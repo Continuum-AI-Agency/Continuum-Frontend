@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+
 // One Inspiration card. Everything a user scans for sits on the face — the format,
 // how far the post beat its own account ('3.2x'), and its views/likes/comments —
 // so nothing needs a hover. Hovering a reel only plays it. Clicking opens the
@@ -28,6 +31,7 @@ function KindGlyph({
   kind: CompetitorPostView['post']['kind'];
   mediaCount: number;
 }) {
+  const uiText = useTranslations('competitor');
   if (kind === 'post') return null;
   return (
     <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white">
@@ -36,7 +40,7 @@ function KindGlyph({
       ) : (
         <Images className="size-2.5" aria-hidden />
       )}
-      {kind === 'carousel' ? mediaCount : 'Reel'}
+      {kind === 'carousel' ? mediaCount : uiText('reel_9cb145e')}
     </span>
   );
 }
@@ -50,12 +54,26 @@ export function CompetitorPostHoverTile({
   view: CompetitorPostView;
   actions?: ReactNode;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
   const { post } = view;
   const [hovering, setHovering] = useState(false);
   const [open, setOpen] = useState(false);
-  const altText = `${view.competitorName} ${post.kind}`;
+  const postLabel = localizeCompetitorCopy(
+    post.kind === 'carousel'
+      ? 'Carousel'
+      : post.kind === 'reel'
+        ? post.platform === 'youtube'
+          ? 'Short'
+          : 'Reel'
+        : post.platform === 'youtube'
+          ? 'Video'
+          : 'Post',
+    uiText,
+  );
+  const altText = `${view.competitorName} ${postLabel}`;
   const videoUrl = reelVideoUrl(post);
-  const age = post.timestamp ? formatRelativeTime(post.timestamp) : null;
+  const age = post.timestamp ? formatRelativeTime(post.timestamp, undefined, uiLocale) : null;
   const youtube = post.platform === 'youtube';
   const opensOn = youtube ? 'YouTube' : post.platform === 'facebook' ? 'Facebook' : null;
   const mediaClassName = youtube
@@ -82,7 +100,7 @@ export function CompetitorPostHoverTile({
           className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white"
         >
           <YouTubeIcon className="size-3" />
-          {post.kind === 'reel' ? 'Short' : 'Video'}
+          {post.kind === 'reel' ? uiText('short_f5d61ea') : uiText('video_d534be8')}
         </span>
       ) : (
         <>
@@ -90,7 +108,7 @@ export function CompetitorPostHoverTile({
             data-testid="format-label"
             className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white"
           >
-            {COMPETITOR_POST_FORMAT_LABELS[view.format]}
+            {localizeCompetitorCopy(COMPETITOR_POST_FORMAT_LABELS[view.format], uiText)}
           </span>
           <OutlierBadge view={view} className="pointer-events-none absolute right-1.5 top-1.5" />
           <KindGlyph kind={post.kind} mediaCount={post.mediaCount} />
@@ -116,7 +134,10 @@ export function CompetitorPostHoverTile({
           href={post.permalink}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`Open ${view.competitorName} on ${opensOn}`}
+          aria-label={uiText('m_1f6dae45ab', {
+            name: view.competitorName,
+            platform: opensOn,
+          })}
           className={faceClassName}
         >
           {face}
@@ -127,7 +148,10 @@ export function CompetitorPostHoverTile({
           onClick={() => setOpen(true)}
           onPointerEnter={() => setHovering(true)}
           onPointerLeave={() => setHovering(false)}
-          aria-label={`Analyse ${view.competitorName} ${post.kind}`}
+          aria-label={uiText('m_eca48c74f9', {
+            name: view.competitorName,
+            format: postLabel,
+          })}
           className={faceClassName}
         >
           {face}
@@ -144,13 +168,17 @@ export function CompetitorPostHoverTile({
         ) : null}
         {view.relevance && view.relevance.matchedTerms.length > 0 ? (
           <p data-testid="relevance-reason" className="truncate text-2xs text-muted-foreground">
-            Fits your brand: {view.relevance.matchedTerms.join(', ')}
+            {uiText.rich('sentence_89a42d38dd51', {
+              v0: () => view.relevance?.matchedTerms.join(', '),
+            })}
           </p>
         ) : null}
         <PostMetrics view={view} />
         {opensOn && post.capturedAt ? (
           <p data-testid="captured-at" className="text-2xs text-muted-foreground">
-            Updated {formatRelativeTime(post.capturedAt)}
+            {uiText.rich('sentence_5f1f7fcaedd2', {
+              v0: () => formatRelativeTime(post.capturedAt ?? '', undefined, uiLocale),
+            })}
           </p>
         ) : null}
       </div>

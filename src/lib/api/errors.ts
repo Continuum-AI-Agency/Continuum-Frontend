@@ -1,10 +1,7 @@
+import { type ApiErrorPayload, apiErrorPayloadSchema } from '@continuum/contracts';
 import { notifyPaymentRequired } from '@/lib/billing/paymentRequired';
 
-export type ApiErrorPayload = {
-  message?: string;
-  code?: string;
-  [key: string]: unknown;
-};
+export type { ApiErrorPayload } from '@continuum/contracts';
 
 export class ApiError extends Error {
   status: number;
@@ -23,7 +20,8 @@ export class ApiError extends Error {
 export async function toApiError(response: Response): Promise<ApiError> {
   let payload: ApiErrorPayload | undefined;
   try {
-    payload = (await response.json()) as ApiErrorPayload;
+    const parsed = apiErrorPayloadSchema.safeParse(await response.json());
+    if (parsed.success) payload = parsed.data;
   } catch {
     // ignore non-JSON errors
   }

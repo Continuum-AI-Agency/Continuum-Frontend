@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // The "What's Working" body as a dense, sortable data table (one row per mined
 // creative insight). Each row surfaces its confidence + average measured metric
 // and a "Top creatives" cell of the actual top performers — ranked, metric-
@@ -28,9 +30,10 @@ const MAX_THUMBS = 4;
 const WHATS_WORKING_TABLE_MAX_HEIGHT = 420;
 
 function KindBadge({ kind }: { kind: string }) {
+  const uiText = useTranslations('organic');
   return (
     <span className="rounded bg-accent/15 px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-accent">
-      {kind}
+      {uiText('creativeInsightKind', { kind })}
     </span>
   );
 }
@@ -78,7 +81,9 @@ function ExpandedInsight({ row }: { row: InsightRowView }) {
 }
 
 export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[] }) {
-  const rows = useMemo(() => toInsightRows(insights), [insights]);
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
+  const rows = useMemo(() => toInsightRows(insights, uiLocale), [insights, uiLocale]);
   // Cluster ids can collide (kind-archetype); keep list index so pin keys stay unique.
   const insightByRowId = useMemo(() => {
     const map = new Map<string, { insight: CreativeInsight; index: number }>();
@@ -95,13 +100,13 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
     () => [
       {
         id: 'kind',
-        header: 'Type',
+        header: uiText('type_baaddf7'),
         cellClassName: 'w-16',
         cell: (row) => <KindBadge kind={row.kind} />,
       },
       {
         id: 'insight',
-        header: 'Insight',
+        header: uiText('insight_1d7ecdd'),
         cellClassName: 'min-w-52 max-w-72',
         cell: (row) => (
           <div className="min-w-0">
@@ -112,20 +117,20 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
       },
       {
         id: 'surface',
-        header: 'Surface',
+        header: uiText('surface_0905f7f'),
         cellClassName: 'w-16 text-2xs uppercase tracking-wide text-muted-foreground',
-        cell: (row) => row.surface,
+        cell: (row) => uiText('creativeSurface', { surface: row.surface }),
       },
       {
         id: 'confidence',
-        header: 'Confidence',
+        header: uiText('confidence_6422e3e'),
         align: 'right',
         sortValue: (row) => row.confidence,
         cell: (row) => `${Math.round(row.confidence * 100)}%`,
       },
       {
         id: 'metric',
-        header: 'Avg metric',
+        header: uiText('avg_metric_a9c5970'),
         align: 'right',
         sortValue: (row) => row.avgMetricValue ?? -1,
         cell: (row) =>
@@ -142,12 +147,12 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
       },
       {
         id: 'creatives',
-        header: 'Top creatives',
+        header: uiText('top_creatives_ea765e1'),
         cellClassName: 'min-w-40',
         cell: (row): ReactNode => <CreativesCell row={row} />,
       },
     ],
-    [],
+    [uiText],
   );
 
   return (
@@ -165,7 +170,9 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
             permalink={row.topPermalink ?? undefined}
             agentSuggestion={
               entry
-                ? creativeInsightToMentionSuggestion(entry.insight, { index: entry.index })
+                ? creativeInsightToMentionSuggestion(entry.insight, {
+                    index: entry.index,
+                  })
                 : null
             }
           />
@@ -178,7 +185,9 @@ export function CreativeStrategyTable({ insights }: { insights: CreativeInsight[
             permalink={row.topPermalink ?? undefined}
             agentSuggestion={
               entry
-                ? creativeInsightToMentionSuggestion(entry.insight, { index: entry.index })
+                ? creativeInsightToMentionSuggestion(entry.insight, {
+                    index: entry.index,
+                  })
                 : null
             }
           />

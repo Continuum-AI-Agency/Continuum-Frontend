@@ -1,8 +1,9 @@
 'use client';
 
 import { ArrowUpRight } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { Link } from '@/i18n/navigation';
 
 import { useDryRunMode, usePendingActions } from '@/lib/approvals/queries';
 import { useApprovalsStore } from '@/lib/approvals/store';
@@ -23,6 +24,7 @@ type Props = {
  * coexist with the standalone /scale/approvals surface.
  */
 export function ApprovalsCompact({ brandId, className }: Props) {
+  const uiText = useTranslations('common');
   const optimistic = useApprovalsStore((s) => s.pendingDecisions);
   const list = usePendingActions(brandId, 'PENDING');
   const dryRun = useDryRunMode();
@@ -70,7 +72,7 @@ export function ApprovalsCompact({ brandId, className }: Props) {
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Pending
+            {uiText('pending_331551b')}
           </span>
           <LiveStatusDot isDryRun={isDryRun} isFetching={list.isFetching} />
           <span className="font-data text-xs tabular-nums text-muted-foreground">{total}</span>
@@ -79,7 +81,7 @@ export function ApprovalsCompact({ brandId, className }: Props) {
           href="/scale/approvals"
           className="inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
         >
-          Full surface
+          {uiText('m_59b7f029c1')}
           <ArrowUpRight className="h-3 w-3" strokeWidth={1.5} />
         </Link>
       </div>

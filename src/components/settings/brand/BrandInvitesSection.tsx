@@ -6,8 +6,12 @@ import {
   inviteIsResendable,
 } from '@continuum/contracts';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState, useTransition } from 'react';
-import { createMagicLinkAction, revokeInviteAction } from '@/app/(post-auth)/settings/actions';
+import {
+  createMagicLinkAction,
+  revokeInviteAction,
+} from '@/app/[locale]/(post-auth)/settings/actions';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -30,6 +34,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { BrandRole } from '@/lib/onboarding/state';
 
 type BrandInvitesSectionProps = {
@@ -39,21 +44,34 @@ type BrandInvitesSectionProps = {
 
 const INVITE_ROLES: BrandRole[] = ['admin', 'operator', 'viewer'];
 
-const STATUS_LABEL: Record<BrandInviteStatus, string> = {
-  pending: 'Pending',
-  accepted: 'Accepted',
-  expired: 'Expired',
-  revoked: 'Revoked',
-};
+const STATUS_LABEL = {
+  pending: 'invitePending',
+  accepted: 'inviteAccepted',
+  expired: 'inviteExpired',
+  revoked: 'inviteRevoked',
+} as const;
+const ROLE_LABEL = {
+  owner: 'roleOwner',
+  admin: 'roleAdmin',
+  operator: 'roleOperator',
+  viewer: 'roleViewer',
+} as const;
 
-/** What the inviter can actually learn about the send, in one phrase. */
-function deliveryLabel(invite: BrandInviteRecord): string {
-  if (invite.delivery.lastEmailError) return `Send failed (${invite.delivery.lastEmailError})`;
-  if (invite.delivery.lastEmailedAt) return 'Emailed';
-  return 'No send recorded';
+function deliveryLabel(
+  invite: BrandInviteRecord,
+  tUi: ReturnType<typeof useTranslations<'settings'>>,
+): string {
+  if (invite.delivery.lastEmailError) return tUi('inviteDeliveryFailed');
+  return tUi(invite.delivery.lastEmailedAt ? 'inviteEmailed' : 'inviteNoSend');
 }
 
 export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionProps) {
+  const uiLocale = useLocale();
+
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const router = useRouter();
   const { show } = useToast();
   const { activeBrandId } = useActiveBrandContext();
@@ -67,15 +85,15 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
     setMounted(true);
   }, []);
 
-  const formatDate = (value: string) => (mounted ? new Date(value).toLocaleString() : '—');
+  const formatDate = (value: string) => (mounted ? new Date(value).toLocaleString(uiLocale) : '—');
 
   const handleCreateMagicLink = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = inviteEmail.trim();
     if (!trimmed) {
       show({
-        title: 'Email required',
-        description: 'Add an email to send an invite.',
+        title: tUi('m_887c8dbb94'),
+        description: tUi('m_aff96da74c'),
         variant: 'error',
       });
       return;
@@ -86,25 +104,29 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
         setGeneratedLink(result.link);
         setInviteEmail('');
         if (result.warning) {
-          show({ title: 'Invite ready', description: result.warning, variant: 'warning' });
+          show({
+            title: tUi('m_20cfec91c6'),
+            description: result.warning,
+            variant: 'warning',
+          });
         } else if (result.emailSent) {
           show({
-            title: result.resent ? 'Magic link resent' : 'Magic link sent',
-            description: `Invite emailed to ${trimmed}.`,
+            title: result.resent ? tUi('m_93e7e9c2ca') : tUi('m_8f84cd2826'),
+            description: tUi('m_b0d5fb7060', { v0: String(trimmed) }),
             variant: 'success',
           });
         } else {
           show({
-            title: 'Invite ready',
-            description: 'Invite link created. Share it manually.',
+            title: tUi('m_20cfec91c6'),
+            description: tUi('m_81e47dbef8'),
             variant: 'warning',
           });
         }
         router.refresh();
       } catch (error) {
         show({
-          title: 'Invite failed',
-          description: error instanceof Error ? error.message : 'Unable to create invite.',
+          title: tUi('m_2e82bbd534'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_b4a564578a'),
           variant: 'error',
         });
       }
@@ -119,17 +141,17 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
         const result = await createMagicLinkAction(activeBrandId, invite.email, invite.role, true);
         setGeneratedLink(result.link);
         show({
-          title: result.emailSent ? 'Invite resent' : 'Invite ready',
+          title: result.emailSent ? tUi('m_20538e872d') : tUi('m_20cfec91c6'),
           description: result.emailSent
-            ? `A fresh link is on its way to ${invite.email}.`
-            : (result.warning ?? 'Link created. Share it manually.'),
+            ? tUi('m_e29312d8af', { v0: String(invite.email) })
+            : (result.warning ?? tUi('m_6baee9ff81')),
           variant: result.emailSent ? 'success' : 'warning',
         });
         router.refresh();
       } catch (error) {
         show({
-          title: 'Resend failed',
-          description: error instanceof Error ? error.message : 'Unable to resend invite.',
+          title: tUi('m_4be7910772'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_829102d42b'),
           variant: 'error',
         });
       }
@@ -141,15 +163,15 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
       try {
         await revokeInviteAction(activeBrandId, inviteId);
         show({
-          title: 'Invite revoked',
-          description: 'This invite link is no longer valid.',
+          title: tUi('m_4e6cdd5580'),
+          description: tUi('m_696514be63'),
           variant: 'success',
         });
         router.refresh();
       } catch (error) {
         show({
-          title: 'Revoke failed',
-          description: error instanceof Error ? error.message : 'Unable to revoke invite.',
+          title: tUi('m_064efc10df'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_07c9923569'),
           variant: 'error',
         });
       }
@@ -163,40 +185,40 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 md:grid-cols-3">
               <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Email</span>
+                <span className="text-xs text-muted-foreground">{tUi('m_84add5b295')}</span>
                 <Input
-                  placeholder="teammate@example.com"
+                  placeholder={tUi('m_f0d0fed59a')}
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Role</span>
+                <span className="text-xs text-muted-foreground">{tUi('m_c3f104d136')}</span>
                 <Select
                   value={inviteRole}
                   onValueChange={(value) => setInviteRole(value as BrandRole)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Role" />
+                    <SelectValue placeholder={tUi('m_c3f104d136')} />
                   </SelectTrigger>
                   <SelectContent>
                     {INVITE_ROLES.map((role) => (
                       <SelectItem key={role} value={role}>
-                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                        {tUi(ROLE_LABEL[role])}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <Button type="submit" disabled={isPending} className="min-h-10 w-full md:w-auto">
-                Generate magic link
+                {tUi('m_a0eab943bb')}
               </Button>
             </div>
             {generatedLink ? (
               <div className="flex flex-col gap-2">
                 <Alert className="border-success/30 bg-success/10">
                   <AlertDescription className="text-success">
-                    Invite link generated. Share it directly with your teammate.
+                    {tUi('m_bf6c953972')}
                   </AlertDescription>
                 </Alert>
                 <Textarea readOnly value={generatedLink} className="font-mono text-sm" />
@@ -207,9 +229,9 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
       ) : null}
 
       <div>
-        <h3 className="mb-2 text-base font-semibold">Invitations</h3>
+        <h3 className="mb-2 text-base font-semibold">{tUi('m_9b69a35ab5')}</h3>
         {invites.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No invitations yet.</p>
+          <p className="text-sm text-muted-foreground">{tUi('m_485c403a62')}</p>
         ) : (
           <>
             <div className="space-y-2 md:hidden">
@@ -219,13 +241,15 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
                     <div className="min-w-0">
                       <p className="break-all text-sm font-medium">{invite.email}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {STATUS_LABEL[invite.status]} · {deliveryLabel(invite)}
+                        {tUi(STATUS_LABEL[invite.status])} · {deliveryLabel(invite, tUi)}
                         {invite.delivery.lastEmailedAt
-                          ? ` ${formatDate(invite.delivery.lastEmailedAt)}`
+                          ? tUi('m_73e84c2ec7', {
+                              v0: String(formatDate(invite.delivery.lastEmailedAt)),
+                            })
                           : ''}
                       </p>
                     </div>
-                    <Pill>{invite.role}</Pill>
+                    <Pill>{tUi(ROLE_LABEL[invite.role])}</Pill>
                   </div>
                   {canEdit ? (
                     <div className="mt-3 flex gap-2">
@@ -236,7 +260,7 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
                           disabled={isPending}
                           className="min-h-10"
                         >
-                          Resend
+                          {tUi('m_0f4f469452')}
                         </Button>
                       ) : null}
                       {invite.status === 'pending' || invite.status === 'expired' ? (
@@ -246,7 +270,7 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
                           disabled={isPending}
                           className="min-h-10 text-destructive hover:text-destructive"
                         >
-                          Revoke
+                          {tUi('m_0be720759f')}
                         </Button>
                       ) : null}
                     </div>
@@ -258,10 +282,10 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
               <Table className="min-w-[48rem]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Email delivery</TableHead>
+                    <TableHead>{tUi('m_84add5b295')}</TableHead>
+                    <TableHead>{tUi('m_c3f104d136')}</TableHead>
+                    <TableHead>{tUi('m_bae7d5be70')}</TableHead>
+                    <TableHead>{tUi('m_3776c7a872')}</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -269,18 +293,20 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
                   {invites.map((invite) => (
                     <TableRow key={invite.id}>
                       <TableCell>{invite.email}</TableCell>
-                      <TableCell>{invite.role}</TableCell>
+                      <TableCell>{tUi(ROLE_LABEL[invite.role])}</TableCell>
                       <TableCell>
-                        <Pill>{STATUS_LABEL[invite.status]}</Pill>
+                        <Pill>{tUi(STATUS_LABEL[invite.status])}</Pill>
                       </TableCell>
                       <TableCell
                         className={
                           invite.delivery.lastEmailError ? 'text-destructive' : 'text-secondary'
                         }
                       >
-                        {deliveryLabel(invite)}
+                        {deliveryLabel(invite, tUi)}
                         {invite.delivery.lastEmailedAt
-                          ? ` · ${formatDate(invite.delivery.lastEmailedAt)}`
+                          ? tUi('m_2130fb1aa9', {
+                              v0: String(formatDate(invite.delivery.lastEmailedAt)),
+                            })
                           : ''}
                       </TableCell>
                       <TableCell className="text-right">
@@ -293,7 +319,7 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
                                 onClick={() => handleResend(invite)}
                                 disabled={isPending}
                               >
-                                Resend
+                                {tUi('m_0f4f469452')}
                               </Button>
                             ) : null}
                             {invite.status === 'pending' || invite.status === 'expired' ? (
@@ -304,7 +330,7 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
                                 disabled={isPending}
                                 className="text-destructive hover:text-destructive"
                               >
-                                Revoke
+                                {tUi('m_0be720759f')}
                               </Button>
                             ) : null}
                           </div>

@@ -13,6 +13,7 @@ import {
 } from '@continuum/contracts';
 import { Handle, Position } from '@xyflow/react';
 import { Check, ImageIcon, Library, Lock, Video, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
@@ -62,12 +63,18 @@ import { apiRenderVariableLabel } from './resolveApiRenderVariables';
 const UNSET_OPTION = '__unset__';
 
 /** Which section a role belongs to. The order here is the order on screen. */
-const GROUPS: ReadonlyArray<{ legend: string; roles: readonly ApiRenderSlotRole[] }> = [
+const GROUPS: ReadonlyArray<{
+  legend: string;
+  roles: readonly ApiRenderSlotRole[];
+}> = [
   {
     legend: 'Product',
     roles: ['product_image', 'name', 'description', 'sku', 'external_id', 'quantity'],
   },
-  { legend: 'Price', roles: ['price', 'old_price', 'discount_percent', 'currency'] },
+  {
+    legend: 'Price',
+    roles: ['price', 'old_price', 'discount_percent', 'currency'],
+  },
   {
     legend: 'Promotion',
     roles: ['promo_start', 'promo_end', 'promo_dates', 'cta_text', 'landing_url', 'legal_text'],
@@ -117,11 +124,13 @@ function pinFromAsset(asset: MediaAsset): PinnedRenderAsset {
 
 /** The measured placement verdict, said in one line a person can act on. */
 function FitLine({ verdict }: { verdict: ApiRenderFitVerdict | undefined }) {
+  const translateUi = useUiTranslations('studio');
+
   if (!verdict) return null;
   if (verdict.state === 'unknown') {
     return (
       <FieldDescription>
-        <Badge variant="muted">Measured at Prepare</Badge> {verdict.why}
+        <Badge variant="muted">{translateUi('measured_at_prepare_d1c3a4f2')}</Badge> {verdict.why}
       </FieldDescription>
     );
   }
@@ -129,12 +138,23 @@ function FitLine({ verdict }: { verdict: ApiRenderFitVerdict | undefined }) {
   return (
     <FieldDescription>
       <Badge variant={verdict.state === 'clipped' ? 'warning' : 'success'}>
-        {verdict.state === 'clipped' ? `Clips ${left}/${top}/${right}/${bottom} px` : 'Fits'}
+        {verdict.state === 'clipped'
+          ? translateUi('clips_value0_value1_value2_value3_p_dc1bee06', {
+              value0: String(left),
+              value1: String(top),
+              value2: String(right),
+              value3: String(bottom),
+            })
+          : translateUi('fits_71d396e0')}
       </Badge>{' '}
-      {verdict.shapeClass ? `${verdict.shapeClass} artwork · ` : ''}
+      {verdict.shapeClass
+        ? translateUi('value0_artwork_4da710c0', {
+            value0: String(verdict.shapeClass),
+          })
+        : ''}
       {verdict.state === 'clipped'
-        ? 'estimated — the render is judged against this'
-        : 'estimated from the template’s own measurements'}
+        ? translateUi('estimated_the_render_is_judged_agai_5e872164')
+        : translateUi('estimated_from_the_template_s_own_m_23d44fd8')}
     </FieldDescription>
   );
 }
@@ -156,6 +176,8 @@ function MediaVariableField({
   onPick: (value: ApiRenderInputValue, assets: MediaAsset[]) => void;
   onClear: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [open, setOpen] = useState(false);
   const max = variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1;
   const wired = status.connected > 0;
@@ -172,10 +194,16 @@ function MediaVariableField({
   const state = wired
     ? status.ready === status.connected
       ? { tone: 'success' as const, text: `${status.ready} ready${fanOut}` }
-      : { tone: 'destructive' as const, text: 'Not saved in the Library yet' }
+      : {
+          tone: 'destructive' as const,
+          text: translateUi('not_saved_in_the_library_yet_69d75871'),
+        }
     : picked.length > 0
       ? { tone: 'success' as const, text: `${picked.length} from Library` }
-      : { tone: 'muted' as const, text: 'Connect media or choose' };
+      : {
+          tone: 'muted' as const,
+          text: translateUi('connect_media_or_choose_727e9968'),
+        };
 
   return (
     <>
@@ -187,7 +215,11 @@ function MediaVariableField({
           ) : (
             <Video className="size-3" aria-hidden />
           )}
-          {dims ? `${dims.w}×${dims.h}` : variable.kind === 'image' ? 'Image' : 'Video'}
+          {dims
+            ? `${dims.w}×${dims.h}`
+            : variable.kind === 'image'
+              ? translateUi('image_1aa4cb0b')
+              : translateUi('video_d534be82')}
         </span>
         <Badge variant={state.tone}>{state.text}</Badge>
       </div>
@@ -207,20 +239,26 @@ function MediaVariableField({
                 // and a gallery renders this button twice, and two identically named buttons
                 // are indistinguishable to a screen reader.
                 aria-label={`${
-                  picked.length > 0 ? 'Change selection for' : 'Choose from Library for'
+                  picked.length > 0
+                    ? translateUi('change_selection_for_356ae4f8')
+                    : translateUi('choose_from_library_for_4ba01c15')
                 } ${apiRenderVariableLabel(variable)}`}
                 className="nodrag flex w-full items-center justify-center gap-1 rounded-md border border-border/70 px-1.5 py-1 text-2xs text-muted-foreground hover:bg-muted/50"
                 onClick={() => setOpen(true)}
               >
                 <Library className="size-3" aria-hidden />
-                {picked.length > 0 ? 'Change selection' : 'Choose from Library'}
+                {picked.length > 0
+                  ? translateUi('change_selection_e098f470')
+                  : translateUi('choose_from_library_626d06a7')}
               </button>
             }
           />
           {picked.length > 0 ? (
             <button
               type="button"
-              aria-label={`Clear ${apiRenderVariableLabel(variable)}`}
+              aria-label={translateUi('clear_value0_9016417b', {
+                value0: String(apiRenderVariableLabel(variable)),
+              })}
               className="nodrag rounded-md border border-border/70 p-1 text-muted-foreground hover:bg-muted/50"
               onClick={onClear}
             >
@@ -231,7 +269,8 @@ function MediaVariableField({
       ) : null}
       {wired && picked.length > 0 ? (
         <FieldDescription>
-          Connected — the wired media is used instead of this selection.
+          {' '}
+          {translateUi('connected_the_wired_media_is_used_i_53be6835')}{' '}
         </FieldDescription>
       ) : null}
     </>
@@ -248,6 +287,8 @@ function MediaVariableField({
  * with `400 render_reserved_variable`.
  */
 function LockedDesignKitField({ variable }: { variable: ApiRenderVariable }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <Field orientation="horizontal" data-disabled>
       <FieldContent>
@@ -257,7 +298,7 @@ function LockedDesignKitField({ variable }: { variable: ApiRenderVariable }) {
         </FieldLabel>
       </FieldContent>
       <Badge variant="muted">
-        <Check aria-hidden /> Brand logo
+        <Check aria-hidden /> {translateUi('brand_logo_e458e2b5')}{' '}
       </Badge>
     </Field>
   );
@@ -303,6 +344,8 @@ function VariableField({
   onClear: (key: string) => void;
   onPickMedia: (key: string, value: ApiRenderInputValue, assets: MediaAsset[]) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   if (variable.reserved) return <LockedDesignKitField variable={variable} />;
   const isMedia = variable.kind === 'image' || variable.kind === 'video';
   const value = values?.[variable.key];
@@ -319,7 +362,13 @@ function VariableField({
             variable={variable}
             brandId={brandId}
             picked={pickedPins(value)}
-            status={mediaStatus?.get(variable.key) ?? { connected: 0, ready: 0, picked: 0 }}
+            status={
+              mediaStatus?.get(variable.key) ?? {
+                connected: 0,
+                ready: 0,
+                picked: 0,
+              }
+            }
             dims={assetDims?.[variable.key]}
             onPick={(next, assets) => onPickMedia(variable.key, next, assets)}
             onClear={() => onClear(variable.key)}
@@ -356,14 +405,20 @@ function VariableField({
             className="nodrag h-7 text-xs"
             aria-label={apiRenderVariableLabel(variable)}
           >
-            <SelectValue placeholder={variable.required ? 'Choose…' : 'Not set…'} />
+            <SelectValue
+              placeholder={
+                variable.required ? translateUi('choose_7ca41615') : translateUi('not_set_a2d5e1dc')
+              }
+            />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
               {/* Clearing an optional variable is a real thing to want, and the placeholder is
                   not selectable, so an explicit item is the only way back to unset. A required
                   one has no such item: unset is not an answer the renderer accepts. */}
-              {variable.required ? null : <SelectItem value={UNSET_OPTION}>Not set…</SelectItem>}
+              {variable.required ? null : (
+                <SelectItem value={UNSET_OPTION}>{translateUi('not_set_a2d5e1dc')}</SelectItem>
+              )}
               {variable.options.map((option) => (
                 <SelectItem key={option} value={option}>
                   {option}
@@ -393,7 +448,8 @@ function VariableField({
           />
           {connectedKeys?.has(variable.key) ? (
             <FieldDescription>
-              Connected — the wired text is used instead of this field.
+              {' '}
+              {translateUi('connected_the_wired_text_is_used_in_a7dad784')}{' '}
             </FieldDescription>
           ) : null}
         </>

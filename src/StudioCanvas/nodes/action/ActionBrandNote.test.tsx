@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The node badge is the surface a user sees WITHOUT opening the config, so its whole job is to
 // say which rung of the type chain a render will use. The brand read is a boundary; the pure

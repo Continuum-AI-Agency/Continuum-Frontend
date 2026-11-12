@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The burn-in panel's own controls are what is under test, so the store, the brand-book
 // query and the browser signer are stubbed rather than mounted. Everything stubbed here
 // is a boundary this component only reads through.
 const patch = mock();
-mock.module('../../hooks/useNodeConfigPatch', () => ({ useNodeConfigPatch: () => patch }));
+mock.module('../../hooks/useNodeConfigPatch', () => ({
+  useNodeConfigPatch: () => patch,
+}));
 
 const setNodes = mock();
 const setEdges = mock();
@@ -16,18 +23,30 @@ mock.module('../../stores/useStudioStore', () => ({
 
 let brandTokens: unknown = null;
 mock.module('@/lib/brands/useBrandBook.client', () => ({
-  useBrandBook: () => ({ brandTokens, brandBook: null, isLoading: false, isError: false }),
+  useBrandBook: () => ({
+    brandTokens,
+    brandBook: null,
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 const createSignedAssetUrl = mock(async () => 'https://signed.test/logo.png');
-mock.module('@/lib/creative-assets/storageClient', () => ({ createSignedAssetUrl }));
+mock.module('@/lib/creative-assets/storageClient', () => ({
+  createSignedAssetUrl,
+}));
 mock.module('@/lib/creative-assets/config', () => ({
   getCreativeAssetsBucket: () => 'brand-profile-assets',
 }));
 
 import { buildOverlayImageNode, OverlayConfig } from './OverlayConfig';
 
-const ACTION_NODE = { id: 'act-1', type: 'action', position: { x: 500, y: 300 }, data: {} };
+const ACTION_NODE = {
+  id: 'act-1',
+  type: 'action',
+  position: { x: 500, y: 300 },
+  data: {},
+};
 
 const renderPanel = (
   config: Record<string, unknown> = {},
@@ -61,7 +80,9 @@ describe('OverlayConfig', () => {
     expect(patch).toHaveBeenCalledWith(
       'act-1',
       'action',
-      expect.objectContaining({ config: expect.objectContaining({ position: 'bottom-left' }) }),
+      expect.objectContaining({
+        config: expect.objectContaining({ position: 'bottom-left' }),
+      }),
     );
   });
 
@@ -94,11 +115,15 @@ describe('OverlayConfig', () => {
 
   it('writes a typed window', () => {
     renderPanel();
-    fireEvent.change(screen.getByLabelText('Burn-in start seconds'), { target: { value: '1.5' } });
+    fireEvent.change(screen.getByLabelText('Burn-in start seconds'), {
+      target: { value: '1.5' },
+    });
     expect(patch).toHaveBeenCalledWith(
       'act-1',
       'action',
-      expect.objectContaining({ config: expect.objectContaining({ startSec: 1.5 }) }),
+      expect.objectContaining({
+        config: expect.objectContaining({ startSec: 1.5 }),
+      }),
     );
   });
 

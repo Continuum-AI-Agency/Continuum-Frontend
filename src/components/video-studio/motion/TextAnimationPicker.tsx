@@ -5,6 +5,7 @@ import {
   TEXT_ANIMATION_LABELS,
   type TextAnimationId,
 } from '@continuum/contracts';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,9 @@ function AnimationTile({
   selected: boolean;
   onPick: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const [playing, setPlaying] = useState(false);
   const layers = useMemo(() => [animationPreviewLayer(id, phase)], [id, phase]);
   const label = TEXT_ANIMATION_LABELS[id];
@@ -32,7 +36,7 @@ function AnimationTile({
     <button
       type="button"
       aria-pressed={selected}
-      aria-label={`${phase === 'in' ? 'In' : 'Out'}: ${label}`}
+      aria-label={`${phase === 'in' ? uiText('in_8bc1d53') : uiText('out_9a3c546')}: ${label}`}
       data-animation-id={id}
       className={cn(
         'flex min-w-0 flex-col gap-0.5 rounded-md border p-0.5 text-left transition-colors active:scale-[0.97]',
@@ -52,7 +56,9 @@ function AnimationTile({
         // At rest: entrances show the settled word, exits the word before it leaves.
         restSec={phase === 'in' ? ANIMATION_PREVIEW_SEC * 0.7 : ANIMATION_PREVIEW_SEC * 0.3}
         backingHeight={120}
-        label={`${label} preview`}
+        label={translateUi('value0_preview_1fd3bf3c', {
+          value0: String(label),
+        })}
         className="rounded-sm"
       />
       <span className="truncate px-0.5 text-3xs leading-4">{label}</span>
@@ -73,6 +79,8 @@ export function TextAnimationPicker({
   animationOut?: string;
   onPick: (field: TextAnimationField, id: TextAnimationId) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const current: Record<Phase, TextAnimationId> = {
     in: animationIdFor(animationIn),
     out: animationIdFor(animationOut),
@@ -81,10 +89,12 @@ export function TextAnimationPicker({
     <Tabs defaultValue="in" className="gap-2" data-testid="text-animation-picker">
       <TabsList className="h-7">
         <TabsTrigger value="in" className="text-2xs">
-          In · {TEXT_ANIMATION_LABELS[current.in]}
+          {' '}
+          {translateUi('in_cb09f130')} {TEXT_ANIMATION_LABELS[current.in]}
         </TabsTrigger>
         <TabsTrigger value="out" className="text-2xs">
-          Out · {TEXT_ANIMATION_LABELS[current.out]}
+          {' '}
+          {translateUi('out_16cb2f98')} {TEXT_ANIMATION_LABELS[current.out]}
         </TabsTrigger>
       </TabsList>
       {(['in', 'out'] as const).map((phase) => (

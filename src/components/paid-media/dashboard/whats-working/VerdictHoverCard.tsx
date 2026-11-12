@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Hover reveal for one kill/scale/iterate verdict, following the pattern of the
 // optimizer's CreativeHoverCard: the compact row carries only the identity, the
@@ -35,12 +36,14 @@ export function VerdictHoverCard({
   currency = null,
   children,
 }: VerdictHoverCardProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const media = mediaFromPaidVerdict({
     ...verdict,
     thumbnailUrl: freshUrl ?? verdict.thumbnailUrl,
   });
   const label = verdict.adName ?? verdict.adId;
-  const cohortMultiple = cohortMultipleLabel(verdict);
+  const cohortMultiple = cohortMultipleLabel(verdict, uiText, uiLocale);
 
   return (
     <HoverCard closeDelay={80} openDelay={120}>
@@ -56,7 +59,7 @@ export function VerdictHoverCard({
             />
           ) : (
             <span className="grid size-full place-items-center text-xs text-muted-foreground">
-              No preview
+              {uiText('no_preview_4b8bacd')}
             </span>
           )}
         </div>
@@ -81,8 +84,16 @@ export function VerdictHoverCard({
         <p className="text-xs text-muted-foreground">{verdict.reason}</p>
 
         <div className="flex items-center justify-between border-border/60 border-t pt-2 text-xs text-muted-foreground tabular-nums">
-          <span>30d spend {money(verdict.spend, currency)}</span>
-          <span>CPA {money(verdict.cpa, currency)}</span>
+          <span>
+            {uiText.rich('sentence_f06e2526ff16', {
+              v0: money(verdict.spend, currency, uiLocale),
+            })}
+          </span>
+          <span>
+            {uiText.rich('sentence_5db6c53e05a1', {
+              v0: money(verdict.cpa, currency, uiLocale),
+            })}
+          </span>
         </div>
         {cohortMultiple ? (
           <p className="text-xs text-muted-foreground tabular-nums">{cohortMultiple}</p>

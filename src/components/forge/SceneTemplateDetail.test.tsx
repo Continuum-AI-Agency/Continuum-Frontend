@@ -93,10 +93,20 @@ mock.module('@/lib/library/sceneTemplates', () => ({
   requestScenePreview,
   listSceneRenders,
 }));
-mock.module('@/lib/ai-studio/elements', () => ({ ...realElements, signLibraryAsset }));
+mock.module('@/lib/ai-studio/elements', () => ({
+  ...realElements,
+  signLibraryAsset,
+}));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { SceneTemplateDetail } from './SceneTemplateDetail';
 
 afterEach(() => {
@@ -112,10 +122,16 @@ afterAll(() => {
 
 function mount(
   summary: string | TemplateSourceSummary = 'parsed',
-  handlers: { onBack?: () => void; onRename?: (title: string) => void; onRemove?: () => void } = {},
+  handlers: {
+    onBack?: () => void;
+    onRename?: (title: string) => void;
+    onRemove?: () => void;
+  } = {},
   house = false,
 ) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <SceneTemplateDetail
@@ -187,7 +203,13 @@ describe('SceneTemplateDetail', () => {
     })) as HTMLImageElement;
     expect(image.src).toBe('https://storage.test/defaults.png');
     expect(requestScenePreview.mock.calls.map((call) => call[1])).toEqual([
-      { brandId: BRAND, scope: 'all', versionId: VERSION, outputId: 'Motion/CamWide', values: {} },
+      {
+        brandId: BRAND,
+        scope: 'all',
+        versionId: VERSION,
+        outputId: 'Motion/CamWide',
+        values: {},
+      },
     ]);
     expect(screen.getByText('Draft · 640×360 · cached')).toBeTruthy();
   });
@@ -206,7 +228,10 @@ describe('SceneTemplateDetail', () => {
       key: `text_${n}`,
       name: `Text ${n}`,
     }));
-    fetchSceneTemplate.mockImplementationOnce(async () => ({ ...VIEW, fields: texts }));
+    fetchSceneTemplate.mockImplementationOnce(async () => ({
+      ...VIEW,
+      fields: texts,
+    }));
     mount();
     const fields = await screen.findByRole('region', { name: 'Fields' });
     await within(fields).findByText('Content · 15');
@@ -224,7 +249,9 @@ describe('SceneTemplateDetail', () => {
 
   test('lists recent renders with their files and readable failures', async () => {
     mount();
-    const recent = await screen.findByRole('region', { name: 'Recent renders' });
+    const recent = await screen.findByRole('region', {
+      name: 'Recent renders',
+    });
     const finished = (await within(recent).findByAltText(/^Render of /)) as HTMLImageElement;
     expect(finished.src).toBe('https://signed.test/render.png');
     expect(signLibraryAsset).toHaveBeenCalledWith(BRAND, OUT_ASSET, OUT_VERSION);

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { usePostAnalyticsStore } from '@/lib/organic/post-analytics-store';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 
@@ -13,7 +14,9 @@ const fetchOrganicAnalytics = mock(async (_input: { forceRefresh?: boolean }) =>
   ],
 }));
 
-mock.module('@/lib/api/organicAnalytics.client', () => ({ fetchOrganicAnalytics }));
+mock.module('@/lib/api/organicAnalytics.client', () => ({
+  fetchOrganicAnalytics,
+}));
 
 const { useOrganicPostDetail } = await import('./useOrganicPostDetail');
 

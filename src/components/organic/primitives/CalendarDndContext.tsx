@@ -16,6 +16,8 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
 import { useCalendarStore } from '@/lib/organic/store';
 import {
   crossPlatformDropRefusal,
@@ -72,34 +74,6 @@ function findDraft(id: UniqueIdentifier): OrganicCalendarDraft | undefined {
   return undefined;
 }
 
-function draftTitle(id: UniqueIdentifier): string {
-  return findDraft(id)?.title || 'Untitled draft';
-}
-
-// The same refusal useCalendarDnD's drop applies, so the announcement never says a Story
-// landed on Facebook when the drop left it on Instagram.
-function announceDrop(activeId: UniqueIdentifier, overId: UniqueIdentifier): string {
-  const draft = findDraft(activeId);
-  const title = draft?.title || 'Untitled draft';
-  const platform = parsePlannerCellId(String(overId))?.platform;
-  const refusal = draft && platform ? crossPlatformDropRefusal(draft, platform) : null;
-  if (refusal) return `${refusal}. ${title} stays where it was.`;
-  return `${title} was dropped on ${plannerCellLabel(overId) ?? 'a drop area'}.`;
-}
-
-// dnd-kit's defaults read raw ids aloud ("draggable item 3f2c… over planner-cell::…").
-const ANNOUNCEMENTS: Announcements = {
-  onDragStart: ({ active }) => `Picked up ${draftTitle(active.id)}.`,
-  onDragOver: ({ active, over }) =>
-    over
-      ? `${draftTitle(active.id)} is over ${plannerCellLabel(over.id) ?? 'a drop area'}.`
-      : `${draftTitle(active.id)} is not over a day.`,
-  onDragEnd: ({ active, over }) =>
-    over ? announceDrop(active.id, over.id) : `${draftTitle(active.id)} was put back where it was.`,
-  onDragCancel: ({ active }) => `Move cancelled. ${draftTitle(active.id)} stays where it was.`,
-};
-const ACCESSIBILITY = { announcements: ANNOUNCEMENTS };
-
 export function CalendarDndContext({
   children,
   onDragEnd,
@@ -111,6 +85,32 @@ export function CalendarDndContext({
   onDragStart?: (event: DragStartEvent) => void;
   dragOverlay?: React.ReactNode;
 }) {
+  const uiText = useTranslations('organic');
+  const accessibility = useMemo(() => {
+    const title = (id: UniqueIdentifier) => findDraft(id)?.title || uiText('dragUntitled');
+    const area = (id: UniqueIdentifier) => plannerCellLabel(id) ?? uiText('dragDropArea');
+    const announcements: Announcements = {
+      onDragStart: ({ active }) => uiText('dragPickedUp', { title: title(active.id) }),
+      onDragOver: ({ active, over }) =>
+        over
+          ? uiText('dragOver', { title: title(active.id), area: area(over.id) })
+          : uiText('dragNotOverDay', { title: title(active.id) }),
+      onDragEnd: ({ active, over }) => {
+        if (!over) return uiText('dragReturned', { title: title(active.id) });
+        const draft = findDraft(active.id);
+        const platform = parsePlannerCellId(String(over.id))?.platform;
+        const reason = draft && platform ? crossPlatformDropRefusal(draft, platform, uiText) : null;
+        return reason
+          ? uiText('dragDropRefused', { title: title(active.id), reason })
+          : uiText('dragDropped', {
+              title: title(active.id),
+              area: area(over.id),
+            });
+      },
+      onDragCancel: ({ active }) => uiText('dragCancelled', { title: title(active.id) }),
+    };
+    return { announcements };
+  }, [uiText]);
   const sensors = useSensors(
     useSensor(PointerSensor, POINTER_SENSOR_OPTIONS),
     useSensor(KeyboardSensor, KEYBOARD_SENSOR_OPTIONS),
@@ -120,7 +120,7 @@ export function CalendarDndContext({
     <DndContext
       sensors={sensors}
       collisionDetection={pointerFirstCollision}
-      accessibility={ACCESSIBILITY}
+      accessibility={accessibility}
       onDragEnd={onDragEnd}
       onDragStart={onDragStart}
     >

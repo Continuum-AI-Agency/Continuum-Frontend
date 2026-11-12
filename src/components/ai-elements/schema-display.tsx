@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronRightIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -193,13 +194,15 @@ export const SchemaDisplayParameters = ({
   children,
   ...props
 }: SchemaDisplayParametersProps) => {
+  const tUi = useTranslations('common');
+
   const { parameters } = useContext(SchemaDisplayContext);
 
   return (
     <Collapsible className={cn(className)} defaultOpen {...props}>
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50">
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-        <span className="font-medium text-sm">Parameters</span>
+        <span className="font-medium text-sm">{tUi('m_a975eea30d')}</span>
         <Badge className="ml-auto text-xs" variant="secondary">
           {parameters?.length}
         </Badge>
@@ -224,30 +227,33 @@ export const SchemaDisplayParameter = ({
   location,
   className,
   ...props
-}: SchemaDisplayParameterProps) => (
-  <div className={cn('px-4 py-3 pl-10', className)} {...props}>
-    <div className="flex items-center gap-2">
-      <span className="font-mono text-sm">{name}</span>
-      <Badge className="text-xs" variant="outline">
-        {type}
-      </Badge>
-      {location && (
-        <Badge className="text-xs" variant="secondary">
-          {location}
+}: SchemaDisplayParameterProps) => {
+  const tUi = useTranslations('common');
+  return (
+    <div className={cn('px-4 py-3 pl-10', className)} {...props}>
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-sm">{name}</span>
+        <Badge className="text-xs" variant="outline">
+          {type}
         </Badge>
-      )}
-      {required && (
-        <Badge
-          className="bg-red-100 text-red-700 text-xs dark:bg-red-900/30 dark:text-red-400"
-          variant="secondary"
-        >
-          required
-        </Badge>
-      )}
+        {location && (
+          <Badge className="text-xs" variant="secondary">
+            {location}
+          </Badge>
+        )}
+        {required && (
+          <Badge
+            className="bg-red-100 text-red-700 text-xs dark:bg-red-900/30 dark:text-red-400"
+            variant="secondary"
+          >
+            {tUi('m_1a77d41622')}
+          </Badge>
+        )}
+      </div>
+      {description && <p className="mt-1 text-muted-foreground text-sm">{description}</p>}
     </div>
-    {description && <p className="mt-1 text-muted-foreground text-sm">{description}</p>}
-  </div>
-);
+  );
+};
 
 export type SchemaDisplayRequestProps = ComponentProps<typeof Collapsible>;
 
@@ -256,13 +262,15 @@ export const SchemaDisplayRequest = ({
   children,
   ...props
 }: SchemaDisplayRequestProps) => {
+  const tUi = useTranslations('common');
+
   const { requestBody } = useContext(SchemaDisplayContext);
 
   return (
     <Collapsible className={cn(className)} defaultOpen {...props}>
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50">
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-        <span className="font-medium text-sm">Request Body</span>
+        <span className="font-medium text-sm">{tUi('m_6f8efc89e6')}</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="border-t">
@@ -283,13 +291,15 @@ export const SchemaDisplayResponse = ({
   children,
   ...props
 }: SchemaDisplayResponseProps) => {
+  const tUi = useTranslations('common');
+
   const { responseBody } = useContext(SchemaDisplayContext);
 
   return (
     <Collapsible className={cn(className)} defaultOpen {...props}>
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50">
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-        <span className="font-medium text-sm">Response</span>
+        <span className="font-medium text-sm">{tUi('m_6e617e4fc9')}</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="border-t">
@@ -327,6 +337,8 @@ export const SchemaDisplayProperty = ({
   className,
   ...props
 }: SchemaDisplayPropertyProps) => {
+  const tUi = useTranslations('common');
+
   const hasChildren = properties || items;
   const paddingLeft = 40 + depth * 16;
 
@@ -350,7 +362,7 @@ export const SchemaDisplayProperty = ({
               className="bg-red-100 text-red-700 text-xs dark:bg-red-900/30 dark:text-red-400"
               variant="secondary"
             >
-              required
+              {tUi('m_1a77d41622')}
             </Badge>
           )}
         </CollapsibleTrigger>
@@ -388,7 +400,7 @@ export const SchemaDisplayProperty = ({
             className="bg-red-100 text-red-700 text-xs dark:bg-red-900/30 dark:text-red-400"
             variant="secondary"
           >
-            required
+            {tUi('m_1a77d41622')}
           </Badge>
         )}
       </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 /**
  * The facts a user is agreeing to when they confirm a publish: one row per platform.
  *
@@ -37,9 +39,15 @@ export type PublishIntentSummaryData = {
 };
 
 /** How the confirm and the result toast name the account a member posts to. Never its id. */
-export function intentAccountName(account: PublishIntentAccount): string {
-  if (!account.id) return 'No account selected';
-  if (!account.handle && !account.displayName) return 'Unknown account';
+export function intentAccountName(
+  account: PublishIntentAccount,
+  labels = {
+    noAccount: 'No account selected',
+    unknownAccount: 'Unknown account',
+  },
+): string {
+  if (!account.id) return labels.noAccount;
+  if (!account.handle && !account.displayName) return labels.unknownAccount;
   return publishAccountLabel({
     handle: account.handle ?? null,
     displayName: account.displayName ?? null,
@@ -47,8 +55,15 @@ export function intentAccountName(account: PublishIntentAccount): string {
 }
 
 export function PublishIntentSummary({ intent }: { intent: PublishIntentSummaryData }) {
+  const uiText = useTranslations('organic');
   const platform = isPostPlatform(intent.platform) ? intent.platform : null;
-  const name = intentAccountName(intent.account);
+  const name = intentAccountName(intent.account, {
+    noAccount: uiText('publishNoAccount'),
+    unknownAccount: uiText('publishUnknownAccount'),
+  });
+  const format = ['POST', 'REEL', 'CAROUSEL', 'STORY'].includes(intent.format)
+    ? uiText(`publishFormat${intent.format as 'POST' | 'REEL' | 'CAROUSEL' | 'STORY'}`)
+    : intent.format;
   return (
     <div data-publish-target={platform ?? ''} className="space-y-1.5">
       <div className="flex min-w-0 items-center gap-2">
@@ -70,7 +85,11 @@ export function PublishIntentSummary({ intent }: { intent: PublishIntentSummaryD
           </span>
         </span>
         <span className="text-secondary ml-auto shrink-0 text-xs">
-          {intent.format} · {intent.media.count} of {intent.media.required} media
+          {uiText('publishMediaSummary', {
+            format,
+            count: intent.media.count,
+            required: intent.media.required,
+          })}
         </span>
       </div>
 

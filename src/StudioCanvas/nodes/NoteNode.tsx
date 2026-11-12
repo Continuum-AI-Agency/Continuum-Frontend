@@ -2,6 +2,7 @@
 
 import { type NodeProps, NodeResizer, type Node as ReactFlowNode } from '@xyflow/react';
 import { Copy, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -27,6 +28,8 @@ export interface NoteNodeData extends Record<string, unknown> {
 // the data-flow graph. Rich text is handled via contentEditable with execCommand
 // bold toggle (⌘B / Ctrl+B). Content persists in node.data.content as HTML.
 export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -125,7 +128,8 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
                 />
                 <div className="shrink-0 border-t border-amber-300/40 bg-amber-100/60 dark:bg-amber-900/20 px-3 py-1">
                   <span className="text-2xs text-amber-700/70 dark:text-amber-400/70 select-none">
-                    ⌘B bold
+                    {' '}
+                    {translateUi('b_bold_db26ad91')}{' '}
                   </span>
                 </div>
               </NodeContent>
@@ -135,11 +139,10 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
       />
 
       <ContextMenuContent className="w-52">
-        <ContextMenuLabel>Note</ContextMenuLabel>
+        <ContextMenuLabel>{translateUi('note_d8da2c49')}</ContextMenuLabel>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => duplicateNode(id)}>
-          <Copy className="mr-2 h-4 w-4" />
-          Duplicate
+          <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSeparator />
@@ -147,8 +150,7 @@ export function NoteNode({ id, data, selected }: NodeProps<ReactFlowNode<NoteNod
           className="text-destructive focus:text-destructive"
           onClick={() => deleteNode(id)}
         >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
+          <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>

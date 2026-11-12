@@ -11,6 +11,7 @@ import {
   useNodeId,
 } from '@xyflow/react';
 import { Copy, Download, Play, SquarePen, Trash2, Video } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -94,6 +95,8 @@ const videoSourceOf = (data: Record<string, unknown>): string | undefined => {
 };
 
 export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<OmniGenNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const updateNode = useStudioStore((state) => state.updateNode);
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
@@ -139,13 +142,19 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
     if (!source) return undefined;
     const sourceData = (source.data ?? {}) as Record<string, unknown>;
     const label =
-      (typeof sourceData.label === 'string' && sourceData.label) || source.type || 'Wired clip';
+      (typeof sourceData.label === 'string' && sourceData.label) ||
+      source.type ||
+      translateUi('wired_clip_a10ad7e4');
     return { label, previewUrl: videoSourceOf(sourceData) };
-  }, [edges, id, nodes]);
+  }, [edges, id, nodes, translateUi]);
 
   // Re-snap the box to whatever the model actually returned — the requested
   // `data.aspectRatio` stays untouched, it is what the next run will ask for.
-  useSnapToVideoAspect({ nodeId: id, src: previewVideo, bounds: OMNI_GENERATOR_NODE_BOUNDS });
+  useSnapToVideoAspect({
+    nodeId: id,
+    src: previewVideo,
+    bounds: OMNI_GENERATOR_NODE_BOUNDS,
+  });
 
   const handleToggleSkill = useCallback(
     (skillId: string) => {
@@ -203,7 +212,11 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
   );
 
   const handleRun = useCallback(async () => {
-    await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
+    await executeWorkflow(executionControls, {
+      targetNodeId: id,
+      clearDownstream: false,
+      brandId,
+    });
   }, [executionControls, id, brandId]);
 
   const handleGenerate = useCallback(
@@ -245,16 +258,16 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
       if (!instruction || !base || base.status !== 'done') return;
       if (!brandId) {
         show({
-          title: 'Select a brand',
-          description: 'Editing needs an active brand.',
+          title: translateUi('select_a_brand_c34108ee'),
+          description: translateUi('editing_needs_an_active_brand_7fd9bbbb'),
           variant: 'warning',
         });
         return;
       }
       if (!base.interactionId) {
         show({
-          title: 'Edit chain unavailable',
-          description: 'This clip has no interaction to edit. Regenerate to start a new chain.',
+          title: translateUi('edit_chain_unavailable_87dd2677'),
+          description: translateUi('this_clip_has_no_interaction_to_edi_713ab1a7'),
           variant: 'warning',
         });
         return;
@@ -302,7 +315,11 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
               interactionId: result.interactionId,
             };
           }
-          return { ...variation, status: 'error', error: result.error ?? 'Edit failed' };
+          return {
+            ...variation,
+            status: 'error',
+            error: result.error ?? 'Edit failed',
+          };
         });
         const succeeded = result.success && result.output;
         return {
@@ -334,23 +351,26 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
       show,
       triggerSave,
       updateNode,
+
+      translateUi,
     ],
   );
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
+      translate: translateUi,
       data: previewVideo,
       baseName: `omni-${id}`,
       fallbackExtension: 'mp4',
     });
     if (!success) {
       show({
-        title: 'Download unavailable',
-        description: 'Generate a clip before downloading.',
+        title: translateUi('download_unavailable_2f180e49'),
+        description: translateUi('generate_a_clip_before_downloading_c1e02af4'),
         variant: 'warning',
       });
     }
-  }, [previewVideo, id, show]);
+  }, [previewVideo, id, show, translateUi]);
 
   return (
     <TooltipProvider>
@@ -363,7 +383,11 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                 'relative group h-full w-full min-w-[240px] min-h-[140px] rounded-xl transition-shadow',
                 isSelectedByOther && 'selected-by-other',
               )}
-              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              style={
+                {
+                  '--other-user-color': selectingUser?.color,
+                } as React.CSSProperties
+              }
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
             >
@@ -404,7 +428,11 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                   size="icon"
                   className="h-7 w-7"
                   onClick={handleRun}
-                  title={hasChain ? 'Regenerate Original' : 'Generate'}
+                  title={
+                    hasChain
+                      ? translateUi('regenerate_original_ed1ed990')
+                      : translateUi('generate_49e49bb4')
+                  }
                 >
                   <Play className="h-4 w-4" />
                 </Button>
@@ -435,7 +463,8 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                             </EmptyMedia>
                             <EmptyTitle>Omni 1.1 Flash</EmptyTitle>
                             <EmptyDescription>
-                              Describe a clip, then chat to edit it
+                              {' '}
+                              {translateUi('describe_a_clip_then_chat_to_edit_i_19538a48')}{' '}
                             </EmptyDescription>
                           </EmptyHeader>
                         </Empty>
@@ -455,10 +484,11 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           event.stopPropagation();
                           setEditorOpen(true);
                         }}
-                        title="Open the Omni editor"
+                        title={translateUi('open_the_omni_editor_7c7d8c11')}
                       >
-                        <SquarePen className="mr-1 h-3.5 w-3.5" />
-                        Open
+                        <SquarePen className="mr-1 h-3.5 w-3.5" /> {translateUi(
+                          'open_ed077f3d',
+                        )}{' '}
                       </Button>
                       <NodeDownloadButton
                         nodeType="omniGen"
@@ -470,7 +500,8 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
 
                     {hasChain ? (
                       <span className="pointer-events-none absolute bottom-2 left-2 z-20 rounded bg-background/85 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
-                        {variations.length} variation{variations.length === 1 ? '' : 's'}
+                        {variations.length} {translateUi('variation_819b60bb')}
+                        {variations.length === 1 ? '' : 's'}
                       </span>
                     ) : null}
                   </div>
@@ -502,7 +533,9 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
 
               <div
                 className="absolute -right-2 top-1/2 flex -translate-y-1/2 flex-col items-center group/handle pointer-events-none"
-                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                style={{
+                  ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                }}
               >
                 <Tooltip>
                   <TooltipTrigger
@@ -516,7 +549,7 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                     }
                   />
                   <TooltipContent>
-                    <p>Generated Video Output</p>
+                    <p>{translateUi('generated_video_output_a3e31423')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -539,13 +572,14 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                          Prompt
+                          {' '}
+                          {translateUi('prompt_5c391238')}{' '}
                         </span>
                       </div>
                     }
                   />
                   <TooltipContent>
-                    <p>Prompt (optional — or type in the editor)</p>
+                    <p>{translateUi('prompt_optional_or_type_in_the_edit_8f25fb19')}</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -566,13 +600,14 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                          Ref Images (Max 3)
+                          {' '}
+                          {translateUi('ref_images_max_3_8852cf8e')}{' '}
                         </span>
                       </div>
                     }
                   />
                   <TooltipContent>
-                    <p>Reference images (generate only)</p>
+                    <p>{translateUi('reference_images_generate_only_5ee5001a')}</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -593,13 +628,14 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
                           className="studio-handle !h-4 !w-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 text-2xs font-medium opacity-0 shadow-md transition-opacity group-hover/handle:opacity-100 z-50 pointer-events-none">
-                          Clip In (1)
+                          {' '}
+                          {translateUi('clip_in_1_a1483dbe')}{' '}
                         </span>
                       </div>
                     }
                   />
                   <TooltipContent>
-                    <p>A clip to edit or extend</p>
+                    <p>{translateUi('a_clip_to_edit_or_extend_3a735abc')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -618,31 +654,29 @@ export function OmniGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Omn
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Omni 1.1 Flash</ContextMenuLabel>
           <ContextMenuItem onClick={() => setEditorOpen(true)}>
-            <SquarePen className="mr-2 h-4 w-4" />
-            Open Editor
+            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_3883a4f4')}{' '}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
             <Play className="mr-2 h-4 w-4" />
-            {hasChain ? 'Regenerate Original' : 'Generate'}
+            {hasChain
+              ? translateUi('regenerate_original_ed1ed990')
+              : translateUi('generate_49e49bb4')}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!previewVideo}>
-            <Download className="mr-2 h-4 w-4" />
-            Download Output
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

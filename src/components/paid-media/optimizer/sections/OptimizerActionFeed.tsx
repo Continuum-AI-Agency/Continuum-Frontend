@@ -1,5 +1,12 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useLocale } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
+
 // The ACTION feed — everything the optimizer did to the ad account, newest first.
 //
 // One row = one state change with a real before and a real after: a budget write, an ad-set
@@ -118,7 +125,18 @@ export function ActionRow({
   /** Ad-set id → name from the rosters the host already holds. */
   entityNames?: ActionEntityNames;
 }) {
-  const change = readActionChange(row);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const FAMILY_LABEL: Record<string, string> = useMemo(
+    () => ({
+      money: 'Ad account',
+      settings: uiText('setting_818cd8d'),
+      decision: uiText('decision_640ae4b'),
+    }),
+    [uiText],
+  );
+
+  const change = readActionChange(row, uiText, uiLocale, currency);
   const entity = actionEntity(row, entityNames);
   const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
@@ -139,29 +157,29 @@ export function ActionRow({
           {change.sentence ? null : (
             <span className="inline-flex items-center gap-1.5 text-xs" data-figure-role="change">
               <span className="font-mono text-muted-foreground tabular-nums">
-                {printChangeValue(change, change.before, currency)}
+                {printChangeValue(change, change.before, currency, uiLocale)}
               </span>
               <ArrowRightIcon
                 aria-hidden="true"
                 className="size-3 shrink-0 text-muted-foreground"
               />
               <span className="font-mono font-semibold text-foreground tabular-nums">
-                {printChangeValue(change, change.after, currency)}
+                {printChangeValue(change, change.after, currency, uiLocale)}
               </span>
               <ActionDelta change={change} />
             </span>
           )}
         </p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
-          <time dateTime={row.ts}>{formatWhen(row.ts)}</time>
-          <span>· {actorLabel(row)}</span>
-          <span>· {FAMILY_LABEL[row.family] ?? row.family}</span>
+          <time dateTime={row.ts}>{formatWhen(row.ts, uiText, uiLocale)}</time>
+          <span>· {actorLabel(row, uiText)}</span>
+          <span>· {uiText('actionFamily', { family: row.family })}</span>
           {row.portfolio_name && row.op === 'setting' ? <span>· {row.portfolio_name}</span> : null}
           <PlatformChip platform={platform} />
         </p>
         {row.justification ? (
           <p className="mt-0.5 text-muted-foreground text-xs leading-relaxed">
-            Why: {row.justification}
+            {uiText.rich('sentence_b8fcef5f90e9', { v0: row.justification })}
           </p>
         ) : null}
         {receipt ? <ReceiptToken value={receipt} platform={platform} /> : null}
@@ -226,11 +244,11 @@ const LANDED_DECISIONS = new Set(['approved', 'applied']);
  * waiting on someone is primary, because it asks a decision. Settings, rejected decisions and
  * rows that were since undone stay muted: nothing about them is still in force or still asks.
  */
-export function actionTone(row: OptimizerActionFeedRow): TimelineTone {
+export function actionTone(row: OptimizerActionFeedRow, uiTranslate?: ScaleCopy): TimelineTone {
   const outcome = readOutcome(row);
   if (outcome && STOPPED_OUTCOMES.has(outcome)) return 'stopped';
   if (row.reverted_by) return 'neutral';
-  const change = readActionChange(row);
+  const change = readActionChange(row, uiTranslate);
   const after = typeof change.after === 'string' ? change.after.toLowerCase() : null;
   switch (row.op) {
     case 'budget':
@@ -263,7 +281,9 @@ function ActionTimelineEntry({
   entityNames: ActionEntityNames;
   highlighted: boolean;
 }) {
-  const change = readActionChange(row);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const change = readActionChange(row, uiText, uiLocale, currency);
   const entity = actionEntity(row, entityNames);
   const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
@@ -293,24 +313,24 @@ function ActionTimelineEntry({
         {change.sentence ? null : (
           <span className="inline-flex items-center gap-1.5" data-figure-role="change">
             <span className="font-mono tabular-nums">
-              {printChangeValue(change, change.before, currency)}
+              {printChangeValue(change, change.before, currency, uiLocale)}
             </span>
             <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
             <span className="font-mono font-semibold text-foreground tabular-nums">
-              {printChangeValue(change, change.after, currency)}
+              {printChangeValue(change, change.after, currency, uiLocale)}
             </span>
             <ActionDelta change={change} />
           </span>
         )}
         <span>
           {change.sentence ? '' : '· '}
-          {actorLabel(row)}
+          {actorLabel(row, uiText)}
         </span>
         <PlatformChip platform={platform} />
       </div>
       {row.justification ? (
         <p className="mt-0.5 text-muted-foreground text-xs leading-relaxed">
-          Why: {row.justification}
+          {uiText.rich('sentence_b8fcef5f90e9', { v0: row.justification })}
         </p>
       ) : null}
       {receipt ? <ReceiptToken value={receipt} platform={platform} /> : null}
@@ -453,6 +473,7 @@ export function OptimizerActionFeed({
   highlightedId = null,
   onHighlight,
 }: OptimizerActionFeedProps) {
+  const uiText = useTranslations('scale');
   const actionsQuery = useOptimizerActions(brandId, windowDays);
   const [ownPortfolio, setOwnPortfolio] = useState<string>(ALL_PORTFOLIOS);
   const portfolio = heldPortfolio ?? ownPortfolio;
@@ -468,7 +489,7 @@ export function OptimizerActionFeed({
         <OptimizerReadError
           error={actionsQuery.error}
           onRetry={() => void actionsQuery.refetch()}
-          subject="the action feed"
+          subject={uiText('optimizerLoadSubject', { kind: 'feed', name: '' })}
         />
         {footer}
       </div>
@@ -480,9 +501,9 @@ export function OptimizerActionFeed({
     return (
       <div className="space-y-3">
         <EmptyState
-          headline="Nothing has changed yet"
+          headline={uiText('activityNoChanges')}
           media={<ListChecksIcon aria-hidden="true" />}
-          description="Budget writes, pauses, setting edits and recommendation decisions appear here with their before, their after, and a one-click undo."
+          description={uiText('budget_writes_pauses_setting_edits_and_recomm_0c5f86c')}
         />
         {footer}
       </div>
@@ -507,7 +528,7 @@ export function OptimizerActionFeed({
           names={portfolioNames}
           value={effectivePortfolio}
           onChange={setPortfolio}
-          label="Filter actions by portfolio"
+          label={uiText('filter_actions_by_portfolio_5b46dbc')}
         />
       </FeedToolbar>
       {visible.length === 0 && visiblePlatform.length === 0 ? (
@@ -528,7 +549,7 @@ export function OptimizerActionFeed({
         hasMore={actionsQuery.hasNextPage}
         isFetchingMore={actionsQuery.isFetchingNextPage}
         onLoadMore={() => void actionsQuery.fetchNextPage()}
-        noun="actions"
+        entryKind="actions"
       />
       {footer}
     </div>

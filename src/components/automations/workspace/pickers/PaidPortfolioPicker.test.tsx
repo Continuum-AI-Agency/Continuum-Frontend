@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { PortfolioOption } from './defaultPickerSources';
 import { PaidPortfolioPicker } from './PaidPortfolioPicker';
 import { chooseOption, installPickerDomGlobals, openSelect, stubSource } from './pickerTestHarness';
@@ -12,7 +13,11 @@ const PORTFOLIO_ID = '22222222-2222-4222-8222-222222222222';
 
 const portfolios: PortfolioOption[] = [
   { id: PORTFOLIO_ID, name: 'Prospecting — US', adAccountId: 'act_1' },
-  { id: '33333333-3333-4333-8333-333333333333', name: 'Retargeting', adAccountId: 'act_2' },
+  {
+    id: '33333333-3333-4333-8333-333333333333',
+    name: 'Retargeting',
+    adAccountId: 'act_2',
+  },
 ];
 
 describe('PaidPortfolioPicker', () => {

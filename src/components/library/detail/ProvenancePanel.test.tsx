@@ -52,7 +52,12 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ProvenancePanel } from './ProvenancePanel';
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
@@ -104,7 +109,12 @@ describe('ProvenancePanel', () => {
 
   it('leaves out what it does not know, and offers no re-render without the row', async () => {
     response = {
-      provenance: { ...PROVENANCE, renderSetId: null, renderSetName: null, rowId: null },
+      provenance: {
+        ...PROVENANCE,
+        renderSetId: null,
+        renderSetName: null,
+        rowId: null,
+      },
     };
     render(<ProvenancePanel brandId={BRAND} assetId={ASSET} />);
 
@@ -146,7 +156,9 @@ describe('ProvenancePanel — canvas origin', () => {
   });
 
   it('links an asset made in the canvas back to its room and node', async () => {
-    tables = { assets: [asset({ kind: 'canvas', roomId: ROOM, nodeId: 'gen-1' })] };
+    tables = {
+      assets: [asset({ kind: 'canvas', roomId: ROOM, nodeId: 'gen-1' })],
+    };
     render(<ProvenancePanel brandId={BRAND} assetId={ASSET} />);
 
     const section = await screen.findByTestId('library-canvas-origin');

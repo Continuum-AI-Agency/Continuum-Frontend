@@ -3,6 +3,8 @@
 // and the dashboard render numbers identically. Compact formatting reuses the
 // canonical jaina formatValue helper.
 
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import { formatValue } from '@/lib/jaina/formatValue';
 
 // The one token for "there is no number here", used by every formatter below and
@@ -20,29 +22,29 @@ export type DeltaTone = 'positive' | 'negative' | 'flat';
 const YMD_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 // Full grouped number (e.g. 12,431).
-export function formatNumber(value: number | undefined): string {
+export function formatNumber(value: number | undefined, locale: UiLocale = 'en'): string {
   if (value === undefined || !Number.isFinite(value)) return NO_DATA;
-  return new Intl.NumberFormat().format(value);
+  return new Intl.NumberFormat(locale).format(value);
 }
 
 // Compact number (e.g. 12.4K).
-export function formatCompactNumber(value: number | undefined): string {
+export function formatCompactNumber(value: number | undefined, locale: UiLocale = 'en'): string {
   if (value === undefined || !Number.isFinite(value)) return NO_DATA;
-  return formatValue(value, 'compact');
+  return formatValue(value, 'compact', { locale });
 }
 
 // A 0-100 rate rendered as a percent (e.g. 4.1%).
-export function formatRate(value: number | undefined): string {
+export function formatRate(value: number | undefined, locale: UiLocale = 'en'): string {
   if (value === undefined || !Number.isFinite(value)) return NO_DATA;
-  return formatValue(value, 'percent');
+  return formatValue(value, 'percent', { locale });
 }
 
 // Signed percentage change (e.g. "+12.3%"). The window it describes is supplied
 // by the adjacent label. An exact zero is rendered unsigned: "+0.0%" reads as a
 // measured gain, which is exactly the misreading it used to sit next to.
-export function formatPercentChange(value: number | undefined): string {
+export function formatPercentChange(value: number | undefined, locale: UiLocale = 'en'): string {
   if (value === undefined || !Number.isFinite(value)) return NO_DATA;
-  const magnitude = `${Math.abs(value).toFixed(1)}%`;
+  const magnitude = `${formatDecimal(Math.abs(value), 1, locale)}%`;
   if (value === 0) return magnitude;
   return `${value > 0 ? '+' : '-'}${magnitude}`;
 }
@@ -69,25 +71,35 @@ export function percentChangeFrom(current: number, previous: number): number | u
   return Number((((current - previous) / Math.abs(previous)) * 100).toFixed(1));
 }
 
-export function formatShortDate(date: string | undefined): string {
+export function formatShortDate(date: string | undefined, locale: UiLocale = 'en'): string {
   if (!date) return NO_DATA;
   // A bare YYYY-MM-DD parses as UTC midnight, which renders as the *previous*
   // day in any western timezone — an axis tick then names a day the backend
   // never reported. Pin it to local midnight so the label matches the data.
   const parsed = new Date(YMD_ONLY.test(date) ? `${date}T00:00:00` : date);
   if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parsed.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 // States a window in absolute dates. Preferred over a bare day count anywhere a
 // reader could mistake the count for the active range filter.
 export function formatDateRangeLabel(
   range: { from: string; to: string } | null | undefined,
+  locale: UiLocale = 'en',
 ): string {
   if (!range) return NO_DATA;
-  const from = formatShortDate(range.from);
-  const to = formatShortDate(range.to);
-  return from === to ? from : `${from} to ${to}`;
+  const from = formatShortDate(range.from, locale);
+  const to = formatShortDate(range.to, locale);
+  if (from === to) return from;
+  if (locale === 'en') return `${from} to ${to}`;
+  const start = new Date(YMD_ONLY.test(range.from) ? `${range.from}T00:00:00` : range.from);
+  const end = new Date(YMD_ONLY.test(range.to) ? `${range.to}T00:00:00` : range.to);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end)
+    return `${from} – ${to}`;
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+  }).formatRange(start, end);
 }
 
 // "Select a instagram account" was shipping in two empty states. The article
@@ -97,11 +109,11 @@ export function articleFor(label: string): string {
   return /^[aeiou]/i.test(label) ? 'an' : 'a';
 }
 
-export function formatDateTime(value: string | undefined): string {
+export function formatDateTime(value: string | undefined, locale: UiLocale = 'en'): string {
   if (!value) return NO_DATA;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString('en-US', {
+  return parsed.toLocaleString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

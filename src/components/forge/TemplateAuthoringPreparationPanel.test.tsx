@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { TemplateAuthoringDocument } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TemplateAuthoringPreparationPanel } from './TemplateAuthoringPreparationPanel';
 import type { useTemplateAuthoringLifecycle } from './useTemplateAuthoringLifecycle';
 
@@ -101,7 +106,9 @@ describe('TemplateAuthoringPreparationPanel', () => {
     const preflightSummary = screen.getByText(
       'Package preflight: format passed, dependencies pending · Forge provider pending',
     );
-    const detailsTrigger = screen.getByRole('button', { name: /Package details and verification/ });
+    const detailsTrigger = screen.getByRole('button', {
+      name: /Package details and verification/,
+    });
     expect(
       namedFont.compareDocumentPosition(detailsTrigger) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

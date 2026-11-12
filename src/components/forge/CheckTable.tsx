@@ -1,7 +1,8 @@
 'use client';
 
 import { AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, CircleMinus } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { type ReactNode, useEffect, useRef, useState, useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Spinner } from '@/components/ui/spinner';
@@ -36,11 +37,16 @@ const TICK_TONE: Record<CheckTick, string> = {
 };
 
 export function TickBar({ ticks, className }: { ticks: CheckTick[]; className?: string }) {
+  const translateUi = useUiTranslations('forge');
+
   const done = ticks.filter((tick) => tick === 'pass').length;
   return (
     <span
       role="img"
-      aria-label={`${done} of ${ticks.length} done`}
+      aria-label={translateUi('value0_of_value1_done_7ae59652', {
+        value0: String(done),
+        value1: String(ticks.length),
+      })}
       className={cn('flex h-3 items-stretch gap-px', className)}
     >
       {ticks.map((tick, index) => (
@@ -51,25 +57,59 @@ export function TickBar({ ticks, className }: { ticks: CheckTick[]; className?: 
   );
 }
 
-const STATE_MARK: Record<
-  Exclude<CheckState, 'running'>,
-  { Icon: typeof CheckCircle2; tone: string; label: string }
-> = {
-  pass: { Icon: CheckCircle2, tone: 'text-success', label: 'Passed' },
-  warn: { Icon: AlertTriangle, tone: 'text-warning', label: 'Warning' },
-  fail: { Icon: AlertCircle, tone: 'text-destructive', label: 'Failed' },
-  todo: { Icon: CircleDashed, tone: 'text-muted-foreground', label: 'Not done' },
-  skipped: { Icon: CircleMinus, tone: 'text-muted-foreground', label: 'Skipped' },
-};
+function useLocalStateMarkMessages() {
+  const translateConfig = useUiTranslations('forge');
+  return useUiConfigMemo(() => {
+    const value: Record<
+      Exclude<CheckState, 'running'>,
+      { Icon: typeof CheckCircle2; tone: string; label: string }
+    > = {
+      pass: {
+        Icon: CheckCircle2,
+        tone: 'text-success',
+        label: translateConfig('passed_436fe71b'),
+      },
+      warn: {
+        Icon: AlertTriangle,
+        tone: 'text-warning',
+        label: translateConfig('warning_e981ddae'),
+      },
+      fail: {
+        Icon: AlertCircle,
+        tone: 'text-destructive',
+        label: translateConfig('failed_031a8f0f'),
+      },
+      todo: {
+        Icon: CircleDashed,
+        tone: 'text-muted-foreground',
+        label: translateConfig('not_done_0df2acbe'),
+      },
+      skipped: {
+        Icon: CircleMinus,
+        tone: 'text-muted-foreground',
+        label: translateConfig('skipped_12698ce1'),
+      },
+    };
+    return value;
+  }, [translateConfig]);
+}
 
 function StateMark({ state }: { state: CheckState }) {
-  if (state === 'running') return <Spinner role="img" aria-label="Running" className="size-3.5" />;
+  const STATE_MARK = useLocalStateMarkMessages();
+
+  const translateUi = useUiTranslations('forge');
+
+  if (state === 'running')
+    return <Spinner role="img" aria-label={translateUi('running_f4ccae29')} className="size-3.5" />;
   const { Icon, tone, label } = STATE_MARK[state];
   return <Icon role="img" aria-label={label} className={cn('size-3.5', tone)} />;
 }
 
 /** "1 failed · 2 warnings", or "All checks passed" once nothing is failed, warned, running or left to do. */
-export function checkSummary(rows: Array<Pick<CheckRow, 'state'>>): string {
+export function checkSummary(
+  rows: Array<Pick<CheckRow, 'state'>>,
+  t?: ReturnType<typeof useUiTranslations<'forge'>>,
+): string {
   const count = (state: CheckState) => rows.filter((row) => row.state === state).length;
   const parts = [
     [count('fail'), 'failed', 'failed'],
@@ -77,8 +117,11 @@ export function checkSummary(rows: Array<Pick<CheckRow, 'state'>>): string {
     [count('running'), 'running', 'running'],
     [count('todo'), 'to do', 'to do'],
   ] as const;
-  const said = parts.filter(([n]) => n > 0).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
-  return said.length ? said.join(' · ') : 'All checks passed';
+  const keys = ['checkFailed', 'checkWarnings', 'checkRunning', 'checkPending'] as const;
+  const said = parts.flatMap(([n, one, many], i) =>
+    n > 0 ? [t?.(keys[i], { count: n }) ?? `${n} ${n === 1 ? one : many}`] : [],
+  );
+  return said.length ? said.join(' · ') : (t?.('checkAllPassed') ?? 'All checks passed');
 }
 
 function RowCells({ row }: { row: CheckRow }) {
@@ -112,7 +155,7 @@ const investigateTarget = (rows: CheckRow[]) =>
 
 export function CheckTable({
   rows,
-  label = 'Checks',
+  label,
   action,
   className,
   focusRowRequest,
@@ -125,6 +168,8 @@ export function CheckTable({
   /** Open and focus a named row when a related repair action points here. */
   focusRowRequest?: { name: string; requestId: number } | null;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   // Open rows by name, held here rather than in each row, so a detail that disappears while its
   // data reloads comes back open, and the footer can open the row it points at.
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -137,7 +182,7 @@ export function CheckTable({
     triggers.current[row.name]?.focus();
     triggers.current[row.name]?.scrollIntoView?.({ block: 'nearest' });
   }, [focusRowRequest?.name, focusRowRequest?.requestId, rows]);
-  const summary = checkSummary(rows);
+  const summary = checkSummary(rows, translateUi);
   const failing = rows.some((row) => row.state === 'fail');
   const warning = rows.some((row) => row.state === 'warn');
   const target = investigateTarget(rows);
@@ -151,13 +196,17 @@ export function CheckTable({
         triggers.current[target.name]?.focus();
       }}
     >
-      Investigate
+      {' '}
+      {translateUi('investigate_e2641093')}{' '}
     </Button>
   ) : null;
 
   return (
     <div className={cn('flex flex-col', className)}>
-      <ul aria-label={label} className="flex flex-col divide-y divide-border">
+      <ul
+        aria-label={label ?? translateUi('checks_de07d072')}
+        className="flex flex-col divide-y divide-border"
+      >
         {rows.map((row) => (
           <li key={row.name}>
             <Collapsible
@@ -176,7 +225,9 @@ export function CheckTable({
                     ref={(node) => {
                       triggers.current[row.name] = node;
                     }}
-                    aria-label={`${row.name} details`}
+                    aria-label={translateUi('value0_details_9c9cc882', {
+                      value0: String(row.name),
+                    })}
                     className="absolute inset-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   />
                 ) : null}

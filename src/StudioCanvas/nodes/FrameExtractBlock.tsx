@@ -7,9 +7,9 @@ import {
   useEdges,
 } from '@xyflow/react';
 import { Camera, Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback } from 'react';
-
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
@@ -17,6 +17,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { FrameExtractNodeData } from '../types';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 import { NodeOverlayNote, NodeTitleBar } from './NodeChrome';
 import { NodeDownloadButton } from './NodeDownloadButton';
 
@@ -25,6 +26,8 @@ export function FrameExtractBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<FrameExtractNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const edges = useEdges();
   const executionControls = useWorkflowExecution();
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
@@ -55,26 +58,26 @@ export function FrameExtractBlock({
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <NodeTitleBar icon={Camera} label="Continuity Frame">
+        <NodeTitleBar icon={Camera} label={translateUi('continuity_frame_8c9749b5')}>
           <select
             className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-2xs"
             value={selector}
-            aria-label="Which frame to extract"
+            aria-label={translateUi('which_frame_to_extract_bb3902a8')}
             onChange={(event) =>
               updateNodeData(id, {
                 selector: event.target.value as FrameExtractNodeData['selector'],
               })
             }
           >
-            <option value="first">First</option>
-            <option value="last">Last</option>
-            <option value="timestamp">At time</option>
+            <option value="first">{translateUi('first_a151ceb1')}</option>
+            <option value="last">{translateUi('last_eb970eb0')}</option>
+            <option value="timestamp">{translateUi('at_time_5a064864')}</option>
           </select>
           {selector === 'timestamp' ? (
             <NumberScrubField
               // `nodrag` on the root so scrubbing the label moves the value, not the node.
               className="nodrag"
-              label="Sec"
+              label={translateUi('sec_7daacc78')}
               min={0}
               orientation="inline"
               step={0.1}
@@ -88,12 +91,16 @@ export function FrameExtractBlock({
             // biome-ignore lint/performance/noImgElement: data URLs and signed rendition URLs are valid here.
             <img
               src={data.generatedImage}
-              alt={`${selector} extracted video frame`}
+              alt={translateUi('value0_extracted_video_frame_f79fabf7', {
+                value0: String(selector),
+              })}
               className="max-h-full max-w-full object-contain"
             />
           ) : (
             <span className="px-3 text-center text-xs text-muted-foreground">
-              {hasVideo ? 'Ready to extract' : 'Connect a video'}
+              {hasVideo
+                ? translateUi('ready_to_extract_b1cc9c80')
+                : translateUi('connect_a_video_39a735e3')}
             </span>
           )}
           <Button
@@ -103,16 +110,20 @@ export function FrameExtractBlock({
             onMouseDown={(event) => event.stopPropagation()}
             onClick={() => void extract()}
           >
-            {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-            Extract
+            {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}{' '}
+            {translateUi('extract_c15301c0')}{' '}
           </Button>
           <NodeDownloadButton
             nodeType="frameExtract"
             data={data}
             baseName={`frame-${selector}`}
-            label="Download extracted frame"
+            label={translateUi('download_extracted_frame_e7389f99')}
           />
-          {data.error ? <NodeOverlayNote tone="destructive">{data.error}</NodeOverlayNote> : null}
+          {data.error ? (
+            <NodeOverlayNote tone="destructive">
+              {workflowNodeError(data, translateUi)}
+            </NodeOverlayNote>
+          ) : null}
         </NodeContent>
       </CanvasNode>
       <Handle
@@ -120,14 +131,18 @@ export function FrameExtractBlock({
         position={Position.Left}
         id="video"
         className="studio-handle !size-3"
-        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+        style={{
+          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id="image"
         className="studio-handle !size-3"
-        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+        style={{
+          ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+        }}
       />
     </div>
   );

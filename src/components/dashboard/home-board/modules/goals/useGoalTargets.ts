@@ -1,4 +1,6 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The team's goal targets, through the Backend: GET once when the tile mounts, PUT to set one,
 // DELETE to remove one. The list changes only when the Backend said a write landed, so a failed
@@ -62,7 +64,12 @@ const sameTarget =
     target.scope === key.scope && target.objectiveId === key.objectiveId;
 
 export function useGoalTargets(brandId: string, enabled: boolean): GoalTargetsApi {
-  const [load, setLoad] = useState<GoalTargetsLoad>({ status: enabled ? 'loading' : 'idle' });
+  const locale = useLocale();
+  const uiText = useTranslations('dashboard');
+  const formatError = useUiErrorMessage();
+  const [load, setLoad] = useState<GoalTargetsLoad>({
+    status: enabled ? 'loading' : 'idle',
+  });
 
   useEffect(() => {
     if (!enabled) {
@@ -86,27 +93,36 @@ export function useGoalTargets(brandId: string, enabled: boolean): GoalTargetsAp
     };
   }, [brandId, enabled]);
 
-  const save = useCallback(async (target: HomeGoalTargetUpsertRequest) => {
-    try {
-      const { target: stored } = await request<HomeGoalTargetUpsertResponse>({
-        path: HOME_READ_PATHS.goalTargets,
-        method: 'PUT',
-        body: target,
-        schema: homeGoalTargetUpsertResponseSchema,
-      });
-      setLoad((current) =>
-        current.status === 'ready'
-          ? {
-              status: 'ready',
-              targets: [...current.targets.filter((item) => !sameTarget(stored)(item)), stored],
-            }
-          : current,
-      );
-      return { ok: true as const };
-    } catch (error) {
-      return { ok: false as const, message: `Not saved. ${wordsOf(error)}` };
-    }
-  }, []);
+  const save = useCallback(
+    async (target: HomeGoalTargetUpsertRequest) => {
+      try {
+        const { target: stored } = await request<HomeGoalTargetUpsertResponse>({
+          path: HOME_READ_PATHS.goalTargets,
+          method: 'PUT',
+          body: target,
+          schema: homeGoalTargetUpsertResponseSchema,
+        });
+        setLoad((current) =>
+          current.status === 'ready'
+            ? {
+                status: 'ready',
+                targets: [...current.targets.filter((item) => !sameTarget(stored)(item)), stored],
+              }
+            : current,
+        );
+        return { ok: true as const };
+      } catch (error) {
+        return {
+          ok: false as const,
+          message: uiText('goalWriteFailed', {
+            action: 'save',
+            reason: locale === 'en' ? wordsOf(error) : formatError(error),
+          }),
+        };
+      }
+    },
+    [locale, uiText, formatError],
+  );
 
   const remove = useCallback(
     async (key: { scope: string; objectiveId: string }) => {
@@ -127,10 +143,16 @@ export function useGoalTargets(brandId: string, enabled: boolean): GoalTargetsAp
         );
         return { ok: true as const };
       } catch (error) {
-        return { ok: false as const, message: `Not removed. ${wordsOf(error)}` };
+        return {
+          ok: false as const,
+          message: uiText('goalWriteFailed', {
+            action: 'remove',
+            reason: locale === 'en' ? wordsOf(error) : formatError(error),
+          }),
+        };
       }
     },
-    [brandId],
+    [brandId, locale, uiText, formatError],
   );
 
   return { load, save, remove };

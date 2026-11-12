@@ -13,6 +13,7 @@ import {
   Search,
   Sparkles,
 } from 'lucide-react';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { LibraryElementsGrid } from '@/components/library/LibraryElementsGrid';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
@@ -36,6 +37,9 @@ type Props = {
 // library page's filter + search semantics and makes every asset grabbable onto
 // the canvas via the shared asset_drop contract.
 export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const {
     assets,
     loading,
@@ -74,12 +78,16 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             className="w-full rounded-md border border-white/10 bg-white/5 py-1.5 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-            placeholder="Search the library…"
+            placeholder={uiText('search_the_library_ec8e720')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Library destinations">
+        <div
+          className="flex flex-wrap gap-1"
+          role="tablist"
+          aria-label={translateUi('library_destinations_9acd4f9e')}
+        >
           {STUDIO_LIBRARY_DESTINATIONS.map((destination) => (
             <button
               key={destination.value}
@@ -94,7 +102,9 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
                   : 'text-gray-400 hover:text-white',
               )}
             >
-              {destination.label}
+              {translateUi('studioLibraryDestination', {
+                destination: destination.value,
+              })}
             </button>
           ))}
         </div>
@@ -109,7 +119,7 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
         )}
 
         {isInspiration && assets.length > 0 ? (
-          <InspirationPullButton label="Regenerate" pull={pull} />
+          <InspirationPullButton label={uiText('regenerate_1651031')} pull={pull} />
         ) : null}
       </div>
 
@@ -118,7 +128,7 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           <LibraryElementsGrid brandId={brandProfileId} />
         ) : assets.length === 0 && loading ? (
           <div className="flex h-32 items-center justify-center text-sm text-gray-400">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {translateUi('loading_ba3bbbe1')}{' '}
           </div>
         ) : assets.length === 0 && error ? (
           <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-gray-400">
@@ -129,7 +139,9 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
           <InspirationEmptyState pull={pull} />
         ) : assets.length === 0 ? (
           <div className="p-6 text-center text-sm text-gray-400">
-            {query.trim() ? 'No matching assets.' : 'No assets in the library yet.'}
+            {query.trim()
+              ? translateUi('no_matching_assets_b0c50a8b')
+              : translateUi('no_assets_in_the_library_yet_c30a2d4e')}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">
@@ -142,7 +154,9 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
         <div ref={sentinelRef} className="h-px w-full" />
         {loading && assets.length > 0 && (
           <div className="flex items-center justify-center py-3 text-xs text-gray-500">
-            <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Loading more…
+            <Loader2 className="mr-2 h-3 w-3 animate-spin" /> {translateUi(
+              'loading_more_964e5f88',
+            )}{' '}
           </div>
         )}
       </div>
@@ -163,6 +177,8 @@ type InspirationPull = {
 // media.assets with source='inspiration', so a completed run leaves the folder
 // populated for next time; we just re-read it when the stream ends.
 function useInspirationPull(brandId: string, onSettled: () => void): InspirationPull {
+  const translateUi = useUiTranslations('studio');
+
   const [running, setRunning] = React.useState(false);
   const [found, setFound] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
@@ -200,13 +216,12 @@ function useInspirationPull(brandId: string, onSettled: () => void): Inspiration
         setError(
           outcome.pulled > 0
             ? null
-            : (outcome.message ??
-                'No inspiration came back. Add competitors for this brand, then try again.'),
+            : (outcome.message ?? translateUi('no_inspiration_came_back_add_compet_a5747825')),
         );
       } catch (err) {
         if (!controller.signal.aborted) {
           console.error('[StudioMediaLibraryPanel] inspiration pull failed', err);
-          setError("Couldn't pull inspiration. Please try again.");
+          setError(translateUi('couldn_t_pull_inspiration_please_tr_3b137e36'));
         }
       } finally {
         abortRef.current = null;
@@ -215,12 +230,14 @@ function useInspirationPull(brandId: string, onSettled: () => void): Inspiration
         onSettled();
       }
     })();
-  }, [brandId, onSettled]);
+  }, [brandId, onSettled, translateUi]);
 
   return { running, found, error, start };
 }
 
 function InspirationPullButton({ label, pull }: { label: string; pull: InspirationPull }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div className="flex flex-col gap-1.5">
       <button
@@ -233,7 +250,11 @@ function InspirationPullButton({ label, pull }: { label: string; pull: Inspirati
         {pull.running ? (
           <>
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {pull.found > 0 ? `Finding inspiration… ${pull.found} found` : 'Finding inspiration…'}
+            {pull.found > 0
+              ? translateUi('finding_inspiration_value0_found_d25aadcf', {
+                  count: Number(pull.found),
+                })
+              : translateUi('finding_inspiration_8768ae34')}
           </>
         ) : (
           <>
@@ -252,18 +273,22 @@ function InspirationPullButton({ label, pull }: { label: string; pull: Inspirati
 }
 
 function InspirationEmptyState({ pull }: { pull: InspirationPull }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div
       data-testid="studio-inspiration-empty"
       className="flex flex-col items-center gap-3 p-6 text-center"
     >
       <Sparkles className="h-6 w-6 text-purple-400" />
-      <p className="text-sm font-medium text-white">No inspiration saved yet</p>
-      <p className="max-w-[16rem] text-xs leading-relaxed text-gray-400">
-        Inspiration is competitor creative pulled from the brands you track. Nothing has been saved
-        for this brand yet — pull a set to fill this folder.
+      <p className="text-sm font-medium text-white">
+        {translateUi('no_inspiration_saved_yet_b2f58eea')}
       </p>
-      <InspirationPullButton label="Find inspiration" pull={pull} />
+      <p className="max-w-[16rem] text-xs leading-relaxed text-gray-400">
+        {' '}
+        {translateUi('inspiration_is_competitor_creative__f55857a5')}{' '}
+      </p>
+      <InspirationPullButton label={translateUi('find_inspiration_eed90577')} pull={pull} />
     </div>
   );
 }
@@ -271,7 +296,8 @@ function InspirationEmptyState({ pull }: { pull: InspirationPull }) {
 // Image/video tiles paint the original. Audio and source files (PSD, INDD, 3D, PDF…)
 // paint their Library preview still, never the original bytes an <img> cannot draw.
 function tileStill(asset: MediaAsset): string | null {
-  if (asset.kind === 'image' || asset.kind === 'video') return sanitizeCreativeAssetUrl(asset.signedUrl);
+  if (asset.kind === 'image' || asset.kind === 'video')
+    return sanitizeCreativeAssetUrl(asset.signedUrl);
   const preview = asset.preview;
   return sanitizeCreativeAssetUrl(
     preview?.state === 'ready' && preview.kind === 'image' ? preview.signedUrl : asset.thumbnailUrl,
@@ -279,6 +305,9 @@ function tileStill(asset: MediaAsset): string | null {
 }
 
 function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: string }) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const url = tileStill(asset);
   const isVideo = asset.kind === 'video';
   const label = asset.title ?? asset.fileName;
@@ -329,8 +358,10 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
                   trigger={
                     <button
                       type="button"
-                      aria-label={`Reformat ${label}`}
-                      title="Reformat image"
+                      aria-label={translateUi('reformat_value0_45e905e6', {
+                        value0: String(label),
+                      })}
+                      title={uiText('reformat_image_b86c06c')}
                       className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
                       onClick={(event) => event.stopPropagation()}
                     >

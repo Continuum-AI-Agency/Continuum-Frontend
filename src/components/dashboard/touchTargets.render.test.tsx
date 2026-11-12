@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // PP-DT-C-touch-hit-areas-overlap-home-views-scale-bar: on touch screens neighbouring controls stole
 // each other's taps. The invisible pads (`hit-area`, 44 px under a coarse pointer) of controls that
 // sit closer than the pad overlap — Home's view switch, the Scale bar's Canvas / Full screen /
@@ -8,7 +9,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -30,7 +31,9 @@ const classes = (element: Element | null | undefined) =>
 describe('touch targets that sit side by side', () => {
   it("Home's view switch is a row of pads that cannot cross into each other", () => {
     render(<HomeBaseDashboard activeView="organic" activeViewSlot={<div>slot</div>} />);
-    const nav = screen.getByRole('navigation', { name: 'Dashboard view options' });
+    const nav = screen.getByRole('navigation', {
+      name: 'Dashboard view options',
+    });
     expect(classes(nav)).toContain('hit-area-row');
   });
 

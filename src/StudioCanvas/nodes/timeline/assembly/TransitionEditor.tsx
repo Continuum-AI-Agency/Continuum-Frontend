@@ -7,7 +7,8 @@ import type {
   EditorVideoClip,
 } from '@continuum/contracts';
 import { Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useState, useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
 import {
@@ -16,23 +17,35 @@ import {
   upsertTransitionOperation,
 } from '../editorProjectV2AssemblyModel';
 
-const TRANSITION_OPTIONS: Array<{
-  value: 'cut' | Exclude<EditorTransition['transitionType'], 'cut' | 'custom'>;
-  label: string;
-}> = [
-  { value: 'cut', label: 'Cut' },
-  { value: 'crossfade', label: 'Crossfade' },
-  { value: 'dip_to_black', label: 'Dip to black' },
-  { value: 'dip_to_white', label: 'Dip to white' },
-  { value: 'flash', label: 'Flash' },
-  { value: 'wipe', label: 'Wipe' },
-  { value: 'slide', label: 'Slide' },
-  { value: 'zoom', label: 'Zoom' },
-  { value: 'blur', label: 'Blur' },
-  { value: 'whip', label: 'Whip pan' },
-  { value: 'zoom_blur', label: 'Zoom through' },
-  { value: 'glitch', label: 'Glitch' },
-];
+function useLocalTransitionOptionsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: Array<{
+      value: 'cut' | Exclude<EditorTransition['transitionType'], 'cut' | 'custom'>;
+      label: string;
+    }> = [
+      { value: 'cut', label: translateConfig('cut_1f45f025') },
+      { value: 'crossfade', label: translateConfig('crossfade_d5fe512a') },
+      {
+        value: 'dip_to_black',
+        label: translateConfig('dip_to_black_68514cba'),
+      },
+      {
+        value: 'dip_to_white',
+        label: translateConfig('dip_to_white_f37ecc75'),
+      },
+      { value: 'flash', label: translateConfig('flash_f3577cb5') },
+      { value: 'wipe', label: translateConfig('wipe_3404644e') },
+      { value: 'slide', label: translateConfig('slide_6bb4c117') },
+      { value: 'zoom', label: translateConfig('zoom_509c517e') },
+      { value: 'blur', label: translateConfig('blur_cd83e673') },
+      { value: 'whip', label: translateConfig('whip_pan_e2ccac87') },
+      { value: 'zoom_blur', label: translateConfig('zoom_through_8f81c0ae') },
+      { value: 'glitch', label: translateConfig('glitch_14980158') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 export function TransitionEditor({
   project,
@@ -45,10 +58,12 @@ export function TransitionEditor({
   clips: EditorVideoClip[];
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   if (!videoTrack || clips.length < 2) return null;
   return (
     <section className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
-      <h3 className="text-xs font-semibold">Transitions</h3>
+      <h3 className="text-xs font-semibold">{translateUi('transitions_700bb6e8')}</h3>
       {clips.slice(1).map((to, index) => {
         const from = clips[index];
         const transition = project.transitions.find(
@@ -88,6 +103,10 @@ function TransitionRow({
   transition?: EditorTransition;
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
+  const TRANSITION_OPTIONS = useLocalTransitionOptionsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const [type, setType] = useState<EditorTransition['transitionType']>(
     transition?.transitionType ?? 'cut',
   );
@@ -99,7 +118,7 @@ function TransitionRow({
   return (
     <div className="space-y-2 rounded-md border border-border/50 bg-muted/20 p-2">
       <p className="truncate text-3xs text-muted-foreground">
-        {from.name ?? 'Clip'} → {to.name ?? 'Clip'}
+        {from.name ?? translateUi('clip_82337888')} → {to.name ?? translateUi('clip_82337888')}
       </p>
       <div className="grid grid-cols-[1fr_72px] gap-2">
         <select
@@ -108,7 +127,10 @@ function TransitionRow({
             setType(event.currentTarget.value as EditorTransition['transitionType'])
           }
           className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-          aria-label={`Transition from ${from.name ?? from.id} to ${to.name ?? to.id}`}
+          aria-label={translateUi('transition_from_value0_to_value1_b961178e', {
+            value0: String(from.name ?? from.id),
+            value1: String(to.name ?? to.id),
+          })}
         >
           {TRANSITION_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -117,7 +139,7 @@ function TransitionRow({
           ))}
         </select>
         <NumberScrubField
-          label="Seconds"
+          label={translateUi('seconds_381a8e96')}
           value={duration}
           min={0.1}
           step={0.1}
@@ -131,7 +153,7 @@ function TransitionRow({
             size="icon"
             className="size-7"
             onClick={() => onApply(removeTransitionOperation(project, transition.id))}
-            aria-label="Delete transition"
+            aria-label={translateUi('delete_transition_cdce4e21')}
           >
             <Trash2 className="size-3.5" />
           </Button>
@@ -157,7 +179,8 @@ function TransitionRow({
           }}
           disabled={type === 'cut' && !transition}
         >
-          Apply
+          {' '}
+          {translateUi('apply_31e392d1')}{' '}
         </Button>
       </div>
     </div>

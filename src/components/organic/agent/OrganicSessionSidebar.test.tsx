@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OrganicSession } from '@/lib/organic/agent-sessions';
 import { OrganicSessionSidebar } from './OrganicSessionSidebar';
 
@@ -73,7 +74,10 @@ describe('OrganicSessionSidebar working marker', () => {
   });
 
   it('shows no Working marker when no session is streaming', () => {
-    const { queryByText } = renderSidebar({ sessions, streamingSessionIds: new Set() });
+    const { queryByText } = renderSidebar({
+      sessions,
+      streamingSessionIds: new Set(),
+    });
     expect(queryByText('Working')).toBeNull();
   });
 

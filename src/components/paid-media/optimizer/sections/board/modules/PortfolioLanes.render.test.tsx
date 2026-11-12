@@ -7,7 +7,8 @@ import {
   type PortfolioMetrics,
   PortfolioMetricsSchema,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { PortfolioMetricsState } from '../../detail/usePortfolioMetrics';
 
 // The lanes' reads, driven from real reads of Nov 2, 2026 (the fixtures beside this file).
@@ -48,7 +49,11 @@ mock.module('../../usePortfolioFigures', () => ({
     const figures = new Map<string, NonNullable<ReturnType<typeof realFigure.portfolioFigure>>>();
     portfolios.forEach((portfolio, index) => {
       const cycle = realFigure.seriesWindowFigures(series[index] ?? []);
-      const figure = realFigure.portfolioFigure({ portfolio, live: cycle, snapshot: cycle });
+      const figure = realFigure.portfolioFigure({
+        portfolio,
+        live: cycle,
+        snapshot: cycle,
+      });
       if (figure) figures.set(portfolio.id, figure);
     });
     return { figures, pending: false };
@@ -90,7 +95,14 @@ const READING: AdAccountReading = {
     currency: 'MXN',
     windowDays: 7,
   },
-  board: [{ module: 'portfolios', size: 'w', score: 20, reason: '3 portafolios contra su meta.' }],
+  board: [
+    {
+      module: 'portfolios',
+      size: 'w',
+      score: 20,
+      reason: '3 portafolios contra su meta.',
+    },
+  ],
   hidden: [],
   asks: [],
 };

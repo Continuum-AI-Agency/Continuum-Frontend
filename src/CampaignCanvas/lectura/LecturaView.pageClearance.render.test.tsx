@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import { LIVE_BATCH_PREVIEW } from '@/lib/campaign-canvas/lectura.fixtures';
 import { LecturaView } from './LecturaView';

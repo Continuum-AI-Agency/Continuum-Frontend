@@ -1,4 +1,6 @@
 'use client';
+import { useLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 
 // The timeline both account feeds render as: events grouped under their day ("Today",
 // "Yesterday", "Oct 3"), each on a hairline-free line of its own — a clock time in mono, a small
@@ -25,13 +27,13 @@ function startOfDay(date: Date): number {
 }
 
 /** "Today", "Yesterday", or the short date — with the year only when it is not this one. */
-export function dayLabel(ts: string, now: Date = new Date()): string {
+export function dayLabel(ts: string, now: Date = new Date(), uiLocale: UiLocale = 'en'): string {
   const at = new Date(ts);
   if (!Number.isFinite(at.getTime())) return 'Undated';
   const days = Math.round((startOfDay(now) - startOfDay(at)) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
-  return at.toLocaleDateString('en-US', {
+  return at.toLocaleDateString(uiLocale, {
     month: 'short',
     day: 'numeric',
     ...(at.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
@@ -39,10 +41,14 @@ export function dayLabel(ts: string, now: Date = new Date()): string {
 }
 
 /** The 24-hour clock time of an event, in the viewer's zone. */
-export function clockTime(ts: string): string {
+export function clockTime(ts: string, uiLocale: UiLocale = 'en'): string {
   const at = new Date(ts);
   if (!Number.isFinite(at.getTime())) return '—';
-  return at.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return at.toLocaleTimeString(uiLocale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
 }
 
 /** Consecutive items that share a day, in the order given. The feeds arrive newest first, so a
@@ -51,10 +57,11 @@ export function groupByDay<T>(
   items: readonly T[],
   tsOf: (item: T) => string,
   now: Date = new Date(),
+  uiLocale: UiLocale = 'en',
 ): { label: string; items: T[] }[] {
   const groups: { label: string; items: T[] }[] = [];
   for (const item of items) {
-    const label = dayLabel(tsOf(item), now);
+    const label = dayLabel(tsOf(item), now, uiLocale);
     const last = groups.at(-1);
     if (last && last.label === label) last.items.push(item);
     else groups.push({ label, items: [item] });
@@ -96,6 +103,7 @@ export function TimelineEntry({
   children: ReactNode;
   className?: string;
 } & { [dataAttribute: `data-${string}`]: string | undefined }) {
+  const uiLocale = useLocale();
   return (
     <li
       className={cn(
@@ -105,7 +113,7 @@ export function TimelineEntry({
       {...rest}
     >
       <time className="pt-0.5 font-mono text-muted-foreground text-xs tabular-nums" dateTime={ts}>
-        {clockTime(ts)}
+        {clockTime(ts, uiLocale)}
       </time>
       <span
         aria-hidden="true"

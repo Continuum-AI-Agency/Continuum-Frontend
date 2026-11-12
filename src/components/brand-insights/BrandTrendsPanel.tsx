@@ -1,4 +1,5 @@
 import { Calendar, Clock3, Globe2, LineChart } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,19 +44,19 @@ type BrandTrendsPanelProps = {
   className?: string;
 };
 
-function formatDate(value?: string) {
+function formatDate(value: string | undefined, uiLocale: string) {
   if (!value) return undefined;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed.toLocaleDateString('en-US', {
+  return parsed.toLocaleDateString(uiLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 }
 
-function formatWeekOption(week: BrandInsightsWeekSummary) {
-  const label = formatDate(week.weekStartDate) ?? week.weekStartDate;
+function formatWeekOption(week: BrandInsightsWeekSummary, uiLocale: string) {
+  const label = formatDate(week.weekStartDate, uiLocale) ?? week.weekStartDate;
   return week.regenerationCount > 0 ? `${label} · ${week.generationCount} attempts` : label;
 }
 
@@ -122,8 +123,11 @@ export function BrandTrendsPanel({
   fill = false,
   className,
 }: BrandTrendsPanelProps) {
-  const weekLabel = formatDate(weekStartDate);
-  const generatedLabel = formatDate(generatedAt);
+  const tUi = useTranslations('common');
+  const uiLocale = useLocale();
+
+  const weekLabel = formatDate(weekStartDate, uiLocale);
+  const generatedLabel = formatDate(generatedAt, uiLocale);
 
   if (isLoading) {
     return <BrandTrendsPanelSkeleton />;
@@ -139,9 +143,9 @@ export function BrandTrendsPanel({
           <div className="flex min-w-0 items-baseline gap-2">
             <p className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wide uppercase">
               <LineChart className="h-3 w-3" />
-              Brand Insights
+              {tUi('m_ed14eb9a90')}
             </p>
-            <CardTitle className="truncate text-sm tracking-tight">Current trend signals</CardTitle>
+            <CardTitle className="truncate text-sm tracking-tight">{tUi('m_ce1343aef9')}</CardTitle>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -157,12 +161,12 @@ export function BrandTrendsPanel({
                 <Select value={weekStartDate} onValueChange={onWeekChange} disabled={isWeekLoading}>
                   <SelectTrigger className="h-6 w-[168px] text-xs">
                     <Calendar className="mr-1 size-3" />
-                    <SelectValue aria-label="Browse Trends week" />
+                    <SelectValue aria-label={tUi('m_abbcb66635')} />
                   </SelectTrigger>
                   <SelectContent>
                     {weeks.map((week) => (
                       <SelectItem key={week.weekStartDate} value={week.weekStartDate}>
-                        {formatWeekOption(week)}
+                        {formatWeekOption(week, uiLocale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -176,8 +180,10 @@ export function BrandTrendsPanel({
             ) : null}
             {generationKind === 'regeneration' ? (
               <Badge variant="secondary" className="h-6 text-xs">
-                Regeneration
-                {generationCount && generationCount > 1 ? ` · ${generationCount} attempts` : ''}
+                {tUi('m_506eb98f49')}
+                {generationCount && generationCount > 1
+                  ? tUi('m_939d469c91', { v0: String(generationCount) })
+                  : ''}
               </Badge>
             ) : null}
             {generatedLabel ? (

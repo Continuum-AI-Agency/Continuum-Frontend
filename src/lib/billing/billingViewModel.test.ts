@@ -1,16 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { type BillingOverview, billingOverviewSchema } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import settingsMessages from '../../../messages/settings/en.json';
+import portugueseSettingsMessages from '../../../messages/settings/pt-BR.json';
 import { BillingApiRequestError, promoErrorMessage, withCheckoutSessionId } from './billingApi';
 import {
   AUTO_BILLING_CONTRACT,
   AUTO_BILLING_NEEDS_PLAN,
+  toBillingView as buildBillingView,
   checkoutReturnParams,
   isBrandOwner,
   isChangeSettled,
   parseCheckoutReturn,
   type ReceiptPhase,
   receiptPhase,
-  toBillingView,
 } from './billingViewModel';
 
 const BRAND_ID = '00000000-0000-4000-8000-0000000000b2';
@@ -39,7 +42,11 @@ function overview(patch: {
       addons: [],
       trendsTier: null,
       buckets: [],
-      creditBalance: { totalCredits: 0, purchasedCredits: 0, rolloverCredits: 0 },
+      creditBalance: {
+        totalCredits: 0,
+        purchasedCredits: 0,
+        rolloverCredits: 0,
+      },
       ...patch.entitlements,
     },
     hasPaymentMethod: patch.hasPaymentMethod ?? false,
@@ -128,7 +135,11 @@ describe('toBillingView — states', () => {
         'Jaina, Forge ad creation, approvals and optimizer',
         'Brand listening: mentions of your brand and competitors',
       ],
-      autoBilling: { enabled: false, capUsd: null, disabledReason: AUTO_BILLING_CONTRACT },
+      autoBilling: {
+        enabled: false,
+        capUsd: null,
+        disabledReason: AUTO_BILLING_CONTRACT,
+      },
     });
   });
 
@@ -169,7 +180,10 @@ describe('toBillingView — states', () => {
   test('with both plans live, either can be removed', () => {
     const view = selfServe(
       overview({
-        entitlements: { billingModel: 'stripe', plans: ['organic_studio', 'paid_media'] },
+        entitlements: {
+          billingModel: 'stripe',
+          plans: ['organic_studio', 'paid_media'],
+        },
         subscription: subscription(['organic_studio', 'paid_media']),
       }),
     );
@@ -185,7 +199,11 @@ describe('toBillingView — states', () => {
     // get_brand_entitlements lists no plans while past_due; the grace keeps the products on.
     const retrying = selfServe(
       overview({
-        entitlements: { billingModel: 'stripe', plans: [], products: ['studio', 'organic_agent'] },
+        entitlements: {
+          billingModel: 'stripe',
+          plans: [],
+          products: ['studio', 'organic_agent'],
+        },
         subscription: subscription(['organic_studio'], 'past_due'),
       }),
     );
@@ -246,7 +264,9 @@ describe('toBillingView — Trends+ add-on', () => {
     selfServe(withTrendsPlus(input)).plans.find((plan) => plan.planCode === 'trends_plus');
 
   test('sells Trends+ alone to a brand whose Organic comes from an admin grant', () => {
-    const card = trendsPlusCard(overview({ entitlements: { products: ['organic_agent', 'studio'] } }));
+    const card = trendsPlusCard(
+      overview({ entitlements: { products: ['organic_agent', 'studio'] } }),
+    );
     expect(card).toMatchObject({ action: 'checkout', priceLabel: '$9.99' });
     expect(card?.features).toContain('Brand listening: mentions of your brand and competitors');
   });
@@ -260,7 +280,10 @@ describe('toBillingView — Trends+ add-on', () => {
   test('adds Trends+ to an Organic Plus subscription', () => {
     const card = trendsPlusCard(
       overview({
-        entitlements: { products: ['organic_agent', 'studio'], plans: ['organic_studio'] },
+        entitlements: {
+          products: ['organic_agent', 'studio'],
+          plans: ['organic_studio'],
+        },
         subscription: subscription(['organic_studio']),
       }),
     );
@@ -271,7 +294,10 @@ describe('toBillingView — Trends+ add-on', () => {
 describe('toBillingView — Canvas credits', () => {
   test('a fresh Organic Plus period shows 1,000 credits available, all included', () => {
     const { credits } = selfServe(
-      overview({ canvas: { studioBucket: studioBucket(10, 0) }, hasPaymentMethod: true }),
+      overview({
+        canvas: { studioBucket: studioBucket(10, 0) },
+        hasPaymentMethod: true,
+      }),
     );
     expect(credits).toMatchObject({
       availableCredits: 1000,
@@ -327,7 +353,9 @@ describe('toBillingView — Canvas credits', () => {
     const blocked = selfServe(
       overview({
         hasPaymentMethod: true,
-        canvas: { studioBucket: { ...studioBucket(10, 0), overageAction: 'block' } },
+        canvas: {
+          studioBucket: { ...studioBucket(10, 0), overageAction: 'block' },
+        },
       }),
     );
     expect(blocked.credits.billsOverageToCard).toBe(false);
@@ -355,7 +383,9 @@ describe('toBillingView — auto-billing overage (opt-in)', () => {
     const view = selfServe(
       organicPlus({
         overageEnabled: true,
-        canvas: { studioBucket: { ...studioBucket(10, 0), overageAction: 'block' } },
+        canvas: {
+          studioBucket: { ...studioBucket(10, 0), overageAction: 'block' },
+        },
       }),
     );
     expect(view.autoBilling.enabled).toBe(true);
@@ -367,12 +397,19 @@ describe('toBillingView — auto-billing overage (opt-in)', () => {
       capUsd: null,
       disabledReason: AUTO_BILLING_NEEDS_PLAN,
     });
-    const canceled = overview({ subscription: subscription(['organic_studio'], 'canceled') });
+    const canceled = overview({
+      subscription: subscription(['organic_studio'], 'canceled'),
+    });
     expect(selfServe(canceled).autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
   });
 
   test('out of credits only when packs are on sale, nothing left and nothing billed to the card', () => {
-    const spent = { studioBucket: { ...studioBucket(10, 10), overageAction: 'block' as const } };
+    const spent = {
+      studioBucket: {
+        ...studioBucket(10, 10),
+        overageAction: 'block' as const,
+      },
+    };
     expect(selfServe(organicPlus({ canvas: spent })).outOfCredits).toBe(true);
     expect(
       selfServe(organicPlus({ canvas: { ...spent, purchasedBalanceUsd: 10 } })).outOfCredits,
@@ -397,7 +434,10 @@ describe('toBillingView — credit packs for a brand with Canvas but no subscrip
 
   test('a grandfathered brand can buy packs, has no auto-billing, and runs out at 0', () => {
     const view = selfServe(grandfathered(0));
-    expect(view).toMatchObject({ hasLiveSubscription: false, canBuyCredits: true });
+    expect(view).toMatchObject({
+      hasLiveSubscription: false,
+      canBuyCredits: true,
+    });
     expect(view.outOfCredits).toBe(true);
     expect(view.autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
   });
@@ -416,7 +456,11 @@ describe('toBillingView — credit packs for a brand with Canvas but no subscrip
 
   test('a live subscription can always buy packs, Canvas or not', () => {
     const performance = overview({
-      entitlements: { products: ['paid_media'], plans: ['paid_media'], billingModel: 'stripe' },
+      entitlements: {
+        products: ['paid_media'],
+        plans: ['paid_media'],
+        billingModel: 'stripe',
+      },
       subscription: subscription(['paid_media']),
     });
     expect(selfServe(performance).canBuyCredits).toBe(true);
@@ -528,7 +572,10 @@ describe('toBillingView — the X API wallet', () => {
   });
 
   test('an X pack return settles once the X balance grows, never on Canvas credits', () => {
-    const query = checkoutReturnParams({ kind: 'x_credits_added', xCreditsBefore: 120 });
+    const query = checkoutReturnParams({
+      kind: 'x_credits_added',
+      xCreditsBefore: 120,
+    });
     const parsed = parseCheckoutReturn(new URLSearchParams(query.success));
     expect(parsed).toEqual({
       outcome: 'success',
@@ -540,13 +587,17 @@ describe('toBillingView — the X API wallet', () => {
       canvas: { purchasedBalanceUsd: 50 },
       x: { balanceUsd: 1.2, overageEnabled: false, overageCapUsd: null },
     });
-    const after = overview({ x: { balanceUsd: 11.2, overageEnabled: false, overageCapUsd: null } });
+    const after = overview({
+      x: { balanceUsd: 11.2, overageEnabled: false, overageCapUsd: null },
+    });
     expect(isChangeSettled(parsed.change, before)).toBe(false);
     expect(isChangeSettled(parsed.change, after)).toBe(true);
   });
 
   test('an X auto-billing change settles on the X switch alone', () => {
-    const on = overview({ x: { balanceUsd: 0, overageEnabled: true, overageCapUsd: 100 } });
+    const on = overview({
+      x: { balanceUsd: 0, overageEnabled: true, overageCapUsd: 100 },
+    });
     expect(isChangeSettled({ kind: 'x_overage_changed', enabled: true }, on)).toBe(true);
     expect(isChangeSettled({ kind: 'x_overage_changed', enabled: false }, on)).toBe(false);
   });
@@ -556,15 +607,23 @@ describe('checkout return', () => {
   const params = (query: string) => new URLSearchParams(query);
 
   test('return URLs round-trip through the parser', () => {
-    const plan = checkoutReturnParams({ kind: 'plan_added', plan: 'organic_studio' });
+    const plan = checkoutReturnParams({
+      kind: 'plan_added',
+      plan: 'organic_studio',
+    });
     expect(parseCheckoutReturn(params(plan.success))).toEqual({
       outcome: 'success',
       change: { kind: 'plan_added', plan: 'organic_studio' },
       sessionId: null,
     });
-    expect(parseCheckoutReturn(params(plan.cancel))).toEqual({ outcome: 'cancel' });
+    expect(parseCheckoutReturn(params(plan.cancel))).toEqual({
+      outcome: 'cancel',
+    });
 
-    const credits = checkoutReturnParams({ kind: 'credits_added', purchasedCreditsBefore: 250 });
+    const credits = checkoutReturnParams({
+      kind: 'credits_added',
+      purchasedCreditsBefore: 250,
+    });
     expect(parseCheckoutReturn(params(credits.success))).toEqual({
       outcome: 'success',
       change: { kind: 'credits_added', purchasedCreditsBefore: 250 },
@@ -573,11 +632,16 @@ describe('checkout return', () => {
   });
 
   test("reads Stripe's substituted session id, and only a real one", () => {
-    const success = checkoutReturnParams({ kind: 'plan_added', plan: 'paid_media' }).success;
+    const success = checkoutReturnParams({
+      kind: 'plan_added',
+      plan: 'paid_media',
+    }).success;
     const template = new URL(withCheckoutSessionId(`https://app.test/settings?${success}`));
     // What Stripe redirects to: the literal template, replaced by the session id.
     const returned = template.search.replace('{CHECKOUT_SESSION_ID}', 'cs_live_a1B2c3');
-    expect(parseCheckoutReturn(params(returned))).toMatchObject({ sessionId: 'cs_live_a1B2c3' });
+    expect(parseCheckoutReturn(params(returned))).toMatchObject({
+      sessionId: 'cs_live_a1B2c3',
+    });
     for (const junk of ['{CHECKOUT_SESSION_ID}', 'pi_123', 'cs_test_../x', '']) {
       expect(parseCheckoutReturn(params(`${success}&session_id=${junk}`))).toMatchObject({
         outcome: 'success',
@@ -625,10 +689,19 @@ describe('promoErrorMessage', () => {
 });
 
 describe('receiptPhase', () => {
-  const paid = { paid: true, invoicePdf: 'https://pay.stripe.com/invoice/x/pdf' };
+  const paid = {
+    paid: true,
+    invoicePdf: 'https://pay.stripe.com/invoice/x/pdf',
+  };
   const paidNoInvoice = { paid: true, invoicePdf: null };
   const unpaid = { paid: false, invoicePdf: null };
-  const base = { receipt: paid, failed: false, settled: true, expired: false, printed: false };
+  const base = {
+    receipt: paid,
+    failed: false,
+    settled: true,
+    expired: false,
+    printed: false,
+  };
   const cases: Array<[string, Partial<Parameters<typeof receiptPhase>[0]>, ReceiptPhase]> = [
     ['receipt still loading', { receipt: undefined }, 'processing'],
     ['Stripe has not confirmed payment', { receipt: unpaid }, 'processing'],
@@ -704,8 +777,57 @@ describe('isChangeSettled', () => {
   });
 
   test('a credit pack settles once the purchased balance rises above where it started', () => {
-    const change = { kind: 'credits_added', purchasedCreditsBefore: 500 } as const;
+    const change = {
+      kind: 'credits_added',
+      purchasedCreditsBefore: 500,
+    } as const;
     expect(isChangeSettled(change, overview({ canvas: { purchasedBalanceUsd: 5 } }))).toBe(false);
     expect(isChangeSettled(change, overview({ canvas: { purchasedBalanceUsd: 15 } }))).toBe(true);
   });
+});
+
+const billingTranslator = createTranslator({
+  locale: 'en',
+  messages: { settings: settingsMessages },
+  namespace: 'settings',
+});
+function toBillingView(
+  overview: Parameters<typeof buildBillingView>[0],
+  need: Parameters<typeof buildBillingView>[1] = null,
+) {
+  return buildBillingView(overview, need, {
+    locale: 'en',
+    t: billingTranslator,
+  });
+}
+
+test('localizes billing presentation without changing invoice currency or stored amounts', () => {
+  const input = overview({
+    invoices: [
+      {
+        id: 'in_locale',
+        number: 'LOCALE-001',
+        status: 'paid',
+        currency: 'mxn',
+        amountDue: 123456,
+        amountPaid: 123456,
+        total: 123456,
+        createdAt: '2026-09-21T10:00:00.000Z',
+        hostedInvoiceUrl: null,
+        invoicePdf: null,
+      },
+    ],
+  });
+  const before = structuredClone(input);
+  const translate = createTranslator({
+    locale: 'pt-BR',
+    messages: { settings: portugueseSettingsMessages },
+    namespace: 'settings',
+  });
+  const view = buildBillingView(input, null, { locale: 'pt-BR', t: translate });
+  if (view.kind !== 'self_serve') throw new Error('Expected self-serve fixture');
+  expect(view.invoices[0].amountLabel).toContain('1.234,56');
+  expect(view.invoices[0].amountLabel).toContain('MX');
+  expect(view.plans[0].features).toContain('Agente Orgânico, calendário e publicação');
+  expect(input).toEqual(before);
 });

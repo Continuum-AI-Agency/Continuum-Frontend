@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OrganicPlatformAccounts } from '@/lib/organic/platformAccountOptions';
 import { PlannerTargetPicker } from './PlannerTargetPicker';
 import { chooseOption, installPickerDomGlobals, openSelect, stubSource } from './pickerTestHarness';
@@ -64,7 +65,10 @@ describe('PlannerTargetPicker', () => {
 
     openSelect('Connected account');
     chooseOption('Second profile');
-    expect(onChange).toHaveBeenLastCalledWith({ platform: 'instagram', accountId: 'ig-second' });
+    expect(onChange).toHaveBeenLastCalledWith({
+      platform: 'instagram',
+      accountId: 'ig-second',
+    });
   });
 
   test('drops an account that no longer addresses anything when the platform changes', () => {
@@ -81,7 +85,10 @@ describe('PlannerTargetPicker', () => {
 
     openSelect('Planner platform');
     chooseOption('LinkedIn');
-    expect(onChange).toHaveBeenLastCalledWith({ platform: 'linkedin', accountId: null });
+    expect(onChange).toHaveBeenLastCalledWith({
+      platform: 'linkedin',
+      accountId: null,
+    });
   });
 
   test('renders the catalog placeholder id as unset, not as text to overwrite', () => {

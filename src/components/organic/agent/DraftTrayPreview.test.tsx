@@ -4,7 +4,8 @@ import {
   type ChatMediaSignRequest,
   chatMediaRefKey,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 
 Object.assign(global.window, {
@@ -28,7 +29,10 @@ const requestMock = mock(async (args: { path: string; body?: unknown }) => {
     })),
   };
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 const { DraftTrayPreview } = await import('./DraftTrayPreview');
 const { SessionContentTray } = await import('@/components/chat/SessionContentTray');
@@ -39,7 +43,12 @@ const draft = (draftId: string): AgentMentionSuggestion => ({
   label: `Draft ${draftId}`,
   type: 'draft',
   source: 'organic',
-  reference: { id: draftId, type: 'draft', label: `Draft ${draftId}`, source: 'organic' },
+  reference: {
+    id: draftId,
+    type: 'draft',
+    label: `Draft ${draftId}`,
+    source: 'organic',
+  },
   // What a restored session carried: a URL that lapsed long ago. The tray must not use it.
   preview: { url: `https://storage.test/stale-${draftId}.png`, kind: 'image' },
 });

@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Contextual ways into Jaina from a portfolio: the analyses that apply to THIS
 // portfolio, offered as the questions a person would ask rather than commands to
 // memorise. Each label mirrors the first sentence of its prompt. Discovery
@@ -18,32 +22,43 @@ function portfolioScope(portfolio: JainaPortfolio): string {
   return `the optimizer portfolio "${portfolio.name}" (objective: ${humanize(portfolio.objective)})`;
 }
 
-export function jainaEntryPrompts(portfolio: JainaPortfolio): JainaEntry[] {
+export function jainaEntryPrompts(
+  portfolio: JainaPortfolio,
+  uiTranslate?: ScaleCopy,
+): JainaEntry[] {
   const who = portfolioScope(portfolio);
   return [
     {
       key: 'budget',
-      label: 'Where is the budget going?',
+      label: uiTranslate
+        ? uiTranslate('where_is_the_budget_going_df307ee')
+        : 'Where is the budget going?',
       prompt: `For ${who}: are we on pace and where is the budget going? Read the optimizer's last cycle (pace, moves, held ad sets) and give me the scope line, one table per ad set, the context floor and the actions.`,
     },
     {
       key: 'creative',
-      label: 'Which creatives are winning?',
+      label: uiTranslate
+        ? uiTranslate('which_creatives_are_winning_b13517a')
+        : 'Which creatives are winning?',
       prompt: `For ${who}: which messaging angles are winning and which are wearing out? Group the active ads by angle, show spend, CTR, CVR, CPA and the efficiency class per angle, then the scale / refresh / switch-off opportunities and up to three briefs.`,
     },
     {
       key: 'funnel',
-      label: 'Where does the funnel leak?',
+      label: uiTranslate
+        ? uiTranslate('where_does_the_funnel_leak_3170f3a')
+        : 'Where does the funnel leak?',
       prompt: `For ${who}: where does the funnel leak? Impressions to clicks to results per ad set over the last 14 days against the 14 before and the 30-day baseline, with the drop named and measured.`,
     },
     {
       key: 'scaling',
-      label: 'Which ad set can scale?',
+      label: uiTranslate
+        ? uiTranslate('which_ad_set_can_scale_07f9a8e')
+        : 'Which ad set can scale?',
       prompt: `For ${who}: which ad set can take more budget without losing efficiency? The ad sets at or under the target cost with headroom, the velocity cap and the floors that bounded the last cycle, and the settings the optimizer recommends changing.`,
     },
     {
       key: 'risks',
-      label: 'Risks this week',
+      label: uiTranslate ? uiTranslate('risks_this_week_e2554be') : 'Risks this week',
       prompt: `For ${who}: what is about to go wrong this week? Ad sets under the event floor, tracking gaps, audience saturation, creative fatigue and delivery problems, each with its evidence and what to do.`,
     },
   ];
@@ -86,7 +101,10 @@ function accountScope(account: JainaAccountContext): string {
   return `${accountName}, with the optimizer's portfolios: ${portfolioList}`;
 }
 
-export function jainaAccountEntryPrompts(account: JainaAccountContext): JainaEntry[] {
+export function jainaAccountEntryPrompts(
+  account: JainaAccountContext,
+  uiTranslate?: ScaleCopy,
+): JainaEntry[] {
   const who = accountScope(account);
   const scopeAndActions =
     "Give me the reach line, one table per portfolio and this week's actions.";
@@ -109,7 +127,9 @@ export function jainaAccountEntryPrompts(account: JainaAccountContext): JainaEnt
       }
     : {
         key: 'risks',
-        label: "What's about to go wrong?",
+        label: uiTranslate
+          ? uiTranslate('what_s_about_to_go_wrong_b44b07e')
+          : "What's about to go wrong?",
         prompt: `For ${who}: what's about to go wrong? In each portfolio: ad sets under the event floor, tracking gaps, audience saturation, creative fatigue and delivery problems, each with its evidence. ${scopeAndActions}`,
       };
 
@@ -117,18 +137,20 @@ export function jainaAccountEntryPrompts(account: JainaAccountContext): JainaEnt
     ...expensive,
     {
       key: 'pause',
-      label: 'What to pause this week?',
+      label: uiTranslate
+        ? uiTranslate('what_to_pause_this_week_11337e8')
+        : 'What to pause this week?',
       prompt: `For ${who}: what to pause this week? In each portfolio, point out the ad sets and ads spending with no results, with a cost far above target or with creative fatigue, with the spend each pause frees and the risk of making it. ${scopeAndActions}`,
     },
     silentOrRisks,
     {
       key: 'budget',
-      label: "Where's the budget?",
+      label: uiTranslate ? uiTranslate('where_s_the_budget_4ac2c29') : "Where's the budget?",
       prompt: `For ${who}: where's the budget? Each portfolio's daily budget and actual spend, whether we are on pace, what the optimizer moved in its last cycle and what it held back. ${scopeAndActions}`,
     },
     {
       key: 'summary',
-      label: 'Summary for the client',
+      label: uiTranslate ? uiTranslate('summary_for_the_client_0e5937e') : 'Summary for the client',
       prompt: `For ${who}: write a summary for the client. What happened this week in each portfolio (spend, results and cost per result against the target), what was changed and why, and what comes next. Clear tone and no jargon, with one table per portfolio and three action points at the end.`,
     },
   ];
@@ -152,29 +174,38 @@ export function jainaWeeklyReportPrompt(adAccountId: string): string {
 // product cannot give (PP-L1-copy-sells-tiktok-ads-in-seven-places).
 
 /** "All": questions that compare platforms, each in its own currency and attribution window. */
-export function jainaCrossPlatformEntryPrompts(account: JainaAccountContext): JainaEntry[] {
+export function jainaCrossPlatformEntryPrompts(
+  account: JainaAccountContext,
+  uiTranslate?: ScaleCopy,
+): JainaEntry[] {
   const who = `${accountScope(account)}, across every ad platform connected to it`;
   const fairly =
     "Compare each platform in its own currency and attribution window, and say when two platforms' figures cannot be compared.";
   return [
     {
       key: 'cheapest',
-      label: 'Which platform buys leads cheapest?',
+      label: uiTranslate
+        ? uiTranslate('which_platform_buys_leads_cheapest_ca9f1f2')
+        : 'Which platform buys leads cheapest?',
       prompt: `For ${who}: which platform buys leads cheapest? Cost per lead on each platform over the last 7 days against the 14 days before, with spend and leads beside it. ${fairly}`,
     },
     {
       key: 'move',
-      label: 'Where should budget move?',
+      label: uiTranslate
+        ? uiTranslate('where_should_budget_move_bff2db1')
+        : 'Where should budget move?',
       prompt: `For ${who}: where should budget move between platforms? Which platform has room to take more at the same cost per result, which one is spending above target, and the move you would make, with its evidence. ${fairly}`,
     },
     {
       key: 'risks',
-      label: "What's going wrong on any platform?",
+      label: uiTranslate
+        ? uiTranslate('what_s_going_wrong_on_any_platform_09fde59')
+        : "What's going wrong on any platform?",
       prompt: `For ${who}: what's going wrong on any platform? Campaigns not serving, ads rejected, budgets running out, tracking gaps and creative fatigue, each with its platform, its evidence and what to do.`,
     },
     {
       key: 'summary',
-      label: 'Summary for the client',
+      label: uiTranslate ? uiTranslate('summary_for_the_client_0e5937e') : 'Summary for the client',
       prompt: `For ${who}: write a summary for the client. What happened this week on each platform (spend, results and cost per result), what was changed and why, and what comes next. Clear tone and no jargon, with one table per platform and three action points at the end.`,
     },
   ];
@@ -182,51 +213,70 @@ export function jainaCrossPlatformEntryPrompts(account: JainaAccountContext): Ja
 
 /** Google Ads: search terms, Search budget limits, Performance Max asset groups, delivery, bid
  *  targets against the goal, and what changed. */
-export function jainaGoogleAdsEntryPrompts(account: JainaAccountContext): JainaEntry[] {
+export function jainaGoogleAdsEntryPrompts(
+  account: JainaAccountContext,
+  uiTranslate?: ScaleCopy,
+): JainaEntry[] {
   const who = `the Google Ads account of the brand behind ${account.accountLabel ? `"${account.accountLabel}"` : 'the active account'}`;
   return [
     {
       key: 'search_terms',
-      label: 'Which search terms bring leads?',
+      label: uiTranslate
+        ? uiTranslate('which_search_terms_bring_leads_244b494')
+        : 'Which search terms bring leads?',
       prompt: `For ${who}: which search terms bring leads? The terms with conversions over the last 14 days, their cost per lead and the keyword each one comes in through, the converting terms that are not keywords yet, and the terms that spend without a lead.`,
     },
     {
       key: 'search_budget',
-      label: 'Is Search limited by budget?',
+      label: uiTranslate
+        ? uiTranslate('is_search_limited_by_budget_3183974')
+        : 'Is Search limited by budget?',
       prompt: `For ${who}: is Search limited by budget? Each Search campaign's share of impressions lost to budget and to rank, its cost per result, and whether more budget is worth it at that price.`,
     },
     {
       key: 'asset_groups',
-      label: 'Which asset group is missing assets?',
+      label: uiTranslate
+        ? uiTranslate('which_asset_group_is_missing_assets_e4c1d78')
+        : 'Which asset group is missing assets?',
       prompt: `For ${who}: which asset group is missing assets? Each Performance Max asset group with its ad strength and what it lacks (images, videos, headlines), and which to fix first.`,
     },
     {
       key: 'delivery',
-      label: 'Is any campaign not serving?',
+      label: uiTranslate
+        ? uiTranslate('is_any_campaign_not_serving_55a8dbd')
+        : 'Is any campaign not serving?',
       prompt: `For ${who}: is any campaign not serving? Google's own reasons for every campaign that is limited or dark, disapproved ads with their policy topics, and what to fix in Google Ads.`,
     },
     {
       key: 'bidding',
-      label: 'Are the bid targets serving the goal?',
+      label: uiTranslate
+        ? uiTranslate('are_the_bid_targets_serving_the_goal_27fac88')
+        : 'Are the bid targets serving the goal?',
       prompt: `For ${who}: are the bid targets serving the goal? Each campaign's Google target CPA or ROAS (the bid setting) against what it actually paid over the last 14 days and against its portfolio's CPA goal, which campaigns are still learning, and which target to move by up to 10% once its 14-day cooldown has passed.`,
     },
     {
       key: 'changes',
-      label: 'What changed this week, and did it help?',
+      label: uiTranslate
+        ? uiTranslate('what_changed_this_week_and_did_it_help_968e8a7')
+        : 'What changed this week, and did it help?',
       prompt: `For ${who}: what changed this week, and did it help? Every change in Google's change history over the last 7 days (budgets, bid targets, keywords, ads, status) with who made it, and each changed campaign's cost per conversion in the days before against the days since.`,
     },
   ];
 }
 
 /** The band's questions for the Overview tab a person is on. */
-export function jainaTabEntryPrompts(tab: PlatformTab, account: JainaAccountContext): JainaEntry[] {
+export function jainaTabEntryPrompts(
+  tab: PlatformTab,
+  account: JainaAccountContext,
+  uiTranslate?: ScaleCopy,
+): JainaEntry[] {
   switch (tab) {
     case 'all':
-      return jainaCrossPlatformEntryPrompts(account);
+      return jainaCrossPlatformEntryPrompts(account, uiTranslate);
     case 'meta':
-      return jainaAccountEntryPrompts(account);
+      return jainaAccountEntryPrompts(account, uiTranslate);
     case 'google_ads':
-      return jainaGoogleAdsEntryPrompts(account);
+      return jainaGoogleAdsEntryPrompts(account, uiTranslate);
     case 'tiktok_ads':
       return jainaTikTokEntryPrompts(account);
   }

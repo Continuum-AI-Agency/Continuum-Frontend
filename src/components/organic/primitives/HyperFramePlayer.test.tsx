@@ -1,5 +1,6 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OrganicCalendarDraft } from './types';
 
 Object.assign(global.window, {
@@ -109,7 +110,12 @@ describe('HyperFramePlayer shader preview', () => {
           shaderStack: {
             version: 1,
             effects: [
-              { effectId: 'vignette', enabled: true, parameters: { amount: 0.65 }, keyframes: [] },
+              {
+                effectId: 'vignette',
+                enabled: true,
+                parameters: { amount: 0.65 },
+                keyframes: [],
+              },
             ],
           },
         })}

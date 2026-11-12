@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeBoardTile, HomeBriefData } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { ctxFor } from '../ask/__fixtures__/readings';
 import {
@@ -30,11 +31,20 @@ mock.module('./useBriefReads', () => ({
 
 let briefLoad: HomeReadLoad<HomeBriefData> = { status: 'unavailable' };
 const realGoalRead = await import('../../useHomeGoalRead');
-mock.module('../../useHomeGoalRead', () => ({ ...realGoalRead, useHomeGoalRead: () => briefLoad }));
+mock.module('../../useHomeGoalRead', () => ({
+  ...realGoalRead,
+  useHomeGoalRead: () => briefLoad,
+}));
 
 const { default: BriefTile } = await import('./Tile');
 
-const tile: HomeBoardTile = { id: 'brief', size: 'm', urgency: 1, score: 12, why: null };
+const tile: HomeBoardTile = {
+  id: 'brief',
+  size: 'm',
+  urgency: 1,
+  score: 12,
+  why: null,
+};
 const ctx = ctxFor('operate', { adAccounts: [META_ACCOUNT, GOOGLE_ACCOUNT] });
 
 afterEach(() => {

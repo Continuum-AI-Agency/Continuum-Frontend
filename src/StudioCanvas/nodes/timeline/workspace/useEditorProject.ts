@@ -6,6 +6,7 @@ import {
   VIDEO_EDITOR_OPS,
   type VideoEditorOpName,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { RunVideoEditorOp } from '@/components/video-studio/types';
@@ -20,7 +21,11 @@ import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import type { EditorCommandDraft } from '../editorProjectV2AssemblyModel';
 import { type EditBuild, finalizeEdit } from './timelineEdits';
 
-type HistoryEntry = { label: string; beforeRevision: number; afterRevision: number };
+type HistoryEntry = {
+  label: string;
+  beforeRevision: number;
+  afterRevision: number;
+};
 type UndoEntry = HistoryEntry & { appliedFingerprint: string };
 type RedoEntry = HistoryEntry & { redoFingerprint: string };
 
@@ -40,6 +45,8 @@ const errorText = (error: unknown, fallback: string): string =>
  * `media.editor_projects`. The initial fetch stays: a Realtime-only hook fails open.
  */
 export function useEditorProject(projectId: string) {
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const [project, setProject] = useState<EditorProjectV2 | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -73,17 +80,23 @@ export function useEditorProject(projectId: string) {
         .maybeSingle();
       const actor = ACTOR_LABELS[data?.actor_type ?? ''] ?? 'someone else';
       show({
-        title: `Updated by ${actor}`,
-        description: data?.summary || `Revision ${revision} arrived live.`,
+        title: translateUi('updated_by_value0_48c4da7f', {
+          value0: String(actor),
+        }),
+        description:
+          data?.summary ||
+          translateUi('revision_value0_arrived_live_7103800e', {
+            value0: String(revision),
+          }),
       });
     },
-    [projectId, show],
+    [projectId, show, translateUi],
   );
 
   useEffect(() => {
     void refresh().catch((error) =>
       show({
-        title: 'Could not open the video project',
+        title: translateUi('could_not_open_the_video_project_09f342ef'),
         description: errorText(error, 'Project loading failed.'),
         variant: 'error',
       }),
@@ -106,7 +119,7 @@ export function useEditorProject(projectId: string) {
       // Anything committed between the first fetch and the channel going live.
       onSubscribed: () => void refresh().catch(() => undefined),
     });
-  }, [announceExternal, projectId, refresh, show]);
+  }, [announceExternal, projectId, refresh, show, translateUi]);
 
   const commit = useCallback(
     async (commands: readonly EditorCommandDraft[], label: string) => {
@@ -161,7 +174,7 @@ export function useEditorProject(projectId: string) {
       const run = async () => {
         const current = projectRef.current;
         if (!current) return;
-        let label = 'Edit';
+        let label = translateUi('edit_464c4ffd');
         try {
           const edit = typeof build === 'function' ? build(current) : build;
           if (!edit) return;
@@ -181,7 +194,9 @@ export function useEditorProject(projectId: string) {
           setRedoStack([]);
         } catch (error) {
           show({
-            title: `${label} failed`,
+            title: translateUi('value0_failed_afc83119', {
+              value0: String(label),
+            }),
             description: errorText(error, 'The timeline could not be updated.'),
             variant: 'error',
           });
@@ -192,7 +207,7 @@ export function useEditorProject(projectId: string) {
       queue.current = next;
       return next;
     },
-    [commit, refresh, show],
+    [commit, refresh, show, translateUi],
   );
 
   const restore = useCallback(
@@ -226,8 +241,8 @@ export function useEditorProject(projectId: string) {
     if (!entry || !current || busy) return;
     if (entry.appliedFingerprint !== current.fingerprint) {
       show({
-        title: 'Undo needs the latest revision',
-        description: 'The project changed after this edit. Use the history of the new edit.',
+        title: translateUi('undo_needs_the_latest_revision_c200e63d'),
+        description: translateUi('the_project_changed_after_this_edit_f117f623'),
         variant: 'warning',
       });
       return;
@@ -240,18 +255,21 @@ export function useEditorProject(projectId: string) {
         const previous = remaining.at(-1);
         // Restoring the same timeline creates a new revision and fingerprint.
         return previous
-          ? remaining.with(-1, { ...previous, appliedFingerprint: next.fingerprint })
+          ? remaining.with(-1, {
+              ...previous,
+              appliedFingerprint: next.fingerprint,
+            })
           : remaining;
       });
       setRedoStack((stack) => [...stack, { ...entry, redoFingerprint: next.fingerprint }]);
     } catch (error) {
       show({
-        title: 'Undo failed',
+        title: translateUi('undo_failed_c7abe568'),
         description: errorText(error, 'Undo failed.'),
         variant: 'error',
       });
     }
-  }, [busy, restore, show, undoStack]);
+  }, [busy, restore, show, undoStack, translateUi]);
 
   const redo = useCallback(async () => {
     const entry = redoStack.at(-1);
@@ -259,8 +277,8 @@ export function useEditorProject(projectId: string) {
     if (!entry || !current || busy) return;
     if (entry.redoFingerprint !== current.fingerprint) {
       show({
-        title: 'Redo needs the latest revision',
-        description: 'The project changed after undo. Redo was left unapplied.',
+        title: translateUi('redo_needs_the_latest_revision_d03828da'),
+        description: translateUi('the_project_changed_after_undo_redo_715029b7'),
         variant: 'warning',
       });
       return;
@@ -272,18 +290,21 @@ export function useEditorProject(projectId: string) {
         const remaining = stack.slice(0, -1);
         const previous = remaining.at(-1);
         return previous
-          ? remaining.with(-1, { ...previous, redoFingerprint: next.fingerprint })
+          ? remaining.with(-1, {
+              ...previous,
+              redoFingerprint: next.fingerprint,
+            })
           : remaining;
       });
       setUndoStack((stack) => [...stack, { ...entry, appliedFingerprint: next.fingerprint }]);
     } catch (error) {
       show({
-        title: 'Redo failed',
+        title: translateUi('redo_failed_37647f61'),
         description: errorText(error, 'Redo failed.'),
         variant: 'error',
       });
     }
-  }, [busy, redoStack, restore, show]);
+  }, [busy, redoStack, restore, show, translateUi]);
 
   const runOp = useCallback<RunVideoEditorOp>(
     async (op, input) => {
@@ -336,7 +357,18 @@ export function useEditorProject(projectId: string) {
   const canRedo = Boolean(project && redoStack.at(-1)?.redoFingerprint === project.fingerprint);
 
   return useMemo(
-    () => ({ project, busy, refresh, commit, apply, runOp, undo, redo, canUndo, canRedo }),
+    () => ({
+      project,
+      busy,
+      refresh,
+      commit,
+      apply,
+      runOp,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+    }),
     [project, busy, refresh, commit, apply, runOp, undo, redo, canUndo, canRedo],
   );
 }

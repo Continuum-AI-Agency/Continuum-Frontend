@@ -6,7 +6,8 @@ import {
   type SheetSyncReport,
   SheetSyncReportSchema,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { FIXTURE_NOW, portfolioMetricsFixture } from './__fixtures__/portfolioMetricsFixture';
 import { AttributionSectionView } from './AttributionSection';
 import type { SheetAttributionApi, SheetCallOutcome } from './sheetAttributionApi';
@@ -49,7 +50,12 @@ function report(covered: number, spending: number): SheetSyncReport {
     rowsUnmatched: 4,
     rowsInvalid: 0,
     matchedBy: { id: 0, name: 38, utm: 0 },
-    coverage: { ratio, covered, spending, window: { since: '2026-09-21', until: '2026-09-27' } },
+    coverage: {
+      ratio,
+      covered,
+      spending,
+      window: { since: '2026-09-21', until: '2026-09-27' },
+    },
     used: ratio >= 0.8 ? 'spreadsheet' : 'platform',
     fallbackReason: ratio >= 0.8 ? 'none' : 'coverage',
     replaced: null,
@@ -83,7 +89,10 @@ function fakeApi(overrides: Partial<SheetAttributionApi> = {}) {
     },
     save: async (portfolioId, config, label) => {
       calls.save.push({ portfolioId, config, label });
-      return { status: 'ready', data: { sourceId: '7a1c6f0e-3b0f-4a55-9b1e-2a5f3b9e0c11' } };
+      return {
+        status: 'ready',
+        data: { sourceId: '7a1c6f0e-3b0f-4a55-9b1e-2a5f3b9e0c11' },
+      };
     },
     ...overrides,
   };
@@ -115,7 +124,9 @@ function renderSection(
 async function connectByLink() {
   fireEvent.click(screen.getByRole('button', { name: 'Connect a sheet' }));
   fireEvent.change(screen.getByLabelText('Google Sheet link'), {
-    target: { value: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=0` },
+    target: {
+      value: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit#gid=0`,
+    },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Read' }));
   await screen.findByTestId('sheet-preview');
@@ -151,7 +162,10 @@ describe('Attribution — source cards', () => {
     const changed = mock(() => {});
     renderSection(
       api,
-      { status: 'ready', metrics: portfolioMetricsFixture({ used: 'spreadsheet' }) },
+      {
+        status: 'ready',
+        metrics: portfolioMetricsFixture({ used: 'spreadsheet' }),
+      },
       changed,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Re-read now' }));
@@ -232,7 +246,10 @@ describe('Attribution — spreadsheet flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Use this sheet' }));
     await waitFor(() => expect(calls.save).toHaveLength(1));
-    expect(calls.save[0]).toMatchObject({ portfolioId: PORTFOLIO, label: 'Google Sheet' });
+    expect(calls.save[0]).toMatchObject({
+      portfolioId: PORTFOLIO,
+      label: 'Google Sheet',
+    });
     await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
   });
 
@@ -242,7 +259,10 @@ describe('Attribution — spreadsheet flow', () => {
       check: async (_id, config) => {
         call += 1;
         calls.check.push(config);
-        return { status: 'ready', data: call === 1 ? report(9, 10) : report(6, 10) };
+        return {
+          status: 'ready',
+          data: call === 1 ? report(9, 10) : report(6, 10),
+        };
       },
     });
     renderSection(api);
@@ -265,11 +285,17 @@ describe('Attribution — spreadsheet flow', () => {
     renderSection(api);
     await connectByLink();
     await screen.findByTestId('sheet-match-line');
-    fireEvent.change(screen.getByLabelText('Conversions'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Conversions'), {
+      target: { value: '' },
+    });
     expect(screen.getByTestId('sheet-missing').textContent).toBe('Still to pick: Conversions.');
     expect(calls.check).toHaveLength(1);
     expect(
-      (screen.getByRole('button', { name: 'Use this sheet' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Use this sheet',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 
@@ -277,11 +303,17 @@ describe('Attribution — spreadsheet flow', () => {
     const { api, calls } = fakeApi();
     renderSection(api);
     await connectByLink();
-    fireEvent.change(screen.getByLabelText('Tab'), { target: { value: 'Notes' } });
+    fireEvent.change(screen.getByLabelText('Tab'), {
+      target: { value: 'Notes' },
+    });
     await waitFor(() => expect(calls.inspect).toHaveLength(2));
     expect(calls.inspect[1]).toEqual({
       portfolioId: PORTFOLIO,
-      location: { source: 'google_sheet', spreadsheetId: SHEET_ID, tab: 'Notes' },
+      location: {
+        source: 'google_sheet',
+        spreadsheetId: SHEET_ID,
+        tab: 'Notes',
+      },
     });
   });
 
@@ -292,11 +324,16 @@ describe('Attribution — spreadsheet flow', () => {
     const file = new File(['Fecha,Ad set,Leads\n21/09/2026,ITESO,4\n'], 'leads.csv', {
       type: 'text/csv',
     });
-    fireEvent.change(screen.getByLabelText('CSV file'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('CSV file'), {
+      target: { files: [file] },
+    });
     await screen.findByTestId('sheet-preview');
     expect(calls.inspect[0]).toEqual({
       portfolioId: PORTFOLIO,
-      location: { source: 'csv_upload', csv: 'Fecha,Ad set,Leads\n21/09/2026,ITESO,4\n' },
+      location: {
+        source: 'csv_upload',
+        csv: 'Fecha,Ad set,Leads\n21/09/2026,ITESO,4\n',
+      },
     });
     await screen.findByTestId('sheet-match-line');
     expect(calls.check[0]?.source).toBe('csv_upload');

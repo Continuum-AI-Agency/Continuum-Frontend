@@ -1,12 +1,21 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { PreviewFormat } from './FormatPreview';
 
 // One format's Live kit with nothing to place: every row measured in it lands.
 const KIT = {
-  scene: { ok: true, comp: { name: 'Main', width: 1080, height: 1080 }, at: 0, layers: [] },
+  scene: {
+    ok: true,
+    comp: { name: 'Main', width: 1080, height: 1080 },
+    at: 0,
+    layers: [],
+  },
   variables: [],
   brandMark: null,
   comp: 'Main',
@@ -25,11 +34,20 @@ afterEach(() => {
 });
 
 const format = (id: string, ratio: string): PreviewFormat =>
-  ({ id, label: id, ratio, comp: null, width: null, height: null }) as PreviewFormat;
+  ({
+    id,
+    label: id,
+    ratio,
+    comp: null,
+    width: null,
+    height: null,
+  }) as PreviewFormat;
 const FORMATS = [format('square', '1:1'), format('story', '9:16')];
 
 const renderFit = () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retryDelay: 0 } },
+  });
   return renderHook(
     () =>
       useLiveFit({

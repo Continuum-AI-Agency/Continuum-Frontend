@@ -7,6 +7,7 @@ import {
   checkBundleBudgets,
   isWithinBudget,
   maxAllowedBytes,
+  visibleRoute,
 } from './check-vercel-bundle-budget.mjs';
 
 // The arithmetic tests below never touch a dist directory, which is why the bundler migration broke
@@ -20,12 +21,18 @@ writeFileSync(path.join(distDirectory, 'static', 'chunks', 'main.js'), 'x'.repea
 writeFileSync(path.join(distDirectory, 'static', 'chunks', 'framework.js'), 'x'.repeat(300));
 writeFileSync(
   path.join(distDirectory, 'build-manifest.json'),
-  JSON.stringify({ rootMainFiles: ['static/chunks/main.js', 'static/chunks/framework.js'] }),
+  JSON.stringify({
+    rootMainFiles: ['static/chunks/main.js', 'static/chunks/framework.js'],
+  }),
 );
 writeFileSync(
   path.join(distDirectory, 'diagnostics', 'route-bundle-stats.json'),
   JSON.stringify([
-    { route: '/organic', firstLoadUncompressedJsBytes: 4000, firstLoadChunkPaths: [] },
+    {
+      route: '/organic',
+      firstLoadUncompressedJsBytes: 4000,
+      firstLoadChunkPaths: [],
+    },
     {
       route: '/login',
       firstLoadUncompressedJsBytes: 1000,
@@ -37,6 +44,47 @@ writeFileSync(
 afterAll(() => rmSync(distDirectory, { recursive: true, force: true }));
 
 describe('Vercel bundle budgets', () => {
+  it('keeps existing route budgets across internal locale and route groups', () => {
+    expect(visibleRoute('/[locale]/(post-auth)/organic')).toBe('/organic');
+    expect(visibleRoute('/[locale]/(auth)/login')).toBe('/login');
+    expect(visibleRoute('/[locale]')).toBe('/');
+    expect(visibleRoute('/api/auth')).toBe('/api/auth');
+  });
+  it('gates the largest localized route against the unchanged visible-route budget', () => {
+    const localizedDist = mkdtempSync(path.join(tmpdir(), 'localized-budget-'));
+    mkdirSync(path.join(localizedDist, 'diagnostics'), { recursive: true });
+    writeFileSync(
+      path.join(localizedDist, 'diagnostics/route-bundle-stats.json'),
+      JSON.stringify([
+        {
+          route: '/[locale]/(post-auth)/organic',
+          firstLoadUncompressedJsBytes: 1000,
+          firstLoadChunkPaths: [],
+        },
+        {
+          route: '/pt-BR/(post-auth)/organic',
+          firstLoadUncompressedJsBytes: 1300,
+          firstLoadChunkPaths: [],
+        },
+      ]),
+    );
+    const [result] = checkBundleBudgets({
+      distDirectory: localizedDist,
+      configuration: {
+        maxGrowthPercent: 10,
+        budgets: [
+          {
+            name: 'organic',
+            source: 'routeFirstLoad',
+            route: '/organic',
+            baselineBytes: 1000,
+          },
+        ],
+      },
+    });
+    expect(result).toMatchObject({ actualBytes: 1300, passed: false });
+    rmSync(localizedDist, { recursive: true, force: true });
+  });
   it('allows at most the configured percentage over the recorded baseline', () => {
     expect(maxAllowedBytes(1000, 10)).toBe(1100);
     expect(isWithinBudget(1100, 1000, 10)).toBe(true);
@@ -65,7 +113,12 @@ describe('Vercel bundle budgets', () => {
       configuration: {
         maxGrowthPercent: 10,
         budgets: [
-          { name: 'login', source: 'routeFirstLoad', route: '/login', baselineBytes: 1000 },
+          {
+            name: 'login',
+            source: 'routeFirstLoad',
+            route: '/login',
+            baselineBytes: 1000,
+          },
         ],
       },
     });
@@ -80,7 +133,12 @@ describe('Vercel bundle budgets', () => {
       configuration: {
         maxGrowthPercent: 10,
         budgets: [
-          { name: 'organic', source: 'routeFirstLoad', route: '/organic', baselineBytes: 3000 },
+          {
+            name: 'organic',
+            source: 'routeFirstLoad',
+            route: '/organic',
+            baselineBytes: 3000,
+          },
         ],
       },
     });
@@ -94,7 +152,12 @@ describe('Vercel bundle budgets', () => {
         configuration: {
           maxGrowthPercent: 10,
           budgets: [
-            { name: 'gone', source: 'routeFirstLoad', route: '/removed', baselineBytes: 1000 },
+            {
+              name: 'gone',
+              source: 'routeFirstLoad',
+              route: '/removed',
+              baselineBytes: 1000,
+            },
           ],
         },
       }),
@@ -106,7 +169,9 @@ describe('Webpack emitted route bootstrap budgets', () => {
   const webpackDist = mkdtempSync(path.join(tmpdir(), 'webpack-budget-'));
   afterAll(() => rmSync(webpackDist, { recursive: true, force: true }));
   mkdirSync(path.join(webpackDist, 'static', 'chunks'), { recursive: true });
-  mkdirSync(path.join(webpackDist, 'server', 'app', 'login.segments'), { recursive: true });
+  mkdirSync(path.join(webpackDist, 'server', 'app', 'login.segments'), {
+    recursive: true,
+  });
   writeFileSync(
     path.join(webpackDist, 'build-manifest.json'),
     JSON.stringify({ rootMainFiles: ['static/chunks/main.js'] }),

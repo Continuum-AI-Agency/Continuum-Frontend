@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AdAccountReading, BoardModuleId } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { BoardModuleProps } from './types';
 
 // The board around its modules. The modules are each other agents' and have render tests of
@@ -49,11 +50,36 @@ const VIVO_47: AdAccountReading = {
     windowDays: 30,
   },
   board: [
-    { module: 'signal', size: 'l', score: 96, reason: '85% son eventos de atención.' },
-    { module: 'decisions', size: 'm', score: 88, reason: '6 tarjetas, 2 altas.' },
-    { module: 'result', size: 'm', score: 84, reason: 'Google reporta 3,857; contamos 572.' },
-    { module: 'quality', size: 's', score: 71, reason: '56% del gasto de keywords en QS ≤ 3.' },
-    { module: 'portfolios', size: 'w', score: 40, reason: '1 portafolio de Google.' },
+    {
+      module: 'signal',
+      size: 'l',
+      score: 96,
+      reason: '85% son eventos de atención.',
+    },
+    {
+      module: 'decisions',
+      size: 'm',
+      score: 88,
+      reason: '6 tarjetas, 2 altas.',
+    },
+    {
+      module: 'result',
+      size: 'm',
+      score: 84,
+      reason: 'Google reporta 3,857; contamos 572.',
+    },
+    {
+      module: 'quality',
+      size: 's',
+      score: 71,
+      reason: '56% del gasto de keywords en QS ≤ 3.',
+    },
+    {
+      module: 'portfolios',
+      size: 'w',
+      score: 40,
+      reason: '1 portafolio de Google.',
+    },
   ],
   hidden: [{ module: 'structure', reason: 'Una campaña lleva el 83% del gasto.' }],
   asks: [
@@ -94,7 +120,13 @@ const BASE = {
   onSelectPortfolio: () => {},
   onCreatePortfolio: () => {},
 };
-const TAB_ASKS = [{ key: 'search_terms', label: 'Which search terms bring leads?', prompt: 'p' }];
+const TAB_ASKS = [
+  {
+    key: 'search_terms',
+    label: 'Which search terms bring leads?',
+    prompt: 'p',
+  },
+];
 
 const slotOrder = (root: HTMLElement) =>
   [...root.querySelectorAll('[data-board-slot]')].map((slot) =>
@@ -111,7 +143,10 @@ describe('AdaptiveBoard — the header', () => {
   });
 
   it('adds the goal to the chip when the reading has one', () => {
-    const withGoal = { ...VIVO_47, result: { ...VIVO_47.result, count: null, goal: 99 } };
+    const withGoal = {
+      ...VIVO_47,
+      result: { ...VIVO_47.result, count: null, goal: 99 },
+    };
     const { getByTestId } = render(<AdaptiveBoard ctx={{ ...BASE, reading: withGoal }} />);
     expect(getByTestId('board-result-chip').textContent).toBe('leads reales · goal $99.00 MXN');
   });

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useCanvasRealtime } from './useCanvasRealtime';
 
 let subscribeStatusSequence: string[] = ['SUBSCRIBED'];
@@ -99,7 +100,11 @@ mock.module('@/lib/supabase/client', () => ({
 
 mock.module('@/hooks/useSession', () => ({
   useSession: () => ({
-    user: { id: 'user-1', email: 'test@example.com', user_metadata: { full_name: 'Test User' } },
+    user: {
+      id: 'user-1',
+      email: 'test@example.com',
+      user_metadata: { full_name: 'Test User' },
+    },
   }),
 }));
 
@@ -355,7 +360,10 @@ describe('useCanvasRealtime', () => {
         id: 'gen-2',
         type: 'veoDirector',
         position: { x: 0, y: 0 },
-        data: { generatedVideo: 'data:video/mp4;base64,local-output', prompt: 'make a teaser' },
+        data: {
+          generatedVideo: 'data:video/mp4;base64,local-output',
+          prompt: 'make a teaser',
+        },
       },
       {
         id: 'ref-1',
@@ -430,9 +438,21 @@ describe('useCanvasRealtime', () => {
 
     mockStore.nodes = initialNodes as any;
     maybeSingleResponses = [
-      { nodes: initialNodes, edges: [], updated_at: '2026-02-18T10:00:00.000Z' },
-      { nodes: initialNodes, edges: [], updated_at: '2026-02-18T10:00:01.000Z' },
-      { nodes: initialNodes, edges: [], updated_at: '2026-02-18T10:00:03.000Z' },
+      {
+        nodes: initialNodes,
+        edges: [],
+        updated_at: '2026-02-18T10:00:00.000Z',
+      },
+      {
+        nodes: initialNodes,
+        edges: [],
+        updated_at: '2026-02-18T10:00:01.000Z',
+      },
+      {
+        nodes: initialNodes,
+        edges: [],
+        updated_at: '2026-02-18T10:00:03.000Z',
+      },
     ];
 
     renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
@@ -484,9 +504,21 @@ describe('useCanvasRealtime', () => {
 
     mockStore.nodes = initialNodes as any;
     maybeSingleResponses = [
-      { nodes: initialNodes, edges: [], updated_at: '2026-02-18T10:10:00.000Z' },
-      { nodes: initialNodes, edges: [], updated_at: '2026-02-18T10:10:01.000Z' },
-      { nodes: catchupNodes, edges: [], updated_at: '2026-02-18T10:10:03.000Z' },
+      {
+        nodes: initialNodes,
+        edges: [],
+        updated_at: '2026-02-18T10:10:00.000Z',
+      },
+      {
+        nodes: initialNodes,
+        edges: [],
+        updated_at: '2026-02-18T10:10:01.000Z',
+      },
+      {
+        nodes: catchupNodes,
+        edges: [],
+        updated_at: '2026-02-18T10:10:03.000Z',
+      },
     ];
 
     renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
@@ -532,7 +564,12 @@ describe('useCanvasRealtime', () => {
 
     mockStore.nodes = initialNodes as any;
     maybeSingleResponses = [
-      { nodes: initialNodes, edges: [], updated_at: '2026-02-18T11:00:00.000Z', revision: 1 },
+      {
+        nodes: initialNodes,
+        edges: [],
+        updated_at: '2026-02-18T11:00:00.000Z',
+        revision: 1,
+      },
       null,
     ];
 
@@ -645,7 +682,12 @@ describe('useCanvasRealtime', () => {
 
   it('a save asked for mid-save resolves only once the follow-up save has written', async () => {
     mockStore.nodes = [
-      { id: 'n1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'first' } },
+      {
+        id: 'n1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'first' },
+      },
     ] as any;
     mockStore.edges = [];
     upsertSingleResponse = {
@@ -669,7 +711,12 @@ describe('useCanvasRealtime', () => {
     await act(async () => {
       first = result.current.saveCanvasToDatabase();
       mockStore.nodes = [
-        { id: 'n1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'second' } },
+        {
+          id: 'n1',
+          type: 'string',
+          position: { x: 0, y: 0 },
+          data: { value: 'second' },
+        },
       ] as any;
       second = result.current.saveCanvasToDatabase().then(() => {
         secondDone = true;
@@ -691,7 +738,12 @@ describe('useCanvasRealtime', () => {
 
   it("drops the client's own postgres echo (self editor_session_id)", async () => {
     mockStore.nodes = [
-      { id: 'n1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'local' } },
+      {
+        id: 'n1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'local' },
+      },
     ] as any;
     upsertSingleResponse = {
       updated_at: '2026-02-18T10:00:05.000Z',
@@ -720,7 +772,12 @@ describe('useCanvasRealtime', () => {
           brand_profile_id: 'brand-1',
           room_id: 'room-1',
           nodes: [
-            { id: 'n1', type: 'string', position: { x: 99, y: 99 }, data: { value: 'echo' } },
+            {
+              id: 'n1',
+              type: 'string',
+              position: { x: 99, y: 99 },
+              data: { value: 'echo' },
+            },
           ],
           edges: [],
           updated_at: '2026-02-18T10:30:00.000Z',
@@ -736,7 +793,12 @@ describe('useCanvasRealtime', () => {
 
   it("applies a peer's postgres update (different editor_session_id)", async () => {
     mockStore.nodes = [
-      { id: 'n1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'local' } },
+      {
+        id: 'n1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'local' },
+      },
     ] as any;
 
     renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
@@ -754,7 +816,12 @@ describe('useCanvasRealtime', () => {
           brand_profile_id: 'brand-1',
           room_id: 'room-1',
           nodes: [
-            { id: 'n1', type: 'string', position: { x: 12, y: 12 }, data: { value: 'peer-edit' } },
+            {
+              id: 'n1',
+              type: 'string',
+              position: { x: 12, y: 12 },
+              data: { value: 'peer-edit' },
+            },
           ],
           edges: [],
           updated_at: '2026-02-18T10:30:00.000Z',
@@ -776,7 +843,12 @@ describe('useCanvasRealtime', () => {
   // waits 25s for a node that is in the store the whole time.
   it('reports nodes a remote update introduced that this client never had', async () => {
     mockStore.nodes = [
-      { id: 'human-node', type: 'string', position: { x: 0, y: 0 }, data: { value: 'human work' } },
+      {
+        id: 'human-node',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'human work' },
+      },
     ] as any;
 
     const { result } = renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
@@ -824,7 +896,12 @@ describe('useCanvasRealtime', () => {
 
   it('does not report an arrival for a remote update that only edits known nodes', async () => {
     mockStore.nodes = [
-      { id: 'human-node', type: 'string', position: { x: 0, y: 0 }, data: { value: 'human work' } },
+      {
+        id: 'human-node',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'human work' },
+      },
     ] as any;
 
     const { result } = renderHook(() => useCanvasRealtime('brand-1', 'room-1'));
@@ -861,7 +938,11 @@ describe('useCanvasRealtime', () => {
   it('re-signs merged media missing its signed url, once per durable pointer', async () => {
     mockSignRequest.mockImplementation(async () => ({
       items: [
-        { bucket: 'media-library', path: 'gen/img.png', signedUrl: 'https://signed.test/img' },
+        {
+          bucket: 'media-library',
+          path: 'gen/img.png',
+          signedUrl: 'https://signed.test/img',
+        },
       ],
       expiresIn: 3600,
     }));
@@ -878,7 +959,10 @@ describe('useCanvasRealtime', () => {
       id: 'gen-img',
       type: 'nanoGen',
       position: { x: 0, y: 0 },
-      data: { generatedImageStoragePath: 'gen/img.png', generatedImageBucket: 'media-library' },
+      data: {
+        generatedImageStoragePath: 'gen/img.png',
+        generatedImageBucket: 'media-library',
+      },
     };
 
     await act(async () => {
@@ -925,7 +1009,12 @@ describe('useCanvasRealtime', () => {
     mockStore.brandId = 'brand-1';
     mockStore.activeRoomId = 'room-old';
     mockStore.nodes = [
-      { id: 'stale', type: 'string', position: { x: 0, y: 0 }, data: { value: 'old room' } },
+      {
+        id: 'stale',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'old room' },
+      },
     ];
 
     renderHook(() => useCanvasRealtime('brand-1', 'room-new'));
@@ -939,7 +1028,12 @@ describe('useCanvasRealtime', () => {
 
   it('does not wipe a non-empty local canvas when no persisted row exists (solo)', async () => {
     mockStore.nodes = [
-      { id: 'solo-1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'unsynced' } },
+      {
+        id: 'solo-1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'unsynced' },
+      },
     ] as any;
     maybeSingleResponses = [null];
 
@@ -957,7 +1051,12 @@ describe('useCanvasRealtime', () => {
   it('starts a newly selected room empty instead of adopting the previous room graph', async () => {
     const roomOneSession = {
       nodes: [
-        { id: 'room-one-node', type: 'string', position: { x: 0, y: 0 }, data: { value: 'old' } },
+        {
+          id: 'room-one-node',
+          type: 'string',
+          position: { x: 0, y: 0 },
+          data: { value: 'old' },
+        },
       ],
       edges: [],
       updated_at: '2026-07-22T07:00:00.000Z',
@@ -989,10 +1088,19 @@ describe('useCanvasRealtime', () => {
 
   it('preserves local work on a canvas_sessions DELETE instead of wiping', async () => {
     mockStore.nodes = [
-      { id: 'keep-1', type: 'string', position: { x: 0, y: 0 }, data: { value: 'survive' } },
+      {
+        id: 'keep-1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'survive' },
+      },
     ] as any;
     maybeSingleResponses = [
-      { nodes: mockStore.nodes, edges: [], updated_at: '2026-02-18T10:00:00.000Z' },
+      {
+        nodes: mockStore.nodes,
+        edges: [],
+        updated_at: '2026-02-18T10:00:00.000Z',
+      },
       null,
     ];
 
@@ -1006,7 +1114,10 @@ describe('useCanvasRealtime', () => {
     (mockStore.triggerSave as any).mockClear();
 
     await act(async () => {
-      dbHandler({ eventType: 'DELETE', old: { brand_profile_id: 'brand-1', room_id: 'room-1' } });
+      dbHandler({
+        eventType: 'DELETE',
+        old: { brand_profile_id: 'brand-1', room_id: 'room-1' },
+      });
       await new Promise((r) => setTimeout(r, 20));
     });
 

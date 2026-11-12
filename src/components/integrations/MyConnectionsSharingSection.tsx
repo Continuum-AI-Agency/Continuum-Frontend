@@ -1,3 +1,5 @@
+import { useLocale, useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 import { RemoveConnectionButton } from '@/components/integrations/RemoveConnectionButton';
 import { ShareConnectionButton } from '@/components/integrations/ShareConnectionButton';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -31,8 +33,6 @@ const CONNECTION_COLUMNS = ['Connection', 'Status', 'Shared with', 'Connected', 
 const CONNECTION_GRID =
   'grid-cols-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_13rem]';
 
-const DATE_FORMAT = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
-
 function formatProvider(provider: string): string {
   return (
     PROVIDER_LABEL[provider] ??
@@ -41,14 +41,18 @@ function formatProvider(provider: string): string {
   );
 }
 
-function formatDate(value: string | null): string {
+function formatDate(value: string | null, locale: string): string {
   const parsed = value ? new Date(value) : null;
-  return parsed && !Number.isNaN(parsed.getTime()) ? DATE_FORMAT.format(parsed) : '—';
+  return parsed && !Number.isNaN(parsed.getTime())
+    ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(parsed)
+    : '—';
 }
 
 function ConnectionStatus({ status }: { status: string | null }) {
-  if (status === 'active') return <Pill variant="success">Active</Pill>;
-  if (status === 'needs_reauth') return <Pill variant="warning">Needs reconnect</Pill>;
+  const uiText = useTranslations('common');
+  const uiLocale = useLocale();
+  if (status === 'active') return <Pill variant="success">{uiText('active_9234069')}</Pill>;
+  if (status === 'needs_reauth') return <Pill variant="warning">{uiText('m_1d537a7de5')}</Pill>;
   return status ? (
     <Pill variant="muted" className="capitalize">
       {status.replace(/_/g, ' ')}
@@ -61,13 +65,17 @@ function ConnectionStatus({ status }: { status: string | null }) {
 type Grant = { brandProfileId: string; brandName: string; grantedAt: string };
 
 function SharedWithSummary({ grants }: { grants: Grant[] }) {
-  if (grants.length === 0) return <p className="text-xs text-muted-foreground">Not shared</p>;
+  const tUi = useTranslations('common');
+  const uiLocale = useLocale();
+
+  if (grants.length === 0)
+    return <p className="text-xs text-muted-foreground">{tUi('m_0872bf81fd')}</p>;
   const shown = grants.slice(0, 2).map((grant) => grant.brandName);
   const rest = grants.length - shown.length;
   return (
     <div className="min-w-0">
       <p className="text-sm font-medium tabular-nums">
-        {grants.length} {grants.length === 1 ? 'brand' : 'brands'}
+        {grants.length} {grants.length === 1 ? tUi('m_63acf68c4f') : tUi('m_87101ba214')}
       </p>
       <p className="truncate text-xs text-muted-foreground">
         {shown.join(', ')}
@@ -82,6 +90,10 @@ type MyConnectionsSharingSectionProps = {
 };
 
 export async function MyConnectionsSharingSection({ userId }: MyConnectionsSharingSectionProps) {
+  const uiLocale = useLocale();
+
+  const tUi = await getTranslations('common');
+
   const [connections, grants] = await Promise.all([
     fetchOwnedConnections(userId),
     fetchMyConnectionGrants(),
@@ -96,28 +108,20 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
 
   return (
     <SettingsSection
-      title="Sharing and removal"
-      description="Which brands each connection reaches, and how to take one back. Open a connection for every brand it is shared with."
+      title={tUi('m_f06b5ed4e7')}
+      description={tUi('m_f73d438bc8')}
       action={
-        <SettingsInfoHint label="How sharing works">
+        <SettingsInfoHint label={tUi('m_8fdd0c484c')}>
           <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-            <li>Share a connection with any brand you own or administer.</li>
-            <li>
-              Remove takes a connection off your account entirely, which pulls it from every brand
-              at once. You see what each brand loses before you confirm.
-            </li>
-            <li>
-              Needs reconnect means the provider sign-in has lapsed. Reconnect it under Personal
-              connections above.
-            </li>
+            <li>{tUi('m_c92fbe4c1c')}</li>
+            <li>{tUi('m_9941f8981c')}</li>
+            <li>{tUi('m_1c1dc720b6')}</li>
           </ul>
         </SettingsInfoHint>
       }
     >
       {connections.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No connections on your account yet. Connect one under Personal connections above.
-        </p>
+        <p className="text-sm text-muted-foreground">{tUi('m_9171278656')}</p>
       ) : (
         <SettingsRowList
           data-testid="connection-sharing-list"
@@ -140,7 +144,7 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
                   <ConnectionStatus key="status" status={connection.status} />,
                   <SharedWithSummary key="shared" grants={grantedTo} />,
                   <p key="connected" className="text-sm tabular-nums">
-                    {formatDate(connection.createdAt)}
+                    {formatDate(connection.createdAt, uiLocale)}
                   </p>,
                 ]}
                 actions={
@@ -158,12 +162,10 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
                 }
                 detail={
                   grantedTo.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Not shared with any brand yet. Use Share to give a brand access.
-                    </p>
+                    <p className="text-sm text-muted-foreground">{tUi('m_5601a8d8e2')}</p>
                   ) : (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-muted-foreground">Shared with</p>
+                      <p className="text-xs text-muted-foreground">{tUi('m_6203f44916')}</p>
                       <ul className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
                         {grantedTo.map((grant) => (
                           <li
@@ -172,7 +174,8 @@ export async function MyConnectionsSharingSection({ userId }: MyConnectionsShari
                           >
                             <span className="truncate">{grant.brandName}</span>
                             <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                              since {formatDate(grant.grantedAt)}
+                              {tUi('m_32332d2e56')}
+                              {formatDate(grant.grantedAt, uiLocale)}
                             </span>
                           </li>
                         ))}

@@ -38,6 +38,7 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import {
   createContext,
   Fragment,
@@ -74,12 +75,12 @@ import {
   MAX_BATCH_ROWS,
   missingInputs,
   ownChangeCount,
-  RENDER_OVERRIDES,
   type RenderOverride,
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
   type RowStatus,
+  renderOverrideCopy,
   rowBreadcrumb,
   seededValue,
   toPreflightDelivery,
@@ -108,6 +109,8 @@ import { TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 import { pickedPins } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
@@ -218,12 +221,16 @@ function fitTone(verdict: ApiRenderFitVerdict | null) {
     return { variant: 'muted' as const, text: '?', title: verdict.why };
   if (verdict.state === 'clipped') {
     const [l, t, r, b] = verdict.clippedPx ?? [0, 0, 0, 0];
-    return { variant: 'warning' as const, text: 'Clips', title: `Clips ${l}/${t}/${r}/${b} px` };
+    return {
+      variant: 'warning' as const,
+      text: 'Clips',
+      title: `Clips ${l}/${t}/${r}/${b} px`,
+    };
   }
   return { variant: 'success' as const, text: 'Fits', title: verdict.why };
 }
 
-const secs = (value: number) => `${value.toFixed(1)}s`;
+const secs = (value: number, locale: UiLocale) => `${formatDecimal(value, 1, locale)}s`;
 
 function MediaPicker({
   variable,
@@ -242,6 +249,9 @@ function MediaPicker({
   onPick: (assets: MediaAsset[]) => void;
   onClear: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const displayLocale = useUiLocale();
+
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -253,11 +263,11 @@ function MediaPicker({
   const defaulted = isDefaultValue(variable, value);
   const picked = pins.length
     ? variable.multiple
-      ? `${pins.length} picked`
-      : (media?.name ?? 'Picked')
+      ? translateUi('mediaPickedCount', { count: pins.length })
+      : (media?.name ?? translateUi('mediaPickedFallback'))
     : defaulted
-      ? 'Default'
-      : 'Choose';
+      ? translateUi('default_21b111cb')
+      : translateUi('choose_c7f93783');
   // A video slot plays a fixed stretch of its clip — the render keeps the layer's timing — so its
   // length rides in the field like a text budget does. A length the Library never stored is read
   // from the file's own metadata.
@@ -281,7 +291,7 @@ function MediaPicker({
         anchor={
           <button
             type="button"
-            aria-label={`${pins.length ? 'Change' : 'Choose'} ${variable.label}`}
+            aria-label={`${pins.length ? translateUi('change_c0bf75bd') : translateUi('choose_c7f93783')} ${variable.label}`}
             title={
               [
                 pins.length
@@ -326,15 +336,24 @@ function MediaPicker({
         ref={fileInput}
         type="file"
         accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
-        aria-label={`Upload ${variable.label}`}
+        aria-label={translateUi('upload_value0_d0166fa5', {
+          value0: String(variable.label),
+        })}
         className="sr-only"
         onChange={async (event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
           if (!file) return;
-          const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+          const format = classifyLibraryFile({
+            fileName: file.name,
+            mimeType: file.type,
+          });
           if (!format.accepted || format.originalKind !== variable.kind) {
-            toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+            toast.error(
+              translateUi('choose_an_value0_file_66ba4888', {
+                value0: String(variable.kind === 'image' ? 'image' : 'video'),
+              }),
+            );
             return;
           }
           setUploading(true);
@@ -345,7 +364,11 @@ function MediaPicker({
               throw new Error('Uploaded file is not ready in the Library.');
             onPick([asset]);
           } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : translateUi('could_not_upload_this_file_91efc96a'),
+            );
           } finally {
             setUploading(false);
           }
@@ -355,8 +378,10 @@ function MediaPicker({
         type="button"
         size="icon-xs"
         variant="ghost"
-        aria-label={`Upload ${variable.label}`}
-        title="Upload a file here"
+        aria-label={translateUi('upload_value0_d0166fa5', {
+          value0: String(variable.label),
+        })}
+        title={translateUi('upload_a_file_here_3cd8f22b')}
         disabled={uploading}
         className="shrink-0 text-muted-foreground"
         onClick={() => fileInput.current?.click()}
@@ -383,10 +408,15 @@ function MediaPicker({
       {shortBy !== null && clipSec !== undefined && clip ? (
         <Badge
           variant="warning"
-          title={`This clip is ${secs(clipSec)}; the template plays it to ${secs(clip.toSec)}, so it runs out ${secs(shortBy)} early and the layer is empty for the rest.`}
+          title={translateUi('this_clip_is_value0_the_template_pl_7bdd3332', {
+            value0: String(secs(clipSec, displayLocale)),
+            value1: String(secs(clip.toSec, displayLocale)),
+            value2: String(secs(shortBy, displayLocale)),
+          })}
           className="shrink-0 px-1 py-0 text-2xs"
         >
-          Short
+          {' '}
+          {translateUi('short_f5d61ead')}{' '}
         </Badge>
       ) : null}
       {fit ? (
@@ -399,7 +429,9 @@ function MediaPicker({
           type="button"
           size="icon-xs"
           variant="ghost"
-          aria-label={`Clear ${variable.label}`}
+          aria-label={translateUi('clear_value0_9016417b', {
+            value0: String(variable.label),
+          })}
           className="shrink-0 text-muted-foreground"
           onClick={onClear}
         >
@@ -449,17 +481,19 @@ function StatusBadge({
   fitLoading: boolean;
   labelOf: LabelOf;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   switch (status.state) {
     case 'invalid':
       return (
         <Explained why={invalidReason ?? ''}>
-          <Badge variant="destructive">Invalid</Badge>
+          <Badge variant="destructive">{translateUi('invalid_96c34a07')}</Badge>
         </Explained>
       );
     case 'refused':
       return (
         <Explained why={status.reason}>
-          <Badge variant="destructive">Rejected</Badge>
+          <Badge variant="destructive">{translateUi('rejected_aea4a04a')}</Badge>
         </Explained>
       );
     // A refusal a person may render through is a question for Render, not an error in the row.
@@ -467,10 +501,12 @@ function StatusBadge({
       return (
         <Explained
           why={status.calls
-            .map((call) => `${RENDER_OVERRIDES[call.override].title}: ${call.message}`)
+            .map(
+              (call) => `${renderOverrideCopy(call.override, translateUi).title}: ${call.message}`,
+            )
             .join(' ')}
         >
-          <Badge variant="warning">Needs your call</Badge>
+          <Badge variant="warning">{translateUi('needs_your_call_a33293c8')}</Badge>
         </Explained>
       );
     case 'unchecked':
@@ -478,16 +514,20 @@ function StatusBadge({
         return (
           <Explained
             why={[
-              ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
+              ...new Set(
+                status.findings.map((finding) => explainFinding(finding, labelOf, translateUi)),
+              ),
             ].join(' ')}
           >
-            <Badge variant="warning">Needs review</Badge>
+            <Badge variant="warning">{translateUi('needs_review_07297fa9')}</Badge>
           </Explained>
         );
       // No kit for the template: the readiness line says so once, not per row.
       return fitLoading ? (
         <Badge variant="muted">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Checking
+          <Loader2 className="size-3 animate-spin" aria-hidden /> {translateUi(
+            'checking_0dfe1d63',
+          )}{' '}
         </Badge>
       ) : null;
     case 'warning':
@@ -498,15 +538,17 @@ function StatusBadge({
             fitWarning,
             status.state === 'ai-check'
               ? aiCheckWhy(status.fit)
-              : [...new Set(status.findings.map((finding) => explainFinding(finding, labelOf)))].join(
-                  ' ',
-                ),
+              : [
+                  ...new Set(
+                    status.findings.map((finding) => explainFinding(finding, labelOf, translateUi)),
+                  ),
+                ].join(' '),
           ]
             .filter(Boolean)
             .join(' ')}
         >
           <Badge variant="warning">
-            <Info className="size-3" aria-hidden /> Ready · fit warning
+            <Info className="size-3" aria-hidden /> {translateUi('ready_fit_warning_363f14d8')}{' '}
           </Badge>
         </Explained>
       );
@@ -514,11 +556,11 @@ function StatusBadge({
       return fitWarning ? (
         <Explained why={fitWarning}>
           <Badge variant="warning">
-            <Info className="size-3" aria-hidden /> Ready · fit warning
+            <Info className="size-3" aria-hidden /> {translateUi('ready_fit_warning_363f14d8')}{' '}
           </Badge>
         </Explained>
       ) : (
-        <Badge variant="success">Ready</Badge>
+        <Badge variant="success">{translateUi('ready_5fa7aac5')}</Badge>
       );
   }
 }
@@ -534,6 +576,8 @@ function InheritanceAction({
   value: ApiRenderInputValue | undefined;
   actions: RequestRowActions;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   if (!row.parentId) {
     // A root inherits nothing; its reset puts back what a new row starts with — the designer's
     // value, or nothing where a saved default fills it. A media slot's own clear already does that.
@@ -546,8 +590,10 @@ function InheritanceAction({
         size="icon-xs"
         variant="ghost"
         className="text-muted-foreground"
-        aria-label={`Reset ${variable.label} to default`}
-        title="Reset to default"
+        aria-label={translateUi('reset_value0_to_default_85248570', {
+          value0: String(variable.label),
+        })}
+        title={translateUi('reset_to_default_bc5b45ae')}
         onClick={() => actions.setValue(row.id, variable.key, restore)}
       >
         <RotateCcw className="size-3" aria-hidden />
@@ -561,8 +607,10 @@ function InheritanceAction({
       size="icon-xs"
       variant="ghost"
       className="text-muted-foreground"
-      aria-label={`Reset ${variable.label} to inherited`}
-      title="Reset to inherited"
+      aria-label={translateUi('reset_value0_to_inherited_57bb9253', {
+        value0: String(variable.label),
+      })}
+      title={translateUi('reset_to_inherited_af537e74')}
       onClick={() => actions.resetValue(row.id, variable.key)}
     >
       <RotateCcw className="size-3" aria-hidden />
@@ -573,8 +621,10 @@ function InheritanceAction({
       size="icon-xs"
       variant="ghost"
       className="text-muted-foreground"
-      aria-label={`Clear inherited ${variable.label}`}
-      title="Clear inherited value"
+      aria-label={translateUi('clear_inherited_value0_2cb2c5dc', {
+        value0: String(variable.label),
+      })}
+      title={translateUi('clear_inherited_value_6a234cfc')}
       onClick={() => actions.clearValue(row.id, variable.key)}
     >
       <X className="size-3" aria-hidden />
@@ -590,14 +640,20 @@ function DefaultTag({
   variable: ApiRenderVariable;
   value: ApiRenderInputValue | undefined;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const saved = isEmptyInput(variable, value) && hasSavedDefault(variable);
   return (
     <Badge
       variant="muted"
-      title={`${saved ? 'The template’s saved default' : 'From the design'} — ${variable.kind === 'boolean' ? 'switch' : 'type'} to replace`}
+      title={translateUi('value0_value1_to_replace_8e04cf84', {
+        value0: String(saved ? 'The template’s saved default' : 'From the design'),
+        value1: String(variable.kind === 'boolean' ? 'switch' : 'type'),
+      })}
       className="shrink-0 px-1 py-0 text-2xs"
     >
-      Default
+      {' '}
+      {translateUi('default_21b111cb')}{' '}
     </Badge>
   );
 }
@@ -664,6 +720,8 @@ export function VariableCell({
   column,
   table,
 }: CellContext<RequestRow, unknown>) {
+  const translateUi = useUiTranslations('forge');
+
   const { variable } = column.columnDef.meta as VariableColumnMeta;
   const { brandId, contract, rows, clientErrors, calls, actions, liveFit } = gridMeta(table);
   const clientError = clientErrors.get(row.id)?.[variable.key];
@@ -684,9 +742,10 @@ export function VariableCell({
 
   if (variable.reserved)
     return (
-      <Explained why="The brand’s logo, filled in automatically at render time.">
+      <Explained why={translateUi('automaticBrandLogoExplanation')}>
         <span className="text-2xs text-muted-foreground underline decoration-dotted underline-offset-2">
-          Continuum fills this
+          {' '}
+          {translateUi('continuum_fills_this_43ee4b3a')}{' '}
         </span>
       </Explained>
     );
@@ -743,7 +802,7 @@ export function VariableCell({
           onCheckedChange={(next) => actions.setValue(row.id, variable.key, next)}
         />
         <span className="text-2xs text-muted-foreground">
-          {shown === null ? 'As designed' : shown ? on : off}
+          {shown === null ? translateUi('as_designed_76de4b46') : shown ? on : off}
         </span>
         {defaultTag}
         {inheritance}
@@ -765,10 +824,16 @@ export function VariableCell({
             aria-label={variable.label}
             title={error}
           >
-            <SelectValue placeholder={variable.required ? 'Choose…' : 'Not set…'} />
+            <SelectValue
+              placeholder={
+                variable.required ? translateUi('choose_7ca41615') : translateUi('not_set_a2d5e1dc')
+              }
+            />
           </SelectTrigger>
           <SelectContent>
-            {variable.required ? null : <SelectItem value={UNSET}>Not set…</SelectItem>}
+            {variable.required ? null : (
+              <SelectItem value={UNSET}>{translateUi('not_set_a2d5e1dc')}</SelectItem>
+            )}
             {variable.options.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
@@ -836,7 +901,10 @@ export function VariableCell({
               misfit && 'border-warning',
               invalid && 'border-destructive',
             )}
-            aria-label={`${variable.label} — one line each for ${[variable, ...lineFields].map((field) => field.label).join(', ')}`}
+            aria-label={translateUi('value0_one_line_each_for_value1_d84baf6f', {
+              value0: String(variable.label),
+              value1: String([variable, ...lineFields].map((field) => field.label).join(', ')),
+            })}
             title={error}
             placeholder={[variable, ...lineFields]
               .map((field) => field.sample ?? field.label)
@@ -864,7 +932,10 @@ export function VariableCell({
       {misfit ? (
         // A warning, never a block: the render still runs, and the AI check reads the frame.
         <Explained why={`Will render · may shrink or clip — ${misfit}`}>
-          <Info className="size-3.5 text-warning" aria-label="Will render · may shrink or clip" />
+          <Info
+            className="size-3.5 text-warning"
+            aria-label={translateUi('will_render_may_shrink_or_clip_726b2f3a')}
+          />
         </Explained>
       ) : null}
       {defaultTag}
@@ -874,6 +945,8 @@ export function VariableCell({
 }
 
 function RowMenu({ row, meta }: { row: RequestRow; meta: RequestGridMeta }) {
+  const translateUi = useUiTranslations('forge');
+
   const focusAfter = useRef<(() => HTMLElement | null) | null>(null);
   return (
     <DropdownMenu>
@@ -883,7 +956,9 @@ function RowMenu({ row, meta }: { row: RequestRow; meta: RequestGridMeta }) {
             type="button"
             size="icon-xs"
             variant="ghost"
-            aria-label={`Row actions for ${row.label || 'Untitled'}`}
+            aria-label={translateUi('row_actions_for_value0_f91c02e7', {
+              value0: String(row.label || translateUi('untitledFallback')),
+            })}
           >
             <MoreHorizontal aria-hidden />
           </Button>
@@ -892,7 +967,7 @@ function RowMenu({ row, meta }: { row: RequestRow; meta: RequestGridMeta }) {
       <DropdownMenuContent align="end" className="w-48" finalFocus={takeFocusAfter(focusAfter)}>
         <ActionMenuItems
           kind="dropdown"
-          groups={rowActions({ ...meta }, row.id)}
+          groups={rowActions({ ...meta, translate: translateUi }, row.id)}
           focusAfter={focusAfter}
         />
       </DropdownMenuContent>
@@ -947,6 +1022,8 @@ function RowAddButton({
 }
 
 export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unknown>) {
+  const translateUi = useUiTranslations('forge');
+
   const meta = gridMeta(table);
   const { rows, actions } = meta;
   const row = tableRow.original;
@@ -970,7 +1047,7 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           size="icon-xs"
           variant="ghost"
           className="text-muted-foreground"
-          aria-label={`${tableRow.getIsExpanded() ? 'Collapse' : 'Expand'} ${row.label}`}
+          aria-label={`${tableRow.getIsExpanded() ? translateUi('collapse_be6eb1fc') : translateUi('expand_07548c2c')} ${row.label}`}
           onClick={tableRow.getToggleExpandedHandler()}
         >
           {tableRow.getIsExpanded() ? (
@@ -986,7 +1063,9 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           sizes its columns; containing the block's inline size keeps the column at its own width. */}
       <div className="min-w-0 flex-1 [contain:inline-size]">
         {row.proposed ? (
-          <p className="text-3xs font-medium text-primary">Proposed · not saved yet</p>
+          <p className="text-3xs font-medium text-primary">
+            {translateUi('proposed_not_saved_yet_a623700c')}
+          </p>
         ) : null}
         {breadcrumb ? (
           <div className="flex min-w-0 items-center gap-1.5">
@@ -994,7 +1073,9 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
               {breadcrumb}
             </p>
             <span className="shrink-0 rounded-sm bg-muted px-1 font-mono text-3xs tabular-nums text-muted-foreground">
-              inherits · {ownChangeCount(row)} changed
+              {' '}
+              {translateUi('inherits_8f7d01d4')} {ownChangeCount(row)}{' '}
+              {translateUi('changed_d67e2e94')}{' '}
             </span>
           </div>
         ) : null}
@@ -1003,8 +1084,11 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           // the column's width; the column's size and min-w decide it instead.
           size={1}
           className="h-7 text-xs"
-          aria-label="Row name"
-          placeholder={`Render ${rows.findIndex((item) => item.id === row.id) + 1}`}
+          data-row-name-input
+          aria-label={translateUi('row_name_62c6f265')}
+          placeholder={translateUi('render_value0_aba29037', {
+            value0: String(rows.findIndex((item) => item.id === row.id) + 1),
+          })}
           value={row.label}
           onChange={(event) =>
             actions.updateRow(
@@ -1018,8 +1102,8 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
       {/* Over the end of the name while the row is hovered, so they cost the name no width. */}
       <div className="invisible absolute inset-y-0 right-7 flex items-center gap-0.5 rounded-md bg-card/95 px-0.5 group-hover/row:visible">
         <RowAddButton
-          label="Add variation"
-          hint="Add variation — inherits every value until you change it"
+          label={translateUi('add_variation_6e60a034')}
+          hint={translateUi('execution_closure_be76d9f0')}
           icon={CornerDownRight}
           disabledReason={
             full ??
@@ -1030,8 +1114,12 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           onAdd={() => actions.fork([row.id])}
         />
         <RowAddButton
-          label="Row below"
-          hint={row.parentId ? 'Add another variation of the same parent' : 'Add a row below'}
+          label={translateUi('row_below_d377bb94')}
+          hint={
+            row.parentId
+              ? translateUi('add_another_variation_of_the_same_p_75c51391')
+              : translateUi('add_a_row_below_86e118ec')
+          }
           icon={Plus}
           disabledReason={full}
           onAdd={() => actions.addRowBelow(row.id)}
@@ -1077,11 +1165,13 @@ function formatsSource(rows: RequestRow[], row: RequestRow): RequestRow | undefi
 }
 
 export function FormatsCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
+  const translateUi = useUiTranslations('forge');
+
   const { contract, rows, actions } = gridMeta(table);
   const outputs = contract.outputs;
   if (outputs.length === 0) {
     const { ratios } = contract.template;
-    const together = 'This template renders every format together';
+    const together = translateUi('allFormatsTogether');
     return (
       <Tooltip>
         <TooltipTrigger
@@ -1091,7 +1181,10 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
               role="group"
               // biome-ignore lint/a11y/noNoninteractiveTabindex: read-only formats, focusable so the keyboard reaches why they cannot be picked.
               tabIndex={0}
-              aria-label={`Formats ${ratios.join(', ')}. ${together}`}
+              aria-label={translateUi('formats_value0_value1_c0b9a714', {
+                value0: String(ratios.join(', ')),
+                value1: String(together),
+              })}
               className="flex h-6 w-max items-center rounded-md px-1.5 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden"
             >
               <RatioChips ratios={ratios} />
@@ -1115,7 +1208,7 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
     );
   const inheritedFrom =
     row.parentId && row.outputIds.length === 0
-      ? formatsSource(rows, row)?.label.trim() || 'Untitled'
+      ? formatsSource(rows, row)?.label.trim() || translateUi('untitledFallback')
       : null;
   return (
     <div className="flex items-center gap-1">
@@ -1131,7 +1224,10 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
                     type="button"
                     size="xs"
                     variant="ghost"
-                    aria-label={`Formats ${ratios.join(', ')}${inheritedFrom ? `, inherited from ${inheritedFrom}` : ''}`}
+                    aria-label={translateUi('formats_value0_value1_f2c822e6', {
+                      value0: String(ratios.join(', ')),
+                      value1: String(inheritedFrom ? `, inherited from ${inheritedFrom}` : ''),
+                    })}
                   >
                     <RatioChips ratios={ratios} inherited={inheritedFrom !== null} />
                     <ChevronDown
@@ -1144,7 +1240,9 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
               />
             }
           />
-          <TooltipContent side="bottom">Inherited from {inheritedFrom}</TooltipContent>
+          <TooltipContent side="bottom">
+            {translateUi('inherited_from_871fdb7a')} {inheritedFrom}
+          </TooltipContent>
         </Tooltip>
         <DropdownMenuContent className="w-48">
           <DropdownMenuGroup>
@@ -1180,8 +1278,13 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
           size="icon-xs"
           variant="ghost"
           className="text-muted-foreground"
-          aria-label="Reset formats to inherited"
-          onClick={() => actions.updateRow(row.id, (current) => ({ ...current, outputIds: [] }))}
+          aria-label={translateUi('reset_formats_to_inherited_3789c12a')}
+          onClick={() =>
+            actions.updateRow(row.id, (current) => ({
+              ...current,
+              outputIds: [],
+            }))
+          }
         >
           <RotateCcw className="size-3" aria-hidden />
         </Button>
@@ -1212,7 +1315,10 @@ export function destinationLabel(
       ? { text: `Set default · ${adSetName(setDefault)}`, own: false }
       : { text: 'Library only', own: false };
   if (delivery.action === 'create')
-    return { text: `New ad · ${delivery.adsetName ?? delivery.adsetId}`, own: true };
+    return {
+      text: `New ad · ${delivery.adsetName ?? delivery.adsetId}`,
+      own: true,
+    };
   return {
     text: isUnresolvedTarget(delivery)
       ? `Replace · ad ${delivery.adId}`
@@ -1229,6 +1335,8 @@ export function DestinationCell({
   row: { original: row },
   table,
 }: CellContext<RequestRow, unknown>) {
+  const translateUi = useUiTranslations('forge');
+
   const { brandId, rows, destination } = gridMeta(table);
   if (!destination) return null;
   const label = destinationLabel(toPreflightDelivery(row.delivery), destination.setDefault);
@@ -1241,7 +1349,10 @@ export function DestinationCell({
             type="button"
             size="xs"
             variant="ghost"
-            aria-label={`Destination for ${name}: ${label.text}`}
+            aria-label={translateUi('destination_for_value0_value1_04a41fef', {
+              value0: String(name),
+              value1: String(label.text),
+            })}
             title={label.text}
             className={cn(
               'h-6 max-w-full justify-start truncate px-1.5 text-xs font-normal',
@@ -1277,7 +1388,10 @@ export function DestinationCell({
 
 /** A fired row's render, where it is now: the grid's Status cell follows it until it settles. */
 function RunBadge({ job }: { job: ApiRenderJob }) {
-  const steps = jobSteps(job);
+  const translateUi = useUiTranslations('forge');
+  const checkLocale = useUiLocale();
+
+  const steps = jobSteps(job, { t: translateUi, locale: checkLocale });
   const now =
     steps.find((item) => item.state === 'error') ??
     steps.find((item) => item.state === 'active') ??
@@ -1287,9 +1401,9 @@ function RunBadge({ job }: { job: ApiRenderJob }) {
     return (
       <Explained why={where}>
         {job.approval?.status === 'awaiting_approval' ? (
-          <Badge variant="warning">Awaiting approval</Badge>
+          <Badge variant="warning">{translateUi('awaiting_approval_ae25c9b1')}</Badge>
         ) : (
-          <Badge variant="success">Rendered</Badge>
+          <Badge variant="success">{translateUi('rendered_331e25aa')}</Badge>
         )}
       </Explained>
     );
@@ -1302,19 +1416,24 @@ function RunBadge({ job }: { job: ApiRenderJob }) {
             : 'The render service refused it. Select the row and Render again to resend it.'
         }
       >
-        <Badge variant="destructive">{job.taskUid ? 'Render failed' : 'Not sent'}</Badge>
+        <Badge variant="destructive">
+          {job.taskUid ? translateUi('render_failed_b704deeb') : translateUi('not_sent_cd5f943d')}
+        </Badge>
       </Explained>
     );
   return (
     <Explained why={where}>
       <Badge variant="muted">
-        <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden /> Rendering
+        <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden />{' '}
+        {translateUi('rendering_e2fe3539')}{' '}
       </Badge>
     </Explained>
   );
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
+  const translateUi = useUiTranslations('forge');
+
   const { contract, rows, clientErrors, liveFit, runs, statuses, fitLoading } = gridMeta(table);
   const run = runs?.get(row.id);
   if (run) return <RunBadge job={run} />;
@@ -1328,8 +1447,14 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
       readableLayerName(contract.variables.find((item) => item.key === key)?.label ?? key),
     );
     return (
-      <Badge variant="muted" title={`Fill in ${names.join(', ')}`}>
-        Needs input
+      <Badge
+        variant="muted"
+        title={translateUi('fill_in_value0_8f5e7ca4', {
+          value0: String(names.join(', ')),
+        })}
+      >
+        {' '}
+        {translateUi('needs_input_aecc044c')}{' '}
       </Badge>
     );
   }
@@ -1367,6 +1492,8 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
  * there. Hidden columns are still here: hiding a column is about the grid's width, not the data.
  */
 export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: string }) {
+  const translateUi = useUiTranslations('forge');
+
   let row: Row<RequestRow>;
   try {
     row = table.getRow(rowId, true);
@@ -1394,10 +1521,14 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
               {hasDraftEvidence && !variable.reserved && variable.key in values ? (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {evidence?.kind === 'document'
-                    ? `Source: ${evidence.name}${evidence.sheet ? ` · ${evidence.sheet}` : ''} — “${evidence.excerpt}”`
+                    ? translateUi('source_value0_value1_value2_f4465fdc', {
+                        value0: String(evidence.name),
+                        value1: String(evidence.sheet ? ` · ${evidence.sheet}` : ''),
+                        value2: String(evidence.excerpt),
+                      })
                     : evidence?.kind === 'media'
-                      ? 'Source: selected Library asset'
-                      : 'Needs review'}
+                      ? translateUi('source_selected_library_asset_acbe8008')
+                      : translateUi('needs_review_07297fa9')}
                 </p>
               ) : null}
             </dd>
@@ -1461,6 +1592,8 @@ export function SortableRequestRow({ row, className, ...props }: DataGridRowProp
 }
 
 export function DragHandleCell({ row: { original: row } }: CellContext<RequestRow, unknown>) {
+  const translateUi = useUiTranslations('forge');
+
   const handle = useContext(SortableHandleContext);
   if (!handle) return null;
   return (
@@ -1470,7 +1603,9 @@ export function DragHandleCell({ row: { original: row } }: CellContext<RequestRo
       className="flex cursor-grab touch-none items-center rounded-md p-0.5 text-muted-foreground hover:bg-muted/50 active:cursor-grabbing"
       {...handle.attributes}
       {...handle.listeners}
-      aria-label={`Drag ${row.label || 'Untitled'}`}
+      aria-label={translateUi('drag_value0_ec7c9477', {
+        value0: String(row.label || 'Untitled'),
+      })}
       onClick={(event) => event.stopPropagation()}
     >
       <GripVertical className="size-3.5" aria-hidden />

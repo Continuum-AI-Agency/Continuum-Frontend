@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
+import { render } from '@/i18n/__tests__/render';
 import {
   DestructiveConfirmationProvider,
   useDestructiveConfirmation,

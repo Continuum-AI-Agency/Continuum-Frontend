@@ -2,6 +2,7 @@
 
 import { ExternalLink, File, Play } from 'lucide-react';
 import Image from 'next/image';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
 import {
@@ -68,6 +69,8 @@ export function ChatMediaThumb({
   onLoadDimensions,
   hoverPlay = false,
 }: ChatMediaThumbProps) {
+  const tUi = useTranslations('common');
+
   // Failures are keyed to the URL that failed, so recovered media (a new signed
   // URL arriving via props) invalidates the failure without an explicit reset.
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
@@ -93,7 +96,7 @@ export function ChatMediaThumb({
   // Every tile names its content: an empty alt would mark a creative as decoration.
   const label =
     [media.name, media.caption, media.badge].find((text) => text?.trim()) ??
-    (media.kind === 'video' ? 'Video' : 'Image');
+    (media.kind === 'video' ? tUi('m_bc17c1f017') : tUi('m_50e19fda0d'));
 
   const videoRef = useRef<HTMLVideoElement>(null);
   // `activated` is sticky (the first hover mounts the bytes, which then stay); `hovered`
@@ -187,7 +190,10 @@ export function ChatMediaThumb({
           onLoad={(event) => {
             const { naturalWidth, naturalHeight } = event.currentTarget;
             if (naturalWidth > 0 && naturalHeight > 0) {
-              onLoadDimensions?.({ width: naturalWidth, height: naturalHeight });
+              onLoadDimensions?.({
+                width: naturalWidth,
+                height: naturalHeight,
+              });
             }
           }}
           className="object-cover"
@@ -237,6 +243,8 @@ export function ChatMediaCarousel({
   hoverPlay = false,
   onOpen,
 }: ChatMediaCarouselProps) {
+  const tUi = useTranslations('common');
+
   const [api, setApi] = useState<CarouselApi | null>(null);
   const [current, setCurrent] = useState(0);
 
@@ -267,7 +275,9 @@ export function ChatMediaCarousel({
     if (!onOpen) return thumb;
     return (
       <button
-        aria-label={`Open ${media.name ?? media.caption ?? 'creative'}`}
+        aria-label={tUi('m_f1d760a593', {
+          v0: String(media.name ?? media.caption ?? 'creative'),
+        })}
         className="relative block size-full cursor-zoom-in"
         onClick={(event) => {
           event.stopPropagation();
@@ -337,6 +347,8 @@ export function ChatMediaGrid({
   fallbackSeedFor,
   onRecoverItem,
 }: ChatMediaGridProps) {
+  const tUi = useTranslations('common');
+
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   if (items.length === 0) return null;
@@ -356,7 +368,7 @@ export function ChatMediaGrid({
               type="button"
               disabled={!lightboxTitle}
               onClick={() => setOpenIndex(index)}
-              aria-label={media.name ?? media.caption ?? 'Open media'}
+              aria-label={media.name ?? media.caption ?? tUi('m_d15d28cf00')}
               className={cn(
                 'relative block size-24 overflow-hidden rounded-md border transition-opacity',
                 lightboxTitle ? 'hover:opacity-90' : 'cursor-default',
@@ -375,7 +387,7 @@ export function ChatMediaGrid({
                 href={media.permalink}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Open the live post"
+                aria-label={tUi('m_5eaf58bc5a')}
                 className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
               >
                 <ExternalLink className="size-3" aria-hidden="true" />

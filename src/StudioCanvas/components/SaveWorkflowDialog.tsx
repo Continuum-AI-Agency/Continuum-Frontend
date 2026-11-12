@@ -11,10 +11,11 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Upload, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-
+import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +30,8 @@ import {
 import { coerceToastOptions, throwToastError, useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { draftPipelineGuide, publishPipeline } from '@/lib/ai-studio/pipelines';
 import { formatMiB } from '@/lib/ai-studio/referenceDrop';
 import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
@@ -41,10 +43,11 @@ import { serializeWorkflowSnapshot } from '../utils/workflowSerialization';
 
 const WORKFLOW_PAYLOAD_MAX_BYTES = 200 * 1024 * 1024;
 
-const saveWorkflowSchema = z.object({
-  name: z.string().min(1, 'Workflow name is required'),
-  description: z.string().optional(),
-});
+const saveWorkflowSchema = (translateUi: ReturnType<typeof useUiTranslations<'studio'>>) =>
+  z.object({
+    name: z.string().min(1, translateUi('validationWorkflowNameRequired')),
+    description: z.string().optional(),
+  });
 
 /**
  * Saving and PUBLISHING are different acts, so they are one deliberate choice rather than
@@ -58,7 +61,7 @@ const saveWorkflowSchema = z.object({
  */
 type SaveKind = 'workflow' | 'pipeline';
 
-type SaveWorkflowFormValues = z.infer<typeof saveWorkflowSchema>;
+type SaveWorkflowFormValues = z.infer<ReturnType<typeof saveWorkflowSchema>>;
 
 type PipelinePortDirection = 'input' | 'output';
 type PipelineBindings = Record<string, PipelinePortBinding>;
@@ -106,13 +109,17 @@ function PipelinePortBindingEditor({
   editorConfigurations: Readonly<Record<string, EditorPortConfiguration>>;
   onChange: (key: string, binding: PipelinePortBinding) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const configurable = ports.filter((port) => canConfigurePipelinePort(direction, port));
   if (configurable.length === 0) return null;
 
   return (
     <div className="mt-2 grid gap-2 border-t border-border/70 pt-2">
       <p className="font-medium text-foreground">
-        {direction === 'input' ? 'Input meaning' : 'Output meaning'}
+        {direction === 'input'
+          ? translateUi('input_meaning_3df44444')
+          : translateUi('output_meaning_bf71c714')}
       </p>
       {configurable.map((port) => {
         const key = bindingKey(direction, port.id);
@@ -143,7 +150,9 @@ function PipelinePortBindingEditor({
                   <SelectTrigger
                     size="sm"
                     className="w-44"
-                    aria-label={`${label} editor source slot`}
+                    aria-label={translateUi('value0_editor_source_slot_5493a10e', {
+                      value0: String(label),
+                    })}
                   >
                     <SelectValue
                       items={Object.fromEntries(
@@ -160,7 +169,9 @@ function PipelinePortBindingEditor({
                   </SelectContent>
                 </Select>
               ) : (
-                <span className="text-danger">No media clips to replace</span>
+                <span className="text-danger">
+                  {translateUi('no_media_clips_to_replace_02fa30f8')}
+                </span>
               )}
             </div>
           );
@@ -191,7 +202,14 @@ function PipelinePortBindingEditor({
                   )
                 }
               >
-                <SelectTrigger size="sm" className="w-32" aria-label={`${label} ${direction} type`}>
+                <SelectTrigger
+                  size="sm"
+                  className="w-32"
+                  aria-label={translateUi('value0_value1_type_45edf808', {
+                    value0: String(label),
+                    value1: String(direction),
+                  })}
+                >
                   <SelectValue
                     items={{
                       asset: 'Asset',
@@ -201,11 +219,13 @@ function PipelinePortBindingEditor({
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="asset">Asset</SelectItem>
+                  <SelectItem value="asset">{translateUi('asset_80d298c9')}</SelectItem>
                   {direction === 'input' ? (
-                    <SelectItem value="element">Element</SelectItem>
+                    <SelectItem value="element">{translateUi('element_4e5b548d')}</SelectItem>
                   ) : (
-                    <SelectItem value="element_candidate">Element candidate</SelectItem>
+                    <SelectItem value="element_candidate">
+                      {translateUi('element_candidate_3e7a96ef')}
+                    </SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -222,21 +242,34 @@ function PipelinePortBindingEditor({
                           }
                         : binding.kind === 'element_candidate'
                           ? { ...binding, category: value as ElementCategory }
-                          : { kind: 'element_candidate', category: value as ElementCategory },
+                          : {
+                              kind: 'element_candidate',
+                              category: value as ElementCategory,
+                            },
                     )
                   }
                 >
                   <SelectTrigger
                     size="sm"
                     className="w-32"
-                    aria-label={`${label} ${direction === 'input' ? 'Element' : 'candidate'} category`}
+                    aria-label={translateUi('elementCategoryLabel', {
+                      label,
+                      direction,
+                    })}
                   >
-                    <SelectValue items={ELEMENT_CATEGORY_LABEL} />
+                    <SelectValue
+                      items={Object.fromEntries(
+                        ELEMENT_CATEGORIES.map((category) => [
+                          category,
+                          elementCategoryLabel(category, translateUi),
+                        ]),
+                      )}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {ELEMENT_CATEGORIES.map((value) => (
                       <SelectItem key={value} value={value}>
-                        {ELEMENT_CATEGORY_LABEL[value]}
+                        {elementCategoryLabel(value, translateUi)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -245,8 +278,10 @@ function PipelinePortBindingEditor({
               {binding.kind === 'element_candidate' && isElementPersonCategory(binding.category) ? (
                 <Input
                   className="h-7 w-48 text-xs"
-                  aria-label={`${label} candidate rights note`}
-                  placeholder="Rights basis"
+                  aria-label={translateUi('value0_candidate_rights_note_1c1f010d', {
+                    value0: String(label),
+                  })}
+                  placeholder={translateUi('rights_basis_c272d465')}
                   value={binding.rightsNote ?? ''}
                   onChange={(event) =>
                     onChange(key, {
@@ -265,8 +300,8 @@ function PipelinePortBindingEditor({
         (port) => bindings[bindingKey(direction, port.id)]?.kind === 'element_candidate',
       ) ? (
         <p className="text-muted-foreground">
-          A candidate is created only after quality checks pass. It never replaces a default Element
-          automatically.
+          {' '}
+          {translateUi('a_candidate_is_created_only_after_q_881e7a4f')}{' '}
         </p>
       ) : null}
     </div>
@@ -298,6 +333,12 @@ export function SaveWorkflowDialog({
   showTrigger = true,
   selection,
 }: SaveWorkflowDialogProps) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const { nodes, edges, defaultEdgeType } = useStudioStore();
   const { show } = useToast();
   const [internalOpen, setInternalOpen] = React.useState(false);
@@ -363,9 +404,7 @@ export function SaveWorkflowDialog({
       .catch((cause) => {
         if (!cancelled) {
           setEditorConfigurations({});
-          setError(
-            cause instanceof Error ? cause.message : 'Could not load the editor configuration.',
-          );
+          setError(uiErrorText(cause));
         }
       })
       .finally(() => {
@@ -374,7 +413,7 @@ export function SaveWorkflowDialog({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, kind, timelineProjects]);
+  }, [isOpen, kind, timelineProjects, uiErrorText]);
 
   // Only the edges wholly inside the selection are PERSISTED, so a captured subgraph
   // re-applies without dangling connections to nodes that were left behind.
@@ -459,7 +498,9 @@ export function SaveWorkflowDialog({
   );
 
   const form = useForm<SaveWorkflowFormValues>({
-    resolver: zodResolver(saveWorkflowSchema),
+    resolver: zodResolver(saveWorkflowSchema(translateUi), {
+      error: validationErrorMap,
+    }),
     defaultValues: {
       name: '',
       description: '',
@@ -502,8 +543,8 @@ export function SaveWorkflowDialog({
       // model fails, so reaching here means the request itself was refused (e.g. an input on
       // an occupied handle). Say why, and let the author fix it and redraft.
       const toastOptions = coerceToastOptions(err, {
-        title: 'Could not draft the guide',
-        description: err instanceof Error ? err.message : 'Try again.',
+        title: translateUi('could_not_draft_the_guide_8fbd3a35'),
+        description: uiErrorText(err),
         variant: 'error',
       });
       setError(toastOptions.description ?? toastOptions.title);
@@ -514,7 +555,7 @@ export function SaveWorkflowDialog({
 
   const onSubmit = form.handleSubmit(async (values) => {
     if (!brandProfileId) {
-      setError('Select a brand profile to save workflows.');
+      setError(translateUi('select_a_brand_profile_to_save_work_0b42fdd4'));
       return;
     }
     // The description is what another agent reads to decide whether to run this pipeline,
@@ -522,7 +563,7 @@ export function SaveWorkflowDialog({
     const description = values.description?.trim() ?? '';
     if (kind === 'pipeline' && !description) {
       form.setError('description', {
-        message: 'Describe what this pipeline makes and when to use it.',
+        message: translateUi('describe_what_this_pipeline_makes_a_21abf041'),
       });
       return;
     }
@@ -534,17 +575,20 @@ export function SaveWorkflowDialog({
       const payloadBytes = new TextEncoder().encode(JSON.stringify(snapshot)).length;
       if (payloadBytes > WORKFLOW_PAYLOAD_MAX_BYTES) {
         throwToastError({
-          title: 'Workflow too large to save',
-          description: `${formatMiB(payloadBytes)} (max ${formatMiB(WORKFLOW_PAYLOAD_MAX_BYTES)}). Remove large media inputs.`,
+          title: translateUi('workflow_too_large_to_save_143e70d8'),
+          description: translateUi('value0_max_value1_remove_large_medi_bd0ca6a0', {
+            value0: String(formatMiB(payloadBytes)),
+            value1: String(formatMiB(WORKFLOW_PAYLOAD_MAX_BYTES)),
+          }),
           variant: 'error',
         });
       }
       if (kind === 'pipeline') {
         if (loadingEditorConfigurations || editorConfigurationMissing) {
-          throw new Error('Choose a reusable editor source slot before publishing.');
+          throw new LocalizedUiError(translateUi('choose_a_reusable_editor_source_slo_b886ea9c'));
         }
         if (!pipelineMetadata || !agentGuide) {
-          throw new Error('Draft or write the agent guide before publishing.');
+          throw new LocalizedUiError(translateUi('pipelineGuideRequired'));
         }
         await publishPipeline({
           brand_profile_id: brandProfileId,
@@ -570,15 +614,18 @@ export function SaveWorkflowDialog({
         });
       }
       show({
-        title: kind === 'pipeline' ? 'Pipeline published' : 'Workflow saved',
+        title:
+          kind === 'pipeline'
+            ? translateUi('pipeline_published_f2dd44d3')
+            : translateUi('workflow_saved_077e94fd'),
         description: values.name,
         variant: 'success',
       });
       closePanel();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to save workflow';
+      const message = uiErrorText(err);
       const toastOptions = coerceToastOptions(err, {
-        title: 'Save failed',
+        title: translateUi('save_failed_53ad6f99'),
         description: message,
         variant: 'error',
       });
@@ -595,15 +642,27 @@ export function SaveWorkflowDialog({
         <div>
           <p className="text-sm font-semibold text-foreground">
             {kind === 'pipeline'
-              ? 'Publish pipeline'
+              ? translateUi('publish_pipeline_a760fceb')
               : isSelectionScoped
-                ? 'Save selection'
-                : 'Save workflow'}
+                ? translateUi('save_selection_dd183ea6')
+                : translateUi('save_workflow_e77921c8')}
           </p>
           <p className="text-xs text-muted-foreground">
             {kind === 'pipeline'
-              ? `Publish ${isSelectionScoped ? 'these nodes' : 'this canvas'} for the optimizer to run on its own.`
-              : `Store ${isSelectionScoped ? 'the selected nodes' : 'this canvas'} as a reusable template for your brand.`}
+              ? translateUi('publish_value0_for_the_optimizer_to_bca8d0c2', {
+                  value0: String(
+                    isSelectionScoped
+                      ? translateUi('these_nodes_336e7d13')
+                      : translateUi('this_canvas_83f0df16'),
+                  ),
+                })
+              : translateUi('store_value0_as_a_reusable_template_fe6bbc78', {
+                  value0: String(
+                    isSelectionScoped
+                      ? translateUi('the_selected_nodes_e7eacff5')
+                      : translateUi('this_canvas_83f0df16'),
+                  ),
+                })}
           </p>
         </div>
         <Button
@@ -612,14 +671,14 @@ export function SaveWorkflowDialog({
           size="icon"
           className="h-7 w-7"
           onClick={closePanel}
-          aria-label="Close workflow saver"
+          aria-label={translateUi('close_workflow_saver_d0726d9e')}
         >
           <X className="h-4 w-4" />
         </Button>
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="workflow-name">Name</Label>
+        <Label htmlFor="workflow-name">{translateUi('name_dcd1d522')}</Label>
         <ToggleGroup
           value={kind}
           onValueChange={(value) => {
@@ -627,13 +686,15 @@ export function SaveWorkflowDialog({
             if (next === 'workflow' || next === 'pipeline') setKind(next);
           }}
           className="grid grid-cols-2"
-          aria-label="Save as"
+          aria-label={translateUi('save_as_60af8a30')}
         >
           <ToggleGroupItem value="workflow" className="text-xs">
-            Workflow
+            {' '}
+            {translateUi('workflow_2e2d5c56')}{' '}
           </ToggleGroupItem>
           <ToggleGroupItem value="pipeline" className="text-xs">
-            Pipeline
+            {' '}
+            {translateUi('pipeline_37e1c775')}{' '}
           </ToggleGroupItem>
         </ToggleGroup>
 
@@ -643,19 +704,21 @@ export function SaveWorkflowDialog({
               <>
                 <p className="text-secondary">
                   <span className="font-medium text-foreground">
-                    {ports.inputPorts.length} input
+                    {ports.inputPorts.length} {translateUi('input_c96c6d5b')}{' '}
                     {ports.inputPorts.length === 1 ? '' : 's'}
                   </span>{' '}
-                  and{' '}
+                  {translateUi('and_6201111b')}{' '}
                   <span className="font-medium text-foreground">
-                    {ports.outputPorts.length} output
+                    {ports.outputPorts.length} {translateUi('output_e0ee8bb5')}{' '}
                     {ports.outputPorts.length === 1 ? '' : 's'}
                   </span>{' '}
-                  — the whole contract. Everything else is fixed.
+                  {translateUi('the_whole_contract_everything_else__04f020f4')}{' '}
                 </p>
                 {ports.inputPorts.length > 0 && (
                   <p className="mt-1 text-muted-foreground">
-                    Takes: {ports.inputPorts.map((port) => port.label ?? port.handleId).join(', ')}
+                    {' '}
+                    {translateUi('takes_6228c88a')}{' '}
+                    {ports.inputPorts.map((port) => port.label ?? port.handleId).join(', ')}
                   </p>
                 )}
                 <PipelinePortBindingEditor
@@ -664,7 +727,10 @@ export function SaveWorkflowDialog({
                   bindings={pipelineBindings}
                   editorConfigurations={editorConfigurations}
                   onChange={(key, binding) =>
-                    setPipelineBindings((current) => ({ ...current, [key]: binding }))
+                    setPipelineBindings((current) => ({
+                      ...current,
+                      [key]: binding,
+                    }))
                   }
                 />
                 <PipelinePortBindingEditor
@@ -673,17 +739,22 @@ export function SaveWorkflowDialog({
                   bindings={pipelineBindings}
                   editorConfigurations={editorConfigurations}
                   onChange={(key, binding) =>
-                    setPipelineBindings((current) => ({ ...current, [key]: binding }))
+                    setPipelineBindings((current) => ({
+                      ...current,
+                      [key]: binding,
+                    }))
                   }
                 />
                 {ports.truncated && (
                   <p className="mt-1 text-warning">
-                    More ports than a pipeline can declare — only the first 12 a side are kept.
+                    {' '}
+                    {translateUi('more_ports_than_a_pipeline_can_decl_1e9440cd')}{' '}
                   </p>
                 )}
                 {loadingEditorConfigurations ? (
                   <p className="mt-1 text-muted-foreground">
-                    Loading saved editor configuration...
+                    {' '}
+                    {translateUi('loading_saved_editor_configuration_76da4a02')}{' '}
                   </p>
                 ) : null}
               </>
@@ -692,15 +763,20 @@ export function SaveWorkflowDialog({
               // steer, which is a worse outcome than refusing: it looks configurable and
               // produces the same creative every time.
               <p className="text-danger">
-                {isSelectionScoped ? 'This selection' : 'This canvas'} declares no ports, so a
-                pipeline could not be given anything or read anything back. Leave a required input
-                unwired — a reference image or a prompt — then publish.
+                {isSelectionScoped
+                  ? translateUi('this_selection_1e0997de')
+                  : translateUi('this_canvas_c4679bf5')}{' '}
+                {translateUi('declares_no_ports_so_a_pipeline_cou_c586fb52')}{' '}
               </p>
             )}
           </div>
         ) : null}
 
-        <Input id="workflow-name" placeholder="Launch creative flow" {...form.register('name')} />
+        <Input
+          id="workflow-name"
+          placeholder={translateUi('launch_creative_flow_65b989d4')}
+          {...form.register('name')}
+        />
         {form.formState.errors.name?.message && (
           <p className="text-xs text-danger">{form.formState.errors.name.message}</p>
         )}
@@ -708,14 +784,16 @@ export function SaveWorkflowDialog({
 
       <div className="grid gap-2">
         <Label htmlFor="workflow-description">
-          {kind === 'pipeline' ? 'What it makes and when to use it' : 'Description'}
+          {kind === 'pipeline'
+            ? translateUi('what_it_makes_and_when_to_use_it_75d6bf54')
+            : translateUi('description_526e0087')}
         </Label>
         <Textarea
           id="workflow-description"
           placeholder={
             kind === 'pipeline'
-              ? 'Makes 9:16 launch images of a character. Use for product launches.'
-              : 'Optional notes for your team'
+              ? translateUi('makes_9_16_launch_images_of_a_chara_2d38c4eb')
+              : translateUi('optional_notes_for_your_team_8f687a50')
           }
           rows={3}
           aria-invalid={Boolean(form.formState.errors.description)}
@@ -730,9 +808,10 @@ export function SaveWorkflowDialog({
         <div className="grid gap-2 rounded-md border border-subtle bg-surface p-2 text-xs">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="font-medium text-foreground">Agent guide</p>
+              <p className="font-medium text-foreground">{translateUi('agent_guide_e58f91e6')}</p>
               <p className="text-muted-foreground">
-                Review what another agent will use to select and invoke this pipeline.
+                {' '}
+                {translateUi('review_what_another_agent_will_use__4870ea8d')}{' '}
               </p>
             </div>
             <Button
@@ -742,18 +821,25 @@ export function SaveWorkflowDialog({
               disabled={!brandProfileId || isDraftingGuide || pipelineHasNoPorts}
               onClick={draftGuide}
             >
-              {isDraftingGuide ? 'Drafting...' : agentGuide ? 'Redraft' : 'Draft guide'}
+              {isDraftingGuide
+                ? translateUi('drafting_c86753f7')
+                : agentGuide
+                  ? translateUi('redraft_d7eac419')
+                  : translateUi('draft_guide_fadad9d9')}
             </Button>
           </div>
           {agentGuide ? (
             <>
               {guideSource === 'fallback' ? (
                 <p className="text-xs text-muted-foreground">
-                  Drafted from the pipeline's inputs and outputs. Review it before publishing.
+                  {' '}
+                  {translateUi('drafted_from_the_pipeline_s_inputs__46be92c0')}{' '}
                 </p>
               ) : null}
               <div className="grid gap-1">
-                <Label htmlFor="pipeline-use-when">Use when · one per line</Label>
+                <Label htmlFor="pipeline-use-when">
+                  {translateUi('use_when_one_per_line_bf069d8f')}
+                </Label>
                 <Textarea
                   id="pipeline-use-when"
                   rows={2}
@@ -766,7 +852,9 @@ export function SaveWorkflowDialog({
                 />
               </div>
               <div className="grid gap-1">
-                <Label htmlFor="pipeline-avoid-when">Avoid when · one per line</Label>
+                <Label htmlFor="pipeline-avoid-when">
+                  {translateUi('avoid_when_one_per_line_378174c0')}
+                </Label>
                 <Textarea
                   id="pipeline-avoid-when"
                   rows={2}
@@ -785,7 +873,7 @@ export function SaveWorkflowDialog({
                 return (
                   <div key={port.id} className="grid gap-1">
                     <Label htmlFor={`pipeline-guide-${port.id}`}>
-                      {port.label ?? port.id} guidance
+                      {port.label ?? port.id} {translateUi('guidance_f8aac527')}{' '}
                     </Label>
                     <Input
                       id={`pipeline-guide-${port.id}`}
@@ -799,7 +887,13 @@ export function SaveWorkflowDialog({
                           return {
                             ...current,
                             input_guidance: event.target.value
-                              ? [...rest, { input_id: port.id, instruction: event.target.value }]
+                              ? [
+                                  ...rest,
+                                  {
+                                    input_id: port.id,
+                                    instruction: event.target.value,
+                                  },
+                                ]
                               : rest,
                           };
                         })
@@ -809,7 +903,9 @@ export function SaveWorkflowDialog({
                 );
               })}
               <div className="grid gap-1">
-                <Label htmlFor="pipeline-invocation-notes">Invocation notes · one per line</Label>
+                <Label htmlFor="pipeline-invocation-notes">
+                  {translateUi('invocation_notes_one_per_line_0b5b65a0')}
+                </Label>
                 <Textarea
                   id="pipeline-invocation-notes"
                   rows={2}
@@ -817,7 +913,10 @@ export function SaveWorkflowDialog({
                   onChange={(event) =>
                     setAgentGuide((current) =>
                       current
-                        ? { ...current, invocation_notes: lines(event.target.value) }
+                        ? {
+                            ...current,
+                            invocation_notes: lines(event.target.value),
+                          }
                         : current,
                     )
                   }
@@ -826,21 +925,26 @@ export function SaveWorkflowDialog({
             </>
           ) : (
             <p className="text-muted-foreground">
-              Draft the guide, then edit it before publication. If drafting fails, these fields open
-              with a manual starting point.
+              {' '}
+              {translateUi('draft_the_guide_then_edit_it_before_79e5f747')}{' '}
             </p>
           )}
         </div>
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Ready to save {scopedNodes.length} node{scopedNodes.length === 1 ? '' : 's'} and{' '}
-        {scopedEdges.length} connection{scopedEdges.length === 1 ? '' : 's'}
-        {isSelectionScoped ? ' from your selection.' : '.'}
+        {' '}
+        {translateUi('ready_to_save_255249e7')} {scopedNodes.length} {translateUi('node_545ea538')}
+        {scopedNodes.length === 1 ? '' : 's'} {translateUi('and_6201111b')} {scopedEdges.length}{' '}
+        {translateUi('connection_b38d9d16')}
+        {scopedEdges.length === 1 ? '' : 's'}
+        {isSelectionScoped ? translateUi('from_your_selection_3beaf146') : '.'}
       </p>
       {error && <p className="text-xs text-danger">{error}</p>}
       {!brandProfileId && (
-        <p className="text-xs text-muted-foreground">Select a brand before saving a workflow.</p>
+        <p className="text-xs text-muted-foreground">
+          {translateUi('select_a_brand_before_saving_a_work_b22b9186')}
+        </p>
       )}
 
       <div className="flex justify-end">
@@ -858,29 +962,29 @@ export function SaveWorkflowDialog({
           }
           title={
             !brandProfileId
-              ? 'Select a brand before saving a workflow.'
+              ? translateUi('select_a_brand_before_saving_a_work_b22b9186')
               : pipelineHasNoPorts
-                ? 'A pipeline needs at least one declared port.'
+                ? translateUi('a_pipeline_needs_at_least_one_decla_3099f745')
                 : pipelineCandidateNeedsRights
-                  ? 'A person Element candidate needs a rights basis.'
+                  ? translateUi('a_person_element_candidate_needs_a__0f368e01')
                   : loadingEditorConfigurations
-                    ? 'Loading the saved editor configuration.'
+                    ? translateUi('loading_the_saved_editor_configurat_3c75b58d')
                     : editorConfigurationMissing
-                      ? 'Choose a reusable editor source slot before publishing.'
+                      ? translateUi('choose_a_reusable_editor_source_slo_b886ea9c')
                       : kind === 'pipeline' && !agentGuide
-                        ? 'Draft and review the agent guide before publishing.'
+                        ? translateUi('draft_and_review_the_agent_guide_be_b1cfeeac')
                         : undefined
           }
         >
           {isSaving
             ? kind === 'pipeline'
-              ? 'Publishing...'
-              : 'Saving...'
+              ? translateUi('publishing_5f51143b')
+              : translateUi('saving_dc85af8f')
             : kind === 'pipeline'
-              ? 'Publish pipeline'
+              ? translateUi('publish_pipeline_a760fceb')
               : isSelectionScoped
-                ? 'Save selection'
-                : 'Save workflow'}
+                ? translateUi('save_selection_dd183ea6')
+                : translateUi('save_workflow_e77921c8')}
         </Button>
       </div>
     </form>
@@ -909,7 +1013,7 @@ export function SaveWorkflowDialog({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <Upload className="mr-2 h-4 w-4" /> Save
+            <Upload className="mr-2 h-4 w-4" /> {translateUi('save_1509f561')}{' '}
           </Button>
         }
       />

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The adaptive board (O01, rBoard in docs/optimizer-redesign/adaptive-15/app.js): how Continuum
 // works the account (the mode and its reason) and the result that counts, the questions for
@@ -49,12 +50,14 @@ export type AdaptiveBoardProps = {
 };
 
 export function AdaptiveBoard({ ctx, loading = false, toggle, asks = [] }: AdaptiveBoardProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const { reading } = ctx;
   const notices = reading.notices ?? [];
   return (
     <section
-      aria-label="Adaptive overview"
+      aria-label={betaUiText('beta_c709c9d2ee69')}
       className={cn('space-y-3', boardPaletteClass)}
       data-testid="adaptive-board-root"
     >
@@ -74,7 +77,12 @@ export function AdaptiveBoard({ ctx, loading = false, toggle, asks = [] }: Adapt
       ) : null}
       {asks.length > 0 ? (
         <div className="rounded-lg bg-primary/5 px-3 py-2" data-testid="board-asks">
-          <JainaEntryChips entries={asks} frame={false} label="Ask Jaina" platform={ctx.platform} />
+          <JainaEntryChips
+            entries={asks}
+            frame={false}
+            label={betaUiText('beta_0d70d163e903')}
+            platform={ctx.platform}
+          />
         </div>
       ) : null}
       <motion.div
@@ -104,7 +112,10 @@ export function AdaptiveBoard({ ctx, loading = false, toggle, asks = [] }: Adapt
               {loading ? (
                 <ModuleFrameSkeleton size={slot.size} testId={testId} />
               ) : (
-                <ModuleBoundary slot={slot} title={BOARD_MODULE_TITLES[slot.module]}>
+                <ModuleBoundary
+                  slot={slot}
+                  title={betaUiText('boardModuleTitle', { id: slot.module })}
+                >
                   <Suspense fallback={<ModuleFrameSkeleton size={slot.size} testId={testId} />}>
                     <Module ctx={ctx} slot={slot} />
                   </Suspense>

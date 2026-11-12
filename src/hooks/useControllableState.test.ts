@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useControllableState } from './useControllableState';
 
 describe('useControllableState', () => {

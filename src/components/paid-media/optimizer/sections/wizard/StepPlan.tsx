@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
 // Step 4 — the plan and who applies it. A name, the daily budget (matched to the selection
 // unless typed), an optional flight with its budget typed per day, per month or as a whole,
 // and the autonomy tier. Choosing Autopilot fills its two guardrails with
@@ -22,12 +25,6 @@ import {
   suggestedGuardrails,
   type WizardDraft,
 } from './wizardModel';
-
-const GRANULARITY_LABEL: Record<BudgetGranularity, string> = {
-  daily: 'Per day',
-  monthly: 'Per month',
-  total: 'Whole flight',
-};
 
 function nextDays(days: number, today = new Date()): { from: string; to: string } {
   const start = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -53,6 +50,17 @@ export function StepPlan({
   advice,
   disabled,
 }: StepPlanProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const GRANULARITY_LABEL: Record<BudgetGranularity, string> = useMemo(
+    () => ({
+      daily: uiText('per_day_5b9e193'),
+      monthly: 'Per month',
+      total: 'Whole flight',
+    }),
+    [uiText],
+  );
+
   // Empty on an account with no currency code, and a label reading "Daily budget ()" is
   // its own kind of wrong — the hint disappears with the unit.
   const unit = currencyFieldSuffix(currency);
@@ -81,20 +89,22 @@ export function StepPlan({
   return (
     <div className="space-y-7">
       <div className="space-y-3">
-        <h3 className={questionHeading}>What should it spend?</h3>
+        <h3 className={questionHeading}>{uiText('what_should_it_spend_2063469')}</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="wizard-name">Name</Label>
+            <Label htmlFor="wizard-name">{uiText('name_dcd1d52')}</Label>
             <Input
               disabled={disabled}
               id="wizard-name"
               onChange={(event) => onChange({ name: event.target.value })}
-              placeholder="e.g. Prospecting · Purchases"
+              placeholder={uiText('e_g_prospecting_purchases_b297654')}
               value={draft.name}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="wizard-daily">Daily budget{unit}</Label>
+            <Label htmlFor="wizard-daily">
+              {uiText.rich('sentence_fab46a0c1ac3', { v0: unit })}
+            </Label>
             <Input
               disabled={disabled}
               id="wizard-daily"
@@ -118,8 +128,9 @@ export function StepPlan({
             />
             {draft.dailyTotal.trim() === '' && selectedBudgetSum > 0 ? (
               <p className="text-xs text-muted-foreground tabular-nums">
-                Blank matches the selection: {formatCurrency(selectedBudgetSum, currency)}/day
-                today.
+                {uiText.rich('sentence_6a2cbcd278bb', {
+                  v0: formatCurrency(selectedBudgetSum, currency, uiLocale),
+                })}
               </p>
             ) : null}
           </div>
@@ -128,19 +139,21 @@ export function StepPlan({
 
       <div className="space-y-3 border-border/60 border-t pt-5">
         <div>
-          <h3 className="font-semibold text-sm tracking-tight">Flight (optional)</h3>
+          <h3 className="font-semibold text-sm tracking-tight">
+            {uiText('flight_optional_7b5d2a0')}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            A start date, an end date and a budget. The optimizer paces spend to land on it.
+            {uiText('a_start_date_an_end_date_and_a_budget_the_opt_79db824')}
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="wizard-flight">Dates</Label>
+            <Label htmlFor="wizard-flight">{uiText('dates_7896390')}</Label>
             <DateRangeField
               disabled={disabled}
               id="wizard-flight"
               onChange={(range) => onChange({ flightFrom: range.from, flightTo: range.to })}
-              placeholder="No flight"
+              placeholder={uiText('no_flight_06a3f38')}
               value={{ from: draft.flightFrom, to: draft.flightTo }}
             />
             {!hasFlight ? (
@@ -153,17 +166,23 @@ export function StepPlan({
                 }}
                 type="button"
               >
-                Next 30 days
+                {uiText('next_30_days_c9c44b4')}
               </button>
             ) : (
-              <p className="text-xs text-muted-foreground">{readout.days} days</p>
+              <p className="text-xs text-muted-foreground">
+                {uiText.rich('sentence_f322f4af81da', {
+                  v0: readout.days ?? '',
+                })}
+              </p>
             )}
           </div>
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label htmlFor="wizard-budget">Budget{unit}</Label>
+              <Label htmlFor="wizard-budget">
+                {uiText.rich('sentence_e51bd8ec1746', { v0: unit })}
+              </Label>
               <ToggleGroup
-                aria-label="Budget granularity"
+                aria-label={uiText('budget_granularity_d1f47f1')}
                 onValueChange={(next) => {
                   if (next) onChange({ budgetGranularity: next as BudgetGranularity });
                 }}
@@ -189,22 +208,27 @@ export function StepPlan({
             />
             <p className="text-xs text-muted-foreground tabular-nums">
               {readout.total != null && readout.perDay != null
-                ? `= ${formatCurrency(readout.total, currency)} for the flight · ≈ ${formatCurrency(readout.perDay, currency)}/day`
+                ? uiText('template_9c98c5150e32', {
+                    v0: formatCurrency(readout.total, currency, uiLocale),
+                    v1: formatCurrency(readout.perDay, currency, uiLocale),
+                  })
                 : draft.budgetAmount && !hasFlight
-                  ? 'Set the dates to pace this over the flight.'
-                  : 'Leave blank to run unpaced on the daily budget.'}
+                  ? uiText('set_the_dates_to_pace_this_over_the_flight_51a9510')
+                  : uiText('leave_blank_to_run_unpaced_on_the_daily_budge_2643a8f')}
             </p>
           </div>
         </div>
       </div>
 
       <div className="space-y-3">
-        <h3 className={questionHeading}>Who applies the moves?</h3>
+        <h3 className={questionHeading}>{uiText('who_applies_the_moves_b220069')}</h3>
         <TierCards disabled={disabled} onSelect={selectTier} value={draft.applyMode} />
         {draft.applyMode === 'autopilot' ? (
           <div className="grid gap-3 pt-1 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-max-daily">Max autopilot spend/day{unit}</Label>
+              <Label htmlFor="wizard-max-daily">
+                {uiText.rich('sentence_69fd1a3b6a3a', { v0: unit })}
+              </Label>
               <Input
                 disabled={disabled}
                 id="wizard-max-daily"
@@ -213,11 +237,11 @@ export function StepPlan({
                 value={draft.maxDailyApply}
               />
               <p className="text-xs text-muted-foreground">
-                Above this daily pool, autopilot writes nothing and asks you instead.
+                {uiText('above_this_daily_pool_autopilot_writes_nothin_85a08b2')}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-max-pct">Max change per cycle (%)</Label>
+              <Label htmlFor="wizard-max-pct">{uiText('max_change_per_cycle_f6b020b')}</Label>
               <Input
                 disabled={disabled}
                 id="wizard-max-pct"
@@ -226,7 +250,7 @@ export function StepPlan({
                 value={draft.maxChangePct}
               />
               <p className="text-xs text-muted-foreground">
-                A single move bigger than this is held for your approval.
+                {uiText('a_single_move_bigger_than_this_is_held_for_yo_8591fb1')}
               </p>
             </div>
           </div>

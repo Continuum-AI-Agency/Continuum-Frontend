@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { DEFAULT_AUTOPILOT_SCOPES } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { OptimizerRpcError } from '../useOptimizerData';
 import { AutopilotScopesField } from './AutopilotScopesField';
 
@@ -62,7 +63,9 @@ describe('AutopilotScopesField', () => {
       />,
     );
     expect(
-      getByRole('switch', { name: 'Move budget between platforms' }).getAttribute('aria-checked'),
+      getByRole('switch', {
+        name: 'Move budget between platforms',
+      }).getAttribute('aria-checked'),
     ).toBe('true');
   });
 

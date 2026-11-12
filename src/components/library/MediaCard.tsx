@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { type DragEvent, useEffect, useRef, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
@@ -210,23 +211,30 @@ function VideoThumbnail({
 }
 
 function StatusBadge({ status }: { status: MediaAsset['status'] }) {
+  const translateUi = useUiTranslations('library');
+
   const reduceMotion = useReducedMotion();
   if (status === 'ready') return null;
 
   const content =
     status === 'analyzing' ? (
       <span className={cn(BADGE_BASE, 'bg-black/60 text-white backdrop-blur-sm')}>
-        <Loader2 className="size-2.5 animate-spin" />
-        Analyzing
+        <Loader2 className="size-2.5 animate-spin" /> {translateUi('analyzing_0141ee95')}{' '}
       </span>
     ) : status === 'skipped_free' ? (
-      <span className={cn(BADGE_BASE, 'bg-amber-900/80 text-amber-200')}>Upgrade to analyze</span>
+      <span className={cn(BADGE_BASE, 'bg-amber-900/80 text-amber-200')}>
+        {translateUi('upgrade_to_analyze_f55a17bb')}
+      </span>
     ) : status === 'skipped_long_form' ? (
       // Neutral, not a warning: the video is fine and fully usable, it just has no
       // AI metadata because vision analysis only covers short ad creative.
-      <span className={cn(BADGE_BASE, 'bg-black/60 text-white')}>Not analyzed</span>
+      <span className={cn(BADGE_BASE, 'bg-black/60 text-white')}>
+        {translateUi('not_analyzed_42ab8d62')}
+      </span>
     ) : status === 'error' ? (
-      <span className={cn(BADGE_BASE, 'bg-red-900/80 text-red-200')}>Error</span>
+      <span className={cn(BADGE_BASE, 'bg-red-900/80 text-red-200')}>
+        {translateUi('error_54a0e8c1')}
+      </span>
     ) : (
       <span className={cn(BADGE_BASE, 'bg-black/60 text-white')}>{status}</span>
     );
@@ -271,6 +279,8 @@ function Thumbnail({
   showBoundingBoxes: boolean;
   priority: boolean;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [mediaError, setMediaError] = useState(false);
   // A small derivative that fails to load (e.g. a transform quota) still has the
   // original behind it; only give up once the original fails too.
@@ -322,7 +332,8 @@ function Thumbnail({
           {asset.fileName}
         </span>
         <span data-testid="card-no-preview" className="text-2xs text-muted-foreground/60">
-          No preview — download to open
+          {' '}
+          {translateUi('no_preview_download_to_open_2a5c1eb0')}{' '}
         </span>
       </div>
     );
@@ -382,14 +393,22 @@ function Thumbnail({
           {asset.fileName}
         </span>
         {isAfterEffects ? (
-          <span className="text-2xs text-muted-foreground/60">After Effects project</span>
+          <span className="text-2xs text-muted-foreground/60">
+            {translateUi('after_effects_project_e3b562fa')}
+          </span>
         ) : ext === 'PRPROJ' ? (
-          <span className="text-2xs text-muted-foreground/60">Premiere project</span>
+          <span className="text-2xs text-muted-foreground/60">
+            {translateUi('premiere_project_e6426978')}
+          </span>
         ) : ext === 'MXF' ? (
-          <span className="text-2xs text-muted-foreground/60">Broadcast MXF</span>
+          <span className="text-2xs text-muted-foreground/60">
+            {translateUi('broadcast_mxf_852ba060')}
+          </span>
         ) : null}
         {asset.preview?.state === 'awaiting_companion' ? (
-          <span className="text-2xs text-muted-foreground/60">Add companion preview</span>
+          <span className="text-2xs text-muted-foreground/60">
+            {translateUi('add_companion_preview_5ef3ef2e')}
+          </span>
         ) : null}
       </div>
     );
@@ -447,6 +466,8 @@ function CarouselThumbnail({
   priority: boolean;
   alt: string;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [index, setIndex] = useState(0);
   const [mediaError, setMediaError] = useState(false);
   const slide = slides[index] ?? slides[0];
@@ -476,7 +497,10 @@ function CarouselThumbnail({
           <Image
             key={slide.slideIndex}
             src={slide.signedUrl}
-            alt={`${alt} — slide ${index + 1}`}
+            alt={translateUi('value0_slide_value1_2a44f863', {
+              value0: String(alt),
+              value1: String(index + 1),
+            })}
             fill
             sizes={IMAGE_SIZES}
             priority={priority && index === 0}
@@ -488,7 +512,9 @@ function CarouselThumbnail({
         <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3 text-center">
           <ImageOff className="size-8 text-muted-foreground/40" />
           <span className="text-2xs text-muted-foreground/70">
-            {slide?.signedUrl ? 'Preview unavailable' : 'Media file unavailable'}
+            {slide?.signedUrl
+              ? translateUi('preview_unavailable_b99fa6c0')
+              : translateUi('media_file_unavailable_5ca11d34')}
           </span>
         </div>
       )}
@@ -502,7 +528,7 @@ function CarouselThumbnail({
 
       <button
         type="button"
-        aria-label="Previous slide"
+        aria-label={translateUi('previous_slide_bfb54922')}
         onClick={page(-1)}
         className="absolute left-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
       >
@@ -510,7 +536,7 @@ function CarouselThumbnail({
       </button>
       <button
         type="button"
-        aria-label="Next slide"
+        aria-label={translateUi('next_slide_cdc93d1c')}
         onClick={page(1)}
         className="absolute right-1 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
       >
@@ -521,6 +547,8 @@ function CarouselThumbnail({
 }
 
 function CopyDescriptionButton({ text }: { text: string }) {
+  const translateUi = useUiTranslations('library');
+
   const [copied, setCopied] = useState(false);
 
   function handleCopy(e: React.MouseEvent) {
@@ -535,7 +563,7 @@ function CopyDescriptionButton({ text }: { text: string }) {
     <button
       className="-m-2 ml-auto flex size-9 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-foreground"
       onClick={handleCopy}
-      title="Copy description"
+      title={translateUi('copy_description_4821fdb4')}
       type="button"
     >
       {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
@@ -552,6 +580,8 @@ function MediaCardHoverDetail({
   asset: MediaAsset;
   formattedDate: string;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const dimensions = asset.width && asset.height ? `${asset.width} × ${asset.height}` : null;
   const tags = asset.tags ?? [];
   const objects = asset.detectedObjects ?? [];
@@ -640,15 +670,15 @@ function MediaCardHoverDetail({
 
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-2xs text-muted-foreground">
           <div>
-            <dt className="inline text-muted-foreground/60">Size </dt>
+            <dt className="inline text-muted-foreground/60">{translateUi('size_1af85190')} </dt>
             <dd className="inline tabular-nums">{formatBytes(asset.sizeBytes ?? 0)}</dd>
           </div>
           <div>
-            <dt className="inline text-muted-foreground/60">Status </dt>
+            <dt className="inline text-muted-foreground/60">{translateUi('status_920e413c')} </dt>
             <dd className="inline">{asset.status}</dd>
           </div>
           <div className="col-span-2">
-            <dt className="inline text-muted-foreground/60">Added </dt>
+            <dt className="inline text-muted-foreground/60">{translateUi('added_6b02e0d3')} </dt>
             <dd className="inline">{formattedDate}</dd>
           </div>
         </dl>
@@ -666,6 +696,8 @@ function GenerateClipsButton({
   disabled: boolean;
   title: string;
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <button
       type="button"
@@ -677,8 +709,7 @@ function GenerateClipsButton({
       className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-50"
       title={title}
     >
-      <Scissors className="size-3" />
-      Clips
+      <Scissors className="size-3" /> {translateUi('clips_4b782ddc')}{' '}
     </button>
   );
 }
@@ -699,6 +730,10 @@ export function MediaCard({
   onDragAssetStart,
   onStackDrop,
 }: Props) {
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+
   const reduceMotion = useReducedMotion();
   const [stackTarget, setStackTarget] = useState(false);
   const fields = visibleCardFields(card);
@@ -718,7 +753,7 @@ export function MediaCard({
   const [hoverDetailOpen, setHoverDetailOpen] = useState(false);
   const suppressHoverDetailRef = useRef(false);
   const priority = (index ?? Infinity) < 10;
-  const formattedDate = new Date(asset.createdAt).toLocaleDateString(undefined, {
+  const formattedDate = new Date(asset.createdAt).toLocaleDateString(displayLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -807,7 +842,9 @@ export function MediaCard({
             <motion.div
               role="button"
               tabIndex={0}
-              aria-label={`Open ${asset.title ?? asset.fileName}`}
+              aria-label={translateUi('open_value0_3dfbdb80', {
+                value0: String(asset.title ?? asset.fileName),
+              })}
               onClick={openDetail}
               onPointerEnter={() => {
                 // Opening the modal causes a synthetic leave on the covered card.
@@ -840,13 +877,14 @@ export function MediaCard({
                 {previewFrame !== 'native' &&
                 placementPreviewCrops(asset.width, asset.height, previewFrame) ? (
                   <span className="absolute bottom-1.5 right-1.5 z-10 rounded bg-black/60 px-1.5 py-0.5 text-2xs text-white">
-                    Cropped
+                    {' '}
+                    {translateUi('cropped_a54e16d8')}{' '}
                   </span>
                 ) : null}
                 {onToggleSelected ? (
                   <button
                     type="button"
-                    aria-label={`${selected ? 'Deselect' : 'Select'} ${asset.title ?? asset.fileName}`}
+                    aria-label={`${selected ? translateUi('deselect_142174c1') : translateUi('select_2a78025d')} ${asset.title ?? asset.fileName}`}
                     aria-pressed={selected}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -891,8 +929,10 @@ export function MediaCard({
                       trigger={
                         <button
                           type="button"
-                          title="Reformat image"
-                          aria-label={`Reformat ${asset.title ?? asset.fileName}`}
+                          title={translateUi('reformat_image_b86c06cf')}
+                          aria-label={translateUi('reformat_value0_45e905e6', {
+                            value0: String(asset.title ?? asset.fileName),
+                          })}
                           className={HOVER_CHROME_BUTTON}
                           onClick={(event) => event.stopPropagation()}
                         >
@@ -959,13 +999,19 @@ export function MediaCard({
                       />
                       <GenerateClipsButton
                         onGenerate={() =>
-                          void generate(asset, { quality, captionsEnabled, captionStyle })
+                          void generate(asset, {
+                            quality,
+                            captionsEnabled,
+                            captionStyle,
+                          })
                         }
                         disabled={isGenerating || clipSourceTooLong}
                         title={
                           clipSourceTooLong
-                            ? `Clips currently supports videos up to ${clipSourceTooLongMs / 60000} minutes`
-                            : 'Generate clips from this video'
+                            ? translateUi('clips_currently_supports_videos_up__d05b1753', {
+                                value0: String(clipSourceTooLongMs / 60000),
+                              })
+                            : translateUi('generate_clips_from_this_video_be0bdfbf')
                         }
                       />
                     </div>
@@ -981,7 +1027,8 @@ export function MediaCard({
       </HoverCard>
       {stackTarget ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 p-3 text-center text-xs font-medium text-primary backdrop-blur-[1px]">
-          Drop to stack as a new version
+          {' '}
+          {translateUi('drop_to_stack_as_a_new_version_98fc7ee6')}{' '}
         </div>
       ) : null}
     </div>

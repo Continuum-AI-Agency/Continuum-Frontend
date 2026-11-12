@@ -140,7 +140,12 @@ export const DEFAULT_REVIEW_STATE_LABELS: readonly ReviewStateLabel[] = [
   { state: 'none', label: 'None', color: '#9CA3AF', position: 0 },
   { state: 'draft', label: 'Draft', color: '#6B7280', position: 1 },
   { state: 'in_review', label: 'In review', color: '#3B82F6', position: 2 },
-  { state: 'needs_changes', label: 'Needs changes', color: '#F59E0B', position: 3 },
+  {
+    state: 'needs_changes',
+    label: 'Needs changes',
+    color: '#F59E0B',
+    position: 3,
+  },
   { state: 'approved', label: 'Approved', color: '#10B981', position: 4 },
 ];
 
@@ -162,6 +167,8 @@ export const listReviewStateLabelsResponseSchema = z
   .object({
     labels: z.array(reviewStateLabelSchema),
     customStates: z.array(reviewCustomStateSchema).default([]),
+    // Presence distinguishes stored brand copy from the defaults filled by the reader.
+    customizedStates: z.array(mediaReviewStatusSchema).optional(),
   })
   .strict();
 export type ListReviewStateLabelsResponse = z.infer<typeof listReviewStateLabelsResponseSchema>;

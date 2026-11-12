@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { z } from 'zod';
 import type { tableSchema } from '@/lib/jaina/schemas';
 
@@ -8,11 +9,14 @@ interface JainaReportTablesProps {
 }
 
 export function JainaReportTables({ tables }: JainaReportTablesProps) {
+  const uiText = useTranslations('scale');
   if (!tables || tables.length === 0) return null;
 
   return (
     <div className="space-y-6">
-      <span className="text-base font-semibold text-primary/80">Detailed Data</span>
+      <span className="text-base font-semibold text-primary/80">
+        {uiText('detailed_data_0f3eafc')}
+      </span>
       <div className="space-y-6">
         {tables.map((table: Table, index: number) => (
           <TableCard

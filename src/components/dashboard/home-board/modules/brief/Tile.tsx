@@ -1,4 +1,9 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+  useLocale as useHomeLocale,
+} from 'next-intl';
 
 // H05 Jaina brief: the daily read the Optimizer's worker stored for the brand's ad accounts,
 // shown as written (in the account's language) and always dated, so a read the worker stopped
@@ -38,9 +43,14 @@ function plural(count: number, one: string, many: string): string {
 }
 
 export default function BriefTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+  const homeLocale = useHomeLocale();
+
   const { reads, retry } = useBriefReads(ctx.brandId, ctx.adAccounts);
   const today = new Date();
-  const view = briefView(reads, today);
+  const view = briefView(reads, today, betaUiText, homeLocale);
   const load = useHomeGoalRead<HomeBriefData>(ctx, {
     name: 'brief',
     schema: homeBriefReadSchema,
@@ -63,7 +73,7 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
     const figures = brief.sentences.reduce((sum, sentence) => sum + sentence.figures.length, 0);
     return (
       <HomeTileFrame
-        badge={plural(figures, 'figure', 'figures')}
+        badge={betaUiText('briefFigures', { count: figures })}
         expanded={
           <Module
             brief={brief}
@@ -71,7 +81,7 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
             failed={view.state === 'ready' ? view.failed : 0}
           />
         }
-        expandedDescription="The brief with the source of each figure, and every account’s stored daily read."
+        expandedDescription={extraUiText('home_0a64925b6325')}
         state="ready"
         tile={tile}
       >
@@ -82,7 +92,7 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
             data-testid="home-tile-brief-headline"
             data-value={day}
           >
-            <time dateTime={day}>{readOnLabel({ day }, today)}</time>
+            <time dateTime={day}>{readOnLabel({ day }, today, betaUiText, homeLocale)}</time>
           </p>
           <div
             className={cn('space-y-1 break-words text-sm leading-snug', CLAMP[tile.size])}
@@ -109,9 +119,9 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
     return (
       <HomeTileFrame state="error" tile={tile}>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground text-xs">Jaina’s daily read could not be loaded.</p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_b9bc8a1355d6')}</p>
           <Button onClick={retry} size="sm" type="button" variant="outline">
-            Retry
+            {betaUiText('beta_942087cc2d41')}
           </Button>
         </div>
       </HomeTileFrame>
@@ -120,14 +130,14 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
 
   const [lead] = view.entries;
   if (!lead) return null;
-  const age = staleLabel(lead);
+  const age = staleLabel(lead, betaUiText);
   const others = view.entries.length - 1;
 
   return (
     <HomeTileFrame
       badge={plural(view.entries.length, 'stored read', 'stored reads')}
       expanded={<Module brief={null} entries={view.entries} failed={view.failed} />}
-      expandedDescription="The daily read Jaina stored for each ad account, as written."
+      expandedDescription={extraUiText('home_a1cde20d9af8')}
       state="ready"
       tile={tile}
     >
@@ -146,12 +156,13 @@ export default function BriefTile({ ctx, tile }: HomeTileProps) {
         <p className={cn('break-words text-sm leading-snug', CLAMP[tile.size])}>{lead.narrative}</p>
         {others > 0 ? (
           <p className="text-muted-foreground text-xs">
-            +{plural(others, 'more account', 'more accounts')} in the brief
+            +{plural(others, 'more account', 'more accounts')} {betaUiText('beta_0a906dee4d8f')}
           </p>
         ) : null}
         {view.failed > 0 ? (
           <p className="text-muted-foreground text-xs">
-            {plural(view.failed, 'account’s read', 'accounts’ reads')} could not be loaded.
+            {plural(view.failed, 'account’s read', 'accounts’ reads')}{' '}
+            {betaUiText('beta_947d0fc30a45')}
           </p>
         ) : null}
       </div>

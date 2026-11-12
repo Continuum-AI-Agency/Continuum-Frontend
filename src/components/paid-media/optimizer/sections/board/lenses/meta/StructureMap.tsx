@@ -1,4 +1,12 @@
 'use client';
+import { useLocale, useLocale as useNumberLocale, type useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { resultWords } from '../../../account/overviewModel';
+import { resultWordsUi } from './metaLensModel';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // Account structure (M15): campaign → ad set → ad as an icicle, each node as wide as its spend
 // over the last 30 days and tinted by its cost against the goal, or by the portfolio holding it.
@@ -73,6 +81,9 @@ const LABEL_MIN_PX = 44;
 type StructureColor = 'goal' | 'portfolio';
 
 export default function StructureMap({ ctx, slot }: BoardModuleProps) {
+  const betaUiText = useBetaTranslations('scale');
+  const uiLocale = useLocale();
+
   const campaigns = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_campaigns');
   const adsets = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_adsets');
   const { rosters } = usePortfolioRosters(ctx.portfolios);
@@ -107,7 +118,7 @@ export default function StructureMap({ ctx, slot }: BoardModuleProps) {
           model != null,
         );
   return (
-    <MetaFrame slot={slot} state={state} testId={TEST_ID} title="Account structure">
+    <MetaFrame slot={slot} state={state} testId={TEST_ID} title={betaUiText('beta_c55a0320f3b1')}>
       {waiting ? (
         <ReadNote size={slot.size} state={waiting} testId={TEST_ID} what="campaigns" />
       ) : model ? (
@@ -120,7 +131,7 @@ export default function StructureMap({ ctx, slot }: BoardModuleProps) {
           zoomedId={zoomedId}
         />
       ) : (
-        <LensNote testId={`${TEST_ID}-empty`}>No campaign spent in the last 30 days.</LensNote>
+        <LensNote testId={`${TEST_ID}-empty`}>{betaUiText('beta_57b869c75f73')}</LensNote>
       )}
     </MetaFrame>
   );
@@ -147,40 +158,67 @@ function fillOf(node: StructureNode, color: StructureColor, model: StructureMode
   };
 }
 
-function figureLine(node: StructureNode, model: StructureModel, currency: string | null): string {
-  const spend = formatCurrencyInColumn(node.spend, currency);
-  const words = model.result?.en;
+function figureLine(
+  node: StructureNode,
+  model: StructureModel,
+  currency: string | null,
+  t: ScaleCopy,
+  locale: UiLocale,
+): string {
+  const spend = formatCurrencyInColumn(node.spend, currency, locale);
+  const words = model.result ? resultWords(model.result.kind, model.result.en.one, t) : null;
   if (!words || node.level === 'rest') return spend;
-  if (node.costPerResult != null) {
-    return `${spend} · ${formatCurrencyInColumn(node.costPerResult, currency)} per ${words.one}`;
-  }
-  return node.results === 0 ? `${spend} · no ${words.many}` : spend;
+  if (node.costPerResult != null)
+    return `${spend} · ${t('metaPerResult', { amount: formatCurrencyInColumn(node.costPerResult, currency, locale), result: words.one })}`;
+  return node.results === 0 ? t('metaNoResult', { amount: spend, result: words.many }) : spend;
 }
 
-function nodeTip(node: StructureNode, model: StructureModel, currency: string | null) {
+function NodeTip({
+  node,
+  model,
+  currency,
+}: {
+  node: StructureNode;
+  model: StructureModel;
+  currency: string | null;
+}) {
+  const t = useBetaTranslations('scale');
+  const locale = useLocale();
   const portfolio = node.portfolioId
     ? model.portfolios.find((candidate) => candidate.id === node.portfolioId)
     : undefined;
-  const words = model.result?.en;
+  const words = model.result ? resultWords(model.result.kind, model.result.en.one, t) : null;
   return (
     <span className="flex flex-col gap-0.5">
       <span className="font-medium">{node.name}</span>
       <span>
-        {formatCurrency(node.spend, currency)} ·{' '}
-        {formatShare(model.totalSpend > 0 ? node.spend / model.totalSpend : null)} of spend
+        {t('metaOfSpend', {
+          amount: formatCurrency(node.spend, currency, locale),
+          share: formatShare(model.totalSpend > 0 ? node.spend / model.totalSpend : null),
+        })}
       </span>
       {words && node.results != null ? (
         <span>
-          {node.results.toLocaleString('en-US')} {node.results === 1 ? words.one : words.many}
-          {node.costPerResult != null
-            ? ` · ${formatCurrency(node.costPerResult, currency)} each`
-            : ''}
+          {t('metaResultCount', {
+            count: node.results,
+            result: node.results === 1 ? words.one : words.many,
+            cost:
+              node.costPerResult != null
+                ? t('metaEach', {
+                    amount: formatCurrency(node.costPerResult, currency, locale),
+                  })
+                : '',
+          })}
         </span>
       ) : null}
-      {portfolio ? <span>In {portfolio.name}</span> : null}
+      {portfolio ? <span>{t('metaInPortfolio', { name: portfolio.name })}</span> : null}
       {node.lost ? (
         <span>
-          Lost{node.lostSince ? ` on ${monthDayEn(node.lostSince)}` : ''}: Meta no longer serves it
+          {t('metaLost', {
+            date: node.lostSince
+              ? t('metaOnDate', { date: monthDayEn(node.lostSince, locale) })
+              : '',
+          })}
         </span>
       ) : null}
     </span>
@@ -226,19 +264,24 @@ function lostLine(model: StructureModel): string | null {
 }
 
 function StructureSmall({ model }: { model: StructureModel }) {
+  const betaUiText = useBetaTranslations('scale');
+  const uiLocale = useLocale();
+
   const cells = layoutIcicle(model, null, null).filter((cell) => cell.row > 0);
   const lost = lostLine(model);
   return (
     <div className="flex flex-col gap-3">
       {model.managedShare != null ? (
         <Headline
-          caption="of the spend is in ad sets a portfolio optimizes"
+          caption={betaUiText('beta_62c471288ef9')}
           figure={formatShare(model.managedShare)}
           testId={`${TEST_ID}-headline`}
         />
       ) : (
         <Headline
-          caption={`campaigns · ${model.adsetCount} ad sets with spend`}
+          caption={betaUiText('beta_dc1841789d99', {
+            value0: String(model.adsetCount),
+          })}
           figure={String(model.campaigns.length)}
           testId={`${TEST_ID}-headline`}
         />
@@ -289,6 +332,11 @@ function StructureFull({
   onZoom: (campaignId: string | null) => void;
   ads: MetaReadState<MetaRankRow[]>;
 }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+  const uiLocale = useLocale();
+
   const reduce = useReducedMotion();
   const [color, setColor] = useState<StructureColor>('goal');
   const host = useRef<HTMLDivElement>(null);
@@ -301,7 +349,7 @@ function StructureFull({
     () => layoutIcicle(model, focused?.id ?? null, ads.status === 'ready' ? ads.data : null),
     [model, focused, ads],
   );
-  const words = model.result?.en;
+  const words = model.result ? resultWordsUi(model.result.kind, betaUiText) : null;
   const spring = reduce
     ? { duration: 0 }
     : { type: 'spring' as const, visualDuration: 0.5, bounce: 0.12 };
@@ -319,11 +367,11 @@ function StructureFull({
       <>
         <span className="block truncate font-medium text-foreground text-xs">{entity.name}</span>
         <span className="block truncate text-foreground/75 text-xs tabular-nums">
-          {figureLine(entity, model, currency)}
+          {figureLine(entity, model, currency, betaUiText, uiLocale)}
         </span>
       </>
     ) : null;
-    const tipOf = () => nodeTip(entity, model, currency);
+    const tipOf = () => <NodeTip node={entity} model={model} currency={currency} />;
     const common = {
       animate: {
         left: `${cell.x}%`,
@@ -356,7 +404,9 @@ function StructureFull({
           key={entity.id}
           {...common}
           aria-label={
-            zoomIn ? `Zoom into ${entity.name}` : `Back to every campaign from ${entity.name}`
+            zoomIn
+              ? betaUiText('beta_4937d563e410', { value0: String(entity.name) })
+              : betaUiText('beta_f8d6db405654', { value0: String(entity.name) })
           }
           disabled={!enabled}
           onBlur={hide}
@@ -388,7 +438,10 @@ function StructureFull({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {focused ? (
-          <nav aria-label="Structure path" className="flex min-w-0 items-center gap-1 text-xs">
+          <nav
+            aria-label={betaUiText('beta_658e90e68e9b')}
+            className="flex min-w-0 items-center gap-1 text-xs"
+          >
             <button
               className="shrink-0 rounded px-1 text-primary-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => onZoom(null)}
@@ -412,7 +465,7 @@ function StructureFull({
         )}
         {model.portfolios.some((portfolio) => portfolio.slot != null) ? (
           <ToggleGroup
-            aria-label="Color the structure by"
+            aria-label={betaUiText('beta_428fd39706af')}
             onValueChange={(value) => {
               const next: string = value;
               if (next === 'goal' || next === 'portfolio') setColor(next);
@@ -423,10 +476,10 @@ function StructureFull({
             variant="outline"
           >
             <ToggleGroupItem className="h-7 px-2 text-xs" value="goal">
-              vs goal
+              {betaUiText('beta_597a6ce24b62')}
             </ToggleGroupItem>
             <ToggleGroupItem className="h-7 px-2 text-xs" value="portfolio">
-              By portfolio
+              {betaUiText('beta_24221568890f')}
             </ToggleGroupItem>
           </ToggleGroup>
         ) : null}
@@ -450,14 +503,14 @@ function StructureFull({
       </div>
       {focused && ads.status === 'error' ? (
         <LensNote testId={`${TEST_ID}-ads-error`}>
-          The ads of this campaign could not be read.{' '}
+          {betaUiText('beta_81388c13f09b')}{' '}
           <button className="text-primary-ink underline" onClick={ads.retry} type="button">
-            Retry
+            {betaUiText('beta_942087cc2d41')}
           </button>
         </LensNote>
       ) : null}
       {focused && ads.status === 'ready' && ads.data.length === 0 ? (
-        <LensNote>No ad of this campaign spent in the last 30 days.</LensNote>
+        <LensNote>{betaUiText('beta_7442a7b529ed')}</LensNote>
       ) : null}
       <LegendRow>
         {color === 'goal' ? (
@@ -465,14 +518,20 @@ function StructureFull({
             <LegendItem
               label={
                 model.reference
-                  ? `Cheaper → dearer than the ${model.reference.kind === 'goal' ? `goal (${formatCurrency(model.reference.value, currency)} per ${words?.one ?? 'result'})` : 'account average'}`
-                  : 'No cost to compare'
+                  ? betaUiText('beta_24c0b49d39b2', {
+                      value0: model.reference.kind,
+                      value1: formatCurrency(model.reference.value, currency, numberLocale),
+                      value2: words?.one ?? betaUiText('metaResultSingle'),
+                    })
+                  : betaUiText('beta_40dd1aaf25e3')
               }
               variant="ramp"
             />
             <LegendItem
               color={BOARD_COLOR.mid}
-              label={`On it, or no ${words?.many ?? 'results'}`}
+              label={betaUiText('beta_fe2d4d48edab', {
+                value0: String(words?.many ?? betaUiText('metaResults')),
+              })}
             />
           </>
         ) : (
@@ -484,10 +543,10 @@ function StructureFull({
                 label={portfolio.name}
               />
             ))}
-            <LegendItem color={BOARD_COLOR.mid} label="In no portfolio" />
+            <LegendItem color={BOARD_COLOR.mid} label={betaUiText('beta_9210f29c9f40')} />
           </>
         )}
-        <LegendItem label="Lost: Meta no longer serves it" variant="hatch" />
+        <LegendItem label={betaUiText('beta_8fa5deb8845b')} variant="hatch" />
       </LegendRow>
       {model.lost.map((group) => (
         <p
@@ -501,7 +560,11 @@ function StructureFull({
           />
           <span>
             {lostText(group)}
-            {group.unseen.length > 0 ? ` · ${group.unseen.join(', ')} had no spend in 30 days` : ''}
+            {group.unseen.length > 0
+              ? betaUiText('beta_57961e87bd07', {
+                  value0: String(group.unseen.join(', ')),
+                })
+              : ''}
           </span>
         </p>
       ))}

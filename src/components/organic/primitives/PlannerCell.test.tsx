@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { PlannerPlatform } from './planner-platforms';
 import type { OrganicCalendarDraft, OrganicCalendarPostedContent } from './types';
@@ -210,8 +211,13 @@ describe('PlannerCell published posts', () => {
   });
 
   it('marks the open post pressed', () => {
-    renderCell({ postedContent: [post(), post({ id: 'post-2' })], selectedPostId: 'post-1' });
-    const [open, other] = screen.getAllByRole('button', { name: /Posted on Instagram/ });
+    renderCell({
+      postedContent: [post(), post({ id: 'post-2' })],
+      selectedPostId: 'post-1',
+    });
+    const [open, other] = screen.getAllByRole('button', {
+      name: /Posted on Instagram/,
+    });
 
     expect(open?.getAttribute('aria-pressed')).toBe('true');
     expect(open?.className).toContain('outline-primary!');

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type React from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 import { AdAccountSelector } from './AdAccountSelector';
 import { PAID_SETUP_CONNECT_HREF } from './paid-setup-diagnostics';
@@ -133,11 +134,15 @@ describe('AdAccountSelector', () => {
       <AdAccountSelector brandId="brand_123" selectedAccountId={null} onSelect={mockSelect} />,
     );
 
-    const connectLink = await findByRole('link', { name: /connect ad account/i });
+    const connectLink = await findByRole('link', {
+      name: /connect ad account/i,
+    });
     expect(connectLink.getAttribute('href')).toBe(PAID_SETUP_CONNECT_HREF);
     expect(mockSelect).not.toHaveBeenCalled();
 
-    const retryButton = await findByRole('button', { name: 'Retry loading ad accounts' });
+    const retryButton = await findByRole('button', {
+      name: 'Retry loading ad accounts',
+    });
     fireEvent.click(retryButton);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
@@ -202,7 +207,9 @@ describe('AdAccountSelector', () => {
       />,
     );
 
-    const connectLink = await findByRole('link', { name: /connect ad account/i });
+    const connectLink = await findByRole('link', {
+      name: /connect ad account/i,
+    });
     expect(connectLink.getAttribute('href')).toBe(PAID_SETUP_CONNECT_HREF);
     expect(mockSelect).not.toHaveBeenCalled();
   });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { buildInlineTextContextBlock } from '@/components/chat/attachmentReferences';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 
 // Bug #222: the composer card's X did not close it. `cancel()` aborted the fetch
@@ -72,7 +73,10 @@ describe('useCanvasComposer — settling and dismissing a turn', () => {
 
   it('retires the panel when the X is pressed on a finished turn', async () => {
     const hook = await startTurn(async ({ onFrame }) => {
-      onFrame({ type: 'composer.graph', data: { nodeCount: 5, edgeCount: 4, addedNodeIds: [] } });
+      onFrame({
+        type: 'composer.graph',
+        data: { nodeCount: 5, edgeCount: 4, addedNodeIds: [] },
+      });
       onFrame({ type: 'response.done', data: { summary: 'Built it.' } });
     });
     await waitFor(() => expect(hook.result.current.state.status).toBe('done'));
@@ -123,7 +127,11 @@ describe('useCanvasComposer — settling and dismissing a turn', () => {
 
   it('sends pasted text to the model ahead of Element grounding and keeps it out of the transcript', async () => {
     const pastedText = buildInlineTextContextBlock([
-      { id: 'paste-1', name: 'pasted-text.txt', text: 'Brief line one\nSENTINEL-PASTE' },
+      {
+        id: 'paste-1',
+        name: 'pasted-text.txt',
+        text: 'Brief line one\nSENTINEL-PASTE',
+      },
     ]);
     const hook = renderHook(() => useCanvasComposer('brand-1', 'room-1'));
     act(() => {
@@ -165,12 +173,18 @@ describe('useCanvasComposer — settling and dismissing a turn', () => {
         type: 'composer.graph',
         data: { nodeCount: 1, edgeCount: 0, addedNodeIds: ['prompt-1'] },
       });
-      onFrame({ type: 'response.done', data: { summary: 'Changed the canvas.' } });
+      onFrame({
+        type: 'response.done',
+        data: { summary: 'Changed the canvas.' },
+      });
     });
 
     await waitFor(() => expect(hook.result.current.state.status).toBe('done'));
     expect(useStudioStore.getState().nodes).toEqual([
-      expect.objectContaining({ id: 'prompt-1', data: { value: 'A direct Canvas edit' } }),
+      expect.objectContaining({
+        id: 'prompt-1',
+        data: { value: 'A direct Canvas edit' },
+      }),
     ]);
     expect(hook.result.current).not.toHaveProperty('decideProposal');
   });

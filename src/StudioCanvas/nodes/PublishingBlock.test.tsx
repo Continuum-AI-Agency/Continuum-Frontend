@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import { cleanup, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import { OrganicPublishBlock } from './OrganicPublishBlock';
@@ -63,7 +63,10 @@ describe('PublisherBlock delivery-handoff state', () => {
       <OrganicPublishBlock
         {...baseProps}
         type="organicPublish"
-        data={{ publishedAt: '2026-08-17T00:00:00.000Z', platformPostId: 'ig-42' }}
+        data={{
+          publishedAt: '2026-08-17T00:00:00.000Z',
+          platformPostId: 'ig-42',
+        }}
       />,
     );
     expect(getByTestId('publisher-handoff-state').textContent).toContain('Published');
@@ -74,7 +77,11 @@ describe('PublisherBlock delivery-handoff state', () => {
     const { getByTestId } = renderNode(
       <PaidPublisherBlock
         {...baseProps}
-        data={{ format: 'image', assetSlots: [], publishedAt: '2026-07-24T00:00:00.000Z' }}
+        data={{
+          format: 'image',
+          assetSlots: [],
+          publishedAt: '2026-07-24T00:00:00.000Z',
+        }}
       />,
     );
     expect(getByTestId('publisher-handoff-state').textContent).toContain('ad creative replaced');

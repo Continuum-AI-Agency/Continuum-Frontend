@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { CheckpointReportV2 } from '@/lib/jaina/schemas';
 
 mock.module('@/components/ui/button', () => ({
@@ -181,7 +182,9 @@ describe('JainaReportV2 module controls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide Recent wins module' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Export visible modules to Google Sheets' }),
+      screen.getByRole('button', {
+        name: 'Export visible modules to Google Sheets',
+      }),
     );
 
     await waitFor(() => expect(exportToSheetsMock).toHaveBeenCalledTimes(1));
@@ -269,7 +272,9 @@ describe('JainaReportV2 module controls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
     await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
-    const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
+    const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{
+      block_id: string;
+    }>;
     expect(blocks.map((block) => block.block_id)).toEqual(['risks', 'wins']);
   });
 });
@@ -361,7 +366,9 @@ describe('JainaReportV2 — the justification under the answer', () => {
     const followUps = document.querySelector('[data-report-section="follow-ups"]');
     expect(followUps?.textContent).toContain('Where can we scale next?');
     const evidence = screen.getByRole('region', { name: 'Evidence' });
-    const exportButton = screen.getByRole('button', { name: 'Export report as PDF' });
+    const exportButton = screen.getByRole('button', {
+      name: 'Export report as PDF',
+    });
     for (const before of [evidence, exportButton]) {
       expect(
         before.compareDocumentPosition(followUps as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -406,7 +413,10 @@ describe('JainaReportV2 — the justification under the answer', () => {
   it('shows no Evidence heading when the answer carries no figures', () => {
     render(
       <JainaReportV2
-        report={{ ...strategyReport, blocks: [moduleBlock('reading', 'insight_list', 'Reading')] }}
+        report={{
+          ...strategyReport,
+          blocks: [moduleBlock('reading', 'insight_list', 'Reading')],
+        }}
         isStreaming={false}
       />,
     );
@@ -524,7 +534,9 @@ describe('JainaReportV2 — the justification under the answer', () => {
     render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
     fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
     await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
-    const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
+    const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{
+      block_id: string;
+    }>;
     expect(blocks.map((block) => block.block_id)).toEqual([
       'scope',
       'reading',
@@ -553,8 +565,16 @@ describe('JainaReportV2 — the J2 card takes no label over its own parts', () =
     executive_summary:
       'Este mes llevamos 68,109 MXN de gasto, 1,552 conversaciones y un costo por conversación de 36.55 MXN, 4% arriba del objetivo de 35.',
     blocks: [
-      j2Block({ block_id: 'scope', category: 'data_scope', title: 'Alcance de los datos' }),
-      j2Block({ block_id: 'tiles', category: 'metric_grid', title: 'Este mes' }),
+      j2Block({
+        block_id: 'scope',
+        category: 'data_scope',
+        title: 'Alcance de los datos',
+      }),
+      j2Block({
+        block_id: 'tiles',
+        category: 'metric_grid',
+        title: 'Este mes',
+      }),
       j2Block({
         block_id: 'reading',
         category: 'narrative',
@@ -568,7 +588,11 @@ describe('JainaReportV2 — the J2 card takes no label over its own parts', () =
         citations: [],
       }),
       j2Block({ block_id: 'moves', category: 'actions', title: 'Acciones' }),
-      j2Block({ block_id: 'rows', category: 'data_table', title: 'Las 4 campañas' }),
+      j2Block({
+        block_id: 'rows',
+        category: 'data_table',
+        title: 'Las 4 campañas',
+      }),
       j2Block({ block_id: 'trend', category: 'chart', title: 'Gasto por día' }),
     ],
   } as CheckpointReportV2;

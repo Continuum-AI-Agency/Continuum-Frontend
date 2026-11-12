@@ -63,9 +63,11 @@ export function postTypeLabel(
 // '3.2x' — how far a post beat its own account's median engagement. Two digits
 // before the point drop the decimal ('12x'); null when the account has too few
 // scorable posts for a baseline.
-export function formatOutlier(score: number | null | undefined): string | null {
+export function formatOutlier(score: number | null | undefined, locale = 'en'): string | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
-  return score >= 10 ? `${Math.round(score)}x` : `${score.toFixed(1)}x`;
+  const digits = score >= 10 ? 0 : 1;
+  const rounded = digits === 0 ? Math.round(score) : Number(score.toFixed(1));
+  return `${new Intl.NumberFormat(locale, { useGrouping: false, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(rounded)}x`;
 }
 
 const outlierOf = (view: CompetitorPostView): number => view.post.outlierScore ?? -1;

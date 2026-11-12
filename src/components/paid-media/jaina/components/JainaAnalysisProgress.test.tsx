@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { JainaUIMessage } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { JainaAnalysisProgress } from './JainaAnalysisProgress';
 
 afterEach(cleanup);
 const message = (parts: unknown[]) => ({ id: 'run', role: 'assistant', parts }) as JainaUIMessage;
-const part = (data: Record<string, unknown>) => ({ type: 'data-jaina-analysis-progress', data });
+const part = (data: Record<string, unknown>) => ({
+  type: 'data-jaina-analysis-progress',
+  data,
+});
 
 describe('Jaina analysis progress', () => {
   it('shows the initial warning and latest scoped progress during live or replayed analysis', () => {
@@ -65,7 +69,12 @@ describe('Jaina analysis progress', () => {
             status: 'running',
             label: 'Reading the creative tier',
           }),
-          part({ kind: 'hypothesis', id: 'cpm', status: 'completed', label: 'CPM closed' }),
+          part({
+            kind: 'hypothesis',
+            id: 'cpm',
+            status: 'completed',
+            label: 'CPM closed',
+          }),
         ])}
       />,
     );
@@ -122,7 +131,12 @@ describe('Jaina analysis progress', () => {
             status: 'running',
             label: 'mix vs efficiency',
           }),
-          part({ kind: 'hypothesis', id: 'settling', status: 'completed', label: 'settling' }),
+          part({
+            kind: 'hypothesis',
+            id: 'settling',
+            status: 'completed',
+            label: 'settling',
+          }),
           part({
             kind: 'layer',
             id: 'a_layer_from_tomorrow',

@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { PlannerPlatform } from './planner-platforms';
 import type {
@@ -211,7 +212,10 @@ describe('PlannerMatrix draft-edit slicing', () => {
 
     const [first, ...rest] = DAYS;
     if (!first) throw new Error('no first day');
-    const edited = { ...first, slots: [{ ...draft('d1'), captionPreview: 'typed' }] };
+    const edited = {
+      ...first,
+      slots: [{ ...draft('d1'), captionPreview: 'typed' }],
+    };
     rerender(matrix(null, [], null, [edited, ...rest]));
 
     expect(renderedCells).toEqual([cellId('2026-08-03')]);
@@ -235,7 +239,10 @@ describe('PlannerMatrix draft-edit slicing', () => {
 });
 
 describe('groupDraftsByCell', () => {
-  const reel = { ...draft('fb'), platforms: ['facebook'] } as OrganicCalendarDraft;
+  const reel = {
+    ...draft('fb'),
+    platforms: ['facebook'],
+  } as OrganicCalendarDraft;
 
   it('keeps the array of a cell whose drafts are unchanged, beside an edited cell of the same day', () => {
     const before = groupDraftsByCell([day('2026-08-03', [draft('d1'), reel])]);

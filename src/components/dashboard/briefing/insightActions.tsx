@@ -9,7 +9,7 @@ import {
   Rocket,
   Sparkles,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenuItem,
@@ -23,6 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+import { useRouter } from '@/i18n/navigation';
 import { enqueueAgentMentions } from '@/lib/agent/mention-queue-store';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 
@@ -31,10 +33,30 @@ import type { AgentMentionSuggestion } from '@/lib/agent-references';
 // drift. Carrying the specific creative/campaign as a seed is a tracked
 // fast-follow; v1 navigates to each surface.
 export const NORTH_STAR_VERBS = [
-  { key: 'inspire', label: 'Open in Studio', icon: Sparkles, href: '/ai-studio' },
-  { key: 'plan', label: 'Plan a post', icon: CalendarPlus, href: '/organic?tab=planner' },
-  { key: 'launch', label: 'Launch a campaign', icon: Rocket, href: '/scale/campaign-canvas' },
-  { key: 'jaina', label: 'Ask Jaina', icon: MessageSquare, href: '/scale?tab=jaina' },
+  {
+    key: 'inspire',
+    label: 'Open in Studio',
+    icon: Sparkles,
+    href: '/ai-studio',
+  },
+  {
+    key: 'plan',
+    label: 'Plan a post',
+    icon: CalendarPlus,
+    href: '/organic?tab=planner',
+  },
+  {
+    key: 'launch',
+    label: 'Launch a campaign',
+    icon: Rocket,
+    href: '/scale/campaign-canvas',
+  },
+  {
+    key: 'jaina',
+    label: 'Ask Jaina',
+    icon: MessageSquare,
+    href: '/scale?tab=jaina',
+  },
 ] as const;
 
 type InsightActionExtras = {
@@ -44,11 +66,12 @@ type InsightActionExtras = {
 };
 
 export function InsightContextActions({ permalink, agentSuggestion }: InsightActionExtras) {
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   return (
     <>
       <ContextMenuLabel className="text-2xs uppercase tracking-wide text-muted-foreground">
-        Take action
+        {uiText('take_action_0190c9b')}
       </ContextMenuLabel>
       {agentSuggestion ? (
         <ContextMenuItem
@@ -56,7 +79,7 @@ export function InsightContextActions({ permalink, agentSuggestion }: InsightAct
           onSelect={() => enqueueAgentMentions(agentSuggestion)}
         >
           <MessageSquarePlus className="size-3.5" />
-          Add to agent
+          {uiText('m_3395aff6e8')}
         </ContextMenuItem>
       ) : null}
       {NORTH_STAR_VERBS.map((verb) => (
@@ -66,7 +89,7 @@ export function InsightContextActions({ permalink, agentSuggestion }: InsightAct
           onSelect={() => router.push(verb.href)}
         >
           <verb.icon className="size-3.5" />
-          {verb.label}
+          {localizeDashboardCopy(verb.label, uiText)}
         </ContextMenuItem>
       ))}
       {permalink ? (
@@ -77,7 +100,7 @@ export function InsightContextActions({ permalink, agentSuggestion }: InsightAct
             onSelect={() => window.open(permalink, '_blank', 'noopener')}
           >
             <ExternalLink className="size-3.5" />
-            Open original
+            {uiText('m_57a08f10df')}
           </ContextMenuItem>
         </>
       ) : null}
@@ -86,6 +109,7 @@ export function InsightContextActions({ permalink, agentSuggestion }: InsightAct
 }
 
 export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightActionExtras) {
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   return (
     <DropdownMenu>
@@ -95,7 +119,7 @@ export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightAc
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Row actions"
+            aria-label={uiText('row_actions_67a1892')}
             className="size-7 text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 max-sm:opacity-100"
           >
             <MoreHorizontal className="size-4" />
@@ -110,7 +134,7 @@ export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightAc
               onSelect={() => enqueueAgentMentions(agentSuggestion)}
             >
               <MessageSquarePlus className="size-3.5" />
-              Add to agent
+              {uiText('m_3395aff6e8')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
@@ -122,7 +146,7 @@ export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightAc
             onSelect={() => router.push(verb.href)}
           >
             <verb.icon className="size-3.5" />
-            {verb.label}
+            {localizeDashboardCopy(verb.label, uiText)}
           </DropdownMenuItem>
         ))}
         {permalink ? (
@@ -133,7 +157,7 @@ export function InsightActionsDropdown({ permalink, agentSuggestion }: InsightAc
               onSelect={() => window.open(permalink, '_blank', 'noopener')}
             >
               <ExternalLink className="size-3.5" />
-              Open original
+              {uiText('m_57a08f10df')}
             </DropdownMenuItem>
           </>
         ) : null}

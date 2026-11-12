@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as rtlRender } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import * as lucideIcons from 'lucide-react';
 import type { ReactNode } from 'react';
+import { render as rtlRender } from '@/i18n/__tests__/render';
 
 import type { CalendarToolbar as CalendarToolbarType } from './CalendarToolbar';
 import { DRAFT_STATUS_PRESENTATION } from './draft-card-styles';
@@ -187,7 +188,12 @@ describe('CalendarToolbar', () => {
     const onViewModeChange = mock();
     const { container } = render(
       <CalendarToolbar
-        {...defaultProps({ viewMode: 'month', compact: true, onGeneratePlan, onViewModeChange })}
+        {...defaultProps({
+          viewMode: 'month',
+          compact: true,
+          onGeneratePlan,
+          onViewModeChange,
+        })}
       />,
     );
     const details = container.querySelector('details');
@@ -318,7 +324,9 @@ describe('CalendarToolbar', () => {
     expect(onGeneratePlan).toHaveBeenCalledTimes(1);
 
     rerender(<CalendarToolbar {...defaultProps({ onGeneratePlan, isProposingPlan: true })} />);
-    const proposing = getByRole('button', { name: 'Generate plan' }) as HTMLButtonElement;
+    const proposing = getByRole('button', {
+      name: 'Generate plan',
+    }) as HTMLButtonElement;
     expect(proposing.disabled).toBe(true);
     expect(proposing.textContent).toContain('Proposing');
   });
@@ -352,7 +360,10 @@ describe('CalendarToolbar', () => {
     );
     fireEvent.click(monthButtons[monthButtons.length - 1]);
     expect(onDateRangeChange).toHaveBeenCalledTimes(1);
-    const range = onDateRangeChange.mock.calls[0][0] as { from: string; to: string };
+    const range = onDateRangeChange.mock.calls[0][0] as {
+      from: string;
+      to: string;
+    };
     expect(range.from).toMatch(/^\d{4}-\d{2}-01$/);
     expect(range.from <= range.to).toBe(true);
   });

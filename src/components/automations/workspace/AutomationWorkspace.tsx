@@ -41,7 +41,8 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import Link from 'next/link';
+
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Connection as CanvasConnection } from '@/components/ai-elements/connection';
@@ -63,6 +64,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
+import { automationValidationMessage } from '@/i18n/automationValidation';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
+import { Link } from '@/i18n/navigation';
 import {
   fetchAutomation,
   fetchAutomationCapabilities,
@@ -93,7 +98,11 @@ import {
   type WebhookResources,
   WorkflowInspector,
 } from './AutomationWorkspacePanels';
-import { AUTOMATION_NODE_CATALOG, createAutomationWorkflowNode } from './automationNodeCatalog';
+import {
+  AUTOMATION_NODE_CATALOG,
+  createAutomationWorkflowNode,
+  localizedAutomationNodeCatalog,
+} from './automationNodeCatalog';
 import { PublishReadinessDialog } from './PublishReadinessDialog';
 import { type RightRailTab, RightRailTabs } from './runs/RightRailTabs';
 import { RunHistoryPanel } from './runs/RunHistoryPanel';
@@ -107,6 +116,7 @@ import {
   toCanvasEdges,
   toCanvasNodes,
   toWorkflowDefinition,
+  workflowConnectionMessage,
 } from './workflowCanvasModel';
 import {
   liveExecutionsByNodeId,
@@ -135,18 +145,19 @@ const nextNodePosition = (count: number) => ({
 });
 
 function WorkflowStatusBadge({ isPublished, enabled }: { isPublished: boolean; enabled: boolean }) {
+  const uiText = useTranslations('automations');
   if (!isPublished) {
     return (
       <Badge variant="warning">
         <Save aria-hidden="true" />
-        Unpublished draft
+        {uiText('unpublished_draft_db31af5')}
       </Badge>
     );
   }
   return (
     <Badge variant={enabled ? 'success' : 'muted'}>
       {enabled ? <CirclePlay aria-hidden="true" /> : <CirclePause aria-hidden="true" />}
-      {enabled ? 'Published · active' : 'Published · paused'}
+      {enabled ? uiText('published_active_49e485c') : uiText('published_paused_7dcc4b2')}
     </Badge>
   );
 }
@@ -180,14 +191,15 @@ function NodePalette({
   capabilities: AutomationCapabilitiesResponse | null;
   onAdd: (type: AutomationWorkflowNode['type']) => void;
 }) {
+  const uiText = useTranslations('automations');
   const capabilityByType = useMemo(() => paletteCapabilities(capabilities), [capabilities]);
 
   return (
     <Command className="rounded-none bg-transparent">
-      <CommandInput disabled={locked} placeholder="Find a node…" />
+      <CommandInput disabled={locked} placeholder={uiText('find_a_node_d9186c6')} />
       <CommandList className="max-h-none flex-1">
-        <CommandEmpty>No matching node.</CommandEmpty>
-        {AUTOMATION_NODE_CATALOG.map((group) => (
+        <CommandEmpty>{uiText('no_matching_node_fafd1c3')}</CommandEmpty>
+        {localizedAutomationNodeCatalog(uiText).map((group) => (
           <CommandGroup
             key={group.category}
             heading={group.label}
@@ -219,9 +231,9 @@ function NodePalette({
                     <span className="flex items-center gap-1.5 text-xs font-medium">
                       {item.label}
                       {unavailable ? (
-                        <Badge variant="destructive">Unavailable</Badge>
+                        <Badge variant="destructive">{uiText('unavailable_ca18449')}</Badge>
                       ) : lifecycle === 'preview' ? (
-                        <Badge variant="muted">Preview</Badge>
+                        <Badge variant="muted">{uiText('preview_324b134')}</Badge>
                       ) : null}
                     </span>
                     <span className="mt-0.5 block line-clamp-2 text-xs leading-4 text-muted-foreground">
@@ -250,6 +262,8 @@ function LoadingWorkspace({ message }: { message: string }) {
 }
 
 function Workspace({ automation: initialAutomation }: { automation: Automation }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('automations');
   const { fitView, screenToFlowPosition, setViewport, zoomTo } = useReactFlow<
     WorkflowCanvasNode,
     WorkflowCanvasEdge
@@ -349,13 +363,13 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setLoadError(errorMessage(error, 'Could not load this workflow.'));
+          setLoadError(errorMessage(error, uiText('m_8c7c3d8aba'), formatUiError));
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [automation.id, setEdges, setNodes]);
+  }, [automation.id, setEdges, setNodes, formatUiError, uiText]);
 
   useEffect(() => {
     if (!definition || locked) return;
@@ -375,11 +389,11 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
         })
         .catch((error: unknown) => {
           setSaveState('error');
-          setMessage(errorMessage(error, 'Could not save this draft.'));
+          setMessage(errorMessage(error, uiText('m_a82576332c'), formatUiError));
         });
     }, 900);
     return () => clearTimeout(timer);
-  }, [automation.id, definition, locked, revision]);
+  }, [automation.id, definition, locked, revision, formatUiError, uiText]);
 
   useEffect(() => {
     if (selectedId && !nodes.some((node) => node.id === selectedId)) {
@@ -444,8 +458,8 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       });
 
       if (!connection) {
-        toast.error('These steps cannot connect directly', {
-          description: 'Choose a compatible node or add it separately from the node library.',
+        toast.error(uiText('m_2352e74891'), {
+          description: uiText('choose_a_compatible_node_or_add_it_separately_4f10656'),
         });
         return;
       }
@@ -470,9 +484,9 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       );
       setSelectedId(workflowNode.id);
       setRightOpen(true);
-      setConnectionFeedback(`${workflowNode.label} added and connected.`);
+      setConnectionFeedback(uiText('m_810bd19c82', { name: workflowNode.label }));
     },
-    [edges, locked, nodes, setEdges, setNodes],
+    [edges, locked, nodes, setEdges, setNodes, uiText],
   );
 
   const patchSelected = useCallback(
@@ -485,7 +499,10 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                 ...node,
                 data: {
                   ...node.data,
-                  workflowNode: { ...node.data.workflowNode, ...patch } as AutomationWorkflowNode,
+                  workflowNode: {
+                    ...node.data.workflowNode,
+                    ...patch,
+                  } as AutomationWorkflowNode,
                 },
               }
             : node,
@@ -581,7 +598,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       toast('Node deleted', {
         description: removedNode.data.workflowNode.label,
         action: {
-          label: 'Undo',
+          label: uiText('undo_a8283ad'),
           onClick: () => {
             setNodes((current) =>
               current.some((node) => node.id === nodeId) ? current : [...current, removedNode],
@@ -596,7 +613,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
         },
       });
     },
-    [edges, locked, nodes, setEdges, setNodes],
+    [edges, locked, nodes, setEdges, setNodes, uiText],
   );
 
   const deleteEdge = useCallback(
@@ -607,7 +624,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       setEdges((current) => current.filter((edge) => edge.id !== edgeId));
       toast('Connection deleted', {
         action: {
-          label: 'Undo',
+          label: uiText('undo_a8283ad'),
           onClick: () =>
             setEdges((current) =>
               current.some((edge) => edge.id === edgeId) ? current : [...current, removedEdge],
@@ -615,7 +632,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
         },
       });
     },
-    [edges, locked, setEdges],
+    [edges, locked, setEdges, uiText],
   );
 
   const selectAllNodes = useCallback(() => {
@@ -707,14 +724,14 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
       try {
         onSuccess(await action());
       } catch (error) {
-        const failure = errorMessage(error, fallback);
+        const failure = errorMessage(error, fallback, formatUiError);
         setMessage(failure);
         onFailure?.(failure);
       } finally {
         setActiveOperation(null);
       }
     },
-    [],
+    [formatUiError],
   );
 
   const handleTest = () => {
@@ -734,13 +751,16 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
         ).length;
         setMessage(
           failed > 0
-            ? `Test completed with ${failed} failed node${failed === 1 ? '' : 's'}.`
-            : `Server test passed ${completed}/${result.nodeExecutions.length} nodes${
-                selectedTriggerId ? ` from ${selected?.label ?? selectedTriggerId}` : ''
-              }.`,
+            ? uiText('m_8f723b550e', { count: failed })
+            : uiText('m_9ef63f2b4d', {
+                completed,
+                total: result.nodeExecutions.length,
+                trigger: selectedTriggerId ? 'selected' : 'none',
+                name: selected?.label ?? selectedTriggerId ?? '',
+              }),
         );
       },
-      fallback: 'Workflow test failed.',
+      fallback: uiText('m_86b782594e'),
     });
   };
 
@@ -756,9 +776,9 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
           const failures = preflight.issues
             .filter((issue) => issue.severity === 'error')
             .slice(0, 3)
-            .map((issue) => issue.message)
+            .map((issue) => automationValidationMessage(issue, uiText))
             .join(' ');
-          throw new Error(failures || 'Workflow is not ready to publish.');
+          throw new LocalizedUiError(failures || uiText('m_08248d02e9'));
         }
         return publishAutomationWorkflow(automation.id);
       },
@@ -775,13 +795,9 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
           draftVersionId: null,
         }));
         setPublishOpen(false);
-        setMessage(
-          `Published, locked, and active · ${response.actionNodeIds.length} live action${
-            response.actionNodeIds.length === 1 ? '' : 's'
-          } granted.`,
-        );
+        setMessage(uiText('m_92ffbbd86d', { count: response.actionNodeIds.length }));
       },
-      fallback: 'Could not publish workflow.',
+      fallback: uiText('m_d6faaad501'),
     });
   };
 
@@ -801,9 +817,9 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
           activeVersionId: null,
           draftVersionId: response.version.id,
         }));
-        setMessage('Unpublished. This version is editable and no longer active.');
+        setMessage(uiText('m_ffcdd3df1a'));
       },
-      fallback: 'Could not unpublish workflow.',
+      fallback: uiText('m_3a7775cb19'),
     });
   };
 
@@ -871,7 +887,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
     return <LoadingWorkspace message={loadError} />;
   }
   if (!base || !definition || !validation) {
-    return <LoadingWorkspace message="Loading workflow…" />;
+    return <LoadingWorkspace message={uiText('m_b7f1ed8e55')} />;
   }
 
   return (
@@ -884,14 +900,17 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                 render={
                   <Link
                     href="/automations"
-                    aria-label="Back to automations"
-                    className={buttonVariants({ size: 'icon', variant: 'ghost' })}
+                    aria-label={uiText('back_to_automations_f345ab6')}
+                    className={buttonVariants({
+                      size: 'icon',
+                      variant: 'ghost',
+                    })}
                   >
                     <ChevronLeft aria-hidden="true" />
                   </Link>
                 }
               />
-              <TooltipContent>Back to automations</TooltipContent>
+              <TooltipContent>{uiText('back_to_automations_f345ab6')}</TooltipContent>
             </Tooltip>
 
             <div className="min-w-0">
@@ -904,18 +923,21 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {saveState === 'saving'
-                  ? 'Saving draft…'
+                  ? uiText('saving_draft_586a618')
                   : saveState === 'saved'
-                    ? `Draft saved · revision ${revision}`
+                    ? uiText('m_76118e9590', { revision })
                     : saveState === 'error'
-                      ? 'Draft save failed'
-                      : `${nodes.length} nodes · ${edges.length} connections`}
+                      ? uiText('draft_save_failed_fec913f')
+                      : uiText('m_c9be816ad1', {
+                          nodes: nodes.length,
+                          edges: edges.length,
+                        })}
               </p>
             </div>
 
             <div className="ml-auto flex items-center gap-1.5">
               <div className="hidden items-center gap-2 rounded-md border px-2 py-1.5 lg:flex">
-                <span className="text-xs text-muted-foreground">Active</span>
+                <span className="text-xs text-muted-foreground">{uiText('active_9234069')}</span>
                 <Switch
                   checked={automation.enabled}
                   disabled={versionState !== 'published' || busy}
@@ -925,12 +947,12 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                       action: () => updateAutomation(automation.id, { enabled }),
                       onSuccess: (next) => {
                         setAutomation(next);
-                        setMessage(enabled ? 'Automation resumed.' : 'Automation paused.');
+                        setMessage(enabled ? uiText('m_723ae44577') : uiText('m_8f65affce0'));
                       },
-                      fallback: 'Could not update automation status.',
+                      fallback: uiText('m_d5fd51f220'),
                     });
                   }}
-                  aria-label="Toggle automation"
+                  aria-label={uiText('toggle_automation_695839e')}
                 />
               </div>
 
@@ -950,7 +972,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   patchSelected({
                     config: { ...selected.config, endpointId },
                   });
-                  setMessage('Inbound endpoint created. Copy its signing secret before closing.');
+                  setMessage(uiText('m_e3fc5a35a9'));
                 }}
               />
 
@@ -961,8 +983,8 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                 onClick={handleTest}
                 title={
                   selected?.type.startsWith('trigger.')
-                    ? `Test from ${selected.label}`
-                    : 'Test all enabled triggers'
+                    ? uiText('m_f9107473d2', { name: selected.label })
+                    : uiText('test_all_enabled_triggers_e2a1ae2')
                 }
               >
                 {activeOperation === 'test' ? (
@@ -972,10 +994,10 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                 )}
                 <span className="hidden xl:inline">
                   {selected?.type.startsWith('trigger.')
-                    ? 'Test selected trigger'
-                    : 'Test workflow'}
+                    ? uiText('test_selected_trigger_c9c19f0')
+                    : uiText('test_workflow_062b580')}
                 </span>
-                <span className="xl:hidden">Test</span>
+                <span className="xl:hidden">{uiText('test_532eaab')}</span>
               </Button>
 
               {versionState === 'published' ? (
@@ -995,18 +1017,20 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                         focusRun(runId);
                         setRightTab('runs');
                         setRightOpen(true);
-                        setMessage(`Run queued · ${runId.slice(0, 8)}`);
+                        setMessage(uiText('m_fced859c1a', { id: runId.slice(0, 8) }));
                       },
-                      fallback: 'Could not queue workflow run.',
+                      fallback: uiText('m_edcb930e68'),
                     });
                   }}
                 >
-                  {activeOperation === 'run' ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : (
-                    <CirclePlay data-icon="inline-start" />
-                  )}
-                  Run now
+                  {uiText.rich('sentence_55cb011cd7f1', {
+                    v0: () =>
+                      activeOperation === 'run' ? (
+                        <Spinner data-icon="inline-start" />
+                      ) : (
+                        <CirclePlay data-icon="inline-start" />
+                      ),
+                  })}
                 </Button>
               ) : null}
 
@@ -1017,8 +1041,8 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   ) : (
                     <Unlock data-icon="inline-start" />
                   )}
-                  <span className="hidden xl:inline">Unpublish to edit</span>
-                  <span className="xl:hidden">Unpublish</span>
+                  <span className="hidden xl:inline">{uiText('unpublish_to_edit_ef91531')}</span>
+                  <span className="xl:hidden">{uiText('unpublish_2db04a5')}</span>
                 </Button>
               ) : versionState === 'draft' ? (
                 <Button
@@ -1029,17 +1053,21 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                     setPublishOpen(true);
                   }}
                 >
-                  {activeOperation === 'publish' ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : (
-                    <Cloud data-icon="inline-start" />
-                  )}
-                  Publish
+                  {uiText.rich('sentence_d37719a6076d', {
+                    v0: () =>
+                      activeOperation === 'publish' ? (
+                        <Spinner data-icon="inline-start" />
+                      ) : (
+                        <Cloud data-icon="inline-start" />
+                      ),
+                  })}
                 </Button>
               ) : null}
 
               <IconButton
-                label={rightOpen ? 'Close inspector' : 'Open inspector'}
+                label={
+                  rightOpen ? uiText('close_inspector_5ac712f') : uiText('open_inspector_21dadf3')
+                }
                 onClick={() => setRightOpen((open) => !open)}
               >
                 <PanelRightClose aria-hidden="true" />
@@ -1061,7 +1089,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   ) : (
                     <Check aria-hidden="true" />
                   )}
-                  <AlertTitle className="sr-only">Workflow update</AlertTitle>
+                  <AlertTitle className="sr-only">{uiText('workflow_update_6440a0a')}</AlertTitle>
                   <AlertDescription className="flex w-full items-center text-xs">
                     {message}
                     <Button
@@ -1069,7 +1097,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                       variant="ghost"
                       className="ml-auto size-7"
                       onClick={() => setMessage(null)}
-                      aria-label="Dismiss message"
+                      aria-label={uiText('dismiss_message_e8722f0')}
                     >
                       <X aria-hidden="true" />
                     </Button>
@@ -1089,16 +1117,22 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
               <div className="flex h-12 items-center border-b px-2">
                 {leftOpen ? (
                   <div className="min-w-0 px-2">
-                    <h2 className="text-xs font-medium">Node library</h2>
+                    <h2 className="text-xs font-medium">{uiText('node_library_e488241')}</h2>
                     <p className="text-xs text-muted-foreground">
-                      {AUTOMATION_NODE_CATALOG.flatMap((group) => group.items).length} typed steps
+                      {uiText.rich('sentence_554bda1e1a4a', {
+                        count: AUTOMATION_NODE_CATALOG.flatMap((group) => group.items).length,
+                      })}
                     </p>
                   </div>
                 ) : (
                   <Search className="mx-auto size-4 text-muted-foreground" aria-hidden="true" />
                 )}
                 <IconButton
-                  label={leftOpen ? 'Collapse node library' : 'Open node library'}
+                  label={
+                    leftOpen
+                      ? uiText('collapse_node_library_8d4b089')
+                      : uiText('open_node_library_e2b630d')
+                  }
                   className={cn(leftOpen && 'ml-auto')}
                   onClick={() => setLeftOpen((open) => !open)}
                 >
@@ -1114,9 +1148,11 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                   {locked ? (
                     <Alert className="m-2 w-auto py-2">
                       <Lock aria-hidden="true" />
-                      <AlertTitle className="text-xs">Published version</AlertTitle>
+                      <AlertTitle className="text-xs">
+                        {uiText('published_version_e5dfd8a')}
+                      </AlertTitle>
                       <AlertDescription className="text-xs">
-                        Unpublish to change this graph.
+                        {uiText('unpublish_to_change_this_graph_25d3ab8')}
                       </AlertDescription>
                     </Alert>
                   ) : null}
@@ -1187,7 +1223,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                                 current,
                               ),
                             );
-                            setConnectionFeedback('Connection added.');
+                            setConnectionFeedback(uiText('m_dfd61c4b21'));
                           }
                     }
                     isValidConnection={(candidate) => {
@@ -1201,7 +1237,9 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                     }}
                     onConnectEnd={(_, state) => {
                       if (!state.isValid) {
-                        setConnectionFeedback(lastConnectionEvaluationRef.current.reason);
+                        setConnectionFeedback(
+                          workflowConnectionMessage(lastConnectionEvaluationRef.current, uiText),
+                        );
                       }
                     }}
                     connectionLineComponent={workflowConnectionLine}
@@ -1293,17 +1331,19 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                                   }
                                 />
                                 {liveRun.status === 'queued'
-                                  ? 'Queued'
+                                  ? uiText('queued_661ff40')
                                   : liveRun.status === 'running'
-                                    ? 'Running'
+                                    ? uiText('running_f4ccae2')
                                     : liveRun.status === 'completed'
-                                      ? 'Run complete'
-                                      : 'Run failed'}
+                                      ? uiText('m_77269f861b')
+                                      : uiText('m_9a731f3d6d')}
                               </Pill>
                             }
                           />
                           <TooltipContent>
-                            Live server run {liveRun.runId.slice(0, 8)}
+                            {uiText.rich('sentence_a4f6943ed605', {
+                              v0: () => liveRun.runId.slice(0, 8),
+                            })}
                           </TooltipContent>
                         </Tooltip>
                       </CanvasPanel>
@@ -1314,15 +1354,19 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                       className="flex items-center gap-0 overflow-hidden rounded-lg border-border/80 bg-card/92 p-0 shadow-sm backdrop-blur"
                     >
                       <span className="px-2.5 py-2 font-mono text-2xs text-muted-foreground">
-                        {nodes.length} nodes
+                        {uiText.rich('sentence_86e747d652a4', {
+                          count: nodes.length,
+                        })}
                       </span>
                       <span className="border-l border-border/70 px-2.5 py-2 font-mono text-2xs text-muted-foreground">
-                        {edges.length} connections
+                        {uiText.rich('sentence_43b2e544668b', {
+                          count: edges.length,
+                        })}
                       </span>
                       {locked ? (
                         <span className="flex items-center gap-1.5 border-l border-border/70 px-2.5 py-2 text-2xs font-medium text-muted-foreground">
                           <Lock aria-hidden="true" />
-                          Read only
+                          {uiText('m_601dcc1c87')}
                         </span>
                       ) : null}
                     </CanvasPanel>
@@ -1349,13 +1393,17 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
                         {connectionFeedback ??
                           (validation.ok
                             ? testResult
-                              ? 'Validated · server test complete'
-                              : 'Structure valid · test before publishing'
-                            : `${issueCount(validation, 'error')} publishing blocker${issueCount(validation, 'error') === 1 ? '' : 's'}`)}
+                              ? uiText('validated_server_test_complete_6c6570d')
+                              : uiText('structure_valid_test_before_publishing_0fe767f')
+                            : uiText('m_4f1174aa5b', {
+                                count: issueCount(validation, 'error'),
+                              }))}
                       </span>
                       {!connectionFeedback && issueCount(validation, 'warning') > 0 ? (
                         <Badge variant="warning">
-                          {issueCount(validation, 'warning')} warnings
+                          {uiText.rich('sentence_857195145d02', {
+                            count: issueCount(validation, 'warning'),
+                          })}
                         </Badge>
                       ) : null}
                     </CanvasPanel>
@@ -1448,7 +1496,7 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
           {busy ? (
             <div className="pointer-events-none absolute bottom-4 right-4 flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-xs">
               <Spinner />
-              {operationLabel[activeOperation]}
+              {localizeAutomationsCopy(operationLabel[activeOperation], uiText)}
             </div>
           ) : null}
         </div>
@@ -1458,6 +1506,8 @@ function Workspace({ automation: initialAutomation }: { automation: Automation }
 }
 
 export function AutomationWorkspace({ automationId }: { automationId: string }) {
+  const uiText = useTranslations('automations');
+  const formatUiError = useUiErrorMessage();
   const [automation, setAutomation] = useState<Automation | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -1468,15 +1518,15 @@ export function AutomationWorkspace({ automationId }: { automationId: string }) 
         if (!cancelled) setAutomation(result);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(errorMessage(cause, 'Could not load this automation.'));
+        if (!cancelled) setError(errorMessage(cause, uiText('m_d8923e1738'), formatUiError));
       });
     return () => {
       cancelled = true;
     };
-  }, [automationId]);
+  }, [automationId, formatUiError, uiText]);
 
   if (error) return <LoadingWorkspace message={error} />;
-  if (!automation) return <LoadingWorkspace message="Loading automation…" />;
+  if (!automation) return <LoadingWorkspace message={uiText('m_c32f578a37')} />;
 
   return (
     <ReactFlowProvider>

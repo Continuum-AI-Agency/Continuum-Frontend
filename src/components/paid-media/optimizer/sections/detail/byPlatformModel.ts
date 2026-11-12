@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The portfolio's "By platform" rows (frontend.html §3, feature 08; §4 for the source rule):
 // one text row per platform — cost per result, results and their share, spend and its share,
 // state. A portfolio on more than one platform adds one stacked bar of the spend shares
@@ -57,19 +62,44 @@ function stateOf(
   costPerResult: number | null,
   results: number,
   target: number | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): PlatformRowState {
-  if (results === 0) return { kind: 'no_results', label: 'no results yet' };
+  if (results === 0)
+    return {
+      kind: 'no_results',
+      label: uiTranslate ? uiTranslate('no_results_yet_3c37b16') : 'no results yet',
+    };
   if (target === null || costPerResult === null)
-    return { kind: 'no_target', label: 'no target set' };
+    return {
+      kind: 'no_target',
+      label: uiTranslate ? uiTranslate('no_target_set_f06f193') : 'no target set',
+    };
   const gap = costPerResult / target - 1;
-  if (Math.abs(gap) <= ON_TARGET_BAND) return { kind: 'on_target', label: 'on target' };
-  const pct = `${Math.round(Math.abs(gap) * 100)}%`;
+  if (Math.abs(gap) <= ON_TARGET_BAND)
+    return {
+      kind: 'on_target',
+      label: uiTranslate ? uiTranslate('optimizer_onTarget') : 'on target',
+    };
+  const pct = formatShare(Math.abs(gap), uiLocale);
   return gap < 0
-    ? { kind: 'under', label: `${pct} under target` }
-    : { kind: 'over', label: `${pct} over target` };
+    ? {
+        kind: 'under',
+        label: uiTranslate
+          ? uiTranslate('helper_a513db43c0f9', { v0: pct })
+          : `${pct} under target`,
+      }
+    : {
+        kind: 'over',
+        label: uiTranslate ? uiTranslate('helper_c599ee858422', { v0: pct }) : `${pct} over target`,
+      };
 }
 
-export function buildByPlatform(metrics: PortfolioMetrics): ByPlatformView {
+export function buildByPlatform(
+  metrics: PortfolioMetrics,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): ByPlatformView {
   const sourceIsNotPlatform = metrics.attribution.used !== 'platform';
   const totalResults = metrics.by_platform.reduce(
     (sum, row) => sum + resultsOf(row, sourceIsNotPlatform),
@@ -89,8 +119,13 @@ export function buildByPlatform(metrics: PortfolioMetrics): ByPlatformView {
       platformResults: sourceIsNotPlatform ? row.results : null,
       spend: row.spend,
       spendShare: metricRatio(row.spend, totalSpend),
-      state: stateOf(costPerResult, results, metrics.target.cpa),
-      delivering: `${row.delivering_entities} of ${row.entities} delivering`,
+      state: stateOf(costPerResult, results, metrics.target.cpa, uiTranslate, uiLocale),
+      delivering: uiTranslate
+        ? uiTranslate('byPlatformDelivering', {
+            active: row.delivering_entities,
+            total: row.entities,
+          })
+        : `${row.delivering_entities} of ${row.entities} delivering`,
     };
   });
   const metaOnly = rows.every((row) => row.platform === 'meta');
@@ -98,27 +133,47 @@ export function buildByPlatform(metrics: PortfolioMetrics): ByPlatformView {
 }
 
 /** The stacked bar's words: each platform that spent, with its share of the spend. */
-export function spendShareLabel(rows: readonly PlatformRow[]): string {
+export function spendShareLabel(
+  rows: readonly PlatformRow[],
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
   const parts = rows
     .filter((row) => row.spendShare !== null && row.spendShare > 0)
-    .map((row) => `${PLATFORM_NAMES[row.platform]} ${formatShare(row.spendShare)}`);
-  return `Share of spend: ${parts.join(', ')}`;
+    .map((row) => `${PLATFORM_NAMES[row.platform]} ${formatShare(row.spendShare, uiLocale)}`);
+  return uiTranslate
+    ? uiTranslate('helper_d948c6f57821', { v0: parts.join(', ') })
+    : `Share of spend: ${parts.join(', ')}`;
 }
 
 /** Why the block prints no cost per result for the portfolio as a whole. */
-export function noBlendNote(sourceIsNotPlatform: boolean, resultKind: string): string {
+export function noBlendNote(
+  sourceIsNotPlatform: boolean,
+  resultKind: string,
+  uiTranslate?: ScaleCopy,
+): string {
+  if (uiTranslate)
+    return uiTranslate('byPlatformNoBlend', {
+      external: sourceIsNotPlatform ? 'yes' : 'no',
+      result: resultKind,
+    });
   return sourceIsNotPlatform
     ? `Cost per ${resultKind} stays per platform, in the rows above.`
     : `Cost per ${resultKind} stays per platform: each one counts its ${resultKind}s its own way, so they are not blended.`;
 }
 
-export function formatShare(share: number | null): string {
-  return share === null ? '—' : `${Math.round(share * 100)}%`;
+export function formatShare(share: number | null, uiLocale: UiLocale = 'en'): string {
+  return share === null
+    ? '—'
+    : new Intl.NumberFormat(uiLocale, {
+        style: 'percent',
+        maximumFractionDigits: 0,
+      }).format(Math.round(share * 100) / 100);
 }
 
 /** Results print whole unless the platform reports fractions (Google's conversions). */
-export function formatResults(value: number): string {
+export function formatResults(value: number, uiLocale: UiLocale = 'en'): string {
   return Number.isInteger(value)
-    ? value.toLocaleString('en-US')
-    : value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+    ? value.toLocaleString(uiLocale)
+    : value.toLocaleString(uiLocale, { maximumFractionDigits: 1 });
 }

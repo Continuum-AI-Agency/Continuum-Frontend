@@ -1,4 +1,6 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The Google tab's one read: the brand's granted Google Ads customer through the same edge the
 // dashboard already uses for google-ads (paid-media-metrics), scopes `account_overview` and
@@ -91,7 +93,12 @@ export async function fetchGoogleAdsOverview(
   };
   const [account, campaigns] = await Promise.all([
     invokeGoogleMetrics({ ...base, scope: 'account_overview' }),
-    invokeGoogleMetrics({ ...base, scope: 'top_campaigns', kpi: 'spend', limit: CAMPAIGN_LIMIT }),
+    invokeGoogleMetrics({
+      ...base,
+      scope: 'top_campaigns',
+      kpi: 'spend',
+      limit: CAMPAIGN_LIMIT,
+    }),
   ]);
   return buildGoogleOverview(parseGoogleAccountOverview(account), parseGoogleCampaigns(campaigns));
 }
@@ -120,6 +127,8 @@ export function useGoogleAdsOverview(
   brandId: string,
   window: GoogleReadWindow | null | 'pending' = null,
 ): GoogleAdsOverviewState {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const accounts = useOptimizerAdAccounts(brandId);
   const granted = accountsOn(accounts.data, 'google_ads')[0] ?? null;
   const customerId = granted?.account_id ?? null;
@@ -152,12 +161,16 @@ export function useGoogleAdsOverview(
     return {
       status: 'error',
       account: null,
-      message: 'Could not read which ad accounts this brand is granted.',
+      message: uiText('could_not_read_which_ad_accounts_this_brand_i_d05f8c7'),
     };
   }
   if (!granted) {
     if (login.isError) {
-      return { status: 'error', account: null, message: 'Could not check your Google login.' };
+      return {
+        status: 'error',
+        account: null,
+        message: uiText('could_not_check_your_google_login_838a5c8'),
+      };
     }
     if (login.isLoading) return { status: 'loading' };
     return login.data ? { status: 'no-grant' } : { status: 'no-connection' };
@@ -178,7 +191,10 @@ const READS_GOOGLE: ReadonlySet<BrandRole> = new Set(['owner', 'admin', 'operato
 
 /** The edge refused the read for no access: its 404, typed INTEGRATION_NOT_LINKED once deployed. */
 export function isGoogleNoAccess(error: unknown): boolean {
-  const { code, status } = (error ?? {}) as { code?: unknown; status?: unknown };
+  const { code, status } = (error ?? {}) as {
+    code?: unknown;
+    status?: unknown;
+  };
   return code === 'INTEGRATION_NOT_LINKED' || (code !== 'TOKEN_EXPIRED' && status === 404);
 }
 

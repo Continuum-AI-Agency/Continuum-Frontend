@@ -5,6 +5,9 @@ import {
   ELEMENT_MEMBER_LIMIT,
   ELEMENT_PERSON_FALLBACK_LIMIT,
 } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import studioEs from '../../../../messages/studio/es.json';
+import studioPt from '../../../../messages/studio/pt-BR.json';
 import {
   appendElementGrounding,
   elementCategoryFolderKey,
@@ -45,7 +48,10 @@ const mention = (record: ElementRecord): AgentMentionReference =>
 describe('elementToCanvasMentionSuggestion', () => {
   it('resolves to the PINNED reference — one ref, not the members', () => {
     const suggestion = elementToCanvasMentionSuggestion(
-      element({ defaultReferenceAssetId: asset(9), referenceHistory: [asset(9)] }),
+      element({
+        defaultReferenceAssetId: asset(9),
+        referenceHistory: [asset(9)],
+      }),
     );
     expect(suggestion?.label).toBe('Nova');
     expect(suggestion?.reference?.id).toBe(asset(9));
@@ -137,9 +143,9 @@ describe('readElementMention', () => {
   });
 
   it('carries the Element’s style slugs on its reference', () => {
-    expect(readElementMention(mention(element({ styleSlugs: ['film-grain'] })))?.styleSlugs).toEqual(
-      ['film-grain'],
-    );
+    expect(
+      readElementMention(mention(element({ styleSlugs: ['film-grain'] })))?.styleSlugs,
+    ).toEqual(['film-grain']);
   });
 
   it('ignores an ordinary media grab', () => {
@@ -177,7 +183,10 @@ describe('expandElementMentions', () => {
   });
 
   it('adds nothing for a pinned Element — one reference is the whole point', () => {
-    const pinned = element({ defaultReferenceAssetId: asset(9), referenceHistory: [asset(9)] });
+    const pinned = element({
+      defaultReferenceAssetId: asset(9),
+      referenceHistory: [asset(9)],
+    });
     const expanded = expandElementMentions([mention(pinned)]);
     expect(expanded.references.map((reference) => reference.id)).toEqual([asset(9)]);
     expect(expanded.grounding).toBe(
@@ -186,7 +195,10 @@ describe('expandElementMentions', () => {
   });
 
   it('composes two Elements: both ref sets, both labels, correct slots', () => {
-    const model = element({ defaultReferenceAssetId: asset(9), referenceHistory: [asset(9)] });
+    const model = element({
+      defaultReferenceAssetId: asset(9),
+      referenceHistory: [asset(9)],
+    });
     const product = element({
       id: 'element-2',
       name: 'Aero Bottle',
@@ -262,7 +274,10 @@ describe('expandElementMentions', () => {
 
 describe('the wire payload a two-Element prompt produces', () => {
   it('carries BOTH Elements’ refs as media_asset grabs plus both labels', () => {
-    const model = element({ defaultReferenceAssetId: asset(9), referenceHistory: [asset(9)] });
+    const model = element({
+      defaultReferenceAssetId: asset(9),
+      referenceHistory: [asset(9)],
+    });
     const product = element({
       id: 'element-2',
       name: 'Aero Bottle',
@@ -337,4 +352,40 @@ describe('appendElementGrounding', () => {
     const prompt = 'x'.repeat(CANVAS_COMPOSE_PROMPT_MAX_CHARS - 2);
     expect(appendElementGrounding(prompt, '', ['film-grain'])).toBe(prompt);
   });
+});
+
+describe('Element mention locale presentation', () => {
+  for (const locale of ['pt-BR', 'es'] as const) {
+    it(`localizes only suggestion copy in ${locale}, leaving reference and generated grounding bytes unchanged`, () => {
+      const t = createTranslator({
+        locale,
+        messages: { studio: locale === 'pt-BR' ? studioPt : studioEs },
+        namespace: 'studio',
+        onError: (error) => {
+          throw error;
+        },
+      });
+      const record = element({
+        category: 'product',
+        name: 'Customer ORIGINAL / SKU-42',
+      });
+      const original = elementToCanvasMentionSuggestion(record);
+      const localized = elementToCanvasMentionSuggestion(record, t);
+      expect(localized?.key).toBe(original?.key);
+      expect(localized?.reference).toEqual(original?.reference);
+      expect(localized?.label).toBe('Customer ORIGINAL / SKU-42');
+      expect(localized?.group).toContain(locale === 'pt-BR' ? 'Produto' : 'Producto');
+      expect(localized?.description).not.toMatch(/\bimages?\b/);
+      if (!localized?.reference || !original?.reference)
+        throw new Error('Fixture must emit a reference');
+      const localizedExpanded = expandElementMentions([localized.reference]);
+      const originalExpanded = expandElementMentions([original.reference]);
+      expect(localizedExpanded).toEqual(originalExpanded);
+      expect(
+        appendElementGrounding('Keep this authored prompt exactly.', localizedExpanded.grounding),
+      ).toBe(
+        appendElementGrounding('Keep this authored prompt exactly.', originalExpanded.grounding),
+      );
+    });
+  }
 });

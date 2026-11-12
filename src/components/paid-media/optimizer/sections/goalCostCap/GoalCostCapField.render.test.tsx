@@ -1,16 +1,24 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 type Answer = { data: unknown; error: unknown };
 const queue: (Answer | Promise<Answer>)[] = [];
 const calls: { fn: string; args?: Record<string, unknown> }[] = [];
 const rpc = mock(async (fn: string, args?: Record<string, unknown>) => {
   calls.push({ fn, args });
-  return (await queue.shift()) ?? { data: null, error: { message: 'no answer queued' } };
+  return (
+    (await queue.shift()) ?? {
+      data: null,
+      error: { message: 'no answer queued' },
+    }
+  );
 });
 
-mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: () => ({ rpc }) }));
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({ rpc }),
+}));
 
 const { GoalCostCapField } = await import('./GoalCostCapField');
 const { SET_GOAL_AS_COST_CAP_RPC, saveGoalAsCostCap } = await import('./useGoalAsCostCap');
@@ -61,12 +69,18 @@ describe('saveGoalAsCostCap', () => {
       allowed_actions: { google_ads: ['set_bid_target'] },
     });
     expect(calls).toEqual([
-      { fn: SET_GOAL_AS_COST_CAP_RPC, args: { p_portfolio_id: PORTFOLIO, p_enabled: true } },
+      {
+        fn: SET_GOAL_AS_COST_CAP_RPC,
+        args: { p_portfolio_id: PORTFOLIO, p_enabled: true },
+      },
     ]);
   });
 
   it('throws plain English for a database refusal and for an unreadable answer', async () => {
-    queue.push({ data: null, error: { code: '42501', message: 'permission denied' } });
+    queue.push({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+    });
     await expect(saveGoalAsCostCap(PORTFOLIO, true)).rejects.toThrow(
       "You don't have access to change this portfolio. Ask a member of the brand.",
     );
@@ -99,7 +113,10 @@ describe('GoalCostCapField', () => {
     expect(view.checkbox().getAttribute('aria-checked')).toBe('true');
     expect(view.getByText(CHECKED_HELP)).toBeTruthy();
     await waitFor(() =>
-      expect(calls[0]?.args).toEqual({ p_portfolio_id: PORTFOLIO, p_enabled: true }),
+      expect(calls[0]?.args).toEqual({
+        p_portfolio_id: PORTFOLIO,
+        p_enabled: true,
+      }),
     );
     expect(view.checkbox().getAttribute('aria-disabled')).toBe('true');
 
@@ -115,7 +132,10 @@ describe('GoalCostCapField', () => {
   });
 
   it('rolls back and explains when the save fails', async () => {
-    queue.push({ data: null, error: { code: 'P0002', message: 'portfolio not found' } });
+    queue.push({
+      data: null,
+      error: { code: 'P0002', message: 'portfolio not found' },
+    });
     const view = mount({ enabled: true });
     fireEvent.click(view.checkbox());
     await waitFor(() =>
@@ -149,14 +169,20 @@ describe('GoalCostCapField', () => {
 
   it('still lets a person switch it off when the goal stopped qualifying', async () => {
     queue.push({
-      data: { goal_as_platform_cost_cap: false, allowed_actions: { google_ads: ['set_budget'] } },
+      data: {
+        goal_as_platform_cost_cap: false,
+        allowed_actions: { google_ads: ['set_budget'] },
+      },
       error: null,
     });
     const view = mount({ enabled: true, goal: null });
     expect(view.checkbox().getAttribute('aria-disabled')).toBeNull();
     fireEvent.click(view.checkbox());
     await waitFor(() =>
-      expect(calls[0]?.args).toEqual({ p_portfolio_id: PORTFOLIO, p_enabled: false }),
+      expect(calls[0]?.args).toEqual({
+        p_portfolio_id: PORTFOLIO,
+        p_enabled: false,
+      }),
     );
   });
 });

@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { VERNE_TITLE_RIGHT_MARGIN } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The panel's own behaviour is what is under test: what it WRITES for a pick, a drag and a
 // snap. The store and the design-system read are boundaries this component only reads
 // through, so they are stubbed rather than mounted.
 const patch = mock();
-mock.module('../../hooks/useNodeConfigPatch', () => ({ useNodeConfigPatch: () => patch }));
+mock.module('../../hooks/useNodeConfigPatch', () => ({
+  useNodeConfigPatch: () => patch,
+}));
 
 let storeState: Record<string, unknown> = {};
 mock.module('../../stores/useStudioStore', () => ({
@@ -25,7 +32,12 @@ mock.module('@/lib/brands/useBrandType.client', () => ({
 
 import { BurnInConfig, resolveBurnInPreviewSources } from './BurnInConfig';
 
-const ACTION_NODE = { id: 'act-1', type: 'action', position: { x: 0, y: 0 }, data: {} };
+const ACTION_NODE = {
+  id: 'act-1',
+  type: 'action',
+  position: { x: 0, y: 0 },
+  data: {},
+};
 const IMAGE_NODE = {
   id: 'img-1',
   type: 'image',
@@ -106,7 +118,11 @@ describe('BurnInConfig', () => {
       sections: [],
       conflicts: [],
     };
-    storeState = { nodes: [ACTION_NODE, IMAGE_NODE, TEXT_NODE], edges: EDGES, brandId: 'brand-1' };
+    storeState = {
+      nodes: [ACTION_NODE, IMAGE_NODE, TEXT_NODE],
+      edges: EDGES,
+      brandId: 'brand-1',
+    };
     stubRects();
     // jsdom has no `setPointerCapture`; the drag handler calls it on pointerdown.
     // biome-ignore lint/suspicious/noExplicitAny: jsdom element shim
@@ -130,7 +146,11 @@ describe('BurnInConfig', () => {
   it('picks an anchor and CLEARS the nudge, because a preset is not a nudged preset', () => {
     render(<BurnInConfig nodeId="act-1" config={{ offsetX: 0.2, offsetY: 0.3 }} />);
     fireEvent.click(screen.getByLabelText('Bottom left'));
-    expect(lastConfig()).toMatchObject({ anchor: 'bottom-left', offsetX: 0, offsetY: 0 });
+    expect(lastConfig()).toMatchObject({
+      anchor: 'bottom-left',
+      offsetX: 0,
+      offsetY: 0,
+    });
   });
 
   it('shows all nine points, not the overlay picker five', () => {
@@ -165,7 +185,11 @@ describe('BurnInConfig', () => {
   it('a press and a release at the same point move nothing', () => {
     render(<BurnInConfig nodeId="act-1" config={{ anchor: 'center', offsetX: 0, offsetY: 0 }} />);
     dragBlockBy({ x: 0, y: 0 });
-    expect(lastConfig()).toMatchObject({ anchor: 'center', offsetX: 0, offsetY: 0 });
+    expect(lastConfig()).toMatchObject({
+      anchor: 'center',
+      offsetX: 0,
+      offsetY: 0,
+    });
   });
 
   // `top-right`'s origin is `1 - margin - measure`; `top-left`'s is `margin`. The gap between
@@ -175,14 +199,20 @@ describe('BurnInConfig', () => {
       <BurnInConfig nodeId="act-1" config={{ anchor: 'top-right', offsetX: 0, offsetY: 0 }} />,
     );
     dragBlockBy({ x: -(1 - 2 * VERNE_TITLE_RIGHT_MARGIN - 0.61), y: 0 });
-    expect(lastConfig()).toMatchObject({ anchor: 'top-left', offsetX: 0, offsetY: 0 });
+    expect(lastConfig()).toMatchObject({
+      anchor: 'top-left',
+      offsetX: 0,
+      offsetY: 0,
+    });
   });
 
   // A nudge is smaller than the snap radius by construction. If it went through the snap it
   // would be swallowed every time and the block could never leave an anchor from a keyboard.
   it('nudges with the arrow keys WITHOUT re-snapping, so the block can leave an anchor', () => {
     render(<BurnInConfig nodeId="act-1" config={{ anchor: 'center', offsetX: 0, offsetY: 0 }} />);
-    fireEvent.keyDown(screen.getByTestId('burn-in-block'), { key: 'ArrowDown' });
+    fireEvent.keyDown(screen.getByTestId('burn-in-block'), {
+      key: 'ArrowDown',
+    });
     expect(lastConfig()).toMatchObject({ anchor: 'center' });
     expect(lastConfig().offsetY as number).toBeGreaterThan(0);
   });
@@ -201,7 +231,9 @@ describe('BurnInConfig', () => {
     render(<BurnInConfig nodeId="act-1" config={{ inkToken: '--accent' }} />);
 
     fireEvent.click(screen.getByLabelText('Custom ink colour'));
-    fireEvent.change(screen.getByLabelText('Hex colour'), { target: { value: '#123456' } });
+    fireEvent.change(screen.getByLabelText('Hex colour'), {
+      target: { value: '#123456' },
+    });
     expect(lastConfig()).toMatchObject({ inkHex: '#123456', inkToken: '' });
 
     cleanup();
@@ -306,7 +338,12 @@ describe('resolveBurnInPreviewSources', () => {
   });
 
   it('a generator that has not produced a frame yet resolves to nothing, not to a guess', () => {
-    const pending = { id: 'img-1', type: 'nanoGen', position: { x: 0, y: 0 }, data: {} };
+    const pending = {
+      id: 'img-1',
+      type: 'nanoGen',
+      position: { x: 0, y: 0 },
+      data: {},
+    };
     // biome-ignore lint/suspicious/noExplicitAny: structural node fixtures
     const sources = resolveBurnInPreviewSources(
       'act-1',

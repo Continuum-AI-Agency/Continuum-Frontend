@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import type { CycleItemRow, PortfolioBrief } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import enNews from '../../../../../../../messages/scale/en.json';
+import esNews from '../../../../../../../messages/scale/es.json';
+import ptNews from '../../../../../../../messages/scale/pt-BR.json';
 import type { HeroView } from '../heroModel';
 import { buildPortfolioNews } from './newsModel';
 
@@ -73,7 +77,11 @@ const view = (over: Partial<HeroView> = {}): HeroView => ({
   pacingLine: null,
   pacingTone: 'muted',
   brief: brief(),
-  cta: { kind: 'queue_row', rowKey: 'budget:as-1', label: 'Review the budget moves' },
+  cta: {
+    kind: 'queue_row',
+    rowKey: 'budget:as-1',
+    label: 'Review the budget moves',
+  },
   observe: false,
   asOf: '2026-09-19T06:10:00Z',
   ...over,
@@ -81,7 +89,11 @@ const view = (over: Partial<HeroView> = {}): HeroView => ({
 
 describe('buildPortfolioNews', () => {
   it('leads with the hero, its own evidence drawn and the money that moved on top', () => {
-    const news = buildPortfolioNews({ view: view(), items: [item()], target: 70 });
+    const news = buildPortfolioNews({
+      view: view(),
+      items: [item()],
+      target: 70,
+    });
     expect(news.lead?.claim).toBe('Move $66/day onto Cold, which buys leads cheaper.');
     expect(news.lead?.visual).toEqual({
       kind: 'budget_move',
@@ -98,18 +110,29 @@ describe('buildPortfolioNews', () => {
     });
     expect(news.lead?.eyebrow).toBe('Budget · raise');
     // A budget move that raises the ad set is listed as a scale, in green.
-    expect(news.lead?.tag).toEqual({ label: 'Scale', tone: 'good', detail: null });
+    expect(news.lead?.tag).toEqual({
+      label: 'Scale',
+      tone: 'good',
+      detail: null,
+    });
     expect(news.lead?.impactPerDay).toBe(14);
     expect(news.lead?.cta?.label).toBe('Review the budget moves');
   });
 
   it('names the ad set above the claim only when the claim does not already say it', () => {
-    const named = buildPortfolioNews({ view: view(), items: [item()], target: 70 });
+    const named = buildPortfolioNews({
+      view: view(),
+      items: [item()],
+      target: 70,
+    });
     expect(named.lead?.subject).toBeNull();
     const unnamed = buildPortfolioNews({
       view: view({
         brief: brief({
-          hero: { ...brief().hero, headline: 'Move money onto the cheapest ad set.' },
+          hero: {
+            ...brief().hero,
+            headline: 'Move money onto the cheapest ad set.',
+          },
         }),
       }),
       items: [item()],
@@ -146,7 +169,11 @@ describe('buildPortfolioNews', () => {
       ],
       secondary: ['budget:as-1', 'rec:2', 'rec:3', 'rec:4'],
     });
-    const news = buildPortfolioNews({ view: view({ brief: many }), items: [item()], target: 70 });
+    const news = buildPortfolioNews({
+      view: view({ brief: many }),
+      items: [item()],
+      target: 70,
+    });
     // The hero (budget:as-1) is first in `secondary` and is skipped; the rest all come through.
     // How many the ROW shows is the row's decision (NEWS_ROW_SIZE), not the model's.
     expect(news.insights.map((c) => c.id)).toEqual(['rec:2', 'rec:3', 'rec:4']);
@@ -162,7 +189,12 @@ describe('buildPortfolioNews', () => {
 
   it('calls a hero with no candidate "nothing to change", and still draws the portfolio', () => {
     const calm = brief({
-      hero: { ...brief().hero, module: 'none', candidate_id: null, impact_per_day: null },
+      hero: {
+        ...brief().hero,
+        module: 'none',
+        candidate_id: null,
+        impact_per_day: null,
+      },
       candidates: [],
     });
     const news = buildPortfolioNews({
@@ -177,7 +209,11 @@ describe('buildPortfolioNews', () => {
       target: 70,
     });
     expect(news.lead?.eyebrow).toBe('Today · nothing to change');
-    expect(news.lead?.tag).toEqual({ label: 'Today', tone: 'muted', detail: 'nothing to change' });
+    expect(news.lead?.tag).toEqual({
+      label: 'Today',
+      tone: 'muted',
+      detail: 'nothing to change',
+    });
     expect(news.lead?.subject).toBe('1 ad set');
     expect(news.lead?.visual).toEqual({
       kind: 'cost_line',
@@ -196,9 +232,23 @@ describe('cards — the row order is the brief’s own ranking', () => {
   const three = (over: Partial<PortfolioBrief> = {}) =>
     brief({
       candidates: [
-        candidate({ id: 'rec:aleira', module: 'pause', kind: 'pause', impact_per_day: 28.68 }),
-        candidate({ id: 'rec:iteso', module: 'pause', kind: 'pause', impact_per_day: 28.34 }),
-        candidate({ id: 'budget:portfolio', module: 'budget', impact_per_day: 6.52 }),
+        candidate({
+          id: 'rec:aleira',
+          module: 'pause',
+          kind: 'pause',
+          impact_per_day: 28.68,
+        }),
+        candidate({
+          id: 'rec:iteso',
+          module: 'pause',
+          kind: 'pause',
+          impact_per_day: 28.34,
+        }),
+        candidate({
+          id: 'budget:portfolio',
+          module: 'budget',
+          impact_per_day: 6.52,
+        }),
       ],
       ...over,
     });
@@ -207,7 +257,11 @@ describe('cards — the row order is the brief’s own ranking', () => {
 
   it('leads with the hero when the hero is the maximum, then the rest by money per day', () => {
     const b = three({
-      hero: { ...brief().hero, candidate_id: 'rec:aleira', impact_per_day: 28.68 },
+      hero: {
+        ...brief().hero,
+        candidate_id: 'rec:aleira',
+        impact_per_day: 28.68,
+      },
       secondary: ['rec:iteso', 'budget:portfolio'],
     });
     const news = buildPortfolioNews({ view: viewOf(b), items: [], target: 35 });
@@ -234,9 +288,23 @@ describe('cards — the row order is the brief’s own ranking', () => {
   it('keeps every secondary the brief listed — a fourth card is the row’s to place, not the model’s to drop', () => {
     const b = three({
       candidates: [
-        candidate({ id: 'rec:aleira', module: 'pause', kind: 'pause', impact_per_day: 28.68 }),
-        candidate({ id: 'rec:iteso', module: 'pause', kind: 'pause', impact_per_day: 28.34 }),
-        candidate({ id: 'budget:portfolio', module: 'budget', impact_per_day: 6.52 }),
+        candidate({
+          id: 'rec:aleira',
+          module: 'pause',
+          kind: 'pause',
+          impact_per_day: 28.68,
+        }),
+        candidate({
+          id: 'rec:iteso',
+          module: 'pause',
+          kind: 'pause',
+          impact_per_day: 28.34,
+        }),
+        candidate({
+          id: 'budget:portfolio',
+          module: 'budget',
+          impact_per_day: 6.52,
+        }),
         candidate({
           id: 'rec:warm',
           module: 'creative',
@@ -263,7 +331,12 @@ describe('cards — the row order is the brief’s own ranking', () => {
 
   it('a lead with no candidate behind it is the only card, and leads', () => {
     const b = brief({
-      hero: { ...brief().hero, module: 'none', candidate_id: null, impact_per_day: null },
+      hero: {
+        ...brief().hero,
+        module: 'none',
+        candidate_id: null,
+        impact_per_day: null,
+      },
       candidates: [],
       secondary: [],
     });
@@ -287,7 +360,10 @@ describe('the tag each finding is listed under', () => {
 
   it('reads a pause red and a creative amber', () => {
     expect(tagOf('pause')).toMatchObject({ label: 'Pause', tone: 'bad' });
-    expect(tagOf('creative')).toMatchObject({ label: 'Creative', tone: 'warn' });
+    expect(tagOf('creative')).toMatchObject({
+      label: 'Creative',
+      tone: 'warn',
+    });
   });
 
   it('keeps a budget move that cuts, and any other module, muted under its own name', () => {
@@ -298,6 +374,40 @@ describe('the tag each finding is listed under', () => {
         target: 70,
       }).lead?.tag,
     ).toEqual({ label: 'Budget', tone: 'muted', detail: 'cut' });
-    expect(tagOf('audience')).toMatchObject({ label: 'Audience', tone: 'muted' });
+    expect(tagOf('audience')).toMatchObject({
+      label: 'Audience',
+      tone: 'muted',
+    });
   });
+});
+
+describe('localized news presentation preserves report content', () => {
+  for (const locale of ['en', 'pt-BR', 'es'] as const) {
+    it(`localizes only local fallback chrome in ${locale}`, () => {
+      const messages = { en: enNews, 'pt-BR': ptNews, es: esNews };
+      const t = createTranslator({
+        locale,
+        namespace: 'scale',
+        messages: { scale: messages[locale] },
+      });
+      const stored = view({ brief: brief({ model: 'deterministic' }) });
+      const before = JSON.stringify(stored);
+      const rendered = buildPortfolioNews({ view: stored, items: [item()], target: 70 }, t, locale);
+      expect(rendered.lead.claim).toBe(stored.brief.hero.headline);
+      expect(rendered.lead.reason).toBe(stored.brief.hero.why);
+      const fallback = { ...stored, source: 'fallback' as const };
+      const localized = buildPortfolioNews(
+        { view: fallback, items: [item()], target: 70 },
+        t,
+        locale,
+      );
+      expect(localized.lead.subject).toBe('Cold');
+      expect(localized.lead.claim).toContain('USD');
+      expect(localized.lead.reason).toBe(stored.brief.hero.why);
+      expect(localized.lead.id).toBe(rendered.lead.id);
+      if (locale === 'pt-BR') expect(localized.lead.claim).toContain('orçamento');
+      if (locale === 'es') expect(localized.lead.claim).toContain('presupuesto');
+      expect(JSON.stringify(stored)).toBe(before);
+    });
+  }
 });

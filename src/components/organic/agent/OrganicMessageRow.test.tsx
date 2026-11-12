@@ -1,9 +1,10 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HeadlessBatchStatus } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, renderHook } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import { type ComponentType, useMemo } from 'react';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
+import { render, renderHook } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -28,7 +29,10 @@ mock.module('@/components/chat/ChatMessage', () => ({
 // Rows open drafts through the canonical planner opener, which needs an app router.
 const realNavigation = await import('next/navigation');
 const router = { push: () => {} };
-mock.module('next/navigation', () => ({ ...realNavigation, useRouter: () => router }));
+mock.module('next/navigation', () => ({
+  ...realNavigation,
+  useRouter: () => router,
+}));
 
 const { OpenPlannerDraftProvider } = await import('../openPlannerDraft');
 const { NO_ACTIVE_STAGES, OrganicMessageRow, rowRunState, useStableRowActions } = await import(
@@ -62,7 +66,9 @@ function seedState(): PanelState {
     role: i % 2 === 0 ? ('user' as const) : ('assistant' as const),
     content: `turn ${i}`,
     ...(TOOL_ROWS.has(`m${i}`)
-      ? { toolCalls: [{ toolCallId: `call-${i}`, toolName: 'generatePosts', args: {} }] }
+      ? {
+          toolCalls: [{ toolCallId: `call-${i}`, toolName: 'generatePosts', args: {} }],
+        }
       : {}),
   }));
   const streamingId = `m${THREAD_LENGTH - 1}`;
@@ -149,7 +155,12 @@ describe('OrganicMessageRow render cost', () => {
     rendersById.clear();
     state = panelReducer(state, {
       type: 'PIPELINE_CARD',
-      card: { jobId: 'job-1', status: 'running', toolCallId: 'call-1', draftId: 'd1' },
+      card: {
+        jobId: 'job-1',
+        status: 'running',
+        toolCallId: 'call-1',
+        draftId: 'd1',
+      },
     });
     rerender(<Transcript Row={OrganicMessageRow} state={state} />);
     console.log(`[render-count] rows per pipeline frame: ${rendersById.size}`);
@@ -210,7 +221,13 @@ describe('OrganicMessageRow headless batch card', () => {
           outputCount: 0,
         },
       ],
-      counts: { queued: 0, running: 0, needs_cast_approval: 0, ready: 0, failed: 1 },
+      counts: {
+        queued: 0,
+        running: 0,
+        needs_cast_approval: 0,
+        ready: 0,
+        failed: 1,
+      },
       cast: { needed: false, drafts: [], approved: true },
       done: true,
     };
@@ -273,13 +290,23 @@ describe('OrganicMessageRow approval reply', () => {
         />
       </ChatTranscript>
     );
-    const failed = { id: 'r1', role: 'assistant' as const, content: '', error: 'Upstream hiccup' };
-    const answered = { id: 'r2', role: 'assistant' as const, content: 'Published.' };
+    const failed = {
+      id: 'r1',
+      role: 'assistant' as const,
+      content: '',
+      error: 'Upstream hiccup',
+    };
+    const answered = {
+      id: 'r2',
+      role: 'assistant' as const,
+      content: 'Published.',
+    };
 
     const view = render(row(failed));
     expect(view.queryByRole('button', { name: 'Retry' })).toBeTruthy();
     view.rerender(row({ ...failed, approvalReply: true }));
-    expect(view.getByText('Upstream hiccup')).toBeTruthy();
+    expect(view.getByText('Generation failed')).toBeTruthy();
+    expect(view.queryByText('Upstream hiccup')).toBeNull();
     expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
 
     view.rerender(row(answered));

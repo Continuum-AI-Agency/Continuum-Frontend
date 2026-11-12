@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // PP-DT-E-optimizer-meta-reads-on-google-account (deep test 2026-10-31, lane E). Scale selects a
 // Google customer on its Google platform, and every Optimizer view under it posted that id to
@@ -23,7 +24,13 @@ const ACCOUNTS = [
     status: null,
     currency: 'MXN',
   },
-  { platform: 'meta_ads', account_id: META, name: 'VIVO47 MKT', status: null, currency: 'MXN' },
+  {
+    platform: 'meta_ads',
+    account_id: META,
+    name: 'VIVO47 MKT',
+    status: null,
+    currency: 'MXN',
+  },
 ];
 
 const invoke = mock(async (_name: string, _options: { body: Record<string, unknown> }) => ({
@@ -34,7 +41,10 @@ const invoke = mock(async (_name: string, _options: { body: Record<string, unkno
 // (PGRST202): settled at once, so the row's pending state is the Meta read's alone.
 const rpc = mock(async (name: string) =>
   name === 'optimizer_get_portfolio_metrics'
-    ? { data: null, error: { code: 'PGRST202', message: 'not in the schema cache' } }
+    ? {
+        data: null,
+        error: { code: 'PGRST202', message: 'not in the schema cache' },
+      }
     : { data: name === 'list_brand_ad_accounts' ? ACCOUNTS : [], error: null },
 );
 
@@ -52,7 +62,9 @@ const { useOptimizerAccountSnapshots, useOptimizerAdsetInventory } = await impor
 const { usePortfolioFigures } = await import('./sections/usePortfolioFigures');
 
 function createWrapper() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
@@ -62,7 +74,10 @@ function createWrapper() {
 function metaReads(): { scope: unknown; accountId: unknown }[] {
   return invoke.mock.calls
     .filter(([name]) => name === 'paid-media-metrics')
-    .map(([, options]) => ({ scope: options.body.scope, accountId: options.body.accountId }));
+    .map(([, options]) => ({
+      scope: options.body.scope,
+      accountId: options.body.accountId,
+    }));
 }
 
 /** Every mocked read has answered and every read it unlocks has had its turn. */
@@ -130,7 +145,9 @@ describe('Meta-only reads on a Google account', () => {
   });
 
   it('still reads a Meta account, and an account the list does not name, from the Meta reader', async () => {
-    renderHook(() => useOptimizerAccountSnapshots(BRAND, META), { wrapper: createWrapper() });
+    renderHook(() => useOptimizerAccountSnapshots(BRAND, META), {
+      wrapper: createWrapper(),
+    });
     renderHook(() => useOptimizerAdsetInventory(BRAND, UNLISTED, true), {
       wrapper: createWrapper(),
     });

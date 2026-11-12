@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import { XIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,18 +37,21 @@ export const ArtifactClose = ({
   size = 'sm',
   variant = 'ghost',
   ...props
-}: ArtifactCloseProps) => (
-  <Button
-    className={cn('size-8 p-0 text-muted-foreground hover:text-foreground', className)}
-    size={size}
-    type="button"
-    variant={variant}
-    {...props}
-  >
-    {children ?? <XIcon className="size-4" />}
-    <span className="sr-only">Close</span>
-  </Button>
-);
+}: ArtifactCloseProps) => {
+  const tUi = useTranslations('common');
+  return (
+    <Button
+      className={cn('size-8 p-0 text-muted-foreground hover:text-foreground', className)}
+      size={size}
+      type="button"
+      variant={variant}
+      {...props}
+    >
+      {children ?? <XIcon className="size-4" />}
+      <span className="sr-only">{tUi('close_7d9eb7a')}</span>
+    </Button>
+  );
+};
 
 export type ArtifactTitleProps = HTMLAttributes<HTMLParagraphElement>;
 

@@ -1,3 +1,10 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+export type ForgeCheckUi = {
+  t: ReturnType<typeof useTranslations<'forge'>>;
+  locale: UiLocale;
+};
+
 import type {
   ApiRenderFitVerdict,
   ApiRenderJob,
@@ -16,60 +23,101 @@ import { formatRelativeTime } from '@/lib/time/relativeTime';
 type Tone = 'muted' | 'warning' | 'success' | 'destructive';
 
 /** `unknown` is never a pass: the judge could not run, and the badge says so. */
-export function verdictOf(job: ApiRenderJob): { text: string; tone: Tone; title?: string } {
+export function verdictOf(
+  job: ApiRenderJob,
+  ui?: ForgeCheckUi,
+): { text: string; tone: Tone; title?: string } {
   if (job.judge) {
     return job.judge.state === 'pass'
-      ? { text: 'Judged · pass', tone: 'success' }
+      ? {
+          text: ui?.t('judged_pass_b0de2358') ?? 'Judged · pass',
+          tone: 'success',
+        }
       : job.judge.state === 'fail'
-        ? { text: 'Judged · fail', tone: 'destructive' }
+        ? {
+            text: ui?.t('judged_fail_5c521154') ?? 'Judged · fail',
+            tone: 'destructive',
+          }
         : {
-            text: 'Judge unknown',
+            text: ui?.t('judge_unknown_1287016d') ?? 'Judge unknown',
             tone: 'warning',
-            title: 'The judge could not run on this frame',
+            title:
+              ui?.t('the_judge_could_not_run_on_this_fra_451100cf') ??
+              'The judge could not run on this frame',
           };
   }
   if (!job.fit) return { text: '—', tone: 'muted' };
-  if (!job.fit.escalate) return { text: 'Fits', tone: 'success', title: job.fit.why };
+  if (!job.fit.escalate)
+    return {
+      text: ui?.t('fits_71d396e0') ?? 'Fits',
+      tone: 'success',
+      title: job.fit.why,
+    };
   return job.status === 'finished'
-    ? { text: 'Judging…', tone: 'warning', title: job.fit.why }
-    : { text: 'AI check after render', tone: 'warning', title: job.fit.why };
+    ? {
+        text: ui?.t('judging_48444ca4') ?? 'Judging…',
+        tone: 'warning',
+        title: job.fit.why,
+      }
+    : {
+        text: ui?.t('ai_check_after_render_654e7c58') ?? 'AI check after render',
+        tone: 'warning',
+        title: job.fit.why,
+      };
 }
 
 type StepState = 'done' | 'active' | 'error' | 'pending' | 'skipped';
-type Step = { label: string; state: StepState; detail?: string; at?: string | null };
+type Step = {
+  label: string;
+  state: StepState;
+  detail?: string;
+  at?: string | null;
+};
 
 /** Queued → Rendering → Checks → Library → Slack → Meta approval → Published. */
-export function jobSteps(job: ApiRenderJob): Step[] {
+export function jobSteps(job: ApiRenderJob, ui?: ForgeCheckUi): Step[] {
   const finished = job.status === 'finished';
   const failed = job.status === 'failed';
-  const verdict = verdictOf(job);
+  const verdict = verdictOf(job, ui);
   const saved = job.outputs.filter((output) => output.assetId).length;
   const slack = job.slackDelivery;
-  const approval = approvalState(job);
+  const approval = approvalState(job, ui?.t);
   const receipt = job.delivery[0];
-  const failure = failed ? describeRenderJobFailure(job.error) : null;
+  const failure = failed ? describeRenderJobFailure(job.error, ui?.t) : null;
 
   const checks: Step = job.judge
     ? {
-        label: 'Checks',
+        label: ui?.t('checks_de07d072') ?? 'Checks',
         state:
           job.judge.state === 'pass' ? 'done' : job.judge.state === 'fail' ? 'error' : 'skipped',
         detail: verdict.title ?? verdict.text,
       }
     : job.fit && !job.fit.escalate
-      ? { label: 'Checks', state: 'done', detail: 'Fits' }
+      ? {
+          label: ui?.t('checks_de07d072') ?? 'Checks',
+          state: 'done',
+          detail: ui?.t('fits_71d396e0') ?? 'Fits',
+        }
       : job.fit
-        ? { label: 'Checks', state: finished ? 'active' : 'pending', detail: verdict.text }
+        ? {
+            label: ui?.t('checks_de07d072') ?? 'Checks',
+            state: finished ? 'active' : 'pending',
+            detail: verdict.text,
+          }
         : {
-            label: 'Checks',
+            label: ui?.t('checks_de07d072') ?? 'Checks',
             state: finished || failed ? 'skipped' : 'pending',
-            detail: 'No placement check',
+            detail: ui?.t('no_placement_check_ea070b5c') ?? 'No placement check',
           };
 
   return [
-    { label: 'Queued', state: 'done', at: job.createdAt },
     {
-      label: 'Rendering',
+      label: ui?.t('queued_661ff40a') ?? 'Queued',
+      state: 'done',
+      at: job.createdAt,
+    },
+    {
+      label: ui?.t('rendering_e2fe3539') ?? 'Rendering',
       state: finished
         ? 'done'
         : failed
@@ -82,12 +130,25 @@ export function jobSteps(job: ApiRenderJob): Step[] {
     },
     checks,
     saved
-      ? { label: 'Library', state: 'done', detail: `${saved} file${saved === 1 ? '' : 's'} saved` }
-      : { label: 'Library', state: finished ? 'active' : failed ? 'skipped' : 'pending' },
-    !slack
-      ? { label: 'Slack', state: 'skipped', detail: 'No channel chosen' }
+      ? {
+          label: ui?.t('library_dc20b3d5') ?? 'Library',
+          state: 'done',
+          detail:
+            ui?.t('checkSavedFiles', { count: saved }) ??
+            `${saved} file${saved === 1 ? '' : 's'} saved`,
+        }
       : {
-          label: 'Slack',
+          label: ui?.t('library_dc20b3d5') ?? 'Library',
+          state: finished ? 'active' : failed ? 'skipped' : 'pending',
+        },
+    !slack
+      ? {
+          label: ui?.t('slack_b27fb38b') ?? 'Slack',
+          state: 'skipped',
+          detail: ui?.t('no_channel_chosen_63fcb2d6') ?? 'No channel chosen',
+        }
+      : {
+          label: ui?.t('slack_b27fb38b') ?? 'Slack',
           state:
             slack.status === 'posted'
               ? 'done'
@@ -104,9 +165,13 @@ export function jobSteps(job: ApiRenderJob): Step[] {
           at: slack.postedAt,
         },
     !approval
-      ? { label: 'Meta approval', state: 'skipped', detail: 'Library only' }
+      ? {
+          label: ui?.t('meta_approval_52587788') ?? 'Meta approval',
+          state: 'skipped',
+          detail: ui?.t('library_only_c143238b') ?? 'Library only',
+        }
       : {
-          label: 'Meta approval',
+          label: ui?.t('meta_approval_52587788') ?? 'Meta approval',
           state:
             approval.tone === 'destructive'
               ? 'error'
@@ -119,39 +184,58 @@ export function jobSteps(job: ApiRenderJob): Step[] {
           at: job.approval?.decidedAt,
         },
     !job.deliveryTarget
-      ? { label: 'Published', state: 'skipped', detail: 'Library only' }
+      ? {
+          label: ui?.t('published_2ef42ec2') ?? 'Published',
+          state: 'skipped',
+          detail: ui?.t('library_only_c143238b') ?? 'Library only',
+        }
       : receipt?.status === 'published' || job.approval?.status === 'published'
-        ? { label: 'Published', state: 'done', at: receipt?.publishedAt }
+        ? {
+            label: ui?.t('published_2ef42ec2') ?? 'Published',
+            state: 'done',
+            at: receipt?.publishedAt,
+          }
         : receipt?.status === 'error'
           ? {
-              label: 'Published',
+              label: ui?.t('published_2ef42ec2') ?? 'Published',
               state: 'error',
-              detail: deliveryReasonText(receipt.reason) ?? undefined,
+              detail: deliveryReasonText(receipt.reason, ui?.t) ?? undefined,
             }
           : receipt?.status === 'dropped' || job.approval?.status === 'rejected'
             ? {
-                label: 'Published',
+                label: ui?.t('published_2ef42ec2') ?? 'Published',
                 state: 'skipped',
-                detail: deliveryReasonText(receipt?.reason) ?? 'Not approved',
+                detail:
+                  deliveryReasonText(receipt?.reason, ui?.t) ??
+                  ui?.t('not_approved_ad281501') ??
+                  'Not approved',
               }
             : receipt?.reason === 'delivery_bridge_unconfigured'
               ? {
-                  label: 'Published',
+                  label: ui?.t('published_2ef42ec2') ?? 'Published',
                   state: 'skipped',
                   detail: deliveryReasonText(receipt.reason) ?? undefined,
                 }
-              : { label: 'Published', state: 'pending' },
+              : {
+                  label: ui?.t('published_2ef42ec2') ?? 'Published',
+                  state: 'pending',
+                },
   ];
 }
 
 /** A check row with plain-string findings; the table turns `lines` into its detail. */
-export type JobCheck = Omit<CheckRow, 'result' | 'detail'> & { result: string; lines: string[] };
+export type JobCheck = Omit<CheckRow, 'result' | 'detail'> & {
+  result: string;
+  lines: string[];
+  kind?: string;
+};
 
 const WAIT_BEFORE_BACKGROUND_MS = 10 * 60_000;
 
-const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+const plural = (count: number, one: string, many: string, ui?: ForgeCheckUi) =>
+  `${count} ${count === 1 ? one : many}`;
 
-export function formatDuration(ms: number): string {
+export function formatDuration(ms: number, ui?: ForgeCheckUi): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
@@ -159,72 +243,167 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-const between = (from: string | null | undefined, to: string | null | undefined) =>
-  from && to ? formatDuration(Date.parse(to) - Date.parse(from)) : undefined;
+const between = (
+  from: string | null | undefined,
+  to: string | null | undefined,
+  ui?: ForgeCheckUi,
+) => (from && to ? formatDuration(Date.parse(to) - Date.parse(from), ui) : undefined);
 
 const EDGES = ['left', 'top', 'right', 'bottom'] as const;
 
 /** `[0, 120, 0, 120]` → "120 px off top and bottom". */
-function clipWords(clippedPx: [number, number, number, number]): string {
+function clipWords(clippedPx: [number, number, number, number], ui?: ForgeCheckUi): string {
   const byPx = new Map<number, string[]>();
   clippedPx.forEach((px, index) => {
     if (px > 0) byPx.set(px, [...(byPx.get(px) ?? []), EDGES[index]!]);
   });
-  return [...byPx].map(([px, edges]) => `${px} px off ${edges.join(' and ')}`).join(', ');
+  return [...byPx]
+    .map(
+      ([px, edges]) =>
+        ui?.t('value0_px_off_value1_716269ae', {
+          value0: String(px),
+          value1: joinWords(
+            edges.map((edge) =>
+              ui
+                ? ui.t(
+                    (
+                      {
+                        left: 'checkEdgeLeft',
+                        top: 'checkEdgeTop',
+                        right: 'checkEdgeRight',
+                        bottom: 'checkEdgeBottom',
+                      } as const
+                    )[edge as (typeof EDGES)[number]],
+                  )
+                : edge,
+            ),
+            ui,
+          ),
+        }) ?? `${px} px off ${edges.join(' and ')}`,
+    )
+    .join(', ');
 }
 
-const coverWords = (slot: ApiRenderFitVerdict) =>
-  slot.covers.length
-    ? ` Covers ${slot.covers.map((cover) => `${Math.round(cover.coverage * 100)}% of ${cover.label}`).join(' and ')}.`
-    : '';
+const listFormats = new Map<UiLocale, Intl.ListFormat>();
+function joinWords(values: string[], ui?: ForgeCheckUi): string {
+  if (!ui) return values.join(' and ');
+  let formatter = listFormats.get(ui.locale);
+  if (!formatter) {
+    formatter = new Intl.ListFormat(ui.locale, { type: 'conjunction' });
+    listFormats.set(ui.locale, formatter);
+  }
+  return formatter.format(values);
+}
+const coverWords = (slot: ApiRenderFitVerdict, ui?: ForgeCheckUi) => {
+  if (!slot.covers.length) return '';
+  const overlaps = joinWords(
+    slot.covers.map(
+      (cover) =>
+        ui?.t('checkCoverage', {
+          coverage: cover.coverage,
+          label: cover.label,
+        }) ?? `${Math.round(cover.coverage * 100)}% of ${cover.label}`,
+    ),
+    ui,
+  );
+  return ui?.t('checkCovers', { overlaps }) ?? ` Covers ${overlaps}.`;
+};
+const drawnAt = (box: [number, number, number, number], ui?: ForgeCheckUi) =>
+  ui?.t('checkDrawnAt', {
+    width: Math.round(box[2] - box[0]),
+    height: Math.round(box[3] - box[1]),
+  }) ?? `drawn at ${Math.round(box[2] - box[0])}×${Math.round(box[3] - box[1])}`;
 
-const drawnAt = (box: [number, number, number, number]) =>
-  `drawn at ${Math.round(box[2] - box[0])}×${Math.round(box[3] - box[1])}`;
-
-// ponytail: the unknown reasons are read off the fit port's own `why` sentences (api-render-fit.ts
-// checkAssetSwap); a `reason` code on the verdict retires the prefix match.
-function slotSentence(slot: ApiRenderFitVerdict, label: string): string {
+function slotSentence(slot: ApiRenderFitVerdict, label: string, ui?: ForgeCheckUi): string {
   if (slot.state === 'clipped' && slot.box && slot.clippedPx) {
     const off =
       slot.insideFraction === null
         ? ''
-        : ` (${Math.round((1 - slot.insideFraction) * 100)}% off-frame)`;
-    return `${label} — ${drawnAt(slot.box)}; ${clipWords(slot.clippedPx)}${off}.${coverWords(slot)}`;
+        : (ui?.t('checkOffFrame', {
+            percent: Math.round((1 - slot.insideFraction) * 100),
+          }) ?? ` (${Math.round((1 - slot.insideFraction) * 100)}% off-frame)`);
+    const dimensions = drawnAt(slot.box, ui);
+    const clipped = clipWords(slot.clippedPx, ui);
+    const covers = coverWords(slot, ui);
+    return (
+      ui?.t('checkPlacedClipped', {
+        label,
+        dimensions,
+        clipped,
+        off,
+        covers,
+      }) ?? `${label} — ${dimensions}; ${clipped}${off}.${covers}`
+    );
   }
   if (slot.state === 'ok' && slot.box) {
-    return `${label} — ${drawnAt(slot.box)}; lands inside the frame.${coverWords(slot)}`;
+    const dimensions = drawnAt(slot.box, ui);
+    const covers = coverWords(slot, ui);
+    return (
+      ui?.t('checkPlacedInside', { label, dimensions, covers }) ??
+      `${label} — ${dimensions}; lands inside the frame.${covers}`
+    );
   }
-  if (slot.box) {
-    return `${label} — Placed by a rig that sizes the image at render time. Can't be predicted; the frame goes to the judge.`;
-  }
-  if (slot.why.startsWith('no asset is chosen')) return `${label} — No image picked.`;
-  if (slot.why.startsWith('this template has no measured placement')) {
-    return `${label} — This template has no measured position for this slot.`;
-  }
-  return `${label} — Couldn't be measured: ${slot.why}.`;
+  if (slot.box)
+    return (
+      ui?.t('checkPlacedRigged', { label }) ??
+      `${label} — Placed by a rig that sizes the image at render time. Can't be predicted; the frame goes to the judge.`
+    );
+  if (slot.why.startsWith('no asset is chosen'))
+    return ui?.t('checkNoImagePicked', { label }) ?? `${label} — No image picked.`;
+  if (slot.why.startsWith('this template has no measured placement'))
+    return (
+      ui?.t('checkNoMeasuredSlot', { label }) ??
+      `${label} — This template has no measured position for this slot.`
+    );
+  return (
+    ui?.t('checkCouldNotMeasure', { label, reason: slot.why }) ??
+    `${label} — Couldn't be measured: ${slot.why}.`
+  );
 }
-
 const SLOT_TICK: Record<ApiRenderFitVerdict['state'], CheckTick> = {
   ok: 'pass',
   clipped: 'warn',
   unknown: 'todo',
 };
-
-function placementCheck(job: ApiRenderJob, labelByKey: Record<string, string>): JobCheck {
+function placementCheck(
+  job: ApiRenderJob,
+  labelByKey: Record<string, string>,
+  ui?: ForgeCheckUi,
+): JobCheck {
   const base = {
-    name: 'Placement',
-    what: "Works out where each picked image lands from its size and the slot's measured position. Arithmetic, not a look at the frame.",
+    kind: 'placement',
+    name: ui?.t('placement_4df99399') ?? 'Placement',
+    what:
+      ui?.t('checkPlacementExplanation') ??
+      "Works out where each picked image lands from its size and the slot's measured position. Arithmetic, not a look at the frame.",
   };
-  if (!job.fit) return { ...base, state: 'skipped', result: 'No placement check', lines: [] };
+  if (!job.fit)
+    return {
+      ...base,
+      state: 'skipped',
+      result: ui?.t('no_placement_check_ea070b5c') ?? 'No placement check',
+      lines: [],
+    };
   const { slots, comp } = job.fit;
-  if (!slots.length) return { ...base, state: 'skipped', result: 'No image slots', lines: [] };
+  if (!slots.length)
+    return {
+      ...base,
+      state: 'skipped',
+      result: ui?.t('no_image_slots_daa88370') ?? 'No image slots',
+      lines: [],
+    };
   const count = (state: ApiRenderFitVerdict['state']) =>
     slots.filter((slot) => slot.state === state).length;
   const [clipped, unknown, ok] = [count('clipped'), count('unknown'), count('ok')];
   const result = [
-    clipped ? `${plural(clipped, 'image', 'images')} cut off` : null,
-    unknown ? `${unknown} couldn't be measured` : null,
-    ok ? `${plural(ok, 'image fits', 'images fit')}` : null,
+    clipped
+      ? (ui?.t('checkImagesCutOff', { count: clipped }) ??
+        `${plural(clipped, 'image', 'images')} cut off`)
+      : null,
+    unknown
+      ? (ui?.t('checkImagesUnknown', { count: unknown }) ?? `${unknown} couldn't be measured`)
+      : null,
+    ok ? (ui?.t('checkImagesFit', { count: ok }) ?? plural(ok, 'image fits', 'images fit')) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -235,8 +414,16 @@ function placementCheck(job: ApiRenderJob, labelByKey: Record<string, string>): 
     result,
     ticks: slots.map((slot) => SLOT_TICK[slot.state]),
     lines: [
-      ...slots.map((slot) => slotSentence(slot, labelByKey[slot.key] ?? slot.key)),
-      ...(comp ? [`Measured in ${comp.name} ${comp.width}×${comp.height} only.`] : []),
+      ...slots.map((slot) => slotSentence(slot, labelByKey[slot.key] ?? slot.key, ui)),
+      ...(comp
+        ? [
+            ui?.t('checkCompositionMeasurement', {
+              name: comp.name,
+              width: comp.width,
+              height: comp.height,
+            }) ?? `Measured in ${comp.name} ${comp.width}×${comp.height} only.`,
+          ]
+        : []),
     ],
   };
 }
@@ -244,27 +431,51 @@ function placementCheck(job: ApiRenderJob, labelByKey: Record<string, string>): 
 // Looked up by string: a kind the judge adds before this build knows it reads as its own note or
 // raw kind, never as a crash that takes the job ledger with it. A Map, so `constructor` is a kind
 // like any other and never a prototype method.
-const FINDING_WORDS = new Map<string, (layer: string) => string>(
+const FINDING_WORDS = new Map<string, (layer: string, ui?: ForgeCheckUi) => string>(
   Object.entries({
-    occluded: (layer) => `Something covers ${layer}`,
-    clipped: (layer) => `${layer} is cut off at the edge`,
-    overlap: (layer) => `${layer} overlaps another element`,
-    unreadable_text: (layer) => `${layer} is hard to read`,
-    off_brand: (layer) => `${layer} looks off-brand`,
-    placeholder: (layer) => `${layer} still shows placeholder content`,
-    missing: (layer) => `${layer} is missing`,
-    stray_element: (layer) => `Unexpected element near ${layer}`,
-    text_overflow: (layer) => `${layer} text runs past its box`,
-  } satisfies Record<JudgeFindingKind, (layer: string) => string>),
+    occluded: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('something_covers_value0_91e6675b', { value0: String(layer) }) ??
+      `Something covers ${layer}`,
+    clipped: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('value0_is_cut_off_at_the_edge_450578af', {
+        value0: String(layer),
+      }) ?? `${layer} is cut off at the edge`,
+    overlap: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('value0_overlaps_another_element_d8b70c66', {
+        value0: String(layer),
+      }) ?? `${layer} overlaps another element`,
+    unreadable_text: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('value0_is_hard_to_read_142e2a9d', { value0: String(layer) }) ??
+      `${layer} is hard to read`,
+    off_brand: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('value0_looks_off_brand_56cdfe82', { value0: String(layer) }) ??
+      `${layer} looks off-brand`,
+    placeholder: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('value0_still_shows_placeholder_cont_ef5e69bf', {
+        value0: String(layer),
+      }) ?? `${layer} still shows placeholder content`,
+    missing: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('value0_is_missing_1570def9', { value0: String(layer) }) ?? `${layer} is missing`,
+    stray_element: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('unexpected_element_near_value0_a1bbb762', {
+        value0: String(layer),
+      }) ?? `Unexpected element near ${layer}`,
+    text_overflow: (layer, ui?: ForgeCheckUi) =>
+      ui?.t('value0_text_runs_past_its_box_7c8e3af3', {
+        value0: String(layer),
+      }) ?? `${layer} text runs past its box`,
+  } satisfies Record<JudgeFindingKind, (layer: string, ui?: ForgeCheckUi) => string>),
 );
 
 type JudgeAnswer = Pick<ApiRenderJudgeFrame, 'state' | 'verdict'>;
 
-const markOf = (answer: JudgeAnswer) => {
+const markOf = (answer: JudgeAnswer, ui?: ForgeCheckUi) => {
   if (answer.state === 'pass') return '✓';
-  if (answer.state === 'unknown') return "? couldn't judge";
+  if (answer.state === 'unknown') return ui?.t('couldn_t_judge_68ac4c78') ?? "? couldn't judge";
   const problems = answer.verdict?.findings.length ?? 0;
-  return problems ? `✗ ${plural(problems, 'problem', 'problems')}` : '✗';
+  return problems
+    ? `✗ ${ui?.t('checkProblems', { count: problems }) ?? plural(problems, 'problem', 'problems', ui)}`
+    : '✗';
 };
 
 const TICK_OF: Record<JudgeAnswer['state'], CheckTick> = {
@@ -278,10 +489,13 @@ const STATE_OF: Record<JudgeAnswer['state'], CheckState> = {
   unknown: 'warn',
 };
 
-function judgeCheck(job: ApiRenderJob, now: number): JobCheck {
+function judgeCheck(job: ApiRenderJob, now: number, ui?: ForgeCheckUi): JobCheck {
   const base = {
-    name: 'Judge',
-    what: "An AI model looks at the finished frame for cut-off, covered or unreadable elements, leftover placeholders and off-brand content. Runs only when placement couldn't answer.",
+    kind: 'judge',
+    name: ui?.t('judge_aed6fc7b') ?? 'Judge',
+    what:
+      ui?.t('an_ai_model_looks_at_the_finished_f_afbf204e') ??
+      "An AI model looks at the finished frame for cut-off, covered or unreadable elements, leftover placeholders and off-brand content. Runs only when placement couldn't answer.",
   };
   const { judge, fit } = job;
   const finished = job.status === 'finished';
@@ -292,7 +506,9 @@ function judgeCheck(job: ApiRenderJob, now: number): JobCheck {
     return {
       ...base,
       state: 'skipped',
-      result: 'This render has no still frame; the judge reads images.',
+      result:
+        ui?.t('this_render_has_no_still_frame_the__8d944a04') ??
+        'This render has no still frame; the judge reads images.',
       lines: [],
     };
   }
@@ -302,46 +518,63 @@ function judgeCheck(job: ApiRenderJob, now: number): JobCheck {
     const couldNotJudge = judge.state === 'unknown' && frames.every((f) => f.state === 'unknown');
     const result = couldNotJudge
       ? judge.why
-        ? `Couldn't judge: ${judge.why}`
-        : "Couldn't judge"
+        ? (ui?.t('couldn_t_judge_value0_9dcb1b9c', {
+            value0: String(judge.why),
+          }) ?? `Couldn't judge: ${judge.why}`)
+        : (ui?.t('couldn_t_judge_024e4308') ?? "Couldn't judge")
       : frames.length
-        ? frames.map((f) => `${f.ratio ?? f.fileName} ${markOf(f)}`).join(' · ')
-        : `Judged one frame ${markOf(judge)}`;
+        ? frames.map((f) => `${f.ratio ?? f.fileName} ${markOf(f, ui)}`).join(' · ')
+        : (ui?.t('judged_one_frame_value0_4486c838', {
+            value0: String(markOf(judge, ui)),
+          }) ?? `Judged one frame ${markOf(judge, ui)}`);
     const findings = (frames.length ? frames : [{ ...judge, ratio: null, fileName: '' }]).flatMap(
       (answer) =>
         (answer.verdict?.findings ?? []).map((finding) => {
           const words =
-            FINDING_WORDS.get(finding.kind)?.(finding.layerHint) ?? finding.note ?? finding.kind;
+            FINDING_WORDS.get(finding.kind)?.(finding.layerHint, ui) ??
+            finding.note ??
+            finding.kind;
           return answer.ratio ? `${answer.ratio}: ${words}` : words;
         }),
     );
     const about = [
-      judge.model ? `Model ${judge.model}` : null,
+      judge.model
+        ? (ui?.t('model_value0_6c86000b', { value0: String(judge.model) }) ??
+          `Model ${judge.model}`)
+        : null,
       judge.level,
-      judge.judgedAt ? formatRelativeTime(judge.judgedAt, now) : null,
+      judge.judgedAt ? formatRelativeTime(judge.judgedAt, now, ui?.locale) : null,
     ].filter(Boolean);
     return {
       ...base,
       state: STATE_OF[judge.state],
       result,
       ticks: frames.length ? frames.map((f) => TICK_OF[f.state]) : [TICK_OF[judge.state]],
-      duration: between(job.finishedAt, judge.judgedAt),
+      duration: between(job.finishedAt, judge.judgedAt, ui),
       lines: [
         ...findings,
         ...(about.length ? [about.join(' · ')] : []),
-        'The judge catches about half of real problems, and is right about 9 in 10 of the ones it flags.',
+        ui?.t('the_judge_catches_about_half_of_rea_d6d26be4') ??
+          'The judge catches about half of real problems, and is right about 9 in 10 of the ones it flags.',
       ],
     };
   }
 
   if (job.status === 'failed') {
-    return { ...base, state: 'skipped', result: 'Not run — the render failed.', lines: [] };
+    return {
+      ...base,
+      state: 'skipped',
+      result: ui?.t('not_run_the_render_failed_b5536cf8') ?? 'Not run — the render failed.',
+      lines: [],
+    };
   }
   if (!fit) {
     return {
       ...base,
       state: 'skipped',
-      result: 'Not run — this render had no placement check.',
+      result:
+        ui?.t('not_run_this_render_had_no_placemen_4d9fe57c') ??
+        'Not run — this render had no placement check.',
       lines: [],
     };
   }
@@ -349,7 +582,9 @@ function judgeCheck(job: ApiRenderJob, now: number): JobCheck {
     return {
       ...base,
       state: 'skipped',
-      result: 'Not needed — every image was measured and fits.',
+      result:
+        ui?.t('not_needed_every_image_was_measured_2c998ec8') ??
+        'Not needed — every image was measured and fits.',
       lines: [],
     };
   }
@@ -357,7 +592,10 @@ function judgeCheck(job: ApiRenderJob, now: number): JobCheck {
     return {
       ...base,
       state: 'todo',
-      result: `Will check the frames when the render finishes. Sent because: ${fit.why}`,
+      result:
+        ui?.t('will_check_the_frames_when_the_rend_fa4da733', {
+          value0: String(fit.why),
+        }) ?? `Will check the frames when the render finishes. Sent because: ${fit.why}`,
       lines: [],
     };
   }
@@ -366,38 +604,63 @@ function judgeCheck(job: ApiRenderJob, now: number): JobCheck {
   const since = job.finishedAt ?? job.updatedAt;
   const waited = now - Date.parse(since);
   return waited < WAIT_BEFORE_BACKGROUND_MS
-    ? { ...base, state: 'running', result: 'Waiting for the judge…', lines: [] }
+    ? {
+        ...base,
+        state: 'running',
+        result: ui?.t('waiting_for_the_judge_51e38cfc') ?? 'Waiting for the judge…',
+        lines: [],
+      }
     : {
         ...base,
         state: 'todo',
-        result: 'Still waiting — the judge runs on a background pass.',
-        duration: formatDuration(waited),
-        lines: [`Sent because: ${fit.why}`],
+        result:
+          ui?.t('still_waiting_the_judge_runs_on_a_b_737d5060') ??
+          'Still waiting — the judge runs on a background pass.',
+        duration: formatDuration(waited, ui),
+        lines: [
+          ui?.t('sent_because_value0_600a37f3', { value0: String(fit.why) }) ??
+            `Sent because: ${fit.why}`,
+        ],
       };
 }
 
-function renderCheck(job: ApiRenderJob): JobCheck {
-  const base = { name: 'Render', what: 'The render farm builds each format.', lines: [] };
+function renderCheck(job: ApiRenderJob, ui?: ForgeCheckUi): JobCheck {
+  const base = {
+    kind: 'render',
+    name: ui?.t('render_6d89eb7d') ?? 'Render',
+    what:
+      ui?.t('the_render_farm_builds_each_format_556f354e') ?? 'The render farm builds each format.',
+    lines: [],
+  };
   if (job.status === 'failed') {
     return {
       ...base,
       state: 'fail',
-      result: describeRenderJobFailure(job.error) ?? 'The render failed.',
-      duration: between(job.createdAt, job.finishedAt),
+      result:
+        describeRenderJobFailure(job.error) ??
+        ui?.t('the_render_failed_b2e6036c') ??
+        'The render failed.',
+      duration: between(job.createdAt, job.finishedAt, ui),
     };
   }
   if (job.status !== 'finished') {
     return {
       ...base,
       state: 'running',
-      result: job.status === 'rendering' ? 'Rendering…' : 'Queued',
+      result:
+        job.status === 'rendering'
+          ? (ui?.t('rendering_6241b615') ?? 'Rendering…')
+          : (ui?.t('queued_661ff40a') ?? 'Queued'),
     };
   }
   return {
     ...base,
     state: job.outputs.length ? 'pass' : 'warn',
-    result: job.outputs.length ? plural(job.outputs.length, 'file', 'files') : 'No files',
-    duration: between(job.createdAt, job.finishedAt),
+    result: job.outputs.length
+      ? (ui?.t('checkFiles', { count: job.outputs.length }) ??
+        plural(job.outputs.length, 'file', 'files', ui))
+      : (ui?.t('no_files_c219d965') ?? 'No files'),
+    duration: between(job.createdAt, job.finishedAt, ui),
   };
 }
 
@@ -409,34 +672,54 @@ const STEP_TICK: Record<StepState, CheckTick | null> = {
   skipped: null,
 };
 
-function deliveryCheck(job: ApiRenderJob): JobCheck {
+function deliveryCheck(job: ApiRenderJob, ui?: ForgeCheckUi): JobCheck {
   const base = {
-    name: 'Delivery',
-    what: 'Saves to Library, posts to Slack, sends to Meta for approval.',
+    kind: 'delivery',
+    name: ui?.t('delivery_52bfe584') ?? 'Delivery',
+    what:
+      ui?.t('saves_to_library_posts_to_slack_sen_cbe164b2') ??
+      'Saves to Library, posts to Slack, sends to Meta for approval.',
     lines: [],
   };
-  const steps = jobSteps(job).slice(3);
+  const steps = jobSteps(job, ui).slice(3);
   if (job.status === 'failed') {
-    return { ...base, state: 'skipped', result: 'Nothing delivered — the render failed.' };
+    return {
+      ...base,
+      state: 'skipped',
+      result:
+        ui?.t('nothing_delivered_the_render_failed_3551cf47') ??
+        'Nothing delivered — the render failed.',
+    };
   }
   if (job.status !== 'finished') {
-    return { ...base, state: 'todo', result: 'Waits for the render.' };
+    return {
+      ...base,
+      state: 'todo',
+      result: ui?.t('waits_for_the_render_7da56647') ?? 'Waits for the render.',
+    };
   }
   const [library, slack, approval, published] = steps as [Step, Step, Step, Step];
   const result = [
-    library.state === 'done' ? 'Saved to Library' : 'Saving to Library',
+    library.state === 'done'
+      ? (ui?.t('saved_to_library_7ffd8133') ?? 'Saved to Library')
+      : (ui?.t('saving_to_library_6a2bf333') ?? 'Saving to Library'),
     slack.state === 'done'
-      ? `posted to ${slack.detail}`
+      ? (ui?.t('posted_to_value0_efa3a395', { value0: String(slack.detail) }) ??
+        `posted to ${slack.detail}`)
       : slack.state === 'error'
-        ? `Slack post failed (${slack.detail})`
+        ? (ui?.t('slack_post_failed_value0_c2ceff6d', {
+            value0: String(slack.detail),
+          }) ?? `Slack post failed (${slack.detail})`)
         : slack.state === 'skipped'
           ? null
-          : `posts to ${slack.detail}`,
+          : (ui?.t('posts_to_value0_1aa2d93c', {
+              value0: String(slack.detail),
+            }) ?? `posts to ${slack.detail}`),
     approval.state === 'skipped' ? null : approval.detail,
     published.state === 'done'
-      ? 'published to Meta'
+      ? (ui?.t('published_to_meta_a4ed06a2') ?? 'published to Meta')
       : published.state === 'error'
-        ? (published.detail ?? 'Meta delivery failed')
+        ? (published.detail ?? ui?.t('meta_delivery_failed_a73d5699') ?? 'Meta delivery failed')
         : null,
   ]
     .filter(Boolean)
@@ -460,17 +743,24 @@ export function renderJobChecks(
   job: ApiRenderJob,
   labelByKey: Record<string, string>,
   now: number = Date.now(),
+  ui?: ForgeCheckUi,
 ): JobCheck[] {
   return [
     ...(job.acceptMissingFonts
       ? [
           {
-            name: 'Font override',
-            what: 'Whether the missing-font check was bypassed for this render.',
+            kind: 'font_override',
+            name: ui?.t('font_override_66446e01') ?? 'Font override',
+            what:
+              ui?.t('whether_the_missing_font_check_was__1961e292') ??
+              'Whether the missing-font check was bypassed for this render.',
             state: 'warn' as const,
-            result: 'Missing-font check bypassed',
+            result: ui?.t('missing_font_check_bypassed_839560d4') ?? 'Missing-font check bypassed',
             lines: [
-              `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; the worker may substitute missing fonts.`,
+              ui?.t('explicitly_accepted_value0_the_work_f07f614f', {
+                value0: String(job.createdByEmail ? ` by ${job.createdByEmail}` : ''),
+              }) ??
+                `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; the worker may substitute missing fonts.`,
             ],
           },
         ]
@@ -478,12 +768,18 @@ export function renderJobChecks(
     ...(job.acceptLinkedLineMismatch
       ? [
           {
-            name: 'Line-count override',
-            what: 'Whether a split headline rendered with a line count its layers did not match.',
+            kind: 'line_count_override',
+            name: ui?.t('line_count_override_4da94002') ?? 'Line-count override',
+            what:
+              ui?.t('whether_a_split_headline_rendered_w_85a1934b') ??
+              'Whether a split headline rendered with a line count its layers did not match.',
             state: 'warn' as const,
-            result: 'Line-count check bypassed',
+            result: ui?.t('line_count_check_bypassed_c099327c') ?? 'Line-count check bypassed',
             lines: [
-              `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; extra lines joined onto the last layer, missing ones rendered empty.`,
+              ui?.t('explicitly_accepted_value0_extra_li_98597eb2', {
+                value0: String(job.createdByEmail ? ` by ${job.createdByEmail}` : ''),
+              }) ??
+                `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; extra lines joined onto the last layer, missing ones rendered empty.`,
             ],
           },
         ]
@@ -491,12 +787,19 @@ export function renderJobChecks(
     ...(job.acceptOffPaletteColor
       ? [
           {
-            name: 'Palette override',
-            what: 'Whether a colour outside the brand palette was rendered on purpose.',
+            kind: 'palette_override',
+            name: ui?.t('palette_override_fad09a82') ?? 'Palette override',
+            what:
+              ui?.t('whether_a_colour_outside_the_brand__d6502467') ??
+              'Whether a colour outside the brand palette was rendered on purpose.',
             state: 'warn' as const,
-            result: 'Brand-palette check bypassed',
+            result:
+              ui?.t('brand_palette_check_bypassed_13a059f3') ?? 'Brand-palette check bypassed',
             lines: [
-              `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; a colour renders outside the brand palette.`,
+              ui?.t('explicitly_accepted_value0_a_colour_221dd8d1', {
+                value0: String(job.createdByEmail ? ` by ${job.createdByEmail}` : ''),
+              }) ??
+                `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; a colour renders outside the brand palette.`,
             ],
           },
         ]
@@ -504,31 +807,44 @@ export function renderJobChecks(
     ...(job.warnings?.length
       ? [
           {
-            name: 'Warnings',
-            what: 'Advisories recorded for this render. Review these before delivery.',
+            kind: 'warnings',
+            name: ui?.t('warnings_0e04cd10') ?? 'Warnings',
+            what:
+              ui?.t('advisories_recorded_for_this_render_626b8abb') ??
+              'Advisories recorded for this render. Review these before delivery.',
             state: 'warn' as const,
-            result: `${job.warnings.length} warning${job.warnings.length === 1 ? '' : 's'}`,
+            result:
+              ui?.t('checkWarnings', { count: job.warnings.length }) ??
+              `${job.warnings.length} warning${job.warnings.length === 1 ? '' : 's'}`,
             lines: job.warnings.map((warning) => warning.message),
           },
         ]
       : []),
     {
-      name: 'Inputs',
-      what: 'Confirms every required variable is filled and every picked asset belongs to this brand.',
+      kind: 'inputs',
+      name: ui?.t('inputs_7abc49df') ?? 'Inputs',
+      what:
+        ui?.t('confirms_every_required_variable_is_755d9b5e') ??
+        'Confirms every required variable is filled and every picked asset belongs to this brand.',
       state: 'pass',
-      result: 'All inputs accepted.',
+      result: ui?.t('all_inputs_accepted_6e2c0fe7') ?? 'All inputs accepted.',
       lines: [],
     },
-    placementCheck(job, labelByKey),
+    placementCheck(job, labelByKey, ui),
     {
-      name: 'Brand',
-      what: 'Checks brand colors and typefaces. Quality warnings can be accepted before rendering.',
+      kind: 'brand',
+      name: ui?.t('brand_090ed431') ?? 'Brand',
+      what:
+        ui?.t('checks_brand_colors_and_typefaces_q_b282f0fd') ??
+        'Checks brand colors and typefaces. Quality warnings can be accepted before rendering.',
       state: job.warnings?.length ? 'warn' : 'pass',
-      result: job.warnings?.length ? 'Review recorded warnings' : 'No blocking issues',
+      result: job.warnings?.length
+        ? (ui?.t('review_recorded_warnings_301981ba') ?? 'Review recorded warnings')
+        : (ui?.t('no_blocking_issues_65150e76') ?? 'No blocking issues'),
       lines: [],
     },
-    renderCheck(job),
-    judgeCheck(job, now),
-    deliveryCheck(job),
+    renderCheck(job, ui),
+    judgeCheck(job, now, ui),
+    deliveryCheck(job, ui),
   ];
 }

@@ -5,7 +5,8 @@ import {
   getOptimizationMetricDefinition,
   type PortfolioListItem,
 } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('motion/react', () => {
   const React = require('react');
@@ -64,9 +65,26 @@ const metrics = (spend: number, leads: number) => ({
 });
 /** The live account read: two members and one ad set of another portfolio. */
 const SNAPSHOTS = [
-  { id: 'a', windows: { d3: metrics(0, 0), d7: metrics(612.4, 20), d14: metrics(1100, 37) } },
-  { id: 'b', windows: { d3: metrics(0, 0), d7: metrics(377.15, 11), d14: metrics(700, 20) } },
-  { id: 'other', windows: { d3: metrics(0, 0), d7: metrics(5000, 3), d14: metrics(9000, 5) } },
+  {
+    id: 'a',
+    windows: {
+      d3: metrics(0, 0),
+      d7: metrics(612.4, 20),
+      d14: metrics(1100, 37),
+    },
+  },
+  {
+    id: 'b',
+    windows: {
+      d3: metrics(0, 0),
+      d7: metrics(377.15, 11),
+      d14: metrics(700, 20),
+    },
+  },
+  {
+    id: 'other',
+    windows: { d3: metrics(0, 0), d7: metrics(5000, 3), d14: metrics(9000, 5) },
+  },
 ];
 /** The last cycle, eleven days before NOW. */
 const SERIES = [
@@ -82,7 +100,14 @@ const SERIES = [
 const RECAP = {
   source: 'daily',
   windowUsed: null,
-  current: { spend: 1, results: 1, impressions: 0, clicks: 0, costPerResult: 1, daysCovered: 7 },
+  current: {
+    spend: 1,
+    results: 1,
+    impressions: 0,
+    clicks: 0,
+    costPerResult: 1,
+    daysCovered: 7,
+  },
   previous: null,
   series: [],
   delta: { spend: null, results: null, costPerResult: null },

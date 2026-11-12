@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The version line above Read and the Map (design C, option 30): v1 → v2 → v3 → "Applied in
 // Meta". Picking a version shows it; "Compare with previous" marks what it changed against the
@@ -86,6 +87,8 @@ export function useVersionLine(
 
 /** The line itself: one pill per version, the applied step, and Compare. */
 export function VersionLineBar({ state }: { state: VersionLineState }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { line, view } = state;
   if (!line || !view) return null;
   const applied = line.appliedId;
@@ -93,9 +96,12 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
     <div className="grid w-full min-w-0 gap-1" data-testid="version-line">
       <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-1.5 text-[12px]">
         <span className="mr-1 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-          Versions
+          {betaUiText('beta_f89ea27036ac')}
         </span>
-        <ol className="flex min-w-0 flex-wrap items-center gap-1" aria-label="Versions">
+        <ol
+          className="flex min-w-0 flex-wrap items-center gap-1"
+          aria-label={betaUiText('beta_f89ea27036ac')}
+        >
           {line.versions.map((version, index) => {
             const selected = version.id === view.version.id;
             const word = STATUS_WORD[version.status];
@@ -144,7 +150,7 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
               data-applied={applied ? 'true' : 'false'}
             >
               {applied ? <Check className="size-3" aria-hidden /> : null}
-              {applied ? appliedLabelOf(view.model) : 'Not applied yet'}
+              {applied ? appliedLabelOf(view.model) : betaUiText('beta_72470b1c47af')}
             </button>
           </li>
         </ol>
@@ -153,7 +159,7 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
           aria-pressed={state.compare}
           disabled={!view.previous}
           onClick={() => state.setCompare(!state.compare)}
-          title={view.previous ? undefined : 'The first version has nothing before it'}
+          title={view.previous ? undefined : betaUiText('beta_6ba2af1ec2f8')}
           className={cn(
             'ml-auto inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40',
             state.compare
@@ -163,19 +169,19 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
           data-testid="version-compare"
         >
           <GitCompareArrows className="size-3.5" aria-hidden />
-          Compare with previous
+          {betaUiText('beta_26a87c28dc13')}
         </button>
       </div>
       {view.comparison && view.previous ? (
         <p className="text-[12px] text-muted-foreground" data-testid="version-compare-summary">
-          {view.version.label} against {view.previous.label}:{' '}
+          {view.version.label} {betaUiText('beta_a718e3e9aefa')} {view.previous.label}:{' '}
           <span className="font-medium text-foreground">
             {comparisonSummaryOf(view.comparison)}
           </span>
         </p>
       ) : state.active ? (
         <p className="text-[12px] text-muted-foreground">
-          Viewing {view.version.label} · read-only
+          {betaUiText('beta_9dc859e86f2e')} {view.version.label} {betaUiText('beta_0264386c451f')}
         </p>
       ) : null}
     </div>

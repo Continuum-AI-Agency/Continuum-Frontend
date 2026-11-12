@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
+
 // When the account read was taken, and how to ask for another.
 //
 // The read is composed once a day by a worker and then served frozen. On 2026-09-21 the row
@@ -26,29 +34,42 @@ const DAY = 24 * HOUR;
  * the finest thing that ever means anything, and pretending otherwise would suggest the figure
  * moves more often than it does.
  */
-export function agoLabel(from: string, now: Date): string | null {
+export function agoLabel(from: string, now: Date, uiTranslate?: ScaleCopy): string | null {
   const taken = Date.parse(from);
   if (Number.isNaN(taken)) return null;
   const elapsed = now.getTime() - taken;
-  if (elapsed < 0) return 'just now';
-  if (elapsed < MINUTE) return 'just now';
+  if (elapsed < 0) return uiTranslate ? uiTranslate('just_now_7ddb44d') : 'just now';
+  if (elapsed < MINUTE) return uiTranslate ? uiTranslate('just_now_7ddb44d') : 'just now';
   if (elapsed < HOUR) {
     const minutes = Math.floor(elapsed / MINUTE);
-    return `${minutes} min ago`;
+    return uiTranslate ? uiTranslate('freshnessMinutesAgo', { minutes }) : `${minutes} min ago`;
   }
   if (elapsed < DAY) {
     const hours = Math.floor(elapsed / HOUR);
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    return uiTranslate
+      ? uiTranslate('helper_4338c9096862', {
+          v0: hours,
+          v1: hours === 1 ? 'hour' : 'hours',
+        })
+      : `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
   }
   const days = Math.floor(elapsed / DAY);
-  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  return uiTranslate
+    ? uiTranslate('helper_4338c9096862', {
+        v0: days,
+        v1: days === 1 ? 'day' : 'days',
+      })
+    : `${days} ${days === 1 ? 'day' : 'days'} ago`;
 }
 
 /** The clock time the cooldown lifts, in the reader's own zone, written en-US. */
-export function clockLabel(at: string): string | null {
+export function clockLabel(at: string, uiLocale: UiLocale = 'en'): string | null {
   const when = Date.parse(at);
   if (Number.isNaN(when)) return null;
-  return new Date(when).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(when).toLocaleTimeString(uiLocale, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 /**
@@ -57,20 +78,47 @@ export function clockLabel(at: string): string | null {
  * Null means there is genuinely nothing to date — no composition has ever landed — and the
  * caller renders no line rather than inventing one.
  */
-export function takenLine(readyAt: string | null, now: Date): string | null {
+export function takenLine(
+  readyAt: string | null,
+  now: Date,
+  uiTranslate?: ScaleCopy,
+): string | null {
   if (!readyAt) return null;
-  const ago = agoLabel(readyAt, now);
-  return ago ? `Read ${ago}` : null;
+  const ago = agoLabel(readyAt, now, uiTranslate);
+  return ago ? (uiTranslate ? uiTranslate('freshnessReadAgo', { age: ago }) : `Read ${ago}`) : null;
 }
 
 /** What the control should say, given what the server decided. */
-export function refreshCopy(refresh: AccountReadRefresh): {
+export function refreshCopy(
+  refresh: AccountReadRefresh,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): {
   /** Said beside the button, or instead of it. */
   note: string | null;
   /** Rendered only when a re-read is genuinely on its way. */
   running: boolean;
 } {
   if (!refresh) return { note: null, running: false };
+  if (uiTranslate) {
+    const running = refresh.state === 'queued' || refresh.state === 'generating';
+    const at = refresh.retry_after ? clockLabel(refresh.retry_after, uiLocale) : null;
+    const state = running
+      ? 'running'
+      : refresh.state === 'stalled'
+        ? 'stalled'
+        : refresh.reason === 'too_soon'
+          ? at
+            ? 'retryAt'
+            : 'retryLater'
+          : refresh.reason === 'daily_limit'
+            ? 'limit'
+            : null;
+    return {
+      running,
+      note: state ? uiTranslate('freshnessRefreshNote', { state, time: at ?? '' }) : null,
+    };
+  }
   if (refresh.state === 'queued' || refresh.state === 'generating') {
     return {
       note: 'Re-reading the account — a fresh read lands in a few minutes.',
@@ -81,7 +129,7 @@ export function refreshCopy(refresh: AccountReadRefresh): {
     return { note: 'The last read stopped halfway.', running: false };
   }
   if (refresh.reason === 'too_soon') {
-    const at = refresh.retry_after ? clockLabel(refresh.retry_after) : null;
+    const at = refresh.retry_after ? clockLabel(refresh.retry_after, uiLocale) : null;
     return {
       note: at ? `Can re-read at ${at}.` : 'Can re-read in a while.',
       running: false,
@@ -130,8 +178,10 @@ export function AccountReadFreshness({
   now = new Date(),
   className,
 }: AccountReadFreshnessProps) {
-  const taken = takenLine(readyAt, now);
-  const { note, running } = refreshCopy(refresh);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const taken = takenLine(readyAt, now, uiText);
+  const { note, running } = refreshCopy(refresh, uiLocale, uiText);
   // No `refresh` means the server has no opinion to report — it is an older RPC — so there is
   // no control at all. A permanently disabled button nobody can explain is worse than none.
   const offersControl = Boolean(onRequest) && refresh !== null;
@@ -156,7 +206,7 @@ export function AccountReadFreshness({
             {utcDay ? <span className="text-muted-foreground/70"> · {utcDay} UTC</span> : null}
           </span>
         ) : (
-          <span data-testid="account-read-taken">No read yet</span>
+          <span data-testid="account-read-taken">{uiText('no_read_yet_b725231')}</span>
         )}
         {note ? (
           <span
@@ -182,7 +232,7 @@ export function AccountReadFreshness({
             onClick={onRequest}
             type="button"
           >
-            {requesting || running ? 'Re-reading…' : 'Re-read'}
+            {requesting || running ? uiText('re_reading_db15439') : uiText('re_read_b72908f')}
           </button>
         ) : null}
       </span>

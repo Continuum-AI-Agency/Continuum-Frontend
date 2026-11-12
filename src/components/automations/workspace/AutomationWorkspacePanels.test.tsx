@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Two seams of the workspace shell: the escape-hatch patch the publish dialog
 // hands back, and the inspector's evidence block — which used to render the
 // server test's evidence only, leaving a LIVE run showing a status badge and
@@ -11,7 +12,7 @@ import type {
   AutomationWorkflowNode,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { applyDefinitionToCanvasNodes, WorkflowInspector } from './AutomationWorkspacePanels';
@@ -161,13 +162,17 @@ describe('WorkflowInspector run evidence', () => {
   test('renders the focused live run’s node attempts', () => {
     renderInspector({
       nodeRuns: [
-        nodeRun({ attempt: 1, status: 'failed', errorMessage: 'source timed out' }),
+        nodeRun({
+          attempt: 1,
+          status: 'failed',
+          errorMessage: 'source timed out',
+        }),
         nodeRun({ id: 'node-run-2', attempt: 2, status: 'completed' }),
       ],
     });
 
-    expect(screen.getByText('Live run · attempt 1 · failed')).toBeTruthy();
-    expect(screen.getByText('Live run · attempt 2 · completed')).toBeTruthy();
+    expect(screen.getByText('Live run · attempt 1 · Failed')).toBeTruthy();
+    expect(screen.getByText('Live run · attempt 2 · Completed')).toBeTruthy();
   });
 
   test('says the step reported nothing rather than showing a bare status badge', () => {
@@ -287,7 +292,9 @@ describe('WorkflowInspector brand scope', () => {
 
   const renderPlannerInspector = (brandId?: string) => {
     globalThis.fetch = mock(async () => new Response('{}', { status: 500 })) as typeof fetch;
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     return render(
       <QueryClientProvider client={client}>
         <TooltipProvider>

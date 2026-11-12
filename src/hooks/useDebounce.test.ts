@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { DEFAULT_SEARCH_DEBOUNCE_MS, useDebounce } from './useDebounce';
 

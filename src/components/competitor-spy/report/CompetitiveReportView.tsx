@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+
 // Competitive Report orchestrator — the Brand Spy "Report" tab. Zero state →
 // live scan progress → the assembled report sections (summary, hooks, angles,
 // gaps, competitors). The scan hook is hoisted to CompetitorSpyClient so the
@@ -46,6 +49,7 @@ export function CompetitiveReportView({
   onManageCompetitors: () => void;
   website?: string | null;
 }) {
+  const uiText = useTranslations('competitor');
   const { data, isLoading } = useCompetitiveReport(brandId);
   const searchParams = useSearchParams();
   const scrolledRef = useRef(false);
@@ -95,8 +99,8 @@ export function CompetitiveReportView({
   if (data?.status === 'assembling' && !hasReport) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
-        <Loader2 aria-hidden="true" className="size-4 animate-spin" />A scan is already assembling
-        your report — it will appear here when ready.
+        <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        {uiText('a_scan_is_already_assembling_your_report_it_w_966abfa')}
       </div>
     );
   }
@@ -150,6 +154,8 @@ function ReportSections({
   refreshedAt: string | null;
   stale?: boolean;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
   const crossRows = angleMap.rows.filter((row) => row.competitorId === null);
   const hookRows = crossRows.filter((row) => row.dimension === 'hook_archetype');
   const angleRows = crossRows.filter((row) => row.dimension === 'angle');
@@ -158,7 +164,7 @@ function ReportSections({
   return (
     <div className="space-y-6">
       <nav
-        aria-label="Report sections"
+        aria-label={uiText('report_sections_2a95841')}
         className="sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto bg-background/95 px-1 py-2 backdrop-blur"
       >
         {SECTIONS.map((section) => (
@@ -172,7 +178,7 @@ function ReportSections({
             }
             type="button"
           >
-            {section.label}
+            {localizeCompetitorCopy(section.label, uiText)}
           </button>
         ))}
       </nav>
@@ -181,18 +187,29 @@ function ReportSections({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <MetricStrip
             items={[
-              { label: 'Competitors', value: String(report.sourceCounts.competitors) },
-              { label: 'Ads analyzed', value: String(report.sourceCounts.competitorSnapshots) },
-              { label: 'Gaps found', value: String(report.gaps.length) },
+              {
+                label: uiText('competitors_e699b0b'),
+                value: report.sourceCounts.competitors.toLocaleString(uiLocale),
+              },
+              {
+                label: uiText('ads_analyzed_beec826'),
+                value: report.sourceCounts.competitorSnapshots.toLocaleString(uiLocale),
+              },
+              {
+                label: uiText('gaps_found_a19d80e'),
+                value: report.gaps.length.toLocaleString(uiLocale),
+              },
             ]}
           />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
-              {stale ? 'Refreshing — showing the last report. ' : ''}
-              Scanned{' '}
-              {refreshedAt
-                ? formatRelativeTime(refreshedAt)
-                : formatRelativeTime(report.generatedAt)}
+              {uiText.rich('sentence_7ab7a60f8588', {
+                v0: () => (stale ? uiText('refreshing_showing_the_last_report_b0c4943') : ''),
+                v1: () =>
+                  refreshedAt
+                    ? formatRelativeTime(refreshedAt, undefined, uiLocale)
+                    : formatRelativeTime(report.generatedAt, undefined, uiLocale),
+              })}
             </span>
             <Button
               disabled={scan.running}
@@ -202,7 +219,7 @@ function ReportSections({
               variant="outline"
             >
               <RefreshCw aria-hidden="true" className="size-3.5" />
-              Re-scan
+              {uiText('re_scan_59b7d55')}
             </Button>
           </div>
         </div>
@@ -213,7 +230,7 @@ function ReportSections({
           dimension="hook_archetype"
           exemplars={report.exemplars.competitor}
           rows={hookRows}
-          title="Hooks they keep scaling"
+          title={uiText('hooks_they_keep_scaling_ca36068')}
         />
       </section>
 
@@ -223,11 +240,11 @@ function ReportSections({
           exemplars={report.exemplars.competitor}
           funnelRows={funnelRows}
           rows={angleRows}
-          title="Angles they keep scaling"
+          title={uiText('angles_they_keep_scaling_6fa4465')}
         />
         <div className="rounded-lg border border-border/70 bg-card p-3">
           <p className="pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Who scales which angle
+            {uiText('who_scales_which_angle_5c70a26')}
           </p>
           <CompetitorAngleMatrix rows={angleMap.rows} />
         </div>
@@ -239,7 +256,7 @@ function ReportSections({
 
       <section className="scroll-mt-12 space-y-3" id={sectionAnchorId('competitors')}>
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Competitors
+          {uiText('competitors_e699b0b')}
         </h2>
         <CompetitorSummaryStrip brandId={brandId} rows={angleMap.rows} />
         <RecentActivitySection brandId={brandId} />
@@ -249,15 +266,15 @@ function ReportSections({
 }
 
 function SparseMarketNotice({ onRescan }: { onRescan: () => void }) {
+  const uiText = useTranslations('competitor');
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-10 text-center">
       <p className="max-w-xl text-sm text-muted-foreground">
-        Meta&apos;s Ad Library provides limited commercial ad coverage for your market — we found no
-        competitor ads to analyze. Organic competitor tracking still works from the Inspiration tab.
+        {uiText('meta_s_ad_library_provides_limited_commercial_626166a')}
       </p>
       <Button onClick={onRescan} size="sm" type="button" variant="outline">
         <RefreshCw aria-hidden="true" className="size-3.5" />
-        Re-scan
+        {uiText('re_scan_59b7d55')}
       </Button>
     </div>
   );

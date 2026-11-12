@@ -1,6 +1,7 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import type { OnboardingIntake } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { UrlScreen } from './UrlScreen';
 
 afterEach(cleanup);
@@ -21,7 +22,12 @@ test('a bare domain is a website, normalized, and Enter analyzes it', async () =
   pressEnter();
   await waitFor(() =>
     expect(onSubmit).toHaveBeenCalledWith(
-      { kind: 'website', brand_name: 'Acme', url: 'https://acme.example/', description: null },
+      {
+        kind: 'website',
+        brand_name: 'Acme',
+        url: 'https://acme.example/',
+        description: null,
+      },
       undefined,
     ),
   );
@@ -73,7 +79,9 @@ test('prose is a description and needs a brand name', async () => {
   pressEnter();
   await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('brand name'));
   expect(onSubmit).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText('Brand name'), { target: { value: 'Acme' } });
+  fireEvent.change(screen.getByLabelText('Brand name'), {
+    target: { value: 'Acme' },
+  });
   pressEnter();
   await waitFor(() =>
     expect(onSubmit).toHaveBeenCalledWith(
@@ -99,7 +107,9 @@ test('empty input explains what to give', async () => {
 test('attached files make it a documents intake and are handed over', async () => {
   const onSubmit = submit();
   const view = render(<UrlScreen onSubmit={onSubmit} defaultBrandName="Acme" />);
-  const file = new File(['guide'], 'brand-guide.pdf', { type: 'application/pdf' });
+  const file = new File(['guide'], 'brand-guide.pdf', {
+    type: 'application/pdf',
+  });
   const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
   fireEvent.change(input, { target: { files: [file] } });
   expect(chip().textContent).toContain('1 file');

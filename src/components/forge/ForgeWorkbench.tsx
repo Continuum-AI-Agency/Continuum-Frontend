@@ -8,6 +8,7 @@ import {
 } from '@continuum/contracts';
 import { experimental_streamedQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fileSha256,
@@ -25,11 +26,11 @@ import {
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
-import { WebComponentTemplateDetail } from '@/components/forge/WebComponentTemplateDetail';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
-import { Skeleton } from '@/components/ui/skeleton';
+import { WebComponentTemplateDetail } from '@/components/forge/WebComponentTemplateDetail';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -39,9 +40,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
@@ -53,12 +54,8 @@ import {
 } from '@/lib/library/templateSources';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { DesignTemplateImports, useDesignTemplateImports } from './DesignTemplateImports';
+import PresentationWorkspace from './presentations/PresentationMessages';
 import { useForgeExitGuard } from './useForgeExitGuard';
-
-const PresentationWorkspace = dynamic(
-  () => import('@/components/forge/presentations/PresentationWorkspace'),
-  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> },
-);
 
 // The detail and the gallery are the heaviest panels behind the tab shell: load them on first use
 // so the shell paints first.
@@ -73,7 +70,10 @@ const TemplateGallery = dynamic(
 );
 
 const NativeHyperframesEditor = dynamic(
-  () => import('@/components/forge/native/NativeHyperframesEditor').then((module) => module.NativeHyperframesEditor),
+  () =>
+    import('@/components/forge/native/NativeHyperframesEditor').then(
+      (module) => module.NativeHyperframesEditor,
+    ),
   { loading: () => <Skeleton className="h-96 w-full" /> },
 );
 
@@ -130,6 +130,8 @@ export function ForgeWorkbench({
   /** The workbench has taken `templateIntent`; the shell drops it so a remount never replays it. */
   onTemplateIntentConsumed?: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const exitGuard = useForgeExitGuard();
   const [selected, setSelected] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<string | undefined>();
@@ -146,7 +148,10 @@ export function ForgeWorkbench({
     [],
   );
   // A file on its way to becoming a template's next source revision, until its panel takes it.
-  const [revision, setRevision] = useState<{ assetId: string; file: File } | null>(null);
+  const [revision, setRevision] = useState<{
+    assetId: string;
+    file: File;
+  } | null>(null);
   const queryClient = useQueryClient();
   const sourceKey = useMemo(() => forgeQueryKeys.templateSources(brandId), [brandId]);
   // Cards roll in a page at a time; a refetch keeps the cards on screen until its list is whole.
@@ -203,12 +208,22 @@ export function ForgeWorkbench({
     () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: sourceKey, exact: true }),
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) }),
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templateVariants(brandId) }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.workspaceTemplates(brandId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.templates(brandId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.contracts(brandId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.templateVariants(brandId),
+        }),
         // The gallery nests uploads by family; a stale registry would list a new variant as a row.
-        queryClient.invalidateQueries({ queryKey: ['forge', brandId, 'revision-variants'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['forge', brandId, 'revision-variants'],
+        }),
       ]).then(() => undefined),
     [brandId, queryClient, sourceKey],
   );
@@ -258,7 +273,9 @@ export function ForgeWorkbench({
   useEffect(() => {
     if (!firstReadDone.current || sourceQuery.isFetching) return;
     if (seenRenderable.current !== null && seenRenderable.current !== renderableKey)
-      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) });
+      void queryClient.invalidateQueries({
+        queryKey: forgeQueryKeys.templates(brandId),
+      });
     seenRenderable.current = renderableKey;
   }, [brandId, queryClient, renderableKey, sourceQuery.isFetching]);
 
@@ -275,12 +292,20 @@ export function ForgeWorkbench({
       const saved = await renameTemplateSource(brandId, assetId, title);
       setDisplayName(assetId, saved.displayName ?? title);
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.workspaceTemplates(brandId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.templates(brandId),
+        }),
       ]);
     } catch (error) {
       setDisplayName(assetId, previous);
-      toast.error(error instanceof Error ? error.message : 'Could not rename the template');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_rename_the_template_ced97fb9'),
+      );
     }
   };
 
@@ -295,16 +320,27 @@ export function ForgeWorkbench({
         workspaceId: template.workspaceId,
       });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.workspaceTemplates(brandId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.templates(brandId),
+        }),
       ]);
       toast.success(
         template.granted
-          ? `${name} removed from ${brandName ?? 'this brand'}`
-          : `${name} is now available to render`,
+          ? translateUi('value0_removed_from_value1_1836d8d6', {
+              value0: String(name),
+              value1: String(brandName ?? translateUi('currentBrandFallback')),
+            })
+          : translateUi('value0_is_now_available_to_render_dc5af4f2', {
+              value0: String(name),
+            }),
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not change that');
+      toast.error(
+        error instanceof Error ? error.message : translateUi('could_not_change_that_fe705a52'),
+      );
     } finally {
       setAdopting(null);
     }
@@ -348,14 +384,19 @@ export function ForgeWorkbench({
       if (!removed.includes(source.assetId)) throw new Error('The template file was not removed.');
       if (selected === source.assetId) setSelected(null);
       setRemoving(null);
-      toast.success(`${sourceDisplayName(source)} removed from ${brandName ?? 'this brand'}`);
+      toast.success(
+        translateUi('value0_removed_from_value1_1836d8d6', {
+          value0: String(sourceDisplayName(source)),
+          value1: String(brandName ?? translateUi('currentBrandFallback')),
+        }),
+      );
     } catch (error) {
       toast.error(
         accessDisabled
-          ? 'The template file could not be removed. Render access is off; try removing it again.'
+          ? translateUi('the_template_file_could_not_be_remo_f20f098a')
           : error instanceof Error
             ? error.message
-            : 'Could not remove the template.',
+            : translateUi('could_not_remove_the_template_462f7064'),
       );
     } finally {
       setRemoveBusy(false);
@@ -367,7 +408,10 @@ export function ForgeWorkbench({
   // shell reads `#approvals`, and taken once: the template opens here, and its set opens in Render
   // once the template's key is known.
   const [deepLink, setDeepLink] = useState<ForgeDeepLink | null>(null);
-  const [authoringHandoff, setAuthoringHandoff] = useState<{ revisionId: string; error: string | null } | null>(null);
+  const [authoringHandoff, setAuthoringHandoff] = useState<{
+    revisionId: string;
+    error: string | null;
+  } | null>(null);
   useEffect(() => {
     const link = readForgeDeepLink(window.location.search);
     if (!link) return;
@@ -375,9 +419,10 @@ export function ForgeWorkbench({
     if (link.hyperframesRevisionId) {
       setAuthoringHandoff({
         revisionId: link.hyperframesRevisionId,
-        error: link.brandId && link.brandId !== brandId
-          ? 'This composition was opened for a different brand. Switch to that brand and open the handoff again.'
-          : null,
+        error:
+          link.brandId && link.brandId !== brandId
+            ? 'This composition was opened for a different brand. Switch to that brand and open the handoff again.'
+            : null,
       });
     }
     if (link.templateAssetId && link.tab) setDetailTab(link.tab);
@@ -394,7 +439,9 @@ export function ForgeWorkbench({
       }),
     );
   const openShared = (template: SharedTemplate | null) =>
-    exitGuard.runGuarded(() => morph(() => setSelectedShared(template ? sharedTemplateId(template) : null)));
+    exitGuard.runGuarded(() =>
+      morph(() => setSelectedShared(template ? sharedTemplateId(template) : null)),
+    );
 
   // An intent is an event, taken once and handed back, the way the Render grid takes its own.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event.
@@ -434,7 +481,11 @@ export function ForgeWorkbench({
         sources,
       );
       if (match.kind === 'same') {
-        toast.info(`Already in Forge as ${sourceDisplayName(match.source)}`);
+        toast.info(
+          translateUi('already_in_forge_as_value0_8886acd4', {
+            value0: String(sourceDisplayName(match.source)),
+          }),
+        );
         existing ??= match.source;
       } else if (match.kind === 'named') named.push({ file, source: match.source });
       else fresh.push(file);
@@ -446,8 +497,18 @@ export function ForgeWorkbench({
 
   const receiveFonts = async (files: File[]) => {
     const { stored, refused } = await uploadTemplateFontFiles(brandId, files);
-    if (stored.length) toast.success(`Fonts added: ${stored.join(', ')}`);
-    if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
+    if (stored.length)
+      toast.success(
+        translateUi('fonts_added_value0_664da924', {
+          value0: String(stored.join(', ')),
+        }),
+      );
+    if (refused.length)
+      toast.error(
+        translateUi('fonts_not_added_value0_aec8462a', {
+          value0: String(refused.join('; ')),
+        }),
+      );
   };
 
   const asking = sameName[0];
@@ -473,23 +534,35 @@ export function ForgeWorkbench({
         <Alert variant={sourceQuery.data !== undefined ? 'default' : 'destructive'}>
           <AlertTitle>
             {sourceQuery.data !== undefined
-              ? 'Your templates could not be refreshed'
-              : 'Your templates are unavailable'}
+              ? translateUi('your_templates_could_not_be_refresh_66513148')
+              : translateUi('your_templates_are_unavailable_91d7a56a')}
           </AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>
               {sourceQuery.data !== undefined
-                ? 'Showing the last available list. Refresh to check for changes.'
-                : 'Your uploaded templates could not be loaded. Shared templates may still be available.'}
+                ? translateUi('showing_the_last_available_list_ref_16b46539')
+                : translateUi('your_uploaded_templates_could_not_b_79f44faa')}
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => void sourceQuery.refetch()} disabled={sourceQuery.isFetching}>
-              {sourceQuery.isFetching ? 'Retrying…' : 'Retry'}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void sourceQuery.refetch()}
+              disabled={sourceQuery.isFetching}
+            >
+              {sourceQuery.isFetching
+                ? translateUi('retrying_a16c8b1c')
+                : translateUi('retry_942087cc')}
             </Button>
           </AlertDescription>
         </Alert>
       ) : null}
       {workspaceQuery.isPending ? (
-        <div aria-label="Loading shared templates" className="flex flex-col gap-2" role="status">
+        <div
+          aria-label={translateUi('loading_shared_templates_56387822')}
+          className="flex flex-col gap-2"
+          role="status"
+        >
           <Skeleton aria-hidden className="h-4 w-40 rounded-md" />
           <Skeleton aria-hidden className="h-10 w-full rounded-md" />
         </div>
@@ -498,16 +571,18 @@ export function ForgeWorkbench({
         <Alert variant={authoringHandoff.error ? 'destructive' : 'default'}>
           <AlertTitle>
             {authoringHandoff.error
-              ? 'HyperFrames handoff paused'
+              ? translateUi('hyperframes_handoff_paused_e4081cf3')
               : current
-                ? `Source selected · ${sourceDisplayName(current)}`
-                : 'Choose a Forge source'}
+                ? translateUi('source_selected_value0_5fbee73a', {
+                    value0: String(sourceDisplayName(current)),
+                  })
+                : translateUi('choose_a_forge_source_f6821875')}
           </AlertTitle>
           <AlertDescription>
             {authoringHandoff.error ??
               (current
-                ? 'This composition is queued for this source’s private Layers workspace. Forge will keep it private while verifying the workspace package path.'
-                : 'Choose one of your existing After Effects templates below. The composition stays private while Forge verifies the workspace package path for that source version.')}
+                ? translateUi('this_composition_is_queued_for_this_51ff0aa0')
+                : translateUi('choose_one_of_your_existing_after_e_1e99e923'))}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -515,19 +590,27 @@ export function ForgeWorkbench({
         <Alert variant={workspaceQuery.data ? 'default' : 'destructive'}>
           <AlertTitle>
             {workspaceQuery.data
-              ? 'Shared catalog could not be refreshed'
-              : 'Shared catalog unavailable'}
+              ? translateUi('shared_catalog_could_not_be_refresh_85dce8bd')
+              : translateUi('shared_catalog_unavailable_3e77a7c8')}
           </AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>
               {workspaceQuery.data
                 ? workspaceFailures.length > 0
-                  ? 'Showing the last available partial catalog. Some workspaces may be missing.'
-                  : 'Showing the last available catalog. Refresh to check for changes.'
-                : 'Your uploaded templates are still available. The shared catalog could not be loaded.'}
+                  ? translateUi('showing_the_last_available_partial__6670709e')
+                  : translateUi('showing_the_last_available_catalog__1b988dfb')
+                : translateUi('your_uploaded_templates_are_still_a_d5e73682')}
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => void workspaceQuery.refetch()} disabled={workspaceQuery.isFetching}>
-              {workspaceQuery.isFetching ? 'Retrying…' : 'Retry'}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void workspaceQuery.refetch()}
+              disabled={workspaceQuery.isFetching}
+            >
+              {workspaceQuery.isFetching
+                ? translateUi('retrying_a16c8b1c')
+                : translateUi('retry_942087cc')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -536,26 +619,42 @@ export function ForgeWorkbench({
         <Alert variant={discoveredItems.length > 0 ? 'default' : 'destructive'}>
           <AlertTitle>
             {discoveredItems.length > 0
-              ? 'Some shared workspaces could not be checked'
-              : 'Shared catalog unavailable'}
+              ? translateUi('some_shared_workspaces_could_not_be_a26fcdcb')
+              : translateUi('shared_catalog_unavailable_3e77a7c8')}
           </AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             <span>
               {discoveredItems.length > 0
-                ? 'Showing templates from workspaces we could read. Other shared templates may be missing.'
-                : 'No shared templates can be confirmed until the workspace catalog loads. Your uploaded templates remain available.'}
+                ? translateUi('showing_templates_from_workspaces_w_35ffc2a6')
+                : translateUi('no_shared_templates_can_be_confirme_c4c96624')}
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => void workspaceQuery.refetch()} disabled={workspaceQuery.isFetching}>
-              {workspaceQuery.isFetching ? 'Retrying…' : 'Retry'}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void workspaceQuery.refetch()}
+              disabled={workspaceQuery.isFetching}
+            >
+              {workspaceQuery.isFetching
+                ? translateUi('retrying_a16c8b1c')
+                : translateUi('retry_942087cc')}
             </Button>
           </AlertDescription>
         </Alert>
       ) : null}
-      {!workspaceQuery.isPending && !workspaceQuery.isError && workspaceFailures.length === 0 && discoveredItems.length === 0 ? (
-        <Empty className="h-auto w-full rounded-lg border border-dashed py-3" data-testid="shared-catalog-empty">
+      {!workspaceQuery.isPending &&
+      !workspaceQuery.isError &&
+      workspaceFailures.length === 0 &&
+      discoveredItems.length === 0 ? (
+        <Empty
+          className="h-auto w-full rounded-lg border border-dashed py-3"
+          data-testid="shared-catalog-empty"
+        >
           <EmptyHeader>
-            <EmptyTitle>No shared templates</EmptyTitle>
-            <EmptyDescription>No shared templates are available to this brand yet.</EmptyDescription>
+            <EmptyTitle>{translateUi('no_shared_templates_707fa346')}</EmptyTitle>
+            <EmptyDescription>
+              {translateUi('no_shared_templates_are_available_t_e4c7e04f')}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : null}
@@ -576,7 +675,11 @@ export function ForgeWorkbench({
         </div>
       ) : null}
 
-      {authoringHandoff?.error ? <p role="alert" className="text-xs text-destructive">{authoringHandoff.error}</p> : null}
+      {authoringHandoff?.error ? (
+        <p role="alert" className="text-xs text-destructive">
+          {authoringHandoff.error}
+        </p>
+      ) : null}
 
       <DesignTemplateImports
         imports={imports}
@@ -641,9 +744,7 @@ export function ForgeWorkbench({
             open(assetId, tab);
           }}
           onRename={(title) => void rename(current.assetId, title)}
-          onRemove={() =>
-            exitGuard.runGuarded(() => setRemoving(current))
-          }
+          onRemove={() => exitGuard.runGuarded(() => setRemoving(current))}
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
@@ -695,7 +796,9 @@ export function ForgeWorkbench({
           }}
           onRejected={(files) =>
             toast.error(
-              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd, .ai or .blend, and .ttf or .otf for fonts.`,
+              translateUi('value0_use_aep_aepx_aet_zip_psd_ai__0263204d', {
+                value0: String(files.map((file) => file.name).join(', ')),
+              }),
             )
           }
         />
@@ -706,19 +809,25 @@ export function ForgeWorkbench({
       <AlertDialog open={asking !== undefined} onOpenChange={(next) => !next && answer(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{askingName} already has this file name</AlertDialogTitle>
+            <AlertDialogTitle>
+              {askingName} {translateUi('already_has_this_file_name_61067934')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Upload {asking?.file.name} as the next revision of {askingName} — you compare the
-              changes before it replaces anything — or as a separate template.
+              {' '}
+              {translateUi('upload_865e89de')} {asking?.file.name}{' '}
+              {translateUi('as_the_next_revision_of_212045ae')} {askingName}{' '}
+              {translateUi('you_compare_the_changes_before_it_r_85bfabbd')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <Button type="button" variant="outline" onClick={() => answer('template')}>
-              New template
+              {' '}
+              {translateUi('new_template_30d87ec4')}{' '}
             </Button>
             <Button type="button" onClick={() => answer('revision')}>
-              New revision of {askingName}
+              {' '}
+              {translateUi('new_revision_of_e68aa886')} {askingName}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -731,22 +840,30 @@ export function ForgeWorkbench({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Remove “{removing ? sourceDisplayName(removing) : ''}”?
+              {' '}
+              {translateUi('remove_5b7e3a54')}
+              {removing ? sourceDisplayName(removing) : ''}”?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the template from {brandName ?? 'this brand'} and its Library. Existing
-              renders and file history are kept.
+              {' '}
+              {translateUi('this_removes_the_template_from_3768016e')}{' '}
+              {brandName ?? translateUi('this_brand_c31b658a')}{' '}
+              {translateUi('and_its_library_existing_renders_an_0fc3d33a')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={removeBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={removeBusy}>
+              {translateUi('cancel_19766ed6')}
+            </AlertDialogCancel>
             <Button
               type="button"
               variant="destructive"
               disabled={removeBusy}
               onClick={() => void removeFromBrand()}
             >
-              {removeBusy ? 'Removing…' : 'Remove from brand'}
+              {removeBusy
+                ? translateUi('removing_d4b09919')
+                : translateUi('remove_from_brand_6bdc486e')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

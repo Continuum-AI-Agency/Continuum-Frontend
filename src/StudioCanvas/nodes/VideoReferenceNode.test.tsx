@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -157,7 +164,10 @@ describe('VideoReferenceNode', () => {
             <ReactFlowProvider>
               <VideoReferenceNode
                 {...defaultProps}
-                data={{ video: 'https://example.com/portrait-reel.mp4', fileName: 'reel.mp4' }}
+                data={{
+                  video: 'https://example.com/portrait-reel.mp4',
+                  fileName: 'reel.mp4',
+                }}
               />
             </ReactFlowProvider>
           </ToastProvider>,
@@ -173,8 +183,14 @@ describe('VideoReferenceNode', () => {
       if (!detectionVideo) throw new Error('the node rendered no video to measure');
       expect(createdVideoElements.filter((video) => video !== detectionVideo)).toHaveLength(0);
 
-      Object.defineProperty(detectionVideo, 'videoWidth', { configurable: true, value: 1080 });
-      Object.defineProperty(detectionVideo, 'videoHeight', { configurable: true, value: 1920 });
+      Object.defineProperty(detectionVideo, 'videoWidth', {
+        configurable: true,
+        value: 1080,
+      });
+      Object.defineProperty(detectionVideo, 'videoHeight', {
+        configurable: true,
+        value: 1920,
+      });
 
       await act(async () => {
         fireEvent.loadedMetadata(detectionVideo);
@@ -185,7 +201,11 @@ describe('VideoReferenceNode', () => {
       });
 
       const updater = updateNode.mock.calls[updateNode.mock.calls.length - 1][1];
-      const nextNode = updater({ id: '1', data: {}, style: { width: 192, height: 192 } });
+      const nextNode = updater({
+        id: '1',
+        data: {},
+        style: { width: 192, height: 192 },
+      });
       expect(nextNode.data.aspectRatio).toBe('9:16');
       expect(nextNode.style.width / nextNode.style.height).toBeCloseTo(9 / 16, 1);
     } finally {

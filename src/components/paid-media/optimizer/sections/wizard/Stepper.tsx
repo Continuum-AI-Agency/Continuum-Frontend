@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The wizard's four steps. In a wide container they stand as a vertical list beside the step
 // (done in green with the answer they hold, the current one tinted, the rest muted); in a narrow
@@ -7,7 +8,7 @@
 
 import { CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WIZARD_STEPS, type WizardStep } from './wizardModel';
+import { WIZARD_STEPS, type WizardStep, wizardSteps } from './wizardModel';
 
 type StepperProps = {
   current: WizardStep;
@@ -18,12 +19,13 @@ type StepperProps = {
 };
 
 export function Stepper({ current, completed, onSelect, values = {} }: StepperProps) {
+  const uiText = useTranslations('scale');
   return (
     <ol
-      aria-label="Portfolio setup steps"
+      aria-label={uiText('portfolio_setup_steps_f24de20')}
       className="flex gap-1 overflow-x-auto @4xl:flex-col @4xl:overflow-visible"
     >
-      {WIZARD_STEPS.map((step, index) => {
+      {wizardSteps(uiText).map((step, index) => {
         const done = completed.has(step.id);
         const active = step.id === current;
         const reachable = done || active;

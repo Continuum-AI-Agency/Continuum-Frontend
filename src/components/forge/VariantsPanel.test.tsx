@@ -1,7 +1,13 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { type TemplateRevisionVariant, templateVariantSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { forgeQueryKeys } from './queryKeys';
 import { VariantsPanel } from './VariantsPanel';
 
@@ -83,7 +89,14 @@ const registry = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
         source: item.source,
         publications:
           index === 1
-            ? [{ templateKey: '401', bindingId: brandId, workspace: 'test', contractHash: 'hash' }]
+            ? [
+                {
+                  templateKey: '401',
+                  bindingId: brandId,
+                  workspace: 'test',
+                  contractHash: 'hash',
+                },
+              ]
             : [],
         createdAt: '2026-10-02T00:00:00Z',
         createdBy: null,
@@ -97,7 +110,9 @@ const registry = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
 
 test('named variants retain draft and published revisions and render the exact publication', () => {
   const items = registry('illustrator');
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   seed(client, items);
   const onInspect = mock(() => undefined);
   const onRender = mock(() => undefined);
@@ -130,7 +145,9 @@ test('named variants retain draft and published revisions and render the exact p
 });
 
 const renderPanel = (sourceKind: TemplateRevisionVariant['sourceKind']) => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   seed(client, registry(sourceKind));
   const onEditLayers = mock(() => undefined);
   render(
@@ -167,7 +184,13 @@ test('a revision whose outputs run different files lists each output with its fi
   items[1]!.revisions[0] = {
     ...published,
     sources: [
-      { fileId: 11, outputs: ['Halftime'], assetId: child, versionId, checksum: 'a'.repeat(64) },
+      {
+        fileId: 11,
+        outputs: ['Halftime'],
+        assetId: child,
+        versionId,
+        checksum: 'a'.repeat(64),
+      },
       {
         fileId: 12,
         outputs: ['Ambos Equipos Anotan'],
@@ -177,7 +200,9 @@ test('a revision whose outputs run different files lists each output with its fi
       },
     ],
   };
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   seed(client, items);
   render(
     <QueryClientProvider client={client}>
@@ -193,7 +218,9 @@ test('a revision whose outputs run different files lists each output with its fi
 test('a variant made by Apply my design system wears its Brand-aligned tag', () => {
   const items = registry('after_effects');
   items[2] = { ...items[2]!, tags: ['brand_aligned'] };
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   seed(client, items);
   render(
     <QueryClientProvider client={client}>
@@ -218,7 +245,9 @@ const renderFamily = (
   items: TemplateRevisionVariant[],
   defaults: Array<{ templateId: string; variantId: string }> = [],
 ) => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   seed(client, items, defaults);
   const onBranch = mock(() => undefined);
   render(

@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // The cycle's budget moves as one picture: every ad set on a shared cost-per-result axis
 // (dot, interval, the target as a line) beside its budget going from what it has to what
 // it gets. Money leaving the rows above the target line and landing on the rows below it
@@ -84,6 +86,8 @@ function CostCell({
   currency?: string | null;
   metric: OptimizationMetricDefinition;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (row.held) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground text-xs">
@@ -94,7 +98,9 @@ function CostCell({
   if (row.cost == null) {
     return (
       <div className="text-muted-foreground text-xs">
-        No {metric.resultLabel.toLowerCase()} in this window
+        {uiText.rich('sentence_3f38187d5530', {
+          v0: metric.resultLabel.toLowerCase(),
+        })}
       </div>
     );
   }
@@ -136,7 +142,7 @@ function CostCell({
           row.standing === 'below' && 'text-success',
         )}
       >
-        {formatCpa(row.cost, currency)}
+        {formatCpa(row.cost, currency, uiLocale)}
       </span>
     </div>
   );
@@ -151,6 +157,7 @@ function BudgetCell({
   budgetMax: number;
   currency?: string | null;
 }) {
+  const uiLocale = useLocale();
   const up = row.changeAbs > 0.5;
   const down = row.changeAbs < -0.5;
   const from = pct(row.current, budgetMax);
@@ -190,7 +197,9 @@ function BudgetCell({
         />
       </div>
       <span className="shrink-0 whitespace-nowrap font-mono font-semibold text-sm tabular-nums">
-        <span className="text-muted-foreground">{formatCurrency(row.current, currency)}</span>
+        <span className="text-muted-foreground">
+          {formatCurrency(row.current, currency, uiLocale)}
+        </span>
         <ArrowRightIcon aria-hidden className="mx-1 inline size-3 text-muted-foreground" />
         <span
           className={cn(
@@ -199,7 +208,7 @@ function BudgetCell({
             !up && !down && 'text-muted-foreground',
           )}
         >
-          {formatCurrency(row.proposed, currency)}
+          {formatCurrency(row.proposed, currency, uiLocale)}
         </span>
         <span className="font-normal font-sans text-muted-foreground text-xs">{pctLabel}</span>
       </span>
@@ -239,17 +248,23 @@ export function ReallocationStory({
   withdrawn = null,
   withdrawnNotes = null,
 }: ReallocationStoryProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const [lookback, setLookback] = useState<StoryLookback>(defaultLookback);
   const [showAll, setShowAll] = useState(false);
-  const story = buildReallocationStory({
-    items,
-    metric,
-    snapshotById,
-    nameById,
-    lookback,
-    target,
-    currency,
-  });
+  const story = buildReallocationStory(
+    {
+      items,
+      metric,
+      snapshotById,
+      nameById,
+      lookback,
+      target,
+      currency,
+    },
+    uiLocale,
+    uiText,
+  );
   const rows = showAll ? story.rows : story.rows.slice(0, collapsedRows);
   const hidden = story.rows.length - rows.length;
 
@@ -273,12 +288,16 @@ export function ReallocationStory({
       <div
         className={`${typeScale.label} hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-muted-foreground sm:grid`}
       >
-        <span>Ad set</span>
+        <span>{uiText('ad_set_639a64f')}</span>
         <span>
-          {metric.costLabel} · {lookback}d
-          {story.target != null ? ` · target ${formatCpa(story.target, currency)}` : ''}
+          {uiText.rich('sentence_8ff4ca67926b', {
+            metric: metric.costLabel,
+            days: lookback,
+            hasTarget: story.target != null ? 'yes' : 'no',
+            target: story.target != null ? formatCpa(story.target, currency, uiLocale) : '',
+          })}
         </span>
-        <span>Daily budget · now → proposed</span>
+        <span>{uiText('daily_budget_now_proposed_0a51bb2')}</span>
       </div>
 
       <ul
@@ -307,11 +326,15 @@ export function ReallocationStory({
                       className="shrink-0 text-muted-foreground text-xs"
                       data-testid="reallocation-row-withdrawn"
                     >
-                      Withdrawn — {withdrawnNote}
+                      {uiText.rich('sentence_65246c579541', {
+                        v0: withdrawnNote,
+                      })}
                     </span>
                   ) : row.standing !== 'unknown' && !row.held ? (
                     <span className={cn('shrink-0 text-xs', STANDING_TEXT[row.standing])}>
-                      {row.standing === 'below' ? 'Below target' : 'Above target'}
+                      {row.standing === 'below'
+                        ? uiText('below_target_3a6685d')
+                        : uiText('above_target_3efcf2e')}
                     </span>
                   ) : null}
                   <DeliveryPill state={row.deliveryState} />
@@ -343,14 +366,15 @@ export function ReallocationStory({
           type="button"
           variant="ghost"
         >
-          {showAll ? 'Show fewer' : `Show ${hidden} more`}
+          {showAll ? uiText('show_fewer_255beb6') : uiText('template_a1eec0306f3f', { v0: hidden })}
         </Button>
       ) : null}
 
       <p className="text-muted-foreground text-xs">
-        Dot = cost per result over the last {lookback} days
-        {lookback === 14 ? ' (bar = likely range)' : ''}; dashed line = target. Budget bar runs from
-        today&rsquo;s daily budget to the proposed one.
+        {uiText.rich('sentence_18c073fd885b', {
+          v0: lookback,
+          v1: lookback === 14 ? uiText('bar_likely_range_3a322b2') : '',
+        })}
       </p>
     </div>
   );

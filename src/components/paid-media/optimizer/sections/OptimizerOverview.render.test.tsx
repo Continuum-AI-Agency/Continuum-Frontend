@@ -6,7 +6,8 @@ import type {
   EfficiencySeriesPoint,
   PortfolioListItem,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, within } from '@testing-library/react';
+import { cleanup, fireEvent, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { PlatformCardsState } from '../useOptimizerData';
 import type { PortfolioMetricsState } from './detail/usePortfolioMetrics';
 import recordedGoogle from './platforms/__fixtures__/google-vivo47-paid-media-metrics.json';
@@ -22,7 +23,10 @@ mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
 // partial replacement here would reach the next file in the run.
 let accountReadData: unknown = null;
 let accountReadLoading = false;
-let approvalMaps: { families: Record<string, string>; insights: Record<string, string> } = {
+let approvalMaps: {
+  families: Record<string, string>;
+  insights: Record<string, string>;
+} = {
   families: {},
   insights: {},
 };
@@ -140,14 +144,25 @@ mock.module('../useOptimizerData', () => ({
     isLoading: accountReadLoading,
     isError: false,
   }),
-  useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
-  useRequestAccountRead: () => ({ mutate: () => {}, isPending: false, error: null }),
+  useAccountApprovals: () => ({
+    data: approvalMaps,
+    isLoading: false,
+    isError: false,
+  }),
+  useRequestAccountRead: () => ({
+    mutate: () => {},
+    isPending: false,
+    error: null,
+  }),
   useOptimizerPortfolioEfficiency: () => efficiency,
   // The pacing read is a query per flight; the rows' pacing is not what this file renders.
   useOptimizerPortfolioPacing: () => new Map(),
   // A card's own control asks the service through this; nothing here confirms a write.
   useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
-  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
+  useRevertOptimizerAction: () => ({
+    mutateAsync: async () => null,
+    isPending: false,
+  }),
 }));
 
 // The rows' headline figures (usePortfolioFigures) read the account snapshots and each
@@ -210,7 +225,12 @@ function statedReading(platform: 'meta' | 'google_ads', portfolios: number): AdA
       windowDays: 7,
     },
     board: [
-      { module: 'decisions', size: 'l', score: 90, reason: '4 decisiones esperan.' },
+      {
+        module: 'decisions',
+        size: 'l',
+        score: 90,
+        reason: '4 decisiones esperan.',
+      },
       {
         module: 'result',
         size: 'm',
@@ -346,7 +366,14 @@ const TOURS = portfolio({
 });
 const EASY_FIT = [MENSAJES, FORMULARIOS, PRUEBA, TOURS];
 const EASY_FIT_SERIES: EfficiencySeriesPoint[][] = [
-  [point({ spend_d7: 20_612, conv_d7: 516, spend_d14: 42_744, conv_d14: 1_051 })],
+  [
+    point({
+      spend_d7: 20_612,
+      conv_d7: 516,
+      spend_d14: 42_744,
+      conv_d14: 1_051,
+    }),
+  ],
   [point({ spend_d7: 2_161, conv_d7: 56, spend_d14: 5_570, conv_d14: 114 })],
   [point({ spend_d7: 730, conv_d7: 22, spend_d14: 1_230, conv_d14: 44 })],
   [point({ spend_d7: 408, conv_d7: 0, spend_d14: 408, conv_d14: 0 })],
@@ -410,7 +437,14 @@ function mount(
       portfolios={portfolios}
     />,
   );
-  return { ...utils, onOpenActions, onOpenActivity, onSelect, onCreate, onPrefetch };
+  return {
+    ...utils,
+    onOpenActions,
+    onOpenActivity,
+    onSelect,
+    onCreate,
+    onPrefetch,
+  };
 }
 
 const follows = (a: Element, b: Element) =>
@@ -442,14 +476,28 @@ afterEach(() => {
   brandRows = [];
   platformCardsState = { status: 'ready', cards: [] };
   approvalMaps = { families: {}, insights: {} };
-  efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
+  efficiency = {
+    series: EASY_FIT_SERIES,
+    pending: false,
+    failed: 0,
+    retryFailed,
+  };
   cleanup();
 });
-efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
+efficiency = {
+  series: EASY_FIT_SERIES,
+  pending: false,
+  failed: 0,
+  retryFailed,
+};
 
 describe('OptimizerOverview — the order above the fold', () => {
   it('renders the sentence, the sub-line, the Jaina band, the tiles, the cards, then the rows', () => {
-    accountReadData = envelope({ candidates: [candidate()], guards: [], model: 'deterministic' });
+    accountReadData = envelope({
+      candidates: [candidate()],
+      guards: [],
+      model: 'deterministic',
+    });
     const { getByTestId } = mount();
     const blocks = [
       getByTestId('overview-headline'),
@@ -515,7 +563,11 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
   });
 
   it('says the window it covers and when the read was taken', () => {
-    accountReadData = envelope({ candidates: [], guards: [], model: 'deterministic' });
+    accountReadData = envelope({
+      candidates: [],
+      guards: [],
+      model: 'deterministic',
+    });
     const { getByTestId } = mount();
     expect(getByTestId('overview-window').textContent).toBe('Sep 21–27');
     expect(getByTestId('overview-subline').textContent).toContain('Read 20 min ago');
@@ -529,7 +581,12 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
   });
 
   it('says no cycle has been measured, rather than a spend of zero', () => {
-    efficiency = { series: [[], [], [], []], pending: false, failed: 0, retryFailed };
+    efficiency = {
+      series: [[], [], [], []],
+      pending: false,
+      failed: 0,
+      retryFailed,
+    };
     const { getByTestId, queryByTestId } = mount();
     expect(getByTestId('overview-headline').textContent).toContain(
       'No portfolio has a measured cycle yet. 4 decisions waiting.',
@@ -599,8 +656,18 @@ describe('OptimizerOverview — the tiles', () => {
       MENSAJES,
       FORMULARIOS,
       TOURS,
-      portfolio({ id: 'traffic', name: 'Tráfico', objective: 'traffic', cpa_target: 2 }),
-      portfolio({ id: 'signups', name: 'Registros', objective: 'signup', cpa_target: 10 }),
+      portfolio({
+        id: 'traffic',
+        name: 'Tráfico',
+        objective: 'traffic',
+        cpa_target: 2,
+      }),
+      portfolio({
+        id: 'signups',
+        name: 'Registros',
+        objective: 'signup',
+        cpa_target: 10,
+      }),
     ];
     efficiency = {
       series: [
@@ -1107,7 +1174,11 @@ describe('OptimizerOverview — the platform tabs', () => {
   it('shows a brand with Google connected its Google read on the tab, and no Connect', () => {
     viewToday();
     grantGoogle();
-    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    googleState = {
+      status: 'ready',
+      account: VIVO_47,
+      overview: VIVO_47_OVERVIEW,
+    };
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     const { getByTestId, queryByTestId } = mount();
     expect(getByTestId('google-headline').textContent).toStartWith('Google spent $55,205 MXN');
@@ -1321,7 +1392,13 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     window.localStorage.setItem('continuum:optimizer:overview:platform-comparison', 'hidden');
     adAccounts = [
       ...adAccounts,
-      { platform: 'google_ads', account_id: '1', name: null, status: 'active', currency: 'MXN' },
+      {
+        platform: 'google_ads',
+        account_id: '1',
+        name: null,
+        status: 'active',
+        currency: 'MXN',
+      },
     ];
     const { getByTestId } = mount();
     expect(getByTestId('platform-comparison-skeleton').textContent).toBe(
@@ -1356,7 +1433,12 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     const first = mount();
     expect(first.queryByTestId('portfolio-rows')).toBeNull();
     cleanup();
-    efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
+    efficiency = {
+      series: EASY_FIT_SERIES,
+      pending: false,
+      failed: 0,
+      retryFailed,
+    };
     expect(mount().getByTestId('portfolio-rows')).toBeTruthy();
   });
 
@@ -1403,7 +1485,13 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     metricsState = { status: 'loading' };
     adAccounts = [
       ...adAccounts,
-      { platform: 'google_ads', account_id: '1', name: null, status: 'active', currency: 'MXN' },
+      {
+        platform: 'google_ads',
+        account_id: '1',
+        name: null,
+        status: 'active',
+        currency: 'MXN',
+      },
     ];
     const { getAllByTestId, getByTestId } = mount();
     expect(getByTestId('overview-subline').textContent).toMatch(/takes \d+% of the spend/);
@@ -1414,7 +1502,10 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
   });
 
   it('names a failed read and falls back to the Meta figures', () => {
-    metricsState = { status: 'error', message: 'Could not read the multi-platform numbers.' };
+    metricsState = {
+      status: 'error',
+      message: 'Could not read the multi-platform numbers.',
+    };
     const { getByTestId } = mount();
     expect(getByTestId('multiplatform-error').textContent).toContain('The figures below are Meta');
     expect(getByTestId('overview-headline').textContent).toStartWith(
@@ -1451,14 +1542,21 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     mount();
-    expect(googleAsked.at(-1)?.[1]).toEqual({ since: '2026-09-21', until: '2026-09-27' });
+    expect(googleAsked.at(-1)?.[1]).toEqual({
+      since: '2026-09-21',
+      until: '2026-09-27',
+    });
   });
 
   it('says what is true when Google is connected but the Optimizer has not read it: the live figures come from Google', () => {
     viewToday();
     grantGoogle();
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
-    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    googleState = {
+      status: 'ready',
+      account: VIVO_47,
+      overview: VIVO_47_OVERVIEW,
+    };
     metricsState = {
       status: 'ready',
       metrics: {
@@ -1485,7 +1583,10 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
     );
     // Google's own read stands in full beneath it, over the producer's window.
     expect(getByTestId('google-headline').textContent).toStartWith('Google spent $55,205 MXN');
-    expect(googleAsked.at(-1)?.[1]).toEqual({ since: '2026-09-21', until: '2026-09-27' });
+    expect(googleAsked.at(-1)?.[1]).toEqual({
+      since: '2026-09-21',
+      until: '2026-09-27',
+    });
     // The way in is the tab's own portfolio rows, which hold none yet.
     expect(getByTestId('platform-reading-note').querySelector('button')).toBeNull();
     expect(getByTestId('platform-portfolios-empty').querySelector('button')?.textContent).toBe(
@@ -1597,7 +1698,9 @@ describe('OptimizerOverview — each row names its member platforms (feature 07)
         'prueba',
         {
           status: 'ready',
-          metrics: portfolioMetricsFixture({ platforms: ['tiktok_ads', 'google_ads'] }),
+          metrics: portfolioMetricsFixture({
+            platforms: ['tiktok_ads', 'google_ads'],
+          }),
         },
       ],
       ['tours', { status: 'loading' }],
@@ -1666,7 +1769,11 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
     viewToday();
     grantGoogle();
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
-    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    googleState = {
+      status: 'ready',
+      account: VIVO_47,
+      overview: VIVO_47_OVERVIEW,
+    };
     efficiency = { series: [], pending: false, failed: 0, retryFailed };
   };
   const rowIds = (root: HTMLElement) =>
@@ -1718,9 +1825,21 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
   it("falls back to the brand's granted Google accounts when the server sends no platforms", () => {
     onGoogleTab();
     brandRows = [
-      portfolio({ id: 'on-google', name: 'Vivo 47 // Google', ad_account_id: '3710693645' }),
-      portfolio({ id: 'on-meta', name: 'Meta row', ad_account_id: 'act_easyfit' }),
-      portfolio({ id: 'not-granted', name: 'Elsewhere', ad_account_id: '9999999999' }),
+      portfolio({
+        id: 'on-google',
+        name: 'Vivo 47 // Google',
+        ad_account_id: '3710693645',
+      }),
+      portfolio({
+        id: 'on-meta',
+        name: 'Meta row',
+        ad_account_id: 'act_easyfit',
+      }),
+      portfolio({
+        id: 'not-granted',
+        name: 'Elsewhere',
+        ad_account_id: '9999999999',
+      }),
     ];
     const { getByTestId } = mount();
     const rows = getByTestId('portfolio-rows');
@@ -1830,12 +1949,18 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
   // series sums Meta ad-set snapshots, which a Google portfolio never writes.
   it("quotes a Google row's 7 days from its metrics read, in that read's currency", () => {
     onGoogleTab();
-    const ran = { ...GOOGLE_ONLY, last_actual_cycle_at: '2026-09-28T06:49:48Z' };
+    const ran = {
+      ...GOOGLE_ONLY,
+      last_actual_cycle_at: '2026-09-28T06:49:48Z',
+    };
     brandRows = [ran];
     memberStates = new Map<string, PortfolioMetricsState>([
       [
         ran.id,
-        { status: 'ready', metrics: portfolioMetricsFixture({ platforms: ['google_ads'] }) },
+        {
+          status: 'ready',
+          metrics: portfolioMetricsFixture({ platforms: ['google_ads'] }),
+        },
       ],
     ]);
     const row = within(mount().getByTestId('portfolio-rows'));
@@ -1867,7 +1992,11 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
     const readLoading = mount();
     expect(below(readLoading)).toEqual([]);
     readLoading.unmount();
-    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    googleState = {
+      status: 'ready',
+      account: VIVO_47,
+      overview: VIVO_47_OVERVIEW,
+    };
     expect(below(mount())).toEqual(['overview-links', 'portfolio-rows']);
   });
 
@@ -2013,7 +2142,11 @@ describe('OptimizerOverview — the adaptive board (O01) on Meta and Google', ()
 
   it("opens Google's connected tab on the board, with the brand's Google portfolios", async () => {
     grantGoogle();
-    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    googleState = {
+      status: 'ready',
+      account: VIVO_47,
+      overview: VIVO_47_OVERVIEW,
+    };
     brandRows = [{ ...MENSAJES, platforms: ['meta'] }, GOOGLE_LEADS];
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     const { getByTestId, queryByTestId, findByTestId } = mount();
@@ -2038,7 +2171,11 @@ describe('OptimizerOverview — the adaptive board (O01) on Meta and Google', ()
   it('keeps one choice for both tabs', () => {
     viewToday();
     grantGoogle();
-    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    googleState = {
+      status: 'ready',
+      account: VIVO_47,
+      overview: VIVO_47_OVERVIEW,
+    };
     for (const platform of ['meta', 'google_ads']) {
       navigation.params = new URLSearchParams(`tab=performance&platform=${platform}`);
       const { queryByTestId, getByTestId, unmount } = mount();

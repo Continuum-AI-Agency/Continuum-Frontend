@@ -1,3 +1,4 @@
+import { useTranslations as useBetaTranslations } from 'next-intl';
 // The body of a P8 Google account finding: the producer's figures, bars, checklist and negative
 // lists, printed as given. The card carries no write — every idea is recommend-only — so nothing
 // here applies a change; copying a negative list to paste in Google Ads is not a write.
@@ -45,6 +46,8 @@ function Facts({ facts }: { facts: AccountFindingCard['facts'] }) {
 }
 
 function Bars({ card }: { card: AccountFindingCard }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const bars = card.bars ?? [];
   if (bars.length === 0) return null;
   const geometry = accountBarGeometry(bars);
@@ -75,7 +78,7 @@ function Bars({ card }: { card: AccountFindingCard }) {
                 {bar.target_share != null ? (
                   <span data-testid="account-finding-bar-target">
                     {' '}
-                    · target {percentLabel(bar.target_share)}
+                    {betaUiText('beta_c557a6fbbc0b')} {percentLabel(bar.target_share)}
                   </span>
                 ) : null}
               </span>
@@ -139,6 +142,8 @@ function Checklist({ items }: { items: AccountFindingCard['checklist'] }) {
 }
 
 function CopyTerms({ theme, terms }: { theme: string; terms: readonly string[] }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard?.writeText(negativesClipboardText(terms))?.catch(() => {});
@@ -147,7 +152,7 @@ function CopyTerms({ theme, terms }: { theme: string; terms: readonly string[] }
   };
   return (
     <Button
-      aria-label={`Copy the ${theme} negatives`}
+      aria-label={betaUiText('beta_9c5cfdaffad1', { value0: String(theme) })}
       className="gap-1.5"
       data-testid="account-finding-copy"
       onClick={copy}
@@ -160,12 +165,14 @@ function CopyTerms({ theme, terms }: { theme: string; terms: readonly string[] }
       ) : (
         <CopyIcon aria-hidden="true" className="size-3.5" />
       )}
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? betaUiText('beta_8d525e5f158b') : betaUiText('beta_e21f935f11d7')}
     </Button>
   );
 }
 
 function Negatives({ groups }: { groups: NonNullable<AccountFindingCard['negatives']> }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (groups.length === 0) return null;
   return (
     <div className="space-y-2" data-testid="account-finding-negatives">
@@ -179,7 +186,10 @@ function Negatives({ groups }: { groups: NonNullable<AccountFindingCard['negativ
             <h4 className="min-w-0 truncate font-medium text-foreground text-sm">
               {group.theme}{' '}
               <span className="font-normal text-muted-foreground">
-                · {countLabel(group.terms.length)} {group.terms.length === 1 ? 'term' : 'terms'}
+                · {countLabel(group.terms.length)}{' '}
+                {group.terms.length === 1
+                  ? betaUiText('beta_599f7703547e')
+                  : betaUiText('beta_51d2361f4fae')}
               </span>
             </h4>
             <CopyTerms terms={group.terms} theme={group.theme} />

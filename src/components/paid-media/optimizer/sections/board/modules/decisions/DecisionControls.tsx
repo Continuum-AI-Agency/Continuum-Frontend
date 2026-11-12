@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The buttons a decision card carries, one per control kind (decisionControl.ts). Approve opens
 // the platform card's own approval: the platform checks the exact action first, a person
@@ -86,13 +87,15 @@ function ApproveControl({
   currency: string | null;
   applied: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [round, setRound] = useState(0);
   return (
     <>
       {applied ? (
         <Badge data-testid="decision-applied" variant="success">
           <CheckIcon aria-hidden="true" />
-          Applied
+          {betaUiText('beta_0c79a9c22284')}
         </Badge>
       ) : (
         <Button
@@ -102,7 +105,7 @@ function ApproveControl({
           type="button"
         >
           <CheckIcon aria-hidden="true" />
-          Approve
+          {betaUiText('beta_6007acbe30b2')}
         </Button>
       )}
       {round > 0 ? (
@@ -123,6 +126,8 @@ const COPY_RESET_MS = 1800;
 
 /** Copies the card's list. "Copied" only once the clipboard took it. */
 function CopyListControl({ text }: { text: string }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -152,7 +157,11 @@ function CopyListControl({ text }: { text: string }) {
       variant="outline"
     >
       {state === 'copied' ? <CheckIcon aria-hidden="true" /> : <CopyIcon aria-hidden="true" />}
-      {state === 'copied' ? 'Copied' : state === 'failed' ? 'Could not copy' : 'Copy list'}
+      {state === 'copied'
+        ? betaUiText('beta_8d525e5f158b')
+        : state === 'failed'
+          ? betaUiText('beta_d5cb934f8035')
+          : betaUiText('beta_682fc8d38922')}
     </Button>
   );
 }
@@ -178,6 +187,8 @@ export function DecisionControlView({
   onToggleSteps: () => void;
   onCreatePortfolio: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   switch (control.kind) {
     case 'approve':
       return (
@@ -193,7 +204,7 @@ export function DecisionControlView({
         <WithReason reason={QUEUED_NOTE}>
           <Badge data-testid="decision-queued" variant="success">
             <ClockIcon aria-hidden="true" />
-            Queued
+            {betaUiText('beta_661ff40a07e0')}
           </Badge>
         </WithReason>
       );
@@ -235,7 +246,7 @@ export function DecisionControlView({
       return (
         <Button data-testid="decision-create" onClick={onCreatePortfolio} size="sm" type="button">
           <PlusIcon aria-hidden="true" />
-          Create portfolio
+          {betaUiText('beta_a53487ce414c')}
         </Button>
       );
     case 'locked':
@@ -267,8 +278,16 @@ export function DismissView({
   state: DismissState;
   onDismiss: (recommendationId: string) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (control.kind === 'unavailable') {
-    return <DisabledControl label="Dismiss" reason={control.reason} testId="decision-dismiss" />;
+    return (
+      <DisabledControl
+        label={betaUiText('beta_48845bff334a')}
+        reason={control.reason}
+        testId="decision-dismiss"
+      />
+    );
   }
   const pending = state === 'pending';
   return (
@@ -282,11 +301,11 @@ export function DismissView({
         type="button"
         variant="ghost"
       >
-        {pending ? 'Dismissing…' : 'Dismiss'}
+        {pending ? betaUiText('beta_fb6d39dff4c1') : betaUiText('beta_48845bff334a')}
       </Button>
       {state === 'failed' ? (
         <span className="text-destructive text-xs" role="status">
-          Could not dismiss it. Nothing changed.
+          {betaUiText('beta_79967d016707')}
         </span>
       ) : null}
     </>

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // The media stack below the mosaic is deliberately NOT mocked. Stubbing ChatMedia here
 // would hide the one composition risk that matters — the tile sits inside a Radix
 // HoverCard trigger, and if that trigger swallowed pointerenter, hover-to-play would
@@ -6,7 +7,7 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AdDailyTrend, AdsetAd, PaidAdAngle } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import * as realData from '../useOptimizerData';
 
 // embla and Radix reach for observers happy-dom does not expose. Inert stubs are
@@ -67,7 +68,13 @@ mock.module('@/components/organic/primitives/MediaLightbox', () => ({
 const { AdsetCreativeMosaic } = await import('./AdsetCreativeMosaic');
 
 function ad(id: string, name: string, creative?: AdsetAd['creative']): AdsetAd {
-  return { id, name, status: 'ACTIVE', thumbnailUrl: `https://cdn.test/${id}.jpg`, creative };
+  return {
+    id,
+    name,
+    status: 'ACTIVE',
+    thumbnailUrl: `https://cdn.test/${id}.jpg`,
+    creative,
+  };
 }
 
 /** Shaped like what the deployed edge returns for a Vivo47 reel: an Instagram-hosted
@@ -168,7 +175,12 @@ describe('AdsetCreativeMosaic', () => {
 
   it('renders the readable image, not Metas 64x64 thumbnail', () => {
     adsReturn = {
-      data: [ad('ad-1', 'Hook A', { format: 'image', imageUrl: 'https://cdn.test/full.jpg' })],
+      data: [
+        ad('ad-1', 'Hook A', {
+          format: 'image',
+          imageUrl: 'https://cdn.test/full.jpg',
+        }),
+      ],
       isLoading: false,
       isError: false,
     };
@@ -238,7 +250,12 @@ describe('AdsetCreativeMosaic', () => {
 
   it('keeps a source-less video as a still, badged Video, with no <video> to play', () => {
     adsReturn = {
-      data: [ad('ad-1', 'Reel', { format: 'video', posterUrl: 'https://cdn.test/poster.jpg' })],
+      data: [
+        ad('ad-1', 'Reel', {
+          format: 'video',
+          posterUrl: 'https://cdn.test/poster.jpg',
+        }),
+      ],
       isLoading: false,
       isError: false,
     };

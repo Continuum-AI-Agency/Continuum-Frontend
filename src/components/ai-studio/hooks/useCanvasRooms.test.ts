@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useCanvasRooms } from './useCanvasRooms';
 
 const mockRooms = [
@@ -55,7 +56,9 @@ const render = () => renderHook(() => useCanvasRooms('brand-1'), { wrapper });
 
 describe('useCanvasRooms', () => {
   beforeEach(() => {
-    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     mockSupabase.from.mockClear();
     mockSupabase.select.mockClear();
     mockSupabase.rpc.mockClear();
@@ -95,7 +98,9 @@ describe('useCanvasRooms', () => {
     // The row lands in the query cache, which notifies its observers asynchronously — so
     // this waits for the re-render rather than reading the render that was already on screen.
     act(() =>
-      realtimeHandlers.get('*')?.({ payload: { operation: 'INSERT', record: room, old_record: {} } }),
+      realtimeHandlers.get('*')?.({
+        payload: { operation: 'INSERT', record: room, old_record: {} },
+      }),
     );
 
     await waitFor(() => expect(result.current.rooms).toContainEqual(room));

@@ -10,6 +10,11 @@
 // that edge generates the insights (a model call) on a cold cache, so the Home never asks it.
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import {
+  useTranslations as useBetaTranslations,
+  useLocale as useHomeLocale,
+  useLocale as useNumberLocale,
+} from 'next-intl';
 import { useState } from 'react';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
 import type {
@@ -37,6 +42,9 @@ function platformsOf(platforms: string[]): string {
 }
 
 function PublishedItem({ post }: { post: OrganicCalendarPostedContent }) {
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   return (
     <li className="flex min-w-0 flex-col gap-1 rounded-lg border bg-card p-2 text-xs">
       <span className="text-2xs text-muted-foreground">
@@ -44,19 +52,22 @@ function PublishedItem({ post }: { post: OrganicCalendarPostedContent }) {
       </span>
       <span className="line-clamp-2 font-medium">{post.title}</span>
       <Badge className="w-fit" variant="success">
-        Published
+        {betaUiText('beta_2ef42ec21d93')}
       </Badge>
     </li>
   );
 }
 
 function ScheduledItem({ card }: { card: OrganicCalendarDraft }) {
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   return (
     <li className="flex min-w-0 flex-col gap-1 rounded-lg border bg-background p-2 text-xs">
       <span className="text-2xs text-muted-foreground">{platformsOf(card.platforms)}</span>
       <span className="line-clamp-2 font-medium">{card.title}</span>
       <Badge className="w-fit" variant="outline">
-        Scheduled · {card.timeLabel}
+        {betaUiText('beta_ea7377ada69a')} {card.timeLabel}
       </Badge>
     </li>
   );
@@ -73,6 +84,9 @@ function WaitingItem({
   disabled: boolean;
   onApprove: () => void;
 }) {
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   return (
     <li
       className="flex min-w-0 flex-col gap-1 rounded-lg border border-dashed p-2 text-xs"
@@ -83,7 +97,7 @@ function WaitingItem({
       </span>
       <span className="line-clamp-2 font-medium">{item.card.title}</span>
       {item.approvedNotScheduled ? (
-        <span className="text-2xs text-muted-foreground">Approved, not scheduled yet</span>
+        <span className="text-2xs text-muted-foreground">{betaUiText('beta_48691fdca39c')}</span>
       ) : null}
       <Button
         className="h-7 w-fit px-2 text-xs"
@@ -94,7 +108,7 @@ function WaitingItem({
         type="button"
         variant="outline"
       >
-        {busy ? 'Approving…' : 'Approve & schedule'}
+        {busy ? betaUiText('beta_e99dcb0a97a2') : betaUiText('beta_c9fe0bdd37be')}
       </Button>
     </li>
   );
@@ -109,6 +123,9 @@ function DayColumn({
   pendingId: string | null;
   onApprove: (card: OrganicCalendarDraft) => void;
 }) {
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   const empty = day.published.length + day.scheduled.length + day.waiting.length === 0;
   return (
     <section
@@ -123,10 +140,12 @@ function DayColumn({
         )}
       >
         {day.label} <span className="font-normal">{day.dateLabel}</span>
-        {day.isToday ? <span className="text-2xs text-muted-foreground">Today</span> : null}
+        {day.isToday ? (
+          <span className="text-2xs text-muted-foreground">{betaUiText('beta_2b065c7c9ce4')}</span>
+        ) : null}
       </h4>
       {empty ? (
-        <p className="text-2xs text-muted-foreground">Nothing planned</p>
+        <p className="text-2xs text-muted-foreground">{betaUiText('beta_7fb2fa8e3508')}</p>
       ) : (
         <ul className="flex min-w-0 flex-col gap-1.5">
           {day.published.map((post) => (
@@ -157,6 +176,11 @@ function ReachRollup({
   brandId: string;
   organicAccounts: SnapshotAccountRef[];
 }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   const snapshot = useOrganicSnapshot(brandId, organicAccounts);
   if (snapshot.status === 'loading') {
     return <div aria-hidden="true" className="h-10 w-full animate-pulse rounded-md bg-muted/60" />;
@@ -166,15 +190,19 @@ function ReachRollup({
       ? summableRollups(snapshot.data.accounts, ['reach', 'totalInteractions'])
       : [];
   if (rollup.every((item) => item.value === null)) {
-    return <p className="text-muted-foreground text-xs">Couldn't read the last 7 days' reach.</p>;
+    return <p className="text-muted-foreground text-xs">{betaUiText('beta_6596a394db54')}</p>;
   }
   return (
     <dl className="flex flex-wrap gap-x-5 gap-y-1" data-testid="home-organic-rollup">
       {rollup.map((item) =>
         item.value === null ? null : (
           <div className="flex flex-col" key={item.metricId}>
-            <dt className="text-2xs text-muted-foreground">{item.label} · last 7 days</dt>
-            <dd className="font-semibold text-base tabular-nums">{formatCount(item.value)}</dd>
+            <dt className="text-2xs text-muted-foreground">
+              {item.label} {betaUiText('beta_4978da83410a')}
+            </dt>
+            <dd className="font-semibold text-base tabular-nums">
+              {formatCount(item.value, numberLocale)}
+            </dd>
           </div>
         ),
       )}
@@ -183,21 +211,24 @@ function ReachRollup({
 }
 
 function ReachPerPost({ read }: { read: OrganicWeekRead }) {
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   if (!read.data) {
     return read.unavailable ? (
       <p className="text-2xs text-muted-foreground" data-testid="home-organic-reach-note">
-        {PER_POST_NOT_READABLE}
+        {betaUiText('weekDetailsUnavailable')}
       </p>
     ) : null;
   }
-  const rows = reachRowsOf(read.data);
-  const topPost = topPostLine(read.data);
+  const rows = reachRowsOf(read.data, betaUiText, homeLocale);
+  const topPost = topPostLine(read.data, betaUiText, homeLocale);
   return (
     <section className="flex min-w-0 flex-col gap-1.5" data-testid="home-organic-reach">
-      <h4 className="font-medium text-xs">Reach per post this week</h4>
+      <h4 className="font-medium text-xs">{betaUiText('beta_90e3dca798f1')}</h4>
       {topPost ? <p className="text-xs tabular-nums">{topPost}</p> : null}
       {rows.length === 0 ? (
-        <p className="text-2xs text-muted-foreground">Nothing was published this week yet.</p>
+        <p className="text-2xs text-muted-foreground">{betaUiText('beta_197cfb55ac68')}</p>
       ) : (
         <ul className="flex min-w-0 flex-col gap-1.5">
           {rows.map((row) => (
@@ -227,7 +258,7 @@ function ReachPerPost({ read }: { read: OrganicWeekRead }) {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  View post
+                  {betaUiText('beta_fe9715bcd31d')}
                 </a>
               ) : null}
             </li>
@@ -245,6 +276,11 @@ export default function OrganicWeekModule({
   brandId: string;
   organicAccounts: SnapshotAccountRef[];
 }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   const load = useOrganicWeek(brandId, organicAccounts);
   const read = useOrganicWeekRead(brandId, organicAccounts.length > 0);
   const { approveAndSchedule } = useApproveScheduleDraft();
@@ -255,7 +291,9 @@ export default function OrganicWeekModule({
     setPendingId(card.id);
     try {
       if (await approveAndSchedule(card)) {
-        await queryClient.invalidateQueries({ queryKey: homeOrganicDraftsKey(brandId) });
+        await queryClient.invalidateQueries({
+          queryKey: homeOrganicDraftsKey(brandId),
+        });
       }
     } finally {
       setPendingId(null);
@@ -267,14 +305,15 @@ export default function OrganicWeekModule({
     <div className="flex min-w-0 flex-col gap-4" data-testid="home-organic-module">
       <p className="text-muted-foreground text-xs" data-testid="home-organic-best-time">
         <Link className="underline underline-offset-2" href="/organic?tab=metrics">
-          {BEST_TIME_COLD}
+          {betaUiText('bestTimeUnavailable')}
         </Link>
       </p>
       {week ? (
         <>
           <p className="text-xs tabular-nums">
-            {formatCount(week.published)} published · {formatCount(week.scheduled)} scheduled ·{' '}
-            {formatCount(week.waiting)} waiting for approval
+            {formatCount(week.published, numberLocale)} {betaUiText('beta_7116a8bdbeb1')}{' '}
+            {formatCount(week.scheduled, numberLocale)} {betaUiText('beta_f8be720c0208')}{' '}
+            {formatCount(week.waiting, numberLocale)} {betaUiText('beta_fbb059ed89ce')}
           </p>
           <div className="grid min-w-0 grid-cols-1 gap-3">
             {week.days.map((day) => (
@@ -283,14 +322,14 @@ export default function OrganicWeekModule({
           </div>
         </>
       ) : load.failed ? (
-        <p className="text-muted-foreground text-xs">Couldn't read this week's posts.</p>
+        <p className="text-muted-foreground text-xs">{betaUiText('beta_28c6fd9b30ed')}</p>
       ) : (
         <div aria-hidden="true" className="h-40 w-full animate-pulse rounded-md bg-muted/60" />
       )}
       <ReachRollup brandId={brandId} organicAccounts={organicAccounts} />
       <ReachPerPost read={read} />
       <Link className="text-xs underline underline-offset-2" href="/organic?tab=planner">
-        Open the Organic calendar
+        {betaUiText('beta_0af970591580')}
       </Link>
     </div>
   );

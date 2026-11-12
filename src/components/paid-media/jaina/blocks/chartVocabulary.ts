@@ -1,3 +1,4 @@
+import type { UiLocale } from '@/i18n/config';
 // The §4 chart vocabulary as plain data: which rows a chart draws, in what order, with what
 // label on each bar. ChartBlock renders what these return; nothing here touches Recharts.
 
@@ -19,28 +20,43 @@ export const TOTAL_KEY = '__chart_total';
 export type DrawnRow = Record<string, unknown>;
 export type SeriesKind = 'bar' | 'line' | 'area';
 
-export function formatChartValue(value: string | number, block: ChartBlockV2): string {
-  return formatValue(
-    value,
-    block.value_format,
-    block.currency_code ? { currency: block.currency_code } : undefined,
-  );
+export function formatChartValue(
+  value: string | number,
+  block: ChartBlockV2,
+  locale: UiLocale = 'en',
+): string {
+  return formatValue(value, block.value_format, {
+    currency: block.currency_code ?? undefined,
+    locale,
+  });
 }
 
 /** A delta reads as a change: "+$3.90 MXN", "-$0.95 MXN" (the sign `formatValue` already prints). */
-function formatDelta(value: number, block: ChartBlockV2): string {
-  const formatted = formatChartValue(value, block);
+function formatDelta(value: number, block: ChartBlockV2, locale: UiLocale = 'en'): string {
+  const formatted = formatChartValue(value, block, locale);
   return value > 0 ? `+${formatted}` : formatted;
 }
 
-const shareFormat = new Intl.NumberFormat('en-US', {
-  style: 'percent',
-  maximumSignificantDigits: 2,
-});
+const shareFormats = new Map<UiLocale, Intl.NumberFormat>();
+function shareFormat(locale: UiLocale) {
+  let formatter = shareFormats.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumSignificantDigits: 2,
+    });
+    shareFormats.set(locale, formatter);
+  }
+  return formatter;
+}
 
 /** One stage as a share of the stage before it: 2,315 of 18,420 is "13%", 18,420 of 1.28M "1.4%". */
-export function stageShare(value: number, previous: number): string | null {
-  return previous > 0 ? shareFormat.format(value / previous) : null;
+export function stageShare(
+  value: number,
+  previous: number,
+  locale: UiLocale = 'en',
+): string | null {
+  return previous > 0 ? shareFormat(locale).format(value / previous) : null;
 }
 
 /** Bar, line, area, stacked bar, waterfall, funnel: a category axis against a value axis. */
@@ -107,12 +123,12 @@ function sortedRows(block: ChartBlockV2): DrawnRow[] {
  * Opening total, one floating bar per cause, closing total. Each delta floats from the
  * running total before it to the one after it, so a negative cause hangs downward.
  */
-function waterfallRows(block: ChartBlockV2, valueKey: string): DrawnRow[] {
+function waterfallRows(block: ChartBlockV2, valueKey: string, locale: UiLocale = 'en'): DrawnRow[] {
   const total = (label: string, value: number): DrawnRow => ({
     [block.category_key]: label,
     [valueKey]: value,
     [RANGE_KEY]: [Math.min(0, value), Math.max(0, value)],
-    [LABEL_KEY]: formatChartValue(value, block),
+    [LABEL_KEY]: formatChartValue(value, block, locale),
     [TOTAL_KEY]: true,
   });
   const rows: DrawnRow[] = block.start ? [total(block.start.label, block.start.value)] : [];
@@ -123,7 +139,7 @@ function waterfallRows(block: ChartBlockV2, valueKey: string): DrawnRow[] {
     rows.push({
       ...row,
       [RANGE_KEY]: [Math.min(running, next), Math.max(running, next)],
-      [LABEL_KEY]: formatDelta(delta, block),
+      [LABEL_KEY]: formatDelta(delta, block, locale),
     });
     running = next;
   }
@@ -132,30 +148,38 @@ function waterfallRows(block: ChartBlockV2, valueKey: string): DrawnRow[] {
 }
 
 /** Stages in flow order (never re-sorted), each labelled with its value and its share of the last. */
-function funnelRows(block: ChartBlockV2, valueKey: string): DrawnRow[] {
+function funnelRows(block: ChartBlockV2, valueKey: string, locale: UiLocale = 'en'): DrawnRow[] {
   return block.data.map((row, index) => {
     const value = toNumber(row[valueKey]);
     const previous = index > 0 ? toNumber(block.data[index - 1]?.[valueKey]) : null;
-    const share = previous == null ? null : stageShare(value, previous);
-    const formatted = formatChartValue(value, block);
-    return { ...row, [LABEL_KEY]: share ? `${formatted} · ${share}` : formatted };
+    const share = previous == null ? null : stageShare(value, previous, locale);
+    const formatted = formatChartValue(value, block, locale);
+    return {
+      ...row,
+      [LABEL_KEY]: share ? `${formatted} · ${share}` : formatted,
+    };
   });
 }
 
 /** The rows the chart draws, in the order it draws them. */
-export function drawnRowsOf(block: ChartBlockV2): DrawnRow[] {
+export function drawnRowsOf(block: ChartBlockV2, locale: UiLocale = 'en'): DrawnRow[] {
   const valueKey = singleSeriesKeyOf(block);
-  if (block.chart_type === 'waterfall' && valueKey) return waterfallRows(block, valueKey);
-  if (block.chart_type === 'funnel' && valueKey) return funnelRows(block, valueKey);
+  if (block.chart_type === 'waterfall' && valueKey) return waterfallRows(block, valueKey, locale);
+  if (block.chart_type === 'funnel' && valueKey) return funnelRows(block, valueKey, locale);
   return sortedRows(block);
 }
 
 /** The plotted value of one row and series as the reader sees it printed. */
-export function printedValueOf(row: DrawnRow, key: string, block: ChartBlockV2): string | null {
+export function printedValueOf(
+  row: DrawnRow,
+  key: string,
+  block: ChartBlockV2,
+  locale: UiLocale = 'en',
+): string | null {
   const label = row[LABEL_KEY];
   if (typeof label === 'string') return label;
   const value = row[key];
   return typeof value === 'string' || typeof value === 'number'
-    ? formatChartValue(value, block)
+    ? formatChartValue(value, block, locale)
     : null;
 }

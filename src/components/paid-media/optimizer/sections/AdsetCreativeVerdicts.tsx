@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // The creative calls on ONE ad set's ads, rendered directly under the budget move
 // being made on that ad set — so the operator decides the budget and the creative
 // in one look instead of two surfaces.
@@ -48,6 +50,8 @@ import {
  *  its hook + confidence exposed on hover. Shared with the pre-creation preview
  *  drill-in. Renders nothing until the labeler has tagged the ad. */
 export function AngleChip({ angle }: { angle: PaidAdAngle }) {
+  const uiText = useTranslations('scale');
+
   const confidence =
     typeof angle.confidence === 'number' ? `${Math.round(angle.confidence * 100)}%` : null;
   return (
@@ -55,15 +59,15 @@ export function AngleChip({ angle }: { angle: PaidAdAngle }) {
       <TooltipTrigger
         render={
           <Badge className="shrink-0 text-xs" variant="secondary">
-            {humanize(angle.angle)}
+            {humanize(angle.angle, uiText)}
           </Badge>
         }
       />
       <TooltipContent className="max-w-xs space-y-1">
         {angle.hook ? <p className="text-xs">&ldquo;{angle.hook}&rdquo;</p> : null}
         <p className="text-xs text-muted-foreground">
-          {humanize(angle.angle)}
-          {confidence ? ` · ${confidence} confidence` : ''}
+          {humanize(angle.angle, uiText)}
+          {confidence ? uiText('template_674d7b0f241b', { v0: confidence }) : ''}
         </p>
       </TooltipContent>
     </Tooltip>
@@ -102,6 +106,8 @@ function CreativeRow({
   freshUrl,
   onRecover,
 }: CreativeRowProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const { ad, verdict, thinEvidence } = row;
   const label = adLabel(ad);
   const media = mediaFromPaidVerdict({
@@ -124,7 +130,7 @@ function CreativeRow({
         </span>
       ) : (
         <span className="grid size-10 shrink-0 place-items-center rounded bg-muted text-xs text-muted-foreground">
-          AD
+          {uiText('ad_c7bf4bb')}
         </span>
       )}
       <span className="min-w-0 flex-1 truncate text-xs text-foreground">{label}</span>
@@ -150,14 +156,18 @@ function CreativeRow({
             {verdict.verdict}
           </span>
           {thinEvidence ? (
-            <span className="shrink-0 text-xs text-muted-foreground">thin evidence</span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {uiText('thin_evidence_b7b9707')}
+            </span>
           ) : null}
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {formatCpa(verdict.cpa, currency)}
+            {formatCpa(verdict.cpa, currency, uiLocale)}
           </span>
         </>
       ) : (
-        <span className="shrink-0 text-xs text-muted-foreground">no verdict</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {uiText('no_verdict_91b18d4')}
+        </span>
       )}
     </div>
   );
@@ -204,11 +214,15 @@ export function AdsetCreativeVerdicts({
   adsetId,
   currency,
 }: AdsetCreativeVerdictsProps) {
+  const uiText = useTranslations('scale');
   const adsQuery = useOptimizerAdsetAds(brandId, accountId, adsetId);
   const anglesQuery = useOptimizerAdAngles(brandId, accountId, adsetId);
   const trendsQuery = useOptimizerAdDailyTrends(brandId, accountId, adsetId);
   const { report, isLoading: isReportLoading } = usePaidCreativeReport(brandId);
-  const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId: accountId });
+  const { freshUrlById, recover } = usePaidCreativeRecovery({
+    brandId,
+    adAccountId: accountId,
+  });
   const angleByAd = useMemo(
     () => new Map(anglesQuery.data.map((angle) => [angle.ad_id, angle])),
     [anglesQuery.data],
@@ -230,19 +244,24 @@ export function AdsetCreativeVerdicts({
   if (adsQuery.isError) {
     return (
       <p className="py-1.5 pl-6 text-xs text-warning">
-        Couldn&rsquo;t load the ads in this ad set, so no creative verdicts are shown.
+        {uiText('couldn_t_load_the_ads_in_this_ad_set_so_no_cr_d6a11e4')}
       </p>
     );
   }
 
   const ads = adsQuery.data;
   if (ads.length === 0) {
-    return <p className="py-1.5 pl-6 text-xs text-muted-foreground">No ads in this ad set.</p>;
+    return (
+      <p className="py-1.5 pl-6 text-xs text-muted-foreground">
+        {uiText('no_ads_in_this_ad_set_c872e4c')}
+      </p>
+    );
   }
 
   const rows = joinAdsetCreativeRows({ ads, verdicts: report?.verdicts ?? [] });
   const notice = verdictCoverageNotice(
     summarizeVerdictCoverage({ rows, hasReport: Boolean(report) }),
+    uiText,
   );
 
   return (

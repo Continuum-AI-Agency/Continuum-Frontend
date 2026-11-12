@@ -5,12 +5,15 @@
 // arguments those consumers are actually called with, before and after a mounted switch.
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 type ConsumerCall = { brandProfileId?: string; roomId?: string };
 type TestRoom = { id: string; brand_profile_id: string };
 
-const ROOM_BRAND: Record<string, string> = { 'room-a1': 'brand-a', 'room-b1': 'brand-b' };
+const ROOM_BRAND: Record<string, string> = {
+  'room-a1': 'brand-a',
+  'room-b1': 'brand-b',
+};
 const ROOMS_A: TestRoom[] = [{ id: 'room-a1', brand_profile_id: 'brand-a' }];
 const ROOMS_B: TestRoom[] = [{ id: 'room-b1', brand_profile_id: 'brand-b' }];
 
@@ -27,12 +30,18 @@ let rooms: TestRoom[] = ROOMS_A;
 // unless this file's specs are the ones running. The copies must be plain objects taken
 // BEFORE the mock: bun re-points an imported namespace at the mock, so delegating through
 // the namespace itself would call the mock again and never return.
-const actualRealtime = { ...(await import('@/components/ai-studio/hooks/useCanvasRealtime')) };
-const actualRooms = { ...(await import('@/components/ai-studio/hooks/useCanvasRooms')) };
+const actualRealtime = {
+  ...(await import('@/components/ai-studio/hooks/useCanvasRealtime')),
+};
+const actualRooms = {
+  ...(await import('@/components/ai-studio/hooks/useCanvasRooms')),
+};
 const actualRunRequests = {
   ...(await import('@/components/ai-studio/hooks/useCanvasRunRequests')),
 };
-const actualContinuations = { ...(await import('../hooks/useTimelineRenderContinuations')) };
+const actualContinuations = {
+  ...(await import('../hooks/useTimelineRenderContinuations')),
+};
 const actualNavigation = { ...(await import('next/navigation')) };
 const actualToast = { ...(await import('@/components/ui/ToastProvider')) };
 let fenceSpecsRunning = false;
@@ -137,7 +146,10 @@ const renderCanvas = (props: { brandProfileId: string; initialRoomId: string }) 
     </QueryClientProvider>
   );
   const view = render(wrap(props));
-  return { ...view, rerender: (next: typeof props) => view.rerender(wrap(next)) };
+  return {
+    ...view,
+    rerender: (next: typeof props) => view.rerender(wrap(next)),
+  };
 };
 
 // A call is cross-brand when it names a room this brand does not own. A room-less call is
@@ -169,11 +181,17 @@ describe('StudioCanvas brand/room fence', () => {
   it('connects the server-resolved room on first paint', () => {
     renderCanvas({ brandProfileId: 'brand-a', initialRoomId: 'room-a1' });
 
-    expect(realtimeCalls[0]).toEqual({ brandProfileId: 'brand-a', roomId: 'room-a1' });
+    expect(realtimeCalls[0]).toEqual({
+      brandProfileId: 'brand-a',
+      roomId: 'room-a1',
+    });
   });
 
   it('never pairs the new brand with the previous brand’s room across a mounted switch', async () => {
-    const view = renderCanvas({ brandProfileId: 'brand-a', initialRoomId: 'room-a1' });
+    const view = renderCanvas({
+      brandProfileId: 'brand-a',
+      initialRoomId: 'room-a1',
+    });
 
     // The real refetch window: useCanvasRooms still reports the previous brand's rooms when
     // the new brandProfileId arrives.
@@ -188,7 +206,10 @@ describe('StudioCanvas brand/room fence', () => {
   });
 
   it('selects the new brand’s first room once its rooms arrive, and puts it in the URL', async () => {
-    const view = renderCanvas({ brandProfileId: 'brand-a', initialRoomId: 'room-a1' });
+    const view = renderCanvas({
+      brandProfileId: 'brand-a',
+      initialRoomId: 'room-a1',
+    });
 
     await act(async () => {
       view.rerender({ brandProfileId: 'brand-b', initialRoomId: 'room-b1' });
@@ -199,7 +220,10 @@ describe('StudioCanvas brand/room fence', () => {
       view.rerender({ brandProfileId: 'brand-b', initialRoomId: 'room-b1' });
     });
 
-    expect(realtimeCalls.at(-1)).toEqual({ brandProfileId: 'brand-b', roomId: 'room-b1' });
+    expect(realtimeCalls.at(-1)).toEqual({
+      brandProfileId: 'brand-b',
+      roomId: 'room-b1',
+    });
     expect(crossBrandCalls(realtimeCalls)).toEqual([]);
     expect(replacedHrefs.at(-1)).toBe('?roomId=room-b1');
   });

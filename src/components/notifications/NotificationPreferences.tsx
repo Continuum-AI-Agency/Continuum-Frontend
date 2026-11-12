@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Kind × channel × frequency. A cell nobody has touched shows the default
 // (DEFAULT_NOTIFICATION_FREQUENCY) — that is what the DB resolves for a missing row,
 // so what this grid shows is what the delivery worker will do. Each change saves on
@@ -24,48 +27,65 @@ import {
 import { toast } from '@/components/ui/toast-imperative';
 import { subscribeThisBrowser } from '@/lib/notifications/pushSubscribe';
 
-const KINDS: { kind: string; label: string }[] = [
-  { kind: 'asset_assigned', label: 'Assigned to me' },
-  { kind: 'review_request', label: 'Review requested' },
-  { kind: 'review_reminder', label: 'Review reminder' },
-  { kind: 'review_escalation', label: 'Review overdue' },
-  { kind: 'review_status_change', label: 'Review status changed' },
-  { kind: 'comment_mention', label: 'Mentioned in a comment' },
-  { kind: 'comment_reply', label: 'Reply to my comment' },
+const getKINDS = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): { kind: string; label: string }[] => [
+  { kind: 'asset_assigned', label: tUi('m_5db35296ea') },
+  { kind: 'review_request', label: tUi('m_86a9586cc4') },
+  { kind: 'review_reminder', label: tUi('m_b022181b6d') },
+  { kind: 'review_escalation', label: tUi('m_19d4b60f74') },
+  { kind: 'review_status_change', label: tUi('m_4f623e1c45') },
+  { kind: 'comment_mention', label: tUi('m_1cdcaa02df') },
+  { kind: 'comment_reply', label: tUi('m_66628888b1') },
 ];
 
-const CHANNELS: { channel: NotificationChannel; label: string }[] = [
-  { channel: 'in_app', label: 'In app' },
-  { channel: 'email', label: 'Email' },
-  { channel: 'slack', label: 'Slack' },
-  { channel: 'web_push', label: 'Push' },
+const getCHANNELS = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): { channel: NotificationChannel; label: string }[] => [
+  { channel: 'in_app', label: tUi('m_11478953f5') },
+  { channel: 'email', label: tUi('m_84add5b295') },
+  { channel: 'slack', label: tUi('m_430b38bf6d') },
+  { channel: 'web_push', label: tUi('m_8f7f57b519') },
 ];
 
-const FREQUENCY_LABEL: Record<NotificationFrequency, string> = {
-  immediate: 'Immediately',
-  hourly: 'Hourly digest',
-  daily: 'Daily digest',
-  never: 'Off',
-};
+const getFREQUENCY_LABEL = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): Record<NotificationFrequency, string> => ({
+  immediate: tUi('m_21b60a9549'),
+  hourly: tUi('m_41cf4a8943'),
+  daily: tUi('m_b0a92efc30'),
+  never: tUi('m_e3de5ab0ca'),
+});
 
 type Grid = Map<string, NotificationFrequency>;
 const cellKey = (kind: string, channel: NotificationChannel) => `${kind}:${channel}`;
 
 export function NotificationPreferences() {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+  const FREQUENCY_LABEL = getFREQUENCY_LABEL(tUi);
+
+  const CHANNELS = getCHANNELS(tUi);
+
+  const KINDS = getKINDS(tUi);
+
   const [grid, setGrid] = useState<Grid | null>(null);
 
   useEffect(() => {
     fetch('/api/notifications/preferences')
       .then(async (response) => {
         if (!response.ok) throw new Error(`Loading preferences failed (${response.status})`);
-        const body = (await response.json()) as { preferences: NotificationPreference[] };
+        const body = (await response.json()) as {
+          preferences: NotificationPreference[];
+        };
         setGrid(
           new Map(body.preferences.map((row) => [cellKey(row.kind, row.channel), row.frequency])),
         );
       })
       .catch((error: unknown) => {
         setGrid(new Map());
-        toast.error((error as Error).message);
+        toast.error(getUiErrorMessage(error as Error));
       });
   }, []);
 
@@ -89,14 +109,15 @@ export function NotificationPreferences() {
         else next.delete(key);
         return next;
       });
-      toast.error('Saving the preference failed');
+      toast.error(tUi('m_672128c9fc'));
     }
   };
 
   if (!grid) {
     return (
       <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" /> Loading preferences…
+        <Loader2 className="size-4 animate-spin" />
+        {tUi('m_e41958acfe')}
       </div>
     );
   }
@@ -107,7 +128,7 @@ export function NotificationPreferences() {
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">Update</th>
+              <th className="px-3 py-2 font-medium">{tUi('m_fb91e24fa5')}</th>
               {CHANNELS.map((column) => (
                 <th key={column.channel} className="px-3 py-2 font-medium">
                   {column.label}
@@ -134,7 +155,10 @@ export function NotificationPreferences() {
                         <SelectTrigger
                           size="sm"
                           className="h-8 w-36 text-xs"
-                          aria-label={`${row.label} by ${column.label}`}
+                          aria-label={tUi('m_063bf82872', {
+                            v0: String(row.label),
+                            v1: String(column.label),
+                          })}
                         >
                           <SelectValue items={FREQUENCY_LABEL} />
                         </SelectTrigger>
@@ -156,10 +180,7 @@ export function NotificationPreferences() {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Slack posts go to your brand&apos;s connected ops channel. “Off” in the app column still
-        keeps the update in your bell, already marked read.
-      </p>
+      <p className="text-xs text-muted-foreground">{tUi('m_ef2bf56c6c')}</p>
       <PushOnThisBrowser />
     </div>
   );
@@ -169,6 +190,10 @@ export function NotificationPreferences() {
 // Either missing means push cannot work here, and the section says so instead of
 // offering a button that silently fails.
 function PushOnThisBrowser() {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const supported =
     typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window;
@@ -196,10 +221,10 @@ function PushOnThisBrowser() {
         fetch: (input, init) => fetch(input, init),
       });
       setState('on');
-      toast.success('Push notifications are on for this browser');
+      toast.success(tUi('m_4d3fa746ef'));
     } catch (error) {
       setState('idle');
-      toast.error((error as Error).message);
+      toast.error(getUiErrorMessage(error as Error));
     }
   };
 
@@ -207,15 +232,15 @@ function PushOnThisBrowser() {
     <section className="rounded-lg border border-border p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-sm font-medium">Push on this browser</h2>
+          <h2 className="text-sm font-medium">{tUi('m_ec73d164ea')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {!supported
-              ? 'This browser does not support push notifications.'
+              ? tUi('m_612e6c577c')
               : !publicKey
-                ? 'Push is not configured for this deployment yet.'
+                ? tUi('m_3d310887e0')
                 : state === 'on'
-                  ? 'This browser receives push notifications for the updates set to Push above.'
-                  : 'Turn it on, then pick Push for the updates you want here.'}
+                  ? tUi('m_fe517537ae')
+                  : tUi('m_e016f292f1')}
           </p>
         </div>
         <Button
@@ -230,7 +255,7 @@ function PushOnThisBrowser() {
           ) : (
             <BellRing className="size-3.5" />
           )}
-          {state === 'on' ? 'Push is on' : 'Turn on push'}
+          {state === 'on' ? tUi('m_e70a874e14') : tUi('m_e96e05ed3d')}
         </Button>
       </div>
     </section>

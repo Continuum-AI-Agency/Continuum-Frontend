@@ -14,7 +14,6 @@ import {
   hasProseMarks,
   headersOfBlocks,
   insightListItemSchema,
-  PRISM_BLOCK_ORDER,
   metricPolarityOf,
   metricReadOf,
   metricReadViolationsOf,
@@ -22,6 +21,8 @@ import {
   narrativeThreePartViolationsOf,
   numberReadingsOfToken,
   numbersInText,
+  numberTokensInText,
+  PRISM_BLOCK_ORDER,
   parseProseMarks,
   sectionOfBlockCategory,
   stripProseMarks,
@@ -190,7 +191,12 @@ describe('degradeToNarrativeBlockV2', () => {
 });
 
 describe('Prism blocks + validateReport', () => {
-  const base = { block_id: 'b', scope: 'account', title: 'T', priority: 'primary' as const };
+  const base = {
+    block_id: 'b',
+    scope: 'account',
+    title: 'T',
+    priority: 'primary' as const,
+  };
   it('parses the four new block categories', () => {
     expect(
       checkpointBlockV2Schema.safeParse({
@@ -210,7 +216,12 @@ describe('Prism blocks + validateReport', () => {
             entity: { name: 'Cold Lookalike' },
             action: 'Pause',
             sizing: '~$120/day recoverable',
-            evidence: { metric: 'CPA', value: 71, window: 'L14D', comparator: 'vs $40 target' },
+            evidence: {
+              metric: 'CPA',
+              value: 71,
+              window: 'L14D',
+              comparator: 'vs $40 target',
+            },
           },
         ],
       }).success,
@@ -240,7 +251,10 @@ describe('Prism blocks + validateReport', () => {
   });
 
   it('flags a report with no scope, a naked KPI, a guessed percent, and an undeclared truncation', () => {
-    const rows = Array.from({ length: 30 }, (_, i) => ({ name: `c${i}`, spend: i }));
+    const rows = Array.from({ length: 30 }, (_, i) => ({
+      name: `c${i}`,
+      spend: i,
+    }));
     const violations = validateReport([
       {
         ...base,
@@ -265,8 +279,20 @@ describe('Prism blocks + validateReport', () => {
         block_id: 'table',
         category: 'data_table',
         columns: [
-          { key: 'name', label: 'Campaign', format: 'text', align: 'left', percent_basis: null },
-          { key: 'spend', label: 'Spend', format: 'currency', align: 'right', percent_basis: null },
+          {
+            key: 'name',
+            label: 'Campaign',
+            format: 'text',
+            align: 'left',
+            percent_basis: null,
+          },
+          {
+            key: 'spend',
+            label: 'Spend',
+            format: 'currency',
+            align: 'right',
+            percent_basis: null,
+          },
         ],
         rows,
         notes: null,
@@ -340,7 +366,13 @@ describe('Prism blocks + validateReport', () => {
           entity,
           action,
           sizing: null,
-          evidence: { metric: 'roas', value: 0.53, unit: null, window: 'L30D', comparator: null },
+          evidence: {
+            metric: 'roas',
+            value: 0.53,
+            unit: null,
+            window: 'L30D',
+            comparator: null,
+          },
           cite_ids: [],
         },
       ],
@@ -369,7 +401,12 @@ describe('Prism blocks + validateReport', () => {
         [
           scope,
           actionsBlock(
-            { id: null, name: 'account-521903353286118', kind: null, level: null },
+            {
+              id: null,
+              name: 'account-521903353286118',
+              kind: null,
+              level: null,
+            },
             'Reduce budget on ITESO // MENSAJES // AGOSTO 2026 by 30%',
           ),
         ] as never,
@@ -605,7 +642,12 @@ describe('classifyClaims', () => {
 });
 
 describe('groundingViolationsOf', () => {
-  const base = { block_id: 'ins', scope: 'account', title: 'Reading', priority: 'primary' };
+  const base = {
+    block_id: 'ins',
+    scope: 'account',
+    title: 'Reading',
+    priority: 'primary',
+  };
   const insight = (summary: string, cite_ids: string[] = []) => ({
     ...base,
     category: 'insight_list',
@@ -693,15 +735,31 @@ describe('groundingViolationsOf', () => {
       items: [{ ...insight('Spend is flat.').items[0], title: 'Creative fatigue' }],
     };
     expect(groundingViolationsOf(titled, { toolKinds: [] })).toEqual([
-      { kind: 'creative', span: 'Creative fatigue', reason: 'claim_without_source' },
+      {
+        kind: 'creative',
+        span: 'Creative fatigue',
+        reason: 'claim_without_source',
+      },
     ]);
   });
 });
 
 describe('validateReport with the turn tool kinds', () => {
-  const base = { block_id: 'b', scope: 'account', title: 'T', priority: 'primary' as const };
+  const base = {
+    block_id: 'b',
+    scope: 'account',
+    title: 'T',
+    priority: 'primary' as const,
+  };
   const report = [
-    { ...base, block_id: 's', category: 'data_scope', dates: 'L14D', source: 'api', notes: [] },
+    {
+      ...base,
+      block_id: 's',
+      category: 'data_scope',
+      dates: 'L14D',
+      source: 'api',
+      notes: [],
+    },
     {
       ...base,
       block_id: 'ins',
@@ -732,20 +790,37 @@ describe('validateReport with the turn tool kinds', () => {
 });
 
 describe('block grounding field', () => {
-  const base = { block_id: 'b', scope: 'account', title: 'T', priority: 'primary' as const };
+  const base = {
+    block_id: 'b',
+    scope: 'account',
+    title: 'T',
+    priority: 'primary' as const,
+  };
   it('defaults to null and carries the violations the Backend wrote', () => {
-    const plain = checkpointBlockV2Schema.parse({ ...base, category: 'narrative', body: 'x' });
+    const plain = checkpointBlockV2Schema.parse({
+      ...base,
+      category: 'narrative',
+      body: 'x',
+    });
     expect(plain.grounding).toBeNull();
     const flagged = checkpointBlockV2Schema.parse({
       ...base,
       category: 'narrative',
       body: 'The video hook is weak.',
       grounding: [
-        { kind: 'creative', span: 'The video hook is weak.', reason: 'claim_without_source' },
+        {
+          kind: 'creative',
+          span: 'The video hook is weak.',
+          reason: 'claim_without_source',
+        },
       ],
     });
     expect(flagged.grounding).toEqual([
-      { kind: 'creative', span: 'The video hook is weak.', reason: 'claim_without_source' },
+      {
+        kind: 'creative',
+        span: 'The video hook is weak.',
+        reason: 'claim_without_source',
+      },
     ]);
     expect(
       checkpointBlockV2Schema.safeParse({
@@ -844,12 +919,23 @@ describe('groundingViolationsOf — rendered figures', () => {
       { key: 'revenue', label: 'Revenue', format: 'currency' },
       { key: 'ctr', label: 'CTR', format: 'percent' },
     ],
-    rows: [{ campaign: 'Leads 2024', spend: 15986.35, revenue: 'Revenue: $3,000.00', ctr: '2.4%' }],
+    rows: [
+      {
+        campaign: 'Leads 2024',
+        spend: 15986.35,
+        revenue: 'Revenue: $3,000.00',
+        ctr: '2.4%',
+      },
+    ],
   };
 
   it('flags the cell no tool output carries and leaves the measured cells alone', () => {
     expect(groundingViolationsOf(table, { toolKinds: [], figures })).toEqual([
-      { kind: 'figure', span: 'Revenue: $3,000.00', reason: 'claim_without_source' },
+      {
+        kind: 'figure',
+        span: 'Revenue: $3,000.00',
+        reason: 'claim_without_source',
+      },
     ]);
   });
 
@@ -894,9 +980,17 @@ describe('groundingViolationsOf — rendered figures', () => {
   // JG-prose-figures-ungraded: a figure in prose is held to the figure set like a cell; the
   // window, entity count and delta a sentence computes are the controls the old rule protected.
   it('grades a figure in prose, and leaves the window, count and delta a sentence computes alone', () => {
-    const narrative = { block_id: 'n', category: 'narrative', body: 'Revenue reached 3,000 MXN.' };
+    const narrative = {
+      block_id: 'n',
+      category: 'narrative',
+      body: 'Revenue reached 3,000 MXN.',
+    };
     expect(groundingViolationsOf(narrative, { toolKinds: [], figures })).toEqual([
-      { kind: 'figure', span: 'Revenue reached 3,000 MXN.', reason: 'claim_without_source' },
+      {
+        kind: 'figure',
+        span: 'Revenue reached 3,000 MXN.',
+        reason: 'claim_without_source',
+      },
     ]);
     const computed = {
       block_id: 'n',
@@ -921,9 +1015,24 @@ describe('groundingViolationsOf — a totals row', () => {
       { key: 'cpr', label: 'Cost / conversation', format: 'currency' },
     ],
     rows: [
-      { creative: 'A', spend: '2,197 MXN', conversations: 63, cpr: '34.88 MXN' },
-      { creative: 'B', spend: '2,005 MXN', conversations: 58, cpr: '34.57 MXN' },
-      { creative: 'C', spend: '1,700 MXN', conversations: 31, cpr: '54.84 MXN' },
+      {
+        creative: 'A',
+        spend: '2,197 MXN',
+        conversations: 63,
+        cpr: '34.88 MXN',
+      },
+      {
+        creative: 'B',
+        spend: '2,005 MXN',
+        conversations: 58,
+        cpr: '34.57 MXN',
+      },
+      {
+        creative: 'C',
+        spend: '1,700 MXN',
+        conversations: 31,
+        cpr: '54.84 MXN',
+      },
       { creative: 'Total', ...total },
     ],
   });
@@ -957,7 +1066,11 @@ describe('groundingViolationsOf — a totals row', () => {
       }),
     ).toEqual([
       { kind: 'figure', span: '5,903 MXN', reason: 'claim_without_source' },
-      { kind: 'figure', span: 'Conversations: 152', reason: 'claim_without_source' },
+      {
+        kind: 'figure',
+        span: 'Conversations: 152',
+        reason: 'claim_without_source',
+      },
     ]);
   });
 });
@@ -981,9 +1094,24 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
         category: 'comparison',
         pairs: [{ label: 'CPA', before: 3, after: 4, format: 'currency' }],
       },
-      { block_id: 'a', category: 'actions', rows: [{ evidence: { metric: 'CPA', value: 5 } }] },
-      { block_id: 'c', category: 'chart', category_key: 'day', data: [{ day: 'Mon', spend: 6 }] },
-      { block_id: 'gp', category: 'goal_pacing', budget: 7, spent: 8, projected_end: null },
+      {
+        block_id: 'a',
+        category: 'actions',
+        rows: [{ evidence: { metric: 'CPA', value: 5 } }],
+      },
+      {
+        block_id: 'c',
+        category: 'chart',
+        category_key: 'day',
+        data: [{ day: 'Mon', spend: 6 }],
+      },
+      {
+        block_id: 'gp',
+        category: 'goal_pacing',
+        budget: 7,
+        spent: 8,
+        projected_end: null,
+      },
     ]);
     expect(cells.map((cell) => [cell.where, cell.label, cell.format, cell.value])).toEqual([
       ['g.metrics[0].value', 'Spend', 'currency', 1],
@@ -1001,7 +1129,12 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
     ]);
     expect(
       headersOfBlocks([
-        { block_id: 'c', category: 'chart', x_axis_label: 'Day', y_axis_label: 'Spend (MXN)' },
+        {
+          block_id: 'c',
+          category: 'chart',
+          x_axis_label: 'Day',
+          y_axis_label: 'Spend (MXN)',
+        },
       ]).map((header) => header.value),
     ).toEqual(['Day', 'Spend (MXN)']);
   });
@@ -1023,6 +1156,15 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
     expect(numbersInText('date_start 2026-08-25, date_stop 2026-08-25')).toEqual([]);
   });
 
+  it('keeps serialized numeric precision, signs and exponents without treating commas as locale punctuation', () => {
+    expect(numberTokensInText('[1.2300,[-2,1e3]]')).toEqual([
+      [{ value: 1.23, decimals: 4 }],
+      [{ value: -2, decimals: 0 }],
+      [{ value: 1000, decimals: -3 }],
+    ]);
+    expect(numbersInText('Spend $1,500 on 2026-08-25T12:00:00Z')).toEqual([1500]);
+  });
+
   const templateFigure = (id: string, value: number | null, unit: string, currency = null) => ({
     id,
     label: `label ${id}`,
@@ -1030,7 +1172,12 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
     unit,
     currency,
     window: { since: '2026-09-01', until: '2026-09-25', label: 'este mes' },
-    source: { tool: 'get_key_metrics', datasetId: 'ds1', level: 'campaign', entityId: null },
+    source: {
+      tool: 'get_key_metrics',
+      datasetId: 'ds1',
+      level: 'campaign',
+      entityId: null,
+    },
     derivation: null,
   });
   const templateBlock = {
@@ -1083,13 +1230,22 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
 
   it('marks an unresolved ref instead of throwing on a malformed template block', () => {
     const cells = cellsOfBlocks([
-      { ...templateBlock, executive: { sentence: 'Gana con {roas_1}.' }, figures: [{ id: 3 }] },
+      {
+        ...templateBlock,
+        executive: { sentence: 'Gana con {roas_1}.' },
+        figures: [{ id: 3 }],
+      },
     ]);
     expect(cells.map((cell) => cell.value)).toContain('Gana con —.');
   });
 
   it('never grades a template`s computed figures against raw tool numbers', () => {
-    expect(groundingViolationsOf(templateBlock, { toolKinds: [], figures: [1, 2, 3] })).toEqual([]);
+    expect(
+      groundingViolationsOf(templateBlock, {
+        toolKinds: [],
+        figures: [1, 2, 3],
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -1174,7 +1330,13 @@ describe('validateReport — the J2 card', () => {
     ...over,
   });
   const grid = (metrics: Record<string, unknown>[]) =>
-    ({ ...base, block_id: 'grid', category: 'metric_grid', metrics, dataset_id: null }) as never;
+    ({
+      ...base,
+      block_id: 'grid',
+      category: 'metric_grid',
+      metrics,
+      dataset_id: null,
+    }) as never;
 
   it('refuses a tile with no read, and a read that disagrees with its prior', () => {
     expect(metricReadViolationsOf(grid([metric({})])).map((v) => v.code)).toEqual([
@@ -1197,7 +1359,11 @@ describe('validateReport — the J2 card', () => {
     expect(
       metricReadViolationsOf(
         grid([
-          metric({ read: 'mejor', prior_value: 1400, prior_label: '2026-08-01 → 2026-08-27' }),
+          metric({
+            read: 'mejor',
+            prior_value: 1400,
+            prior_label: '2026-08-01 → 2026-08-27',
+          }),
           metric({ label: 'Gasto', value: 68109, read: 'sin_comparacion' }),
         ]),
       ),
@@ -1238,7 +1404,9 @@ describe('validateReport — the J2 card', () => {
     // An entity the turn saw, named plainly, with a sizing in a counted noun.
     expect(
       narrativeThreePartViolationsOf(
-        narrative({ now_what: 'Subir ITESO // MENSAJES a 6 conversaciones por día.' }),
+        narrative({
+          now_what: 'Subir ITESO // MENSAJES a 6 conversaciones por día.',
+        }),
         [{ level: 'campaign', id: '1', name: 'ITESO // MENSAJES' }],
       ),
     ).toEqual([]);
@@ -1249,7 +1417,9 @@ describe('validateReport — the J2 card', () => {
     // The account is an entity; a template's ref is a sizing until it is rendered.
     expect(
       narrativeThreePartViolationsOf(
-        narrative({ now_what: 'Mantener la cuenta en {cpr} por conversación.' }),
+        narrative({
+          now_what: 'Mantener la cuenta en {cpr} por conversación.',
+        }),
       ),
     ).toEqual([]);
     expect(narrativeThreePartViolationsOf(narrative({}))).toEqual([]);
@@ -1272,7 +1442,14 @@ describe('validateReport — the J2 card', () => {
         source: 'api',
         notes: [],
       } as never,
-      grid([metric({ change: 10.9, change_direction: 'up', prior_value: 1400, prior_label: 'x' })]),
+      grid([
+        metric({
+          change: 10.9,
+          change_direction: 'up',
+          prior_value: 1400,
+          prior_label: 'x',
+        }),
+      ]),
       narrative({ now_what: null }),
     ]).map((v) => v.code);
     expect(codes).toEqual(['metric_read_missing', 'narrative_fields_missing']);
@@ -1327,9 +1504,24 @@ describe('withPrismBlockOrder', () => {
   it('lets only the answer and the requested format stand above the scope', () => {
     const codes = (blocks: Array<Record<string, unknown>>) =>
       validateReport(blocks as never).map((violation) => violation.code);
-    const scope = block('data_scope', 'scope', { dates: '2026-10-12 → 2026-10-18', timezone: 'UTC', source: 'api', notes: [], scope: 'account', title: 'Data scope' });
+    const scope = block('data_scope', 'scope', {
+      dates: '2026-10-12 → 2026-10-18',
+      timezone: 'UTC',
+      source: 'api',
+      notes: [],
+      scope: 'account',
+      title: 'Data scope',
+    });
     expect(
-      codes([block('answer_template', 'template'), block('data_table', 'asked', { answer_format: true, columns: [], rows: [] }), scope]),
+      codes([
+        block('answer_template', 'template'),
+        block('data_table', 'asked', {
+          answer_format: true,
+          columns: [],
+          rows: [],
+        }),
+        scope,
+      ]),
     ).not.toContain('data_scope_not_first');
     expect(codes([block('metric_grid', 'grid', { metrics: [] }), scope])).toContain(
       'data_scope_not_first',
@@ -1340,10 +1532,20 @@ describe('withPrismBlockOrder', () => {
 describe('recommendation basis and what-to-watch slots (PP-L4 ending/justification)', () => {
   const row = {
     priority: 'P1',
-    entity: { id: '1', name: 'ITESO // MENSAJES', kind: 'campaign', level: 'campaign' },
+    entity: {
+      id: '1',
+      name: 'ITESO // MENSAJES',
+      kind: 'campaign',
+      level: 'campaign',
+    },
     action: 'Pause campaign',
     sizing: 'pause',
-    evidence: { metric: 'cost per conversation', value: 52.93, unit: 'MXN', window: 'L7D' },
+    evidence: {
+      metric: 'cost per conversation',
+      value: 52.93,
+      unit: 'MXN',
+      window: 'L7D',
+    },
   };
 
   it('an action row carries expected_impact, confidence and execute, null until code fills them', () => {
@@ -1365,7 +1567,10 @@ describe('recommendation basis and what-to-watch slots (PP-L4 ending/justificati
         window: 'L7D',
         basis: 'y',
       },
-      execute: { tool: 'pause_meta_entity', input: { entity_id: '1', level: 'campaign' } },
+      execute: {
+        tool: 'pause_meta_entity',
+        input: { entity_id: '1', level: 'campaign' },
+      },
     });
     expect(filled.execute?.tool).toBe('pause_meta_entity');
     expect(filled.confidence?.level).toBe('high');

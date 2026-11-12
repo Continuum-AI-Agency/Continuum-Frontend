@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // End-to-end bench for FEA-05 (in-app "What's New"). Drives the REAL render
 // path with NO mocks: DB-shaped rows → real changelogSchema.parse (the same
 // boundary the server reader enforces) → real sort/unread math
@@ -14,7 +15,7 @@
 // /run through the real app.
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 // Radix Popover positions its content with floating-ui, which observes resize.
 // happy-dom has no ResizeObserver; floating-ui guards for it, but provide a no-op
@@ -32,7 +33,11 @@ import { changelogSchema } from '@/lib/changelog/schema';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 import { WhatsNewBell } from './WhatsNewBell';
 
-const TAG_LABEL: Record<string, string> = { new: 'New', improved: 'Improved', fixed: 'Fixed' };
+const TAG_LABEL: Record<string, string> = {
+  new: 'New',
+  improved: 'Improved',
+  fixed: 'Fixed',
+};
 
 // Rows shaped exactly as the header reader's public.whats_new select returns,
 // validated through the same boundary schema, then sorted newest-first.

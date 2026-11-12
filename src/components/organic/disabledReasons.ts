@@ -5,15 +5,38 @@
 // helper returns null exactly when the matching control is enabled, so a caller
 // can wire "show a reason iff the control is disabled" without drifting.
 
+export type DisabledReasonKey =
+  | 'disabledAddGenerating'
+  | 'disabledHideGenerating'
+  | 'disabledNothingToHide'
+  | 'disabledRefreshConnect'
+  | 'disabledLiveMetrics'
+  | 'disabledRefreshing'
+  | 'disabledExportConnect'
+  | 'disabledExports'
+  | 'disabledExporting'
+  | 'disabledWaitAnalytics'
+  | 'disabledAgentResponding'
+  | 'disabledWorkspaceLoading';
+export type DisabledReasonTranslator = (
+  key: DisabledReasonKey,
+  values?: { platform: string },
+) => string;
+
 export type DisabledHint = {
   reason: string;
   unlocks?: string;
 };
 
-export function describeAddPlaceholderBlock(input: { isGenerating: boolean }): DisabledHint | null {
+export function describeAddPlaceholderBlock(
+  input: { isGenerating: boolean },
+  translate?: DisabledReasonTranslator,
+): DisabledHint | null {
   if (input.isGenerating) {
     return {
-      reason: 'Generation is running. Adding placeholders is paused until it finishes.',
+      reason:
+        translate?.('disabledAddGenerating') ??
+        'Generation is running. Adding placeholders is paused until it finishes.',
     };
   }
   return null;
@@ -21,71 +44,106 @@ export function describeAddPlaceholderBlock(input: { isGenerating: boolean }): D
 
 // "Clear view" hides posts from the planner's views; it deletes nothing. The copy has to
 // say so, or a disabled tooltip re-introduces the fear the control itself just shed.
-export function describeClearBlock(input: {
-  isGenerating: boolean;
-  draftsCount: number;
-}): DisabledHint | null {
+export function describeClearBlock(
+  input: {
+    isGenerating: boolean;
+    draftsCount: number;
+  },
+  translate?: DisabledReasonTranslator,
+): DisabledHint | null {
   if (input.isGenerating) {
     return {
-      reason: 'Generation is running. Hiding posts is paused until it finishes.',
+      reason:
+        translate?.('disabledHideGenerating') ??
+        'Generation is running. Hiding posts is paused until it finishes.',
     };
   }
   if (input.draftsCount === 0) {
-    return { reason: 'There are no posts in this view to hide yet.' };
+    return {
+      reason:
+        translate?.('disabledNothingToHide') ?? 'There are no posts in this view to hide yet.',
+    };
   }
   return null;
 }
 
-export function describeRefreshBlock(input: {
-  hasAccount: boolean;
-  isLoading: boolean;
-  platformLabel: string;
-}): DisabledHint | null {
+export function describeRefreshBlock(
+  input: {
+    hasAccount: boolean;
+    isLoading: boolean;
+    platformLabel: string;
+  },
+  translate?: DisabledReasonTranslator,
+): DisabledHint | null {
   if (!input.hasAccount) {
     return {
-      reason: `Connect and select a ${input.platformLabel} account to refresh analytics.`,
-      unlocks: 'live account and post metrics',
+      reason:
+        translate?.('disabledRefreshConnect', {
+          platform: input.platformLabel,
+        }) ?? `Connect and select a ${input.platformLabel} account to refresh analytics.`,
+      unlocks: translate?.('disabledLiveMetrics') ?? 'live account and post metrics',
     };
   }
   if (input.isLoading) {
-    return { reason: 'Analytics are already refreshing.' };
+    return {
+      reason: translate?.('disabledRefreshing') ?? 'Analytics are already refreshing.',
+    };
   }
   return null;
 }
 
-export function describeExportBlock(input: {
-  hasAccount: boolean;
-  isLoading: boolean;
-  isExporting: boolean;
-  platformLabel: string;
-}): DisabledHint | null {
+export function describeExportBlock(
+  input: {
+    hasAccount: boolean;
+    isLoading: boolean;
+    isExporting: boolean;
+    platformLabel: string;
+  },
+  translate?: DisabledReasonTranslator,
+): DisabledHint | null {
   if (!input.hasAccount) {
     return {
-      reason: `Connect and select a ${input.platformLabel} account to export or email a report.`,
-      unlocks: 'CSV, HTML, and Continuum Report email',
+      reason:
+        translate?.('disabledExportConnect', {
+          platform: input.platformLabel,
+        }) ?? `Connect and select a ${input.platformLabel} account to export or email a report.`,
+      unlocks: translate?.('disabledExports') ?? 'CSV, HTML, and Continuum Report email',
     };
   }
   if (input.isExporting) {
-    return { reason: 'A report is already being prepared.' };
+    return {
+      reason: translate?.('disabledExporting') ?? 'A report is already being prepared.',
+    };
   }
   if (input.isLoading) {
-    return { reason: 'Wait for analytics to finish loading before exporting or emailing.' };
+    return {
+      reason:
+        translate?.('disabledWaitAnalytics') ??
+        'Wait for analytics to finish loading before exporting or emailing.',
+    };
   }
   return null;
 }
 
-export function describeComposerBlock(input: {
-  isStreaming: boolean;
-  hasSession: boolean;
-}): DisabledHint | null {
+export function describeComposerBlock(
+  input: {
+    isStreaming: boolean;
+    hasSession: boolean;
+  },
+  translate?: DisabledReasonTranslator,
+): DisabledHint | null {
   if (input.isStreaming) {
     return {
-      reason: "The agent is responding. It'll be ready for your next message in a moment.",
+      reason:
+        translate?.('disabledAgentResponding') ??
+        "The agent is responding. It'll be ready for your next message in a moment.",
     };
   }
   if (!input.hasSession) {
     return {
-      reason: 'Getting your workspace ready. Starters unlock in a moment.',
+      reason:
+        translate?.('disabledWorkspaceLoading') ??
+        'Getting your workspace ready. Starters unlock in a moment.',
     };
   }
   return null;

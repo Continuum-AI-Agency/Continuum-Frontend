@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 // Outcome-first empty state (IMP-008). Leads with the payoff a user unlocks
 // after setup, not the missing requirement. Composes the shadcn Empty
 // primitives in ui/empty.tsx — it does not fork them.
@@ -34,6 +35,8 @@ export function EmptyState({
   secondaryAction,
   className,
 }: EmptyStateProps) {
+  const tUi = useTranslations('common');
+
   const hasUnlocks = unlocks !== undefined && unlocks.length > 0;
   const hasActions = action !== undefined || secondaryAction !== undefined;
 
@@ -47,7 +50,7 @@ export function EmptyState({
 
       {hasUnlocks ? (
         <ul
-          aria-label="What you unlock after setup"
+          aria-label={tUi('m_c3140311ff')}
           className="mx-auto flex max-w-sm flex-col gap-1.5 text-left"
         >
           {unlocks.map((outcome) => (

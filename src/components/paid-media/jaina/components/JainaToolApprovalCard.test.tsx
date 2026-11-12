@@ -1,3 +1,5 @@
+import { render } from '@/i18n/__tests__/render';
+
 /**
  * The card is the last thing between a human and a Meta write, so what it must prove is
  * narrow: it shows the EXACT arguments that will run, and the button it offers reports
@@ -8,7 +10,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { jainaToolApprovalRequiredPayloadSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { JainaToolApprovalCard } from './JainaToolApprovalCard';
 
@@ -198,7 +200,13 @@ describe('JainaToolApprovalCard', () => {
     preview: {
       subject: 'Ad set 120210 · Summer Sale',
       rows: [
-        { field: 'daily_budget', before: 40, after: 50, changePct: 25, unit: 'USD' },
+        {
+          field: 'daily_budget',
+          before: 40,
+          after: 50,
+          changePct: 25,
+          unit: 'USD',
+        },
         { field: 'status', before: 'ACTIVE', after: 'PAUSED' },
       ],
     },
@@ -328,7 +336,11 @@ describe('JainaToolApprovalCard', () => {
         },
       ],
       affected_adset_ids_for_review: [
-        { adset_id: '120201', name: 'Prospecting · Broad', expected_status: 'ACTIVE' },
+        {
+          adset_id: '120201',
+          name: 'Prospecting · Broad',
+          expected_status: 'ACTIVE',
+        },
         { adset_id: '120202', name: 'Retargeting', expected_status: 'PAUSED' },
       ],
       reason: 'Move budget to the cheaper ad set.',

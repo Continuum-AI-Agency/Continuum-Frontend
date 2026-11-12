@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // Base UI's dialog measures itself and watches the tree on open; happy-dom only exposes
 // these off the window instance.
@@ -12,7 +12,11 @@ import type { NodeOutput } from '../../types/execution';
 import { batchMatrix } from '../../utils/batch/matrix';
 import { MatrixResultsDialog } from './MatrixResultsDialog';
 
-const textItem = (value: string): BatchItem => ({ id: `t-${value}`, kind: 'text', value });
+const textItem = (value: string): BatchItem => ({
+  id: `t-${value}`,
+  kind: 'text',
+  value,
+});
 const textOutput = (value: string): NodeOutput => ({ type: 'text', value });
 
 const renderMatrix = (layout: ReturnType<typeof batchMatrix>) =>

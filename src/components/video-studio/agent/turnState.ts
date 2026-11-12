@@ -4,6 +4,9 @@ import type {
   VideoEditorOpName,
   VideoEditorPoolAsset,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 
 // The agent panel's pure state: how a turn folds its NDJSON frames, and how @-mentions
 // become exact ids the agent can act on.
@@ -28,7 +31,12 @@ export type Turn = {
   undone: boolean;
 };
 
-export type Mention = { token: string; kind: 'clip' | 'asset'; id: string; detail: string };
+export type Mention = {
+  token: string;
+  kind: 'clip' | 'asset';
+  id: string;
+  detail: string;
+};
 
 /** Mentioned clips and assets ride along as exact ids, so the agent never guesses one. */
 export function withMentionContext(prompt: string, mentions: readonly Mention[]): string {
@@ -38,7 +46,7 @@ export function withMentionContext(prompt: string, mentions: readonly Mention[])
   return `${prompt}\n\nMentioned: ${lines.join('; ')}`;
 }
 
-export function clipMentions(project: EditorProjectV2): Mention[] {
+export function clipMentions(project: EditorProjectV2, locale: UiLocale = 'en'): Mention[] {
   return project.tracks.flatMap((track) =>
     track.clips.map((clip, index) => {
       const text = clip.kind === 'text' ? clip.text : undefined;
@@ -47,17 +55,20 @@ export function clipMentions(project: EditorProjectV2): Mention[] {
         token: `@${label}`,
         kind: 'clip' as const,
         id: clip.id,
-        detail: `${track.name} · ${clip.timelineStartSec.toFixed(1)} s`,
+        detail: `${track.name} · ${formatDecimal(clip.timelineStartSec, 1, locale)} s`,
       };
     }),
   );
 }
 
-export const assetMention = (asset: VideoEditorPoolAsset): Mention => ({
+export const assetMention = (
+  asset: VideoEditorPoolAsset,
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
+): Mention => ({
   token: `@${asset.title.slice(0, 40).trim()}`,
   kind: 'asset',
   id: asset.assetId,
-  detail: asset.kind,
+  detail: translate ? translate('mediaKindLabel', { kind: asset.kind }) : asset.kind,
 });
 
 export function applyFrame(turn: Turn, frame: VideoEditorAgentFrame): Turn {

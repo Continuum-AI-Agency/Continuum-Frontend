@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Panel } from '@/components/ai-elements/panel';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,8 @@ export function CanvasFloatingPanel({
     | 'bottom-center'
     | 'bottom-right';
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <Panel
       position={position}
@@ -58,7 +61,9 @@ export function CanvasFloatingPanel({
           size="icon"
           className="size-7 text-muted-foreground"
           onClick={onClose}
-          aria-label={`Close ${title.toLowerCase()}`}
+          aria-label={translateUi('close_value0_31225400', {
+            value0: String(title.toLowerCase()),
+          })}
         >
           <X className="size-4" aria-hidden />
         </Button>

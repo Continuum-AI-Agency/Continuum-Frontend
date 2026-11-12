@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * A reopened dashboard says, per module, whether it can be re-run and for which window.
  *
@@ -8,7 +9,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 mock.module('@/lib/jaina/brandScope', () => ({
   useJainaBrandScope: () => ({ brandId: 'b1', adAccountId: 'act_1' }),
@@ -96,7 +97,11 @@ const withSpec = {
         reason: null,
         spec: {
           tool: 'get_meta_overview_summary',
-          entity: { id: 'act_521903353286118', level: 'account', name: 'account-521903353286118' },
+          entity: {
+            id: 'act_521903353286118',
+            level: 'account',
+            name: 'account-521903353286118',
+          },
           metrics: ['Spend'],
           range: { kind: 'custom', from: '2026-09-13', to: '2026-09-19' },
           derived: null,
@@ -108,7 +113,11 @@ const withSpec = {
         reason: null,
         spec: {
           tool: 'get_paid_creative_intel',
-          entity: { id: 'act_521903353286118', level: 'account', name: 'act_521903353286118' },
+          entity: {
+            id: 'act_521903353286118',
+            level: 'account',
+            name: 'act_521903353286118',
+          },
           metrics: [],
           range: { kind: 'preset', preset: 'd30' },
           derived: 'severity',
@@ -118,7 +127,12 @@ const withSpec = {
   },
 };
 
-const legacy = { ...base, id: '4bc1599a-e987-4d7a-aa90-acba967c6a09', name: 'Legacy', spec: null };
+const legacy = {
+  ...base,
+  id: '4bc1599a-e987-4d7a-aa90-acba967c6a09',
+  name: 'Legacy',
+  spec: null,
+};
 
 mock.module('@/lib/jaina/dashboards.client', () => ({
   listDashboards: async () => [withSpec, legacy],
@@ -143,7 +157,7 @@ describe('SavedDashboardsPanel — re-runnable per module', () => {
     const lines = screen.getAllByTestId('block-rerun').map((node) => node.textContent);
     expect(lines).toEqual([
       'Not re-runnable: the scope frame is composed from the other blocks, not fetched',
-      'Re-runnable · computed for 2026-09-13 → 2026-09-19',
+      'Re-runnable · computed for Sep 13, 2026 → Sep 19, 2026',
       'Re-runnable · computed for Last 30 days · its judgements are recomputed, not re-fetched',
     ]);
   });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { RuleAction } from '@/lib/approvals/types';
 
 // PP-DT-C-approvals-enter-on-any-control-approves (deep test 2026-10-31, lane C, persona 3):

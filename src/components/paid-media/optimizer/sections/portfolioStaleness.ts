@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // What a portfolio's staleness read says on screen — pure, so every row, tile and dateline
 // that names it says the same thing.
 //
@@ -29,7 +34,19 @@ export type StalenessRead = Pick<
   | 'adset_count'
 >;
 
-const SINCE_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const sinceFormats = new Map<UiLocale, Intl.DateTimeFormat>();
+function sinceFormat(locale: UiLocale): Intl.DateTimeFormat {
+  let result = sinceFormats.get(locale);
+  if (!result) {
+    result = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+    });
+    sinceFormats.set(locale, result);
+  }
+  return result;
+}
+const SINCE_FMT = sinceFormat('en');
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -47,9 +64,15 @@ export function isStale(portfolio: Pick<StalenessRead, 'stale_for_days'>): boole
  */
 export function staleLine(
   portfolio: Pick<StalenessRead, 'stale_for_days' | 'last_actual_cycle_at'>,
+  uiTranslate?: ScaleCopy,
 ): string | null {
   if (!isStale(portfolio)) return null;
   const days = portfolio.stale_for_days as number;
+  if (uiTranslate)
+    return uiTranslate('portfolioStaleLine', {
+      hasCycle: portfolio.last_actual_cycle_at ? 'yes' : 'no',
+      days,
+    });
   if (portfolio.last_actual_cycle_at) {
     return days === 0 ? 'a cycle was missed today' : `last cycle ${plural(days, 'day')} ago`;
   }
@@ -68,8 +91,25 @@ export function rosterLine(
     StalenessRead,
     'roster_state' | 'roster_absent_since' | 'roster_missing_count' | 'adset_count'
   >,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): string | null {
   const gone = portfolio.roster_missing_count ?? null;
+  if (uiTranslate) {
+    if (
+      portfolio.roster_state !== 'absent' &&
+      !(portfolio.roster_state === 'partial' && gone != null && gone > 0)
+    )
+      return null;
+    const at = parseIso(portfolio.roster_absent_since);
+    return uiTranslate('portfolioRoster', {
+      state: portfolio.roster_state,
+      gone: gone ?? portfolio.adset_count,
+      total: portfolio.adset_count,
+      hasDate: at == null ? 'no' : 'yes',
+      date: at == null ? '' : sinceFormat(uiLocale).format(new Date(at)),
+    });
+  }
   if (portfolio.roster_state === 'absent') {
     const count = gone ?? portfolio.adset_count;
     const since = parseIso(portfolio.roster_absent_since);
@@ -112,15 +152,21 @@ export function underManagement(
 }
 
 /** What a `pacingPlanVersion` stamp (`start..end@budget`) says in words: "Oct 1–Oct 31 at 45,000". */
-function describePlan(version: string): string {
+function describePlan(version: string, uiTranslate?: ScaleCopy, uiLocale: UiLocale = 'en'): string {
   const match = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})@(.+)$/.exec(version);
   if (!match) return version;
   const [, start, end, budget] = match;
-  const day = (iso: string) => SINCE_FMT.format(new Date(`${iso}T00:00:00Z`));
+  const day = (iso: string) => sinceFormat(uiLocale).format(new Date(`${iso}T00:00:00Z`));
   const amount = Number(budget);
-  return `${day(start as string)}–${day(end as string)} at ${
-    Number.isFinite(amount) ? amount.toLocaleString('en-US') : budget
-  }`;
+  return uiTranslate
+    ? uiTranslate('helper_2b517f76ffb5', {
+        v0: day(start as string),
+        v1: day(end as string),
+        v2: Number.isFinite(amount) ? amount.toLocaleString(uiLocale) : budget,
+      })
+    : `${day(start as string)}–${day(end as string)} at ${
+        Number.isFinite(amount) ? amount.toLocaleString(uiLocale) : budget
+      }`;
 }
 
 /**
@@ -133,14 +179,25 @@ function describePlan(version: string): string {
 export function pacingStaleLine(
   pacing: PacingStamp | null | undefined,
   portfolio: Pick<PortfolioListItem, 'period_start' | 'period_end' | 'period_budget'>,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): { text: string; title: string } | null {
   const reading = pacingPlanFreshness(pacing, portfolio);
   if (reading.freshness !== 'stale' || reading.runPlan === null) return null;
   const flight =
-    reading.currentPlan === null ? 'no complete flight' : describePlan(reading.currentPlan);
+    reading.currentPlan === null
+      ? uiTranslate
+        ? uiTranslate('portfolioNoFlight')
+        : 'no complete flight'
+      : describePlan(reading.currentPlan, uiTranslate, uiLocale);
   return {
-    text: 'pacing stale',
-    title: `The last cycle paced the ${describePlan(reading.runPlan)} plan; the flight is now ${flight}. The verdict is about a plan this portfolio no longer has.`,
+    text: uiTranslate ? uiTranslate('portfolioPacingStale') : 'pacing stale',
+    title: uiTranslate
+      ? uiTranslate('helper_19c5c86c29da', {
+          v0: describePlan(reading.runPlan, uiTranslate, uiLocale),
+          v1: flight,
+        })
+      : `The last cycle paced the ${describePlan(reading.runPlan, uiTranslate, uiLocale)} plan; the flight is now ${flight}. The verdict is about a plan this portfolio no longer has.`,
   };
 }
 
@@ -164,10 +221,19 @@ export type CycleCurrency = {
  * history: shown, never offered. Null while current, before any cycle, and when the read does
  * not say — an unknown must never withdraw a move.
  */
-export function withdrawnLine(portfolio: CycleCurrency): string | null {
+export function withdrawnLine(
+  portfolio: CycleCurrency,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string | null {
   if (portfolio.last_cycle_current !== false) return null;
   const at = parseIso(portfolio.last_actual_cycle_at);
   if (at === null) return null;
+  if (uiTranslate)
+    return uiTranslate('portfolioWithdrawn', {
+      date: sinceFormat(uiLocale).format(new Date(at)),
+      reason: portfolio.withdrawn_reason ?? 'other',
+    });
   const why = portfolio.withdrawn_reason
     ? WITHDRAWN_WORDS[portfolio.withdrawn_reason]
     : 'it no longer stands';
@@ -195,8 +261,10 @@ export function currentMoves(
   portfolio: CycleCurrency & { id: string },
   rosterIds: ReadonlySet<string> | null,
   enrollments: readonly AccountEnrollment[] = [],
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): CurrentMoves {
-  const line = withdrawnLine(portfolio);
+  const line = withdrawnLine(portfolio, uiTranslate, uiLocale);
   if (line) return { line, notes: new Map(), current: [] };
   const notes = new Map<string, string>();
   if (rosterIds) {
@@ -208,7 +276,17 @@ export function currentMoves(
     for (const item of items) {
       if (!isMetaEntity(entityOf(item)) || rosterIds.has(item.adset_id)) continue;
       const holder = holderById.get(item.adset_id);
-      notes.set(item.adset_id, holder ? `now in ${holder}` : 'no longer in this portfolio');
+      notes.set(
+        item.adset_id,
+        uiTranslate
+          ? uiTranslate('portfolioMoveWithdrawn', {
+              reason: holder ? 'holder' : 'left',
+              name: holder ?? '',
+            })
+          : holder
+            ? `now in ${holder}`
+            : 'no longer in this portfolio',
+      );
     }
   }
   // A move the database already withdrew ('skipped', 'voided: <why>') is history, not an offer:
@@ -217,7 +295,17 @@ export function currentMoves(
   for (const item of items) {
     const voided = item.apply_status === 'skipped' && item.apply_error?.startsWith('voided:');
     if (!voided || notes.has(item.adset_id)) continue;
-    notes.set(item.adset_id, VOIDED_WORDS[item.apply_error ?? ''] ?? 'withdrawn by a roster change');
+    notes.set(
+      item.adset_id,
+      uiTranslate
+        ? uiTranslate('portfolioMoveWithdrawn', {
+            reason: Object.hasOwn(VOIDED_WORDS, item.apply_error ?? '')
+              ? (item.apply_error ?? '').replace(/^voided: /, '')
+              : 'other',
+            name: '',
+          })
+        : (VOIDED_WORDS[item.apply_error ?? ''] ?? 'withdrawn by a roster change'),
+    );
   }
   return {
     line,

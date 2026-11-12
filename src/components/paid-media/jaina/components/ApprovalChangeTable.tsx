@@ -1,6 +1,7 @@
 'use client';
 
 import type { JainaApprovalPreview } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import {
   Table,
   TableBody,
@@ -38,6 +39,7 @@ const formatSide = (value: PreviewRow['before'], unit?: string): string => {
 };
 
 export function ApprovalChangeTable({ preview }: { preview: JainaApprovalPreview }) {
+  const uiText = useTranslations('scale');
   if (preview.rows.length === 0) return null;
 
   return (
@@ -49,10 +51,12 @@ export function ApprovalChangeTable({ preview }: { preview: JainaApprovalPreview
       ) : null}
       <TableHeader>
         <TableRow className="border-foreground/5 hover:bg-transparent">
-          <TableHead className="h-8 px-2 text-xs font-medium">Field</TableHead>
-          <TableHead className="h-8 px-2 text-xs font-medium">Before</TableHead>
-          <TableHead className="h-8 px-2 text-xs font-medium">After</TableHead>
-          <TableHead className="h-8 px-2 text-right text-xs font-medium">Change</TableHead>
+          <TableHead className="h-8 px-2 text-xs font-medium">{uiText('field_f45fc1d')}</TableHead>
+          <TableHead className="h-8 px-2 text-xs font-medium">{uiText('before_9bb7250')}</TableHead>
+          <TableHead className="h-8 px-2 text-xs font-medium">{uiText('after_7b68fe5')}</TableHead>
+          <TableHead className="h-8 px-2 text-right text-xs font-medium">
+            {uiText('change_c0bf75b')}
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

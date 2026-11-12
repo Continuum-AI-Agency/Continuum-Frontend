@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { AppliedWriteRow, BudgetWritePreview, type BudgetWritePreviewProps } from './WritePreview';
 import { guardrailChecks } from './writePreviewModel';
 
@@ -49,7 +50,11 @@ function preview(over: Partial<BudgetWritePreviewProps> = {}) {
       onApply={onApply}
       onApprove={onApprove}
       platforms={['google_ads']}
-      state={{ kind: 'approve', keys: ['budget:pmax', 'budget:search'], approved: 0 }}
+      state={{
+        kind: 'approve',
+        keys: ['budget:pmax', 'budget:search'],
+        approved: 0,
+      }}
       writesBlocked={false}
       {...over}
     />,
@@ -110,7 +115,9 @@ describe('BudgetWritePreview', () => {
       writesBlocked: true,
       blockedReason: 'Observe mode writes nothing.',
     });
-    const approve = screen.getByRole('button', { name: 'Approve 2 moves' }) as HTMLButtonElement;
+    const approve = screen.getByRole('button', {
+      name: 'Approve 2 moves',
+    }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     expect(screen.getByTestId('write-state').textContent).toContain('Observe mode writes nothing.');
     fireEvent.click(approve);
@@ -186,7 +193,9 @@ const APPLIED = {
 } as const;
 
 function applied(over: Record<string, unknown> = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const wrap = (children: ReactNode) => (
     <QueryClientProvider client={client}>
       <ul>{children}</ul>
@@ -230,7 +239,11 @@ describe('AppliedWriteRow', () => {
   });
 
   it('prints a change that is not money as its two values, without bars', () => {
-    applied({ op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } });
+    applied({
+      op: 'status',
+      before: { status: 'ACTIVE' },
+      after: { status: 'PAUSED' },
+    });
     const row = screen.getByTestId('applied-write');
     expect(row.textContent).toContain('ACTIVEPAUSED');
     expect(row.querySelector('[style*="width"]')).toBeNull();

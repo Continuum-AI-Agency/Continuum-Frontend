@@ -1,6 +1,7 @@
 'use client';
 
 import type { BlendField, BlendVector3 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { DefaultValueControl } from '@/components/forge/VariableEditor';
 import { NumberScrubField } from '@/components/ui/number-field';
 import type { TemplateVariable } from '@/lib/library/templateSources';
@@ -98,6 +99,8 @@ export function SceneFieldControl({
   /** Null resets the field to the file's value. */
   onChange: (next: SceneValue | null) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   if (field.kind === 'vector3') {
     return (
       <Vector3Field
@@ -112,7 +115,7 @@ export function SceneFieldControl({
   if (field.kind === 'number') {
     return (
       <NumberScrubField
-        label="Value"
+        label={translateUi('value_8e37953d')}
         ariaLabel={label}
         step={0.1}
         suffix={NUMBER_SUFFIX[field.target.path]}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { LiveChangeNode, LiveChangePreviewPayload } from '@continuum/contracts';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { cardHeight, cardsById, columnMapFromLiveChange } from '@/lib/campaign-canvas/columnMap';
 import { MapCardBox } from './columnMap/ColumnMapFlow';
 import { LiveChangeCanvas } from './LiveChangeCanvas';

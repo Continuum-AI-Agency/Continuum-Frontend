@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ctxFor } from './__fixtures__/readings';
 
 // The router is the only way out of the bar: every question leaves through push. `mock.module`
@@ -66,8 +67,12 @@ describe('AskBar', () => {
 
   it('opens Jaina with the typed question pre-filled', () => {
     render(<AskBar ctx={ctxFor('operate')} />);
-    const input = screen.getByRole('textbox', { name: 'Ask Jaina about this brand' });
-    fireEvent.change(input, { target: { value: '  ¿Por qué bajaron los leads?  ' } });
+    const input = screen.getByRole('textbox', {
+      name: 'Ask Jaina about this brand',
+    });
+    fireEvent.change(input, {
+      target: { value: '  ¿Por qué bajaron los leads?  ' },
+    });
     fireEvent.submit(input.closest('form') as HTMLFormElement);
     expect(pushed).toHaveLength(1);
     expect(promptOf(pushed[0] ?? '')).toBe('¿Por qué bajaron los leads?');
@@ -76,7 +81,9 @@ describe('AskBar', () => {
 
   it('does nothing on an empty question', () => {
     render(<AskBar ctx={ctxFor('operate')} />);
-    const input = screen.getByRole('textbox', { name: 'Ask Jaina about this brand' });
+    const input = screen.getByRole('textbox', {
+      name: 'Ask Jaina about this brand',
+    });
     fireEvent.submit(input.closest('form') as HTMLFormElement);
     expect(pushed).toHaveLength(0);
     expect((screen.getByRole('button', { name: 'Ask Jaina' }) as HTMLButtonElement).disabled).toBe(

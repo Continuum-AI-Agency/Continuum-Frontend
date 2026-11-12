@@ -1,8 +1,10 @@
 import { type JainaUIMessage, jainaAnalysisProgressSchema } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { analysisProgressLabel } from './analysisProgressLabels';
 
 /** Progress is a typed run part, so reconnect/history uses the same visible notice as live. */
 export function JainaAnalysisProgress({ message }: { message?: JainaUIMessage }) {
+  const uiText = useTranslations('scale');
   const rows = new Map<string, ReturnType<typeof jainaAnalysisProgressSchema.parse>>();
   for (const part of message?.parts ?? []) {
     if (part.type !== 'data-jaina-analysis-progress') continue;
@@ -40,7 +42,7 @@ export function JainaAnalysisProgress({ message }: { message?: JainaUIMessage })
               data-status={row.status}
               className={row.status === 'running' ? 'text-foreground' : undefined}
             >
-              <span>{analysisProgressLabel(row)}</span>
+              <span>{analysisProgressLabel(row, uiText)}</span>
               {row.detail ? <span> — {row.detail}</span> : null}
             </li>
           ))}

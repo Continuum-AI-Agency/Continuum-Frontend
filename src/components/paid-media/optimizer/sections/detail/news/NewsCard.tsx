@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The lead: the portfolio's main recommendation, as the first line Jaina wrote in "What the
 // Optimizer found" (P1, "Lectura continua").
@@ -20,7 +21,10 @@ import type { FindingTagTone, NewsCardModel } from './newsModel';
 
 /** The money this card is worth, read against the portfolio's daily total. Null when the
  *  finding carries no sized money at all. */
-export type NewsTier = { label: string; tone: 'destructive' | 'warning' | 'muted' } | null;
+export type NewsTier = {
+  label: string;
+  tone: 'destructive' | 'warning' | 'muted';
+} | null;
 
 export type NewsCardProps = {
   card: NewsCardModel;
@@ -81,13 +85,16 @@ export function FindingEvidence({
   currency: string | null;
   resultLabel: string;
 }) {
+  const uiText = useTranslations('scale');
   return (
     // On touch the disclosure's 44px hit area reached the "Explain with Jaina" link 4px above
     // it; the px margin keeps the two presses apart.
     <details className="group/evidence pointer-coarse:mt-[10px]">
       <summary className={cn('w-fit', TEXT_DISCLOSURE)}>
-        <span className="group-open/evidence:hidden">Show the evidence</span>
-        <span className="hidden group-open/evidence:inline">Hide the evidence</span>
+        <span className="group-open/evidence:hidden">{uiText('show_the_evidence_ece9a09')}</span>
+        <span className="hidden group-open/evidence:inline">
+          {uiText('hide_the_evidence_bec55a9')}
+        </span>
       </summary>
       <div className="pt-2">
         <CardBand
@@ -112,6 +119,7 @@ export function NewsCard({
   explainHref,
   onCta,
 }: NewsCardProps) {
+  const uiText = useTranslations('scale');
   const cta = card.cta;
   return (
     <article className={FINDING_ROW} data-testid="portfolio-news-lead">
@@ -133,14 +141,20 @@ export function NewsCard({
         ) : null}
         {card.chosenOver ? (
           <p className="text-muted-foreground text-xs" data-testid="news-chosen-over">
-            <span className="font-medium text-foreground">Chosen over the biggest number:</span>{' '}
+            <span className="font-medium text-foreground">
+              {uiText('chosen_over_the_biggest_number_f42562e')}
+            </span>{' '}
             {card.chosenOver}
           </p>
         ) : null}
         {/* `text-primary-ink` is this app's foreground utility; Jaina speaks in the brand colour. */}
         <p className="inline-flex flex-wrap items-center gap-x-1.5 text-(--primary) text-xs">
           <SparklesIcon aria-hidden className="size-3" />
-          <span>Jaina{draft ? ' · draft read' : ''}</span>
+          <span>
+            {uiText.rich('sentence_c3573f4da315', {
+              v0: draft ? uiText('draft_read_7fab69a') : '',
+            })}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
@@ -148,7 +162,8 @@ export function NewsCard({
             className="hit-area inline-flex items-center gap-1 underline-offset-4 hover:underline"
             href={explainHref}
           >
-            Explain with Jaina <ExternalLinkIcon aria-hidden className="size-3" />
+            {uiText('explain_with_jaina_396f116')}
+            <ExternalLinkIcon aria-hidden className="size-3" />
           </a>
         </p>
         <FindingEvidence card={card} currency={currency} resultLabel={resultLabel} />

@@ -17,12 +17,25 @@ export type PaidMediaTimeRange =
   | { preset: RollingTimePreset }
   | { preset: 'custom'; since: string; until: string };
 
-export const TIME_RANGE_OPTIONS: ReadonlyArray<{ value: TimePreset; label: string }> = [
+export const TIME_RANGE_OPTIONS: ReadonlyArray<{
+  value: TimePreset;
+  label: string;
+}> = [
   { value: 'last_7d', label: 'Last 7 days' },
   { value: 'last_14d', label: 'Last 14 days' },
   { value: 'last_30d', label: 'Last 30 days' },
   { value: 'custom', label: 'Custom range' },
 ] as const;
+
+/** Localized labels are immutable display clones; preset IDs and date arithmetic stay canonical. */
+export function getTimeRangeOptions(
+  translate?: (value: TimePreset) => string,
+): ReadonlyArray<Readonly<{ value: TimePreset; label: string }>> {
+  return TIME_RANGE_OPTIONS.map((option) => ({
+    ...option,
+    label: translate ? translate(option.value) : option.label,
+  }));
+}
 
 function toIsoDay(date: Date): string {
   return date.toISOString().slice(0, 10);

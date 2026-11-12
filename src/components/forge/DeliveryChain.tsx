@@ -1,5 +1,9 @@
 'use client';
 
+import { type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
+
+type ForgeText = ReturnType<typeof useTranslations<'forge'>>;
+
 import { type ApiRenderJob, isBucketOnlyRenderFile } from '@continuum/contracts';
 import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -27,39 +31,86 @@ const DELIVERY_REASON_COPY: Record<string, string> = {
 };
 
 /** A delivery receipt's reason in words, or null when it needs none. */
-export function deliveryReasonText(reason: string | null | undefined): string | null {
+export function deliveryReasonText(
+  reason: string | null | undefined,
+  translate?: ForgeText,
+): string | null {
   if (!reason || reason === 'delivery_requested') return null;
+  if (translate)
+    return translate(
+      reason === 'delivery_bridge_unconfigured'
+        ? 'deliveryBridgeUnconfigured'
+        : reason === 'binding_unresolved'
+          ? 'deliveryBindingUnresolved'
+          : 'deliveryUnknownReason',
+    );
   return DELIVERY_REASON_COPY[reason] ?? reason;
 }
 
 /** `render_approvals.status` in words, with the tone its badge carries. */
-export function approvalState(job: ApiRenderJob): { text: string; tone: Tone } | null {
+export function approvalState(
+  job: ApiRenderJob,
+  translate?: ForgeText,
+): { text: string; tone: Tone } | null {
   if (!job.deliveryTarget) return null;
   const receipt = job.delivery[0];
-  if (receipt?.status === 'published') return { text: 'published', tone: 'success' };
-  if (receipt?.status === 'error') return { text: 'delivery failed', tone: 'destructive' };
+  if (receipt?.status === 'published')
+    return {
+      text: translate?.('deliveryPublished') ?? 'published',
+      tone: 'success',
+    };
+  if (receipt?.status === 'error')
+    return {
+      text: translate?.('deliveryFailed') ?? 'delivery failed',
+      tone: 'destructive',
+    };
   // A claim the bridge never picked up is not waiting on a person: say so, never "held".
   if (receipt?.status === 'pending' && receipt.reason === 'delivery_bridge_unconfigured') {
-    return { text: 'delivery not set up', tone: 'warning' };
+    return {
+      text: translate?.('deliveryNotSetUp') ?? 'delivery not set up',
+      tone: 'warning',
+    };
   }
   const status = job.approval?.status;
   switch (status) {
     case 'pending':
-      return { text: 'awaiting approval', tone: 'warning' };
+      return {
+        text: translate?.('deliveryAwaitingApproval') ?? 'awaiting approval',
+        tone: 'warning',
+      };
     case 'previewed':
-      return { text: 'previewed', tone: 'warning' };
+      return {
+        text: translate?.('deliveryPreviewed') ?? 'previewed',
+        tone: 'warning',
+      };
     // Decided; the plugin's outcome has not landed on the row yet.
     case 'approved':
-      return { text: 'approved · publishing…', tone: 'success' };
+      return {
+        text: translate?.('deliveryApprovedPublishing') ?? 'approved · publishing…',
+        tone: 'success',
+      };
     case 'published':
-      return { text: 'published', tone: 'success' };
+      return {
+        text: translate?.('deliveryPublished') ?? 'published',
+        tone: 'success',
+      };
     case 'rejected':
-      return { text: 'rejected', tone: 'destructive' };
+      return {
+        text: translate?.('deliveryRejected') ?? 'rejected',
+        tone: 'destructive',
+      };
     case 'failed':
     case 'expired':
-      return { text: status, tone: 'destructive' };
+      return {
+        text:
+          translate?.(status === 'failed' ? 'deliveryApprovalFailed' : 'deliveryExpired') ?? status,
+        tone: 'destructive',
+      };
     case undefined:
-      return { text: 'held for approval', tone: 'muted' };
+      return {
+        text: translate?.('deliveryHeld') ?? 'held for approval',
+        tone: 'muted',
+      };
     default:
       return { text: status, tone: 'muted' };
   }
@@ -84,17 +135,22 @@ export function deliverySearchText(job: ApiRenderJob): string {
  * the chain fits a dense grid row, and a truncated name is in the tooltip.
  */
 export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?: boolean }) {
+  const translateUi = useUiTranslations('forge');
+
   // Masters stay in the render bucket, so only the other files are ever saved to the Library.
   const libraryBound = job.outputs.filter((output) => !isBucketOnlyRenderFile(output.fileName));
   const bucketOnly = job.outputs.length > 0 && libraryBound.length === 0;
   const saved = libraryBound.some((output) => output.assetId);
   const slack = job.slackDelivery;
   const target = job.deliveryTarget;
-  const approval = approvalState(job);
+  const approval = approvalState(job, translateUi);
   const path = target
     ? `Meta › ${target.adAccountName ?? target.adAccountId} › ${target.campaignName ?? target.campaignId} › ${target.adsetName ?? target.adsetId}`
     : '';
-  const ad = target?.action === 'replace' ? (target.adName ?? target.adId) : 'new paused ad';
+  const ad =
+    target?.action === 'replace'
+      ? (target.adName ?? target.adId)
+      : translateUi('deliveryNewPausedAd');
   return (
     <span
       className={cn(
@@ -103,16 +159,24 @@ export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?:
       )}
     >
       {bucketOnly ? (
-        <span title="Masters stay in the render bucket and are downloaded from there">
-          Render bucket
+        <span title={translateUi('masters_stay_in_the_render_bucket_a_8016fd98')}>
+          {' '}
+          {translateUi('render_bucket_bf540934')}{' '}
         </span>
       ) : (
         <span
           className={saved ? 'inline-flex items-center gap-0.5' : 'text-muted-foreground'}
-          title={saved ? 'Saved to the Library' : 'Not in the Library yet'}
+          title={
+            saved
+              ? translateUi('saved_to_the_library_d3e7863d')
+              : translateUi('not_in_the_library_yet_7e14e54c')
+          }
         >
-          Library
-          {saved ? <Check className="size-3 text-emerald-600" aria-label="saved" /> : null}
+          {' '}
+          {translateUi('library_dc20b3d5')}{' '}
+          {saved ? (
+            <Check className="size-3 text-emerald-600" aria-label={translateUi('saved_d81c55f4')} />
+          ) : null}
         </span>
       )}
       {slack ? (
@@ -120,8 +184,11 @@ export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?:
           <span className="text-muted-foreground">·</span>
           <span className="inline-flex items-center gap-1">
             #{slack.channelName}
-            <Badge variant={SLACK_TONE[slack.status]} title={slack.reason ?? undefined}>
-              {slack.status}
+            <Badge
+              variant={SLACK_TONE[slack.status]}
+              title={deliveryReasonText(slack.reason, translateUi) ?? undefined}
+            >
+              {translateUi(SLACK_STATUS_KEYS[slack.status])}
             </Badge>
           </span>
         </>
@@ -136,8 +203,14 @@ export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?:
             )}
             title={
               wrap
-                ? `Meta ad account ${target.adAccountId}`
-                : `${path} › ${ad} (ad account ${target.adAccountId})`
+                ? translateUi('meta_ad_account_value0_b3e8b0b1', {
+                    value0: String(target.adAccountId),
+                  })
+                : translateUi('value0_value1_ad_account_value2_a0628d94', {
+                    value0: String(path),
+                    value1: String(ad),
+                    value2: String(target.adAccountId),
+                  })
             }
           >
             <span className={cn('text-muted-foreground', !wrap && 'truncate')}>
@@ -145,7 +218,10 @@ export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?:
               {target.action === 'replace' ? ' ›' : ''}
             </span>
             <span className={cn(!wrap && 'truncate')}>{ad}</span>
-            <Badge variant={approval.tone} title={job.delivery[0]?.reason ?? undefined}>
+            <Badge
+              variant={approval.tone}
+              title={deliveryReasonText(job.delivery[0]?.reason, translateUi) ?? undefined}
+            >
               {approval.text}
             </Badge>
           </span>
@@ -154,3 +230,10 @@ export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?:
     </span>
   );
 }
+
+const SLACK_STATUS_KEYS = {
+  posted: 'slackPosted',
+  pending: 'slackPending',
+  error: 'slackError',
+  skipped: 'slackSkipped',
+} as const;

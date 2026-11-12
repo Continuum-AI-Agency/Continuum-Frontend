@@ -1,3 +1,10 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+import { isUiLocale, type UiLocale } from '@/i18n/config';
+import { googleCopy } from './googlePresentation';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The Google tab's campaigns priced against the portfolio CPA goal (P6 ideas 1, 3, 7, 8, 10):
 // the account read by campaign type, the campaign explorer, the bidding panel, a Google
 // portfolio's campaigns and the account's recent changes.
@@ -91,19 +98,32 @@ export function goalBand(
   conversions: number | null,
   goal: CampaignGoal | null | undefined,
   currency: string | null,
+  uiTranslate?: ScaleCopy,
 ): GoalBand {
   if (conversions == null) {
-    return { kind: 'unpriced', label: '—', goal: null, reason: NO_SINGLE_RESULT };
+    return {
+      kind: 'unpriced',
+      label: '—',
+      goal: null,
+      reason: NO_SINGLE_RESULT,
+    };
   }
   if (!goal) {
-    return { kind: 'no_target', label: NO_TARGET, goal: null, reason: 'No portfolio holds it' };
+    return {
+      kind: 'no_target',
+      label: NO_TARGET,
+      goal: null,
+      reason: 'No portfolio holds it',
+    };
   }
   if (goal.goal == null) {
     return {
       kind: 'no_target',
       label: NO_TARGET,
       goal: null,
-      reason: `${goal.portfolioName} has no CPA goal`,
+      reason: uiTranslate
+        ? uiTranslate('googlePortfolioNoGoal', { name: goal.portfolioName })
+        : `${goal.portfolioName} has no CPA goal`,
     };
   }
   if (goal.currency && currency && goal.currency !== currency) {
@@ -111,20 +131,46 @@ export function goalBand(
       kind: 'no_target',
       label: NO_TARGET,
       goal: null,
-      reason: `${goal.portfolioName}'s goal is in ${goal.currency}; the account bills in ${currency}`,
+      reason: uiTranslate
+        ? uiTranslate('googleGoalCurrencyMismatch', {
+            name: goal.portfolioName,
+            goalCurrency: goal.currency,
+            accountCurrency: currency,
+          })
+        : `${goal.portfolioName}'s goal is in ${goal.currency}; the account bills in ${currency}`,
     };
   }
   if (cost == null || conversions <= 0) {
-    return { kind: 'no_results', label: 'no conversions yet', goal: goal.goal, reason: null };
+    return {
+      kind: 'no_results',
+      label: uiTranslate ? uiTranslate('no_conversions_yet_3446169') : 'no conversions yet',
+      goal: goal.goal,
+      reason: null,
+    };
   }
   const gap = cost / goal.goal - 1;
   if (Math.abs(gap) <= ON_GOAL_BAND) {
-    return { kind: 'on_goal', label: 'on goal', goal: goal.goal, reason: null };
+    return {
+      kind: 'on_goal',
+      label: uiTranslate ? uiTranslate('on_goal_42407f3') : 'on goal',
+      goal: goal.goal,
+      reason: null,
+    };
   }
   const pct = `${Math.round(Math.abs(gap) * 100)}%`;
   return gap < 0
-    ? { kind: 'under', label: `${pct} under goal`, goal: goal.goal, reason: null }
-    : { kind: 'over', label: `${pct} over goal`, goal: goal.goal, reason: null };
+    ? {
+        kind: 'under',
+        label: uiTranslate ? uiTranslate('helper_a9c9249ad4da', { v0: pct }) : `${pct} under goal`,
+        goal: goal.goal,
+        reason: null,
+      }
+    : {
+        kind: 'over',
+        label: uiTranslate ? uiTranslate('helper_f303963a0f4f', { v0: pct }) : `${pct} over goal`,
+        goal: goal.goal,
+        reason: null,
+      };
 }
 
 /** One campaign of the read, as the explorer and the bidding panel list it. */
@@ -171,6 +217,7 @@ export function campaignViews(
   currency: string | null,
   /** Why a campaign with no goal may still sit in a portfolio (a members read failed). */
   unknownGoal: string | null = null,
+  uiTranslate?: ScaleCopy,
 ): CampaignView[] {
   const ambiguous = read.result_basis?.unambiguous === false;
   return read.rows
@@ -194,7 +241,7 @@ export function campaignViews(
         band:
           !goal && unknownGoal && conversions != null
             ? { kind: 'unpriced', label: '—', goal: null, reason: unknownGoal }
-            : goalBand(cost, conversions, goal, currency),
+            : goalBand(cost, conversions, goal, currency, uiTranslate),
         budgetPerDay: figureOf(row, 'budget_per_day'),
         impressionShare: figureOf(row, 'search_impression_share'),
         budgetLost: figureOf(row, 'search_budget_lost_impression_share'),
@@ -250,13 +297,14 @@ function typeBand(
   rows: readonly CampaignView[],
   totals: Totals,
   currency: string | null,
+  uiTranslate?: ScaleCopy,
 ): GoalBand {
   if (totals.conversions == null || rows.every((row) => !row.goal)) {
-    return goalBand(totals.cost, totals.conversions, null, currency);
+    return goalBand(totals.cost, totals.conversions, null, currency, uiTranslate);
   }
   const goal = sharedGoal(rows);
   if (goal && rows.every((row) => row.goal)) {
-    return goalBand(totals.cost, totals.conversions, goal, currency);
+    return goalBand(totals.cost, totals.conversions, goal, currency, uiTranslate);
   }
   return {
     kind: 'mixed',
@@ -272,7 +320,11 @@ function typeBand(
  * campaign of it that spent sits in portfolios sharing that one goal; none in a portfolio reads
  * "no target"; a type split across goals reads "—" and sends a person to its campaigns.
  */
-export function typeRows(campaigns: readonly CampaignView[], currency: string | null): TypeRow[] {
+export function typeRows(
+  campaigns: readonly CampaignView[],
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+): TypeRow[] {
   const spending = campaigns.filter((row) => row.spend > 0);
   const total = spending.reduce((sum, row) => sum + row.spend, 0);
   const groups = new Map<string, CampaignView[]>();
@@ -288,7 +340,7 @@ export function typeRows(campaigns: readonly CampaignView[], currency: string | 
         label: rows[0]?.typeLabel ?? rows[0]?.name ?? key,
         campaigns: rows.length,
         sharePct: total > 0 ? Math.round((totals.spend / total) * 100) : 0,
-        band: typeBand(rows, totals, currency),
+        band: typeBand(rows, totals, currency, uiTranslate),
         ...totals,
       };
     })
@@ -327,16 +379,24 @@ const SYSTEM_STATUS_WORDS: Readonly<Record<string, string>> = {
   PAUSED: 'Paused',
 };
 
-export function strategyWords(code: string): string {
-  return STRATEGY_WORDS[code] ?? codeLabel(code);
+export function strategyWords(code: string, uiTranslate?: ScaleCopy): string {
+  return STRATEGY_WORDS[code]
+    ? googleCopy(STRATEGY_WORDS[code], uiTranslate)
+    : codeLabel(code, uiTranslate);
 }
 
-export function systemStatusWords(code: string): string {
-  return SYSTEM_STATUS_WORDS[code] ?? codeLabel(code);
+export function systemStatusWords(code: string, uiTranslate?: ScaleCopy): string {
+  return SYSTEM_STATUS_WORDS[code]
+    ? googleCopy(SYSTEM_STATUS_WORDS[code], uiTranslate)
+    : codeLabel(code, uiTranslate);
 }
 
 /** A change to a campaign's bid target in Google's change history. */
-export type BidChange = { at: string; before: number | null; after: number | null };
+export type BidChange = {
+  at: string;
+  before: number | null;
+  after: number | null;
+};
 
 /** When the target may move again: G07 holds one change per 14 days while Smart Bidding relearns. */
 export type Cooldown =
@@ -396,9 +456,13 @@ export function lastBidChange(
   campaignId: string,
   kind: 'cpa' | 'roas',
   history: HistoryRead,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
 ): Figure<BidChange> {
-  if (history.status === 'loading') return missing("Reading Google's change history…");
-  if (history.status === 'error') return missing("Google's change history could not be read");
+  if (history.status === 'loading')
+    return missing(googleCopy("Reading Google's change history…", uiTranslate));
+  if (history.status === 'error')
+    return missing(googleCopy("Google's change history could not be read", uiTranslate));
   for (const change of history.history.changes) {
     if (change.campaignId !== campaignId) continue;
     const bid = bidChangeOf(change, kind);
@@ -407,8 +471,14 @@ export function lastBidChange(
   const read = history.history.coverage.read;
   return missing(
     read
-      ? `No target change in Google's change history since ${dayLabel(read.since)}`
-      : "Google's change history holds none of this window",
+      ? uiTranslate
+        ? uiTranslate('googleNoTargetChangeSince', {
+            date: dayLabel(read.since, uiLocale),
+          })
+        : `No target change in Google's change history since ${dayLabel(read.since, uiLocale)}`
+      : uiTranslate
+        ? uiTranslate('googleHistoryOutsideWindow')
+        : "Google's change history holds none of this window",
   );
 }
 
@@ -467,7 +537,11 @@ function bidTargetOf(row: GoogleCampaignRow): {
     return { strategy, targetKind: 'cpa', target: figureOf(row, 'target_cpa') };
   }
   if (code && ROAS_STRATEGIES.has(code)) {
-    return { strategy, targetKind: 'roas', target: figureOf(row, 'target_roas') };
+    return {
+      strategy,
+      targetKind: 'roas',
+      target: figureOf(row, 'target_roas'),
+    };
   }
   return {
     strategy,
@@ -485,6 +559,8 @@ export function biddingViews(
   history: HistoryRead,
   cards: readonly AccountCandidate[],
   now: Date,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
 ): BiddingView[] {
   return campaigns
     .filter((campaign) => campaign.spend > 0 || campaign.status.value === 'ENABLED')
@@ -506,14 +582,14 @@ export function biddingViews(
                   : 'No conversion in the window to price',
               );
       const lastChange = targetKind
-        ? lastBidChange(campaign.id, targetKind, history)
+        ? lastBidChange(campaign.id, targetKind, history, uiLocale, uiTranslate)
         : missing<BidChange>('No bid target to change');
       const found = bidCardFor(campaign, cards);
       return {
         id: campaign.id,
         name: campaign.name,
-        strategy: strategy.value ? known(strategyWords(strategy.value)) : strategy,
-        learning: status.value ? known(systemStatusWords(status.value)) : status,
+        strategy: strategy.value ? known(strategyWords(strategy.value, uiTranslate)) : strategy,
+        learning: status.value ? known(systemStatusWords(status.value, uiTranslate)) : status,
         isLearning: (status.value ?? '').startsWith('LEARNING'),
         targetKind,
         target,
@@ -526,7 +602,10 @@ export function biddingViews(
           : { state: 'unknown', reason: 'No bid target to change' },
         step:
           target.value != null
-            ? { low: target.value * (1 - G07_STEP), high: target.value * (1 + G07_STEP) }
+            ? {
+                low: target.value * (1 - G07_STEP),
+                high: target.value * (1 + G07_STEP),
+              }
             : null,
         proposal: found
           ? {
@@ -544,9 +623,12 @@ export function targetLabel(
   value: number | null,
   kind: 'cpa' | 'roas' | null,
   currency: string | null,
+  uiLocale: UiLocale = 'en',
 ): string {
   if (value == null) return '—';
-  return kind === 'roas' ? percentLabel(value) : formatCurrency(value, currency);
+  return kind === 'roas'
+    ? percentLabel(value, uiLocale)
+    : formatCurrency(value, currency, uiLocale);
 }
 
 // ── A Google portfolio's campaigns (idea 8) ──────────────────────────────────────────────────
@@ -599,17 +681,25 @@ function budgetCardFor(
 }
 
 /** The read's figure for each Google member of the portfolio, with G03's and G07's proposals. */
-export function portfolioCampaignViews(args: {
-  members: readonly PortfolioMemberLike[];
-  read: GoogleTopCampaigns;
-  goal: CampaignGoal;
-  cards: readonly AccountCandidate[];
-  currency: string | null;
-}): PortfolioCampaignView[] {
+export function portfolioCampaignViews(
+  args: {
+    members: readonly PortfolioMemberLike[];
+    read: GoogleTopCampaigns;
+    goal: CampaignGoal;
+    cards: readonly AccountCandidate[];
+    currency: string | null;
+  },
+  uiTranslate?: ScaleCopy,
+): PortfolioCampaignView[] {
   const { goal, cards, currency } = args;
   const goals = new Map<string, CampaignGoal>();
   for (const member of args.members) goals.set(member.entityId, goal);
-  const views = new Map(campaignViews(args.read, goals, currency).map((view) => [view.id, view]));
+  const views = new Map(
+    campaignViews(args.read, goals, currency, undefined, uiTranslate).map((view) => [
+      view.id,
+      view,
+    ]),
+  );
   return args.members
     .filter((member) => member.platform === 'google_ads')
     .map((member): PortfolioCampaignView => {
@@ -635,7 +725,7 @@ export function portfolioCampaignViews(args: {
         spend: view ? known(view.spend) : missing(NOT_AMONG_TOP),
         conversions: view?.conversions ?? null,
         cost: view?.cost ?? null,
-        band: view?.band ?? goalBand(null, 0, goal, currency),
+        band: view?.band ?? goalBand(null, 0, goal, currency, uiTranslate),
         target: bid?.target ?? missing(NOT_AMONG_TOP),
         targetKind: bid?.targetKind ?? null,
         targetAfter: bidCard?.card.proposed_target ?? null,
@@ -686,26 +776,53 @@ function moneyOf(side: GoogleChange['before'], key: 'budget' | 'targetCpa'): num
 }
 
 /** "$500 MXN → $650 MXN", for the values a change set that a person decides on. */
-function changeDetail(change: GoogleChange): string | null {
+function changeDetail(
+  change: GoogleChange,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string | null {
   const { before, after } = change;
   const money = (key: 'budget' | 'targetCpa', name: string) => {
     const from = moneyOf(before, key);
     const to = moneyOf(after, key);
     if (from == null && to == null) return null;
     const code = after?.[key]?.currency ?? before?.[key]?.currency ?? null;
-    return `${name} ${formatCurrency(from, code)} → ${formatCurrency(to, code)}`;
+    return uiTranslate
+      ? uiTranslate('googleChangeMoney', {
+          name: googleCopy(name, uiTranslate),
+          before: formatCurrency(from, code, uiLocale),
+          after: formatCurrency(to, code, uiLocale),
+        })
+      : `${name} ${formatCurrency(from, code, uiLocale)} → ${formatCurrency(to, code, uiLocale)}`;
   };
   if (after?.targetRoas != null || before?.targetRoas != null) {
-    const pct = (value: number | undefined) => (value == null ? '—' : percentLabel(value));
-    return `target ROAS ${pct(before?.targetRoas)} → ${pct(after?.targetRoas)}`;
+    const pct = (value: number | undefined) =>
+      value == null ? '—' : percentLabel(value, uiLocale);
+    return uiTranslate
+      ? uiTranslate('helper_4ae000b29726', {
+          v0: pct(before?.targetRoas),
+          v1: pct(after?.targetRoas),
+        })
+      : `target ROAS ${pct(before?.targetRoas)} → ${pct(after?.targetRoas)}`;
   }
   const parts = [
     money('budget', 'budget'),
     money('targetCpa', 'target CPA'),
     before?.status || after?.status
-      ? `status ${codeLabel(before?.status ?? '—').toLowerCase()} → ${codeLabel(after?.status ?? '—').toLowerCase()}`
+      ? uiTranslate
+        ? uiTranslate('googleChangeStatus', {
+            before: uiTranslate('googleControlCode', {
+              code: before?.status ?? '—',
+            }),
+            after: uiTranslate('googleControlCode', {
+              code: after?.status ?? '—',
+            }),
+          })
+        : `status ${codeLabel(before?.status ?? '—').toLowerCase()} → ${codeLabel(after?.status ?? '—').toLowerCase()}`
       : null,
-    after?.keyword ? `"${after.keyword.text}" (${after.keyword.matchType.toLowerCase()})` : null,
+    after?.keyword
+      ? `"${after.keyword.text}" (${uiTranslate ? uiTranslate('googleControlCode', { code: after.keyword.matchType }) : after.keyword.matchType.toLowerCase()})`
+      : null,
   ].filter((part): part is string => part != null);
   return parts.length > 0 ? parts.join(' · ') : null;
 }
@@ -720,21 +837,40 @@ export type ChangeLine = {
   who: string;
 };
 
-export function changeLine(change: GoogleChange): ChangeLine {
-  const resource = RESOURCE_WORDS[change.resourceType] ?? codeLabel(change.resourceType);
+export function changeLine(
+  change: GoogleChange,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): ChangeLine {
+  // Existing callers also pass this helper directly to Array.map.
+  uiTranslate = typeof uiTranslate === 'function' ? uiTranslate : undefined;
+  uiLocale = isUiLocale(uiLocale) ? uiLocale : 'en';
+  const resource = RESOURCE_WORDS[change.resourceType]
+    ? googleCopy(RESOURCE_WORDS[change.resourceType], uiTranslate)
+    : codeLabel(change.resourceType, uiTranslate);
   const where = [change.campaignName, change.adGroupName].filter(Boolean).join(' › ');
   return {
     at: change.at,
-    what: `${resource} ${OPERATION_WORDS[change.operation]}`,
+    what: uiTranslate
+      ? uiTranslate('googleChangeWhat', {
+          operation: change.operation,
+          resource,
+        })
+      : `${resource} ${OPERATION_WORDS[change.operation]}`,
     where: where || null,
-    detail: changeDetail(change),
-    who: CLIENT_WORDS[change.clientType] ?? codeLabel(change.clientType).toLowerCase(),
+    detail: changeDetail(change, uiTranslate, uiLocale),
+    who: CLIENT_WORDS[change.clientType]
+      ? googleCopy(CLIENT_WORDS[change.clientType], uiTranslate)
+      : codeLabel(change.clientType, uiTranslate).toLowerCase(),
   };
 }
 
 /** Google's change history reaches back 30 days, today included, in the account's own day. The
  *  edge clamps a wider ask to what change_event can read and says what it cut (`coverage`). */
-export function changeHistoryWindow(now: Date = new Date()): { since: string; until: string } {
+export function changeHistoryWindow(now: Date = new Date()): {
+  since: string;
+  until: string;
+} {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   return { since: iso(today - 30 * DAY_MS), until: iso(today + DAY_MS) };
@@ -742,8 +878,8 @@ export function changeHistoryWindow(now: Date = new Date()): { since: string; un
 
 /** "Oct 25" from an ISO day, or from an instant on its own offset's day: Google dates a change in
  *  the account's time zone, and that is the day a person there made it. */
-export function dayLabel(iso: string): string {
-  return new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', {
+export function dayLabel(iso: string, uiLocale: UiLocale = 'en'): string {
+  return new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString(uiLocale, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',

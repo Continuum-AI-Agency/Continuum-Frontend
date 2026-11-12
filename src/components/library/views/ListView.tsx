@@ -2,6 +2,7 @@
 
 import type { CustomField, LibrarySort, MediaAsset } from '@continuum/contracts';
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -40,6 +41,7 @@ import {
   sortRows,
 } from './listSort';
 import { type FieldValuesByAsset, useAssetCommentCounts } from './useAssetFieldValues';
+import { useCardFieldDisplay, useLibraryFieldOptions } from './useLibraryFieldOptions';
 
 // A built-in the List always shows, by its List key; 'name' is the card's 'title'.
 const DEFAULT_COLUMN_KEYS: ReadonlySet<string> = new Set([
@@ -78,6 +80,10 @@ export function ListView({
   loadingMore?: boolean;
   emptyHint?: string;
 }) {
+  const translateUi = useUiTranslations('library');
+  const fieldDisplay = useCardFieldDisplay();
+  const { fields: BUILT_IN_CARD_FIELDS, columns: BUILT_IN_LIST_COLUMNS } = useLibraryFieldOptions();
+
   const [clientSort, setClientSort] = useState<ListSort | null>(null);
   const reviewLabels = useReviewStateLabels(assets[0]?.brandId);
   const customStates = useReviewCustomStates(assets[0]?.brandId);
@@ -102,7 +108,12 @@ export function ListView({
     customFields.some((field) => field.type === 'user' || field.type === 'user_multi');
   const members = useMentionTargets(needsMembers ? assets[0]?.brandId : null);
   const memberName = memberNameLookup(members);
-  const lookups: CardFieldLookups = { commentCount, memberName, reviewLabel };
+  const lookups: CardFieldLookups = {
+    ...fieldDisplay,
+    commentCount,
+    memberName,
+    reviewLabel,
+  };
   const builtInCell = (asset: MediaAsset, key: string): string =>
     cardFieldValue(asset, key === 'name' ? 'title' : key, lookups) ?? '—';
 
@@ -110,10 +121,19 @@ export function ListView({
   const customCell = (asset: MediaAsset, fieldId: string): string => {
     const field = fieldById.get(fieldId);
     const value = fieldValues.get(asset.id)?.get(fieldId);
-    return field && value !== undefined ? formatCustomFieldValue(field, value, memberName) : '';
+    return field && value !== undefined
+      ? formatCustomFieldValue(field, value, memberName, fieldDisplay)
+      : '';
   };
   const sortValue = (asset: MediaAsset, key: string): SortValue => {
-    if (fieldById.has(key)) return customCell(asset, key).toLocaleLowerCase();
+    if (fieldById.has(key)) {
+      const field = fieldById.get(key);
+      const value = fieldValues.get(asset.id)?.get(key);
+      if (field?.type === 'number' || field?.type === 'rating')
+        return typeof value === 'number' ? value : null;
+      if (field?.type === 'date') return typeof value === 'string' ? value : null;
+      return customCell(asset, key).toLocaleLowerCase(fieldDisplay.locale);
+    }
     return DEFAULT_COLUMN_KEYS.has(key)
       ? builtInSortValue(asset, key)
       : cardFieldSortValue(asset, key, lookups);
@@ -154,7 +174,7 @@ export function ListView({
         data-testid="library-list-view"
         className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground"
       >
-        {emptyHint ?? 'No media yet.'}
+        {emptyHint ?? translateUi('no_media_yet_78144e53')}
       </div>
     );
   }
@@ -166,10 +186,10 @@ export function ListView({
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">
-                <span className="sr-only">Select</span>
+                <span className="sr-only">{translateUi('select_2a78025d')}</span>
               </TableHead>
               <TableHead className="w-14">
-                <span className="sr-only">Thumbnail</span>
+                <span className="sr-only">{translateUi('thumbnail_f3fe2c93')}</span>
               </TableHead>
               {columns.map((column) => {
                 const direction = activeSort?.key === column.key ? activeSort.direction : null;
@@ -217,7 +237,7 @@ export function ListView({
                     <Checkbox
                       checked={selected}
                       onCheckedChange={() => onToggleSelected(asset)}
-                      aria-label={`${selected ? 'Deselect' : 'Select'} ${asset.title ?? asset.fileName}`}
+                      aria-label={`${selected ? translateUi('deselect_142174c1') : translateUi('select_2a78025d')} ${asset.title ?? asset.fileName}`}
                     />
                   </TableCell>
                   <TableCell>
@@ -267,8 +287,8 @@ export function ListView({
           disabled={loadingMore}
           onClick={onLoadMore}
         >
-          {loadingMore ? <Loader2 className="size-4 animate-spin" /> : null}
-          Load more
+          {loadingMore ? <Loader2 className="size-4 animate-spin" /> : null}{' '}
+          {translateUi('load_more_ac8991ef')}{' '}
         </Button>
       ) : null}
     </div>

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { LiveChangePreviewPayload } from '@continuum/contracts';
-import { act, cleanup, render } from '@testing-library/react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { act, cleanup } from '@testing-library/react';
+import { render, renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import { LIVE_BATCH_PREVIEW } from '@/lib/campaign-canvas/lectura.fixtures';
 import { useCanvasView } from './CanvasViewToggle';

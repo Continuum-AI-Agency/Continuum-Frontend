@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import type { TimelineEvent, TimelineSegment } from '@/types/timeline';
 import { TimelineEventMarker } from './TimelineEventMarker';
@@ -27,6 +28,8 @@ export function TimelineRow({
   selectedEventId,
   isAd = false,
 }: TimelineRowProps) {
+  const uiText = useTranslations('scale');
+
   const totalDurationMs = endDateMs - startDateMs;
 
   const getSegmentStyle = (segment: TimelineSegment) => {
@@ -83,7 +86,11 @@ export function TimelineRow({
                   : 'bg-muted border border-border'
               } ${isAd ? 'h-4' : 'h-6'}`}
               style={style}
-              title={`Status: ${seg.status} | Spend: $${seg.spend_start || 0} - $${seg.spend_end || 0}`}
+              title={uiText('template_48082b510b6c', {
+                v0: seg.status,
+                v1: seg.spend_start || 0,
+                v2: seg.spend_end || 0,
+              })}
             >
               <div
                 className={`w-full h-full rounded-sm ${seg.status === 'ACTIVE' ? 'bg-green-500' : 'bg-muted-foreground/30'}`}

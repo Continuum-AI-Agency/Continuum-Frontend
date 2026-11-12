@@ -15,7 +15,7 @@
 // ADDITIVE for this wave: the node context menus keep their config copies. Slimming
 // them is a separate change against files this shell does not own.
 
-import { actionDef } from '@continuum/contracts';
+import { actionDef, STUDIO_NODE_REGISTRY, type StudioNodeType } from '@continuum/contracts';
 import {
   Blocks,
   Combine,
@@ -25,9 +25,11 @@ import {
   ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNodeConfigPatch } from '../hooks/useNodeConfigPatch';
+import { useStudioMetadata } from '../hooks/useStudioMetadata';
 import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
@@ -67,16 +69,21 @@ const GROUNDED_TYPES = new Set(['nanoGen', 'videoGen', 'veoDirector', 'veoFast',
 const humanizeType = (type: string): string =>
   type.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (character) => character.toUpperCase());
 
-function nodeTitle(node: StudioNode): string {
+function nodeTitle(node: StudioNode, metadata: (source: string) => string): string {
   const label = (node.data as { label?: unknown }).label;
   if (typeof label === 'string' && label.trim().length > 0) return label;
   // "Action" names the node type, never the op. The registry label is the only thing
   // that distinguishes one of the 31 ops from another.
   if (node.type === 'action') {
-    return actionDef((node.data as ActionNodeData).actionId)?.label ?? 'Action';
+    return metadata(actionDef((node.data as ActionNodeData).actionId)?.label ?? 'Action');
   }
   const type = node.type ?? '';
-  return TYPE_TITLES[type] ?? humanizeType(type) ?? 'Node';
+  return metadata(
+    TYPE_TITLES[type] ??
+      STUDIO_NODE_REGISTRY[type as StudioNodeType]?.label ??
+      humanizeType(type) ??
+      'Node',
+  );
 }
 
 function ConfigSection({
@@ -144,6 +151,9 @@ export function NodeInspectorPanel({
   onRunSelection?: (nodeIds: string[]) => void;
   onEnforceBrandBook?: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+  const metadata = useStudioMetadata();
+
   const nodes = useStudioStore((state) => state.nodes);
   const setNodes = useStudioStore((state) => state.setNodes);
   const brandId = useStudioStore((state) => state.brandId);
@@ -183,7 +193,13 @@ export function NodeInspectorPanel({
 
   return (
     <CanvasFloatingPanel
-      title={multiple ? `${selected.length} nodes selected` : nodeTitle(node)}
+      title={
+        multiple
+          ? translateUi('value0_nodes_selected_6413c674', {
+              count: Number(selected.length),
+            })
+          : nodeTitle(node, metadata)
+      }
       icon={
         multiple ? (
           <ListChecks className="size-4" aria-hidden />
@@ -205,14 +221,16 @@ export function NodeInspectorPanel({
             inputs is as legitimate a technique as a whole branch. */}
         <BulkAction
           icon={Blocks}
-          label="Save as technique"
+          label={translateUi('save_as_technique_8110164f')}
           onClick={() => setIsSaveTechniqueOpen(true)}
         />
 
         {collapsibleModuleId ? (
           <BulkAction
             icon={Combine}
-            label={`Collapse technique (${collapsibleMemberCount} nodes)`}
+            label={translateUi('collapse_technique_value0_nodes_22ab8059', {
+              value0: String(collapsibleMemberCount),
+            })}
             onClick={collapseSelectedModule}
           />
         ) : null}
@@ -220,20 +238,21 @@ export function NodeInspectorPanel({
         {multiple ? (
           <>
             <p className="text-xs text-muted-foreground">
-              Per-node settings stay on the node while more than one is selected.
+              {' '}
+              {translateUi('per_node_settings_stay_on_the_node__d98d8127')}{' '}
             </p>
             <div className="flex flex-col gap-1.5">
               {onRunSelection ? (
                 <BulkAction
                   icon={Play}
-                  label="Run selection"
+                  label={translateUi('run_selection_5e40e515')}
                   onClick={() => onRunSelection(selected.map((entry) => entry.id))}
                 />
               ) : null}
               {onEnforceBrandBook ? (
                 <BulkAction
                   icon={ShieldCheck}
-                  label="Enforce brand book"
+                  label={translateUi('enforce_brand_book_69cade25')}
                   onClick={onEnforceBrandBook}
                 />
               ) : null}
@@ -241,7 +260,7 @@ export function NodeInspectorPanel({
             <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
               {selected.map((entry) => (
                 <li key={entry.id} className="truncate">
-                  {nodeTitle(entry)}
+                  {nodeTitle(entry, metadata)}
                 </li>
               ))}
             </ul>

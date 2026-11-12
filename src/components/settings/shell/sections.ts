@@ -28,7 +28,12 @@ export const BRAND_SECTIONS = [
   { key: 'activation', label: 'Activation', icon: Rocket, scope: 'brand' },
   { key: 'general', label: 'General', icon: IdCard, scope: 'brand' },
   { key: 'projects', label: 'Projects', icon: FolderKanban, scope: 'brand' },
-  { key: 'brand-intelligence', label: 'Brand Intelligence', icon: Library, scope: 'brand' },
+  {
+    key: 'brand-intelligence',
+    label: 'Brand Intelligence',
+    icon: Library,
+    scope: 'brand',
+  },
   { key: 'skills', label: 'Skills', icon: Sparkles, scope: 'brand' },
   { key: 'prompts', label: 'Prompts', icon: BookText, scope: 'brand' },
   { key: 'integrations', label: 'Integrations', icon: Plug, scope: 'brand' },
@@ -41,7 +46,12 @@ export const ACCOUNT_SECTIONS = [
   { key: 'connections', label: 'Connections', icon: Link2, scope: 'account' },
   { key: 'activity', label: 'Activity', icon: ScrollText, scope: 'account' },
   { key: 'brands', label: 'Brands', icon: Building2, scope: 'account' },
-  { key: 'notifications', label: 'Notifications', icon: Bell, scope: 'account' },
+  {
+    key: 'notifications',
+    label: 'Notifications',
+    icon: Bell,
+    scope: 'account',
+  },
   { key: 'drive', label: 'Drive', icon: HardDrive, scope: 'account' },
 ] as const satisfies readonly SectionDef[];
 
@@ -77,3 +87,21 @@ export function resolveSection(value: string | string[] | undefined | null): Sec
   if (candidate === 'brand-book') return 'brand-intelligence';
   return isSectionKey(candidate) ? candidate : DEFAULT_SECTION;
 }
+
+export const sectionMessageKeys = {
+  activation: 'sectionActivation',
+  general: 'sectionGeneral',
+  projects: 'sectionProjects',
+  'brand-intelligence': 'sectionBrandIntelligence',
+  skills: 'sectionSkills',
+  prompts: 'sectionPrompts',
+  integrations: 'sectionIntegrations',
+  knowledge: 'sectionKnowledge',
+  billing: 'sectionBilling',
+  profile: 'sectionProfile',
+  connections: 'sectionConnections',
+  activity: 'sectionActivity',
+  brands: 'sectionBrands',
+  notifications: 'sectionNotifications',
+  drive: 'sectionDrive',
+} as const satisfies Record<SectionKey, string>;

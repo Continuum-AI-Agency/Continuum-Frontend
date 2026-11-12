@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // Where the team sets how much of the primary goal it aims for, and by when. A failed write keeps
 // everything typed and says what the Backend said: the form only says "saved" when it was.
@@ -39,6 +40,8 @@ export function GoalTargetForm({
   currencies: string[];
   targets: Pick<GoalTargetsApi, 'save' | 'remove'>;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const id = useId();
   const isMoney = HOME_OBJECTIVE_METRICS[objective.metric].unit === 'currency';
   const [target, setTarget] = useState(existing ? String(existing.target) : '');
@@ -51,15 +54,18 @@ export function GoalTargetForm({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const built = goalTargetRequest({
-      brandId,
-      objective,
-      target,
-      period,
-      periodStart,
-      periodEnd,
-      currency,
-    });
+    const built = goalTargetRequest(
+      {
+        brandId,
+        objective,
+        target,
+        period,
+        periodStart,
+        periodEnd,
+        currency,
+      },
+      betaUiText,
+    );
     if (!built.ok) {
       setOutcome({ kind: 'failed', message: built.message });
       return;
@@ -92,11 +98,13 @@ export function GoalTargetForm({
       onChange={() => setOutcome(null)}
       onSubmit={submit}
     >
-      <p className="font-medium text-xs">Target for {objective.label.toLowerCase()}</p>
+      <p className="font-medium text-xs">
+        {betaUiText('beta_154ce00efbbb')} {objective.label.toLowerCase()}
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <label className={LABEL_CLASS} htmlFor={`${id}-target`}>
-            Target
+            {betaUiText('beta_978354db0c00')}
           </label>
           <Input
             className="h-8 text-sm"
@@ -111,7 +119,7 @@ export function GoalTargetForm({
         </div>
         <div className="flex min-w-0 flex-col gap-1">
           <label className={LABEL_CLASS} htmlFor={`${id}-period`}>
-            Period
+            {betaUiText('beta_6e795d4d3cc2')}
           </label>
           <select
             className={SELECT_CLASS}
@@ -121,7 +129,7 @@ export function GoalTargetForm({
           >
             {homeGoalPeriodSchema.options.map((option) => (
               <option key={option} value={option}>
-                {GOAL_PERIOD_LABELS[option]}
+                {betaUiText('goalPeriodLabel', { period: option })}
               </option>
             ))}
           </select>
@@ -129,7 +137,7 @@ export function GoalTargetForm({
         {isMoney ? (
           <div className="flex min-w-0 flex-col gap-1">
             <label className={LABEL_CLASS} htmlFor={`${id}-currency`}>
-              Currency
+              {betaUiText('beta_3ac1a9ec4fa7')}
             </label>
             <Input
               className="h-8 text-sm uppercase"
@@ -150,7 +158,7 @@ export function GoalTargetForm({
           <>
             <div className="flex min-w-0 flex-col gap-1">
               <label className={LABEL_CLASS} htmlFor={`${id}-start`}>
-                Starts
+                {betaUiText('beta_96dbedeca7df')}
               </label>
               <Input
                 className="h-8 text-sm"
@@ -162,7 +170,7 @@ export function GoalTargetForm({
             </div>
             <div className="flex min-w-0 flex-col gap-1">
               <label className={LABEL_CLASS} htmlFor={`${id}-end`}>
-                Ends
+                {betaUiText('beta_e98982c9f2ba')}
               </label>
               <Input
                 className="h-8 text-sm"
@@ -185,12 +193,14 @@ export function GoalTargetForm({
           data-testid="home-goals-target-status"
           role="status"
         >
-          {outcome.kind === 'saved' ? 'Target saved.' : 'Target removed.'}
+          {outcome.kind === 'saved'
+            ? betaUiText('beta_f02fdb033267')
+            : betaUiText('beta_d7527aac39b4')}
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button className="h-7 text-xs" disabled={busy} size="sm" type="submit">
-          Save target
+          {betaUiText('beta_769075e4b436')}
         </Button>
         {existing ? (
           <Button
@@ -201,7 +211,7 @@ export function GoalTargetForm({
             type="button"
             variant="ghost"
           >
-            Remove target
+            {betaUiText('beta_efdbbceb8034')}
           </Button>
         ) : null}
       </div>

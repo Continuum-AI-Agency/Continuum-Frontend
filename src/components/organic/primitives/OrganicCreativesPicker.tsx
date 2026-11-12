@@ -4,6 +4,7 @@
 import type { MediaAsset } from '@continuum/contracts';
 import { creativeRefFromAsset, shapeUserSuppliedMedia } from '@continuum/contracts';
 import { ImageOff, Play, Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { Button } from '@/components/ui/button';
@@ -116,6 +117,7 @@ export function OrganicCreativesPicker({
   onAttach,
   attached,
 }: OrganicCreativesPickerProps) {
+  const uiText = useTranslations('organic');
   const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters } =
     useStudioLibraryBrowser(brandProfileId);
 
@@ -161,7 +163,7 @@ export function OrganicCreativesPicker({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search the library…"
+          placeholder={uiText('search_the_library_ec8e720')}
           className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-9 pr-3 text-sm outline-none focus:border-border"
         />
       </div>
@@ -180,12 +182,12 @@ export function OrganicCreativesPicker({
           <div className="flex min-h-[6rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-3 py-4">
             <p className="text-center text-xs text-muted-foreground/60">
               {query.trim() ? (
-                'No matching creatives.'
+                uiText('no_matching_creatives_5b816d3')
               ) : (
                 <>
-                  No creatives in your library yet.{' '}
+                  {uiText('libraryNoCreatives')}{' '}
                   <span className="text-muted-foreground">
-                    Generate in AI Studio or upload, then attach here.
+                    {uiText('generate_in_ai_studio_or_upload_then_attach_h_bb4f5ce')}
                   </span>
                 </>
               )}
@@ -211,7 +213,9 @@ export function OrganicCreativesPicker({
       {selectedIds.length > 0 && (
         <div className="flex justify-end">
           <Button type="button" size="sm" onClick={handleAttach}>
-            Attach selected ({selectedIds.length})
+            {uiText.rich('sentence_27ce9ab23aea', {
+              v0: () => selectedIds.length,
+            })}
           </Button>
         </div>
       )}

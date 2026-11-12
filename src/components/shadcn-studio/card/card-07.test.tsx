@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import * as React from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 import { CardOverlayDemo } from './card-07';
 
@@ -35,8 +36,14 @@ describe('CardOverlayDemo', () => {
 
     const image = screen.getByRole('img') as HTMLImageElement;
 
-    Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 360 });
-    Object.defineProperty(image, 'naturalHeight', { configurable: true, value: 180 });
+    Object.defineProperty(image, 'naturalWidth', {
+      configurable: true,
+      value: 360,
+    });
+    Object.defineProperty(image, 'naturalHeight', {
+      configurable: true,
+      value: 180,
+    });
 
     fireEvent.load(image);
 

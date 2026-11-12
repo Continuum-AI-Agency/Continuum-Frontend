@@ -7,10 +7,16 @@ import {
   templateRevisionVariantSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import type { LayerDraftState } from '@/components/forge/layerDraft';
 import { useForgeExitGuard } from '@/components/forge/useForgeExitGuard';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
 const ASSET = '22222222-2222-4222-8222-222222222222';
@@ -35,7 +41,11 @@ const base: HyperframesSceneView = {
   sceneSha256: 'b'.repeat(64),
   viewport: { width: 32, height: 24 },
   clock: { numerator: 30, denominator: 1, frameCount: 3 },
-  edits: { schema: 'hyperframes.edits/1', sourceSha256: 'c'.repeat(64), operations: [] },
+  edits: {
+    schema: 'hyperframes.edits/1',
+    sourceSha256: 'c'.repeat(64),
+    operations: [],
+  },
   capabilities: [
     {
       nodeId: 'copy',
@@ -63,7 +73,10 @@ const base: HyperframesSceneView = {
     },
   ],
   renderer: {
-    engine: { implementation: 'hyperframes-native/4+resvg-0.48.1', sha256: 'd'.repeat(64) },
+    engine: {
+      implementation: 'hyperframes-native/4+resvg-0.48.1',
+      sha256: 'd'.repeat(64),
+    },
     tools: { encoderSha256: 'e'.repeat(64), probeSha256: 'f'.repeat(64) },
   },
 };
@@ -183,7 +196,9 @@ beforeEach(() => {
       });
     if (url.pathname === '/api/library/sign') {
       posts.push({ path: url.pathname, body: JSON.parse(String(init?.body)) });
-      return respond({ signedUrl: 'https://private-output.test/exact-saved-frame.png' });
+      return respond({
+        signedUrl: 'https://private-output.test/exact-saved-frame.png',
+      });
     }
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer editor-fixture-token');
     if (init?.method === 'POST') {
@@ -193,7 +208,10 @@ beforeEach(() => {
         if (failSave) {
           failSave = false;
           return respond(
-            { code: 'runtime-controlled-edit', message: 'The source script overwrites this copy.' },
+            {
+              code: 'runtime-controlled-edit',
+              message: 'The source script overwrites this copy.',
+            },
             422,
           );
         }
@@ -211,7 +229,9 @@ beforeEach(() => {
       return respond(status, 202);
     }
     if (url.pathname.endsWith('/revision-variants'))
-      return respond({ items: acceptedSave ? [originalVariant, childVariant] : [originalVariant] });
+      return respond({
+        items: acceptedSave ? [originalVariant, childVariant] : [originalVariant],
+      });
     if (url.pathname.endsWith('/scene/uploads'))
       return respond({
         family: 'hyperframes',
@@ -249,7 +269,10 @@ beforeEach(() => {
     if (url.pathname.endsWith('/scene')) {
       if (sceneFailure)
         return respond(
-          { code: 'native_source_pending', message: 'Source compilation is pending.' },
+          {
+            code: 'native_source_pending',
+            message: 'Source compilation is pending.',
+          },
           409,
         );
       return respond(
@@ -279,7 +302,9 @@ afterAll(() => {
   else process.env.NEXT_PUBLIC_API_URL = apiBefore;
 });
 function mount(pins: { initialRevisionId?: string; initialJobId?: string } = {}) {
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <NativeHyperframesEditor
@@ -322,7 +347,9 @@ test('native editor loads full copy, keeps refused edits, retries the exact save
     expectedParentSceneSha256: base.sceneSha256,
     expectedSourceSceneSha256: base.sceneSha256,
     expectedHeadRevisionId: null,
-    edits: { operations: [{ op: 'text', fieldId: 'copy:text', value: 'A longer headline' }] },
+    edits: {
+      operations: [{ op: 'text', fieldId: 'copy:text', value: 'A longer headline' }],
+    },
   });
   expect(posts[0]!.body.variantId).toBeUndefined();
   await screen.findByText('Native copy');
@@ -424,10 +451,15 @@ test('completed output displays only its signed Library version and keeps the ex
     ],
   };
   mount({ initialJobId: JOB });
-  const image = await screen.findByRole('img', { name: 'Render of saved Hyperframes revision' });
+  const image = await screen.findByRole('img', {
+    name: 'Render of saved Hyperframes revision',
+  });
   expect(image.getAttribute('src')).toBe('https://private-output.test/exact-saved-frame.png');
   expect(posts).toEqual([
-    { path: '/api/library/sign', body: { brandId: BRAND, assetId: CHILD, versionId: VERSION } },
+    {
+      path: '/api/library/sign',
+      body: { brandId: BRAND, assetId: CHILD, versionId: VERSION },
+    },
   ]);
   expect(screen.getByRole('link', { name: 'Saved job link' }).getAttribute('href')).toContain(
     `jobId=${JOB}`,
@@ -458,7 +490,9 @@ function GuardedNativeEditor() {
 }
 
 test('the native editor protects dirty copy through the existing Forge exit guard', async () => {
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
     <QueryClientProvider client={queryClient}>
       <GuardedNativeEditor />
@@ -490,7 +524,9 @@ test('text pagination bounds mounted controls and preserves changes across pages
     })),
   };
   mount();
-  fireEvent.change(await screen.findByLabelText('Text 1'), { target: { value: 'First edit' } });
+  fireEvent.change(await screen.findByLabelText('Text 1'), {
+    target: { value: 'First edit' },
+  });
   expect(
     screen.getAllByRole('textbox').filter((control) => control.tagName === 'TEXTAREA'),
   ).toHaveLength(20);
@@ -512,12 +548,20 @@ test('text pagination bounds mounted controls and preserves changes across pages
 
 test('mounted source ordering changes the real save payload and supports discard', async () => {
   mount();
-  const earlier = await screen.findByRole('button', { name: 'Move right earlier' });
+  const earlier = await screen.findByRole('button', {
+    name: 'Move right earlier',
+  });
   fireEvent.click(earlier);
-  fireEvent.change(screen.getByLabelText('Variant name'), { target: { value: 'Reordered' } });
+  fireEvent.change(screen.getByLabelText('Variant name'), {
+    target: { value: 'Reordered' },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
   expect(
-    (screen.getByRole('button', { name: 'Move left earlier' }) as HTMLButtonElement).disabled,
+    (
+      screen.getByRole('button', {
+        name: 'Move left earlier',
+      }) as HTMLButtonElement
+    ).disabled,
   ).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Move right earlier' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
@@ -551,7 +595,11 @@ test('late source-order metadata preserves unsaved copy and dirty state', async 
         operations: unknown[];
       }
     ).operations,
-  ).toContainEqual({ op: 'text', fieldId: 'copy:text', value: 'Edited while loading' });
+  ).toContainEqual({
+    op: 'text',
+    fieldId: 'copy:text',
+    value: 'Edited while loading',
+  });
 });
 
 test('an unavailable companion order endpoint leaves existing copy editing usable', async () => {
@@ -560,7 +608,9 @@ test('an unavailable companion order endpoint leaves existing copy editing usabl
   await screen.findByText(
     'Element order is unavailable for this source. Copy and size edits remain available.',
   );
-  fireEvent.change(screen.getByLabelText('Text 1'), { target: { value: 'Compatible copy' } });
+  fireEvent.change(screen.getByLabelText('Text 1'), {
+    target: { value: 'Compatible copy' },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
   await screen.findByText('Variant was not saved');
   expect(

@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type ParsedRunEvent, useRunEventStream } from '@/hooks/useRunEventStream';
 import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
@@ -32,8 +33,14 @@ function foldEvent(prev: BulkRunState, event: ParsedRunEvent): BulkRunState {
       return {
         ...prev,
         completed: prev.completed + 1,
-        byPlatform: { ...prev.byPlatform, [platform]: (prev.byPlatform[platform] ?? 0) + 1 },
-        byFormat: { ...prev.byFormat, [format]: (prev.byFormat[format] ?? 0) + 1 },
+        byPlatform: {
+          ...prev.byPlatform,
+          [platform]: (prev.byPlatform[platform] ?? 0) + 1,
+        },
+        byFormat: {
+          ...prev.byFormat,
+          [format]: (prev.byFormat[format] ?? 0) + 1,
+        },
       };
     }
     case 'slot_failed':
@@ -101,7 +108,11 @@ function useBulkPlanBatch(
   return useQuery({
     queryKey: ['organic', 'bulk-plan-batch', brandId ?? 'none', run.runId],
     queryFn: ({ signal }) =>
-      fetchBulkPlanBatch({ brandId: brandId ?? '', planId: run.planId, signal }),
+      fetchBulkPlanBatch({
+        brandId: brandId ?? '',
+        planId: run.planId,
+        signal,
+      }),
     enabled: Boolean(brandId && expectsBatch && run.completedAt),
     // Found once; from then on the card polls the batch itself.
     staleTime: Number.POSITIVE_INFINITY,
@@ -125,6 +136,7 @@ export function BulkRunPanel({
   expectsBatch?: boolean;
   onOpenDraft?: (draftId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   // The run-event stream still drives the by-platform / by-format breakdowns (the
   // summaries carry platform but not format), but the completion TALLY is derived
   // from the real post_generation_jobs rows for this plan.
@@ -176,7 +188,7 @@ export function BulkRunPanel({
       >
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Bulk Generation Run
+            {uiText('bulk_generation_run_1cd0487')}
           </p>
           <span
             className={cn(
@@ -188,7 +200,7 @@ export function BulkRunPanel({
                   : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
             )}
           >
-            {status}
+            {uiText('bulkRunState', { status })}
           </span>
         </div>
 
@@ -197,14 +209,13 @@ export function BulkRunPanel({
             <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
           </div>
           <span className="text-xs tabular-nums text-muted-foreground">
-            {done}/{displayTotal}
-            {failed > 0 ? ` · ${failed} failed` : ''}
+            {uiText('bulkRunProgress', { done, total: displayTotal, failed })}
           </span>
         </div>
 
         <div className="space-y-1.5">
-          <CountRow label="By platform" counts={run.byPlatform} />
-          <CountRow label="By format" counts={run.byFormat} />
+          <CountRow label={uiText('by_platform_64eb24a')} counts={run.byPlatform} />
+          <CountRow label={uiText('by_format_ed7449b')} counts={run.byFormat} />
         </div>
       </div>
       {batch && onOpenDraft ? (

@@ -1,6 +1,7 @@
 'use client';
 
 import { PlayIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
@@ -42,8 +43,9 @@ export function CreativeTile({
   onToggleSelect,
   onOpenDetail,
 }: CreativeTileProps) {
+  const uiText = useTranslations('scale');
   const [ratio, setRatio] = React.useState<string | null>(null);
-  const title = ad.creative?.title || ad.name || 'Untitled ad';
+  const title = ad.creative?.title || ad.name || uiText('creativeUntitledAd');
   const isVideo = ad.creative?.format === 'video' || Boolean(ad.creative?.videoId);
   // The tile renders its own Video/ratio pills, so the media badge stays off.
   const media = React.useMemo(() => {
@@ -69,7 +71,10 @@ export function CreativeTile({
         onClick={() => onToggleSelect(ad.id)}
         disabled={disabled}
         aria-pressed={isSelected}
-        aria-label={`${isSelected ? 'Deselect' : 'Select'} ad ${title}`}
+        aria-label={uiText('template_52ddbf6d9668', {
+          v0: isSelected ? uiText('deselect_142174c') : uiText('select_2a78025'),
+          v1: title,
+        })}
         className={cn(
           'group/tile flex w-full cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
@@ -93,7 +98,7 @@ export function CreativeTile({
             />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-              No preview
+              {uiText('no_preview_4b8bacd')}
             </div>
           )}
 
@@ -101,7 +106,7 @@ export function CreativeTile({
             {isVideo ? (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-black/55 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
                 <PlayIcon className="h-2.5 w-2.5 fill-current" aria-hidden />
-                Video
+                {uiText('video_d534be8')}
               </span>
             ) : null}
             {ratio ? (
@@ -119,7 +124,7 @@ export function CreativeTile({
               {metricLabel} · {metricValue}
             </span>
             <Badge variant={isSelected ? 'default' : 'secondary'} className="shrink-0 text-2xs">
-              {isSelected ? 'Selected' : 'Select'}
+              {isSelected ? uiText('selected_57fd7a0') : uiText('select_2a78025')}
             </Badge>
           </div>
         </div>

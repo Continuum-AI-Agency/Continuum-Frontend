@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { BID_CARD, EKATAR, GOALS, HISTORY, WITH_E1 } from './__fixtures__/googleTab';
 
 // The edge is the boundary: each scope answers its fixture. The portfolios' goals and the cards
@@ -18,7 +19,10 @@ mock.module('@/lib/supabase/client', () => ({
             ? { data: null, error: new Error('502') }
             : { data: WITH_E1, error: null };
         }
-        return { data: scope === 'change_history' ? HISTORY : null, error: null };
+        return {
+          data: scope === 'change_history' ? HISTORY : null,
+          error: null,
+        };
       },
     },
   }),
@@ -29,7 +33,11 @@ mock.module('next/navigation', () => ({
   useSearchParams: () => params,
 }));
 mock.module('./useGoogleCampaignGoals', () => ({
-  useGoogleCampaignGoals: () => ({ status: 'ready', goals: GOALS, unknown: null }),
+  useGoogleCampaignGoals: () => ({
+    status: 'ready',
+    goals: GOALS,
+    unknown: null,
+  }),
 }));
 const realData = await import('../../useOptimizerData');
 mock.module('../../useOptimizerData', () => ({
@@ -47,7 +55,9 @@ afterEach(() => {
 });
 
 function mount() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <GoogleTabSections
@@ -78,7 +88,9 @@ describe('GoogleTabSections', () => {
     mount();
     await waitFor(() => expect(screen.getByTestId('google-campaign-detail')).toBeTruthy());
     expect(
-      screen.getByText('VIVO 47-EKATAR', { selector: '[data-slot="sheet-title"]' }),
+      screen.getByText('VIVO 47-EKATAR', {
+        selector: '[data-slot="sheet-title"]',
+      }),
     ).toBeTruthy();
   });
 

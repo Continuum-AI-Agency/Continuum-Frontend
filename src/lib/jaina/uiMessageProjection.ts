@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // Project an AI SDK UI message onto the shapes the Jaina transcript renders.
 //
 // This is a GROUPING, not a fold, and the difference is the whole point of the migration. The old
@@ -126,7 +130,10 @@ const DELEGATION_STAGE: Record<string, string> = {
  * No dedup here, deliberately. Every row is addressed `${runId}:delegation:${callId}`, so the SDK
  * has ALREADY replaced a call's `started` part with its `complete` — one part per call reaches us.
  */
-const delegationEntriesOf = (data: Record<string, unknown>): JainaProgressEntry[] => {
+const delegationEntriesOf = (
+  data: Record<string, unknown>,
+  uiTranslate?: ScaleCopy,
+): JainaProgressEntry[] => {
   const kind = data.kind;
   if (kind !== 'handoff' && kind !== 'worker') return [];
 
@@ -162,20 +169,27 @@ const delegationEntriesOf = (data: Record<string, unknown>): JainaProgressEntry[
           stage,
           at: '',
           detail,
-          data: { stage, agent_id: agentId, display_name: label, field: record?.field },
+          data: {
+            stage,
+            agent_id: agentId,
+            display_name: label,
+            field: record?.field,
+          },
         },
       ];
     });
   }
 
   const detail =
-    stage === 'agent_spawn'
-      ? (objective ?? `Agent ${label} spawned`)
-      : stage === 'agent_complete'
-        ? `Agent ${label} ${status}`
-        : stage === 'handoff_start'
-          ? `Handoff to ${label}`
-          : `Handoff to ${label} ${status}`;
+    uiTranslate && !(stage === 'agent_spawn' && objective)
+      ? uiTranslate('jainaDelegationDetail', { stage, label, status })
+      : stage === 'agent_spawn'
+        ? (objective ?? `Agent ${label} spawned`)
+        : stage === 'agent_complete'
+          ? `Agent ${label} ${status}`
+          : stage === 'handoff_start'
+            ? `Handoff to ${label}`
+            : `Handoff to ${label} ${status}`;
 
   return [
     {
@@ -206,7 +220,10 @@ const delegationEntriesOf = (data: Record<string, unknown>): JainaProgressEntry[
  * timestamps. `formatThoughtDuration` drops non-finite dates, so this renders as thinking without
  * a duration rather than "NaNs".
  */
-export const reasoningEntriesOf = (message: JainaUIMessage): JainaProgressEntry[] =>
+export const reasoningEntriesOf = (
+  message: JainaUIMessage,
+  uiTranslate?: ScaleCopy,
+): JainaProgressEntry[] =>
   (message.parts as (DataPart & { text?: string })[]).flatMap((part) => {
     if (part.type === 'reasoning') {
       const detail = (part.text ?? '').trim();
@@ -215,7 +232,7 @@ export const reasoningEntriesOf = (message: JainaUIMessage): JainaProgressEntry[
     }
     if (part.type === JAINA_UI_DATA_PART.delegation) {
       const data = asRecord(part.data);
-      return data ? delegationEntriesOf(data) : [];
+      return data ? delegationEntriesOf(data, uiTranslate) : [];
     }
     return [];
   });
@@ -625,7 +642,15 @@ export const toolResultsOf = (message: JainaUIMessage): ToolResultEventData[] =>
     if (!part.toolCallId) return [];
     const name = part.toolName ?? 'tool';
     if (part.state === 'output-available') {
-      return [{ id: part.toolCallId, name, ok: true, cached: false, output: part.output }];
+      return [
+        {
+          id: part.toolCallId,
+          name,
+          ok: true,
+          cached: false,
+          output: part.output,
+        },
+      ];
     }
     if (part.state === 'output-error') {
       return [
@@ -722,7 +747,7 @@ const getNonEmptyString = (value: unknown): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-function planFromRecord(record: Record<string, unknown>): JainaPlan {
+function planFromRecord(record: Record<string, unknown>, uiTranslate?: ScaleCopy): JainaPlan {
   const stepsRaw = Array.isArray(record.steps)
     ? record.steps
     : Array.isArray(record.objectives)
@@ -757,20 +782,20 @@ function planFromRecord(record: Record<string, unknown>): JainaPlan {
       getNonEmptyString(record.chat_title) ??
       getNonEmptyString(record.chatTitle) ??
       getNonEmptyString(record.title) ??
-      'Execution Plan',
+      (uiTranslate ? uiTranslate('jainaExecutionPlan') : 'Execution Plan'),
     description:
       getNonEmptyString(record.description) ??
       getNonEmptyString(record.summary) ??
-      'Review this execution plan.',
+      (uiTranslate ? uiTranslate('jainaReviewPlan') : 'Review this execution plan.'),
     status: typeof record.status === 'string' ? (record.status as JainaPlan['status']) : 'pending',
     steps,
   };
 }
 
 /** The plan this turn's planner produced, or undefined when it produced none. */
-export const planOf = (message: JainaUIMessage): JainaPlan | undefined => {
+export const planOf = (message: JainaUIMessage, uiTranslate?: ScaleCopy): JainaPlan | undefined => {
   const data = partsOfType(message, JAINA_UI_DATA_PART.plan).at(-1);
-  return data ? planFromRecord(data) : undefined;
+  return data ? planFromRecord(data, uiTranslate) : undefined;
 };
 
 // ---------------------------------------------------------------------------
@@ -793,7 +818,11 @@ const STATUS_BY_METADATA: Record<string, JainaChatMessage['status']> = {
  */
 export const toJainaChatMessage = (
   message: JainaUIMessage,
-  options: { isStreaming: boolean; createdAt?: string },
+  options: {
+    isStreaming: boolean;
+    createdAt?: string;
+    uiTranslate?: ScaleCopy;
+  },
 ): JainaChatMessage => {
   const role = message.role === 'user' ? 'user' : 'assistant';
   // The run's own terminal verdict WINS over the caller's `isStreaming`, and the reason is that
@@ -831,7 +860,7 @@ export const toJainaChatMessage = (
     : interpretCheckpointReportPayload(reportOf(message));
   const report: ReportPayload | undefined = interpreted?.report;
 
-  const reasoning = reasoningEntriesOf(message);
+  const reasoning = reasoningEntriesOf(message, options.uiTranslate);
   const objectives = objectivesOf(message);
   const delegations = delegationsOf(message);
   const scaffold = scaffoldOf(message);
@@ -846,7 +875,7 @@ export const toJainaChatMessage = (
   const optimizerHyperframes = optimizerHyperframesOf(message);
   const campaignStructures = campaignStructuresOf(message);
   const liveChangePreviews = liveChangePreviewsOf(message);
-  const plan = planOf(message);
+  const plan = planOf(message, options.uiTranslate);
 
   // Mirrors the surface's completion rule: a report renders AS a report when it has content, is
   // not a direct answer, is not superseded by a question back to the user, and either something
@@ -873,7 +902,11 @@ export const toJainaChatMessage = (
           }
         : {}),
     }),
-    ...(status === 'error' ? { title: 'Jaina error' } : {}),
+    ...(status === 'error'
+      ? {
+          title: options.uiTranslate ? options.uiTranslate('jainaErrorLabel') : 'Jaina error',
+        }
+      : {}),
     renderAsReport,
     ...(reasoning.length > 0 ? { reasoning } : {}),
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
@@ -900,6 +933,7 @@ export const toJainaChatMessage = (
 };
 
 export type TranscriptProjectionInputs = {
+  uiTranslate?: ScaleCopy;
   /** True only for the turn the SDK is still writing. */
   isStreaming: boolean;
   /** Plan verdicts submitted but not yet echoed back by the run. */
@@ -909,6 +943,7 @@ export type TranscriptProjectionInputs = {
 };
 
 type TranscriptProjectionEntry = {
+  uiTranslate?: ScaleCopy;
   isStreaming: boolean;
   projected: JainaChatMessage;
   planStatus?: PlanStatus;
@@ -933,9 +968,12 @@ export const projectTranscriptMessage = (
 ): JainaChatMessage => {
   const cached = cache.get(message);
   const projected =
-    cached && cached.isStreaming === inputs.isStreaming
+    cached && cached.isStreaming === inputs.isStreaming && cached.uiTranslate === inputs.uiTranslate
       ? cached.projected
-      : toJainaChatMessage(message, { isStreaming: inputs.isStreaming });
+      : toJainaChatMessage(message, {
+          isStreaming: inputs.isStreaming,
+          uiTranslate: inputs.uiTranslate,
+        });
   const planStatus = projected.plan
     ? inputs.optimisticPlanStatusById[projected.plan.id]
     : undefined;
@@ -955,6 +993,7 @@ export const projectTranscriptMessage = (
   const value = deliverySource ? { ...withPlan, deliverySource } : withPlan;
   cache.set(message, {
     isStreaming: inputs.isStreaming,
+    uiTranslate: inputs.uiTranslate,
     projected,
     planStatus,
     deliverySource,

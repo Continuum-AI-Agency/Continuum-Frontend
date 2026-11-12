@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import { ImageNode } from './ImageNode';
@@ -365,7 +371,10 @@ describe('ImageNode', () => {
   it('should display a ready badge when a reference image is inlined', () => {
     const props = {
       ...defaultProps,
-      data: { image: 'data:image/jpeg;base64,abc', referenceStatus: 'ready' as const },
+      data: {
+        image: 'data:image/jpeg;base64,abc',
+        referenceStatus: 'ready' as const,
+      },
     };
 
     render(
@@ -382,7 +391,10 @@ describe('ImageNode', () => {
   it('should display a failed badge when reference inlining errors', () => {
     const props = {
       ...defaultProps,
-      data: { image: 'https://scontent.cdninstagram.com/a.jpg', referenceStatus: 'error' as const },
+      data: {
+        image: 'https://scontent.cdninstagram.com/a.jpg',
+        referenceStatus: 'error' as const,
+      },
     };
 
     render(

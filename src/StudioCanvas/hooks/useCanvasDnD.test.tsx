@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { buildElementDragPayload, ELEMENT_DRAG_TYPE } from '@/lib/ai-studio/referenceDrop';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
@@ -74,7 +74,9 @@ mock.module('@/components/ui/ToastProvider', () => ({
 mock.module('../stores/useStudioStore', () => ({
   useStudioStore: useStudioStoreMock,
 }));
-mock.module('../utils/resolveCreativeAssetDrop', () => ({ resolveCreativeAssetDrop }));
+mock.module('../utils/resolveCreativeAssetDrop', () => ({
+  resolveCreativeAssetDrop,
+}));
 mock.module('../utils/resolveSidebarDropTarget', () => ({
   resolveSidebarDropTarget,
   resolveBurnInDropTarget,
@@ -263,7 +265,9 @@ describe('useCanvasDnD', () => {
 
     await act(async () => {
       await result.current.onDrop(
-        buildDragEvent({ data: { 'application/reactflow-node-data': '{"type":"asset_drop"}' } }),
+        buildDragEvent({
+          data: { 'application/reactflow-node-data': '{"type":"asset_drop"}' },
+        }),
       );
     });
 
@@ -298,7 +302,9 @@ describe('useCanvasDnD', () => {
 
     await act(async () => {
       await result.current.onDrop(
-        buildDragEvent({ data: { 'application/vnd.continuum.asset': '{"path":"a.png"}' } }),
+        buildDragEvent({
+          data: { 'application/vnd.continuum.asset': '{"path":"a.png"}' },
+        }),
       );
     });
 

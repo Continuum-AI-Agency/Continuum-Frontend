@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The campaign's trend (G11): its cost per result day by day as one thin line, the portfolio
 // goal as a dashed line, the days it did not serve shaded, and what changed on it as dots on
@@ -33,6 +34,8 @@ export function CampaignTrendChart({
   marks: readonly ChangeMark[];
   currency: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const points = trend.days.map((day) => ({ day: day.day, value: day.value }));
   const geometry = trendGeometry(points, trend.goal, W, H);
@@ -67,7 +70,7 @@ export function CampaignTrendChart({
               <span className="text-muted-foreground"> · {dayLabel(trend.last.day)}</span>
             </>
           ) : (
-            <span className="text-muted-foreground">Nothing to price in the window</span>
+            <span className="text-muted-foreground">{betaUiText('beta_2073b12d2059')}</span>
           )}
         </span>
       </figcaption>
@@ -153,7 +156,10 @@ export function CampaignTrendChart({
               data-testid="campaign-trend-mark"
               initial={reduce ? false : { scale: 0 }}
               key={`${mark.day}:${mark.actor}`}
-              style={{ left: pctX(xOf(index)), background: ACTOR_COLOR[mark.actor] }}
+              style={{
+                left: pctX(xOf(index)),
+                background: ACTOR_COLOR[mark.actor],
+              }}
               title={`${dayLabel(mark.day)} · ${ACTOR_WORDS[mark.actor]}: ${mark.label}`}
               transition={{
                 type: 'spring',
@@ -192,7 +198,7 @@ export function CampaignTrendChart({
                 aria-hidden="true"
                 className="w-4 border-foreground/55 border-t-[1.5px] border-dashed"
               />
-              goal{' '}
+              {betaUiText('beta_0304523efff5')}{' '}
               <span className="font-medium text-foreground tabular-nums">{money(trend.goal)}</span>
             </span>
           ) : null}
@@ -200,11 +206,15 @@ export function CampaignTrendChart({
             <span className="inline-flex items-center gap-1.5">
               <span aria-hidden="true" className="size-2.5 rounded-sm bg-destructive/15" />
               <span data-testid="campaign-trend-dark-days">
-                {trend.darkDays} {trend.darkDays === 1 ? 'day' : 'days'} without ads
+                {trend.darkDays}{' '}
+                {trend.darkDays === 1
+                  ? betaUiText('beta_944c27e5b97a')
+                  : betaUiText('beta_ab51004e9d71')}{' '}
+                {betaUiText('beta_37e9a2d44c9d')}
               </span>
             </span>
           ) : null}
-          {marks.length > 0 ? <span>Dots: what changed on it, listed below</span> : null}
+          {marks.length > 0 ? <span>{betaUiText('beta_24b669fb5558')}</span> : null}
           {actors.map((actor) => (
             <span className="inline-flex items-center gap-1.5" key={actor}>
               <span

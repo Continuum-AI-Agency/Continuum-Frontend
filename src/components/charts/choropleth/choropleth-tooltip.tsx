@@ -1,8 +1,8 @@
 'use client';
-
-import { intFmt } from '../chart-formatters';
+import { useTranslations } from 'next-intl';
 import { TooltipBox } from '../tooltip/tooltip-box';
 import { TooltipContent, type TooltipRow } from '../tooltip/tooltip-content';
+import { useChartFormatters } from '../use-chart-formatters';
 import {
   type ChoroplethFeature,
   useChoroplethInteraction,
@@ -34,14 +34,19 @@ export interface ChoroplethTooltipProps {
 
 export function ChoroplethTooltip({
   content,
-  formatValue = intFmt,
+  formatValue: providedFormatValue,
   getFeatureName,
   getFeatureValue,
-  valueLabel = 'Value',
+  valueLabel: providedValueLabel,
   className = '',
   panelStyle,
   backgroundColor,
 }: ChoroplethTooltipProps) {
+  const { intFmt } = useChartFormatters();
+  const tUi = useTranslations('common');
+  const formatValue = providedFormatValue ?? intFmt;
+  const valueLabel = providedValueLabel ?? tUi('m_8dce170de2');
+
   const { containerRef, width, height, features } = useChoroplethStable();
   const { tooltipData } = useChoroplethInteraction();
   const { zoom } = useChoroplethZoom();
@@ -69,7 +74,8 @@ export function ChoroplethTooltip({
   // Get feature name
   const featureName = getFeatureName
     ? getFeatureName(feature, tooltipData.featureIndex)
-    : (feature.properties?.name ?? `Feature ${tooltipData.featureIndex}`);
+    : (feature.properties?.name ??
+      tUi('chartFeatureFallback', { index: tooltipData.featureIndex }));
 
   // Custom content
   if (content) {

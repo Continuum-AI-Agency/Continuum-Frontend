@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import {
   FIXTURE_NOW,
   portfolioMetricsFixture,
@@ -58,7 +59,10 @@ describe('ByPlatformView', () => {
     render(
       <ByPlatformView
         now={FIXTURE_NOW}
-        state={{ status: 'ready', metrics: portfolioMetricsFixture({ used: 'spreadsheet' }) }}
+        state={{
+          status: 'ready',
+          metrics: portfolioMetricsFixture({ used: 'spreadsheet' }),
+        }}
       />,
     );
     expect(screen.getByTestId('by-platform-attribution').textContent).toBe(
@@ -97,7 +101,10 @@ describe('ByPlatformView', () => {
     render(
       <ByPlatformView
         now={FIXTURE_NOW}
-        state={{ status: 'ready', metrics: portfolioMetricsFixture({ targetCpa: null }) }}
+        state={{
+          status: 'ready',
+          metrics: portfolioMetricsFixture({ targetCpa: null }),
+        }}
       />,
     );
     for (const state of screen.getAllByTestId('by-platform-state')) {
@@ -130,7 +137,10 @@ describe('ByPlatformView', () => {
     render(
       <ByPlatformView
         now={FIXTURE_NOW}
-        state={{ status: 'ready', metrics: portfolioMetricsFixture({ used: 'spreadsheet' }) }}
+        state={{
+          status: 'ready',
+          metrics: portfolioMetricsFixture({ used: 'spreadsheet' }),
+        }}
       />,
     );
     expect(screen.getByTestId('cross-platform-move').textContent).toContain(
@@ -145,7 +155,10 @@ describe('ByPlatformView', () => {
     const { container } = render(
       <ByPlatformView
         now={FIXTURE_NOW}
-        state={{ status: 'ready', metrics: portfolioMetricsFixture({ platforms: ['meta'] }) }}
+        state={{
+          status: 'ready',
+          metrics: portfolioMetricsFixture({ platforms: ['meta'] }),
+        }}
       />,
     );
     expect(container.innerHTML).toBe('');
@@ -190,7 +203,10 @@ describe('fetchPortfolioMetrics', () => {
     expect(calls).toEqual([
       [
         'optimizer_get_portfolio_metrics',
-        { p_portfolio_id: '0b8f0c55-1d2e-4c3b-8a9f-6e5d4c3b2a10', p_window: 'd7' },
+        {
+          p_portfolio_id: '0b8f0c55-1d2e-4c3b-8a9f-6e5d4c3b2a10',
+          p_window: 'd7',
+        },
       ],
     ]);
     expect(result.by_platform).toHaveLength(3);

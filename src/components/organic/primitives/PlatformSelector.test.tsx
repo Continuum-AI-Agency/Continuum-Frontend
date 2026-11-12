@@ -4,7 +4,8 @@ import {
   PUBLISH_PLATFORM_ORDER,
   type PublishPlatform,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { PlatformVerdict } from '@/lib/organic/platformSelection';
 import { PlatformSelector } from './PlatformSelector';
 
@@ -41,7 +42,9 @@ describe('PlatformSelector', () => {
         />,
       );
       expect(
-        screen.getByRole('button', { name: 'Change platforms — Instagram, TikTok selected' }),
+        screen.getByRole('button', {
+          name: 'Change platforms — Instagram, TikTok selected',
+        }),
       ).toBeDefined();
     },
     TIMEOUT_MS,
@@ -70,7 +73,9 @@ describe('PlatformSelector', () => {
     () => {
       const { menu, onToggle } = open(
         ['instagram', 'facebook'],
-        verdictsWith({ x: { available: false, reason: 'Connect X to post here' } }),
+        verdictsWith({
+          x: { available: false, reason: 'Connect X to post here' },
+        }),
       );
       const x = within(menu).getByRole('menuitemcheckbox', { name: 'X' });
       expect(x.getAttribute('aria-disabled')).toBe('true');
@@ -99,7 +104,9 @@ describe('PlatformSelector', () => {
     'refuses to untick the last platform',
     () => {
       const { menu, onToggle } = open(['linkedin']);
-      const linkedin = within(menu).getByRole('menuitemcheckbox', { name: 'LinkedIn' });
+      const linkedin = within(menu).getByRole('menuitemcheckbox', {
+        name: 'LinkedIn',
+      });
       expect(linkedin.getAttribute('aria-disabled')).toBe('true');
       fireEvent.click(linkedin);
       expect(onToggle).not.toHaveBeenCalled();

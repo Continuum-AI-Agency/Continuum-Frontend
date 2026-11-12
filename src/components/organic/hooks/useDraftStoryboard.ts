@@ -1,5 +1,6 @@
 'use client';
 
+import type { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type ChatMedia,
@@ -92,7 +93,10 @@ export function draftRealizedMedia(
 
   const assets = [...(draft.publishingAssets ?? [])]
     .sort((a, b) => (a.slideIndex ?? 999) - (b.slideIndex ?? 999))
-    .map((asset) => ({ asset, url: fresh[asset.storagePath] ?? asset.storageUrl }))
+    .map((asset) => ({
+      asset,
+      url: fresh[asset.storagePath] ?? asset.storageUrl,
+    }))
     .filter((entry): entry is { asset: typeof entry.asset; url: string } =>
       isRenderableUrl(entry.url),
     );
@@ -141,7 +145,11 @@ export function draftRealizedMedia(
   ];
 }
 
-type DurableRef = { path: string; bucket?: string | null; assetId?: string | null };
+type DurableRef = {
+  path: string;
+  bucket?: string | null;
+  assetId?: string | null;
+};
 
 // Every bucket+path pair the chat card can show. Persisted drafts hold only these; the
 // URL beside each is a 1h signature that was already stale when it was written.
@@ -154,7 +162,11 @@ function durableRefs(draft: OrganicCalendarDraft): DurableRef[] {
   }
   for (const asset of draft.publishingAssets ?? []) {
     if (hasText(asset.storagePath) && (hasText(asset.assetId) || hasText(asset.bucket))) {
-      refs.push({ path: asset.storagePath, bucket: asset.bucket, assetId: asset.assetId });
+      refs.push({
+        path: asset.storagePath,
+        bucket: asset.bucket,
+        assetId: asset.assetId,
+      });
     }
   }
   const suggestion = draft.mediaSuggestion;
@@ -174,7 +186,11 @@ async function signRefs(brandId: string, refs: DurableRef[]): Promise<Record<str
     refs.map(async (ref) => {
       const url = hasText(ref.assetId)
         ? await signMediaAsset({ brandId, assetId: ref.assetId })
-        : await signOrganicMediaAsset({ brandId, bucket: ref.bucket ?? '', path: ref.path });
+        : await signOrganicMediaAsset({
+            brandId,
+            bucket: ref.bucket ?? '',
+            path: ref.path,
+          });
       return url ? ([ref.path, url] as const) : null;
     }),
   );
@@ -351,6 +367,7 @@ export function rankCardMedia({
   previewStage = 'storyboard',
   storyboard,
   format,
+  translate,
 }: {
   idPrefix: string;
   realized: ChatMedia[];
@@ -359,12 +376,21 @@ export function rankCardMedia({
   previewStage?: PreviewMediaStage;
   storyboard: readonly string[];
   format?: string | null;
+  translate?: ReturnType<typeof useTranslations<'organic'>>;
 }): { source: CardMediaSource; media: ChatMedia[] } {
   if (realized.length > 0) return { source: 'realized', media: realized };
   const previews = (urls: readonly string[], stage: PreviewMediaStage = 'storyboard') =>
     mediaFromPreviewUrls(idPrefix, urls, format, stage).map((media, index, all) => ({
       ...media,
-      name: `${format ?? 'Post'} preview ${index + 1} of ${all.length}`,
+      name: translate
+        ? translate('draftPreviewName', {
+            format: /^(post|carousel|reel|story|image|video)$/i.test(format ?? 'post')
+              ? (format ?? 'post').toLowerCase()
+              : (format ?? 'post'),
+            index: index + 1,
+            total: all.length,
+          })
+        : `${format ?? 'Post'} preview ${index + 1} of ${all.length}`,
     }));
   if (preview.length > 0 && !previewStale) {
     return { source: 'live', media: previews(preview, previewStage) };

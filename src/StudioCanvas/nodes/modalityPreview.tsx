@@ -1,4 +1,5 @@
 import type { ActionInputModality, ActionModality } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { NodeVideoPreview } from '../components/NodeVideoPreview';
 
@@ -65,6 +66,8 @@ export function ModalityPreview({
   data: ModalityPreviewData;
   emptyLabel: string;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   // A worker op hands back bytes; the executor stamps the durable URL. Until it does
   // there is nothing to point a <video> at, so the node stays in its empty state.
   const videoSrc =
@@ -90,7 +93,10 @@ export function ModalityPreview({
               key={`${index}:${src}`}
               loading="lazy"
               src={src}
-              alt={`Output ${index + 1} of ${collection.length}`}
+              alt={translateUi('output_value0_of_value1_adee041b', {
+                value0: String(index + 1),
+                value1: String(collection.length),
+              })}
               className="h-full w-full rounded-sm object-contain"
             />
           ),
@@ -105,7 +111,7 @@ export function ModalityPreview({
       <img
         loading="lazy"
         src={data.generatedImage}
-        alt="Action output"
+        alt={translateUi('action_output_eb9050cc')}
         className="max-h-full max-w-full object-contain"
       />
     );

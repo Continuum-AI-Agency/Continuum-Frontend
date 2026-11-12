@@ -12,7 +12,8 @@ import type {
   ShareVersionMode,
 } from '@continuum/contracts';
 import { Check, Copy, Link2, Loader2, SlidersHorizontal } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { useCallback, useState, useMemo as useUiConfigMemo } from 'react';
 import { ShareLinkActivity } from '@/components/library/share/ShareLinkActivity';
 import { ShareLinkPanel } from '@/components/library/share/ShareLinkPanel';
 import { fetchAssetShareActivity } from '@/components/library/share/shareLinkClient';
@@ -32,6 +33,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { createShareLink, listShareLinks, revokeShareLink } from '@/lib/library/share';
 import { shareLinkStatus } from '@/lib/library/shareValidation';
 
@@ -40,22 +43,37 @@ export type ShareLinkMenuProps = {
   asset: MediaAsset;
 };
 
-const EXPIRY_OPTIONS = [
-  { value: '7', label: '7 days' },
-  { value: '30', label: '30 days' },
-  { value: '90', label: '90 days' },
-  { value: 'never', label: 'No expiry' },
-] as const;
+function useLocalExpiryOptionsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value = [
+      { value: '7', label: translateConfig('7_days_7f920bb6') },
+      { value: '30', label: translateConfig('30_days_ffd72805') },
+      { value: '90', label: translateConfig('90_days_38825b0f') },
+      { value: 'never', label: translateConfig('no_expiry_fe06351d') },
+    ] as const;
+    return value;
+  }, [translateConfig]);
+}
 
 function shareUrl(link: ShareLink): string {
   return link.url ?? `${window.location.origin}/share/${link.token}`;
 }
 
-function linkLabel(link: ShareLink): string {
-  const status = shareLinkStatus({ revokedAt: link.revokedAt, expiresAt: link.expiresAt });
-  if (!status.active) return status.reason === 'revoked' ? 'Revoked' : 'Expired';
-  if (!link.expiresAt) return 'No expiry';
-  return `Expires ${new Date(link.expiresAt).toLocaleDateString()}`;
+function linkLabel(
+  link: ShareLink,
+  t: ReturnType<typeof useUiTranslations<'library'>>,
+  locale: UiLocale,
+): string {
+  const status = shareLinkStatus({
+    revokedAt: link.revokedAt,
+    expiresAt: link.expiresAt,
+  });
+  if (!status.active) return t(status.reason === 'revoked' ? 'shareRevoked' : 'shareExpired');
+  if (!link.expiresAt) return t('shareNoExpiry');
+  return t('shareExpires', {
+    date: new Date(link.expiresAt).toLocaleDateString(locale),
+  });
 }
 
 function PolicyToggle({
@@ -81,6 +99,13 @@ function PolicyToggle({
 }
 
 export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
+  const EXPIRY_OPTIONS = useLocalExpiryOptionsMessages();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+  const currentUiLocale = useUiLocale();
+
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -94,7 +119,9 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
   const [passcode, setPasscode] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activity, setActivity] = useState<ShareLinkActivityResponse>({ events: [] });
+  const [activity, setActivity] = useState<ShareLinkActivityResponse>({
+    events: [],
+  });
   const [customizingId, setCustomizingId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -103,16 +130,18 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
     try {
       const [nextLinks, nextActivity] = await Promise.all([
         listShareLinks(brandId, asset.id),
-        fetchAssetShareActivity(brandId, asset.id).catch(() => ({ events: [] })),
+        fetchAssetShareActivity(brandId, asset.id).catch(() => ({
+          events: [],
+        })),
       ]);
       setLinks(nextLinks);
       setActivity(nextActivity);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load share links');
+      setError(uiErrorText(err));
     } finally {
       setLoading(false);
     }
-  }, [brandId, asset.id]);
+  }, [brandId, asset.id, translateUi, uiErrorText]);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -147,7 +176,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
       setCopiedId(link.id);
       setTimeout(() => setCopiedId((id) => (id === link.id ? null : id)), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create the share link');
+      setError(uiErrorText(err));
     } finally {
       setCreating(false);
     }
@@ -163,29 +192,37 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
     showMetadata,
     requireIdentity,
     passcode,
+    translateUi,
+    uiErrorText,
   ]);
 
-  const handleCopy = useCallback(async (link: ShareLink) => {
-    try {
-      await navigator.clipboard.writeText(shareUrl(link));
-      setCopiedId(link.id);
-      setTimeout(() => setCopiedId((id) => (id === link.id ? null : id)), 2000);
-    } catch {
-      setError('Could not copy the link');
-    }
-  }, []);
+  const handleCopy = useCallback(
+    async (link: ShareLink) => {
+      try {
+        await navigator.clipboard.writeText(shareUrl(link));
+        setCopiedId(link.id);
+        setTimeout(() => setCopiedId((id) => (id === link.id ? null : id)), 2000);
+      } catch {
+        setError(translateUi('could_not_copy_the_link_b156f6c7'));
+      }
+    },
+    [translateUi],
+  );
 
   const handleRevoke = useCallback(
     async (link: ShareLink) => {
       setError(null);
       try {
-        const revoked = await revokeShareLink({ brandId, shareLinkId: link.id });
+        const revoked = await revokeShareLink({
+          brandId,
+          shareLinkId: link.id,
+        });
         setLinks((prev) => prev.map((l) => (l.id === revoked.id ? revoked : l)));
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not revoke the link');
+        setError(uiErrorText(err));
       }
     },
-    [brandId],
+    [brandId, translateUi, uiErrorText],
   );
 
   return (
@@ -194,8 +231,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
         <PopoverTrigger
           render={
             <Button variant="outline" size="sm">
-              <Link2 className="size-3.5" aria-hidden />
-              Share
+              <Link2 className="size-3.5" aria-hidden /> {translateUi('share_29887a5f')}{' '}
             </Button>
           }
         />
@@ -207,17 +243,17 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
               disabled={allowApproval}
             >
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Versions" />
+                <SelectValue placeholder={translateUi('versions_f89ea270')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="live">Live latest</SelectItem>
-                <SelectItem value="pinned">Current version</SelectItem>
-                <SelectItem value="all">All versions</SelectItem>
+                <SelectItem value="live">{translateUi('live_latest_9004dc73')}</SelectItem>
+                <SelectItem value="pinned">{translateUi('current_version_a74487de')}</SelectItem>
+                <SelectItem value="all">{translateUi('all_versions_6473ccf9')}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={expiry} onValueChange={setExpiry}>
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Expiry" />
+                <SelectValue placeholder={translateUi('expiry_6956d814')} />
               </SelectTrigger>
               <SelectContent>
                 {EXPIRY_OPTIONS.map((option) => (
@@ -230,12 +266,28 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-            <PolicyToggle label="Comments" checked={allowComments} onChange={setAllowComments} />
-            <PolicyToggle label="Approval" checked={allowApproval} onChange={setAllowApproval} />
-            <PolicyToggle label="Downloads" checked={allowDownload} onChange={setAllowDownload} />
-            <PolicyToggle label="Metadata" checked={showMetadata} onChange={setShowMetadata} />
             <PolicyToggle
-              label="Require identity"
+              label={translateUi('comments_355f79f2')}
+              checked={allowComments}
+              onChange={setAllowComments}
+            />
+            <PolicyToggle
+              label={translateUi('approval_147fb813')}
+              checked={allowApproval}
+              onChange={setAllowApproval}
+            />
+            <PolicyToggle
+              label={translateUi('downloads_d5fdc1af')}
+              checked={allowDownload}
+              onChange={setAllowDownload}
+            />
+            <PolicyToggle
+              label={translateUi('metadata_9eddf573')}
+              checked={showMetadata}
+              onChange={setShowMetadata}
+            />
+            <PolicyToggle
+              label={translateUi('require_identity_ef33398a')}
               checked={requireIdentity}
               onChange={setRequireIdentity}
             />
@@ -246,7 +298,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
               type="password"
               value={passcode}
               onChange={(event) => setPasscode(event.target.value)}
-              placeholder="Optional passcode"
+              placeholder={translateUi('optional_passcode_5ae60488')}
               className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
             />
             <Button
@@ -256,8 +308,8 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
                 creating || ((versionMode === 'pinned' || allowApproval) && !asset.headVersionId)
               }
             >
-              {creating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-              Create link
+              {creating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+              {translateUi('create_link_e6b850cf')}{' '}
             </Button>
           </div>
 
@@ -265,10 +317,13 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
 
           <div className="mt-3 flex flex-col gap-1">
             {loading ? (
-              <p className="py-2 text-xs text-muted-foreground">Loading links…</p>
+              <p className="py-2 text-xs text-muted-foreground">
+                {translateUi('loading_links_8662575b')}
+              </p>
             ) : links.length === 0 ? (
               <p className="py-2 text-xs text-muted-foreground">
-                No links yet. Anyone with a link can view this asset without an account.
+                {' '}
+                {translateUi('no_links_yet_anyone_with_a_link_can_8fb435fd')}{' '}
               </p>
             ) : (
               links.map((link) => {
@@ -284,7 +339,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
                     <span
                       className={`truncate text-xs ${active ? 'text-foreground' : 'text-muted-foreground line-through'}`}
                     >
-                      {linkLabel(link)}
+                      {linkLabel(link, translateUi, currentUiLocale)}
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
                       {active ? (
@@ -293,7 +348,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
                             variant="ghost"
                             size="sm"
                             className="h-7 px-2"
-                            aria-label="Customize link"
+                            aria-label={translateUi('customize_link_6913cb7a')}
                             data-share-customize={link.id}
                             onClick={() => setCustomizingId(link.id)}
                           >
@@ -310,7 +365,9 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
                             ) : (
                               <Copy className="size-3.5" aria-hidden />
                             )}
-                            {copiedId === link.id ? 'Copied' : 'Copy'}
+                            {copiedId === link.id
+                              ? translateUi('copied_8d525e5f')
+                              : translateUi('copy_e21f935f')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -318,7 +375,8 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
                             className="h-7 px-2 text-destructive hover:text-destructive"
                             onClick={() => void handleRevoke(link)}
                           >
-                            Revoke
+                            {' '}
+                            {translateUi('revoke_87e6d00b')}{' '}
                           </Button>
                         </>
                       ) : null}
@@ -331,12 +389,13 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
 
           <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
             <h3 className="text-xs font-semibold text-foreground">
-              Reviewer activity on this asset
+              {' '}
+              {translateUi('reviewer_activity_on_this_asset_19c12b55')}{' '}
             </h3>
             <ShareLinkActivity
               events={activity.events}
               totals={activity.totals}
-              emptyLabel="No reviewer has opened it yet."
+              emptyLabel={translateUi('shareNoReviewerOpened')}
             />
           </div>
         </PopoverContent>
@@ -347,9 +406,10 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Customize share link</DialogTitle>
+            <DialogTitle>{translateUi('customize_share_link_e07be3a6')}</DialogTitle>
             <DialogDescription>
-              How reviewers see this link, and what they did with it.
+              {' '}
+              {translateUi('how_reviewers_see_this_link_and_wha_34a9fcc1')}{' '}
             </DialogDescription>
           </DialogHeader>
           {customizingId ? <ShareLinkPanel by={{ id: customizingId }} /> : null}

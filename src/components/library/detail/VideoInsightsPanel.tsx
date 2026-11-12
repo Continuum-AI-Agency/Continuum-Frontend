@@ -1,6 +1,7 @@
 'use client';
 
 import type { VideoCreativeInsights } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 function timecode(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
@@ -14,16 +15,22 @@ export function VideoInsightsPanel({
   insights: VideoCreativeInsights;
   onSeek: (ms: number) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
       <section>
-        <p className="text-3xs uppercase tracking-wide text-muted-foreground">Creative summary</p>
+        <p className="text-3xs uppercase tracking-wide text-muted-foreground">
+          {translateUi('creative_summary_96351bcf')}
+        </p>
         <p className="mt-1 text-xs leading-relaxed text-foreground">{insights.summary}</p>
       </section>
 
       <section className="rounded-md border border-border p-2.5">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-foreground">Opening hook</p>
+          <p className="text-xs font-medium text-foreground">
+            {translateUi('opening_hook_506ee718')}
+          </p>
           <button
             type="button"
             className="text-2xs tabular-nums text-muted-foreground hover:text-foreground"
@@ -42,19 +49,23 @@ export function VideoInsightsPanel({
         ) : null}
         {insights.hook.strengths.length > 0 ? (
           <p className="mt-2 text-2xs text-emerald-600 dark:text-emerald-400">
-            Strengths: {insights.hook.strengths.join(' · ')}
+            {' '}
+            {translateUi('strengths_ab38c36f')} {insights.hook.strengths.join(' · ')}
           </p>
         ) : null}
         {insights.hook.risks.length > 0 ? (
           <p className="mt-1 text-2xs text-amber-600 dark:text-amber-400">
-            Risks: {insights.hook.risks.join(' · ')}
+            {' '}
+            {translateUi('risks_d25b080b')} {insights.hook.risks.join(' · ')}
           </p>
         ) : null}
       </section>
 
       {insights.chapters.length > 0 ? (
         <section>
-          <p className="text-3xs uppercase tracking-wide text-muted-foreground">Chapters</p>
+          <p className="text-3xs uppercase tracking-wide text-muted-foreground">
+            {translateUi('chapters_9831375b')}
+          </p>
           <ol className="mt-1.5 space-y-1">
             {insights.chapters.map((chapter) => (
               <li key={`${chapter.startMs}:${chapter.title}`}>

@@ -12,9 +12,16 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type ComponentProps, useState } from 'react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import {
   DataGrid,
   type DataGridMenuTarget,
@@ -44,7 +51,9 @@ const COLUMNS: ColumnDef<Job>[] = [
 function Harness({
   columns = COLUMNS,
   ...props
-}: Partial<ComponentProps<typeof DataGrid<Job>>> & { columns?: ColumnDef<Job>[] }) {
+}: Partial<ComponentProps<typeof DataGrid<Job>>> & {
+  columns?: ColumnDef<Job>[];
+}) {
   const [visibility, setVisibility] = useState<VisibilityState>({});
   const [selection, setSelection] = useState({});
   const table = useReactTable({
@@ -216,13 +225,23 @@ describe('DataGrid', () => {
     );
     fireEvent.contextMenu(screen.getByText('Hero'));
     await screen.findByRole('menuitem');
-    expect(targets.at(-1)).toEqual({ rowId: '2', columnId: 'template', header: false });
+    expect(targets.at(-1)).toEqual({
+      rowId: '2',
+      columnId: 'template',
+      header: false,
+    });
     expect(clicked).toEqual(['Alpha']);
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
     await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
     fireEvent.contextMenu(screen.getByRole('columnheader', { name: 'Template' }));
     await screen.findByRole('menuitem');
-    expect(targets.at(-1)).toEqual({ rowId: null, columnId: 'template', header: true });
+    expect(targets.at(-1)).toEqual({
+      rowId: null,
+      columnId: 'template',
+      header: true,
+    });
   });
 
   test('shift-click ticks every row from the last one ticked', () => {

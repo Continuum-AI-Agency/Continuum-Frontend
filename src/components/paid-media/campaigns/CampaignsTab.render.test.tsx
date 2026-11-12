@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { type ScaleEntityPage, type ScaleEntityRow, scaleEntitiesKey } from './campaignsClient';
 
 // Spread the real modules: `mock.module` replaces them for the whole PROCESS.
@@ -10,7 +11,10 @@ mock.module('../optimizer/useOptimizerData', () => ({
   useAdAccountCurrency: () => 'USD',
 }));
 const realSheet = await import('./EntityStatusSheet');
-mock.module('./EntityStatusSheet', () => ({ ...realSheet, EntityStatusSheet: () => null }));
+mock.module('./EntityStatusSheet', () => ({
+  ...realSheet,
+  EntityStatusSheet: () => null,
+}));
 
 const { CampaignsTab } = await import('./CampaignsTab');
 
@@ -27,7 +31,9 @@ function renderWith(page: ScaleEntityPage) {
 }
 
 beforeEach(() => {
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
 });
 
 afterEach(cleanup);
@@ -147,7 +153,10 @@ describe('CampaignsTab', () => {
 
   it('grows each status filter button to a 24px target invisibly, the 19px pill as drawn', () => {
     // PP-L1V tap-target: the status pills paint at py-0.5 text-xs (19px).
-    renderWith({ fetchedAt: null, rows: [campaign({ id: 'c1', status: 'ACTIVE' })] });
+    renderWith({
+      fetchedAt: null,
+      rows: [campaign({ id: 'c1', status: 'ACTIVE' })],
+    });
     const buttons = within(screen.getByTestId('scale-campaigns-filter')).getAllByRole('button');
     expect(buttons.length).toBe(4);
     for (const button of buttons) {

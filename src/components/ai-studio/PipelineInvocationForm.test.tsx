@@ -58,7 +58,13 @@ mock.module('@/lib/creative-assets/useStudioLibraryBrowser', () => ({
 }));
 
 import type { PipelineCapabilityV2, PipelineRunReceipt } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { PipelineInvocationForm } from './PipelineInvocationForm';
 
 const identity = {
@@ -105,7 +111,13 @@ const capability = {
     },
   ],
   outputs: [
-    { output_id: 'hero', kind: 'asset', label: 'Hero image', media: 'image', count: 1 },
+    {
+      output_id: 'hero',
+      kind: 'asset',
+      label: 'Hero image',
+      media: 'image',
+      count: 1,
+    },
     {
       output_id: 'product_candidate',
       kind: 'element_candidate',
@@ -311,6 +323,8 @@ describe('PipelineInvocationForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run pipeline' }));
 
     await waitFor(() => expect(executePipelineMock).toHaveBeenCalledTimes(1));
-    expect(executePipelineMock.mock.calls[0]?.[0]).toMatchObject({ inputs: {} });
+    expect(executePipelineMock.mock.calls[0]?.[0]).toMatchObject({
+      inputs: {},
+    });
   });
 });

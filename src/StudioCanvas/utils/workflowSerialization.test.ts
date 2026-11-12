@@ -6,6 +6,7 @@ import {
   serializeForBroadcast,
   serializeWorkflowSnapshot,
 } from './workflowSerialization';
+import { workflowFailure } from './workflowUiFailure';
 
 const buildNode = (overrides: Partial<StudioNode> = {}): StudioNode => ({
   id: 'node-1',
@@ -44,6 +45,22 @@ describe('workflowSerialization', () => {
     expect(firstNode.data).toEqual({ value: 'hello' });
   });
 
+  it('drops transient error presentation from persistence and peer broadcasts', () => {
+    const node = buildNode({
+      data: {
+        value: 'keep',
+        error: 'raw diagnostic',
+        errorCode: 'image_blocked',
+        uiFailure: workflowFailure('workflow_missing_required_prompt_fd8a0824'),
+      },
+    });
+    for (const snapshot of [
+      serializeWorkflowSnapshot([node], [], 'bezier'),
+      serializeForBroadcast([node], [], 'bezier'),
+    ])
+      expect(snapshot.nodes[0].data).toEqual({ value: 'keep' });
+  });
+
   it('preserves the generation signature across persist and broadcast serialization', () => {
     // The signature gates reuse-vs-regenerate on load; its delimiters must keep it
     // from matching the base64 strip so it survives a save/reload round-trip.
@@ -51,7 +68,11 @@ describe('workflowSerialization', () => {
     const node = buildNode({
       id: 'gen',
       type: 'nanoGen',
-      data: { positivePrompt: 'a prompt', model: 'nano-banana', generationSignature: sig },
+      data: {
+        positivePrompt: 'a prompt',
+        model: 'nano-banana',
+        generationSignature: sig,
+      },
     });
 
     const persisted = serializeWorkflowSnapshot([node], [], 'bezier');
@@ -126,7 +147,11 @@ describe('workflowSerialization', () => {
           type: 'document',
           data: {
             documents: [
-              { name: 'doc.pdf', content: 'data:application/pdf;base64,abc', type: 'pdf' },
+              {
+                name: 'doc.pdf',
+                content: 'data:application/pdf;base64,abc',
+                type: 'pdf',
+              },
             ],
           } as any,
         }),
@@ -190,7 +215,13 @@ describe('workflowSerialization', () => {
   it('strips complex data URLs with extra parameters', () => {
     const complexDataUrl = 'data:image/png;name=test.png;base64,abc123';
     const snapshot = serializeWorkflowSnapshot(
-      [buildNode({ id: 'img', type: 'image', data: { image: complexDataUrl } as any })],
+      [
+        buildNode({
+          id: 'img',
+          type: 'image',
+          data: { image: complexDataUrl } as any,
+        }),
+      ],
       [],
       'bezier',
     );
@@ -288,7 +319,11 @@ describe('workflowSerialization', () => {
           measured: { width: 392, height: 398 },
           width: undefined,
           height: undefined,
-          data: { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' } as any,
+          data: {
+            model: 'nano-banana',
+            positivePrompt: '',
+            aspectRatio: '16:9',
+          } as any,
         }),
       ],
       [],
@@ -346,7 +381,10 @@ describe('workflowSerialization', () => {
     >;
     expect(data.collectionItems).toBeUndefined();
     expect(data.collectionAssets).toEqual([
-      expect.objectContaining({ storagePath: 'brand/a.png', assetVersionId: 'version-a' }),
+      expect.objectContaining({
+        storagePath: 'brand/a.png',
+        assetVersionId: 'version-a',
+      }),
     ]);
   });
 

@@ -6,6 +6,7 @@ import {
   isElementProductCategory,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,8 @@ export function HeadlessElementReview({
   brandId: string;
   element: ElementRecord;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const elementId = element.id;
   const client = useQueryClient();
   const headlessQueryKey = ['headless-element', brandId, elementId];
@@ -57,7 +60,11 @@ export function HeadlessElementReview({
         });
       else {
         if (!revision.approved)
-          await http.request({ path: '/api/headless/elements/approve', method: 'POST', body: ref });
+          await http.request({
+            path: '/api/headless/elements/approve',
+            method: 'POST',
+            body: ref,
+          });
         if (pack)
           await http.request({
             path: '/api/headless/elements/approve-character',
@@ -85,15 +92,17 @@ export function HeadlessElementReview({
     <div className="space-y-2 rounded-lg border p-3">
       <p className="text-sm font-medium">
         {revision
-          ? `Reusable generation ${revision.kind === 'character' ? 'actress' : revision.kind}`
-          : 'Auto-ads'}
+          ? translateUi('reusable_generation_value0_35a828a4', {
+              value0: String(revision.kind === 'character' ? 'actress' : revision.kind),
+            })
+          : translateUi('auto_ads_e85072f8')}
       </p>
       <p className="text-xs text-muted-foreground">
         {ready
-          ? 'Approved for reuse. Finished ads still need their own approval.'
+          ? translateUi('approved_for_reuse_finished_ads_sti_dfa3294c')
           : canPromote
-            ? 'Approve this product so the Optimizer’s auto-ads can feature it.'
-            : 'Review this Element before it is reused in an ad.'}
+            ? translateUi('approve_this_product_so_the_optimiz_00fbc2cf')
+            : translateUi('review_this_element_before_it_is_re_b038fab9')}
       </p>
       {revision?.kind === 'scene' ? (
         <p className="text-xs">{revision.payload.setting}</p>
@@ -103,7 +112,7 @@ export function HeadlessElementReview({
       {pack && preview.data ? (
         <img
           src={preview.data}
-          alt="Actress identity candidate"
+          alt={translateUi('actress_identity_candidate_6c9360e8')}
           className="w-full rounded object-contain"
         />
       ) : null}
@@ -114,7 +123,8 @@ export function HeadlessElementReview({
           disabled={action.isPending}
           onClick={() => action.mutate('prepare')}
         >
-          Generate actress reference
+          {' '}
+          {translateUi('generate_actress_reference_477c8a64')}{' '}
         </Button>
       ) : null}
       {revision && !ready && !canPromote && (revision.kind !== 'character' || pack) ? (
@@ -123,7 +133,11 @@ export function HeadlessElementReview({
           disabled={action.isPending || (revision.kind === 'character' && !preview.data)}
           onClick={() => action.mutate('approve')}
         >
-          Approve {revision.kind === 'character' ? 'actress and reference' : 'Element'}
+          {' '}
+          {translateUi('approve_6007acbe')}{' '}
+          {revision.kind === 'character'
+            ? translateUi('actress_and_reference_d40ff132')
+            : translateUi('element_4e5b548d')}
         </Button>
       ) : null}
       {canPromote ? (
@@ -131,12 +145,13 @@ export function HeadlessElementReview({
           {needsRightsNote ? (
             <>
               <Label htmlFor={`element-${elementId}-auto-ads-rights`}>
-                Rights basis for auto-ads
+                {' '}
+                {translateUi('rights_basis_for_auto_ads_655bc19f')}{' '}
               </Label>
               <Input
                 id={`element-${elementId}-auto-ads-rights`}
                 value={rightsNote}
-                placeholder="e.g. own product photography"
+                placeholder={translateUi('e_g_own_product_photography_5e9f8bca')}
                 onChange={(event) => setRightsNote(event.target.value)}
               />
             </>
@@ -151,22 +166,27 @@ export function HeadlessElementReview({
                   elementId,
                   ...(needsRightsNote ? { rightsNote: rightsNote.trim() } : {}),
                 },
-                { onSuccess: () => client.invalidateQueries({ queryKey: headlessQueryKey }) },
+                {
+                  onSuccess: () => client.invalidateQueries({ queryKey: headlessQueryKey }),
+                },
               )
             }
           >
-            Use in auto-ads
+            {' '}
+            {translateUi('use_in_auto_ads_1451354d')}{' '}
           </Button>
         </div>
       ) : null}
       {promote.isSuccess ? (
         <p role="status" className="text-xs text-muted-foreground">
-          Approved for auto-ads (revision {promote.data.revision}).
+          {' '}
+          {translateUi('approved_for_auto_ads_revision_be400439')} {promote.data.revision}).
         </p>
       ) : null}
       {promote.error ? (
         <p role="alert" className="text-xs text-destructive">
-          Could not approve for auto-ads: {promote.error.message}
+          {' '}
+          {translateUi('could_not_approve_for_auto_ads_562c6616')} {promote.error.message}
         </p>
       ) : null}
       {action.error ? (

@@ -4,6 +4,7 @@
 // notifications. Mounted once in the dashboard header.
 
 import { BellIcon, Loader2Icon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { useInFlightJobs } from './useInFlightJobs';
 import { useNotifications } from './useNotifications';
 
 export function NotificationsBell() {
+  const t = useTranslations('common');
   const [open, setOpen] = useState(false);
   const { notifications, unreadCount, loading, markAllRead, markRead } = useNotifications();
   const { activeBrandId } = useActiveBrandContext();
@@ -24,15 +26,16 @@ export function NotificationsBell() {
       <PopoverTrigger
         render={
           <Button
+            data-testid="notifications-trigger"
             variant="ghost"
             size="icon"
             className="relative size-9 active:scale-[0.96] transition-[transform]"
             aria-label={
               running > 0
-                ? `${running} in flight, ${unreadCount} unread`
+                ? t('notificationsInFlight', { running, unread: unreadCount })
                 : unreadCount > 0
-                  ? `${unreadCount} unread notifications`
-                  : 'Notifications'
+                  ? t('notificationsUnread', { count: unreadCount })
+                  : t('notificationsTitle')
             }
           >
             {/* Work in flight replaces the bell outright: a spinner is the one thing that

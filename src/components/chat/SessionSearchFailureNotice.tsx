@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 import type { SessionSearchFailure } from './useSessionSearch';
 
@@ -14,6 +15,8 @@ export function SessionSearchFailureNotice({
   failure: SessionSearchFailure;
   onRetry: () => void;
 }) {
+  const betaUiText = useBetaTranslations('common');
+
   const here =
     typeof window === 'undefined' ? '/' : `${window.location.pathname}${window.location.search}`;
   return (
@@ -24,7 +27,7 @@ export function SessionSearchFailureNotice({
           className="hit-area font-medium underline underline-offset-4"
           href={`/login?redirectTo=${encodeURIComponent(here)}`}
         >
-          Sign in again
+          {betaUiText('beta_51fbe1dc8a73')}
         </a>
       ) : (
         <button
@@ -32,7 +35,7 @@ export function SessionSearchFailureNotice({
           onClick={onRetry}
           type="button"
         >
-          Retry
+          {betaUiText('beta_942087cc2d41')}
         </button>
       )}
     </span>

@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,10 +19,12 @@ export function TimelineSidePanel({
   onSelectEvent,
   onClose,
 }: TimelineSidePanelProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <div className="w-80 border-l border-border bg-card flex flex-col h-full shrink-0">
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h3 className="font-semibold">Timeline Events</h3>
+        <h3 className="font-semibold">{uiText('timeline_events_26cc594')}</h3>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X size={16} />
         </Button>
@@ -30,10 +33,13 @@ export function TimelineSidePanel({
       <ScrollArea className="flex-1">
         <div className="p-4 flex flex-col gap-3">
           {events.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center mt-4">No events found.</div>
+            <div className="text-sm text-muted-foreground text-center mt-4">
+              {uiText('no_events_found_28112f5')}
+            </div>
           ) : (
             events.map((event) => (
               <button
+                type="button"
                 key={event.id || `${event.date}-${event.type}`}
                 onClick={() => onSelectEvent(event)}
                 className={`text-left p-3 rounded-md border text-sm transition-colors ${
@@ -49,11 +55,13 @@ export function TimelineSidePanel({
                       {event.summary || event.type.replace('_', ' ')}
                     </span>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(event.date).toLocaleDateString()} {event.time}
+                      {new Date(event.date).toLocaleDateString(uiLocale)} {event.time}
                     </div>
                     {event.adName && (
                       <div className="text-xs text-muted-foreground line-clamp-1 mt-1">
-                        Ad: {event.adName}
+                        {uiText.rich('sentence_e6dc85f84648', {
+                          v0: event.adName,
+                        })}
                       </div>
                     )}
                   </div>

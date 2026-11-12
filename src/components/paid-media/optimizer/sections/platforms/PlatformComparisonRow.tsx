@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // The "All" tab's optional MP3 block: the connected platforms compared as a plain table, one
 // row each, with the same four figures in the same columns and a hairline between rows. A
 // platform that spent nothing keeps its row, greyed. The cheapest is said in a sentence and
@@ -59,6 +61,8 @@ function Row({
   row: PlatformComparison;
   metrics: AccountPlatformMetrics;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const window = figureWindowOfMetrics(metrics);
   const key = (name: string) => `comparison.${column.platform}.${name}`;
   const muted = idle(column);
@@ -67,8 +71,8 @@ function Row({
   const codeIn = row.currency == null ? 'text' : 'header';
   const money = (value: number) =>
     codeIn === 'header'
-      ? formatCurrencyInColumn(value, column.currency)
-      : formatCurrency(value, column.currency);
+      ? formatCurrencyInColumn(value, column.currency, uiLocale)
+      : formatCurrency(value, column.currency, uiLocale);
   return (
     <tr
       className={cn(
@@ -89,12 +93,12 @@ function Row({
           {PLATFORM_NAMES[column.platform]}
           {row.currency == null ? (
             <span className="text-muted-foreground text-xs" data-testid="comparison-currency">
-              {column.currency ?? 'several currencies'}
+              {column.currency ?? uiText('several_currencies_084d637')}
             </span>
           ) : null}
           {column.cheapest ? (
             <span className="font-semibold text-xs" data-testid="comparison-cheapest">
-              · cheapest
+              {uiText('cheapest_637e3b2')}
             </span>
           ) : null}
         </span>
@@ -103,13 +107,13 @@ function Row({
         className={NUMBER_CELL}
         {...figureProps(key('spend'), column.spend, column.currency, window, 'currency', codeIn)}
       >
-        {column.spend == null ? 'not added up' : money(column.spend)}
+        {column.spend == null ? uiText('not_added_up_dc18bbe') : money(column.spend)}
       </td>
       <td
         className={NUMBER_CELL}
         {...figureProps(key('results'), column.results ?? 0, null, window, 'count')}
       >
-        {column.results == null ? '0' : formatResults(column.results)}
+        {column.results == null ? '0' : formatResults(column.results, uiLocale)}
       </td>
       <td
         className={NUMBER_CELL}
@@ -142,59 +146,71 @@ function TotalsLine({
   row: PlatformComparison;
   metrics: AccountPlatformMetrics;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const window = figureWindowOfMetrics(metrics);
   if (!row.totals) {
     return (
       <p className="text-muted-foreground text-xs" data-testid="comparison-no-totals">
-        No totals: the platforms bill in different currencies.
+        {uiText('no_totals_the_platforms_bill_in_different_cur_d2a8836')}
       </p>
     );
   }
   const { totals } = row;
-  const words = row.kind ? kindWords(row.kind) : null;
+  const words = row.kind ? kindWords(row.kind, uiText) : null;
   return (
     <p className="text-muted-foreground text-xs" data-testid="comparison-totals">
-      All platforms:{' '}
-      <span
-        className="tabular-nums"
-        {...figureProps('comparison.total.spend', totals.spend, totals.currency, window)}
-      >
-        {formatCurrency(totals.spend, totals.currency)}
-      </span>
-      {words ? (
-        <>
-          {' · '}
+      {uiText.rich('sentence_55fefe237b4d', {
+        v0: () => (
           <span
             className="tabular-nums"
-            {...figureProps('comparison.total.results', totals.results, null, window, 'count')}
+            {...figureProps('comparison.total.spend', totals.spend, totals.currency, window)}
           >
-            {formatResults(totals.results)}
-          </span>{' '}
-          {words.many}
-          {totals.costPerResult != null ? (
+            {formatCurrency(totals.spend, totals.currency, uiLocale)}
+          </span>
+        ),
+        v1: () =>
+          words ? (
             <>
               {' · '}
               <span
                 className="tabular-nums"
-                {...figureProps(
-                  'comparison.total.cost',
-                  totals.costPerResult,
-                  totals.currency,
-                  window,
-                )}
+                {...figureProps('comparison.total.results', totals.results, null, window, 'count')}
               >
-                {formatCurrency(totals.costPerResult, totals.currency)}
+                {formatResults(totals.results, uiLocale)}
               </span>{' '}
-              per {words.one}
+              {words.many}
+              {totals.costPerResult != null ? (
+                <>
+                  {' '}
+                  {uiText.rich('sentence_d1edcacfd9e4', {
+                    v0: () => (
+                      <span
+                        className="tabular-nums"
+                        {...figureProps(
+                          'comparison.total.cost',
+                          totals.costPerResult,
+                          totals.currency,
+                          window,
+                        )}
+                      >
+                        {formatCurrency(totals.costPerResult, totals.currency, uiLocale)}
+                      </span>
+                    ),
+                    v1: words.one,
+                  })}
+                </>
+              ) : null}
             </>
-          ) : null}
-        </>
-      ) : null}
+          ) : null,
+      })}
     </p>
   );
 }
 
 export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMetrics }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const [hidden, setHidden] = useState(false);
   // Read after mount: the server render has no storage, and the first paint must match it.
   useEffect(() => setHidden(readComparisonHidden()), []);
@@ -214,7 +230,7 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
       onClick={toggle}
       type="button"
     >
-      {hidden ? 'Show platforms side by side' : 'Hide'}
+      {hidden ? uiText('show_platforms_side_by_side_86c3386') : uiText('hide_ac20a57')}
     </button>
   );
 
@@ -225,17 +241,19 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
       </div>
     );
   }
-  const words = row.kind ? kindWords(row.kind) : null;
+  const words = row.kind ? kindWords(row.kind, uiText) : null;
   return (
     <section
-      aria-label="Platforms side by side"
+      aria-label={uiText('platforms_side_by_side_4586d70')}
       className="space-y-1.5 px-1"
       data-source="account-platform-metrics"
       data-testid="platform-comparison"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={`${typeScale.label} font-semibold text-muted-foreground`}>
-          Platforms side by side{words ? ` · ${words.many}` : ''}
+          {uiText.rich('sentence_1ade3c5adece', {
+            v0: words ? ` · ${words.many}` : '',
+          })}
         </p>
         {toggleButton}
       </div>
@@ -244,21 +262,33 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
           <thead>
             <tr className="text-muted-foreground text-xs">
               <th className="py-1.5 pr-3 text-left font-medium" scope="col">
-                {words ? `${capitalise(words.many)} by platform` : 'Platform'}
+                {words
+                  ? uiText('template_5915a7741a9d', {
+                      v0: capitalise(words.many),
+                    })
+                  : uiText('platform_c78ffe1')}
               </th>
               <th className="py-1.5 pl-3 text-right font-medium" scope="col">
-                Spend · {windowDaysLabel(metrics)}
+                {uiText.rich('sentence_2f5a7d94f66f', {
+                  v0: windowDaysLabel(metrics, uiText),
+                  v1: currencyColumnSuffix(row.currency),
+                })}
+              </th>
+              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
+                {words ? capitalise(words.many) : uiText('results_219c4a6')}
+              </th>
+              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
+                {words
+                  ? uiText('template_ced2e5c5acfe', { v0: words.one })
+                  : uiText('cost_per_result_a664c01')}
                 {currencyColumnSuffix(row.currency)}
               </th>
               <th className="py-1.5 pl-3 text-right font-medium" scope="col">
-                {words ? capitalise(words.many) : 'Results'}
-              </th>
-              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
-                {words ? `Cost per ${words.one}` : 'Cost per result'}
-                {currencyColumnSuffix(row.currency)}
-              </th>
-              <th className="py-1.5 pl-3 text-right font-medium" scope="col">
-                {row.shareOf ? `Share of ${kindWords(row.shareOf).many}` : 'Share'}
+                {row.shareOf
+                  ? uiText('template_dfebbaa0ddf9', {
+                      v0: kindWords(row.shareOf, uiText).many,
+                    })
+                  : uiText('share_29887a5')}
               </th>
             </tr>
           </thead>
@@ -270,7 +300,7 @@ export function PlatformComparisonRow({ metrics }: { metrics: AccountPlatformMet
         </table>
       </div>
       <p className="text-foreground text-xs" data-testid="comparison-sentence">
-        {cheapestSentence(row)}
+        {cheapestSentence(row, uiText, uiLocale)}
       </p>
       <TotalsLine metrics={metrics} row={row} />
     </section>

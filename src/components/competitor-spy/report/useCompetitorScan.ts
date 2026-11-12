@@ -36,7 +36,9 @@ export function useCompetitorScan(brandId: string): CompetitorScan {
     setState({ ...INITIAL_SCAN_STATE, running: true });
 
     const invalidateSpyQueries = () => {
-      void queryClient.invalidateQueries({ queryKey: ['competitor-spy', 'gap-report', brandId] });
+      void queryClient.invalidateQueries({
+        queryKey: ['competitor-spy', 'gap-report', brandId],
+      });
       void queryClient.invalidateQueries({ queryKey: ['competitor-spy'] });
     };
 
@@ -53,7 +55,11 @@ export function useCompetitorScan(brandId: string): CompetitorScan {
       .catch((error: unknown) => {
         if (isAbortError(error)) return;
         const message = error instanceof Error ? error.message : 'Scan failed';
-        setState((prev) => ({ ...prev, error: prev.error ?? message }));
+        setState((prev) => ({
+          ...prev,
+          error: prev.error ?? message,
+          transportError: prev.error ? prev.transportError : error,
+        }));
       })
       .finally(() => {
         // Settle on stream end (success, error frame, or transport failure) so

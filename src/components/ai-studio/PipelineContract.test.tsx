@@ -4,7 +4,7 @@ import type {
   PipelineManifest,
   PipelineManifestInput,
 } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { PipelineContract } from './PipelineContract';
 
 const input = (over: Partial<PipelineManifestInput> = {}): PipelineManifestInput => ({
@@ -68,7 +68,13 @@ const capability = (over: Partial<PipelineCapabilityV2> = {}): PipelineCapabilit
       },
     ],
     outputs: [
-      { output_id: 'hero', kind: 'asset', label: 'Hero image', media: 'image', count: 2 },
+      {
+        output_id: 'hero',
+        kind: 'asset',
+        label: 'Hero image',
+        media: 'image',
+        count: 2,
+      },
       {
         output_id: 'product_candidate',
         kind: 'element_candidate',
@@ -124,8 +130,16 @@ describe('PipelineContract', () => {
         manifest={capability({
           quality_policy: {
             checks: [
-              { check_id: 'no_legible_text', media: ['image'], minimum_score: null },
-              { check_id: 'video_contact_sheet', media: ['video'], minimum_score: 0.8 },
+              {
+                check_id: 'no_legible_text',
+                media: ['image'],
+                minimum_score: null,
+              },
+              {
+                check_id: 'video_contact_sheet',
+                media: ['video'],
+                minimum_score: 0.8,
+              },
             ],
             on_failure: 'refuse',
           },
@@ -202,7 +216,10 @@ describe('PipelineContract', () => {
             use_when: ['The user needs launch hero images.'],
             avoid_when: ['The user needs video.'],
             input_guidance: [
-              { input_id: 'brief', instruction: 'State the audience and campaign objective.' },
+              {
+                input_id: 'brief',
+                instruction: 'State the audience and campaign objective.',
+              },
             ],
             invocation_notes: ['Use the approved product Element.'],
           },
@@ -236,7 +253,10 @@ describe('PipelineContract', () => {
   it('says a pipeline cannot run and names the port blocking it', () => {
     render(
       <PipelineContract
-        manifest={manifest({ runnable: false, inputs: [input({ handle_free: false })] })}
+        manifest={manifest({
+          runnable: false,
+          inputs: [input({ handle_free: false })],
+        })}
       />,
     );
     expect(screen.getByText('Cannot run')).toBeDefined();
@@ -252,7 +272,14 @@ describe('PipelineContract', () => {
     render(
       <PipelineContract
         manifest={manifest({
-          outputs: [{ port_id: 'concept', node_type: 'nanoGen', media: 'image', count: 4 }],
+          outputs: [
+            {
+              port_id: 'concept',
+              node_type: 'nanoGen',
+              media: 'image',
+              count: 4,
+            },
+          ],
         })}
       />,
     );

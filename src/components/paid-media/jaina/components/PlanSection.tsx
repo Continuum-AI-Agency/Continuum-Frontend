@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import type { JainaPlan } from '../types';
@@ -17,6 +18,7 @@ type PlanSectionProps = {
 };
 
 export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionProps) {
+  const uiText = useTranslations('scale');
   const [refineOpen, setRefineOpen] = React.useState(false);
   const [edits, setEdits] = React.useState('');
 
@@ -38,7 +40,7 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
     >
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
-          Approve the plan above to proceed, or refine it.
+          {uiText('approve_the_plan_above_to_proceed_or_refine_i_3b70647')}
         </span>
         <div className="flex shrink-0 gap-2">
           <Button
@@ -47,7 +49,7 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
             disabled={isStreaming}
             onClick={() => setRefineOpen((o) => !o)}
           >
-            Refine
+            {uiText('refine_1e7f34e')}
           </Button>
           <Button
             size="sm"
@@ -55,14 +57,14 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
             disabled={isStreaming}
             onClick={() => onPlanFeedback?.({ type: 'abandon', planId: plan.id })}
           >
-            Abandon
+            {uiText('abandon_d09252c')}
           </Button>
           <Button
             size="sm"
             disabled={isStreaming}
             onClick={() => onPlanFeedback?.({ type: 'approve', planId: plan.id })}
           >
-            Approve
+            {uiText('approve_6007acb')}
           </Button>
         </div>
       </div>
@@ -80,7 +82,7 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
               <textarea
                 className="w-full resize-none rounded-md border bg-background px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 rows={3}
-                placeholder="Describe what to change about this plan..."
+                placeholder={uiText('describe_what_to_change_about_this_plan_876073e')}
                 value={edits}
                 onChange={(e) => setEdits(e.target.value)}
                 onKeyDown={(e) => {
@@ -89,7 +91,7 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
               />
               <div className="flex justify-end">
                 <Button size="sm" disabled={!edits.trim()} onClick={handleRefineSubmit}>
-                  Submit Refinement
+                  {uiText('submit_refinement_f101e1e')}
                 </Button>
               </div>
             </div>

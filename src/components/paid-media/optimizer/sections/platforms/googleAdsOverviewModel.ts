@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
+import type { UiLocale } from '@/i18n/config';
 // The Google tab's figures, composed from two real reads of the paid-media-metrics edge
 // (platform 'google-ads'): `account_overview` for the account's spend against the window before,
 // and `top_campaigns` for each campaign's spend and conversions with its channel type. Money
@@ -259,8 +264,18 @@ export function resultTypesOf(
 }
 
 /** "236 leads", "1 sign-up": whole, as every screen counts conversions. */
-export function resultCountLabel(bucket: GoogleResultBucket, count: number): string {
-  const shown = formatConversions(count);
+export function resultCountLabel(
+  bucket: GoogleResultBucket,
+  count: number,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): string {
+  if (uiTranslate)
+    return uiTranslate('googleResultCount', {
+      bucket,
+      count: Math.round(count),
+    });
+  const shown = formatConversions(count, uiLocale);
   return `${shown} ${shown === '1' ? RESULT_WORDS[bucket].one : RESULT_WORDS[bucket].many}`;
 }
 
@@ -268,16 +283,24 @@ export function resultCountLabel(bucket: GoogleResultBucket, count: number): str
 export function resultsApartLabel(
   byResult: GoogleResultCounts | null,
   types: readonly GoogleResultBucket[],
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
 ): string | null {
   if (!byResult || types.length === 0) return null;
-  return types.map((bucket) => resultCountLabel(bucket, byResult[bucket] ?? 0)).join(' · ');
+  return types
+    .map((bucket) => resultCountLabel(bucket, byResult[bucket] ?? 0, uiLocale, uiTranslate))
+    .join(' · ');
 }
 
 /** One campaign's results apart, the types it counted: "236 leads · 2 sign-ups", or "0" when it
  *  counted none. Null without the counts. */
-export function ownResultsLabel(byResult: GoogleResultCounts | null): string | null {
+export function ownResultsLabel(
+  byResult: GoogleResultCounts | null,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): string | null {
   if (!byResult) return null;
-  return resultsApartLabel(byResult, resultTypesOf([{ byResult }])) ?? '0';
+  return resultsApartLabel(byResult, resultTypesOf([{ byResult }]), uiLocale, uiTranslate) ?? '0';
 }
 
 /** Spend per result of one type; null when there is none to price. */
@@ -317,14 +340,14 @@ export function percentAgainst(value: number | null, base: number | null): numbe
 /** Conversions are fractional in Google (data-driven attribution splits them), but every
  *  screen counts them whole, as the Overview's leads tile does; the raw value rides on the
  *  figure node. */
-export function formatConversions(value: number): string {
-  return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+export function formatConversions(value: number, uiLocale: UiLocale = 'en'): string {
+  return value.toLocaleString(uiLocale, { maximumFractionDigits: 0 });
 }
 
 /** "Sep 1 – Sep 30" from the read's own window. */
-export function windowRangeLabel(since: string, until: string): string {
+export function windowRangeLabel(since: string, until: string, uiLocale: UiLocale = 'en'): string {
   const format = (iso: string) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString(uiLocale, {
       month: 'short',
       day: 'numeric',
       timeZone: 'UTC',

@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // A portfolio setting row, as a person reads it.
 //
 // optimizer_list_actions names a settings row by its COLUMN (`entity_id` = portfolio_audits
@@ -58,7 +62,10 @@ export function humanizeSnakeCase(raw: string): string {
 }
 
 /** 'apply_enabled:google_ads' → its column and the platform's name; a plain column has none. */
-function scopedField(field: string): { column: string; platform: string | null } {
+function scopedField(field: string): {
+  column: string;
+  platform: string | null;
+} {
   const separator = field.lastIndexOf(':');
   if (separator <= 0) return { column: field, platform: null };
   const platform = readAdPlatform(field.slice(separator + 1));
@@ -84,11 +91,19 @@ export function settingMoneyUnit(field: string | null | undefined): 'major' | 'm
   return MONEY_SETTINGS[scopedField(field).column] ?? null;
 }
 
-export function settingLabel(field: string | null | undefined): string {
-  if (!field) return 'Setting';
+export function settingLabel(field: string | null | undefined, uiTranslate?: ScaleCopy): string {
+  if (!field) return uiTranslate ? uiTranslate('setting_818cd8d') : 'Setting';
   const { column, platform } = scopedField(field);
-  const label = SETTING_LABELS[column] ?? humanizeSnakeCase(column);
-  return platform ? `${label} on ${platform}` : label;
+  const label = uiTranslate
+    ? Object.hasOwn(SETTING_MESSAGE_KEYS, column)
+      ? uiTranslate(SETTING_MESSAGE_KEYS[column as keyof typeof SETTING_MESSAGE_KEYS])
+      : uiTranslate('setting_818cd8d')
+    : (SETTING_LABELS[column] ?? humanizeSnakeCase(column));
+  return platform
+    ? uiTranslate
+      ? uiTranslate('helper_fd32956785c1', { v0: label, v1: platform })
+      : `${label} on ${platform}`
+    : label;
 }
 
 /** '["set_budget","set_status"]' → 'Set budget, Set status'; null when not a JSON string array. */
@@ -113,8 +128,27 @@ function accountValue(value: string): string | null {
 
 /** An enum word ('recommend', 'observed') reads capitalised; numbers, dates and free text
  *  are printed as the audit stored them. */
-export function settingValue(value: string | null): string | null {
+export function settingValue(value: string | null, uiTranslate?: ScaleCopy): string | null {
   if (value == null) return null;
+  if (uiTranslate) {
+    if (SETTING_ENUM_VALUES.has(value)) return uiTranslate('settingEnumValue', { value });
+    if (value.trimStart().startsWith('[')) {
+      try {
+        const values: unknown = JSON.parse(value);
+        if (Array.isArray(values) && values.every((item) => typeof item === 'string'))
+          return values.length
+            ? values
+                .map((item) =>
+                  SETTING_ENUM_VALUES.has(item)
+                    ? uiTranslate('settingEnumValue', { value: item })
+                    : item,
+                )
+                .join(', ')
+            : uiTranslate('settingEnumValue', { value: 'none' });
+      } catch {}
+    }
+    return accountValue(value) ?? value;
+  }
   const known = VALUE_LABELS[value];
   if (known) return known;
   const words = listValue(value) ?? accountValue(value);
@@ -129,12 +163,76 @@ const OFF = new Set(['false', 'off']);
 export function settingSentence(
   field: string | null | undefined,
   after: string | null,
+  uiTranslate?: ScaleCopy,
 ): string | null {
   if (after == null) return null;
   const value = after.toLowerCase();
   const on = ON.has(value);
   if (!on && !OFF.has(value)) return null;
   // autopilot_paused reads inverted: the column turning ON is the autopilot stopping.
-  if (field === 'autopilot_paused') return on ? 'Autopilot paused' : 'Autopilot resumed';
-  return `${settingLabel(field)} turned ${on ? 'on' : 'off'}`;
+  if (field === 'autopilot_paused')
+    return uiTranslate
+      ? uiTranslate('settingAutopilotPaused', { paused: on ? 'yes' : 'no' })
+      : on
+        ? 'Autopilot paused'
+        : 'Autopilot resumed';
+  if (uiTranslate)
+    return uiTranslate('settingToggled', {
+      setting: settingLabel(field, uiTranslate),
+      on: on ? 'yes' : 'no',
+    });
+  return `${settingLabel(field, uiTranslate)} turned ${on ? 'on' : 'off'}`;
 }
+
+const SETTING_MESSAGE_KEYS = {
+  allowed_actions: 'allowed_actions_f1ee293',
+  apply_enabled: 'settingField_apply_enabled',
+  apply_mode: 'mode_5e23ec6',
+  autogen: 'settingField_autogen',
+  autopilot_paused: 'optimizer_modeAutopilot',
+  autopilot_scopes: 'settingField_autopilot_scopes',
+  budget_source: 'settingField_budget_source',
+  cpa_target: 'settingField_cpa_target',
+  creative_analysis: 'creative_analysis_d28c315',
+  currency: 'currency_3ac1a9e',
+  daily_total: 'settingField_daily_total',
+  enrolled: 'enrolled_ad_sets_6b4145f',
+  host_account: 'settingField_host_account',
+  lookback_window: 'lookback_window_dd152e0',
+  max_change_pct_per_cycle: 'settingField_max_change_pct_per_cycle',
+  max_daily_apply_minor: 'settingField_max_daily_apply_minor',
+  objective: 'objective_3b20adc',
+  period_budget: 'settingField_period_budget',
+  period_end: 'settingField_period_end',
+  period_start: 'settingField_period_start',
+  scale_cadence_days: 'settingField_scale_cadence_days',
+  scale_growth_pct: 'settingField_scale_growth_pct',
+  scale_max_daily: 'settingField_scale_max_daily',
+  target_metric: 'target_metric_5e5b274',
+  velocity_cap_pct: 'settingField_velocity_cap_pct',
+} as const;
+const SETTING_ENUM_VALUES = new Set([
+  'observe',
+  'recommend',
+  'autopilot',
+  'balanced',
+  'efficiency',
+  'scale',
+  'fixed',
+  'follows_spend',
+  'set_budget',
+  'set_status',
+  'set_bid',
+  'add_negatives',
+  'add_keyword',
+  'budget',
+  'status_pause',
+  'settings',
+  'audience_expand',
+  'creative_refresh',
+  'pause',
+  'true',
+  'on',
+  'false',
+  'off',
+]);

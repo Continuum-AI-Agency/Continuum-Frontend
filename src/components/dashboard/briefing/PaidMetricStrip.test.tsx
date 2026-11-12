@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { completeDaysEndingYesterday } from '@/lib/paid-media/reportingWindow';
 
@@ -10,7 +11,9 @@ const fetchPaidAccountOverview = mock(async () => ({
   metrics: { spend: 28780.16, roas: 1, ctr: 1.83 },
   currency: null as string | null,
 }));
-mock.module('@/lib/paid-media/paid-overview.client', () => ({ fetchPaidAccountOverview }));
+mock.module('@/lib/paid-media/paid-overview.client', () => ({
+  fetchPaidAccountOverview,
+}));
 
 const { PaidMetricStrip } = await import('./PaidMetricStrip');
 
@@ -27,7 +30,10 @@ describe('PaidMetricStrip', () => {
     const [call] = fetchPaidAccountOverview.mock.calls as unknown as [
       { range: { preset: string; since?: string; until?: string } },
     ][];
-    expect(call[0].range).toEqual({ preset: 'custom', ...completeDaysEndingYesterday(7) });
+    expect(call[0].range).toEqual({
+      preset: 'custom',
+      ...completeDaysEndingYesterday(7),
+    });
   });
 
   // PP-L3-home-paid-prints-dollar-signs-no-currency / PP-L3-dashboard-and-home-have-no-data-

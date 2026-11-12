@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeBoardTile, HomeOrganicWeekData } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeBoardContext } from '../../types';
 import { DRAFT_ROWS, NOW, POSTS } from './__fixtures__/organicWeek';
 import { buildOrganicWeek } from './organicWeekModel';
@@ -18,11 +19,19 @@ let retried = 0;
 let load: OrganicWeekLoad;
 const reset = () => {
   retried = 0;
-  load = { week: READY, loading: false, failed: false, retry: () => (retried += 1) };
+  load = {
+    week: READY,
+    loading: false,
+    failed: false,
+    retry: () => (retried += 1),
+  };
 };
 reset();
 const realWeek = await import('./useOrganicWeek');
-mock.module('./useOrganicWeek', () => ({ ...realWeek, useOrganicWeek: () => load }));
+mock.module('./useOrganicWeek', () => ({
+  ...realWeek,
+  useOrganicWeek: () => load,
+}));
 
 // The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
 let weekRead: OrganicWeekRead = { data: null, unavailable: true };
@@ -86,7 +95,10 @@ const ACCOUNTS: HomeBoardContext['organicAccounts'] = [
   { platform: 'instagram', integrationAccountId: 'ig-1', name: 'pinkelephant' },
 ];
 const ctxWith = (organicAccounts = ACCOUNTS) =>
-  ({ brandId: '8e5b7185-e43f-4150-b763-b86c4f5297a0', organicAccounts }) as HomeBoardContext;
+  ({
+    brandId: '8e5b7185-e43f-4150-b763-b86c4f5297a0',
+    organicAccounts,
+  }) as HomeBoardContext;
 const tileOf = (size: HomeBoardTile['size'] = 'm'): HomeBoardTile => ({
   id: 'organic',
   size,
@@ -133,7 +145,10 @@ describe('Organic week tile', () => {
   });
 
   it('is missing when the week holds nothing', () => {
-    load = { ...load, week: buildOrganicWeek({ now: NOW, posts: [], drafts: [] }) };
+    load = {
+      ...load,
+      week: buildOrganicWeek({ now: NOW, posts: [], drafts: [] }),
+    };
     const { container, getByTestId, queryByTestId } = render(
       <OrganicTile ctx={ctxWith()} tile={tileOf()} />,
     );
@@ -216,8 +231,17 @@ describe('Organic week with the Backend read', () => {
     publishedThrough: 'external' as const,
   };
   const WEEK: HomeOrganicWeekData = {
-    week: { since: '2026-11-02', until: '2026-11-08', timeZone: 'America/Mexico_City' },
-    baseline: { since: '2026-10-05', until: '2026-11-01', days: 28, statistic: 'median' },
+    week: {
+      since: '2026-11-02',
+      until: '2026-11-08',
+      timeZone: 'America/Mexico_City',
+    },
+    baseline: {
+      since: '2026-10-05',
+      until: '2026-11-01',
+      days: 28,
+      statistic: 'median',
+    },
     days: (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map((weekday, index) => ({
       date: `2026-11-0${index + 2}`,
       weekday,

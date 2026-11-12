@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { render } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { OrganicAccountProfileHeader } from './OrganicAccountProfileHeader';
 
@@ -45,7 +45,11 @@ describe('OrganicAccountProfileHeader', () => {
   test('renders a partial profile and drops the link when there is no profile URL', () => {
     const view = render(
       <OrganicAccountProfileHeader
-        profile={{ displayName: 'Continuum AI', username: null, profileUrl: null }}
+        profile={{
+          displayName: 'Continuum AI',
+          username: null,
+          profileUrl: null,
+        }}
         platformLabel="TikTok"
       />,
     );

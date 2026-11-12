@@ -1,7 +1,7 @@
 'use client';
 import type { AgentMentionReference } from '@continuum/contracts';
 import { Gem, MessageCircle, Play, Trash2, TriangleAlert, Wand2, Workflow, X } from 'lucide-react';
-
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import {
@@ -11,6 +11,7 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
+import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
 import {
   buildAgentAttachmentContext,
   buildInlineTextContextBlock,
@@ -27,12 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Trace } from '@/components/ui/trace';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
-import {
-  ELEMENT_CATEGORY_LABEL,
-  type ElementRecord,
-  getElement,
-  useElements,
-} from '@/lib/ai-studio/elements';
+import { type ElementRecord, getElement, useElements } from '@/lib/ai-studio/elements';
 import { warmLaya } from '@/lib/api/layaWarm';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
@@ -96,6 +92,9 @@ export function CanvasComposer({
   onRun,
   className,
 }: CanvasComposerProps) {
+  const translateUi = useUiTranslations('studio');
+  const mediaText = useUiTranslations('library');
+
   const [expanded, setExpanded] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [queuedText, setQueuedText] = useState<string | null>(null);
@@ -140,9 +139,11 @@ export function CanvasComposer({
             brandId: brandProfileId,
             skills: brandSkills,
             elements: elementCatalog,
+            uiText: translateUi,
+            mediaText,
           })
         : undefined,
-    [brandProfileId, brandSkills, elementCatalog],
+    [brandProfileId, brandSkills, elementCatalog, translateUi, mediaText],
   );
 
   // A run started before this mount (navigation away and back) lives only in the
@@ -161,7 +162,9 @@ export function CanvasComposer({
           <span className="max-w-40 truncate">{workflow.label}</span>
           <button
             type="button"
-            aria-label={`Remove ${workflow.label} from context`}
+            aria-label={translateUi('remove_value0_from_context_8ac559a9', {
+              value0: String(workflow.label),
+            })}
             className="rounded-full p-0.5 hover:bg-foreground/10"
             onClick={() =>
               setAttachedWorkflows((current) => current.filter((item) => item.id !== workflow.id))
@@ -225,11 +228,13 @@ export function CanvasComposer({
           pastedText: buildInlineTextContextBlock(attachmentContext.inlineTexts),
         });
       }}
-      ariaLabel="Describe the workflow you want on the canvas"
+      ariaLabel={translateUi('canvasWorkflowDescription')}
       placeholder={
         selectedNodeIds.length > 0
-          ? `Change the ${selectedNodeIds.length} selected node${selectedNodeIds.length > 1 ? 's' : ''}…`
-          : 'Describe a workflow; @ for skills, Elements or Library media, / for shortcuts'
+          ? translateUi('change_the_value0_selected_node_val_66799e94', {
+              count: Number(selectedNodeIds.length),
+            })
+          : translateUi('describe_a_workflow_for_skills_elem_0ce06e4b')
       }
       actions={
         <>
@@ -237,8 +242,8 @@ export function CanvasComposer({
             size="icon"
             variant="ghost"
             onClick={() => setWorkflowPickerOpen(true)}
-            aria-label="Attach a saved workflow as context"
-            title="Attach a saved workflow as context"
+            aria-label={translateUi('attach_a_saved_workflow_as_context_f5e2266a')}
+            title={translateUi('attach_a_saved_workflow_as_context_f5e2266a')}
             className="size-8 shrink-0 text-muted-foreground"
             type="button"
           >
@@ -248,7 +253,11 @@ export function CanvasComposer({
             size="icon"
             variant="ghost"
             onClick={() => setExpanded((value) => !value)}
-            aria-label={expanded ? 'Collapse composer chat' : 'Expand composer chat'}
+            aria-label={
+              expanded
+                ? translateUi('collapse_composer_chat_bfd95037')
+                : translateUi('expand_composer_chat_7e104f76')
+            }
             aria-expanded={expanded}
             data-testid="composer-expand"
             className="size-8 shrink-0 text-muted-foreground"
@@ -259,14 +268,22 @@ export function CanvasComposer({
           <Button
             size="sm"
             variant={thinking ? 'secondary' : 'ghost'}
-            aria-label={thinking ? 'Disable deeper thinking' : 'Enable deeper thinking'}
+            aria-label={
+              thinking
+                ? translateUi('disable_deeper_thinking_33444b39')
+                : translateUi('enable_deeper_thinking_86ae9cdb')
+            }
             aria-pressed={thinking}
-            title={thinking ? 'Thinking mode: maximum reasoning' : 'Fast mode: low reasoning'}
+            title={
+              thinking
+                ? translateUi('thinking_mode_maximum_reasoning_556f457c')
+                : translateUi('fast_mode_low_reasoning_f9c3a6ee')
+            }
             onClick={() => setThinking((value) => !value)}
             className="h-8 px-2 text-xs"
             type="button"
           >
-            {thinking ? 'Thinking' : 'Fast'}
+            {thinking ? translateUi('thinking_a20d12c5') : translateUi('fast_6c582b62')}
           </Button>
         </>
       }
@@ -302,11 +319,12 @@ export function CanvasComposer({
         {hero ? (
           <div className="mb-4 text-center">
             <h2 className="text-2xl font-semibold tracking-tight">
-              Describe the workflow you want
+              {' '}
+              {translateUi('describe_the_workflow_you_want_78fecafd')}{' '}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Continuum lays out the nodes, wires them up, and pulls in your creative. You press
-              Run.
+              {' '}
+              {translateUi('continuum_lays_out_the_nodes_wires__ba3aa826')}{' '}
             </p>
           </div>
         ) : null}
@@ -315,15 +333,15 @@ export function CanvasComposer({
           <div className="flex h-[26rem] flex-col rounded-xl border bg-background/95 shadow-lg backdrop-blur">
             <div className="flex items-center gap-2 border-b px-3 py-2">
               <Wand2 className="size-4 text-muted-foreground" aria-hidden />
-              <span className="text-sm font-medium">Composer</span>
-              <Badge variant="secondary">remembers this chat</Badge>
+              <span className="text-sm font-medium">{translateUi('composer_9cb2832c')}</span>
+              <Badge variant="secondary">{translateUi('remembers_this_chat_2e375a38')}</Badge>
               <div className="ml-auto">
                 <Button
                   size="icon"
                   variant="ghost"
                   onClick={clear}
                   disabled={turns.length === 0}
-                  aria-label="Clear the conversation"
+                  aria-label={translateUi('clear_the_conversation_908c0aa7')}
                   className="size-7 text-muted-foreground"
                 >
                   <Trash2 />
@@ -336,8 +354,8 @@ export function CanvasComposer({
                 {turns.length === 0 ? (
                   <ConversationEmptyState
                     icon={<Wand2 className="size-10" aria-hidden />}
-                    title="Compose on the canvas"
-                    description="Prompts sent from here share this conversation as context."
+                    title={translateUi('compose_on_the_canvas_5684633b')}
+                    description={translateUi('prompts_sent_from_here_share_this_c_923f3a02')}
                   />
                 ) : (
                   turns.map((turn, index) => (
@@ -424,6 +442,8 @@ function TurnMessages({
   onCancel: () => void;
   onResolveProposal: (outcome: ProposalOutcome) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const { state } = turn;
   const graphChanged = state.status === 'done' && state.graph && state.changed !== false;
 
@@ -437,7 +457,7 @@ function TurnMessages({
         <ElementGroundingChips references={turn.references} />
         <ChatMediaGrid
           items={mediaFromPersistedAttachments(turn.id, turn.attachments)}
-          lightboxTitle="Attachment"
+          lightboxTitle={translateUi('attachmentFallback')}
         />
       </Message>
       {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the Message component's author prop (house ai-elements API), not an ARIA role */}
@@ -454,7 +474,8 @@ function TurnMessages({
                 onClick={onCancel}
                 className="h-6 px-2 text-xs text-muted-foreground"
               >
-                Stop
+                {' '}
+                {translateUi('stop_cae7d57b')}{' '}
               </Button>
             ) : null}
           </div>
@@ -466,7 +487,7 @@ function TurnMessages({
             </span>
           ) : null}
 
-          {state.status === 'done' ? <p>{state.summary || 'Done.'}</p> : null}
+          {state.status === 'done' ? <p>{state.summary || translateUi('done_ed251864')}</p> : null}
 
           {state.status === 'done' && state.changed === false ? <ComposerAnsweredNote /> : null}
 
@@ -497,8 +518,7 @@ function TurnMessages({
               data-testid="composer-turn-run"
               className="h-6 w-fit px-2 text-xs"
             >
-              <Play data-icon="inline-start" />
-              Run
+              <Play data-icon="inline-start" /> {translateUi('run_00d60e31')}{' '}
             </Button>
           ) : null}
 
@@ -509,18 +529,26 @@ function TurnMessages({
         <ChatMarker
           kind="milestone"
           icon={<Workflow />}
-          label={`Canvas updated · ${graphCountLabel(state.graph)}`}
+          label={translateUi('canvas_updated_value0_ef8e9db4', {
+            value0: String(graphCountLabel(state.graph, translateUi)),
+          })}
         />
       ) : null}
       {state.pipelineProposal?.outcome === 'published' ? (
-        <ChatMarker kind="milestone" label="Pipeline published" />
+        <ChatMarker kind="milestone" label={translateUi('pipeline_published_f2dd44d3')} />
       ) : null}
     </>
   );
 }
 
-function graphCountLabel(graph: { nodeCount: number; edgeCount: number }): string {
-  return `${graph.nodeCount} node${graph.nodeCount === 1 ? '' : 's'} · ${graph.edgeCount} connection${graph.edgeCount === 1 ? '' : 's'}`;
+function graphCountLabel(
+  graph: { nodeCount: number; edgeCount: number },
+  t: ReturnType<typeof useUiTranslations<'studio'>>,
+): string {
+  return t('composerGraphCounts', {
+    nodes: graph.nodeCount,
+    connections: graph.edgeCount,
+  });
 }
 
 /**
@@ -528,6 +556,8 @@ function graphCountLabel(graph: { nodeCount: number; edgeCount: number }): strin
  * running, failed, or done with the turn. Open while running, folded once the turn settles.
  */
 function ComposerSteps({ state }: { state: CanvasComposerState }) {
+  const translateUi = useUiTranslations('studio');
+
   const [open, setOpen] = useState<boolean>();
   const running = state.status === 'running';
   const { steps } = state;
@@ -535,7 +565,7 @@ function ComposerSteps({ state }: { state: CanvasComposerState }) {
   if (steps.length === 0) {
     return running ? (
       <Trace>
-        <TraceStep status="running" title="Thinking…" />
+        <TraceStep status="running" title={translateUi('thinking_a02f1cea')} />
       </Trace>
     ) : null;
   }
@@ -551,7 +581,9 @@ function ComposerSteps({ state }: { state: CanvasComposerState }) {
       <TraceStep
         status={lastStatus}
         icon={<Wand2 />}
-        title={`${steps.length} step${steps.length === 1 ? '' : 's'}`}
+        title={translateUi('value0_step_value1_81a83ce3', {
+          count: Number(steps.length),
+        })}
         open={open ?? running}
         onOpenChange={setOpen}
       >
@@ -579,21 +611,31 @@ function ComposerSteps({ state }: { state: CanvasComposerState }) {
  * (docs/research/element-reference-generation.md §9.2).
  */
 function ElementGroundingChips({ references }: { references?: AgentMentionReference[] }) {
+  const translateUi = useUiTranslations('studio');
+
   const elements = (references ?? []).map(readElementMention).filter((element) => element !== null);
   if (elements.length === 0) return null;
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="composer-elements">
       <Gem className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="sr-only">Elements grounding this generation</span>
+      <span className="sr-only">{translateUi('elements_grounding_this_generation_b4c764b4')}</span>
       {elements.map((element) => (
         <Badge key={element.elementId} variant="secondary" className="gap-1 font-normal">
           {element.name}
           <span className="text-muted-foreground">
             {[
-              ELEMENT_CATEGORY_LABEL[element.category],
-              element.mode === 'fallback' ? `${element.assetIds.length} images` : null,
-              element.droppedCount > 0 ? `${element.droppedCount} dropped` : null,
+              elementCategoryLabel(element.category, translateUi),
+              element.mode === 'fallback'
+                ? translateUi('elementReferenceImages', {
+                    count: element.assetIds.length,
+                  })
+                : null,
+              element.droppedCount > 0
+                ? translateUi('elementReferencesDropped', {
+                    count: element.droppedCount,
+                  })
+                : null,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -610,9 +652,12 @@ function ElementGroundingChips({ references }: { references?: AgentMentionRefere
  * build — so an answered question looked like a workflow the user had to go run.
  */
 function ComposerAnsweredNote() {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <p className="text-xs text-muted-foreground" data-testid="composer-answered-note">
-      Answered — nothing on the canvas changed.
+      {' '}
+      {translateUi('answered_nothing_on_the_canvas_chan_08fe8bea')}{' '}
     </p>
   );
 }
@@ -630,6 +675,8 @@ function ComposerProgress({
   onRun: () => void;
   onResolveProposal: (outcome: ProposalOutcome) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   if (state.status === 'idle') return null;
 
   const latestStep = state.steps.at(-1);
@@ -640,7 +687,7 @@ function ComposerProgress({
         <div className="min-w-0 flex-1">
           {state.status === 'running' ? (
             <Trace>
-              <TraceStep status="running" title={latestStep ?? 'Thinking…'} />
+              <TraceStep status="running" title={latestStep ?? translateUi('thinking_a02f1cea')} />
             </Trace>
           ) : null}
 
@@ -661,7 +708,9 @@ function ComposerProgress({
 
           {state.graph && state.changed !== false ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              {graphCountLabel(state.graph)} on the canvas
+              {graphCountLabel(state.graph, translateUi)} {translateUi(
+                'on_the_canvas_6f5e6584',
+              )}{' '}
             </p>
           ) : null}
 
@@ -683,8 +732,7 @@ function ComposerProgress({
         <div className="flex shrink-0 items-center gap-1">
           {state.status === 'done' && state.graph && state.changed !== false ? (
             <Button size="sm" type="button" onClick={onRun} data-testid="composer-card-run">
-              <Play data-icon="inline-start" />
-              Run
+              <Play data-icon="inline-start" /> {translateUi('run_00d60e31')}{' '}
             </Button>
           ) : null}
           <Button
@@ -692,7 +740,11 @@ function ComposerProgress({
             variant="ghost"
             type="button"
             onClick={onDismiss}
-            aria-label={state.status === 'running' ? 'Stop the composer' : 'Dismiss'}
+            aria-label={
+              state.status === 'running'
+                ? translateUi('stop_the_composer_a97eda0f')
+                : translateUi('dismiss_48845bff')
+            }
             data-testid="composer-card-dismiss"
             className="size-7"
           >

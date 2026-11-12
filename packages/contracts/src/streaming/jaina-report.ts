@@ -783,9 +783,16 @@ export function parseProseMarks(text: string): ProseSegment[] {
   let lastIndex = 0;
   for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
     if (match.index > lastIndex) {
-      segments.push({ kind: 'text', value: text.slice(lastIndex, match.index) });
+      segments.push({
+        kind: 'text',
+        value: text.slice(lastIndex, match.index),
+      });
     }
-    segments.push({ kind: 'mark', tone: match[1] as ProseMarkTone, value: match[2] });
+    segments.push({
+      kind: 'mark',
+      tone: match[1] as ProseMarkTone,
+      value: match[2],
+    });
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) segments.push({ kind: 'text', value: text.slice(lastIndex) });
@@ -866,7 +873,11 @@ export const watchItemSchema = z.object({
   direction: moveDirectionSchema.nullable().default(null),
   severity: z.enum(['watch', 'risk', 'neutral']).default('watch'),
   entity: z
-    .object({ id: z.string().nullable(), name: z.string().min(1), level: z.string().nullable() })
+    .object({
+      id: z.string().nullable(),
+      name: z.string().min(1),
+      level: z.string().nullable(),
+    })
     .nullable()
     .default(null),
   /** Why it is on the list, in the answer's language. */
@@ -1368,7 +1379,10 @@ const METRIC_PHRASES = new RegExp(
   'giu',
 );
 
-const CLAIM_VOCABULARY: ReadonlyArray<{ kind: Exclude<ClaimKind, 'figure'>; pattern: RegExp }> = [
+const CLAIM_VOCABULARY: ReadonlyArray<{
+  kind: Exclude<ClaimKind, 'figure'>;
+  pattern: RegExp;
+}> = [
   {
     kind: 'creative',
     pattern: wordPattern(
@@ -1609,7 +1623,11 @@ export type GroundingOptions = {
  * A piece of prose a block carries. `proposes` marks text that IS a move (a step's action):
  * every percentage in it is the size of that move, computed by the proposal, never read.
  */
-type ClaimSource = { text: string; citeIds: ReadonlyArray<string> | null; proposes?: boolean };
+type ClaimSource = {
+  text: string;
+  citeIds: ReadonlyArray<string> | null;
+  proposes?: boolean;
+};
 
 const stringOf = (value: unknown): string => (typeof value === 'string' ? value : '');
 
@@ -1632,6 +1650,32 @@ const recordsOf = (value: unknown): Record<string, unknown>[] =>
 // ---------------------------------------------------------------------------
 
 const NUMBER_TOKEN = /(?<![\w.,])(\d[\d.,]*\d|\d)\s?(k|K|M|mil|million|millones)?(?![\w])/gu;
+const ISO_DATE_TOKEN =
+  /\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?\b/g;
+
+function serializedArrayNumberTokens(text: string): NumberReading[][] | null {
+  if (!text.trimStart().startsWith('[')) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  } // Array-like prose keeps the normal text tokenizer.
+  if (!Array.isArray(value)) return null;
+  const pending: unknown[] = [value];
+  while (pending.length) {
+    const item = pending.pop();
+    if (Array.isArray(item)) {
+      for (const child of item) pending.push(child);
+    } else if (typeof item !== 'number' || !Number.isFinite(item)) return null;
+  }
+  // JSON commas separate values; they are never a decimal or thousands separator.
+  return [...text.matchAll(/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g)].map(([token]) => {
+    const [mantissa, exponent] = token.split(/[eE]/);
+    const decimals = (mantissa.split('.')[1]?.length ?? 0) - Number(exponent ?? 0);
+    return [{ value: Number(token), decimals }];
+  });
+}
 
 /** One reading of a printed number and the precision it was printed at: "24.9k" is 24,900 to the hundred (decimals −2). */
 export type NumberReading = { value: number; decimals: number };
@@ -1659,7 +1703,10 @@ export const numberReadingsOfToken = (digits: string, suffix?: string): NumberRe
     if (!Number.isFinite(value)) return;
     const point = text.indexOf('.');
     const fractionDigits = point < 0 ? 0 : text.length - point - 1;
-    readings.push({ value: value * scale, decimals: fractionDigits - Math.log10(scale) });
+    readings.push({
+      value: value * scale,
+      decimals: fractionDigits - Math.log10(scale),
+    });
   };
   if (hasComma && hasDot) {
     const decimalIsComma = digits.lastIndexOf(',') > digits.lastIndexOf('.');
@@ -1681,8 +1728,10 @@ export const readingsOfNumberToken = (digits: string, suffix?: string): number[]
 
 /** Each printed number in `text` with its readings — one entry per token, several readings when the token is ambiguous. */
 export const numberTokensInText = (text: string): NumberReading[][] => {
+  const serialized = serializedArrayNumberTokens(text);
+  if (serialized) return serialized;
   const out: NumberReading[][] = [];
-  for (const match of text.matchAll(NUMBER_TOKEN)) {
+  for (const match of text.replace(ISO_DATE_TOKEN, '').matchAll(NUMBER_TOKEN)) {
     out.push(numberReadingsOfToken(match[1], match[2]));
   }
   return out;
@@ -1760,7 +1809,9 @@ const answerTemplateCellsOf = (block: Record<string, unknown>, id: string): Bloc
   const prose = (text: unknown, where: string): void => {
     if (typeof text !== 'string' || text.trim().length === 0) return;
     out.push({
-      value: renderFigureRefs(text, figures, formatFigure, { onUnresolved: 'mark' }).text,
+      value: renderFigureRefs(text, figures, formatFigure, {
+        onUnresolved: 'mark',
+      }).text,
       where,
       label: null,
       format: 'text',
@@ -1883,8 +1934,18 @@ export const cellsOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
         break;
       }
       case 'goal_pacing':
-        out.push({ value: block.budget, where: `${id}.budget`, label: 'budget', format: null });
-        out.push({ value: block.spent, where: `${id}.spent`, label: 'spent', format: null });
+        out.push({
+          value: block.budget,
+          where: `${id}.budget`,
+          label: 'budget',
+          format: null,
+        });
+        out.push({
+          value: block.spent,
+          where: `${id}.spent`,
+          label: 'spent',
+          format: null,
+        });
         out.push({
           value: block.projected_end,
           where: `${id}.projected_end`,
@@ -2345,8 +2406,15 @@ const claimSourcesOf = (block: Record<string, unknown>): ClaimSource[] => {
       }));
     case 'steps':
       return recordsOf(block.items).flatMap((item) => [
-        { text: stringOf(item.action), citeIds: citeIdsOf(item.cite_ids), proposes: true },
-        { text: stringOf(item.expected_effect), citeIds: citeIdsOf(item.cite_ids) },
+        {
+          text: stringOf(item.action),
+          citeIds: citeIdsOf(item.cite_ids),
+          proposes: true,
+        },
+        {
+          text: stringOf(item.expected_effect),
+          citeIds: citeIdsOf(item.cite_ids),
+        },
       ]);
     default:
       return [];
@@ -2388,7 +2456,11 @@ export const groundingViolationsOf = (
           sorted !== null &&
           !proseFiguresAreMeasured(claim.span, entities, sorted, source.proposes === true)
         ) {
-          report({ kind: 'figure', span: claim.span, reason: 'claim_without_source' });
+          report({
+            kind: 'figure',
+            span: claim.span,
+            reason: 'claim_without_source',
+          });
         }
         continue;
       }
@@ -2403,7 +2475,11 @@ export const groundingViolationsOf = (
   }
   if (sorted !== null) {
     for (const cell of unmeasuredCellsOf(block, sorted)) {
-      report({ kind: 'figure', span: cell.span, reason: 'claim_without_source' });
+      report({
+        kind: 'figure',
+        span: cell.span,
+        reason: 'claim_without_source',
+      });
     }
   }
   return out;

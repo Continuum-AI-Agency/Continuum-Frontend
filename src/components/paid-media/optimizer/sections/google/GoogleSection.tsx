@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { googleCopy } from './googlePresentation';
+
 // The parts every lane-A Google section shares: a heading with its one-line result always on
 // screen and the long body behind the Optimizer's text disclosure (so ten views fit at 375 px),
 // a "—" that says why, and the band against the portfolio CPA goal in its state colour.
@@ -15,7 +18,7 @@ export function GoogleSection({
   summary,
   testId,
   open = false,
-  showLabel = 'Show',
+  showLabel: providedShowLabel,
   children,
 }: {
   title: string;
@@ -27,16 +30,20 @@ export function GoogleSection({
   showLabel?: string;
   children: ReactNode;
 }) {
+  const uiText = useTranslations('scale');
+  const showLabel = providedShowLabel ?? uiText('show_0df6f1c');
   return (
     <section className="space-y-1 px-1" data-testid={testId}>
-      <h3 className={cn(typeScale.label, 'font-semibold text-muted-foreground')}>{title}</h3>
+      <h3 className={cn(typeScale.label, 'font-semibold text-muted-foreground')}>
+        {googleCopy(title, uiText)}
+      </h3>
       <div className="text-foreground text-sm" data-testid={`${testId}-summary`}>
         {summary}
       </div>
       <details className="group" open={open}>
         <summary className={TEXT_DISCLOSURE}>
           <span className="group-open:hidden">{showLabel}</span>
-          <span className="hidden group-open:inline">Hide</span>
+          <span className="hidden group-open:inline">{uiText('hide_ac20a57')}</span>
         </summary>
         <div className="mt-2 space-y-2">{children}</div>
       </details>
@@ -45,7 +52,9 @@ export function GoogleSection({
 }
 
 /** "—" with its reason beside it for a screen reader and on hover; the table lists the reasons. */
-export function Missing({ reason }: { reason: string }) {
+export function Missing({ reason: source }: { reason: string }) {
+  const uiText = useTranslations('scale');
+  const reason = googleCopy(source, uiText);
   return (
     <span
       className="text-muted-foreground"
@@ -71,12 +80,13 @@ export function FigureText<T>({
 
 /** Every distinct reason a table's dashes stand for, said once under it. */
 export function ReasonNotes({ reasons }: { reasons: readonly (string | null)[] }) {
+  const uiText = useTranslations('scale');
   const distinct = [...new Set(reasons.filter((reason): reason is string => Boolean(reason)))];
   if (distinct.length === 0) return null;
   return (
     <ul className="space-y-0.5 text-muted-foreground text-xs" data-testid="missing-reasons">
       {distinct.map((reason) => (
-        <li key={reason}>— {reason}</li>
+        <li key={reason}>— {googleCopy(reason, uiText)}</li>
       ))}
     </ul>
   );
@@ -95,18 +105,23 @@ const BAND_TONE: Record<GoalBand['kind'], string> = {
 };
 
 export function BandText({ band }: { band: GoalBand }) {
+  const uiText = useTranslations('scale');
   return (
     <span
       className={cn('font-medium text-xs', BAND_TONE[band.kind])}
       data-band={band.kind}
       data-testid="goal-band"
-      title={band.reason ?? undefined}
+      title={band.reason ? googleCopy(band.reason, uiText) : undefined}
     >
-      {band.label}
+      {googleCopy(band.label, uiText)}
       {band.reason && band.label !== '—' ? (
-        <span className="block font-normal text-muted-foreground">{band.reason}</span>
+        <span className="block font-normal text-muted-foreground">
+          {googleCopy(band.reason, uiText)}
+        </span>
       ) : null}
-      {band.reason && band.label === '—' ? <span className="sr-only"> {band.reason}</span> : null}
+      {band.reason && band.label === '—' ? (
+        <span className="sr-only"> {googleCopy(band.reason, uiText)}</span>
+      ) : null}
     </span>
   );
 }

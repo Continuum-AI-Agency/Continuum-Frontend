@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
-
+import { cleanup } from '@testing-library/react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
 import { InsightsList } from '@/components/dashboard/datatable/InsightsList';
+import { render } from '@/i18n/__tests__/render';
 import { Panel } from './Panel';
 
 // Structural guard for the flattened panes.
@@ -103,8 +103,18 @@ describe('dashboard panes carry no card chrome', () => {
       <InsightsList
         title="Insights"
         items={[
-          { id: '1', text: 'All 1 posts are FEED', severity: 'neutral', label: 'CONTENT' },
-          { id: '2', text: 'Engagement up 0.0%', severity: 'positive', label: 'ENGAGEMENT' },
+          {
+            id: '1',
+            text: 'All 1 posts are FEED',
+            severity: 'neutral',
+            label: 'CONTENT',
+          },
+          {
+            id: '2',
+            text: 'Engagement up 0.0%',
+            severity: 'positive',
+            label: 'ENGAGEMENT',
+          },
         ]}
       />,
     );

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { configFixture, payloadFixture } from '../__fixtures__/easyfitPayload';
 import { PilotoView } from './PilotoView';
 
@@ -17,7 +18,9 @@ describe('PilotoView', () => {
     expect(november.getAttribute('data-state')).toBe('inProgress');
     expect(within(november).getByText('en curso')).toBeTruthy();
     expect(
-      within(november).getByRole('progressbar', { name: 'Altas Poliwin: 85 / 729' }),
+      within(november).getByRole('progressbar', {
+        name: 'Altas Poliwin: 85 / 729',
+      }),
     ).toBeTruthy();
     expect(within(november).getByTestId('floor-marker').getAttribute('title')).toBe('Piso 662');
     expect(within(screen.getByTestId('pilot-month-2026-12')).getByText('por iniciar')).toBeTruthy();
@@ -56,7 +59,9 @@ describe('PilotoView', () => {
     renderPiloto();
 
     expect(
-      screen.getByRole('img', { name: 'Altas por mes: historial y metas del piloto' }),
+      screen.getByRole('img', {
+        name: 'Altas por mes: historial y metas del piloto',
+      }),
     ).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Costo por alta total' })).toBeTruthy();
     expect(screen.getByText('Piso (mismo mes año pasado)')).toBeTruthy();

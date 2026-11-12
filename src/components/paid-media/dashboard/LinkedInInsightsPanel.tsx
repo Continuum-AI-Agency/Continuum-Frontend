@@ -7,11 +7,15 @@ import {
   TrendingUpIcon,
   WalletIcon,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import type { PaidMetricsComparison } from './PerformanceDetails';
 import { type PaidMediaTimeRange, toMetricsRange } from './timeRange';
 
@@ -39,52 +43,74 @@ type PaidMetricsPayload = {
   trends?: Array<Metrics & { date: string }>;
 };
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+function formatCurrency(value: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value);
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
+type LinkedInCopy = ReturnType<typeof useTranslations<'scale'>>;
+function formatDelta(value: number | undefined, locale: UiLocale, translate: LinkedInCopy): string {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return translate('linkedin_no_baseline');
+  return translate('linkedin_delta', {
+    value: (value > 0 ? '+' : '') + formatDecimal(value, 1, locale),
+  });
 }
 
-function formatDelta(value: number | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 'no prior-window baseline';
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(1)}% vs prior window`;
+function chooseEfficiencyLine(
+  metrics: Metrics,
+  comparison: PaidMetricsComparison | undefined,
+  locale: UiLocale,
+  translate: LinkedInCopy,
+): string {
+  if (metrics.roas > 0)
+    return translate('linkedin_roas', {
+      value: formatDecimal(metrics.roas, 2, locale),
+      delta: formatDelta(comparison?.roas?.percentageChange, locale, translate),
+    });
+  if (metrics.cpc > 0)
+    return translate('linkedin_cpc', {
+      value: formatCurrency(metrics.cpc, locale),
+      delta: formatDelta(comparison?.cpc?.percentageChange, locale, translate),
+    });
+  return translate('linkedin_efficiency_wait');
 }
 
-function chooseEfficiencyLine(metrics: Metrics, comparison?: PaidMetricsComparison): string {
-  if (metrics.roas > 0) {
-    return `ROAS is ${metrics.roas.toFixed(2)} with ${formatDelta(comparison?.roas?.percentageChange)}.`;
-  }
-  if (metrics.cpc > 0) {
-    return `Average CPC is ${formatCurrency(metrics.cpc)} with ${formatDelta(comparison?.cpc?.percentageChange)}.`;
-  }
-  return 'Efficiency is waiting on enough click or conversion volume to calculate a stable read.';
+function chooseVolumeLine(
+  metrics: Metrics,
+  comparison: PaidMetricsComparison | undefined,
+  locale: UiLocale,
+  translate: LinkedInCopy,
+): string {
+  return translate('linkedin_volume', {
+    impressions: metrics.impressions,
+    clicks: metrics.clicks,
+    ctr: formatDecimal(metrics.ctr, 2, locale),
+    delta: formatDelta(comparison?.ctr?.percentageChange, locale, translate),
+  });
 }
 
-function chooseVolumeLine(metrics: Metrics, comparison?: PaidMetricsComparison): string {
-  return `${formatNumber(metrics.impressions)} impressions and ${formatNumber(metrics.clicks)} clicks generated a ${metrics.ctr.toFixed(2)}% CTR, ${formatDelta(comparison?.ctr?.percentageChange)}.`;
+function chooseSpendLine(
+  metrics: Metrics,
+  comparison: PaidMetricsComparison | undefined,
+  locale: UiLocale,
+  translate: LinkedInCopy,
+): string {
+  return translate('linkedin_spend', {
+    value: formatCurrency(metrics.spend, locale),
+    delta: formatDelta(comparison?.spend?.percentageChange, locale, translate),
+  });
 }
 
-function chooseSpendLine(metrics: Metrics, comparison?: PaidMetricsComparison): string {
-  return `${formatCurrency(metrics.spend)} spent in this window, ${formatDelta(comparison?.spend?.percentageChange)}.`;
-}
-
-function trendLine(trends: PaidMetricsPayload['trends']): string {
-  if (!trends || trends.length < 2) {
-    return 'Trend hydration is active; more daily rows are needed before a directional read is useful.';
-  }
-  const first = trends[0];
-  const last = trends[trends.length - 1];
-  const clickDelta = (last.clicks ?? 0) - (first.clicks ?? 0);
-  if (clickDelta > 0) return 'Daily click volume is rising across the selected window.';
-  if (clickDelta < 0) return 'Daily click volume is softening across the selected window.';
-  return 'Daily click volume is flat across the selected window.';
+function trendLine(trends: PaidMetricsPayload['trends'], translate: LinkedInCopy): string {
+  if (!trends || trends.length < 2) return translate('linkedin_trend_wait');
+  const delta = (trends.at(-1)?.clicks ?? 0) - (trends[0].clicks ?? 0);
+  return translate(
+    delta > 0 ? 'linkedin_trend_up' : delta < 0 ? 'linkedin_trend_down' : 'linkedin_trend_flat',
+  );
 }
 
 export function LinkedInInsightsPanel({
@@ -94,6 +120,11 @@ export function LinkedInInsightsPanel({
   campaignName,
   timeRange,
 }: LinkedInInsightsPanelProps) {
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const fetchErrorRef = React.useRef(formatUiError);
+  fetchErrorRef.current = formatUiError;
+  const uiText = useTranslations('scale');
   const [payload, setPayload] = React.useState<PaidMetricsPayload | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -123,7 +154,7 @@ export function LinkedInInsightsPanel({
       }
       setPayload((await response.json()) as PaidMetricsPayload);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load LinkedIn insights');
+      setError(fetchErrorRef.current(err));
       setPayload(null);
     } finally {
       setIsLoading(false);
@@ -134,29 +165,31 @@ export function LinkedInInsightsPanel({
     void load();
   }, [load]);
 
-  const title = campaignId ? 'LinkedIn Campaign Insights' : 'LinkedIn Account Insights';
-  const context = campaignId && campaignName ? campaignName : 'Account overview';
+  const title = uiText('dashboardLinkedInTitle', {
+    scope: campaignId ? 'campaign' : 'account',
+  });
+  const context = campaignId && campaignName ? campaignName : uiText('dashboardAccountOverview');
   const cards = payload
     ? [
         {
-          title: 'Spend',
+          title: uiText('spend_85f3d55'),
           icon: WalletIcon,
-          body: chooseSpendLine(payload.metrics, payload.comparison),
+          body: chooseSpendLine(payload.metrics, payload.comparison, uiLocale, uiText),
         },
         {
-          title: 'Traffic',
+          title: uiText('traffic_4876efb'),
           icon: MousePointerClickIcon,
-          body: chooseVolumeLine(payload.metrics, payload.comparison),
+          body: chooseVolumeLine(payload.metrics, payload.comparison, uiLocale, uiText),
         },
         {
-          title: 'Efficiency',
+          title: uiText('efficiency_87b180c'),
           icon: TrendingUpIcon,
-          body: chooseEfficiencyLine(payload.metrics, payload.comparison),
+          body: chooseEfficiencyLine(payload.metrics, payload.comparison, uiLocale, uiText),
         },
         {
-          title: 'Trend',
+          title: uiText('trend_9e21771'),
           icon: BarChart3Icon,
-          body: trendLine(payload.trends),
+          body: trendLine(payload.trends, uiText),
         },
       ]
     : [];

@@ -1,6 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -22,12 +23,17 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
+import { useValidationErrorMap } from '@/i18n/validation';
 
-const schema = z.object({
-  reason: z.string().min(3, 'Tell the rule engine why — at least 3 characters.').max(2000),
-});
+const rejectSchema = (translate: ReturnType<typeof useTranslations<'common'>>) =>
+  z.object({
+    reason: z
+      .string()
+      .min(3, translate('validationRejectReasonMin', { count: 3 }))
+      .max(2000),
+  });
 
-type RejectFormValues = z.infer<typeof schema>;
+type RejectFormValues = z.infer<ReturnType<typeof rejectSchema>>;
 
 type Props = {
   open: boolean;
@@ -38,8 +44,11 @@ type Props = {
 };
 
 export function RejectDialog({ open, onOpenChange, onConfirm, busy, actionLabel }: Props) {
+  const uiText = useTranslations('common');
+  const validationErrorMap = useValidationErrorMap();
+  const schema = React.useMemo(() => rejectSchema(uiText), [uiText]);
   const form = useForm<RejectFormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema, { error: validationErrorMap }),
     defaultValues: { reason: '' },
   });
 
@@ -55,10 +64,10 @@ export function RejectDialog({ open, onOpenChange, onConfirm, busy, actionLabel 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Reject this action</DialogTitle>
+          <DialogTitle>{uiText('m_8c25acaf7f')}</DialogTitle>
           <DialogDescription>
-            {actionLabel}. The reason is stored on the audit row and surfaces to whoever reviews
-            this rule next.
+            {actionLabel}
+            {uiText('m_03a05b2f5a')}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -68,14 +77,9 @@ export function RejectDialog({ open, onOpenChange, onConfirm, busy, actionLabel 
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Reason</FormLabel>
+                  <FormLabel>{uiText('reason_f81ab83')}</FormLabel>
                   <FormControl>
-                    <Textarea
-                      autoFocus
-                      placeholder="Strategy change — keeping this ad live"
-                      rows={4}
-                      {...field}
-                    />
+                    <Textarea autoFocus placeholder={uiText('m_d2faf5d583')} rows={4} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -88,10 +92,10 @@ export function RejectDialog({ open, onOpenChange, onConfirm, busy, actionLabel 
                 onClick={() => onOpenChange(false)}
                 disabled={busy}
               >
-                Cancel
+                {uiText('cancel_19766ed')}
               </Button>
               <Button type="submit" variant="destructive" disabled={busy}>
-                {busy ? 'Rejecting…' : 'Reject'}
+                {busy ? uiText('m_812b8d2a3b') : uiText('reject_ab604a3')}
               </Button>
             </DialogFooter>
           </form>

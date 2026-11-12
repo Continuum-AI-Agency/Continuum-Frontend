@@ -1,4 +1,5 @@
 import { ArrowUpRight } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
   Table,
@@ -13,12 +14,6 @@ import type { InvoiceRowView } from '@/lib/billing/billingViewModel';
 // Stripe-hosted invoices, newest first as billing-api returns them. Receipts and PDFs live on
 // Stripe's page; this list only links to them.
 
-const dateFormat = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-
 const STATUS_TONE: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
   paid: 'success',
   open: 'warning',
@@ -27,24 +22,29 @@ const STATUS_TONE: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
 };
 
 export function BillingInvoices({ invoices }: { invoices: InvoiceRowView[] }) {
+  const tUi = useTranslations('settings');
+  const dateFormat = new Intl.DateTimeFormat(useLocale(), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
   if (invoices.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No invoices yet. Your first one appears here after you choose a plan.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">{tUi('m_b207228b5c')}</p>;
   }
 
   return (
-    <Table aria-label="Invoices">
+    <Table aria-label={tUi('m_35f8f37b92')}>
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-0">Date</TableHead>
-          <TableHead className="hidden @[36rem]/settings-section:table-cell">Invoice</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
+          <TableHead className="pl-0">{tUi('m_eb9a4bc1c0')}</TableHead>
+          <TableHead className="hidden @[36rem]/settings-section:table-cell">
+            {tUi('m_f9f38818c4')}
+          </TableHead>
+          <TableHead>{tUi('m_bae7d5be70')}</TableHead>
+          <TableHead className="text-right">{tUi('m_43dc8532f7')}</TableHead>
           <TableHead className="pr-0">
-            <span className="sr-only">Link</span>
+            <span className="sr-only">{tUi('m_d0517071aa')}</span>
           </TableHead>
         </TableRow>
       </TableHeader>
@@ -74,9 +74,13 @@ export function BillingInvoices({ invoices }: { invoices: InvoiceRowView[] }) {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-0.5 text-xs text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
-                  View
+                  {tUi('m_69bd4ef9fb')}
                   <ArrowUpRight className="size-3" aria-hidden />
-                  <span className="sr-only">invoice {invoice.label} (opens Stripe)</span>
+                  <span className="sr-only">
+                    {tUi('m_db675a2c87')}
+                    {invoice.label}
+                    {tUi('m_7f86ae77ef')}
+                  </span>
                 </a>
               ) : null}
             </TableCell>

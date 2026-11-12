@@ -2,6 +2,7 @@
 
 import { Accordion } from '@base-ui/react/accordion';
 import { ChevronDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,6 +37,8 @@ function SelectableAssetRow({
   disabled: boolean;
   seenKeys: Set<string>;
 }) {
+  const tUi = useTranslations('common');
+
   const key = getAssetRowKey(asset);
   if (seenKeys.has(key)) return null;
   seenKeys.add(key);
@@ -63,7 +66,9 @@ function SelectableAssetRow({
           </span>
           <span className="flex items-center gap-2">
             <Pill variant="muted">{asset.type}</Pill>
-            {!integrationAccountId ? <span className="text-xs text-warning">Not ready</span> : null}
+            {!integrationAccountId ? (
+              <span className="text-xs text-warning">{tUi('m_2b50ff807d')}</span>
+            ) : null}
           </span>
         </span>
       </div>
@@ -114,9 +119,10 @@ export function MetaSelectableAssetsTree({
   onToggleIntegrationAccountId,
   disabled = false,
 }: Props) {
+  const uiText = useTranslations('common');
   const integrations = hierarchy.integrations ?? [];
   if (integrations.length === 0) {
-    return <span className="text-sm text-muted-foreground">No Meta businesses found.</span>;
+    return <span className="text-sm text-muted-foreground">{uiText('m_2ecbd8e264')}</span>;
   }
 
   const seenKeys = new Set<string>();
@@ -133,7 +139,9 @@ export function MetaSelectableAssetsTree({
               {businesses.map((business, index) => {
                 const businessKey = `${integration.integration_id}:${business.business_id ?? 'none'}:${index}`;
                 const businessLabel =
-                  business.business_name?.trim() || business.business_id || 'Meta business';
+                  business.business_name?.trim() ||
+                  business.business_id ||
+                  uiText('metaBusinessFallback');
 
                 return (
                   <Accordion.Item
@@ -147,7 +155,8 @@ export function MetaSelectableAssetsTree({
                           <span className="truncate text-sm font-medium">{businessLabel}</span>
                           {business.business_id ? (
                             <span className="truncate text-xs text-muted-foreground">
-                              Business ID {business.business_id}
+                              {uiText('m_3c6b9e527e')}
+                              {business.business_id}
                             </span>
                           ) : null}
                         </span>
@@ -162,7 +171,9 @@ export function MetaSelectableAssetsTree({
                       <div className="flex flex-col gap-3">
                         {(business.ad_accounts ?? []).length > 0 ? (
                           <div className="flex flex-col gap-2">
-                            <span className="text-sm font-medium text-foreground">Ad accounts</span>
+                            <span className="text-sm font-medium text-foreground">
+                              {uiText('ad_accounts_f3e56c3')}
+                            </span>
                             <Accordion.Root multiple className="flex flex-col gap-2">
                               {(business.ad_accounts ?? []).map((adAccount) => {
                                 const adAccountKey = `${businessKey}:ad:${adAccount.ad_account_id}`;
@@ -205,13 +216,16 @@ export function MetaSelectableAssetsTree({
                                               <span className="truncate text-sm font-medium">
                                                 {adAccountLabel}
                                               </span>
-                                              <Pill variant="muted">ad account</Pill>
+                                              <Pill variant="muted">{uiText('m_865e46c856')}</Pill>
                                               {isReadOnlyMetaRole(adAccount.ad_account?.role) ? (
-                                                <Pill variant="warning">Read-only</Pill>
+                                                <Pill variant="warning">
+                                                  {uiText('read_only_72bb908')}
+                                                </Pill>
                                               ) : null}
                                             </span>
                                             <span className="truncate text-xs text-muted-foreground">
-                                              Ad Account ID {adAccount.ad_account_id}
+                                              {uiText('m_1395b4b164')}
+                                              {adAccount.ad_account_id}
                                             </span>
                                           </span>
                                           <ChevronDown
@@ -225,7 +239,7 @@ export function MetaSelectableAssetsTree({
                                     <Accordion.Panel className="border-subtle border-t px-3 py-3">
                                       <div className="flex flex-col gap-3">
                                         <AssetsList
-                                          title="Pages"
+                                          title={uiText('m_600584c2d5')}
                                           assets={adAccount.pages ?? []}
                                           selectedByIntegrationAccountId={
                                             selectedByIntegrationAccountId
@@ -237,7 +251,7 @@ export function MetaSelectableAssetsTree({
                                           seenKeys={seenKeys}
                                         />
                                         <AssetsList
-                                          title="Instagram accounts"
+                                          title={uiText('m_482e7a5dc5')}
                                           assets={adAccount.instagram_accounts ?? []}
                                           selectedByIntegrationAccountId={
                                             selectedByIntegrationAccountId
@@ -249,7 +263,7 @@ export function MetaSelectableAssetsTree({
                                           seenKeys={seenKeys}
                                         />
                                         <AssetsList
-                                          title="Threads accounts"
+                                          title={uiText('m_af6a10e434')}
                                           assets={adAccount.threads_accounts ?? []}
                                           selectedByIntegrationAccountId={
                                             selectedByIntegrationAccountId
@@ -270,7 +284,7 @@ export function MetaSelectableAssetsTree({
                         ) : null}
 
                         <AssetsList
-                          title="Pages (no ad account)"
+                          title={uiText('m_5c72b41a55')}
                           assets={business.pages_without_ad_account ?? []}
                           selectedByIntegrationAccountId={selectedByIntegrationAccountId}
                           onToggleIntegrationAccountId={onToggleIntegrationAccountId}
@@ -278,7 +292,7 @@ export function MetaSelectableAssetsTree({
                           seenKeys={seenKeys}
                         />
                         <AssetsList
-                          title="Instagram accounts (no ad account)"
+                          title={uiText('m_bb4fbbf0de')}
                           assets={business.instagram_accounts_without_ad_account ?? []}
                           selectedByIntegrationAccountId={selectedByIntegrationAccountId}
                           onToggleIntegrationAccountId={onToggleIntegrationAccountId}
@@ -286,7 +300,7 @@ export function MetaSelectableAssetsTree({
                           seenKeys={seenKeys}
                         />
                         <AssetsList
-                          title="Threads accounts (no ad account)"
+                          title={uiText('m_16999620ae')}
                           assets={business.threads_accounts_without_ad_account ?? []}
                           selectedByIntegrationAccountId={selectedByIntegrationAccountId}
                           onToggleIntegrationAccountId={onToggleIntegrationAccountId}

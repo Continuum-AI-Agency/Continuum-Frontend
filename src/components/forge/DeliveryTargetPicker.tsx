@@ -9,7 +9,7 @@ import {
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, ClipboardPaste, Loader2, Plus, X } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import {
@@ -17,6 +17,7 @@ import {
   isSlackDeliveryUnavailable,
   type SlackPickerState,
 } from '@/components/forge/SlackDestinationPicker';
+import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Link } from '@/i18n/navigation';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { publishingApi } from '@/StudioCanvas/nodes/publish/publishingApi';
@@ -70,8 +72,7 @@ export type ReplaceFormats = ReadonlyArray<{ id: string; label: string }>;
 type Level = PaidCanvasTarget['level'];
 
 const INTEGRATIONS_HREF = '/settings?section=integrations';
-export const APPROVAL_COPY =
-  'Ad changes wait for approval in Slack and on this page. Nothing changes in Ads Manager until someone approves.';
+
 // ponytail: an id lookup pages the account's ads (paused + active) 50 at a time, capped here;
 // add a by-id route on the paid targets service when an account outgrows it.
 const AD_LOOKUP_PAGES = 10;
@@ -217,6 +218,8 @@ export function useDeliveryDestinations(brandId: string): {
   slack: SlackPickerState;
   meta: MetaPickerState;
 } {
+  const presentForge = useForgePresentationText();
+
   const query = useQuery({
     queryKey: forgeQueryKeys.deliveryDestinations(brandId),
     queryFn: () => apiRendersApi.listDeliveryDestinations(brandId),
@@ -228,7 +231,7 @@ export function useDeliveryDestinations(brandId: string): {
     return {
       slack: isSlackDeliveryUnavailable(query.error)
         ? 'unavailable'
-        : { error: describeSlackFailure(query.error) },
+        : { error: describeSlackFailure(query.error, presentForge) },
       meta: 'unknown',
     };
   return { slack: query.data.slack, meta: query.data.meta };
@@ -283,6 +286,8 @@ export function useResolveAdTargets({
   adAccountId: string | undefined;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
 }): { resolving: boolean; resolveErrors: Record<string, string> } {
+  const presentForge = useForgePresentationText();
+  const translateUi = useUiTranslations('forge');
   const [resolveErrors, setResolveErrors] = useState<Record<string, string>>({});
   const [resolving, setResolving] = useState(false);
   // The caller hands a fresh arrow every render; the lookup must not restart on each one.
@@ -315,13 +320,15 @@ export function useResolveAdTargets({
           const target = ad && adAccountId ? replaceTargetFor(adAccountId, ad) : null;
           if (target) deliveryChange.current(rowId, target);
           else
-            misses[`${rowId}:${adId}`] = `Ad ${adId} isn’t a paused or active ad in this account.`;
+            misses[`${rowId}:${adId}`] = translateUi('adNotEligible', {
+              id: adId,
+            });
         }
         setResolveErrors((current) => ({ ...current, ...misses }));
       })
       .catch((error) => {
         if (cancelled) return;
-        const message = describePaidFailure(error);
+        const message = describePaidFailure(error, presentForge);
         setResolveErrors((current) => ({
           ...current,
           ...Object.fromEntries(pending.map(([rowId, adId]) => [`${rowId}:${adId}`, message])),
@@ -333,7 +340,7 @@ export function useResolveAdTargets({
     return () => {
       cancelled = true;
     };
-  }, [brandId, enabled, pendingKey, adAccountId]);
+  }, [brandId, enabled, pendingKey, adAccountId, presentForge, translateUi]);
   return { resolving, resolveErrors };
 }
 
@@ -347,13 +354,19 @@ export function AdAccountSelect({
   value: string | undefined;
   onChange: (adAccountId: string) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const accounts = (meta !== 'loading' && meta !== 'unknown' ? meta.adAccounts : null) ?? [];
   if (accounts.length <= 1) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="text-muted-foreground">Ad account</span>
+      <span className="text-muted-foreground">{translateUi('ad_account_2672664d')}</span>
       <Select value={value} onValueChange={(next) => next && onChange(next)}>
-        <SelectTrigger aria-label="Ad account" size="sm" className="w-auto text-xs">
+        <SelectTrigger
+          aria-label={translateUi('ad_account_2672664d')}
+          size="sm"
+          className="w-auto text-xs"
+        >
           <SelectValue
             items={Object.fromEntries(
               accounts.map((account) => [account.id, account.name ?? account.id]),
@@ -372,18 +385,26 @@ export function AdAccountSelect({
   );
 }
 
-const describePaidFailure = (error: unknown) => {
+const describePaidFailure = (error: unknown, present?: (source: string) => string) => {
   const message = error instanceof Error ? error.message : '';
   if (message.includes('meta_ad_account_not_found'))
-    return 'No ad account is connected to this brand.';
+    return present
+      ? present('No ad account is connected to this brand.')
+      : 'No ad account is connected to this brand.';
   if (message.includes('ad_account_not_assigned_to_brand'))
-    return 'That ad account is not linked to this brand.';
-  return message || 'Meta did not answer. Try again.';
+    return present
+      ? present('That ad account is not linked to this brand.')
+      : 'That ad account is not linked to this brand.';
+  return present
+    ? present('Meta did not answer. Try again.')
+    : message || 'Meta did not answer. Try again.';
 };
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === 'ACTIVE') return <Badge variant="success">Active</Badge>;
-  if (status === 'PAUSED') return <Badge variant="muted">Paused</Badge>;
+  const translateUi = useUiTranslations('forge');
+
+  if (status === 'ACTIVE') return <Badge variant="success">{translateUi('active_92340695')}</Badge>;
+  if (status === 'PAUSED') return <Badge variant="muted">{translateUi('paused_e159b061')}</Badge>;
   return <Badge variant="outline">{status.toLowerCase()}</Badge>;
 }
 
@@ -407,6 +428,8 @@ export function DeliveryTargetPicker({
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onFormatChange: (rowId: string, outputId: string) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const connected = meta !== 'loading' && (meta === 'unknown' || meta.connected);
   const known = meta !== 'loading' && meta !== 'unknown' ? meta : null;
   // Where ads are looked for. Rows keep the account their own target names; this is only the
@@ -423,7 +446,11 @@ export function DeliveryTargetPicker({
   });
 
   if (meta === 'loading') {
-    return <p className="text-xs text-muted-foreground">Checking for an ad account…</p>;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {translateUi('checking_for_an_ad_account_381a7ac9')}
+      </p>
+    );
   }
 
   const targeted = rows.filter((row) => row.delivery);
@@ -431,21 +458,22 @@ export function DeliveryTargetPicker({
     return (
       <div className="space-y-2">
         <div className="rounded-md border border-dashed px-3 py-3 text-xs">
-          <p className="font-medium">No ad account connected</p>
+          <p className="font-medium">{translateUi('no_ad_account_connected_783f04c9')}</p>
           <p className="mt-0.5 text-muted-foreground">
-            Connect a Meta ad account to this brand to replace ads from here. These renders still go
-            to the Library.{' '}
+            {' '}
+            {translateUi('connect_a_meta_ad_account_to_this_b_a616dbdc')}{' '}
             <Link
               href={INTEGRATIONS_HREF}
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
-              Open integrations
+              {' '}
+              {translateUi('open_integrations_93ff028b')}{' '}
             </Link>
           </p>
         </div>
         {targeted.length ? (
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {targeted.length} row{targeted.length === 1 ? ' asks' : 's ask'} to replace an ad.
+            {translateUi('rowsRequestReplacement', { count: targeted.length })}{' '}
             <Button
               type="button"
               size="sm"
@@ -454,7 +482,8 @@ export function DeliveryTargetPicker({
                 for (const row of targeted) onDeliveryChange(row.rowId, null);
               }}
             >
-              Clear ad targets
+              {' '}
+              {translateUi('clear_ad_targets_91abe306')}{' '}
             </Button>
           </div>
         ) : null}
@@ -468,9 +497,11 @@ export function DeliveryTargetPicker({
       <AdAccountSelect meta={meta} value={adAccountId} onChange={setPickedAccount} />
       <p className="text-xs text-muted-foreground">
         {accounts.length <= 1 && known && (known.adAccountName || known.adAccountId)
-          ? `Ad account: ${known.adAccountName ?? known.adAccountId}. `
+          ? translateUi('ad_account_value0_236675c4', {
+              value0: String(known.adAccountName ?? known.adAccountId),
+            })
           : ''}
-        {APPROVAL_COPY}
+        {translateUi('adApprovalExplanation')}
       </p>
       <ul className="divide-y rounded-md border text-xs">
         {rows.map((row) => (
@@ -529,6 +560,8 @@ function MetaRow({
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onFormatChange: (rowId: string, outputId: string) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [picking, setPicking] = useState(false);
   const { delivery } = row;
   const name = row.labelPath.length > 1 ? row.labelPath.join(' / ') : row.label;
@@ -544,9 +577,15 @@ function MetaRow({
               value={format ?? undefined}
               onValueChange={(next) => onFormatChange(row.rowId, next)}
             >
-              <SelectTrigger aria-label={`Format for ${name}`} size="sm" className="w-auto text-xs">
+              <SelectTrigger
+                aria-label={translateUi('format_for_value0_e55d3912', {
+                  value0: String(name),
+                })}
+                size="sm"
+                className="w-auto text-xs"
+              >
                 <SelectValue
-                  placeholder="Choose one format"
+                  placeholder={translateUi('choose_one_format_e6b0c9ca')}
                   items={Object.fromEntries(choices.map((id) => [id, formatLabel(id)]))}
                 />
               </SelectTrigger>
@@ -559,9 +598,13 @@ function MetaRow({
               </SelectContent>
             </Select>
           ) : choices.length === 1 ? (
-            <span className="text-muted-foreground">{formatLabel(choices[0] ?? '')} only</span>
+            <span className="text-muted-foreground">
+              {formatLabel(choices[0] ?? '')} {translateUi('only_f905b195')}
+            </span>
           ) : (
-            <span className="text-destructive">This template has no named format to swap in</span>
+            <span className="text-destructive">
+              {translateUi('this_template_has_no_named_format_t_a6286c67')}
+            </span>
           )
         ) : null}
       </div>
@@ -571,7 +614,9 @@ function MetaRow({
             <span className="text-muted-foreground">{fallback}</span>
           ) : delivery.action === 'create' ? (
             <span>
-              New paused ad in {delivery.campaignName ?? delivery.campaignId} ›{' '}
+              {' '}
+              {translateUi('new_paused_ad_in_853be899')}{' '}
+              {delivery.campaignName ?? delivery.campaignId} ›{' '}
               {delivery.adsetName ?? delivery.adsetId}
             </span>
           ) : isUnresolvedTarget(delivery) ? (
@@ -579,8 +624,8 @@ function MetaRow({
               <span className="text-destructive">{resolveError}</span>
             ) : (
               <span className="inline-flex items-center gap-1 text-muted-foreground">
-                {resolving ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-                Looking up ad {delivery.adId}…
+                {resolving ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+                {translateUi('looking_up_ad_65fe8c35')} {delivery.adId}…
               </span>
             )
           ) : (
@@ -598,18 +643,25 @@ function MetaRow({
           type="button"
           size="xs"
           variant="outline"
-          aria-label={`${delivery ? 'Change the ad' : 'Replace an ad'} for ${name}`}
+          aria-label={translateUi('adTargetChange', {
+            replacing: delivery ? 'yes' : 'no',
+            name,
+          })}
           onClick={() => setPicking((current) => !current)}
         >
-          {delivery ? 'Change' : 'Replace an ad'}
+          {delivery ? translateUi('change_c0bf75bd') : translateUi('replace_an_ad_1813e2a4')}
         </Button>
         {delivery ? (
           <Button
             type="button"
             size="xs"
             variant="ghost"
-            aria-label={`Remove the ad target for ${name}`}
-            title={`Back to: ${fallback}`}
+            aria-label={translateUi('remove_the_ad_target_for_value0_6fa27c7c', {
+              value0: String(name),
+            })}
+            title={translateUi('back_to_value0_c874d06a', {
+              value0: String(fallback),
+            })}
             onClick={() => onDeliveryChange(row.rowId, null)}
           >
             <X aria-hidden />
@@ -649,6 +701,8 @@ export function AdDrillDown({
   onPick: (target: ApiRenderDeliveryTarget) => void;
   onCancel: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [campaign, setCampaign] = useState<Crumb | null>(null);
   const [adset, setAdset] = useState<Crumb | null>(null);
   const [query, setQuery] = useState('');
@@ -738,7 +792,6 @@ export function AdDrillDown({
     if (target) onPick(target);
   };
 
-  const noun = level === 'adset' ? 'ad set' : level;
   return (
     <div className="space-y-1.5 rounded-md border bg-muted/20 p-2">
       <div className="flex flex-wrap items-center gap-1 text-2xs">
@@ -751,7 +804,8 @@ export function AdDrillDown({
             setAdset(null);
           }}
         >
-          Campaigns
+          {' '}
+          {translateUi('campaigns_30e9a089')}{' '}
         </button>
         {campaign ? (
           <>
@@ -773,7 +827,8 @@ export function AdDrillDown({
           </>
         ) : null}
         <Button type="button" size="xs" variant="ghost" className="ml-auto" onClick={onCancel}>
-          Close
+          {' '}
+          {translateUi('close_7d9eb7ac')}{' '}
         </Button>
       </div>
       {adset ? (
@@ -785,13 +840,13 @@ export function AdDrillDown({
           disabled={!page}
           onClick={createHere}
         >
-          <Plus aria-hidden /> New paused ad in this ad set
+          <Plus aria-hidden /> {translateUi('new_paused_ad_in_this_ad_set_87daa6e4')}{' '}
         </Button>
       ) : null}
       <Input
         className="h-7 text-xs"
-        aria-label={`Search ${noun}s`}
-        placeholder={`Search ${noun}s`}
+        aria-label={translateUi('paidTargetSearch', { level })}
+        placeholder={translateUi('paidTargetSearch', { level })}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
@@ -813,11 +868,12 @@ export function AdDrillDown({
         ))}
         {loading ? (
           <p className="flex items-center gap-1.5 p-2 text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" aria-hidden /> Loading {noun}s…
+            <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+            {translateUi('paidTargetLoading', { level })}
           </p>
         ) : null}
         {!loading && !problem && page && page.items.length === 0 ? (
-          <p className="p-2 text-muted-foreground">No paused or active {noun}s match.</p>
+          <p className="p-2 text-muted-foreground">{translateUi('paidTargetEmpty', { level })}</p>
         ) : null}
       </div>
       {page?.nextCursor && !loading ? (
@@ -827,7 +883,8 @@ export function AdDrillDown({
           variant="ghost"
           onClick={() => void load(page.nextCursor ?? undefined)}
         >
-          More {noun}s
+          {' '}
+          {translateUi('paidTargetMore', { level })}
         </Button>
       ) : null}
     </div>
@@ -845,6 +902,8 @@ export function PasteAdIds({
   rows: RenderPreflightRow[];
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -868,16 +927,24 @@ export function PasteAdIds({
         if (!target) {
           lineErrors.push({
             line: assignment.line,
-            message: `ad ${assignment.adId} isn’t a paused or active ad in this account`,
+            message: translateUi('ad_value0_isn_t_a_paused_or_active__b2761cf4', {
+              value0: String(assignment.adId),
+            }),
           });
           continue;
         }
         onDeliveryChange(assignment.rowId, target);
         matched += 1;
       }
-      setResult({ matched, errors: lineErrors.sort((a, b) => a.line - b.line) });
+      setResult({
+        matched,
+        errors: lineErrors.sort((a, b) => a.line - b.line),
+      });
     } catch (error) {
-      setResult({ matched: 0, errors: [{ line: 0, message: describePaidFailure(error) }] });
+      setResult({
+        matched: 0,
+        errors: [{ line: 0, message: describePaidFailure(error) }],
+      });
     } finally {
       setBusy(false);
     }
@@ -892,7 +959,9 @@ export function PasteAdIds({
         className="gap-1.5"
         onClick={() => setOpen(true)}
       >
-        <ClipboardPaste className="size-3.5" aria-hidden /> Paste ad IDs
+        <ClipboardPaste className="size-3.5" aria-hidden /> {translateUi(
+          'paste_ad_ids_54368e57',
+        )}{' '}
       </Button>
     );
   }
@@ -900,11 +969,14 @@ export function PasteAdIds({
     <div className="space-y-1.5 rounded-md border p-2 text-xs">
       <div className="flex flex-col gap-1">
         <span className="text-muted-foreground">
-          One line per row: <code>row name⇥ad ID</code>, or bare ad IDs in row order (
+          {' '}
+          {translateUi('one_line_per_row_40e0b3f6')}{' '}
+          <code>{translateUi('row_name_ad_id_4ce48b4d')}</code>
+          {translateUi('or_bare_ad_ids_in_row_order_3710f502')}{' '}
           {rows.map((row) => row.label).join(', ')}).
         </span>
         <Textarea
-          aria-label="Ad IDs"
+          aria-label={translateUi('ad_ids_b50443b9')}
           rows={4}
           className="font-mono text-xs"
           value={text}
@@ -914,11 +986,17 @@ export function PasteAdIds({
       {result ? (
         <div role="status" className="space-y-0.5">
           <p className="text-muted-foreground">
-            Matched {result.matched} ad{result.matched === 1 ? '' : 's'}.
+            {' '}
+            {translateUi('matched_0d6346e0')} {result.matched} {translateUi('ad_70ba3370')}
+            {result.matched === 1 ? '' : 's'}.
           </p>
           {result.errors.map((error) => (
             <p key={`${error.line}:${error.message}`} className="text-destructive">
-              {error.line ? `Line ${error.line}: ` : ''}
+              {error.line
+                ? translateUi('line_value0_b02ffa7d', {
+                    value0: String(error.line),
+                  })
+                : ''}
               {error.message}
             </p>
           ))}
@@ -926,7 +1004,8 @@ export function PasteAdIds({
       ) : null}
       <div className="flex justify-end gap-1.5">
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Close
+          {' '}
+          {translateUi('close_7d9eb7ac')}{' '}
         </Button>
         <Button
           type="button"
@@ -935,8 +1014,8 @@ export function PasteAdIds({
           disabled={!text.trim() || busy}
           onClick={() => void apply()}
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-          Apply ad IDs
+          {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {translateUi('apply_ad_ids_4c351b51')}{' '}
         </Button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { CardAdAngle } from './creativeCardModel';
 import { adAnglesQueryKey } from './useAdAngles';
 
@@ -90,7 +91,9 @@ const snapshot = {
 } as never;
 
 function renderCard(rows: CardAdAngle[] | null, props: Record<string, unknown> = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   if (rows) client.setQueryData(adAnglesQueryKey(BRAND, ADSET), rows);
   const card = () => (
     <QueryClientProvider client={client}>
@@ -161,7 +164,11 @@ describe('CreativeRecommendationCard — layout A', () => {
 
   it('draws a leaning dashed, with its share and an unconfirmed explanation', () => {
     renderCard(
-      easyFit.map((r) => ({ ...r, angle_leaning: 'value_stack', angle_leaning_share: 0.5 })),
+      easyFit.map((r) => ({
+        ...r,
+        angle_leaning: 'value_stack',
+        angle_leaning_share: 0.5,
+      })),
     );
     const chip = within(screen.getByTestId('angle-row')).getByTestId('angle-chip');
     expect(chip.textContent).toBe('Leaning: Everything you get · 50%');
@@ -192,7 +199,9 @@ describe('CreativeRecommendationCard — layout A', () => {
   });
 
   it('quotes the subject ad’s hook', () => {
-    renderCard(easyFit, { rec: { ...(fatigueRec as object), ad_id: '120252387195460236' } });
+    renderCard(easyFit, {
+      rec: { ...(fatigueRec as object), ad_id: '120252387195460236' },
+    });
     expect(screen.getByTestId('angle-hook').textContent).toBe('“50% de descuento en tu anualidad”');
   });
 
@@ -219,7 +228,9 @@ describe('CreativeRecommendationCard — layout A', () => {
   });
 
   it('a subject ad with no image asks for a fresh one and shows a placeholder meanwhile', () => {
-    renderCard(easyFit, { rec: { ...(fatigueRec as object), ad_id: '120252387195460236' } });
+    renderCard(easyFit, {
+      rec: { ...(fatigueRec as object), ad_id: '120252387195460236' },
+    });
     const problem = screen.getByTestId('creative-card-problem');
     expect(within(problem).getByTestId('subject-ad-placeholder')).toBeTruthy();
     expect(within(problem).queryByRole('img')).toBeNull();

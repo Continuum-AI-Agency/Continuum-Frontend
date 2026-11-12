@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // One server-log row on the timeline, read into its own shape (readLifecycleRow) rather than the
 // first keys of its `fields` bag printed as `key: value`. The Server log lists every lifecycle
@@ -37,11 +38,13 @@ function FactList({ facts }: { facts: LifecycleFact[] }) {
  *  so a 40-ad-set drift does not bury the rest of the feed, but present rather than truncated
  *  to four keys with the rest silently dropped. */
 function DetailList({ lines }: { lines: string[] }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (lines.length === 0) return null;
   return (
     <details className="mt-1">
       <summary className="hit-area cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
-        {lines.length} listed
+        {lines.length} {betaUiText('beta_56547a7cc8bb')}
       </summary>
       <ul className="mt-1 space-y-0.5">
         {lines.map((line) => (
@@ -64,6 +67,8 @@ export function LifecycleLogRow({
   eventId?: string;
   highlighted?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = readLifecycleRow(row);
   return (
     <TimelineEntry
@@ -77,7 +82,9 @@ export function LifecycleLogRow({
       <p className="text-sm leading-snug">
         <span className="font-semibold text-foreground">{read.title}</span>
         {row.level === 'warn' ? (
-          <span className={`${typeScale.label} ml-2 font-semibold text-warning`}>warn</span>
+          <span className={`${typeScale.label} ml-2 font-semibold text-warning`}>
+            {betaUiText('beta_aa63925edf22')}
+          </span>
         ) : null}
         {row.portfolio_name ? (
           <span className="text-muted-foreground text-xs"> · {row.portfolio_name}</span>

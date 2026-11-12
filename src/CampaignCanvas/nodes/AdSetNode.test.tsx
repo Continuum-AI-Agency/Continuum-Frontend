@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { AdSetData, CampaignNodeProps } from '../types';
 import { AdSetNode } from './AdSetNode';
@@ -70,6 +71,8 @@ describe('AdSetNode budget controls', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Lifetime' }));
     });
 
-    expect(updateNodeData).toHaveBeenCalledWith('adset-1', { budgetType: 'LIFETIME' });
+    expect(updateNodeData).toHaveBeenCalledWith('adset-1', {
+      budgetType: 'LIFETIME',
+    });
   });
 });

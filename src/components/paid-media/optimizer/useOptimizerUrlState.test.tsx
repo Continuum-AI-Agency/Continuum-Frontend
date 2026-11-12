@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
-import { cleanup, renderHook } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const navigation = {
   pathname: '/scale',
@@ -181,7 +182,11 @@ describe('useOptimizerUrlState — reporting range', () => {
     const { result } = renderHook(() => useOptimizerUrlState());
     result.current.setRange({ kind: 'preset', preset: 'flight' });
     expect(replaceState).toHaveBeenLastCalledWith(null, '', '/scale?tab=performance&range=flight');
-    result.current.setRange({ kind: 'custom', from: '2026-08-01', to: '2026-08-14' });
+    result.current.setRange({
+      kind: 'custom',
+      from: '2026-08-01',
+      to: '2026-08-14',
+    });
     expect(replaceState).toHaveBeenLastCalledWith(
       null,
       '',
@@ -199,7 +204,10 @@ describe('useOptimizerUrlState — reporting range', () => {
     });
     navigation.params = new URLSearchParams('tab=performance&range=yesterday');
     const garbage = renderHook(() => useOptimizerUrlState());
-    expect(garbage.result.current.range).toEqual({ kind: 'preset', preset: 'd7' });
+    expect(garbage.result.current.range).toEqual({
+      kind: 'preset',
+      preset: 'd7',
+    });
   });
 });
 

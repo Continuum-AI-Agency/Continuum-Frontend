@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // Where the board mounts on a platform tab (Meta, Google): the viewer's layout — the adaptive
 // board, by default, or Today's Overview exactly as it renders, with only the switch above it.
@@ -98,10 +99,12 @@ const SPINE = [
 ] as const;
 
 function BoardPlaceholder({ toggle }: { toggle: ReactNode }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <section
       aria-busy="true"
-      aria-label="Adaptive overview"
+      aria-label={betaUiText('beta_c709c9d2ee69')}
       className={cn('space-y-3', boardPaletteClass)}
       data-testid="adaptive-board-root"
     >

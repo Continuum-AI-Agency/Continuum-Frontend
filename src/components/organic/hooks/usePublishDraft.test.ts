@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -20,7 +21,9 @@ type ConfirmationOptions = {
   title: string;
   description: string;
   confirmLabel: string;
-  details?: { props: { intents: Array<{ platform: string; account: { id: string } }> } };
+  details?: {
+    props: { intents: Array<{ platform: string; account: { id: string } }> };
+  };
   confirmDisabled?: boolean;
 };
 let confirmationAnswer = true;
@@ -85,7 +88,12 @@ function intentFor(rowId: string, overrides: Record<string, unknown> = {}) {
     warnings: [],
     platform: ACCOUNTS[platform] ? platform : 'instagram',
     format: 'POST',
-    account: { ...account, source: 'draft_column', displayName: null, avatarUrl: null },
+    account: {
+      ...account,
+      source: 'draft_column',
+      displayName: null,
+      avatarUrl: null,
+    },
     caption: { present: true, length: 11, preview: 'Hello world' },
     media: { count: 1, required: 1, source: 'publishing_assets' },
     intent_hash: `sha256:${rowId}`,
@@ -113,13 +121,23 @@ function bulkCalls(fetchMock: { mock: { calls: unknown[][] } }) {
 
 function bulkItems(fetchMock: { mock: { calls: unknown[][] } }) {
   const [call] = bulkCalls(fetchMock);
-  return (JSON.parse(call?.[1].body ?? '{"items":[]}') as { items: Record<string, unknown>[] })
-    .items;
+  return (
+    JSON.parse(call?.[1].body ?? '{"items":[]}') as {
+      items: Record<string, unknown>[];
+    }
+  ).items;
 }
 
 const published = (id: string, platform: string, postId: string) => ({
   event: 'published',
-  data: { id, type: 'published', platform, postId, format: 'POST', accountId: 'acct' },
+  data: {
+    id,
+    type: 'published',
+    platform,
+    postId,
+    format: 'POST',
+    accountId: 'acct',
+  },
 });
 
 function complete(results: Array<Record<string, unknown>>) {
@@ -159,7 +177,11 @@ const base = {
   status: 'draft',
   hashtags: { high: [], medium: [], low: [] },
   publishingAssets: [
-    { role: 'primary', kind: 'image', storageUrl: 'https://cdn.example/image.jpg' },
+    {
+      role: 'primary',
+      kind: 'image',
+      storageUrl: 'https://cdn.example/image.jpg',
+    },
   ],
 };
 
@@ -347,7 +369,12 @@ describe('usePublishDraft', () => {
           published('draft-instagram', 'instagram', 'ig-post-1'),
           {
             event: 'failed',
-            data: { id: 'draft-facebook', type: 'failed', error: reason, code: 'api_error' },
+            data: {
+              id: 'draft-facebook',
+              type: 'failed',
+              error: reason,
+              code: 'api_error',
+            },
           },
           complete([
             ok('draft-instagram', 'instagram', 'ig-post-1'),
@@ -371,7 +398,9 @@ describe('usePublishDraft', () => {
     const patches = new Map(
       updateDraftMock.mock.calls.map(([id, updater]) => [id, updater({})] as const),
     );
-    expect(patches.get('placement-1::facebook')).toEqual({ publishError: reason });
+    expect(patches.get('placement-1::facebook')).toEqual({
+      publishError: reason,
+    });
     expect(showMock.mock.calls.at(-1)?.[0].description).toContain(
       `Facebook (@acme_fb) failed: ${reason}`,
     );
@@ -486,7 +515,12 @@ describe('usePublishDraft', () => {
             ? intentFor(rowId, {
                 publishable: false,
                 intent_hash: null,
-                blockers: [{ reason: 'account_missing', message: 'Choose a LinkedIn account' }],
+                blockers: [
+                  {
+                    reason: 'account_missing',
+                    message: 'Choose a LinkedIn account',
+                  },
+                ],
               })
             : intentFor(rowId),
         ),

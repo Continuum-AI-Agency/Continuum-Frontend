@@ -7,6 +7,7 @@ import {
   useEdges,
 } from '@xyflow/react';
 import { Copy, Sparkles, Trash2, Unlink, Wand2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -27,6 +28,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { GroundingChip } from '../components/GroundingChip';
@@ -38,8 +40,13 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { StringNodeData } from '../types';
 import { resolveInheritedGrounding } from '../utils/buildNodePayload';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 
 export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<StringNodeData>>) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -50,7 +57,11 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
   const executionControls = useWorkflowExecution();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const debouncedSave = useDebouncedSave();
-  const { isTitling } = useNodeTitler({ id, value: data.value, isExecuting: !!data.isExecuting });
+  const { isTitling } = useNodeTitler({
+    id,
+    value: data.value,
+    isExecuting: !!data.isExecuting,
+  });
 
   const connectedEdge = edges.find((e) => e.source === id);
   const incomingEdges = edges.filter((e) => e.target === id);
@@ -71,7 +82,10 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
     }
 
     if (connectedEdge.targetHandle === 'prompt' || connectedEdge.targetHandle === 'prompt-in') {
-      return { edgeColor: 'var(--edge-text)', border: 'border-brand-primary/40' };
+      return {
+        edgeColor: 'var(--edge-text)',
+        border: 'border-brand-primary/40',
+      };
     }
 
     if (connectedEdge.targetHandle === 'negative') {
@@ -148,16 +162,16 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
         });
       } catch (err) {
         // A throw here never reached the user — the console was the only report.
-        const message = err instanceof Error ? err.message : 'Enrichment could not start';
+        const message = uiErrorText(err);
         updateNodeData(id, { isExecuting: false, error: message });
         executionControls.show?.({
-          title: 'Enrich Prompt failed',
+          title: translateUi('enrich_prompt_failed_7c9fc9b4'),
           description: message,
           variant: 'error',
         });
       }
     },
-    [id, executionControls, data.isExecuting, brandId, updateNodeData],
+    [id, executionControls, data.isExecuting, brandId, updateNodeData, uiErrorText, translateUi],
   );
 
   return (
@@ -170,7 +184,11 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
               'relative min-w-[280px] min-h-[180px] w-full h-full max-w-[400px] rounded-lg transition-shadow',
               isSelectedByOther && 'selected-by-other',
             )}
-            style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+            style={
+              {
+                '--other-user-color': selectingUser?.color,
+              } as React.CSSProperties
+            }
           >
             <NodeResizer
               minWidth={280}
@@ -202,7 +220,10 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                   )}
                 />
                 <NodeTitle className="min-w-0 flex-1 truncate text-2xs font-medium text-muted-foreground">
-                  {data.label || (isTitling ? 'Naming…' : 'Untitled prompt')}
+                  {data.label ||
+                    (isTitling
+                      ? translateUi('naming_6570061e')
+                      : translateUi('untitled_prompt_5e9072a8'))}
                 </NodeTitle>
               </NodeHeader>
 
@@ -223,7 +244,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                     slash.onKeyDown(event);
                   }}
                   className="nodrag text-xs text-foreground placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]"
-                  placeholder="Enter prompt or instructions — type / for shortcuts"
+                  placeholder={translateUi('enter_prompt_or_instructions_type_f_06731f71')}
                 />
 
                 {data.error ? (
@@ -231,7 +252,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                     data-testid="studio-string-node-error"
                     className="border-t border-destructive/30 bg-destructive/10 px-2 py-1 text-2xs text-destructive shrink-0"
                   >
-                    {data.error}
+                    {workflowNodeError(data, translateUi)}
                   </p>
                 ) : null}
 
@@ -253,12 +274,14 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                     {data.isExecuting ? (
                       <div className="flex items-center gap-1.5">
                         <div className="animate-spin h-3 w-3 border-2 border-white/30 border-t-white rounded-full" />
-                        <span>Enriching...</span>
+                        <span>{translateUi('enriching_c27aafef')}</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <Wand2 className="w-3.5 h-3.5 fill-white" />
-                        <span className="font-semibold tracking-wide">Enrich Prompt</span>
+                        <span className="font-semibold tracking-wide">
+                          {translateUi('enrich_prompt_6cde81df')}
+                        </span>
                       </div>
                     )}
                   </Button>
@@ -272,7 +295,9 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                   type="target"
                   position={Position.Left}
                   id="image"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                  style={{
+                    ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                  }}
                   className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125"
                 />
               </div>
@@ -292,7 +317,9 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                   type="target"
                   position={Position.Left}
                   id="video"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                  style={{
+                    ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                  }}
                   className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125"
                 />
               </div>
@@ -311,7 +338,9 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
 
             <div
               className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
-              style={{ ['--edge-color' as keyof React.CSSProperties]: context.edgeColor }}
+              style={{
+                ['--edge-color' as keyof React.CSSProperties]: context.edgeColor,
+              }}
             >
               <Handle
                 type="source"
@@ -326,32 +355,28 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
         }
       />
       <ContextMenuContent className="w-52">
-        <ContextMenuLabel>Text Block</ContextMenuLabel>
+        <ContextMenuLabel>{translateUi('text_block_43c57c1f')}</ContextMenuLabel>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => void handleEnrich()}>
-          <Wand2 className="mr-2 h-4 w-4" />
-          Enrich Prompt
+          <Wand2 className="mr-2 h-4 w-4" /> {translateUi('enrich_prompt_6cde81df')}{' '}
           <ContextMenuShortcut>R</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={() => duplicateNode(id)}>
-          <Copy className="mr-2 h-4 w-4" />
-          Duplicate
+          <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem
           disabled={getConnectedEdges(id).length === 0}
           onClick={() => detachNodeConnections(id)}
         >
-          <Unlink className="mr-2 h-4 w-4" />
-          Detach connections
+          <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
           className="text-destructive focus:text-destructive"
           onClick={() => deleteNode(id)}
         >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
+          <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>

@@ -1,5 +1,11 @@
 'use client';
 
+import { useLocale as useAuditLocale } from 'next-intl';
+
+type AuctionCopy = ReturnType<typeof useBetaTranslations<'scale'>>;
+
+import { useTranslations as useBetaTranslations } from 'next-intl';
+
 // G06 Auction: what each Search campaign wins of its auctions and why it loses the rest. One
 // stacked bar per campaign — shown, lost to budget, lost to rank, Google's own shares — with the
 // V3 case marked (half or more lost to budget) and its raise shown locked when the V3 finding says
@@ -74,7 +80,12 @@ const CHANNEL_COLOR: Record<AuctionChannel, string> = {
  *  neutral; the two losses take the warm and the cool pole, because they call for opposite
  *  fixes: budget buys back the first, only ads, pages and bids the second. */
 const PARTS = [
-  { key: 'shown', label: 'Shown', color: NEUTRAL_MARK, of: (row: AuctionRow) => row.shown },
+  {
+    key: 'shown',
+    label: 'Shown',
+    color: NEUTRAL_MARK,
+    of: (row: AuctionRow) => row.shown,
+  },
   {
     key: 'budget',
     label: 'Lost to budget',
@@ -155,7 +166,12 @@ export function auctionLensState({
   }
   if (google.status === 'loading') return { status: 'loading' };
   if (google.status !== 'ready') {
-    return googleReadBlocked(google) ?? { status: 'error', line: 'Google Ads could not be read.' };
+    return (
+      googleReadBlocked(google) ?? {
+        status: 'error',
+        line: 'Google Ads could not be read.',
+      }
+    );
   }
   if (campaigns.isError) {
     return {
@@ -173,7 +189,10 @@ export function auctionLensState({
     model:
       shares.rows.length > 0
         ? shares
-        : { kind: 'empty', reason: 'No campaign served on Search in this window.' },
+        : {
+            kind: 'empty',
+            reason: 'No campaign served on Search in this window.',
+          },
     currency: campaigns.data.currency ?? google.account.currency,
     scope: `${windowRangeLabel(shares.since, shares.until)} · Google's impression share on Search, per campaign`,
     figureWindow: figureWindowOf(days),
@@ -183,6 +202,9 @@ export function auctionLensState({
 }
 
 export default function AuctionLens({ ctx, slot }: BoardModuleProps) {
+  const betaUiText = useBetaTranslations('scale');
+  const auditLocale = useAuditLocale();
+
   const readWindow = useLensWindow();
   const google = useGoogleAdsOverview(ctx.brandId, readWindow);
   const cards = useLensCards(ctx.brandId);
@@ -190,9 +212,16 @@ export default function AuctionLens({ ctx, slot }: BoardModuleProps) {
   const dark = useMemo(
     () =>
       cards.status === 'ready'
-        ? buildAuctionDark(cards.candidates, cards.cards, readWindow, today)
+        ? buildAuctionDark(
+            cards.candidates,
+            cards.cards,
+            readWindow,
+            today,
+            betaUiText,
+            auditLocale,
+          )
         : null,
-    [cards, readWindow, today],
+    [cards, readWindow, today, betaUiText, auditLocale],
   );
   const ready = google.status === 'ready' && !dark ? google : null;
   const campaigns = useGoogleCampaigns({
@@ -201,7 +230,13 @@ export default function AuctionLens({ ctx, slot }: BoardModuleProps) {
     resultBucket: ready?.resultBucket ?? null,
     window: readWindow,
   });
-  const state = auctionLensState({ google, cards, dark, campaigns, readWindow });
+  const state = auctionLensState({
+    google,
+    cards,
+    dark,
+    campaigns,
+    readWindow,
+  });
   return <AuctionLensView reason={slot.reason} size={slot.size} state={state} />;
 }
 
@@ -214,6 +249,8 @@ export function AuctionLensView({
   size: BoardModuleSize;
   reason?: string;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <ModuleFrame
       action={
@@ -226,7 +263,7 @@ export function AuctionLensView({
       size={size}
       state={auctionFrameState(state)}
       testId="board-module-auction"
-      title="Impression share"
+      title={betaUiText('beta_7df40c264b11')}
     >
       <AuctionBody size={size} state={state} />
     </ModuleFrame>
@@ -272,6 +309,8 @@ function AuctionBody({ state, size }: { state: AuctionLensState; size: BoardModu
 // ── The shares, a stacked bar per campaign ─────────────────────────────────────────────────────
 
 function ShareStack({ row, index }: { row: AuctionRow; index: number }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const parts = PARTS.flatMap((part) => {
     const value = part.of(row);
     return value != null && value > 0 ? [{ ...part, value }] : [];
@@ -286,8 +325,11 @@ function ShareStack({ row, index }: { row: AuctionRow; index: number }) {
           delay={index * 0.06 + order * 0.05}
           fillClassName="inset-0 rounded-[4px]"
           key={part.key}
-          label={`${row.name} · ${part.label}`}
-          style={{ flexBasis: `${(part.value * 100).toFixed(2)}%`, flexGrow: 0 }}
+          label={`${row.name} · ${betaUiText('auctionPart', { part: part.key })}`}
+          style={{
+            flexBasis: `${(part.value * 100).toFixed(2)}%`,
+            flexGrow: 0,
+          }}
           testId={`auction-part-${part.key}`}
           value={shareText(part.value)}
         />
@@ -297,7 +339,11 @@ function ShareStack({ row, index }: { row: AuctionRow; index: number }) {
           aria-hidden="true"
           className="h-full shrink rounded-[4px]"
           data-testid="auction-part-unread"
-          style={{ flexBasis: `${(rest * 100).toFixed(2)}%`, flexGrow: 0, background: UNREAD_FILL }}
+          style={{
+            flexBasis: `${(rest * 100).toFixed(2)}%`,
+            flexGrow: 0,
+            background: UNREAD_FILL,
+          }}
         />
       ) : null}
     </div>
@@ -319,6 +365,8 @@ function ShareRow({
   currency: string | null;
   small: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <li
       className="min-w-0 space-y-1"
@@ -341,7 +389,8 @@ function ShareRow({
           </span>
           {row.budgetPerDay != null ? (
             <span className="ml-auto text-muted-foreground tabular-nums">
-              {formatCurrency(row.budgetPerDay, currency)}/day
+              {formatCurrency(row.budgetPerDay, currency)}
+              {betaUiText('beta_ea30d1c554b8')}
             </span>
           ) : null}
         </div>
@@ -352,9 +401,15 @@ function ShareRow({
           className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-muted-foreground text-xs"
           data-testid="auction-row-shares"
         >
-          <span>Shown {shareOrDash(row.shown)}</span>
-          <span>Lost to budget {shareOrDash(row.budgetLost)}</span>
-          <span>Lost to rank {shareOrDash(row.rankLost)}</span>
+          <span>
+            {betaUiText('beta_6ba2a0e0afd0')} {shareOrDash(row.shown)}
+          </span>
+          <span>
+            {betaUiText('beta_d856931d0802')} {shareOrDash(row.budgetLost)}
+          </span>
+          <span>
+            {betaUiText('beta_3029ccc58005')} {shareOrDash(row.rankLost)}
+          </span>
         </div>
       )}
       {!small && (row.v3 || row.locked) ? (
@@ -362,13 +417,15 @@ function ShareRow({
           {row.v3 ? (
             <Badge data-testid="auction-v3" variant="destructive">
               <AlertTriangleIcon aria-hidden="true" />
-              {`${shareText(V3_BUDGET_LOST)} or more lost to budget`}
+              {betaUiText('beta_66cb614bfca2', {
+                value0: String(shareText(V3_BUDGET_LOST)),
+              })}
             </Badge>
           ) : null}
           {row.locked ? (
             <Badge data-testid="auction-locked" variant="secondary">
               <LockIcon aria-hidden="true" />
-              Raise locked
+              {betaUiText('beta_b576c4ff8e99')}
             </Badge>
           ) : null}
         </div>
@@ -377,14 +434,14 @@ function ShareRow({
   );
 }
 
-function sharesLegend(model: AuctionShares): LegendItem[] {
+function sharesLegend(model: AuctionShares, t: AuctionCopy): LegendItem[] {
   const items: LegendItem[] = [
-    { label: 'Shown', color: NEUTRAL_MARK },
-    { label: 'Lost to budget · more budget buys it back', color: BOARD_COLOR.above },
-    { label: 'Lost to rank · ads, pages and bids win it', color: BOARD_COLOR.below },
+    { label: t('auctionLegendShown'), color: NEUTRAL_MARK },
+    { label: t('auctionLegendBudget'), color: BOARD_COLOR.above },
+    { label: t('auctionLegendRank'), color: BOARD_COLOR.below },
   ];
   const unread = model.rows.some((row) => PARTS.some((part) => part.of(row) == null));
-  return unread ? [...items, { label: 'Not in this read', color: UNREAD_FILL }] : items;
+  return unread ? [...items, { label: t('auctionLegendUnread'), color: UNREAD_FILL }] : items;
 }
 
 function SharesView({
@@ -398,6 +455,8 @@ function SharesView({
   size: BoardModuleSize;
   figureWindow: FigureWindow;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const small = isSmall(size);
   const headline = auctionHeadline(model);
   const rows = small
@@ -417,7 +476,10 @@ function SharesView({
             figureWindow,
             'percent',
           )}
-          label={`${headline.row.name} · lost to ${headline.measure}`}
+          label={betaUiText('beta_06f31727fb94', {
+            value0: String(headline.row.name),
+            value1: String(headline.measure),
+          })}
           testId="auction-headline"
           value={shareText(headline.share)}
         />
@@ -427,7 +489,7 @@ function SharesView({
           <ShareRow currency={currency} index={index} key={row.id} row={row} small={small} />
         ))}
       </ul>
-      {small ? null : <Legend items={sharesLegend(model)} testId="auction-legend" />}
+      {small ? null : <Legend items={sharesLegend(model, betaUiText)} testId="auction-legend" />}
       {!small && model.locked.length > 0 ? (
         <p
           className="flex items-start gap-1.5 text-muted-foreground text-xs"
@@ -435,8 +497,8 @@ function SharesView({
         >
           <LockIcon aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
           <span>
-            Raise locked for {model.locked.join(', ')}: fix the primary conversion first, then the
-            budget card proposes the raise against real leads.
+            {betaUiText('beta_296c468ee01b')} {model.locked.join(', ')}
+            {betaUiText('beta_b79423e4ce44')}
           </span>
         </p>
       ) : null}
@@ -474,7 +536,9 @@ function DayCell({
       <span
         className={cn(cell, 'grid place-items-center text-muted-foreground text-xs tabular-nums')}
         data-testid="auction-day-unknown"
-        style={{ background: `color-mix(in srgb, ${UNREAD_FILL} 60%, transparent)` }}
+        style={{
+          background: `color-mix(in srgb, ${UNREAD_FILL} 60%, transparent)`,
+        }}
       >
         {compact ? null : number}
       </span>
@@ -503,15 +567,19 @@ function DayCell({
   );
 }
 
-function darkLegend(dark: AuctionDark): LegendItem[] {
+function darkLegend(dark: AuctionDark, t: AuctionCopy): LegendItem[] {
   const days = dark.weeks?.flat().filter((day) => day.inRange) ?? [];
   const items: LegendItem[] = [];
   if (days.some((day) => day.state === 'served')) {
-    items.push({ label: 'Ads shown · shade is the spend', color: SERVED_INK(28) });
+    items.push({ label: t('auctionLegendServed'), color: SERVED_INK(28) });
   }
-  items.push({ label: 'No ad shown', color: BOARD_COLOR.above, mark: 'outline' });
+  items.push({
+    label: t('auctionLegendDark'),
+    color: BOARD_COLOR.above,
+    mark: 'outline',
+  });
   if (days.some((day) => day.state === 'unknown')) {
-    items.push({ label: 'Not in the delivery card', color: UNREAD_FILL });
+    items.push({ label: t('auctionLegendNotInCard'), color: UNREAD_FILL });
   }
   return items;
 }
@@ -525,6 +593,8 @@ function DarkView({
   currency: string | null;
   small: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const daysWord = dark.darkDays === 1 ? 'day' : 'days';
   const weeks = dark.weeks ? (small ? dark.weeks.slice(-2) : dark.weeks) : null;
   return (
@@ -532,19 +602,28 @@ function DarkView({
       {small ? (
         <LensHeadline
           figure={figureProps('board.auction.dark-days', dark.darkDays, null, 'none', 'count')}
-          label={`${daysWord} without ads${dark.suspended ? ' · Google suspended the account' : ''}`}
+          label={betaUiText('beta_9fb989c51724', {
+            value0: String(daysWord),
+            value1: String(dark.suspended ? ' · Google suspended the account' : ''),
+          })}
           testId="auction-headline"
           value={String(dark.darkDays)}
         />
       ) : (
         <Badge className="self-start" data-testid="auction-dark-days" variant="destructive">
           <AlertTriangleIcon aria-hidden="true" />
-          {`${dark.darkDays} ${daysWord} without ads`}
+          {betaUiText('beta_364cd6a3015b', {
+            value0: String(dark.darkDays),
+            value1: String(daysWord),
+          })}
         </Badge>
       )}
       {weeks ? (
         <figure
-          aria-label={`${dark.darkDays} ${daysWord} without ads`}
+          aria-label={betaUiText('beta_364cd6a3015b', {
+            value0: String(dark.darkDays),
+            value1: String(daysWord),
+          })}
           className="min-w-0 space-y-1"
           data-testid="auction-calendar"
         >
@@ -568,7 +647,7 @@ function DarkView({
           </div>
         </figure>
       ) : null}
-      {small ? null : <Legend items={darkLegend(dark)} testId="auction-legend" />}
+      {small ? null : <Legend items={darkLegend(dark, betaUiText)} testId="auction-legend" />}
       {!small && dark.status ? (
         <div
           className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 sm:flex-row sm:items-start"
@@ -588,7 +667,7 @@ function DarkView({
             rel="noreferrer"
             target="_blank"
           >
-            Open in Google Ads
+            {betaUiText('beta_013124925a61')}
           </a>
         </div>
       ) : null}

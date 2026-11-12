@@ -17,6 +17,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { Copy, Layers, SquarePen, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -80,6 +81,8 @@ export function LayerEditorBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<LayerEditorNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -143,7 +146,11 @@ export function LayerEditorBlock({
       // slow or the canvas is anonymous.
       updateNodeData(id, { generatedImage: result.dataUrl });
       if (brandId) {
-        const persisted = await persistLayerComposite({ blob: result.blob, brandId, nodeId: id });
+        const persisted = await persistLayerComposite({
+          blob: result.blob,
+          brandId,
+          nodeId: id,
+        });
         // The durable coordinates are what let a run register this into the Library:
         // `registerCanvasIfDurable` refuses data: URLs and needs a bucket + path.
         updateNodeData(id, {
@@ -169,7 +176,11 @@ export function LayerEditorBlock({
                 'group relative h-full min-h-[200px] w-full min-w-[200px] rounded-xl transition-shadow',
                 isSelectedByOther && 'selected-by-other',
               )}
-              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              style={
+                {
+                  '--other-user-color': selectingUser?.color,
+                } as React.CSSProperties
+              }
               data-testid="layer-editor-node"
             >
               <NodeResizer
@@ -192,7 +203,7 @@ export function LayerEditorBlock({
                     // storage URLs that next/image cannot resolve at build time.
                     <img
                       src={preview}
-                      alt="Composed layers"
+                      alt={translateUi('composed_layers_ae82c8f6')}
                       className="h-full w-full object-contain"
                     />
                   ) : (
@@ -200,8 +211,8 @@ export function LayerEditorBlock({
                       <Layers className="h-6 w-6 text-muted-foreground" />
                       <p className="text-2xs text-muted-foreground">
                         {inputConnections === 0
-                          ? 'Connect images to stack them'
-                          : 'Open the editor and compose'}
+                          ? translateUi('connect_images_to_stack_them_15abb035')
+                          : translateUi('open_the_editor_and_compose_d6f67fce')}
                       </p>
                     </div>
                   )}
@@ -226,13 +237,13 @@ export function LayerEditorBlock({
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={() => onOpenChange(true)}
                     >
-                      <SquarePen className="mr-1 h-3 w-3" /> Edit
+                      <SquarePen className="mr-1 h-3 w-3" /> {translateUi('edit_464c4ffd')}{' '}
                     </Button>
                     <NodeDownloadButton
                       nodeType="layerEditor"
                       data={data}
                       baseName="layer-composite"
-                      label="Download composed layers"
+                      label={translateUi('download_composed_layers_333db1ea')}
                       className="static h-6 w-6"
                     />
                   </div>
@@ -251,13 +262,20 @@ export function LayerEditorBlock({
                       position={Position.Left}
                       id={LAYER_EDITOR_IMAGE_INPUT_HANDLE}
                       maxConnections={LAYER_EDITOR_LAYER_LIMIT}
-                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                      style={{
+                        ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                      }}
                       className="studio-handle !-left-2 !h-4 !w-4 !border-2 top-1/2 shadow-sm transition-transform hover:scale-125"
                     />
                   }
                 />
                 <TooltipContent>
-                  <p>{`Images in: ${inputConnections} of ${LAYER_EDITOR_LAYER_LIMIT}`}</p>
+                  <p>
+                    {translateUi('images_in_value0_of_value1_9c1e7a5a', {
+                      value0: String(inputConnections),
+                      value1: String(LAYER_EDITOR_LAYER_LIMIT),
+                    })}
+                  </p>
                 </TooltipContent>
               </Tooltip>
 
@@ -268,34 +286,33 @@ export function LayerEditorBlock({
                       type="source"
                       position={Position.Right}
                       id={LAYER_EDITOR_IMAGE_OUTPUT_HANDLE}
-                      style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                      style={{
+                        ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)',
+                      }}
                       className="studio-handle !-right-2 !h-4 !w-4 !border-2 top-1/2 shadow-sm transition-transform hover:scale-125"
                     />
                   }
                 />
                 <TooltipContent>
-                  <p>Image output: the composed still</p>
+                  <p>{translateUi('image_output_the_composed_still_2cd421bd')}</p>
                 </TooltipContent>
               </Tooltip>
             </div>
           }
         />
         <ContextMenuContent className="w-52">
-          <ContextMenuLabel>Layer Editor</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('layer_editor_328aef07')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onOpenChange(true)}>
-            <SquarePen className="mr-2 h-4 w-4" />
-            Open editor
+            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_550697e0')}{' '}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onClick={() => deleteNode(id)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

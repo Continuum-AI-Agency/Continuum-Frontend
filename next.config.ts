@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 
 const distDir = process.env.NEXT_DIST_DIR?.trim();
 const tsconfigPath = process.env.NEXT_TSCONFIG_PATH?.trim();
@@ -48,7 +49,11 @@ const nextConfig: NextConfig = {
     // signed URLs are intentionally private and only available in development.
     ...(process.env.NODE_ENV === 'development' ? { dangerouslyAllowLocalIP: true } : {}),
     remotePatterns: [
-      { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/sign/**' },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/object/sign/**',
+      },
       // The local Supabase stack signs from http://127.0.0.1:54321; without this
       // every library image throws "Invalid src prop" and takes the page down.
       // Development only — the hosted app never sees this host.
@@ -91,7 +96,10 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['@phosphor-icons/react'],
   },
   webpack(config) {
-    config.module.rules.push({ test: /\.wgsl$/, loader: '@vgpu/wgsl/loader-webpack' });
+    config.module.rules.push({
+      test: /\.wgsl$/,
+      loader: '@vgpu/wgsl/loader-webpack',
+    });
     return config;
   },
   turbopack: {
@@ -154,4 +162,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withNextIntl = createNextIntlPlugin({
+  experimental: {
+    messages: {
+      path: './messages',
+      format: 'json',
+      locales: ['en', 'pt-BR', 'es'],
+      sourceLocale: 'en',
+      precompile: true,
+    },
+  },
+});
+
+export default withNextIntl(nextConfig);

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, render } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { cleanup, render } from '@/i18n/__tests__/render';
 
 // The settings page mounts this hook TWICE for one brand — `DesignSystemSection` for
 // the section cards, and the `DesignSystemCard` nested inside it for the uploader. When
@@ -18,9 +19,7 @@ class FakeChannel {
 
   on(): FakeChannel {
     if (this.subscribed) {
-      throw new Error(
-        `cannot add callbacks for realtime:${this.topic} after \`subscribe()\`.`,
-      );
+      throw new Error(`cannot add callbacks for realtime:${this.topic} after \`subscribe()\`.`);
     }
     return this;
   }

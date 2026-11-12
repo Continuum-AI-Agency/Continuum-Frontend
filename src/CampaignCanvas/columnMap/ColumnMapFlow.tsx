@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The Map in columns (design C, phases 2-3): campaign → ad sets → ads in three fixed columns
 // that fit the companion pane at 100% and grow only downward; the unchanged branches of a
@@ -62,8 +63,14 @@ const MARK_TAG: Record<LecturaMark, { label: string; className: string } | null>
     label: 'Changes',
     className: 'bg-[color:var(--warning)]/15 text-[color:var(--warning)]',
   },
-  added: { label: 'New · paused', className: 'bg-[color:var(--success)] text-white' },
-  paused: { label: 'Pauses', className: 'bg-[color:var(--destructive)] text-white' },
+  added: {
+    label: 'New · paused',
+    className: 'bg-[color:var(--success)] text-white',
+  },
+  paused: {
+    label: 'Pauses',
+    className: 'bg-[color:var(--destructive)] text-white',
+  },
   removed: { label: 'Removed', className: 'bg-muted text-muted-foreground' },
   unchanged: null,
 };
@@ -143,6 +150,8 @@ export function MapCardBox({
   selected,
   children,
 }: CardNodeData & { selected: boolean; children?: React.ReactNode }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const tag = MARK_TAG[card.mark];
   const { audienceLine } = card;
   return (
@@ -167,7 +176,7 @@ export function MapCardBox({
             className="nodrag size-10 shrink-0 overflow-hidden rounded-md bg-muted"
             onClick={() => card.folded.creativeId && onSelectFolded?.(card.folded.creativeId)}
             disabled={!onSelectFolded || !card.folded.creativeId}
-            aria-label="Open the creative"
+            aria-label={betaUiText('beta_25aae8290e2d')}
           >
             <img src={card.thumbnailUrl} alt="" className="size-full object-cover" />
           </button>
@@ -225,7 +234,7 @@ export function MapCardBox({
             type="button"
             className="nodrag truncate text-left text-[11px] leading-[15px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
             onClick={() => card.folded.audienceId && onSelectFolded(card.folded.audienceId)}
-            title="Open the audience"
+            title={betaUiText('beta_edc0ecad9f3c')}
           >
             {audienceLine}
           </button>
@@ -289,7 +298,10 @@ const edgeTypes: EdgeTypes = { bus: BusEdge };
 
 const defaultEdgeOptions = {
   type: 'bus',
-  style: { stroke: 'color-mix(in srgb, var(--ring) 70%, transparent)', strokeWidth: 1.25 },
+  style: {
+    stroke: 'color-mix(in srgb, var(--ring) 70%, transparent)',
+    strokeWidth: 1.25,
+  },
 };
 
 /** The control in the map's top bar: "‹ Change 1 of 3 ›". */
@@ -302,6 +314,8 @@ function NextChangeControl({
   total: number;
   onStep: (direction: 1 | -1) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (total === 0) return null;
   const label =
     index === null
@@ -316,7 +330,7 @@ function NextChangeControl({
         type="button"
         className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
         onClick={() => onStep(-1)}
-        aria-label="Previous change"
+        aria-label={betaUiText('beta_55b2c320251d')}
       >
         <ChevronLeft className="size-3.5" aria-hidden />
       </button>
@@ -327,9 +341,9 @@ function NextChangeControl({
         type="button"
         className="flex h-7 items-center gap-1 rounded-full bg-primary px-2.5 font-medium text-primary-foreground hover:bg-primary/90"
         onClick={() => onStep(1)}
-        aria-label="Next change"
+        aria-label={betaUiText('beta_d7b5e6cfb403')}
       >
-        Next
+        {betaUiText('beta_1ff57a29d7c9')}
         <ChevronRight className="size-3.5" aria-hidden />
       </button>
     </div>
@@ -380,6 +394,8 @@ export function ColumnMapFlow({
   initialFocusIndex = null,
   header,
 }: ColumnMapFlowProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(() => new Set());
   const toggleGroup = React.useCallback((id: string) => {
     setExpanded((current) => {
@@ -420,7 +436,12 @@ export function ColumnMapFlow({
             type: 'map-collapsed' as const,
             selectable: false,
             data: {
-              group: group ?? { id: placement.id, count: 0, adSetIds: [], expanded: false },
+              group: group ?? {
+                id: placement.id,
+                count: 0,
+                adSetIds: [],
+                expanded: false,
+              },
               labels,
               onToggle: toggleGroup,
             },
@@ -511,7 +532,10 @@ export function ColumnMapFlow({
   }, [focusedId, layout, pane, setViewport]);
 
   const fitWidth = React.useCallback(() => {
-    if (pane) void setViewport(initialColumnViewport(pane, layout.width), { duration: 300 });
+    if (pane)
+      void setViewport(initialColumnViewport(pane, layout.width), {
+        duration: 300,
+      });
   }, [layout.width, pane, setViewport]);
 
   const stepTo = React.useCallback(
@@ -526,7 +550,9 @@ export function ColumnMapFlow({
       setFocusIndex(next);
       const placement = layout.placements.find((entry) => entry.id === changes[next]);
       if (placement && pane) {
-        void setViewport(focusViewport(placement, pane, layout.width), { duration: 400 });
+        void setViewport(focusViewport(placement, pane, layout.width), {
+          duration: 400,
+        });
       }
     },
     [changes, focusIndex, layout, pane, setViewport],
@@ -573,8 +599,8 @@ export function ColumnMapFlow({
           <Controls position="bottom-left" showInteractive={false} showFitView={false}>
             <ControlButton
               onClick={fitWidth}
-              title="Fit to width"
-              aria-label="Fit to width"
+              title={betaUiText('beta_953eba677de4')}
+              aria-label={betaUiText('beta_953eba677de4')}
               data-testid="map-fit-width"
             >
               <MoveHorizontal aria-hidden />
@@ -589,7 +615,7 @@ export function ColumnMapFlow({
               nodeStrokeWidth={0}
               maskColor="color-mix(in srgb, var(--background) 70%, transparent)"
               className="!m-2 !h-[112px] !w-[64px] overflow-hidden rounded-md border !bg-card shadow-sm [&>svg]:!h-full [&>svg]:!w-full"
-              ariaLabel="Map overview: changes are coloured"
+              ariaLabel={betaUiText('beta_de720972b6dd')}
             />
           ) : null}
           {children}

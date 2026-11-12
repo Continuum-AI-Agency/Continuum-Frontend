@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ConversionVolumeBadge } from './ConversionVolumeBadge';
 import { ConversionVolumePanel } from './ConversionVolumePanel';
 
@@ -40,7 +41,11 @@ describe('conversion volume', () => {
     const mismatch = {
       ...confidence,
       actionables: [
-        { code: 'kpi_mismatch', adsetIds: ['a1'], message: '1 of 1 ad sets bid for purchases.' },
+        {
+          code: 'kpi_mismatch',
+          adsetIds: ['a1'],
+          message: '1 of 1 ad sets bid for purchases.',
+        },
       ],
     };
     const { container } = render(

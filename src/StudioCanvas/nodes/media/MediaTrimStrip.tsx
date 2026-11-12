@@ -2,6 +2,7 @@
 // clip's waveform, two overlaid range handles, and the kept span as text. It also owns
 // the trim during playback, so the node's own <video>/<audio> never plays outside it.
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -43,11 +44,16 @@ export function MediaTrimStrip({
   trimEndMs,
   atOutPoint,
 }: MediaTrimStripProps) {
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const trackRef = useRef<HTMLDivElement>(null);
   const decoded = useMediaWaveform(src, trackRef);
-  const [elementDuration, setElementDuration] = useState<{ src: string; ms: number } | null>(null);
+  const [elementDuration, setElementDuration] = useState<{
+    src: string;
+    ms: number;
+  } | null>(null);
 
   // The decode is the primary duration (cached, so a remount pays nothing); the element
   // covers media Mediabunny cannot open but the browser can still play.
@@ -98,7 +104,10 @@ export function MediaTrimStrip({
   }, [mediaRef, startMs, endMs, atOutPoint]);
 
   const persist = (next: { startMs: number; endMs: number }) => {
-    updateNodeData(nodeId, { trimStartMs: next.startMs, trimEndMs: next.endMs });
+    updateNodeData(nodeId, {
+      trimStartMs: next.startMs,
+      trimEndMs: next.endMs,
+    });
     triggerSave();
   };
 
@@ -120,7 +129,7 @@ export function MediaTrimStrip({
           viewBox={`0 0 ${Math.max(1, peaks?.length ?? 1)} 2`}
           preserveAspectRatio="none"
           role="img"
-          aria-label="Audio waveform"
+          aria-label={translateUi('audio_waveform_9c4fb7e6')}
           className="absolute inset-0 h-full w-full text-emerald-500"
         >
           {peaks && (
@@ -147,7 +156,7 @@ export function MediaTrimStrip({
         />
         <input
           type="range"
-          aria-label="Trim start"
+          aria-label={translateUi('trim_start_0bf382c2')}
           aria-valuetext={range ? formatTrimTime(range.startMs) : undefined}
           min={0}
           max={durationMs ?? 0}
@@ -163,7 +172,7 @@ export function MediaTrimStrip({
         />
         <input
           type="range"
-          aria-label="Trim end"
+          aria-label={translateUi('trim_end_027cb0cc')}
           aria-valuetext={range ? formatTrimTime(range.endMs) : undefined}
           min={0}
           max={durationMs ?? 0}

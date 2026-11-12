@@ -1,6 +1,7 @@
 'use client';
 
 import type { PaidAccountOverview } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { figureProps } from '@/components/paid-media/optimizer/format';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
@@ -27,6 +28,20 @@ export function PaidMetricStrip({
   /** The account record's currency (what the Optimizer knows); the payload's own wins. */
   accountCurrency?: string | null;
 }) {
+  const uiLocale = useLocale();
+  const t = useTranslations('dashboard');
+  const statLabels = {
+    spend: 'spend_85f3d55',
+    roas: 'm_f659e3f559',
+    ctr: 'm_f9c744e8c0',
+    previous: 'm_288e6544af',
+    impressions: 'm_b5fb66f61a',
+    clicks: 'm_8b97ba460c',
+    cpc: 'm_eba32f8c03',
+    conversionValue: 'm_c772544253',
+    conversions: 'm_b08eaadf77',
+    cpa: 'm_fe9e7be5f8',
+  } as const;
   const [state, setState] = useState<State>({ status: 'idle' });
 
   useEffect(() => {
@@ -38,7 +53,12 @@ export function PaidMetricStrip({
     setState({ status: 'loading' });
     // The seven complete days ending yesterday, as an explicit range: the edge's own `last_7d`
     // is eight days with today half-written (PP-L3-last-7d-asks-eight-days-including-today).
-    fetchPaidAccountOverview({ brandId, adAccountId, platform: 'meta', range: lastCompleteDays(7) })
+    fetchPaidAccountOverview({
+      brandId,
+      adAccountId,
+      platform: 'meta',
+      range: lastCompleteDays(7),
+    })
       .then((overview) => {
         if (!cancelled) setState({ status: 'success', overview });
       })
@@ -56,7 +76,9 @@ export function PaidMetricStrip({
   // formats a percent to whole points.
   const items = useMemo<MetricStripItem[]>(() => {
     if (state.status !== 'success') return [];
-    return buildPaidStatCards(state.overview, accountCurrency).map((card) => ({
+    return buildPaidStatCards(state.overview, accountCurrency, uiLocale, (key) =>
+      t(statLabels[key]),
+    ).map((card) => ({
       label: card.label,
       value: card.value,
       deltaPct: card.deltaPct,
@@ -65,7 +87,7 @@ export function PaidMetricStrip({
           ? figureProps(`home.strip.${card.id}`, card.raw, card.currency, 'd7', 'currency')
           : undefined,
     }));
-  }, [state, accountCurrency]);
+  }, [state, accountCurrency, uiLocale, t]);
 
   if (state.status === 'idle' || state.status === 'error') return null;
   if (state.status === 'loading') return <Skeleton className="h-4 w-72" />;

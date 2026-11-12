@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { APPROVABLE_FAMILIES } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { FamilyCeilings } from './FamilyCeilings';
 
 afterEach(cleanup);
 
-const DEFAULTS = { budget: 'recommend', creative_swap: 'recommend', structure: 'recommend' };
+const DEFAULTS = {
+  budget: 'recommend',
+  creative_swap: 'recommend',
+  structure: 'recommend',
+};
 
 describe('what this account may do on its own', () => {
   // It was a folded `<details>` strip on Overview; a control that has to be found before it

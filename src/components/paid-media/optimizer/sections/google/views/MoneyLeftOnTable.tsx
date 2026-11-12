@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // "Money left on the table" (P6 view 2): impression share lost to budget and to rank, side by
 // side, and what more budget would buy. Read-only; a raise goes through the Optimizer's G03 card.
 
@@ -24,51 +26,6 @@ import {
   viewRead,
 } from './viewParts';
 
-const COLUMNS: InsightColumn<MoneyLeftRow>[] = [
-  {
-    id: 'campaign',
-    header: 'Campaign',
-    cell: (row) => <span className="block min-w-36 font-medium">{row.name}</span>,
-  },
-  {
-    id: 'share',
-    header: 'Impr. share',
-    align: 'right',
-    cell: (row) => <CellText cell={row.share} />,
-  },
-  {
-    id: 'budget-lost',
-    header: 'Lost · budget',
-    align: 'right',
-    cell: (row) => <CellText cell={row.lostToBudget} />,
-  },
-  {
-    id: 'rank-lost',
-    header: 'Lost · rank',
-    align: 'right',
-    cell: (row) => <CellText cell={row.lostToRank} />,
-  },
-  {
-    id: 'budget',
-    header: 'Budget',
-    align: 'right',
-    cell: (row) => <CellText cell={row.budgetPerDay} />,
-  },
-  {
-    id: 'buys',
-    header: 'More budget buys',
-    sortValue: (row) => row.extraSpendPerDay ?? -1,
-    cell: (row) => (
-      <span className="block min-w-44" data-testid="money-left-buys">
-        <CellText cell={row.buys} />
-        {row.buysBasis ? (
-          <span className="block text-muted-foreground text-xs">{row.buysBasis}</span>
-        ) : null}
-      </span>
-    ),
-  },
-];
-
 function plural(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
@@ -82,13 +39,62 @@ function MoneyLeftBody({
   cards: readonly PlatformCard[];
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const COLUMNS: InsightColumn<MoneyLeftRow>[] = [
+    {
+      id: 'campaign',
+      header: uiText('campaign_268286d'),
+      cell: (row) => <span className="block min-w-36 font-medium">{row.name}</span>,
+    },
+    {
+      id: 'share',
+      header: 'Impr. share',
+      align: 'right',
+      cell: (row) => <CellText cell={row.share} />,
+    },
+    {
+      id: 'budget-lost',
+      header: 'Lost · budget',
+      align: 'right',
+      cell: (row) => <CellText cell={row.lostToBudget} />,
+    },
+    {
+      id: 'rank-lost',
+      header: 'Lost · rank',
+      align: 'right',
+      cell: (row) => <CellText cell={row.lostToRank} />,
+    },
+    {
+      id: 'budget',
+      header: uiText('budget_1c6225e'),
+      align: 'right',
+      cell: (row) => <CellText cell={row.budgetPerDay} />,
+    },
+    {
+      id: 'buys',
+      header: 'More budget buys',
+      sortValue: (row) => row.extraSpendPerDay ?? -1,
+      cell: (row) => (
+        <span className="block min-w-44" data-testid="money-left-buys">
+          <CellText cell={row.buys} />
+          {row.buysBasis ? (
+            <span className="block text-muted-foreground text-xs">{row.buysBasis}</span>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
+
   const model = buildMoneyLeft(
     read,
     cards.filter((card): card is BudgetLimitedCard => card.variant === 'google_budget_limited'),
     currency,
+    uiText,
+    uiLocale,
   );
   if (model.rows.length === 0 && model.offSearch === 0) {
-    return <ChartEmpty message="No campaign spent in this window." />;
+    return <ChartEmpty message={uiText('no_campaign_spent_in_this_window_952d69e')} />;
   }
   const reasons = reasonsOf(
     model.rows.flatMap((row) => [
@@ -102,28 +108,32 @@ function MoneyLeftBody({
   return (
     <div className="space-y-3">
       <ScopeLine>
-        {windowRangeLabel(read.range.since, read.range.until)} · Google's impression share on Search
-        inventory, per campaign
+        {uiText.rich('sentence_67f2f545e743', {
+          v0: windowRangeLabel(read.range.since, read.range.until, uiLocale),
+        })}
       </ScopeLine>
       <div className="space-y-1 text-sm" data-testid="money-left-headline">
         <p>
           {model.budgetLimited > 0 ? (
             <>
-              {plural(model.budgetLimited, 'campaign loses', 'campaigns lose')} impressions to
-              budget: up to{' '}
-              <span className="font-semibold tabular-nums">
-                +{formatCurrency(model.extraSpendPerDay, currency)}/day
-              </span>{' '}
-              would reach those auctions at today's price.
+              {uiText.rich('sentence_64bffde097a9', {
+                count: model.budgetLimited,
+                amount: () => (
+                  <span className="font-semibold tabular-nums">
+                    {uiText.rich('sentence_e456c61af445', {
+                      v0: formatCurrency(model.extraSpendPerDay, currency, uiLocale),
+                    })}
+                  </span>
+                ),
+              })}
             </>
           ) : (
-            <>No campaign is known to lose impressions to budget.</>
+            <>{uiText('no_campaign_is_known_to_lose_impressions_to_b_7f79277')}</>
           )}
         </p>
         {model.rankLimited > 0 ? (
           <p className="text-muted-foreground">
-            {plural(model.rankLimited, 'campaign loses', 'campaigns lose')} more to rank than to
-            budget: budget won't buy those back; Quality Score and bids do.
+            {uiText.rich('sentence_7fa57110464e', { count: model.rankLimited })}
           </p>
         ) : null}
       </div>
@@ -132,12 +142,11 @@ function MoneyLeftBody({
       ) : null}
       {model.offSearch > 0 ? (
         <p className="text-muted-foreground text-xs" data-testid="money-left-off-search">
-          {plural(model.offSearch, 'campaign serves', 'campaigns serve')} off Search (Display,
-          Video, Demand Gen): Google reports them no impression share.
+          {uiText.rich('sentence_cd8c29456987', { count: model.offSearch })}
         </p>
       ) : null}
       <p className="text-muted-foreground text-xs">
-        A raise goes through the Optimizer's budget card in Actions; this view changes nothing.
+        {uiText('a_raise_goes_through_the_optimizer_s_budget_c_a1ad5b6')}
       </p>
       <ReasonNotes reasons={reasons} />
     </div>

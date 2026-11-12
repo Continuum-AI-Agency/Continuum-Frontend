@@ -1,3 +1,5 @@
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../../messages/studio/en.json';
 // A Fast Cut run is the server's: the browser saves the room, posts the node, and files what
 // came back. These pin the order (save BEFORE the route reads the room), the readiness
 // refusals the server would otherwise answer a minute later, and the filed keys.
@@ -74,12 +76,22 @@ const POOL = [
 const BED = wire('bed', FAST_CUT_AUDIO_INPUT_HANDLE);
 
 const run = async (nodes: StudioNode[], edges: Edge[], { inRoom = true } = {}) => {
-  useStudioStore.setState({ nodes, edges, brandId: BRAND, activeRoomId: inRoom ? ROOM : undefined });
+  useStudioStore.setState({
+    nodes,
+    edges,
+    brandId: BRAND,
+    activeRoomId: inRoom ? ROOM : undefined,
+  });
   const show = mock((_toast: unknown) => {});
   const flushSave = mock(async () => {
     calls.push('flushSave');
   });
   const controls = {
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration: mock(async () => ({ success: false })),
     executeVideoExtension: mock(async () => ({ success: false })),
     executeEnrichment: mock(async () => ({ success: false })),
@@ -90,7 +102,10 @@ const run = async (nodes: StudioNode[], edges: Edge[], { inRoom = true } = {}) =
     show,
     flushSave,
   };
-  await executeWorkflow(controls as never, { targetNodeId: 'cut', brandId: BRAND });
+  await executeWorkflow(controls as never, {
+    targetNodeId: 'cut',
+    brandId: BRAND,
+  });
   return {
     show,
     flushSave,
@@ -115,9 +130,16 @@ describe('executeWorkflow — fastCut', () => {
     const { data } = await run([fastCut(), clip(), still(), bed()], [...POOL, BED]);
 
     expect(calls).toEqual(['flushSave', 'request']);
-    const sent = requestMock.mock.calls[0]?.[0] as { path: string; body: unknown };
+    const sent = requestMock.mock.calls[0]?.[0] as {
+      path: string;
+      body: unknown;
+    };
     expect(sent.path).toBe(CANVAS_FAST_CUT_ROUTE);
-    expect(sent.body).toEqual({ brandProfileId: BRAND, roomId: ROOM, nodeId: 'cut' });
+    expect(sent.body).toEqual({
+      brandProfileId: BRAND,
+      roomId: ROOM,
+      nodeId: 'cut',
+    });
 
     expect(data).toMatchObject({
       generatedVideo: RESPONSE.signedUrl,
@@ -175,11 +197,9 @@ describe('executeWorkflow — fastCut', () => {
   });
 
   it('fails without a room instead of rendering a canvas the server cannot read', async () => {
-    const { data, flushSave } = await run(
-      [fastCut(), clip(), still(), bed()],
-      [...POOL, BED],
-      { inRoom: false },
-    );
+    const { data, flushSave } = await run([fastCut(), clip(), still(), bed()], [...POOL, BED], {
+      inRoom: false,
+    });
 
     expect(requestMock).not.toHaveBeenCalled();
     expect(flushSave).not.toHaveBeenCalled();

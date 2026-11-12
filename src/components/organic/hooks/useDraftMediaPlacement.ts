@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Write path for user-supplied media placement on the calendar draft preview.
 // Wraps updateDraft from useCalendarStore with optimistic patching, undo, and
@@ -169,9 +170,13 @@ function sortedSlides(draft: OrganicCalendarDraft): PublishingAsset[] {
 function validateKindForTarget(
   creatives: CreativeRef[],
   target: SlotTarget,
+  translate: ReturnType<typeof useTranslations<'organic'>>,
 ): PlacementError | null {
   if (creatives.some((creative) => !isSlideKind(creative.kind))) {
-    return { type: 'invalid_kind', message: 'Carousel slides must be images or videos.' };
+    return {
+      type: 'invalid_kind',
+      message: translate('carousel_slides_must_be_images_or_videos_dfb3bd5'),
+    };
   }
   const videoCount = creatives.filter((c) => c.kind === 'video').length;
   const imageCount = creatives.filter((c) => c.kind === 'image').length;
@@ -183,13 +188,13 @@ function validateKindForTarget(
     target.kind === 'carousel_slide' ? 'CAROUSEL' : undefined,
   );
   if (multiVideo) {
-    return { type: 'too_many_videos', message: `${multiVideo}.` };
+    return { type: 'too_many_videos', message: translate('oneVideoPerPost') };
   }
 
   if (target.kind !== 'carousel_slide' && videoCount > 0 && imageCount > 0) {
     return {
       type: 'invalid_kind',
-      message: 'Cannot mix image and video in a single post.',
+      message: translate('mediaCannotMix'),
     };
   }
 
@@ -197,6 +202,7 @@ function validateKindForTarget(
 }
 
 export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementResult {
+  const uiText = useTranslations('organic');
   const updateDraft = useCalendarStore((s) => s.updateDraft);
   const { persistDraftFields } = useDraftFieldPersistence();
   const { show } = useToast();
@@ -231,7 +237,9 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       await Promise.all(
         rows.map(async (row) => {
           const mediaSuggestion = source.mediaSuggestion ?? undefined;
-          const saved = await persistDraftFields(row, { media: { publishingAssets, mediaSuggestion } });
+          const saved = await persistDraftFields(row, {
+            media: { publishingAssets, mediaSuggestion },
+          });
           if (!saved.ok) return;
           filled.set(row.id, mediaKey(publishingAssets));
           updateDraft(row.id, (current) =>
@@ -284,15 +292,13 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
 
       if (confirmed) updateDraft(draftId, (current) => ({ ...current, ...confirmed }));
       show({
-        title: 'Media not saved',
-        description: result.stale
-          ? 'This post changed elsewhere. Reopen it and try again.'
-          : result.message,
+        title: uiText('media_not_saved_ff9122c'),
+        description: result.stale ? uiText('postChangedReopen') : result.message,
         variant: 'error',
       });
       return false;
     },
-    [draftId, updateDraft, persistDraftFields, show, fillEmptyGroupMedia],
+    [draftId, updateDraft, persistDraftFields, show, fillEmptyGroupMedia, uiText],
   );
 
   /**
@@ -353,14 +359,14 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       if (assets.length === 0) {
         const err: PlacementError = {
           type: 'empty_selection',
-          message: 'Select at least one creative.',
+          message: uiText('select_at_least_one_creative_aa30cb9'),
         };
         setError(err);
         return err;
       }
 
       const refs = assets.map(creativeRefFromAsset);
-      const kindError = validateKindForTarget(refs, target);
+      const kindError = validateKindForTarget(refs, target, uiText);
       if (kindError) {
         setError(kindError);
         return kindError;
@@ -372,10 +378,14 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       applyMedia((current) => {
         if (target.kind === 'carousel_slide') {
           const slides = [...(current.publishingAssets ?? [])].sort(
-            (a, b) => (a.slideIndex ?? Number.MAX_SAFE_INTEGER) - (b.slideIndex ?? Number.MAX_SAFE_INTEGER),
+            (a, b) =>
+              (a.slideIndex ?? Number.MAX_SAFE_INTEGER) - (b.slideIndex ?? Number.MAX_SAFE_INTEGER),
           );
           if (target.slideIndex < 0 || target.slideIndex >= slides.length) {
-            placementError = { type: 'empty_selection', message: 'That slide no longer exists.' };
+            placementError = {
+              type: 'empty_selection',
+              message: uiText('that_slide_no_longer_exists_739eb67'),
+            };
             return current;
           }
 
@@ -398,11 +408,16 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
           // Replace the targeted slide only; additional selected media follows it in
           // selection order, while every untouched slide remains in its prior order.
           currentRefs.splice(target.slideIndex, 1, ...refs);
-          const shaped = shapeUserSuppliedMedia(currentRefs, { format: 'CAROUSEL' });
+          const shaped = shapeUserSuppliedMedia(currentRefs, {
+            format: 'CAROUSEL',
+          });
           return {
             ...current,
             publishingAssets: shaped.publishingAssets,
-            mediaSuggestion: { ...current.mediaSuggestion, ...shaped.mediaSuggestionPatch },
+            mediaSuggestion: {
+              ...current.mediaSuggestion,
+              ...shaped.mediaSuggestionPatch,
+            },
             format: shaped.contentPatch.format,
           };
         }
@@ -432,7 +447,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
 
       return null;
     },
-    [applyMedia],
+    [applyMedia, uiText],
   );
 
   const undo = React.useCallback(() => {
@@ -482,7 +497,10 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
         const slides = sortedSlides(current);
 
         if (slides.length <= 1) {
-          slideErr = { type: 'min_slides', message: 'A carousel needs at least one slide.' };
+          slideErr = {
+            type: 'min_slides',
+            message: uiText('a_carousel_needs_at_least_one_slide_b0fa699'),
+          };
           return current;
         }
 
@@ -498,7 +516,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       if (slideErr) setError(slideErr);
       return slideErr;
     },
-    [applyMedia],
+    [applyMedia, uiText],
   );
 
   // Replace the media at `position` (same slideIndex-sorted order as removeSlide)
@@ -509,7 +527,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       if (!isSlideKind(kind)) {
         const err: PlacementError = {
           type: 'invalid_kind',
-          message: 'Carousel slides must be images or videos.',
+          message: uiText('carousel_slides_must_be_images_or_videos_dfb3bd5'),
         };
         setError(err);
         return err;
@@ -520,7 +538,10 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
         const slides = sortedSlides(current);
 
         if (position < 0 || position >= slides.length) {
-          slideErr = { type: 'empty_selection', message: 'That slide no longer exists.' };
+          slideErr = {
+            type: 'empty_selection',
+            message: uiText('that_slide_no_longer_exists_739eb67'),
+          };
           return current;
         }
 
@@ -547,7 +568,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       if (slideErr) setError(slideErr);
       return slideErr;
     },
-    [applyMedia],
+    [applyMedia, uiText],
   );
 
   const addSlide = React.useCallback(
@@ -556,7 +577,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       if (!isSlideKind(kind)) {
         const err: PlacementError = {
           type: 'invalid_kind',
-          message: 'Carousel slides must be images or videos.',
+          message: uiText('carousel_slides_must_be_images_or_videos_dfb3bd5'),
         };
         setError(err);
         return err;
@@ -590,7 +611,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
 
       return null;
     },
-    [applyMedia],
+    [applyMedia, uiText],
   );
 
   const clearError = React.useCallback(() => setError(null), []);

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { PipelineCard } from './PipelineCard';
 import type { CheckpointState, PipelineCardState } from './types';
@@ -19,7 +20,10 @@ function card(
     jobId: 'job-1',
     brandId: 'brand-1',
     platform: 'instagram',
-    stages: PIPELINE_STAGES.map((stage) => ({ stage, status: 'done' as const })),
+    stages: PIPELINE_STAGES.map((stage) => ({
+      stage,
+      status: 'done' as const,
+    })),
     status: 'completed',
     draftId: 'draft-1',
     checkpoint,
@@ -67,7 +71,11 @@ describe('PipelineCard media actions', () => {
     render(
       <PipelineCard
         card={card(
-          { textReady: true, blueprintReady: true, previewRevision: 'revision-1' },
+          {
+            textReady: true,
+            blueprintReady: true,
+            previewRevision: 'revision-1',
+          },
           { preview: { caption: null, imageUrl: null, format: 'carousel' } },
         )}
         onEnrichDraft={onEnrichDraft}
@@ -84,7 +92,11 @@ describe('PipelineCard media actions', () => {
   it('hides both actions once media is settled', () => {
     render(
       <PipelineCard
-        card={card({ textReady: true, blueprintReady: true, mediaStatus: 'ready' })}
+        card={card({
+          textReady: true,
+          blueprintReady: true,
+          mediaStatus: 'ready',
+        })}
         onEnrichDraft={mock(() => {})}
         onGenerateMedia={mock(() => {})}
       />,
@@ -157,7 +169,12 @@ describe('PipelineCard awaiting-media-choice invariant', () => {
       { textReady: true, mediaStatus: 'pending' },
       { textReady: true, blueprintReady: true },
       { textReady: true, blueprintReady: true, mediaStatus: 'pending' },
-      { textReady: true, blueprintReady: true, mediaStatus: 'pending', awaitingMediaChoice: true },
+      {
+        textReady: true,
+        blueprintReady: true,
+        mediaStatus: 'pending',
+        awaitingMediaChoice: true,
+      },
       {
         textReady: true,
         blueprintReady: true,
@@ -216,7 +233,13 @@ describe('PipelineCard outcome tone', () => {
 
   it('stays green for a completed card whose media is ready', () => {
     render(
-      <PipelineCard card={card({ textReady: true, blueprintReady: true, mediaStatus: 'ready' })} />,
+      <PipelineCard
+        card={card({
+          textReady: true,
+          blueprintReady: true,
+          mediaStatus: 'ready',
+        })}
+      />,
     );
 
     const badge = statusBadge('Fully fleshed out');
@@ -227,7 +250,11 @@ describe('PipelineCard outcome tone', () => {
   it('stays green for a completed card with user-supplied media', () => {
     render(
       <PipelineCard
-        card={card({ textReady: true, blueprintReady: true, mediaStatus: 'user_supplied' })}
+        card={card({
+          textReady: true,
+          blueprintReady: true,
+          mediaStatus: 'user_supplied',
+        })}
       />,
     );
 
@@ -239,7 +266,11 @@ describe('PipelineCard outcome tone', () => {
   it('keeps the working tone for a completed blueprint-only card', () => {
     render(
       <PipelineCard
-        card={card({ textReady: true, blueprintReady: true, mediaStatus: 'pending' })}
+        card={card({
+          textReady: true,
+          blueprintReady: true,
+          mediaStatus: 'pending',
+        })}
       />,
     );
 
@@ -266,7 +297,11 @@ describe('PipelineCard outcome tone', () => {
   it('does pulse a card whose media is genuinely rendering', () => {
     render(
       <PipelineCard
-        card={card({ textReady: true, blueprintReady: true, mediaStatus: 'generating' })}
+        card={card({
+          textReady: true,
+          blueprintReady: true,
+          mediaStatus: 'generating',
+        })}
       />,
     );
     expect(badgeDot('Fleshing out')?.className).toContain('animate-pulse');

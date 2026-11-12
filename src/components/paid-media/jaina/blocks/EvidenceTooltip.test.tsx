@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { AnswerLanguageProvider } from '../answerLanguageContext';
 import { EvidenceTooltip } from './EvidenceTooltip';
 
@@ -14,7 +15,11 @@ describe('EvidenceTooltip', () => {
         provenance={{
           source: 'computed',
           tool: 'get_top_ads',
-          period: { since: '2026-07-01', until: '2026-07-12', requested_label: null },
+          period: {
+            since: '2026-07-01',
+            until: '2026-07-12',
+            requested_label: null,
+          },
           entity_label: 'Campaign One',
           record_count: 5,
         }}
@@ -59,7 +64,11 @@ describe('EvidenceTooltip, as a screen reader says it', () => {
     provenance: {
       source: 'computed' as const,
       tool: 'get_key_metrics',
-      period: { since: '2026-10-06', until: '2026-10-19', requested_label: null },
+      period: {
+        since: '2026-10-06',
+        until: '2026-10-19',
+        requested_label: null,
+      },
       entity_label: 'account-521903353286118',
       record_count: 14,
     },

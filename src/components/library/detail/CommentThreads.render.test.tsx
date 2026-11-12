@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaComment } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { buildCommentThreads } from '@/lib/library/comments';
 import { CommentThreads } from './CommentThreads';
 import { partitionThreadsByVersion } from './commentVersions';
@@ -166,7 +166,12 @@ describe('CommentThreads — comments from another version', () => {
 describe('CommentThreads — who sees a comment', () => {
   function renderVisibility(visibility: MediaComment['visibility']) {
     const threads = buildCommentThreads([
-      comment({ id: 'c-vis', versionId: V2, body: 'Tighten the cut', visibility }),
+      comment({
+        id: 'c-vis',
+        versionId: V2,
+        body: 'Tighten the cut',
+        visibility,
+      }),
     ]);
     return render(
       <CommentThreads
@@ -221,7 +226,12 @@ describe('CommentThreads — who sees a comment', () => {
     expect(state()).toBe('internal');
     // The echo of the FIRST toggle (shared) lands after the second click.
     const threads = buildCommentThreads([
-      comment({ id: 'c-vis', versionId: V2, body: 'Tighten the cut', visibility: 'shared' }),
+      comment({
+        id: 'c-vis',
+        versionId: V2,
+        body: 'Tighten the cut',
+        visibility: 'shared',
+      }),
     ]);
     rerender(
       <CommentThreads

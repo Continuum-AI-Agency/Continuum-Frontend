@@ -18,12 +18,14 @@ import {
   useEdges,
 } from '@xyflow/react';
 import { AlertTriangle, Copy, Layers, Plus, Trash2, Unlink } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
 import {
-  ELEMENT_ONBOARDING_COPY,
-  ElementsPanel,
-} from '@/components/ai-studio/elements/ElementsPanel';
+  elementCategoryLabel,
+  elementUseIntentLabel,
+} from '@/components/ai-studio/elements/elementPresentation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,8 +55,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   defaultElementUseIntent,
-  ELEMENT_CATEGORY_LABEL,
-  ELEMENT_USE_INTENT_LABEL,
   ELEMENT_USE_INTENTS,
   type ElementCategory,
   type ElementRecord,
@@ -72,6 +72,8 @@ import type { ElementNodeData } from '../types';
 export type { ElementNodeData } from '../types';
 
 export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<ElementNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const detachNodeConnections = useStudioStore((state) => state.detachNodeConnections);
@@ -124,9 +126,9 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
     });
     triggerSave();
   };
-  const name = element?.name ?? data.elementName ?? 'Element';
+  const name = element?.name ?? data.elementName ?? translateUi('element_4e5b548d');
   const category = (element?.category ?? data.elementCategory) as ElementCategory | undefined;
-  const categoryLabel = category ? (ELEMENT_CATEGORY_LABEL[category] ?? category) : undefined;
+  const categoryLabel = category ? elementCategoryLabel(category, translateUi) : undefined;
 
   const outputHandle =
     intent === 'motion' ? ELEMENT_VIDEO_OUTPUT_HANDLE : ELEMENT_IMAGE_OUTPUT_HANDLE;
@@ -144,7 +146,11 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                 'relative group h-full w-full min-w-[180px] min-h-[180px] rounded-xl transition-shadow',
                 isSelectedByOther && 'selected-by-other',
               )}
-              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              style={
+                {
+                  '--other-user-color': selectingUser?.color,
+                } as React.CSSProperties
+              }
               data-testid="element-node"
             >
               <NodeResizer
@@ -172,9 +178,11 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                         <EmptyMedia variant="icon">
                           <AlertTriangle />
                         </EmptyMedia>
-                        <EmptyTitle>Element unavailable</EmptyTitle>
+                        <EmptyTitle>{translateUi('element_unavailable_bb8afce0')}</EmptyTitle>
                         <EmptyDescription>
-                          {`“${name}” is no longer in this brand’s Elements. This node sends nothing.`}
+                          {translateUi('value0_is_no_longer_in_this_brand_s_c963f6f7', {
+                            value0: String(name),
+                          })}
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
@@ -192,7 +200,9 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                     <img
                       loading="lazy"
                       src={preview}
-                      alt={`${name} reference`}
+                      alt={translateUi('value0_reference_a1af46da', {
+                        value0: String(name),
+                      })}
                       className="h-full w-full object-contain"
                     />
                   ) : (
@@ -201,9 +211,13 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                         <EmptyMedia variant="icon">
                           <Layers />
                         </EmptyMedia>
-                        <EmptyTitle>{intent === 'motion' ? 'No motion clip' : name}</EmptyTitle>
+                        <EmptyTitle>
+                          {intent === 'motion' ? translateUi('no_motion_clip_f5d31d15') : name}
+                        </EmptyTitle>
                         <EmptyDescription>
-                          {isLoading ? 'Loading…' : 'No reference yet'}
+                          {isLoading
+                            ? translateUi('loading_ba3bbbe1')
+                            : translateUi('no_reference_yet_f9c4850a')}
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
@@ -240,9 +254,10 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                       variant="outline"
                       className="absolute right-2 top-2 z-20 h-5 bg-background/90 px-2 text-2xs"
                     >
-                      {`No reference — sending ${emission.refs.length} ${
-                        emission.refs.length === 1 ? 'image' : 'images'
-                      }`}
+                      {translateUi('no_reference_sending_value0_value1_ac76fb07', {
+                        value0: String(emission.refs.length),
+                        value1: String(emission.refs.length === 1 ? 'image' : 'images'),
+                      })}
                     </Badge>
                   ) : null}
 
@@ -251,9 +266,10 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                       variant="destructive"
                       className="absolute bottom-7 right-2 z-20 h-5 px-2 text-2xs"
                     >
-                      {`${emission.droppedCount} of ${
-                        emission.droppedCount + emission.refs.length
-                      } reference images dropped`}
+                      {translateUi('value0_of_value1_reference_images_d_6619fd35', {
+                        value0: String(emission.droppedCount),
+                        value1: String(emission.droppedCount + emission.refs.length),
+                      })}
                     </Badge>
                   ) : null}
 
@@ -278,7 +294,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                       }}
                     >
                       <SelectTrigger
-                        aria-label="Element use"
+                        aria-label={translateUi('element_use_e91f7c26')}
                         className="nodrag absolute bottom-7 left-2 z-20 h-6 w-28 bg-background/90 px-2 text-3xs"
                       >
                         <SelectValue />
@@ -286,7 +302,7 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                       <SelectContent>
                         {ELEMENT_USE_INTENTS.map((value) => (
                           <SelectItem key={value} value={value}>
-                            {ELEMENT_USE_INTENT_LABEL[value]}
+                            {elementUseIntentLabel(value, translateUi)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -312,8 +328,11 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
                 />
                 <TooltipContent>
                   <p>
-                    {intent === 'motion' ? 'Video' : 'Image'} Output: {outputConnections}{' '}
-                    connections
+                    {intent === 'motion'
+                      ? translateUi('video_d534be82')
+                      : translateUi('image_1aa4cb0b')}{' '}
+                    {translateUi('output_457f4957')} {outputConnections}{' '}
+                    {translateUi('connections_1e5fac86')}{' '}
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -321,26 +340,23 @@ export function ElementNode({ id, data, selected }: NodeProps<ReactFlowNode<Elem
           }
         />
         <ContextMenuContent className="w-52">
-          <ContextMenuLabel>Element</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('element_4e5b548d')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem
             disabled={getConnectedEdges(id).length === 0}
             onClick={() => detachNodeConnections(id)}
           >
-            <Unlink className="mr-2 h-4 w-4" />
-            Detach connections
+            <Unlink className="mr-2 h-4 w-4" /> {translateUi('detach_connections_ea1e2b08')}{' '}
           </ContextMenuItem>
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>
@@ -365,6 +381,8 @@ function ElementNodeSetup({
   elements: ElementRecord[];
   onBind: (element: ElementRecord) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [createOpen, setCreateOpen] = React.useState(false);
 
   return (
@@ -372,7 +390,8 @@ function ElementNodeSetup({
       {elements.length > 0 ? (
         <div className="nodrag nowheel flex h-full w-full flex-col gap-1.5 overflow-y-auto p-3">
           <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-            Choose an Element
+            {' '}
+            {translateUi('choose_an_element_a5f12fb6')}{' '}
           </p>
           {elements.map((candidate) => (
             <Button
@@ -385,7 +404,7 @@ function ElementNodeSetup({
             >
               <span className="truncate">{candidate.name}</span>
               <span className="shrink-0 text-2xs text-muted-foreground">
-                {ELEMENT_CATEGORY_LABEL[candidate.category] ?? candidate.category}
+                {elementCategoryLabel(candidate.category, translateUi)}
               </span>
             </Button>
           ))}
@@ -396,8 +415,7 @@ function ElementNodeSetup({
             className="w-full shrink-0 justify-start"
             onClick={() => setCreateOpen(true)}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            New Element
+            <Plus className="mr-2 h-4 w-4" /> {translateUi('new_element_45e3dc5d')}{' '}
           </Button>
         </div>
       ) : (
@@ -406,13 +424,12 @@ function ElementNodeSetup({
             <EmptyMedia variant="icon">
               <Layers />
             </EmptyMedia>
-            <EmptyTitle>No Elements yet</EmptyTitle>
-            <EmptyDescription>{ELEMENT_ONBOARDING_COPY}</EmptyDescription>
+            <EmptyTitle>{translateUi('no_elements_yet_d2dff1dd')}</EmptyTitle>
+            <EmptyDescription>{translateUi('elementOnboarding')}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create an Element
+              <Plus className="mr-2 h-4 w-4" /> {translateUi('create_an_element_574bb0e4')}{' '}
             </Button>
           </EmptyContent>
         </Empty>

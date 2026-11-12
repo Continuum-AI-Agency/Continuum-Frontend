@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { JainaUIMessage } from '@continuum/contracts';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { JainaRunProgress } from '@/lib/jaina/runProgress';
 import {
   JainaRunProgressBar,
@@ -64,7 +65,11 @@ describe('JainaRunProgressIndicator', () => {
         data: {
           plan_id: 'p',
           presentation: {
-            question: { class: 'lookup', expected_duration: 'short', language: 'es' },
+            question: {
+              class: 'lookup',
+              expected_duration: 'short',
+              language: 'es',
+            },
           },
         },
       },

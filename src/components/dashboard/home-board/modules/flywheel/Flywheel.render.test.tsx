@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { OrganicWinners } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { EASY_FIT_ACCOUNT, EASY_FIT_REPORT } from '../creative/__fixtures__/creativeReport';
 import { NO_WINNERS, TWO_WINNERS } from './__fixtures__/organicWinners';
 
 // `mock.module` replaces a module for the whole process, so this file runs on its own; every mock
 // spreads the real module.
-let winners: { data: OrganicWinners | undefined; isLoading: boolean; isError: boolean } = {
+let winners: {
+  data: OrganicWinners | undefined;
+  isLoading: boolean;
+  isError: boolean;
+} = {
   data: TWO_WINNERS,
   isLoading: false,
   isError: false,
@@ -33,7 +38,12 @@ mock.module('@/hooks/useOrganicWinners', () => ({
     isLoading: false,
     isError: false,
   }),
-  usePromoteWinner: () => ({ mutate: promote, isPending: false, isError: false, data: undefined }),
+  usePromoteWinner: () => ({
+    mutate: promote,
+    isPending: false,
+    isError: false,
+    data: undefined,
+  }),
 }));
 
 const { default: Flywheel } = await import('./Flywheel');
@@ -41,7 +51,12 @@ const { creativeTileState, needsNewCreative } = await import('../creative/creati
 const { FLYWHEEL_SENTENCES } = await import('./flywheelModel');
 
 const view = creativeTileState(
-  { status: 'ready', report: EASY_FIT_REPORT, isLoading: false, isError: false },
+  {
+    status: 'ready',
+    report: EASY_FIT_REPORT,
+    isLoading: false,
+    isError: false,
+  },
   [EASY_FIT_ACCOUNT],
 );
 if (view.state !== 'ready') throw new Error('fixture is not ready');
@@ -91,7 +106,9 @@ describe('Flywheel', () => {
     expect(within(items[1]).queryByRole('button')).toBeNull();
 
     fireEvent.click(within(items[0]).getByRole('button', { name: 'Create paused' }));
-    fireEvent.change(screen.getByLabelText('Ad set'), { target: { value: '120251135197790236' } });
+    fireEvent.change(screen.getByLabelText('Ad set'), {
+      target: { value: '120251135197790236' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create paused ad' }));
     expect(promote).toHaveBeenCalledWith({
       mediaId: '18000000000000001',

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
 const switchActiveBrandActionMock = mock(async (_brandId: string) => {});
 
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   switchActiveBrandAction: switchActiveBrandActionMock,
 }));
 

@@ -7,7 +7,8 @@ import type {
   MotionStyleId,
 } from '@continuum/contracts';
 import { ChevronDown, ChevronRight, Pause, Play } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useMemo, useState, useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -29,12 +30,18 @@ import {
   motionLayersFromProject,
 } from './motionLayers';
 
-const STYLES: Array<{ id: MotionStyleId; label: string }> = [
-  { id: 'fade', label: 'Fade' },
-  { id: 'move', label: 'Move' },
-  { id: 'scale', label: 'Scale' },
-  { id: 'rotate', label: 'Rotate' },
-];
+function useLocalStylesMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: Array<{ id: MotionStyleId; label: string }> = [
+      { id: 'fade', label: translateConfig('fade_9efb597c') },
+      { id: 'move', label: translateConfig('move_6ecc3df6') },
+      { id: 'scale', label: translateConfig('scale_f102986b') },
+      { id: 'rotate', label: translateConfig('rotate_c3613b17') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 export type MotionElementOption = { id: string; name: string };
 
@@ -116,6 +123,10 @@ export function MotionTimeline({
   onSaveElement: () => void;
   onPlaceElement: (elementId: string) => void;
 }) {
+  const STYLES = useLocalStylesMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const layers = motionLayersFromProject(project);
   const [unit, setUnit] = useState<MotionTimeUnit>('s');
   const [collapsed, setCollapsed] = useState(false);
@@ -145,7 +156,7 @@ export function MotionTimeline({
           size="icon"
           variant="ghost"
           className="size-7 active:scale-[0.96]"
-          aria-label={isPlaying ? 'Pause' : 'Play'}
+          aria-label={isPlaying ? translateUi('pause_858e4ba7') : translateUi('play_436e6101')}
           onClick={onTogglePlay}
         >
           {isPlaying ? (
@@ -165,16 +176,17 @@ export function MotionTimeline({
           aria-pressed={autoKey}
           onClick={onToggleAutoKey}
         >
-          Autokey
+          {' '}
+          {translateUi('autokey_594d0cde')}{' '}
         </Button>
         <label
           htmlFor="motion-current-time"
           className="flex items-center gap-1 text-2xs text-muted-foreground"
         >
-          <span className="sr-only">Current time</span>
+          <span className="sr-only">{translateUi('current_time_06dafda7')}</span>
           <Input
             id="motion-current-time"
-            aria-label="Current time"
+            aria-label={translateUi('current_time_06dafda7')}
             value={formatMotionTime(playheadSec, unit)}
             onChange={(event) => {
               const parsed = parseMotionTime(event.target.value, unit);
@@ -202,7 +214,11 @@ export function MotionTimeline({
           className="h-7 text-2xs"
           onClick={onCyclePlayback}
         >
-          {playbackMode === 'once' ? 'Once' : playbackMode === 'loop' ? 'Loop' : 'Ping-pong'}
+          {playbackMode === 'once'
+            ? translateUi('once_d88f6d83')
+            : playbackMode === 'loop'
+              ? translateUi('loop_f2f6a018')
+              : translateUi('ping_pong_78867795')}
         </Button>
         <Button
           type="button"
@@ -212,7 +228,8 @@ export function MotionTimeline({
           aria-pressed={showGraph}
           onClick={() => setShowGraph((current) => !current)}
         >
-          Graph
+          {' '}
+          {translateUi('graph_32ab018f')}{' '}
         </Button>
         <Button
           type="button"
@@ -222,17 +239,18 @@ export function MotionTimeline({
           disabled={!canSaveElement || savingElement}
           title={
             canSaveElement
-              ? 'Save this overlay motion as an Element'
-              : 'Select a keyed Library overlay to save'
+              ? translateUi('save_this_overlay_motion_as_an_elem_c28d3d6f')
+              : translateUi('select_a_keyed_library_overlay_to_s_4a87f4e2')
           }
           onClick={onSaveElement}
         >
-          Save Element
+          {' '}
+          {translateUi('save_element_1285445f')}{' '}
         </Button>
         <label className="flex items-center gap-1 text-2xs text-muted-foreground">
-          <span className="sr-only">Place motion Element</span>
+          <span className="sr-only">{translateUi('place_motion_element_df78db20')}</span>
           <select
-            aria-label="Place motion Element"
+            aria-label={translateUi('place_motion_element_df78db20')}
             className="h-7 rounded-md border border-input bg-background px-1.5 text-2xs"
             value=""
             disabled={!selected || motionElements.length === 0}
@@ -242,7 +260,7 @@ export function MotionTimeline({
               event.currentTarget.value = '';
             }}
           >
-            <option value="">Place</option>
+            <option value="">{translateUi('place_e9463dcc')}</option>
             {motionElements.map((element) => (
               <option key={element.id} value={element.id}>
                 {element.name}
@@ -257,7 +275,7 @@ export function MotionTimeline({
           className="ml-auto h-7 text-2xs"
           onClick={() => setCollapsed((current) => !current)}
         >
-          {collapsed ? 'Expand layers' : 'Collapse'}
+          {collapsed ? translateUi('expand_layers_6076e947') : translateUi('collapse_be6eb1fc')}
         </Button>
       </header>
       {selected ? (
@@ -288,7 +306,7 @@ export function MotionTimeline({
           style={{ width: widthPx }}
           role="slider"
           tabIndex={0}
-          aria-label="Motion playhead"
+          aria-label={translateUi('motion_playhead_5653b9d1')}
           aria-valuemin={0}
           aria-valuemax={project.durationSec}
           aria-valuenow={playheadSec}
@@ -319,7 +337,8 @@ export function MotionTimeline({
           </div>
           {layers.length === 0 ? (
             <p className="px-3 py-6 text-center text-2xs text-muted-foreground">
-              Place an overlay or text clip, then add keyframes.
+              {' '}
+              {translateUi('place_an_overlay_or_text_clip_then__6f2a6b38')}{' '}
             </p>
           ) : null}
           {layers.map((layer) => (
@@ -335,7 +354,11 @@ export function MotionTimeline({
               onSelect={() => onSelectClip(layer.clipId)}
               onAddKeyframe={onAddKeyframe}
               onOpenEasing={(keyframe) =>
-                setEasingKey({ trackId: layer.trackId, clipId: layer.clipId, keyframe })
+                setEasingKey({
+                  trackId: layer.trackId,
+                  clipId: layer.clipId,
+                  keyframe,
+                })
               }
               onTrimStyle={(instanceId, startSec, endSec) =>
                 onTrimStyle({
@@ -416,6 +439,8 @@ function MotionLayerBlock({
   onOpenEasing: (keyframe: EditorKeyframe) => void;
   onTrimStyle: (instanceId: string, startSec: number, endSec: number) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const localSec = localPlayheadSec(layer, playheadSec);
   const bars = useMemo(() => styleBarsFor(layer), [layer]);
   const clip = project.tracks
@@ -489,7 +514,9 @@ function MotionLayerBlock({
                         {next ? (
                           <button
                             type="button"
-                            aria-label={`Edit ${row.label} easing`}
+                            aria-label={translateUi('edit_value0_easing_55c42eb8', {
+                              value0: String(row.label),
+                            })}
                             className={cn(
                               'absolute top-2 h-px bg-primary/50',
                               easingKeyId === key.id && 'bg-primary',
@@ -511,7 +538,9 @@ function MotionLayerBlock({
                               ? 'bg-primary'
                               : 'bg-background',
                           )}
-                          style={{ left: (layer.startSec + key.timeSec) * pxPerSec }}
+                          style={{
+                            left: (layer.startSec + key.timeSec) * pxPerSec,
+                          }}
                         />
                       </span>
                     );
@@ -535,7 +564,12 @@ function StyleBar({
   layerStartSec: number;
   onTrim: (startSec: number, endSec: number) => void;
 }) {
-  const [draft, setDraft] = useState<{ startSec: number; endSec: number } | null>(null);
+  const translateUi = useUiTranslations('studio');
+
+  const [draft, setDraft] = useState<{
+    startSec: number;
+    endSec: number;
+  } | null>(null);
   const display = draft ?? bar;
   const beginTrim = (edge: 'start' | 'end') => (event: React.PointerEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -585,7 +619,7 @@ function StyleBar({
     >
       <button
         type="button"
-        aria-label="Trim style start"
+        aria-label={translateUi('trim_style_start_8513376a')}
         className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize bg-foreground/30"
         onPointerDown={beginTrim('start')}
         onClick={(event) => event.stopPropagation()}
@@ -593,7 +627,7 @@ function StyleBar({
       <span className="pointer-events-none truncate px-1">{bar.label}</span>
       <button
         type="button"
-        aria-label="Trim style end"
+        aria-label={translateUi('trim_style_end_844c2a58')}
         className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-ew-resize bg-foreground/30"
         onPointerDown={beginTrim('end')}
         onClick={(event) => event.stopPropagation()}

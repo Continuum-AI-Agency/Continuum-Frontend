@@ -1,3 +1,7 @@
+import { createTranslator } from 'next-intl';
+import en from '../../../messages/scale/en.json';
+import es from '../../../messages/scale/es.json';
+import pt from '../../../messages/scale/pt-BR.json';
 /**
  * Parts in, a whole `JainaChatMessage` out.
  *
@@ -97,7 +101,12 @@ describe('text, reasoning and tools', () => {
   it('reads dynamic tool parts and static tool parts alike', () => {
     const tools = toolsOf(
       uiMessage([
-        toolPart({ state: 'output-available', toolCallId: 'call_1', input: { a: 1 }, output: 2 }),
+        toolPart({
+          state: 'output-available',
+          toolCallId: 'call_1',
+          input: { a: 1 },
+          output: 2,
+        }),
         {
           type: 'tool-get_campaigns',
           state: 'output-error',
@@ -177,7 +186,9 @@ describe('toJainaChatMessage fills the whole render model', () => {
         plan: { campaigns: [{ name: 'Summer' }] },
         summary: { campaigns: 1, adSets: 2, ads: 4 },
       }),
-      data(JAINA_UI_DATA_PART.canvasActions, 'run_1:canvas', { actions: [{ kind: 'add_node' }] }),
+      data(JAINA_UI_DATA_PART.canvasActions, 'run_1:canvas', {
+        actions: [{ kind: 'add_node' }],
+      }),
       toolPart({
         state: 'output-available',
         toolCallId: 'call_1',
@@ -185,10 +196,15 @@ describe('toJainaChatMessage fills the whole render model', () => {
         output: { b: 2 },
       }),
     ],
-    { metadata: { runId: 'run_1', status: 'completed' } } as Partial<JainaUIMessage>,
+    {
+      metadata: { runId: 'run_1', status: 'completed' },
+    } as Partial<JainaUIMessage>,
   );
 
-  const projected = toJainaChatMessage(message, { isStreaming: false, createdAt: '2026-09-17' });
+  const projected = toJainaChatMessage(message, {
+    isStreaming: false,
+    createdAt: '2026-09-17',
+  });
 
   it('carries identity, run and terminal status off the metadata', () => {
     expect(projected.id).toBe('msg_1');
@@ -209,14 +225,22 @@ describe('toJainaChatMessage fills the whole render model', () => {
     expect(projected.objectives?.map((objective) => objective.id)).toEqual(['o1']);
     expect(projected.delegations?.map((delegation) => delegation.callId)).toEqual(['d1']);
     expect(projected.toolCalls?.map((call) => call.id)).toEqual(['call_1']);
-    expect(projected.toolResults?.[0]).toMatchObject({ id: 'call_1', ok: true, cached: false });
+    expect(projected.toolResults?.[0]).toMatchObject({
+      id: 'call_1',
+      ok: true,
+      cached: false,
+    });
     expect(projected.artifacts?.creatives?.map((creative) => creative.id)).toEqual(['cr1']);
     expect(projected.paidCreativeRenders?.[0].draft_id).toBe('draft_1');
   });
 
   it('fills the scaffold, the artifact job and the checkpoint summary', () => {
     expect(projected.scaffold?.scaffoldId).toBe('33333333-3333-4333-8333-333333333333');
-    expect(projected.scaffold?.summary).toMatchObject({ campaigns: 1, adSets: 2, ads: 4 });
+    expect(projected.scaffold?.summary).toMatchObject({
+      campaigns: 1,
+      adSets: 2,
+      ads: 4,
+    });
     expect(projected.reportArtifactJob?.job_id).toBe('job_1');
     expect(projected.checkpointSummary).toEqual({
       summary: 'Spend rose on two campaigns.',
@@ -256,11 +280,15 @@ describe('toJainaChatMessage fills the whole render model', () => {
   });
 
   it('reports a live turn as streaming, and a user turn as bare text', () => {
-    const live = toJainaChatMessage(uiMessage([text('typing')]), { isStreaming: true });
+    const live = toJainaChatMessage(uiMessage([text('typing')]), {
+      isStreaming: true,
+    });
     expect(live.status).toBe('streaming');
 
     const user = toJainaChatMessage(
-      uiMessage([text('how is spend?')], { role: 'user' } as Partial<JainaUIMessage>),
+      uiMessage([text('how is spend?')], {
+        role: 'user',
+      } as Partial<JainaUIMessage>),
       { isStreaming: false },
     );
     expect(user.role).toBe('user');
@@ -310,7 +338,13 @@ describe('toJainaChatMessage fills the whole render model', () => {
         data(JAINA_UI_DATA_PART.reportMeta, 'run_1:report', {
           report_title: 'Weekly account review',
           executive_summary: 'Spend is up.',
-          sections: [{ heading: 'Spend', summary: 'Up 12% week on week.', highlights: [] }],
+          sections: [
+            {
+              heading: 'Spend',
+              summary: 'Up 12% week on week.',
+              highlights: [],
+            },
+          ],
           strategic_recommendations: [{ title: 'Scale Summer', rationale: 'Best ROAS' }],
         }),
       ]),
@@ -340,13 +374,18 @@ describe('toJainaChatMessage fills the whole render model', () => {
       { isStreaming: false },
     );
 
-    expect(asking.pendingClarification).toEqual({ id: 'clar_1', question: 'Which ad account?' });
+    expect(asking.pendingClarification).toEqual({
+      id: 'clar_1',
+      question: 'Which ad account?',
+    });
     expect(asking.content).toBe('Which ad account?');
     expect(asking.renderAsReport).toBe(false);
   });
 
   it('reads the request nested in the Backend frame, with the survey s alternatives as options', () => {
-    const asking = toJainaChatMessage(clarificationTurn(), { isStreaming: false });
+    const asking = toJainaChatMessage(clarificationTurn(), {
+      isStreaming: false,
+    });
 
     expect(asking.pendingClarification).toEqual({
       id: CLARIFICATION_ID,
@@ -357,7 +396,9 @@ describe('toJainaChatMessage fills the whole render model', () => {
   });
 
   it('never projects the survey that asked the question as a report', () => {
-    const asking = toJainaChatMessage(clarificationTurn(), { isStreaming: false });
+    const asking = toJainaChatMessage(clarificationTurn(), {
+      isStreaming: false,
+    });
 
     expect(asking.reportV2).toBeUndefined();
     expect(asking.report).toBeUndefined();
@@ -404,7 +445,10 @@ describe('the approval gate', () => {
       toolCallId: 'call_gate',
       toolName: 'pause_meta_entity',
     });
-    expect(pending[0].input).toEqual({ entity_id: '1234', expected_status: 'ACTIVE' });
+    expect(pending[0].input).toEqual({
+      entity_id: '1234',
+      expected_status: 'ACTIVE',
+    });
     expect(resolved).toEqual({});
     expect(denied).toEqual([]);
   });
@@ -474,7 +518,10 @@ describe('the approval gate', () => {
     );
 
     expect(pending).toEqual([]);
-    expect(resolved.appr_2).toMatchObject({ decision: 'denied', reason: 'Not this week' });
+    expect(resolved.appr_2).toMatchObject({
+      decision: 'denied',
+      reason: 'Not this week',
+    });
     expect(denied).toEqual([
       {
         toolCallId: 'call_gate',
@@ -505,7 +552,9 @@ describe('the approval gate', () => {
   });
 
   it('puts all three onto the projected message', () => {
-    const projected = toJainaChatMessage(uiMessage(pendingParts()), { isStreaming: true });
+    const projected = toJainaChatMessage(uiMessage(pendingParts()), {
+      isStreaming: true,
+    });
 
     expect(projected.pendingToolApprovals?.map((entry) => entry.approvalId)).toEqual(['appr_1']);
     expect(projected.resolvedApprovals).toEqual({});
@@ -523,7 +572,12 @@ describe('the plan part', () => {
     intent: 'analysis',
     scope_ceiling: null,
     objectives: [
-      { objective_id: 'o1', task: 'Read account spend', description: '', success_criteria: 'KPIs' },
+      {
+        objective_id: 'o1',
+        task: 'Read account spend',
+        description: '',
+        success_criteria: 'KPIs',
+      },
       { objective_id: 'o2', task: 'Find the winners', description: 'By ROAS' },
     ],
   };
@@ -605,7 +659,10 @@ describe('projectTranscriptMessage keeps identity until something it shows chang
   it('re-projects when the turn stops streaming', () => {
     const cache = new WeakMap();
     const message = answer();
-    const streaming = projectTranscriptMessage(cache, message, { ...inputs, isStreaming: true });
+    const streaming = projectTranscriptMessage(cache, message, {
+      ...inputs,
+      isStreaming: true,
+    });
     const done = projectTranscriptMessage(cache, message, inputs);
 
     expect(streaming.status).toBe('streaming');
@@ -680,7 +737,10 @@ describe('the checkpoint summary part', () => {
  */
 describe('sub-agent activity that is not a cross-agent call', () => {
   const delegationPart = (callId: string, payload: Record<string, unknown>): Part =>
-    data(JAINA_UI_DATA_PART.delegation, `run_1:delegation:${callId}`, { callId, ...payload });
+    data(JAINA_UI_DATA_PART.delegation, `run_1:delegation:${callId}`, {
+      callId,
+      ...payload,
+    });
 
   const handoffStart = delegationPart('h1', {
     kind: 'handoff',
@@ -706,7 +766,9 @@ describe('sub-agent activity that is not a cross-agent call', () => {
   });
 
   it('keeps a handoff row OUT of delegations, which renders "X asked Y"', () => {
-    const projected = toJainaChatMessage(uiMessage([handoffStart]), { isStreaming: false });
+    const projected = toJainaChatMessage(uiMessage([handoffStart]), {
+      isStreaming: false,
+    });
 
     expect(projected.delegations).toBeUndefined();
     expect(projected.reasoning?.map((entry) => entry.stage)).toEqual(['handoff_start']);
@@ -822,7 +884,10 @@ describe('report blocks once the final report lands', () => {
   const meta = (order?: string[]) => ({
     type: JAINA_UI_DATA_PART.reportMeta,
     id: 'run_1:report',
-    data: { executive_summary: 'Summary', ...(order ? { block_order: order } : {}) },
+    data: {
+      executive_summary: 'Summary',
+      ...(order ? { block_order: order } : {}),
+    },
   });
   const blockIds = (message: JainaUIMessage) =>
     ((reportOf(message)?.blocks ?? []) as { block_id: string }[]).map((b) => b.block_id);
@@ -1004,14 +1069,24 @@ describe('scaffoldOf', () => {
         }),
       ]),
     );
-    expect(scaffold).toMatchObject({ version: 3, contentHash: 'a'.repeat(64), name: 'Summer' });
+    expect(scaffold).toMatchObject({
+      version: 3,
+      contentHash: 'a'.repeat(64),
+      name: 'Summer',
+    });
   });
 });
 
 describe('a user turn keeps what the reader attached', () => {
   const mentions = {
     references: [],
-    attachments: [{ url: 'https://cdn.example.com/a.png', name: 'a.png', mediaType: 'image/png' }],
+    attachments: [
+      {
+        url: 'https://cdn.example.com/a.png',
+        name: 'a.png',
+        mediaType: 'image/png',
+      },
+    ],
     documents: [
       {
         documentId: '0b3e8c1a-5d2f-4e7a-9c10-123456789abc',
@@ -1023,7 +1098,10 @@ describe('a user turn keeps what the reader attached', () => {
 
   it('carries the mentions onto the projected message metadata', () => {
     const projected = toJainaChatMessage(
-      uiMessage([text('Use this brief')], { role: 'user', metadata: { mentions } }),
+      uiMessage([text('Use this brief')], {
+        role: 'user',
+        metadata: { mentions },
+      }),
       { isStreaming: false },
     );
     expect(projected.content).toBe('Use this brief');
@@ -1036,4 +1114,61 @@ describe('a user turn keeps what the reader attached', () => {
     });
     expect(projected.metadata).toBeUndefined();
   });
+});
+
+it('changes cached application chrome on locale change while preserving authored content and source identity', () => {
+  const message = uiMessage(
+    [
+      planPart({
+        plan_id: 'authored-plan',
+        chat_title: 'Customer-authored title',
+        objectives: [
+          {
+            task: 'Keep authored task',
+            description: 'Keep authored description',
+          },
+        ],
+      }),
+      text('Keep the generated answer in its original language.'),
+    ],
+    {
+      metadata: { runId: 'run-locale', status: 'failed' },
+    } as Partial<JainaUIMessage>,
+  );
+  const source = JSON.stringify(message),
+    cache = new WeakMap();
+  let prior: ReturnType<typeof projectTranscriptMessage> | undefined;
+  for (const [locale, messages, label] of [
+    ['en', en, 'Jaina error'],
+    ['pt-BR', pt, 'Erro da Jaina'],
+    ['es', es, 'Error de Jaina'],
+  ] as const) {
+    const uiTranslate = createTranslator({
+      locale,
+      timeZone: 'UTC',
+      messages: { scale: messages },
+      namespace: 'scale',
+      onError(error) {
+        throw error;
+      },
+    });
+    const inputs: TranscriptProjectionInputs = {
+      isStreaming: false,
+      optimisticPlanStatusById: {},
+      deliverySource: 'history_hydrated',
+      uiTranslate,
+    };
+    const projected = projectTranscriptMessage(cache, message, inputs);
+    expect(projected).not.toBe(prior);
+    expect(projectTranscriptMessage(cache, message, { ...inputs })).toBe(projected);
+    expect(projected.title).toBe(label);
+    expect(projected.content).toContain('Keep the generated answer in its original language.');
+    expect(projected.plan?.title).toBe('Customer-authored title');
+    expect(projected.plan?.steps[0]).toMatchObject({
+      title: 'Keep authored task',
+      description: 'Keep authored description',
+    });
+    expect(JSON.stringify(message)).toBe(source);
+    prior = projected;
+  }
 });

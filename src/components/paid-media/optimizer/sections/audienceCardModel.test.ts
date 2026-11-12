@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import en from '../../../../../messages/scale/en.json';
+import es from '../../../../../messages/scale/es.json';
+import pt from '../../../../../messages/scale/pt-BR.json';
 import {
   AUDIENCE_PROPOSAL_STATE_LABEL,
   audienceCardStateFor,
@@ -68,10 +72,18 @@ const plan = {
     option({
       id: '101',
       name: 'Gimnasios',
-      estimate: { lower: 2_000_000, upper: 2_400_000, source: 'catalogue_band' },
+      estimate: {
+        lower: 2_000_000,
+        upper: 2_400_000,
+        source: 'catalogue_band',
+      },
     }),
     option({ id: '102', name: 'Entrenamiento funcional' }),
-    option({ id: '103', name: 'Cerveza', blocked_by: 'Brand DNA: nunca alcohol' }),
+    option({
+      id: '103',
+      name: 'Cerveza',
+      blocked_by: 'Brand DNA: nunca alcohol',
+    }),
   ],
   chosen_option_ids: ['ca-13', '101', '102'],
   targeting_spec: {
@@ -89,10 +101,21 @@ const plan = {
     ],
     targeting_automation: { advantage_audience: 1 },
   },
-  advantage_audience: { enabled: true, rationale: 'objetivo de compras, pool amplio' },
+  advantage_audience: {
+    enabled: true,
+    rationale: 'objetivo de compras, pool amplio',
+  },
   reach: {
-    current: { lower: 3_300_000, upper: 3_500_000, source: 'delivery_estimate' },
-    proposed: { lower: 1_100_000, upper: 1_300_000, source: 'delivery_estimate' },
+    current: {
+      lower: 3_300_000,
+      upper: 3_500_000,
+      source: 'delivery_estimate',
+    },
+    proposed: {
+      lower: 1_100_000,
+      upper: 1_300_000,
+      source: 'delivery_estimate',
+    },
     estimated_at: null,
   },
   budget: {
@@ -156,10 +179,16 @@ const planWith = (over: Record<string, unknown>) => ({ ...(plan as object), ...o
 describe('audience card model', () => {
   it('recognises the audience recommendation and reads the row into a view', () => {
     expect(
-      isAudienceRecommendation({ kind: 'audience_expand', trigger: 'F3_audience_exhausted' }),
+      isAudienceRecommendation({
+        kind: 'audience_expand',
+        trigger: 'F3_audience_exhausted',
+      }),
     ).toBe(true);
     expect(
-      isAudienceRecommendation({ kind: 'creative_refresh', trigger: 'F1_creative_fatigue' }),
+      isAudienceRecommendation({
+        kind: 'creative_refresh',
+        trigger: 'F1_creative_fatigue',
+      }),
     ).toBe(false);
     const row = {
       id: '2f1c1c1e-0000-4000-8000-000000000001',
@@ -183,7 +212,11 @@ describe('audience card model', () => {
     expect(view.state).toBe('ready');
     expect(view.plan?.mode).toBe('add');
     expect(
-      audienceCardView([], { id: 'rec', adset_id: 'as-1', trigger: 'F3_audience_exhausted' }).state,
+      audienceCardView([], {
+        id: 'rec',
+        adset_id: 'as-1',
+        trigger: 'F3_audience_exhausted',
+      }).state,
     ).toBe('none');
   });
 
@@ -202,16 +235,27 @@ describe('audience card model — a full proposal', () => {
       reach: '1.1M–1.3M',
     });
     expect(audienceWords({})).toBeNull();
-    expect(audienceWords({ genders: [2], geo_locations: { countries: ['MX', 'CO'] } })).toBe(
-      'MX, CO · women',
-    );
+    expect(
+      audienceWords({
+        genders: [2],
+        geo_locations: { countries: ['MX', 'CO'] },
+      }),
+    ).toBe('MX, CO · women');
     expect(reachChange(plan)).toEqual({ label: '−65%', up: false });
     expect(
       reachChange(
         planWith({
           reach: {
-            current: { lower: 516_000, upper: 607_000, source: 'delivery_estimate' },
-            proposed: { lower: 569_000, upper: 669_000, source: 'delivery_estimate' },
+            current: {
+              lower: 516_000,
+              upper: 607_000,
+              source: 'delivery_estimate',
+            },
+            proposed: {
+              lower: 569_000,
+              upper: 669_000,
+              source: 'delivery_estimate',
+            },
             estimated_at: null,
           },
         }),
@@ -241,7 +285,10 @@ describe('audience card model — a full proposal', () => {
       null,
     );
     const geoRow = comparison.rows.find((row) => row.label === 'Locations');
-    const around = { kind: 'text', text: '4 km around Vivo 47 Easy Fit Plaza Aleira' };
+    const around = {
+      kind: 'text',
+      text: '4 km around Vivo 47 Easy Fit Plaza Aleira',
+    };
     expect(geoRow?.current).toEqual(around);
     expect(geoRow?.proposed).toEqual(around);
   });
@@ -262,7 +309,11 @@ describe('audience card model — a full proposal', () => {
     expect(ageRow?.current).toEqual({ kind: 'text', text: '18–65 · all' });
     expect(ageRow?.proposed).toEqual({ kind: 'text', text: '25–45 · all' });
     expect(geoRow?.proposed).toEqual({ kind: 'text', text: 'MX' });
-    expect(interestRow?.current).toEqual({ kind: 'chips', chips: [], empty: 'None' });
+    expect(interestRow?.current).toEqual({
+      kind: 'chips',
+      chips: [],
+      empty: 'None',
+    });
     expect(interestRow?.proposed).toEqual({
       kind: 'chips',
       empty: 'None',
@@ -274,14 +325,24 @@ describe('audience card model — a full proposal', () => {
     expect(seedRow?.current).toEqual({
       kind: 'chips',
       empty: 'None',
-      chips: [{ name: 'Lookalike 5% · leads de agosto', tone: 'removed', isNew: false }],
+      chips: [
+        {
+          name: 'Lookalike 5% · leads de agosto',
+          tone: 'removed',
+          isNew: false,
+        },
+      ],
     });
     expect(seedRow?.proposed).toEqual({
       kind: 'chips',
       empty: 'None',
       chips: [{ name: 'Lookalike 1–3% · compradores', tone: 'added', isNew: true }],
     });
-    expect(excludeRow?.proposed).toEqual({ kind: 'chips', chips: [], empty: 'Nothing' });
+    expect(excludeRow?.proposed).toEqual({
+      kind: 'chips',
+      chips: [],
+      empty: 'Nothing',
+    });
     expect(advantageRow).toEqual({
       label: 'Advantage+',
       current: { kind: 'text', text: 'Not set' },
@@ -297,7 +358,9 @@ describe('audience card model — a full proposal', () => {
       [
         {
           adsetId: 'as-2',
-          spec: { flexible_spec: [{ interests: [{ id: '101', name: 'Gimnasios' }] }] },
+          spec: {
+            flexible_spec: [{ interests: [{ id: '101', name: 'Gimnasios' }] }],
+          },
         },
       ],
       () => 'ALEIRA // AGOSTO',
@@ -326,7 +389,13 @@ describe('audience card model — a full proposal', () => {
     expect(comparison.rows[4]?.current).toEqual({
       kind: 'chips',
       empty: 'Nothing',
-      chips: [{ name: 'Lookalike 5% · Inscritos 2025', tone: 'removed', isNew: false }],
+      chips: [
+        {
+          name: 'Lookalike 5% · Inscritos 2025',
+          tone: 'removed',
+          isNew: false,
+        },
+      ],
     });
     expect(comparison.exclusionWarning).toBe(
       'People in Lookalike 5% · Inscritos 2025 can see these ads again.',
@@ -342,7 +411,9 @@ describe('audience card model — a full proposal', () => {
         },
         {
           adsetId: 'as-2',
-          spec: { flexible_spec: [{ interests: [{ id: '101', name: 'Gimnasios' }] }] },
+          spec: {
+            flexible_spec: [{ interests: [{ id: '101', name: 'Gimnasios' }] }],
+          },
         },
         { adsetId: 'as-3', spec: { custom_audiences: [{ id: 'ca-13' }] } },
         { adsetId: 'as-4', spec: { age_min: 'not a number' } },
@@ -361,7 +432,11 @@ describe('audience card model — a full proposal', () => {
           kindLabel: 'lookalike',
           usedIn: ['ITESO // AGOSTO - RTG'],
         },
-        { name: 'Gimnasios', kindLabel: 'interest', usedIn: ['ALEIRA // AGOSTO'] },
+        {
+          name: 'Gimnasios',
+          kindLabel: 'interest',
+          usedIn: ['ALEIRA // AGOSTO'],
+        },
       ],
       excludedByRule: [{ name: 'Cerveza', rule: 'Brand DNA: nunca alcohol' }],
     });
@@ -386,10 +461,19 @@ describe('audience card model — a full proposal', () => {
 
   it('launch plan: the new ad set, paused beside the current one, its campaign and budget', () => {
     expect(implementationLines(plan, 'MXN')).toEqual([
-      { label: 'New ad set', value: 'ITESO // AGOSTO // 2 - LKL · compradores · 2026-09-28' },
-      { label: 'Starts', value: 'Paused, next to "ITESO // AGOSTO // 2 - LKL"; both keep running' },
+      {
+        label: 'New ad set',
+        value: 'ITESO // AGOSTO // 2 - LKL · compradores · 2026-09-28',
+      },
+      {
+        label: 'Starts',
+        value: 'Paused, next to "ITESO // AGOSTO // 2 - LKL"; both keep running',
+      },
       { label: 'Campaign', value: 'Tours' },
-      { label: 'Budget', value: '$62.00 MXN/day · between $20.00 MXN and $120 MXN' },
+      {
+        label: 'Budget',
+        value: '$62.00 MXN/day · between $20.00 MXN and $120 MXN',
+      },
     ]);
     expect(implementationLines(planWith({ mode: 'replace' }), null)[1]?.value).toBe(
       'Paused, next to "ITESO // AGOSTO // 2 - LKL"; the current one pauses once the new one is live',
@@ -467,7 +551,10 @@ describe('audience card model — a blocked proposal', () => {
     undo_requested_at: null,
     undo_result: null,
     undone_at: null,
-    error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
+    error: {
+      code: 'signal_stopped',
+      message: 'The trigger did not fire again.',
+    },
     created_at: '2026-09-27T09:20:16Z',
     updated_at: '2026-09-28T00:20:00Z',
   } as never;
@@ -484,12 +571,18 @@ describe('audience card model — a blocked proposal', () => {
     expect(view.block?.message).toBe('No delivering creative has enough results yet.');
 
     expect(audienceCardStateFor(superseded)).toBe('blocked');
-    expect(audienceCardStateFor({ ...(superseded as object), proposal: plan } as never)).toBe(
-      'none',
-    );
-    expect(audienceCardStateFor({ ...(superseded as object), blocked_by: null } as never)).toBe(
-      'none',
-    );
+    expect(
+      audienceCardStateFor({
+        ...(superseded as object),
+        proposal: plan,
+      } as never),
+    ).toBe('none');
+    expect(
+      audienceCardStateFor({
+        ...(superseded as object),
+        blocked_by: null,
+      } as never),
+    ).toBe('none');
     expect(
       audienceCardView([superseded], {
         id: '44444444-4444-4444-8444-444444444444',
@@ -514,7 +607,10 @@ describe('audience card model — a blocked proposal', () => {
       created_at: '2026-09-27T09:20:16Z',
     });
     expect(
-      carriedRecommendation({ ...(superseded as object), recommendation_id: null } as never),
+      carriedRecommendation({
+        ...(superseded as object),
+        recommendation_id: null,
+      } as never),
     ).toBeNull();
   });
 
@@ -523,7 +619,10 @@ describe('audience card model — a blocked proposal', () => {
   // proposal's state implies.
   it('carries a live proposal as a pending recommendation, and a cancelled one as rejected', () => {
     const status = (proposalStatus: string) =>
-      carriedRecommendation({ ...(superseded as object), status: proposalStatus } as never)?.status;
+      carriedRecommendation({
+        ...(superseded as object),
+        status: proposalStatus,
+      } as never)?.status;
     expect(status('queued')).toBe('pending');
     expect(status('proposing')).toBe('pending');
     expect(status('ready')).toBe('pending');
@@ -546,7 +645,11 @@ describe('audience card model — why a proposal failed, in one line', () => {
 
   it('replaces a JSON dump with the sentence the code stands for', () => {
     expect(
-      proposalFailureReason({ code: 'propose_failed', phase: 'propose', message: zodDump }),
+      proposalFailureReason({
+        code: 'propose_failed',
+        phase: 'propose',
+        message: zodDump,
+      }),
     ).toBe('Jaina ran into an error while reading the audience, catalogue and creatives.');
     expect(proposalFailureReason({ code: 'execute_failed', message: '{"error":1}' })).toBe(
       'Meta returned an error while the new ad set was being created.',
@@ -564,17 +667,26 @@ describe('audience card model — why a proposal failed, in one line', () => {
       }),
     ).toBe('Jaina ran out of catalogue.');
     expect(
-      proposalFailureReason({ code: 'signal_stopped', message: 'The trigger did not fire again.' }),
+      proposalFailureReason({
+        code: 'signal_stopped',
+        message: 'The trigger did not fire again.',
+      }),
     ).toBe('The trigger did not fire again.');
   });
 
   it('treats a multi-line or over-long message as a dump', () => {
-    expect(proposalFailureReason({ code: 'propose_failed', message: 'line one\nline two' })).toBe(
-      PROPOSE_COPY,
-    );
-    expect(proposalFailureReason({ code: 'propose_failed', message: 'x'.repeat(241) })).toBe(
-      PROPOSE_COPY,
-    );
+    expect(
+      proposalFailureReason({
+        code: 'propose_failed',
+        message: 'line one\nline two',
+      }),
+    ).toBe(PROPOSE_COPY);
+    expect(
+      proposalFailureReason({
+        code: 'propose_failed',
+        message: 'x'.repeat(241),
+      }),
+    ).toBe(PROPOSE_COPY);
   });
 
   it('reads nothing off a row with no error, and hands the card the human line', () => {
@@ -663,7 +775,10 @@ describe('audience card model — what was implemented', () => {
       { label: 'Daily budget', value: '62 (minor units 6200)' },
       { label: 'Optimization goal', value: 'OFFSITE_CONVERSIONS' },
       { label: 'Billing event', value: 'IMPRESSIONS' },
-      { label: 'Targeting', value: '25–45 · interests: Gimnasios · Advantage+ on' },
+      {
+        label: 'Targeting',
+        value: '25–45 · interests: Gimnasios · Advantage+ on',
+      },
       { label: 'Interests', value: 'Gimnasios' },
       { label: 'Advantage+', value: 'on' },
       {
@@ -683,7 +798,11 @@ describe('audience card model — a failed row: what failed and the button that 
 
   it('a Meta write that failed on a sound plan is a retry in Meta', () => {
     const failure = proposalFailure(
-      failedRow({ code: 'execute_failed', phase: 'execute', message: '{"error":1}' }),
+      failedRow({
+        code: 'execute_failed',
+        phase: 'execute',
+        message: '{"error":1}',
+      }),
       plan,
       null,
     );
@@ -755,7 +874,10 @@ describe('audience card model — a failed row: what failed and the button that 
   it('a propose failure, no plan, or a plan the world moved under is a fresh ask to Jaina', () => {
     expect(
       proposalFailure(failedRow({ code: 'propose_failed', phase: 'propose' }), null, null),
-    ).toMatchObject({ headline: "Jaina couldn't build the proposal.", action: 'reask' });
+    ).toMatchObject({
+      headline: "Jaina couldn't build the proposal.",
+      action: 'reask',
+    });
     expect(proposalFailure(failedRow({ code: 'execute_failed' }), null, null)?.action).toBe(
       'reask',
     );
@@ -814,3 +936,33 @@ describe('audience card model — every label is English', () => {
     }
   });
 });
+
+for (const [locale, messages, reach, trigger] of [
+  ['en', en, '1.1M–1.3M', 'Reach exhausted'],
+  ['pt-BR', pt, '1,1 mi–1,3 mi', 'Alcance esgotado'],
+  ['es', es, '1,1 M–1,3 M', 'Alcance agotado'],
+] as const) {
+  it(`keeps source targeting and reach math intact in ${locale}`, () => {
+    const t = createTranslator({
+      locale,
+      timeZone: 'UTC',
+      messages: { scale: messages },
+      namespace: 'scale',
+      onError(error) {
+        throw error;
+      },
+    });
+    const before = JSON.stringify(plan);
+    const proposed = proposedAudience(plan, t, locale);
+    expect(proposed.reach).toBe(reach);
+    expect(proposed.words).toContain('Gimnasios');
+    expect(proposed.words).toContain('Lookalike 1–3% · compradores');
+    expect(audienceComparison(plan, null, t, locale).reachChange?.up).toBe(false);
+    expect(audienceComparison(plan, null, t, locale).reachChange?.label).toBe(
+      locale === 'es' ? '−65\u00a0%' : '−65%',
+    );
+    expect(triggerLabel('F3_audience_exhausted', t)).toBe(trigger);
+    expect(triggerLabel('rule:customer-authored', t)).toBe('rule:customer-authored');
+    expect(JSON.stringify(plan)).toBe(before);
+  });
+}

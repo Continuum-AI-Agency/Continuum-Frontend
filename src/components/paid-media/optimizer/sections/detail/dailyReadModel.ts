@@ -1,3 +1,8 @@
+import type { UiLocale } from '@/i18n/config';
+import {
+  type OptimizerDisplayTranslate,
+  optimizerDisplayCopy,
+} from '@/lib/paid-media/optimizationMetricPresentation';
 // The daily read, one row per category: the strongest candidate of each module the brief
 // weighed — budget, pausing, creatives, audience — with its impact in words rather than
 // money. The hero on the overview shows the single strongest of these; the activity view
@@ -54,19 +59,50 @@ const KIND_WORDS: Record<string, string> = {
   audience_change: 'Audience change',
 };
 
-function titleOf(candidate: BriefCandidate): string {
+const KIND_KEYS = {
+  budget_move: 'dailyBudget',
+  pause: 'dailyPause',
+  variate_creative: 'dailyCreative',
+  creative_refresh: 'dailyRotation',
+  audience_expand: 'dailyAudience',
+  audience_change: 'dailyAudienceChange',
+} as const;
+const MODULE_KEYS = {
+  budget: 'moduleBudget',
+  pause: 'modulePause',
+  creative: 'moduleCreative',
+  audience: 'moduleAudience',
+} as const;
+const TIER_KEYS = {
+  low: 'impactLow',
+  medium: 'impactMedium',
+  high: 'impactHigh',
+} as const;
+function titleOf(candidate: BriefCandidate, translate?: OptimizerDisplayTranslate): string {
   const action =
     KIND_WORDS[candidate.kind] ??
     (candidate.trigger
       ? triggerWords(candidate.trigger)
       : HERO_MODULE_COPY[candidate.module].label);
+  const localizedAction = translate
+    ? Object.hasOwn(KIND_KEYS, candidate.kind)
+      ? translate(KIND_KEYS[candidate.kind as keyof typeof KIND_KEYS])
+      : candidate.trigger
+        ? triggerWords(candidate.trigger, translate)
+        : translate(MODULE_KEYS[candidate.module])
+    : action;
   const where = candidate.adset_name ?? candidate.adset_id;
-  return where && candidate.id !== 'budget:portfolio' ? `${action} · ${where}` : action;
+  return where && candidate.id !== 'budget:portfolio'
+    ? translate
+      ? translate('dailyTitle', { action: localizedAction, entity: where })
+      : `${action} · ${where}`
+    : localizedAction;
 }
 
 export function buildDailyRead(
   view: HeroView,
   dailyTotal: number | null | undefined,
+  translate?: OptimizerDisplayTranslate,
 ): DailyReadRow[] {
   const heroId = view.brief.hero.candidate_id;
   return topCandidatePerModule(view.brief.candidates).map((candidate) => {
@@ -74,15 +110,17 @@ export function buildDailyRead(
     return {
       id: candidate.id,
       module: candidate.module,
-      category: HERO_MODULE_COPY[candidate.module].label,
+      category: translate
+        ? translate(MODULE_KEYS[candidate.module])
+        : HERO_MODULE_COPY[candidate.module].label,
       tier,
-      tierLabel: IMPACT_TIER_COPY[tier],
-      title: titleOf(candidate),
+      tierLabel: translate ? translate(TIER_KEYS[tier]) : IMPACT_TIER_COPY[tier],
+      title: titleOf(candidate, translate),
       reason: candidate.reason,
       basis: candidate.impact_basis,
       isHero: candidate.id === heroId,
       origin: 'brief',
-      cta: ctaForCandidate(candidate, view.observe),
+      cta: ctaForCandidate(candidate, view.observe, translate),
     };
   });
 }

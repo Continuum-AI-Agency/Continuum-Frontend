@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Speak-your-change: the browser's own Web Speech recognizer, no dependency and no audio
 // leaving through our servers. Firefox has none, so the button renders nothing there.
@@ -44,6 +45,8 @@ export function DictationButton({
   disabled?: boolean;
   className?: string;
 }) {
+  const tUi = useTranslations('common');
+
   const supported = useSyncExternalStore(
     subscribeNever,
     () => Boolean(speechRecognition()),
@@ -99,9 +102,9 @@ export function DictationButton({
       size="icon"
       variant={listening ? 'default' : 'ghost'}
       disabled={disabled}
-      aria-label={listening ? 'Stop dictation' : 'Dictate'}
+      aria-label={listening ? tUi('m_96ad53f139') : tUi('m_3eaff69c98')}
       aria-pressed={listening}
-      title={problem ?? (listening ? 'Listening… click to stop' : 'Speak your change')}
+      title={problem ?? (listening ? tUi('m_a13c74df65') : tUi('m_be36d92660'))}
       className={cn('size-7 shrink-0', listening && 'animate-pulse', className)}
       onClick={toggle}
     >

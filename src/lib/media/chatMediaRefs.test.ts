@@ -5,7 +5,8 @@ import {
   type ChatMediaSignRequest,
   chatMediaRefKey,
 } from '@continuum/contracts';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // The HTTP client is the seam: every sign is one POST through it, so the test counts exactly
 // what a strip costs.
@@ -36,7 +37,10 @@ const requestMock = mock(async (args: { path: string; body?: unknown }) => {
     }),
   };
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 const {
   CHAT_MEDIA_MAX_RECOVERIES_PER_TILE,
@@ -50,7 +54,10 @@ const {
 const { getApiBaseUrl } = await import('@/lib/api/config');
 
 const draftRefs = (count: number, prefix = 'd'): ChatMediaRef[] =>
-  Array.from({ length: count }, (_, i) => ({ type: 'draft', draftId: `${prefix}${i}` }));
+  Array.from({ length: count }, (_, i) => ({
+    type: 'draft',
+    draftId: `${prefix}${i}`,
+  }));
 
 const signCalls = () =>
   requestMock.mock.calls.filter(([args]) => args.path === CHAT_MEDIA_SIGN_ROUTE);
@@ -86,7 +93,11 @@ describe('signChatMediaRefs', () => {
   });
 
   it('resolves a provider still against the API base', async () => {
-    const ref: ChatMediaRef = { type: 'platform', platform: 'instagram', mediaId: '1789' };
+    const ref: ChatMediaRef = {
+      type: 'platform',
+      platform: 'instagram',
+      mediaId: '1789',
+    };
     const tiles = await signChatMediaRefs('brand-1', [ref]);
     expect(tiles.get(chatMediaRefKey(ref))?.thumbUrl).toBe(
       `${getApiBaseUrl()}/api/organic/agent/media/thumb?t=platform:instagram:1789-1`,
@@ -94,7 +105,11 @@ describe('signChatMediaRefs', () => {
   });
 
   it('keeps a null still null: nothing to show is not a URL to retry', async () => {
-    const ref: ChatMediaRef = { type: 'competitor', source: 'instagram', id: 'x' };
+    const ref: ChatMediaRef = {
+      type: 'competitor',
+      source: 'instagram',
+      id: 'x',
+    };
     const tiles = await signChatMediaRefs('brand-1', [ref]);
     expect(tiles.get(chatMediaRefKey(ref))?.thumbUrl).toBeNull();
   });
@@ -216,7 +231,9 @@ describe('useChatMediaTiles', () => {
         expect(result.current.tiles.get('draft:d0')?.thumbUrl).toBe(
           'https://storage.test/draft:d0?v=2',
         ),
-      { timeout: CHAT_MEDIA_RECOVER_COALESCE_MS + CHAT_MEDIA_SIGN_RETRY_MS + 1_000 },
+      {
+        timeout: CHAT_MEDIA_RECOVER_COALESCE_MS + CHAT_MEDIA_SIGN_RETRY_MS + 1_000,
+      },
     );
     expect(signCalls()).toHaveLength(3);
   });

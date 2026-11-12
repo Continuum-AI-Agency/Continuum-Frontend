@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -77,7 +78,13 @@ describe('ReallocationFlow — net honesty', () => {
   // The field bug: −$746 out, +$75 in read as "$75 moved", so a budget CUT looked like a
   // reallocation. The net is what distinguishes them.
   const cuttingItems = [
-    { adset_id: 'up', current_budget: 100, final_budget: 175, change_abs: 75, change_pct: 0.75 },
+    {
+      adset_id: 'up',
+      current_budget: 100,
+      final_budget: 175,
+      change_abs: 75,
+      change_pct: 0.75,
+    },
     {
       adset_id: 'down',
       current_budget: 900,

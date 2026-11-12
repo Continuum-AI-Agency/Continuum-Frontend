@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import {
   CARDS,
   campaignsBeforeE1,
@@ -54,7 +55,9 @@ const WIDTHS = [375, 1280] as const;
 
 function atWidth(width: number) {
   (
-    window as unknown as { happyDOM: { setViewport(v: { width: number; height: number }): void } }
+    window as unknown as {
+      happyDOM: { setViewport(v: { width: number; height: number }): void };
+    }
   ).happyDOM.setViewport({ width, height: 900 });
   expect(window.innerWidth).toBe(width);
 }
@@ -130,10 +133,14 @@ describe('QualityScoreMapView', () => {
     render(
       <QualityScoreMapView
         currency="MXN"
-        read={{ status: 'error', message: 'The Google Ads Quality Score read did not answer.' }}
+        read={{
+          status: 'error',
+          message: 'The Google Ads Quality Score read did not answer.',
+        }}
       />,
     );
-    expect(document.body.textContent).toContain(
+    expect(document.body.textContent).toContain('An unexpected error occurred. Please try again.');
+    expect(document.body.textContent).not.toContain(
       'The Google Ads Quality Score read did not answer.',
     );
   });
@@ -211,7 +218,9 @@ describe('SearchTermExplorerView', () => {
       );
       expect(screen.queryByTestId('search-terms-ask-jaina')).toBeNull();
       fireEvent.click(
-        within(gimnasio).getByRole('checkbox', { name: 'Select every term under gimnasio' }),
+        within(gimnasio).getByRole('checkbox', {
+          name: 'Select every term under gimnasio',
+        }),
       );
       expect(screen.getByTestId('search-terms-selection').textContent).toContain(
         '3 terms selected · $2,251 MXN',
@@ -228,7 +237,11 @@ describe('SearchTermExplorerView', () => {
       <SearchTermExplorerView
         cards={[]}
         currency="MXN"
-        read={ready({ ...searchTermsFixture(), signals: null, rejected: ['window: invalid'] })}
+        read={ready({
+          ...searchTermsFixture(),
+          signals: null,
+          rejected: ['window: invalid'],
+        })}
       />,
     );
     expect(screen.getByTestId('search-terms-unread').textContent).toBe(
@@ -281,7 +294,9 @@ describe('PmaxHealthView', () => {
       );
       expect(document.body.textContent).toContain('Google asks: Add more headlines · Add a video');
       expect(document.body.textContent).toContain('Spend by network · PMax · Membresías');
-      const network = screen.getByRole('region', { name: 'Spend by network: PMax · Membresías' });
+      const network = screen.getByRole('region', {
+        name: 'Spend by network: PMax · Membresías',
+      });
       expect(
         [...network.querySelectorAll('tbody tr')].map((row) => row.firstChild?.textContent),
       ).toEqual(['Search', 'Display', 'YouTube']);
@@ -296,7 +311,7 @@ describe('PmaxHealthView', () => {
     cleanup();
     view({ ...pmaxFixture(), signals: null, rejected: [] });
     expect(screen.getByTestId('pmax-unread').textContent).toBe(
-      '— The Google read came back incomplete',
+      '— The Google read came back incomplete. Refresh and try again.',
     );
     expect(document.body.textContent).toContain(PMAX_NOT_READ);
   });
@@ -309,7 +324,9 @@ describe('PmaxHealthView', () => {
 
 describe('GoogleOwnViews', () => {
   function wrapper() {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     return ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
@@ -344,6 +361,9 @@ describe('GoogleOwnViews', () => {
       within(screen.getByTestId('google-view-search-terms')).getByText('Search terms'),
     );
     await waitFor(() => expect(screen.getAllByTestId('search-root')).toHaveLength(3));
-    expect(sent.at(-1)).toMatchObject({ scope: 'google_signals', blocks: ['search_terms'] });
+    expect(sent.at(-1)).toMatchObject({
+      scope: 'google_signals',
+      blocks: ['search_terms'],
+    });
   });
 });

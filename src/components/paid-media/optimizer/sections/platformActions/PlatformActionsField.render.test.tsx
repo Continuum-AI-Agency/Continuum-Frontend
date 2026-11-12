@@ -1,16 +1,24 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 type Answer = { data: unknown; error: unknown };
 const answers: Record<string, Answer[]> = {};
 const calls: { fn: string; args?: Record<string, unknown> }[] = [];
 const rpc = mock(async (fn: string, args?: Record<string, unknown>) => {
   calls.push({ fn, args });
-  return answers[fn]?.shift() ?? { data: null, error: { message: `no answer for ${fn}` } };
+  return (
+    answers[fn]?.shift() ?? {
+      data: null,
+      error: { message: `no answer for ${fn}` },
+    }
+  );
 });
 
-mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: () => ({ rpc }) }));
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({ rpc }),
+}));
 
 const { PlatformActionsField } = await import('./PlatformActionsField');
 const {
@@ -23,8 +31,16 @@ const { MissingRpcError } = await import('../platforms/multiplatformRead');
 
 const PORTFOLIO = '0be73981-6287-44ff-8b57-0d083e3e6625';
 const MIXED = [
-  { platform: 'meta', allowed_actions: ['set_budget', 'set_status'], accounts: 1 },
-  { platform: 'google_ads', allowed_actions: ['set_budget', 'set_status'], accounts: 1 },
+  {
+    platform: 'meta',
+    allowed_actions: ['set_budget', 'set_status'],
+    accounts: 1,
+  },
+  {
+    platform: 'google_ads',
+    allowed_actions: ['set_budget', 'set_status'],
+    accounts: 1,
+  },
 ];
 
 function answer(fn: string, ...queue: Answer[]) {
@@ -32,7 +48,9 @@ function answer(fn: string, ...queue: Answer[]) {
 }
 
 function mount() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <PlatformActionsField portfolioId={PORTFOLIO} />
@@ -53,13 +71,20 @@ describe('fetchPlatformActions', () => {
       error: null,
     });
     expect(await fetchPlatformActions(PORTFOLIO)).toEqual([
-      { platform: 'google_ads', allowed: ['set_budget', 'set_status'], accounts: 1 },
+      {
+        platform: 'google_ads',
+        allowed: ['set_budget', 'set_status'],
+        accounts: 1,
+      },
     ]);
     expect(calls).toEqual([{ fn: GET_PLATFORM_ACTIONS_RPC, args: { p_portfolio_id: PORTFOLIO } }]);
   });
 
   it('tells a missing RPC apart from a failed read', async () => {
-    answer(GET_PLATFORM_ACTIONS_RPC, { data: null, error: { code: 'PGRST202' } });
+    answer(GET_PLATFORM_ACTIONS_RPC, {
+      data: null,
+      error: { code: 'PGRST202' },
+    });
     await expect(fetchPlatformActions(PORTFOLIO)).rejects.toBeInstanceOf(MissingRpcError);
     answer(GET_PLATFORM_ACTIONS_RPC, { data: null, error: { code: '42501' } });
     await expect(fetchPlatformActions(PORTFOLIO)).rejects.toThrow(
@@ -70,7 +95,10 @@ describe('fetchPlatformActions', () => {
 
 describe('savePlatformActions', () => {
   it('sends the whole list and surfaces the database refusal word for word', async () => {
-    answer(SET_PLATFORM_ACTIONS_RPC, { data: ['add_negatives', 'set_status'], error: null });
+    answer(SET_PLATFORM_ACTIONS_RPC, {
+      data: ['add_negatives', 'set_status'],
+      error: null,
+    });
     expect(
       await savePlatformActions(PORTFOLIO, 'google_ads', ['set_status', 'add_negatives']),
     ).toEqual(['add_negatives', 'set_status']);
@@ -81,7 +109,10 @@ describe('savePlatformActions', () => {
     });
     answer(SET_PLATFORM_ACTIONS_RPC, {
       data: null,
-      error: { code: 'P0002', message: 'optimizer: portfolio x has no google_ads account' },
+      error: {
+        code: 'P0002',
+        message: 'optimizer: portfolio x has no google_ads account',
+      },
     });
     await expect(savePlatformActions(PORTFOLIO, 'google_ads', [])).rejects.toThrow(
       'optimizer: portfolio x has no google_ads account',
@@ -150,7 +181,10 @@ describe('PlatformActionsField', () => {
     answer(GET_PLATFORM_ACTIONS_RPC, { data: MIXED, error: null });
     answer(SET_PLATFORM_ACTIONS_RPC, {
       data: null,
-      error: { code: '42501', message: 'optimizer: no edit access to this brand' },
+      error: {
+        code: '42501',
+        message: 'optimizer: no edit access to this brand',
+      },
     });
     const view = mount();
     fireEvent.click(await view.findByText('Pause or enable'));
@@ -187,7 +221,10 @@ describe('PlatformActionsField', () => {
     const metaOnly = mount();
     expect(await metaOnly.findByText(/holds no Google or TikTok campaigns/)).toBeTruthy();
     cleanup();
-    answer(GET_PLATFORM_ACTIONS_RPC, { data: null, error: { code: 'PGRST202' } });
+    answer(GET_PLATFORM_ACTIONS_RPC, {
+      data: null,
+      error: { code: 'PGRST202' },
+    });
     const older = mount();
     expect(await older.findByText(/aren’t available yet/)).toBeTruthy();
   });

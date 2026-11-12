@@ -1,3 +1,12 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import type { UiLocale } from '@/i18n/config';
+import {
+  type OptimizerDisplayTranslate,
+  optimizerDisplayCopy,
+} from '@/lib/paid-media/optimizationMetricPresentation';
 // Before and after the last cycle (Performance+ redesign, portafolio.html idea 09): what the
 // Optimizer did in its last cycle and what the window after it looks like against the window
 // before. It renders accounts instead of describing.
@@ -76,12 +85,29 @@ function utcDate(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
 }
 
-const MONTH = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' });
+const MONTH = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  timeZone: 'UTC',
+});
 
 /** "September 14 to 20", or "September 28 to October 4" across a month edge. */
-export function dayRangeLabel(from: string, to: string): string {
+export function dayRangeLabel(
+  from: string,
+  to: string,
+  locale: UiLocale = 'en',
+  translate?: OptimizerDisplayTranslate,
+): string {
   const start = utcDate(from);
   const end = utcDate(to);
+  if (translate || locale !== 'en') {
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()))
+      return translate ? translate('dateRange', { start: from, end: to }) : from + '–' + to;
+    return new Intl.DateTimeFormat(locale, {
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).formatRange(start, end);
+  }
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${from} to ${to}`;
   const startWords = `${MONTH.format(start)} ${start.getUTCDate()}`;
   if (
@@ -93,13 +119,31 @@ export function dayRangeLabel(from: string, to: string): string {
   return `${startWords} to ${MONTH.format(end)} ${end.getUTCDate()}`;
 }
 
-const MONTH_SHORT = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
+const MONTH_SHORT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  timeZone: 'UTC',
+});
 const monthShort = (date: Date): string => MONTH_SHORT.format(date);
 
 /** "week of Sep 14–20" for a week, "Sep 1–14" otherwise, "Sep 28–Oct 4" across a month edge. */
-export function shortRangeLabel(from: string, to: string, days: number): string {
+export function shortRangeLabel(
+  from: string,
+  to: string,
+  days: number,
+  locale: UiLocale = 'en',
+  translate?: OptimizerDisplayTranslate,
+): string {
   const start = utcDate(from);
   const end = utcDate(to);
+  if (translate || locale !== 'en') {
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return from + '–' + to;
+    const range = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).formatRange(start, end);
+    return days === 7 && translate ? translate('weekOf', { range }) : range;
+  }
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${from}–${to}`;
   const range =
     start.getUTCMonth() === end.getUTCMonth()
@@ -108,17 +152,26 @@ export function shortRangeLabel(from: string, to: string, days: number): string 
   return days === 7 ? `week of ${range}` : range;
 }
 
-function windowLabel(from: string, to: string, days: number): string {
-  const range = dayRangeLabel(from, to);
+function windowLabel(
+  from: string,
+  to: string,
+  days: number,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+): string {
+  const range = dayRangeLabel(from, to, locale, translate);
   return days === 7 ? `week of ${range}` : range;
 }
 
 /** "Saturday 19:05" in the account's zone. */
-export function cycleWhen(iso: string, timeZone?: string): string {
+export function cycleWhen(iso: string, timeZone?: string, locale: UiLocale = 'en'): string {
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return iso;
-  const day = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone }).format(at);
-  const time = new Intl.DateTimeFormat('en-US', {
+  const day = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : locale, {
+    weekday: 'long',
+    timeZone,
+  }).format(at);
+  const time = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : locale, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -130,9 +183,24 @@ export function cycleWhen(iso: string, timeZone?: string): string {
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
 /** "a, b and c" */
-function joinWords(parts: readonly string[]): string {
+function joinWords(
+  parts: readonly string[],
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): string {
+  if (translate)
+    return new Intl.ListFormat(locale, {
+      style: 'long',
+      type: 'conjunction',
+    }).format([...parts]);
   if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  return uiTranslate
+    ? uiTranslate('helper_c6a22df1409d', {
+        v0: parts.slice(0, -1).join(', '),
+        v1: parts[parts.length - 1],
+      })
+    : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 const PROPOSAL_WORDS: Record<string, [string, string]> = {
@@ -147,7 +215,11 @@ const PROPOSAL_WORDS: Record<string, [string, string]> = {
 };
 
 /** What the cycle put on the table: pending recommendations by kind, then budget moves. */
-function proposedWords(report: ParsedCycleRunReport): string | null {
+function proposedWords(
+  report: ParsedCycleRunReport,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+): string | null {
   const byKind = new Map<string, number>();
   for (const rec of report.recommendations) {
     if (rec.status !== 'pending') continue;
@@ -156,12 +228,34 @@ function proposedWords(report: ParsedCycleRunReport): string | null {
   const parts: string[] = [];
   for (const [kind, n] of byKind) {
     const words = PROPOSAL_WORDS[kind] ?? ['recommendation', 'recommendations'];
-    parts.push(plural(n, words[0], words[1]));
+    const keys = {
+      pause: 'proposalPause',
+      pause_ad: 'proposalAdPause',
+      restore_delivery: 'proposalRestore',
+      creative_refresh: 'proposalCreative',
+      variate_creative: 'proposalVariation',
+      seed_experiment: 'proposalExperiment',
+      audience_expand: 'proposalAudience',
+      settings: 'proposalSetting',
+    } as const;
+    const key = Object.hasOwn(keys, kind)
+      ? keys[kind as keyof typeof keys]
+      : 'proposalRecommendation';
+    parts.push(translate ? translate(key, { count: n }) : plural(n, words[0], words[1]));
   }
   const moves = report.latest_items.filter((item) => (item.change_abs ?? 0) !== 0).length;
-  if (moves > 0) parts.push(plural(moves, 'budget move', 'budget moves'));
+  if (moves > 0)
+    parts.push(
+      translate
+        ? translate('proposalBudget', { count: moves })
+        : plural(moves, 'budget move', 'budget moves'),
+    );
   if (parts.length === 0) return null;
-  return `${joinWords(parts)} proposed`;
+  return translate
+    ? translate('proposalSummary', {
+        parts: joinWords(parts, translate, locale),
+      })
+    : `${joinWords(parts)} proposed`;
 }
 
 /**
@@ -169,7 +263,12 @@ function proposedWords(report: ParsedCycleRunReport): string | null {
  * budget applies and status writes — stamped after the cycle. The events are the account's
  * own ledger, so a pause that went through outside the optimizer still counts.
  */
-function appliedWords(report: ParsedCycleRunReport, events: readonly TimelineEvent[]): string {
+function appliedWords(
+  report: ParsedCycleRunReport,
+  events: readonly TimelineEvent[],
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+): string {
   const cycleAt = Date.parse(report.latest_run?.cycle_ts ?? '');
   const since = (event: TimelineEvent) => {
     const at = Date.parse(event.ts);
@@ -184,24 +283,40 @@ function appliedWords(report: ParsedCycleRunReport, events: readonly TimelineEve
     .filter((event) => event.kind === 'status' && since(event))
     .reduce((sum, event) => sum + event.count, 0);
   const parts: string[] = [];
-  if (moves > 0) parts.push(plural(moves, 'budget move', 'budget moves'));
-  if (statuses > 0) parts.push(plural(statuses, 'status change', 'status changes'));
-  if (parts.length === 0) return 'none applied yet';
-  return `${joinWords(parts)} applied`;
+  if (moves > 0)
+    parts.push(
+      translate
+        ? translate('proposalBudget', { count: moves })
+        : plural(moves, 'budget move', 'budget moves'),
+    );
+  if (statuses > 0)
+    parts.push(
+      translate
+        ? translate('appliedStatus', { count: statuses })
+        : plural(statuses, 'status change', 'status changes'),
+    );
+  if (parts.length === 0) return optimizerDisplayCopy('noneApplied', translate);
+  return translate
+    ? translate('appliedSummary', {
+        parts: joinWords(parts, translate, locale),
+      })
+    : `${joinWords(parts)} applied`;
 }
 
 function lastCycleOf(
   report: ParsedCycleRunReport | null,
   events: readonly TimelineEvent[],
   timeZone?: string,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
 ): LastCycle | null {
   const at = report?.latest_run?.cycle_ts;
   if (!report || !at) return null;
   return {
     at,
-    when: cycleWhen(at, timeZone),
-    proposed: proposedWords(report),
-    applied: appliedWords(report, events),
+    when: cycleWhen(at, timeZone, locale),
+    proposed: proposedWords(report, translate, locale),
+    applied: appliedWords(report, events, translate, locale),
   };
 }
 
@@ -242,6 +357,8 @@ function windowTotals(
   point: CpaSeriesPoint,
   window: EngineWindow,
   metric: OptimizationMetricDefinition,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
 ): WindowTotals {
   const days = WINDOW_DAYS[window];
   const from = shiftDate(point.cycle_ts, -days);
@@ -249,8 +366,8 @@ function windowTotals(
   const spend = spendOf(point, window);
   const results = resultsOf(point, window);
   return {
-    label: windowLabel(from, to, days),
-    short: shortRangeLabel(from, to, days),
+    label: windowLabel(from, to, days, translate, locale),
+    short: shortRangeLabel(from, to, days, locale, translate),
     spend,
     results,
     cost: deriveEfficiency(spend, results, metric.denominatorMultiplier),
@@ -359,23 +476,42 @@ export function buildBeforeAfter(args: {
   /** Target in the metric's display unit. */
   target: number | null;
   timeZone?: string;
+  translate?: OptimizerDisplayTranslate;
+  locale?: UiLocale;
 }): BeforeAfter {
   const { range, metric } = args;
   const ordered = [...args.series]
     .filter((point) => !Number.isNaN(Date.parse(point.cycle_ts)))
     .sort(latestFirst);
   const latest = ordered[0] ?? null;
-  const lastCycle = lastCycleOf(args.report, args.events, args.timeZone);
+  const lastCycle = lastCycleOf(
+    args.report,
+    args.events,
+    args.timeZone,
+    args.translate,
+    args.locale,
+  );
   if (!latest) {
-    return { lastCycle, before: null, after: null, projection: null, source: 'none' };
+    return {
+      lastCycle,
+      before: null,
+      after: null,
+      projection: null,
+      source: 'none',
+    };
   }
   const window = range.window;
   const prior = cycleOneWindowBefore(ordered, latest, WINDOW_DAYS[window]);
   return {
     lastCycle,
-    before: prior ? windowTotals(prior, window, metric) : null,
-    after: windowTotals(latest, window, metric),
-    projection: projectionOf({ report: args.report, latest, metric, target: args.target }),
+    before: prior ? windowTotals(prior, window, metric, args.translate, args.locale) : null,
+    after: windowTotals(latest, window, metric, args.translate, args.locale),
+    projection: projectionOf({
+      report: args.report,
+      latest,
+      metric,
+      target: args.target,
+    }),
     source: 'engine',
   };
 }

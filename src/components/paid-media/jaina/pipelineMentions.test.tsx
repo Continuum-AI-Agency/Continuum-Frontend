@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { type PipelineCapabilityV2, pipelineCapabilityV2Schema } from '@continuum/contracts';
 import { QueryClient } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { PromptInput } from '@/components/chat/prompt-input';
+import { render } from '@/i18n/__tests__/render';
 import type { AgentMentionProvider } from '@/lib/agent-references';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
 import { PIPELINES_MENTION_FOLDER_KEY, withPipelineMentions } from './pipelineMentions';
@@ -36,7 +37,15 @@ const capability = (id: string, name: string, description?: string): PipelineCap
     ...(description ? { description } : {}),
     source: 'brand',
     inputs: [],
-    outputs: [{ output_id: 'hero', kind: 'asset', label: 'Hero', media: 'image', count: 1 }],
+    outputs: [
+      {
+        output_id: 'hero',
+        kind: 'asset',
+        label: 'Hero',
+        media: 'image',
+        count: 1,
+      },
+    ],
     execution_policy: {
       runtime: 'server',
       timeout_seconds: 300,
@@ -49,7 +58,11 @@ const capability = (id: string, name: string, description?: string): PipelineCap
       approval: 'within_limit',
       on_exceed: 'refuse',
     },
-    quality_policy: { minimum_score: 0.8, required_checks: ['polish'], on_failure: 'refuse' },
+    quality_policy: {
+      minimum_score: 0.8,
+      required_checks: ['polish'],
+      on_failure: 'refuse',
+    },
   });
 
 const HERO = capability(
@@ -67,7 +80,12 @@ const campaigns: AgentMentionProvider = {
       type: 'campaign',
       source: 'jaina',
       group: 'Campaigns',
-      reference: { id: 'c-1', type: 'campaign', label: 'Spring sale', source: 'jaina' },
+      reference: {
+        id: 'c-1',
+        type: 'campaign',
+        label: 'Spring sale',
+        source: 'jaina',
+      },
     },
   ],
   getChildSuggestions: async (parent) => [
@@ -76,7 +94,12 @@ const campaigns: AgentMentionProvider = {
       label: 'Lookalike 1%',
       type: 'adset',
       source: 'jaina',
-      reference: { id: 'as-1', type: 'adset', label: 'Lookalike 1%', source: 'jaina' },
+      reference: {
+        id: 'as-1',
+        type: 'adset',
+        label: 'Lookalike 1%',
+        source: 'jaina',
+      },
     },
   ],
 };
@@ -129,7 +152,9 @@ describe('Jaina @-picker Pipelines group', () => {
         type: 'pipeline',
         label: 'Product hero stills',
         source: 'jaina',
-        metadata: { description: 'Makes 9:16 product hero images for launches.' },
+        metadata: {
+          description: 'Makes 9:16 product hero images for launches.',
+        },
       }),
     ]);
   });

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
@@ -21,7 +22,6 @@ import {
   figureProps,
   formatCurrency,
 } from '@/components/paid-media/optimizer/format';
-import { NO_SINGLE_RESULT } from '@/components/paid-media/optimizer/sections/platforms/googleAdsOverviewModel';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -71,6 +71,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { useTimelineBlocks } from '@/hooks/timeline/useTimelineBlocks';
 import { useDCOActionLogs } from '@/hooks/useDCOActionLogs';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import {
   buildCampaignIndexAggregate,
   type CampaignIndexRecord,
@@ -78,6 +81,7 @@ import {
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { ActionLog } from '@/lib/types/dco';
 import { cn } from '@/lib/utils';
+import { humanizeStatus } from '../campaigns/EntityStatusPill';
 import type { AdSet } from './AdSetTable';
 import { mapActionLogsToTimelineMarkers } from './actionMarkers';
 import { campaignsSplit } from './campaignsSplit';
@@ -88,6 +92,7 @@ import {
   type CreativeAd,
   type OpenCreativeDetail,
 } from './creatives/types';
+import { dashboardMetricLabel } from './dashboardPresentation';
 import type {
   ObservabilityChartMarkerSelection,
   ObservabilityChartPoint,
@@ -215,17 +220,17 @@ const RAIL_HEIGHT_CLASS = 'h-full';
 const RAIL_SCROLL_HEIGHT_CLASS = 'h-full';
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, 'all'];
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
+function formatNumber(value: number, uiLocale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(uiLocale).format(value);
 }
 
-function formatPercent(value: number): string {
-  return `${value.toFixed(2)}%`;
+function formatPercent(value: number, uiLocale: UiLocale = 'en'): string {
+  return `${formatDecimal(value, 2, uiLocale)}%`;
 }
 
-function formatDeltaPercent(value: number): string {
+function formatDeltaPercent(value: number, uiLocale: UiLocale = 'en'): string {
   const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(1)}%`;
+  return `${sign}${formatDecimal(value, 1, uiLocale)}%`;
 }
 
 const MONEY_METRICS: ReadonlySet<MetricKey> = new Set(['spend', 'cpc', 'cpa']);
@@ -238,11 +243,12 @@ export function formatMetric(
   metric: MetricKey,
   value: number,
   currency: string | null | undefined,
+  uiLocale: UiLocale = 'en',
 ): string {
-  if (MONEY_METRICS.has(metric)) return formatCurrency(value, currency);
-  if (metric === 'roas') return value.toFixed(2);
-  if (metric === 'ctr') return formatPercent(value);
-  return formatNumber(value);
+  if (MONEY_METRICS.has(metric)) return formatCurrency(value, currency, uiLocale);
+  if (metric === 'roas') return formatDecimal(value, 2, uiLocale);
+  if (metric === 'ctr') return formatPercent(value, uiLocale);
+  return formatNumber(value, uiLocale);
 }
 
 const WINDOW_BY_DAY_COUNT: Readonly<Record<number, FigureWindow>> = {
@@ -292,39 +298,20 @@ export function MetricValue({
   currency: string | null | undefined;
   dayCount: number;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   if (value === null) {
     return (
-      <span className={className} title={NO_SINGLE_RESULT}>
-        —<span className="sr-only"> {NO_SINGLE_RESULT}</span>
+      <span className={className} title={uiText('dashboardNoSingleResult')}>
+        —<span className="sr-only"> {uiText('dashboardNoSingleResult')}</span>
       </span>
     );
   }
   return (
     <span className={className} {...metricFigure(scope, metric, value, currency, dayCount)}>
-      {formatMetric(metric, value, currency)}
+      {formatMetric(metric, value, currency, uiLocale)}
     </span>
   );
-}
-
-function labelForMetric(metric: MetricKey): string {
-  switch (metric) {
-    case 'spend':
-      return 'Spend';
-    case 'roas':
-      return 'ROAS';
-    case 'ctr':
-      return 'CTR';
-    case 'cpc':
-      return 'CPC';
-    case 'cpa':
-      return 'CPA';
-    case 'impressions':
-      return 'Impressions';
-    case 'clicks':
-      return 'Clicks';
-    default:
-      return metric;
-  }
 }
 
 // The change chip under a metric card. Coloured by what the move MEANS, not by its sign:
@@ -340,8 +327,14 @@ export function MetricCardDelta({
   metric: MetricKey;
   changePct: number | null | undefined;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   if (changePct == null) {
-    return <span className="text-2xs font-medium text-muted-foreground">No change data</span>;
+    return (
+      <span className="text-2xs font-medium text-muted-foreground">
+        {uiText('no_change_data_9d4f8b8')}
+      </span>
+    );
   }
   return (
     <span
@@ -350,7 +343,7 @@ export function MetricCardDelta({
         paidDeltaIsGood(metric, changePct) ? 'text-emerald-600' : 'text-destructive',
       )}
     >
-      {formatDeltaPercent(changePct)}
+      {formatDeltaPercent(changePct, uiLocale)}
     </span>
   );
 }
@@ -608,7 +601,10 @@ export function buildAggregatedMetricsContext(
 }
 
 function getDcoManagedCampaignIds(
-  timelineCampaigns: Array<{ id: string; ad_sets?: Array<{ ads?: unknown[] }> }>,
+  timelineCampaigns: Array<{
+    id: string;
+    ad_sets?: Array<{ ads?: unknown[] }>;
+  }>,
 ): string[] {
   const explicitManagedIds = timelineCampaigns
     .filter((campaign) =>
@@ -724,6 +720,11 @@ export function CampaignAdSetWorkspace({
   toolbarSlot,
   currency = null,
 }: CampaignAdSetWorkspaceProps) {
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const fetchErrorRef = React.useRef(formatUiError);
+  fetchErrorRef.current = formatUiError;
+  const uiText = useTranslations('scale');
   const [viewMode, setViewMode] = React.useState<ViewMode>('campaigns');
   const [campaignQuery, setCampaignQuery] = React.useState('');
   const [campaignSearchFilter, setCampaignSearchFilter] =
@@ -780,10 +781,16 @@ export function CampaignAdSetWorkspace({
   const supportsNestedPaidSurfaces = isMeta || isLinkedIn || isGoogleAds;
   // Each platform's own word for the level between campaign and ad. Calling a
   // Google ad group an "ad set" is wrong in the product's own UI.
-  const segmentLabel = isLinkedIn ? 'Segments' : isGoogleAds ? 'Ad Groups' : 'Ad Sets';
-  const segmentLabelSingular = isLinkedIn ? 'segment' : isGoogleAds ? 'ad group' : 'ad set';
-  const creativeLabel = isLinkedIn ? 'Creatives' : 'Ads';
-  const creativeLabelSingular = isLinkedIn ? 'creative' : 'ad';
+  const segmentKind = isLinkedIn ? 'linkedin' : isGoogleAds ? 'google' : 'other';
+  const segmentLabel = uiText('dashboardSegmentPlural', {
+    platform: segmentKind,
+  });
+  const segmentLabelSingular = uiText('dashboardSegmentSingular', {
+    platform: segmentKind,
+  });
+  const creativeLabelSingular = uiText('dashboardCreativeSingular', {
+    platform: segmentKind,
+  });
 
   const startDateIso = React.useMemo(() => `${timeWindow.since}T00:00:00.000Z`, [timeWindow.since]);
   const endDateIso = React.useMemo(() => `${timeWindow.until}T23:59:59.999Z`, [timeWindow.until]);
@@ -874,12 +881,18 @@ export function CampaignAdSetWorkspace({
       if (campaignSearchFilter === 'paused' && status === 'ACTIVE') return false;
       if (!normalized) return true;
 
-      const haystack = [campaign.name, campaign.id, campaign.status, campaign.objective ?? '']
+      const haystack = [
+        campaign.name,
+        campaign.id,
+        campaign.status,
+        humanizeStatus(campaign.status, uiText),
+        campaign.objective ?? '',
+      ]
         .join(' ')
         .toLowerCase();
       return haystack.includes(normalized);
     });
-  }, [campaignQuery, campaignSearchFilter, eligibleCampaigns]);
+  }, [campaignQuery, campaignSearchFilter, eligibleCampaigns, uiText]);
 
   const campaignById = React.useMemo(
     () => new Map(eligibleCampaigns.map((campaign) => [campaign.id, campaign])),
@@ -1041,9 +1054,16 @@ export function CampaignAdSetWorkspace({
           label: entity.label,
           color: compareColorByKey.get(entity.key) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
           points,
-          markers: mapActionLogsToTimelineMarkers(markerLogs, points, resolution, {
-            viewLayer: 'campaign',
-          }),
+          markers: mapActionLogsToTimelineMarkers(
+            markerLogs,
+            points,
+            resolution,
+            {
+              viewLayer: 'campaign',
+            },
+            uiText,
+            uiLocale,
+          ),
           variant: 'line' as const,
           emphasized: index === 0,
           dashed: index > 0,
@@ -1057,16 +1077,22 @@ export function CampaignAdSetWorkspace({
     indexCards,
     resolution,
     selectedCompareEntities,
+    uiText,
+    uiLocale,
   ]);
 
   const selectedCompareSummary = React.useMemo(() => {
     if (selectedCompareEntities.length === 0) return undefined;
     if (selectedCompareEntities.length === 1) {
       const [entity] = selectedCompareEntities;
-      return entity.type === 'index' ? `Index · ${entity.label}` : entity.label;
+      return entity.type === 'index'
+        ? uiText('dashboardIndexName', { name: entity.label })
+        : entity.label;
     }
-    return `${selectedCompareEntities.length} selected entities`;
-  }, [selectedCompareEntities]);
+    return uiText('dashboardSelectedEntities', {
+      count: selectedCompareEntities.length,
+    });
+  }, [selectedCompareEntities, uiText]);
 
   const aggregatedCampaignContext = React.useMemo(
     () => buildAggregatedMetricsContext(selectedCompareEntities),
@@ -1078,7 +1104,7 @@ export function CampaignAdSetWorkspace({
       const spark = mapTrendPoints(aggregatedCampaignContext?.trends, metric);
       return {
         metric,
-        label: labelForMetric(metric),
+        label: dashboardMetricLabel(metric, uiText),
         value: latestMetricValue(
           metric,
           aggregatedCampaignContext?.metrics,
@@ -1095,6 +1121,7 @@ export function CampaignAdSetWorkspace({
     aggregatedCampaignContext?.comparison,
     aggregatedCampaignContext?.metrics,
     aggregatedCampaignContext?.trends,
+    uiText,
   ]);
 
   const toggleCompareEntity = React.useCallback(
@@ -1266,6 +1293,7 @@ export function CampaignAdSetWorkspace({
           },
         }));
       } catch (error) {
+        console.error('[paid-dashboard] Failed to load ad sets', error);
         const fallback = timelineFallbackByCampaign[campaign.id] ?? [];
         const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
         const retryAfter = (error as { retryAfter?: number }).retryAfter;
@@ -1275,12 +1303,7 @@ export function CampaignAdSetWorkspace({
             status: fallback.length > 0 ? 'success' : 'error',
             adSets: fallback,
             source: fallback.length > 0 ? 'timeline' : undefined,
-            errorMessage:
-              fallback.length > 0
-                ? undefined
-                : error instanceof Error
-                  ? error.message
-                  : `Failed to load ${segmentLabel.toLowerCase()}`,
+            errorMessage: fallback.length > 0 ? undefined : fetchErrorRef.current(error),
             errorCode: fallback.length > 0 ? undefined : errorCode,
             retryAfter: fallback.length > 0 ? undefined : retryAfter,
           },
@@ -1294,7 +1317,6 @@ export function CampaignAdSetWorkspace({
       isLinkedIn,
       metricsRange,
       platform,
-      segmentLabel,
       supportsNestedPaidSurfaces,
       timelineFallbackByCampaign,
     ],
@@ -1397,10 +1419,7 @@ export function CampaignAdSetWorkspace({
           [adSetId]: {
             status: 'error',
             ads: prev[adSetId]?.ads ?? [],
-            errorMessage:
-              error instanceof Error
-                ? error.message
-                : `Failed to load ${creativeLabel.toLowerCase()}`,
+            errorMessage: fetchErrorRef.current(error),
             errorCode: (error as { errorCode?: IntegrationErrorCode }).errorCode,
             retryAfter: (error as { retryAfter?: number }).retryAfter,
           },
@@ -1409,15 +1428,7 @@ export function CampaignAdSetWorkspace({
         inFlightAdLoadsRef.current.delete(adSetId);
       }
     },
-    [
-      accountId,
-      adsByAdSet,
-      brandId,
-      creativeLabel,
-      metricsRange,
-      platform,
-      supportsNestedPaidSurfaces,
-    ],
+    [accountId, adsByAdSet, brandId, metricsRange, platform, supportsNestedPaidSurfaces],
   );
 
   React.useEffect(() => {
@@ -1512,12 +1523,18 @@ export function CampaignAdSetWorkspace({
     const normalized = campaignQuery.trim().toLowerCase();
     if (!normalized) return scopedAdSets;
     return scopedAdSets.filter((adSet) => {
-      const haystack = [adSet.name, adSet.id, adSet.campaignName, adSet.status]
+      const haystack = [
+        adSet.name,
+        adSet.id,
+        adSet.campaignName,
+        adSet.status,
+        humanizeStatus(adSet.status ?? '', uiText),
+      ]
         .join(' ')
         .toLowerCase();
       return haystack.includes(normalized);
     });
-  }, [campaignQuery, scopedAdSets]);
+  }, [campaignQuery, scopedAdSets, uiText]);
 
   React.useEffect(() => {
     if (scopedAdSets.length === 0) {
@@ -1644,7 +1661,7 @@ export function CampaignAdSetWorkspace({
       const spark = mapTrendPoints(aggregate?.trends, metric);
       return {
         metric,
-        label: labelForMetric(metric),
+        label: dashboardMetricLabel(metric, uiText),
         value: latestMetricValue(metric, aggregate?.metrics, aggregate?.trends),
         color: METRIC_CARD_COLORS[metric],
         spark,
@@ -1652,7 +1669,7 @@ export function CampaignAdSetWorkspace({
           metricPercentageChange(metric, aggregate?.comparison) ?? trendPercentageChange(spark),
       };
     });
-  }, [selectedScopedAdSets]);
+  }, [selectedScopedAdSets, uiText]);
 
   const adSetColorByKey = React.useMemo(() => {
     return new Map(
@@ -1710,12 +1727,21 @@ export function CampaignAdSetWorkspace({
       if (averaged.length > 0) {
         series.push({
           id: 'adset-avg',
-          label: `Selected Avg (${pointEntries.length})`,
+          label: uiText('dashboardSelectedAverage', {
+            count: pointEntries.length,
+          }),
           color: '#0ea5e9',
           points: averaged,
-          markers: mapActionLogsToTimelineMarkers(selectedAdSetActionLogs, averaged, resolution, {
-            viewLayer: markerViewLayer,
-          }),
+          markers: mapActionLogsToTimelineMarkers(
+            selectedAdSetActionLogs,
+            averaged,
+            resolution,
+            {
+              viewLayer: markerViewLayer,
+            },
+            uiText,
+            uiLocale,
+          ),
           variant: 'line',
           emphasized: true,
         });
@@ -1734,6 +1760,8 @@ export function CampaignAdSetWorkspace({
             entry.points,
             resolution,
             { viewLayer: markerViewLayer },
+            uiText,
+            uiLocale,
           ),
           variant: 'line',
           emphasized: !showSelectedAdSetAverage && index === 0,
@@ -1753,6 +1781,8 @@ export function CampaignAdSetWorkspace({
           first.points,
           resolution,
           { viewLayer: markerViewLayer },
+          uiText,
+          uiLocale,
         ),
         variant: 'line',
         emphasized: true,
@@ -1771,13 +1801,15 @@ export function CampaignAdSetWorkspace({
     selectedAdIds,
     showSelectedAdSetAverage,
     showSelectedAdSetLines,
+    uiText,
+    uiLocale,
   ]);
 
   const selectedAdSeries = React.useMemo<ObservabilityChartSeries[]>(() => {
     return selectedAds
       .map((ad, index) => ({
         id: `ad:${ad.id}`,
-        label: ad.creative?.title || ad.name || `Ad ${index + 1}`,
+        label: ad.creative?.title || ad.name || uiText('dashboardAdNumber', { index: index + 1 }),
         color: adColorById.get(ad.id) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
         points: mapTrendPoints(ad.trends, adSetMetric),
         variant: 'line' as const,
@@ -1785,7 +1817,7 @@ export function CampaignAdSetWorkspace({
         emphasized: false,
       }))
       .filter((entry) => entry.points.length > 0);
-  }, [adColorById, adSetMetric, selectedAds]);
+  }, [adColorById, adSetMetric, selectedAds, uiText]);
 
   const adSetChartSeries = React.useMemo(
     () => [...selectedAdSetSeries, ...selectedAdSeries],
@@ -1833,13 +1865,13 @@ export function CampaignAdSetWorkspace({
     Math.max(16, Math.min(filteredIndexCards.length, 3) * 12),
   );
   const activeScopeLabel = React.useMemo(() => {
-    if (!scope) return 'All';
+    if (!scope) return uiText('dashboardAll');
     if (scope.type === 'campaign') {
-      return campaignById.get(scope.id)?.name ?? 'Campaign';
+      return campaignById.get(scope.id)?.name ?? uiText('campaign_268286d');
     }
     const idx = campaignIndexes.find((entry) => entry.id === scope.id);
-    return idx ? `Index · ${idx.name}` : 'Index';
-  }, [campaignById, campaignIndexes, scope]);
+    return idx ? uiText('dashboardIndexName', { name: idx.name }) : uiText('dashboardIndex');
+  }, [campaignById, campaignIndexes, scope, uiText]);
 
   const applyAdSetSelectionById = React.useCallback(
     (adSetId: string): boolean => {
@@ -1916,7 +1948,10 @@ export function CampaignAdSetWorkspace({
         target.actionType &&
         (CREATIVE_SWAP_ACTION_TYPES as ReadonlyArray<string>).includes(target.actionType)
       ) {
-        setOpenCreativeDetail({ adId: target.adId, focusLogId: target.sourceLogId });
+        setOpenCreativeDetail({
+          adId: target.adId,
+          focusLogId: target.sourceLogId,
+        });
       }
     },
     [applyAdSetSelectionById, onSelectedCampaignChange, scope?.id, scope?.type],
@@ -1960,7 +1995,10 @@ export function CampaignAdSetWorkspace({
           pending.actionType &&
           (CREATIVE_SWAP_ACTION_TYPES as ReadonlyArray<string>).includes(pending.actionType)
         ) {
-          setOpenCreativeDetail({ adId: pending.adId, focusLogId: pending.sourceLogId });
+          setOpenCreativeDetail({
+            adId: pending.adId,
+            focusLogId: pending.sourceLogId,
+          });
         }
       }
     }
@@ -2008,7 +2046,7 @@ export function CampaignAdSetWorkspace({
         <div className="border-b border-border/70 bg-muted/20 px-2 py-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="truncate text-sm font-semibold">Explorer</div>
+              <div className="truncate text-sm font-semibold">{uiText('explorer_c39d646')}</div>
             </div>
 
             {/* The px gap on touch keeps each control's 44px hit area off its neighbours. */}
@@ -2027,7 +2065,7 @@ export function CampaignAdSetWorkspace({
                     onSelectedCampaignChange?.(undefined);
                   }}
                 >
-                  Campaigns
+                  {uiText('campaigns_30e9a08')}
                 </Button>
                 <Button
                   variant={viewMode === 'adsets' ? 'secondary' : 'ghost'}
@@ -2046,7 +2084,7 @@ export function CampaignAdSetWorkspace({
                   variant={resolution === 'daily' ? 'secondary' : 'ghost'}
                   onClick={() => handleResolutionChange('daily')}
                 >
-                  Daily
+                  {uiText('daily_b36c261')}
                 </Button>
                 <Button
                   size="sm"
@@ -2054,7 +2092,7 @@ export function CampaignAdSetWorkspace({
                   variant={resolution === 'hourly' ? 'secondary' : 'ghost'}
                   onClick={() => handleResolutionChange('hourly')}
                 >
-                  Hourly
+                  {uiText('hourly_eab0cd8')}
                 </Button>
               </div>
 
@@ -2062,7 +2100,7 @@ export function CampaignAdSetWorkspace({
                 <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
                   {HOURLY_SLICE_OPTIONS.map((slice) => {
                     const isActive = hourlySlice === slice;
-                    const label = slice === 'all' ? 'All' : `${slice}h`;
+                    const label = slice === 'all' ? uiText('all_a52ace4') : `${slice}h`;
                     return (
                       <Button
                         key={`hourly-slice-${label}`}
@@ -2080,7 +2118,7 @@ export function CampaignAdSetWorkspace({
 
               <div className="flex h-9 items-center gap-2 rounded-md border border-border/70 bg-background px-2.5">
                 <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
-                <span className="text-xs font-medium">Active only</span>
+                <span className="text-xs font-medium">{uiText('active_only_a9b5ed3')}</span>
               </div>
 
               <Button
@@ -2088,7 +2126,9 @@ export function CampaignAdSetWorkspace({
                 size="sm"
                 variant="ghost"
                 onClick={toggleRailCollapsed}
-                aria-label={isRailCollapsed ? 'Show rail' : 'Hide rail'}
+                aria-label={
+                  isRailCollapsed ? uiText('show_rail_12727bc') : uiText('hide_rail_4c4ec38')
+                }
                 aria-pressed={isRailCollapsed}
                 className="h-9 w-9 rounded-md border border-border/70 bg-background p-0"
               >
@@ -2109,7 +2149,8 @@ export function CampaignAdSetWorkspace({
                 <div className="flex h-full min-h-0 flex-col rounded-md border border-border/70 bg-card p-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
-                      {selectedCompareSummary ?? 'No selection'} · {labelForMetric(campaignMetric)}
+                      {selectedCompareSummary ?? uiText('no_selection_211f6bb')} ·{' '}
+                      {dashboardMetricLabel(campaignMetric, uiText)}
                     </span>
                   </div>
 
@@ -2143,7 +2184,7 @@ export function CampaignAdSetWorkspace({
                           <div className="mt-1 flex items-center justify-between gap-2">
                             {card.value === null ? (
                               <span className="text-2xs font-medium text-muted-foreground">
-                                {NO_SINGLE_RESULT}
+                                {uiText('dashboardNoSingleResult')}
                               </span>
                             ) : (
                               <MetricCardDelta metric={card.metric} changePct={card.changePct} />
@@ -2202,18 +2243,21 @@ export function CampaignAdSetWorkspace({
                             />
                           ) : (
                             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                              Add at least one campaign or index to visualize{' '}
-                              {labelForMetric(campaignMetric)}.
+                              {uiText.rich('sentence_911e03131d09', {
+                                v0: dashboardMetricLabel(campaignMetric, uiText),
+                              })}
                             </div>
                           )}
                         </div>
                       }
                     />
                     <ContextMenuContent className="w-56">
-                      <ContextMenuLabel>Chart actions</ContextMenuLabel>
+                      <ContextMenuLabel>{uiText('chart_actions_0312f61')}</ContextMenuLabel>
                       <ContextMenuSeparator />
                       <ContextMenuSub>
-                        <ContextMenuSubTrigger inset>Quick actions</ContextMenuSubTrigger>
+                        <ContextMenuSubTrigger inset>
+                          {uiText('quick_actions_1810407')}
+                        </ContextMenuSubTrigger>
                         <ContextMenuSubContent className="w-52">
                           <ContextMenuItem
                             onSelect={() => {
@@ -2222,32 +2266,36 @@ export function CampaignAdSetWorkspace({
                               setCampaignMetric('spend');
                             }}
                           >
-                            Reset compare view
+                            {uiText('reset_compare_view_e95a66f')}
                           </ContextMenuItem>
                           <ContextMenuItem onSelect={() => setSelectedCompareKeys([])}>
-                            Clear compared entities
+                            {uiText('clear_compared_entities_c6b0f93')}
                           </ContextMenuItem>
                         </ContextMenuSubContent>
                       </ContextMenuSub>
                       <ContextMenuSub>
-                        <ContextMenuSubTrigger inset>Display</ContextMenuSubTrigger>
+                        <ContextMenuSubTrigger inset>
+                          {uiText('display_34e108c')}
+                        </ContextMenuSubTrigger>
                         <ContextMenuSubContent className="w-52">
                           <ContextMenuCheckboxItem
                             checked={activeOnly}
                             onCheckedChange={(checked) => onActiveOnlyChange(checked === true)}
                           >
-                            Active only
+                            {uiText('active_only_a9b5ed3')}
                           </ContextMenuCheckboxItem>
                           <ContextMenuCheckboxItem
                             checked={decomposeIndexes}
                             onCheckedChange={(checked) => setDecomposeIndexes(checked === true)}
                           >
-                            Decompose indexes
+                            {uiText('decompose_indexes_46dd3b2')}
                           </ContextMenuCheckboxItem>
                         </ContextMenuSubContent>
                       </ContextMenuSub>
                       <ContextMenuSub>
-                        <ContextMenuSubTrigger inset>Resolution</ContextMenuSubTrigger>
+                        <ContextMenuSubTrigger inset>
+                          {uiText('resolution_d4055fa')}
+                        </ContextMenuSubTrigger>
                         <ContextMenuSubContent className="w-52">
                           <ContextMenuRadioGroup
                             value={resolution}
@@ -2255,13 +2303,19 @@ export function CampaignAdSetWorkspace({
                               handleResolutionChange(value as TimelineResolution)
                             }
                           >
-                            <ContextMenuRadioItem value="daily">Daily</ContextMenuRadioItem>
-                            <ContextMenuRadioItem value="hourly">Hourly</ContextMenuRadioItem>
+                            <ContextMenuRadioItem value="daily">
+                              {uiText('daily_b36c261')}
+                            </ContextMenuRadioItem>
+                            <ContextMenuRadioItem value="hourly">
+                              {uiText('hourly_eab0cd8')}
+                            </ContextMenuRadioItem>
                           </ContextMenuRadioGroup>
                         </ContextMenuSubContent>
                       </ContextMenuSub>
                       <ContextMenuSub>
-                        <ContextMenuSubTrigger inset>Metric</ContextMenuSubTrigger>
+                        <ContextMenuSubTrigger inset>
+                          {uiText('metric_2d275a7')}
+                        </ContextMenuSubTrigger>
                         <ContextMenuSubContent className="w-52">
                           <ContextMenuRadioGroup
                             value={campaignMetric}
@@ -2272,7 +2326,7 @@ export function CampaignAdSetWorkspace({
                                 key={`campaign-metric-${metric}`}
                                 value={metric}
                               >
-                                {labelForMetric(metric)}
+                                {dashboardMetricLabel(metric, uiText)}
                               </ContextMenuRadioItem>
                             ))}
                           </ContextMenuRadioGroup>
@@ -2296,9 +2350,9 @@ export function CampaignAdSetWorkspace({
                     <Input
                       value={campaignQuery}
                       onChange={(event) => setCampaignQuery(event.target.value)}
-                      placeholder="Search by name, id, status, objective..."
+                      placeholder={uiText('search_by_name_id_status_objective_d17c71d')}
                       className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
-                      aria-label="Search campaigns and indexes"
+                      aria-label={uiText('search_campaigns_and_indexes_7f41a99')}
                     />
                     <div
                       data-tour-id="paid-campaign-selector"
@@ -2309,21 +2363,21 @@ export function CampaignAdSetWorkspace({
                         variant={railEntityFilter === 'all' ? 'secondary' : 'ghost'}
                         onClick={showAllEntityOptions}
                       >
-                        All
+                        {uiText('all_a52ace4')}
                       </Button>
                       <Button
                         size="xs"
                         variant={railEntityFilter === 'indexes' ? 'secondary' : 'ghost'}
                         onClick={() => setRailEntityFilter('indexes')}
                       >
-                        Indexes
+                        {uiText('indexes_90b901a')}
                       </Button>
                       <Button
                         size="xs"
                         variant={railEntityFilter === 'campaigns' ? 'secondary' : 'ghost'}
                         onClick={() => setRailEntityFilter('campaigns')}
                       >
-                        Campaigns
+                        {uiText('campaigns_30e9a08')}
                       </Button>
                       <ContextMenu>
                         <ContextMenuTrigger
@@ -2334,10 +2388,12 @@ export function CampaignAdSetWorkspace({
                           }
                         />
                         <ContextMenuContent className="w-56">
-                          <ContextMenuLabel>Rail filters</ContextMenuLabel>
+                          <ContextMenuLabel>{uiText('rail_filters_3df2b16')}</ContextMenuLabel>
                           <ContextMenuSeparator />
                           <ContextMenuSub>
-                            <ContextMenuSubTrigger inset>Status</ContextMenuSubTrigger>
+                            <ContextMenuSubTrigger inset>
+                              {uiText('status_920e413')}
+                            </ContextMenuSubTrigger>
                             <ContextMenuSubContent className="w-48">
                               <ContextMenuRadioGroup
                                 value={campaignSearchFilter}
@@ -2345,16 +2401,22 @@ export function CampaignAdSetWorkspace({
                                   setCampaignSearchFilter(value as CampaignSearchFilter)
                                 }
                               >
-                                <ContextMenuRadioItem value="all">All</ContextMenuRadioItem>
-                                <ContextMenuRadioItem value="active">Active</ContextMenuRadioItem>
+                                <ContextMenuRadioItem value="all">
+                                  {uiText('all_a52ace4')}
+                                </ContextMenuRadioItem>
+                                <ContextMenuRadioItem value="active">
+                                  {uiText('active_9234069')}
+                                </ContextMenuRadioItem>
                                 <ContextMenuRadioItem value="paused">
-                                  Non-active
+                                  {uiText('non_active_4bd8384')}
                                 </ContextMenuRadioItem>
                               </ContextMenuRadioGroup>
                             </ContextMenuSubContent>
                           </ContextMenuSub>
                           <ContextMenuSub>
-                            <ContextMenuSubTrigger inset>Actions</ContextMenuSubTrigger>
+                            <ContextMenuSubTrigger inset>
+                              {uiText('actions_ff8059d')}
+                            </ContextMenuSubTrigger>
                             <ContextMenuSubContent className="w-48">
                               <ContextMenuItem
                                 onSelect={() => {
@@ -2363,7 +2425,7 @@ export function CampaignAdSetWorkspace({
                                   showAllEntityOptions();
                                 }}
                               >
-                                Reset rail filters
+                                {uiText('reset_rail_filters_6489e4e')}
                               </ContextMenuItem>
                             </ContextMenuSubContent>
                           </ContextMenuSub>
@@ -2381,11 +2443,13 @@ export function CampaignAdSetWorkspace({
                           className={cn(RAIL_SCROLL_HEIGHT_CLASS, 'max-h-none px-1 pb-1')}
                         >
                           {filteredIndexCards.length === 0 && filteredCampaigns.length === 0 ? (
-                            <CommandEmpty>No campaigns or indexes match.</CommandEmpty>
+                            <CommandEmpty>
+                              {uiText('no_campaigns_or_indexes_match_f22a92f')}
+                            </CommandEmpty>
                           ) : null}
 
                           {filteredIndexCards.length > 0 ? (
-                            <CommandGroup heading="Indexes">
+                            <CommandGroup heading={uiText('indexes_90b901a')}>
                               {filteredIndexCards.map((entry) => {
                                 const indexKey = `index:${entry.index.id}`;
                                 const isAdded = selectedCompareSet.has(indexKey);
@@ -2393,8 +2457,12 @@ export function CampaignAdSetWorkspace({
                                   <CommandItem
                                     key={`all-index-${entry.index.id}`}
                                     value={`index ${entry.index.name} ${entry.index.id}`}
+                                    keywords={[uiText('dashboardIndex')]}
                                     onSelect={() => {
-                                      setScope({ type: 'index', id: entry.index.id });
+                                      setScope({
+                                        type: 'index',
+                                        id: entry.index.id,
+                                      });
                                       toggleCompareEntity(indexKey);
                                       onSelectedCampaignChange?.(undefined);
                                     }}
@@ -2405,7 +2473,7 @@ export function CampaignAdSetWorkspace({
                                   >
                                     <span className="inline-flex min-w-0 items-center gap-1.5">
                                       <span className="rounded border border-sidebar-border/80 px-1 py-0 text-3xs uppercase text-sidebar-foreground/70">
-                                        IDX
+                                        {uiText('dashboardIndexAbbreviation')}
                                       </span>
                                       <span className="truncate font-medium">
                                         {entry.index.name}
@@ -2430,7 +2498,7 @@ export function CampaignAdSetWorkspace({
                           ) : null}
 
                           {filteredCampaigns.length > 0 ? (
-                            <CommandGroup heading="Campaigns">
+                            <CommandGroup heading={uiText('campaigns_30e9a08')}>
                               {filteredCampaigns.map((campaign) => {
                                 const key = `campaign:${campaign.id}`;
                                 const isAdded = selectedCompareSet.has(key);
@@ -2439,8 +2507,12 @@ export function CampaignAdSetWorkspace({
                                   <CommandItem
                                     key={`all-campaign-${campaign.id}`}
                                     value={`campaign ${campaign.name} ${campaign.id} ${campaign.status ?? ''}`}
+                                    keywords={[uiText('campaign_268286d')]}
                                     onSelect={() => {
-                                      setScope({ type: 'campaign', id: campaign.id });
+                                      setScope({
+                                        type: 'campaign',
+                                        id: campaign.id,
+                                      });
                                       toggleCompareEntity(key);
                                       onSelectedCampaignChange?.(campaign.id);
                                     }}
@@ -2487,10 +2559,10 @@ export function CampaignAdSetWorkspace({
                         >
                           <SidebarGroup className="pt-1">
                             <SidebarGroupLabel className="mb-1 flex h-auto items-center justify-between px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
-                              <span>Indexes</span>
+                              <span>{uiText('indexes_90b901a')}</span>
                               <span className="flex items-center gap-1.5 normal-case tracking-normal">
                                 <span className="text-2xs text-sidebar-foreground/60">
-                                  Decompose
+                                  {uiText('decompose_e064dcb')}
                                 </span>
                                 <Switch
                                   checked={decomposeIndexes}
@@ -2502,7 +2574,7 @@ export function CampaignAdSetWorkspace({
                               <ScrollArea className="h-full max-h-[220px] px-1 pb-1">
                                 {filteredIndexCards.length === 0 ? (
                                   <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
-                                    No indexes match.
+                                    {uiText('no_indexes_match_a8dbaff')}
                                   </div>
                                 ) : (
                                   <SidebarMenu>
@@ -2517,7 +2589,10 @@ export function CampaignAdSetWorkspace({
                                                 <button
                                                   type="button"
                                                   onClick={() => {
-                                                    setScope({ type: 'index', id: entry.index.id });
+                                                    setScope({
+                                                      type: 'index',
+                                                      id: entry.index.id,
+                                                    });
                                                     toggleCompareEntity(indexKey);
                                                     onSelectedCampaignChange?.(undefined);
                                                   }}
@@ -2547,17 +2622,24 @@ export function CampaignAdSetWorkspace({
                                             <ContextMenuContent className="w-52">
                                               <ContextMenuItem
                                                 onSelect={() => {
-                                                  setScope({ type: 'index', id: entry.index.id });
+                                                  setScope({
+                                                    type: 'index',
+                                                    id: entry.index.id,
+                                                  });
                                                   setViewMode('adsets');
                                                   onSelectedCampaignChange?.(undefined);
                                                 }}
                                               >
-                                                Open {segmentLabel.toLowerCase()}
+                                                {uiText.rich('sentence_e09866f46d16', {
+                                                  v0: segmentLabel.toLowerCase(),
+                                                })}
                                               </ContextMenuItem>
                                               <ContextMenuItem
                                                 onSelect={() => toggleCompareEntity(indexKey)}
                                               >
-                                                {isAdded ? 'Remove from compare' : 'Add to compare'}
+                                                {isAdded
+                                                  ? uiText('remove_from_compare_e46c7d3')
+                                                  : uiText('add_to_compare_4c4f51c')}
                                               </ContextMenuItem>
                                               <ContextMenuSeparator />
                                               <ContextMenuItem
@@ -2565,7 +2647,7 @@ export function CampaignAdSetWorkspace({
                                                   onEditCampaignIndex?.(entry.index.id)
                                                 }
                                               >
-                                                Edit index
+                                                {uiText('edit_index_e1f991e')}
                                               </ContextMenuItem>
                                               <ContextMenuItem
                                                 onSelect={() =>
@@ -2573,7 +2655,7 @@ export function CampaignAdSetWorkspace({
                                                 }
                                                 className="text-destructive"
                                               >
-                                                Delete index
+                                                {uiText('delete_index_aef2443')}
                                               </ContextMenuItem>
                                             </ContextMenuContent>
                                           </ContextMenu>
@@ -2633,7 +2715,10 @@ export function CampaignAdSetWorkspace({
                                                     />
                                                     <button
                                                       type="button"
-                                                      title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
+                                                      title={uiText('template_6b0468a0bb6a', {
+                                                        v0: segmentLabel.toLowerCase(),
+                                                        v1: campaign.name,
+                                                      })}
                                                       onClick={(event) => {
                                                         event.stopPropagation();
                                                         openCampaignSegments(campaign);
@@ -2666,13 +2751,13 @@ export function CampaignAdSetWorkspace({
                         <ResizablePanel defaultSize={100 - indexPanelDefaultSize} minSize={30}>
                           <SidebarGroup className="pt-1">
                             <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
-                              Campaigns
+                              {uiText('campaigns_30e9a08')}
                             </SidebarGroupLabel>
                             <SidebarGroupContent>
                               <ScrollArea className="h-full px-1 pb-1">
                                 {filteredCampaigns.length === 0 ? (
                                   <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
-                                    No campaigns match.
+                                    {uiText('no_campaigns_match_6c5dcba')}
                                   </div>
                                 ) : (
                                   <SidebarMenu>
@@ -2685,7 +2770,10 @@ export function CampaignAdSetWorkspace({
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setScope({ type: 'campaign', id: campaign.id });
+                                              setScope({
+                                                type: 'campaign',
+                                                id: campaign.id,
+                                              });
                                               toggleCompareEntity(key);
                                               onSelectedCampaignChange?.(campaign.id);
                                             }}
@@ -2720,7 +2808,10 @@ export function CampaignAdSetWorkspace({
                                             />
                                             <button
                                               type="button"
-                                              title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
+                                              title={uiText('template_6b0468a0bb6a', {
+                                                v0: segmentLabel.toLowerCase(),
+                                                v1: campaign.name,
+                                              })}
                                               onClick={(event) => {
                                                 event.stopPropagation();
                                                 openCampaignSegments(campaign);
@@ -2746,7 +2837,7 @@ export function CampaignAdSetWorkspace({
                     ) : hasIndexRail ? (
                       <SidebarGroup className="flex-1 min-h-0 pt-1">
                         <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
-                          Indexes
+                          {uiText('indexes_90b901a')}
                         </SidebarGroupLabel>
                         <SidebarGroupContent className="flex flex-1 flex-col min-h-0">
                           <ScrollArea className={cn(RAIL_SCROLL_HEIGHT_CLASS, 'px-1 pb-1')}>
@@ -2758,7 +2849,10 @@ export function CampaignAdSetWorkspace({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setScope({ type: 'index', id: entry.index.id });
+                                      setScope({
+                                        type: 'index',
+                                        id: entry.index.id,
+                                      });
                                       toggleCompareEntity(indexKey);
                                       onSelectedCampaignChange?.(undefined);
                                     }}
@@ -2788,7 +2882,7 @@ export function CampaignAdSetWorkspace({
                     ) : (
                       <SidebarGroup className="flex-1 min-h-0 pt-1">
                         <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
-                          Campaigns
+                          {uiText('campaigns_30e9a08')}
                         </SidebarGroupLabel>
                         <SidebarGroupContent className="flex flex-1 flex-col min-h-0">
                           <ScrollArea className={cn(RAIL_SCROLL_HEIGHT_CLASS, 'px-1 pb-1')}>
@@ -2801,7 +2895,10 @@ export function CampaignAdSetWorkspace({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setScope({ type: 'campaign', id: campaign.id });
+                                      setScope({
+                                        type: 'campaign',
+                                        id: campaign.id,
+                                      });
                                       toggleCompareEntity(key);
                                       onSelectedCampaignChange?.(campaign.id);
                                     }}
@@ -2836,7 +2933,10 @@ export function CampaignAdSetWorkspace({
                                     />
                                     <button
                                       type="button"
-                                      title={`Open ${segmentLabel.toLowerCase()} for ${campaign.name}`}
+                                      title={uiText('template_6b0468a0bb6a', {
+                                        v0: segmentLabel.toLowerCase(),
+                                        v1: campaign.name,
+                                      })}
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         openCampaignSegments(campaign);
@@ -2878,22 +2978,34 @@ export function CampaignAdSetWorkspace({
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold">
                           {selectedScopedAdSets.length === 0
-                            ? `Select ${segmentLabel.toLowerCase()}`
+                            ? uiText('template_84805b3f51e7', {
+                                v0: segmentLabel.toLowerCase(),
+                              })
                             : selectedScopedAdSets.length === 1
                               ? selectedScopedAdSets[0]?.name
-                              : `Selected ${segmentLabel} (${selectedScopedAdSets.length})`}
+                              : uiText('template_7366bea8f75d', {
+                                  v0: segmentLabel,
+                                  v1: selectedScopedAdSets.length,
+                                })}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {selectedScopedAdSets.length} selected ·{' '}
-                          {showSelectedAdSetAverage ? 'avg on' : 'avg off'} ·{' '}
-                          {showSelectedAdSetLines ? 'lines on' : 'lines off'} ·{' '}
-                          {isAdViewActive
-                            ? `${creativeLabelSingular} level (${selectedAdIds.length}/3)`
-                            : `${segmentLabelSingular} level`}
+                          {uiText.rich('sentence_20732d1bb2c8', {
+                            count: selectedScopedAdSets.length,
+                            average: showSelectedAdSetAverage
+                              ? uiText('avg_on_80f74c9')
+                              : uiText('avg_off_f674a5c'),
+                            lines: showSelectedAdSetLines
+                              ? uiText('lines_on_6e39819')
+                              : uiText('lines_off_b1035be'),
+                            adView: isAdViewActive ? 'yes' : 'no',
+                            creativeLevel: creativeLabelSingular,
+                            segmentLevel: segmentLabelSingular,
+                            selectedAds: selectedAdIds.length,
+                          })}
                         </div>
                       </div>
                       <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
-                        {labelForMetric(adSetMetric)}
+                        {dashboardMetricLabel(adSetMetric, uiText)}
                       </span>
                     </div>
 
@@ -2978,21 +3090,31 @@ export function CampaignAdSetWorkspace({
                             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                               {isAdSetLoading ? (
                                 <span className="inline-flex items-center gap-2">
-                                  <RotateCw className="h-4 w-4 animate-spin" />
-                                  Loading {segmentLabelSingular} timeline...
+                                  {uiText.rich('sentence_bb90c1aa8d01', {
+                                    v0: () => <RotateCw className="h-4 w-4 animate-spin" />,
+                                    v1: segmentLabelSingular,
+                                  })}
                                 </span>
                               ) : (
-                                `No timeline data for selected ${segmentLabel.toLowerCase()}.`
+                                uiText('template_bb3f0c785c7a', {
+                                  v0: segmentLabel.toLowerCase(),
+                                })
                               )}
                             </div>
                           )}
                         </div>
                       </ContextMenuTrigger>
                       <ContextMenuContent className="w-56">
-                        <ContextMenuLabel>{segmentLabelSingular} view actions</ContextMenuLabel>
+                        <ContextMenuLabel>
+                          {uiText.rich('sentence_788d27386394', {
+                            v0: segmentLabelSingular,
+                          })}
+                        </ContextMenuLabel>
                         <ContextMenuSeparator />
                         <ContextMenuSub>
-                          <ContextMenuSubTrigger inset>Quick actions</ContextMenuSubTrigger>
+                          <ContextMenuSubTrigger inset>
+                            {uiText('quick_actions_1810407')}
+                          </ContextMenuSubTrigger>
                           <ContextMenuSubContent className="w-52">
                             <ContextMenuItem
                               onSelect={() => {
@@ -3007,7 +3129,7 @@ export function CampaignAdSetWorkspace({
                                 setFocusedAdSetKey(key);
                               }}
                             >
-                              Reset view
+                              {uiText('reset_view_ce89ae8')}
                             </ContextMenuItem>
                             <ContextMenuItem
                               onSelect={() => {
@@ -3018,7 +3140,7 @@ export function CampaignAdSetWorkspace({
                                 if (keys.length > 0) setFocusedAdSetKey(keys[0]);
                               }}
                             >
-                              Select all visible
+                              {uiText('select_all_visible_b48c032')}
                             </ContextMenuItem>
                             <ContextMenuItem
                               onSelect={() => {
@@ -3026,12 +3148,14 @@ export function CampaignAdSetWorkspace({
                                 setSelectedAdIds([]);
                               }}
                             >
-                              Clear selected
+                              {uiText('clear_selected_451b37c')}
                             </ContextMenuItem>
                           </ContextMenuSubContent>
                         </ContextMenuSub>
                         <ContextMenuSub>
-                          <ContextMenuSubTrigger inset>Display</ContextMenuSubTrigger>
+                          <ContextMenuSubTrigger inset>
+                            {uiText('display_34e108c')}
+                          </ContextMenuSubTrigger>
                           <ContextMenuSubContent className="w-52">
                             <ContextMenuCheckboxItem
                               checked={showSelectedAdSetAverage}
@@ -3039,7 +3163,7 @@ export function CampaignAdSetWorkspace({
                                 setShowSelectedAdSetAverage(checked === true)
                               }
                             >
-                              Show averaged line
+                              {uiText('show_averaged_line_7eb508f')}
                             </ContextMenuCheckboxItem>
                             <ContextMenuCheckboxItem
                               checked={showSelectedAdSetLines}
@@ -3047,12 +3171,14 @@ export function CampaignAdSetWorkspace({
                                 setShowSelectedAdSetLines(checked === true)
                               }
                             >
-                              Show individual lines
+                              {uiText('show_individual_lines_c5e261c')}
                             </ContextMenuCheckboxItem>
                           </ContextMenuSubContent>
                         </ContextMenuSub>
                         <ContextMenuSub>
-                          <ContextMenuSubTrigger inset>Metric</ContextMenuSubTrigger>
+                          <ContextMenuSubTrigger inset>
+                            {uiText('metric_2d275a7')}
+                          </ContextMenuSubTrigger>
                           <ContextMenuSubContent className="w-52">
                             <ContextMenuRadioGroup
                               value={adSetMetric}
@@ -3060,7 +3186,7 @@ export function CampaignAdSetWorkspace({
                             >
                               {METRICS.map((metric) => (
                                 <ContextMenuRadioItem key={`adset-metric-${metric}`} value={metric}>
-                                  {labelForMetric(metric)}
+                                  {dashboardMetricLabel(metric, uiText)}
                                 </ContextMenuRadioItem>
                               ))}
                             </ContextMenuRadioGroup>
@@ -3083,19 +3209,21 @@ export function CampaignAdSetWorkspace({
                       className="h-7 w-full justify-start border-sidebar-border/70 bg-sidebar text-xs text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
                       <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-                      Back to campaigns
+                      {uiText('back_to_campaigns_48ab8df')}
                     </Button>
                     <Input
                       value={campaignQuery}
                       onChange={(event) => setCampaignQuery(event.target.value)}
-                      placeholder={`Search scope and ${segmentLabel.toLowerCase()}...`}
+                      placeholder={uiText('template_6a82ee90d935', {
+                        v0: segmentLabel.toLowerCase(),
+                      })}
                       className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
                     />
                     <Breadcrumb>
                       <BreadcrumbList className="text-xs">
                         <BreadcrumbItem>
                           <BreadcrumbPage className="text-xs text-sidebar-foreground/70">
-                            Campaigns
+                            {uiText('campaigns_30e9a08')}
                           </BreadcrumbPage>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator />
@@ -3117,13 +3245,13 @@ export function CampaignAdSetWorkspace({
                   <SidebarContent className="gap-0 overflow-hidden pb-2">
                     <SidebarGroup className="pt-1">
                       <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
-                        Scope
+                        {uiText('scope_b073f6c')}
                       </SidebarGroupLabel>
                       <SidebarGroupContent>
                         <ScrollArea className="h-[min(11rem,24dvh)] px-1 pb-1">
                           {scopeRailItems.length === 0 ? (
                             <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
-                              No available scope.
+                              {uiText('no_available_scope_8d99551')}
                             </div>
                           ) : (
                             <SidebarMenu>
@@ -3141,7 +3269,10 @@ export function CampaignAdSetWorkspace({
                                         if (item.type === 'campaign') {
                                           const campaignId =
                                             item.campaignId ?? item.key.replace('campaign:', '');
-                                          setScope({ type: 'campaign', id: campaignId });
+                                          setScope({
+                                            type: 'campaign',
+                                            id: campaignId,
+                                          });
                                           onSelectedCampaignChange?.(campaignId);
                                           return;
                                         }
@@ -3174,7 +3305,9 @@ export function CampaignAdSetWorkspace({
                                         ) : null}
                                         <span className="truncate text-sm">
                                           {item.type === 'index'
-                                            ? `Index · ${item.label}`
+                                            ? uiText('template_80cc186075d5', {
+                                                v0: item.label,
+                                              })
                                             : item.label}
                                         </span>
                                       </span>
@@ -3200,7 +3333,10 @@ export function CampaignAdSetWorkspace({
 
                     <SidebarGroup className="pt-1">
                       <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-xs uppercase tracking-wide text-sidebar-foreground/70">
-                        {segmentLabel} ({selectedScopedAdSets.length} selected)
+                        {uiText.rich('sentence_108622cddecc', {
+                          v0: segmentLabel,
+                          v1: selectedScopedAdSets.length,
+                        })}
                       </SidebarGroupLabel>
                       <SidebarGroupContent>
                         <ScrollArea className="h-[min(20rem,38dvh)] px-1 pb-1">
@@ -3215,7 +3351,9 @@ export function CampaignAdSetWorkspace({
                             </div>
                           ) : filteredScopedAdSets.length === 0 ? (
                             <div className="px-2 py-1.5 text-xs text-sidebar-foreground/60">
-                              No {segmentLabel.toLowerCase()} for this scope.
+                              {uiText.rich('sentence_d18d50ed971e', {
+                                v0: segmentLabel.toLowerCase(),
+                              })}
                             </div>
                           ) : (
                             <SidebarMenu>
@@ -3307,14 +3445,20 @@ export function CampaignAdSetWorkspace({
                       retryAfter={focusedAdSetAdsState?.retryAfter}
                       platform={platform}
                       segmentLabelSingular={segmentLabelSingular}
-                      onRetry={() => void loadAdsForAdSet(focusedScopedAdSet.id, { force: true })}
+                      onRetry={() =>
+                        void loadAdsForAdSet(focusedScopedAdSet.id, {
+                          force: true,
+                        })
+                      }
                       selectedIds={selectedAdIdSet}
                       selectionCount={selectedAdIds.length}
                       selectionLimit={3}
                       onToggleSelect={toggleAdSelection}
                       activeMetric={adSetMetric}
-                      formatMetric={(metric, value) => formatMetric(metric, value, currency)}
-                      labelForMetric={labelForMetric}
+                      formatMetric={(metric, value) =>
+                        formatMetric(metric, value, currency, uiLocale)
+                      }
+                      labelForMetric={(metric) => dashboardMetricLabel(metric, uiText)}
                       logs={actionLogs}
                       onOpenDetail={setOpenCreativeDetail}
                     />

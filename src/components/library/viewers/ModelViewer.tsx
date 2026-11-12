@@ -17,6 +17,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -46,7 +47,12 @@ export type ModelViewerProps = {
   onAnchor?: (anchor: ViewerAnchor) => void;
 };
 
-type Flight = { from: Orbit; to: Orbit; startedAt: number; onLanded: () => void };
+type Flight = {
+  from: Orbit;
+  to: Orbit;
+  startedAt: number;
+  onLanded: () => void;
+};
 
 type Stage = {
   renderer: THREE.WebGLRenderer;
@@ -134,7 +140,12 @@ function bareGeometry(geometry: THREE.BufferGeometry, pointCloud: boolean): THRE
   if (pointCloud) {
     return new THREE.Points(
       geometry,
-      new THREE.PointsMaterial({ color, vertexColors: coloured, size: 2, sizeAttenuation: false }),
+      new THREE.PointsMaterial({
+        color,
+        vertexColors: coloured,
+        size: 2,
+        sizeAttenuation: false,
+      }),
     );
   }
   if (!geometry.hasAttribute('normal')) geometry.computeVertexNormals();
@@ -174,7 +185,11 @@ function frameModel(
   controls.target.set(0, 0, 0);
   controls.minDistance = radius * 0.3;
   controls.maxDistance = radius * 10;
-  placeCamera(camera, controls.target, { azimuthDeg: 35, polarDeg: 70, distance });
+  placeCamera(camera, controls.target, {
+    azimuthDeg: 35,
+    polarDeg: 70,
+    distance,
+  });
   controls.update();
   controls.saveState();
 }
@@ -317,20 +332,32 @@ export function ModelViewer({
   review,
   onAnchor,
 }: ModelViewerProps): JSX.Element {
+  const translateUi = useUiTranslations('library');
+
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Stage | null>(null);
   // Refs, not effect state: StrictMode's second effect pass must not post a second poster.
   const posterSentRef = useRef(false);
   const restoredPinRef = useRef<string | null>(null);
-  const latest = useRef({ capturePoster, onPoster, onAnchor, onSelectPin: review?.onSelectPin });
+  const latest = useRef({
+    capturePoster,
+    onPoster,
+    onAnchor,
+    onSelectPin: review?.onSelectPin,
+  });
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [autoRotate, setAutoRotate] = useState(true);
   const [frozen, setFrozen] = useState<Frozen | null>(null);
   const { url, format } = source;
 
   useEffect(() => {
-    latest.current = { capturePoster, onPoster, onAnchor, onSelectPin: review?.onSelectPin };
+    latest.current = {
+      capturePoster,
+      onPoster,
+      onAnchor,
+      onSelectPin: review?.onSelectPin,
+    };
   });
 
   // Turning away from a restored pin (or leaving comment mode) lets go of its thread, so
@@ -390,7 +417,14 @@ export function ModelViewer({
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
     controls.autoRotateSpeed = 1.5;
-    const stage: Stage = { renderer, scene, camera, controls, flight: null, settling: false };
+    const stage: Stage = {
+      renderer,
+      scene,
+      camera,
+      controls,
+      flight: null,
+      settling: false,
+    };
     stageRef.current = stage;
 
     const resize = () => {
@@ -646,7 +680,8 @@ export function ModelViewer({
       {status === 'error' && (
         <div className="absolute inset-0 flex items-center justify-center p-8">
           <p data-testid="model-viewer-error" className="text-xs text-muted-foreground">
-            Could not open this 3D model.
+            {' '}
+            {translateUi('could_not_open_this_3d_model_809e37b5')}{' '}
           </p>
         </div>
       )}
@@ -655,7 +690,9 @@ export function ModelViewer({
         <div className="absolute inset-0 z-10">
           <ImageAnnotationLayer
             src={frozen.src}
-            alt={`${label}, frozen view`}
+            alt={translateUi('value0_frozen_view_fae4f42c', {
+              value0: String(label),
+            })}
             pins={pinsInView}
             onSelectPin={review.onSelectPin}
             posting={review.posting}
@@ -681,7 +718,11 @@ export function ModelViewer({
           {!frozen && (
             <>
               <PillButton
-                label={autoRotate ? 'Pause auto-rotate' : 'Auto-rotate'}
+                label={
+                  autoRotate
+                    ? translateUi('pause_auto_rotate_12cfd870')
+                    : translateUi('auto_rotate_e533aab8')
+                }
                 testId="model-viewer-autorotate"
                 pressed={autoRotate}
                 onClick={() => setAutoRotate((on) => !on)}
@@ -689,23 +730,35 @@ export function ModelViewer({
                 {autoRotate ? <Pause className="size-3.5" /> : <RotateCw className="size-3.5" />}
               </PillButton>
               <PillButton
-                label="Zoom out"
+                label={translateUi('zoom_out_bc7b631a')}
                 testId="model-viewer-zoom-out"
                 onClick={() => dolly(1.25)}
               >
                 <ZoomOut className="size-3.5" />
               </PillButton>
-              <PillButton label="Zoom in" testId="model-viewer-zoom-in" onClick={() => dolly(0.8)}>
+              <PillButton
+                label={translateUi('zoom_in_0e47f09a')}
+                testId="model-viewer-zoom-in"
+                onClick={() => dolly(0.8)}
+              >
                 <ZoomIn className="size-3.5" />
               </PillButton>
-              <PillButton label="Reset view" testId="model-viewer-reset" onClick={resetView}>
+              <PillButton
+                label={translateUi('reset_view_ce89ae82')}
+                testId="model-viewer-reset"
+                onClick={resetView}
+              >
                 <RotateCcw className="size-3.5" />
               </PillButton>
             </>
           )}
           {review && (
             <PillButton
-              label={frozen ? 'Back to the 3D view' : 'Comment on this view'}
+              label={
+                frozen
+                  ? translateUi('back_to_the_3d_view_46b43258')
+                  : translateUi('comment_on_this_view_c7a9a287')
+              }
               testId="model-viewer-comment"
               pressed={frozen !== null}
               onClick={() => (frozen ? leaveComment() : freeze(null))}

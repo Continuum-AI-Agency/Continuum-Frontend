@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -206,11 +207,22 @@ mock.module('../useOptimizerData', () => ({
     update: { mutateAsync: async () => null, isPending: false },
   }),
   useApplyApproved: () => ({ mutate: applyApprovedMutate, isPending: false }),
-  useApplyAdsetStatus: () => ({ mutate: applyAdsetStatusMutate, isPending: false }),
+  useApplyAdsetStatus: () => ({
+    mutate: applyAdsetStatusMutate,
+    isPending: false,
+  }),
   // Reads the queue only touches when a creative row is expanded; empty here.
-  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false, targeting: [] }),
+  useOptimizerAccountSnapshots: () => ({
+    data: [],
+    isLoading: false,
+    targeting: [],
+  }),
   useOptimizerAdsetAds: () => ({ data: [], isLoading: false }),
-  useOptimizerCreativeSwapJobs: () => ({ data: [], isLoading: false, refetch: () => undefined }),
+  useOptimizerCreativeSwapJobs: () => ({
+    data: [],
+    isLoading: false,
+    refetch: () => undefined,
+  }),
   useOptimizerPortfolioAudiences: () => ({ data: [], isLoading: false }),
   useFlashCreativeMutations: () => ({
     request: { mutateAsync: async () => 'job', isPending: false },
@@ -221,7 +233,10 @@ mock.module('../useOptimizerData', () => ({
   }),
   useAdAccountCurrency: () => activeAccountCurrency,
   fetchAdsetAds: async () => [],
-  useOptimizerAudienceProposals: () => ({ data: activeProposals, isLoading: false }),
+  useOptimizerAudienceProposals: () => ({
+    data: activeProposals,
+    isLoading: false,
+  }),
   useAudienceProposalMutations: () => ({
     request: { mutate: () => undefined, isPending: false },
     approve: { mutate: () => undefined, isPending: false },
@@ -232,10 +247,16 @@ mock.module('../useOptimizerData', () => ({
     refresh: () => undefined,
   }),
   useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
-  useRevertApply: () => ({ mutateAsync: async () => ({ ok: true }), isPending: false }),
+  useRevertApply: () => ({
+    mutateAsync: async () => ({ ok: true }),
+    isPending: false,
+  }),
   // A platform card's own control asks the service through these; nothing here confirms one.
   useApplyOptimizerActions: () => ({ mutateAsync: applyActionsMutate }),
-  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
+  useRevertOptimizerAction: () => ({
+    mutateAsync: async () => null,
+    isPending: false,
+  }),
 }));
 
 // The confirm AlertDialog is a Radix portal + focus-scope; render it as plain, open-gated
@@ -511,7 +532,9 @@ describe('OptimizerActionsPortfolioGroup — a pause on a roster that left Meta'
   it('replaces Approve with why it cannot be approved', () => {
     renderGroup(gone);
     expect(
-      screen.queryByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+      screen.queryByRole('button', {
+        name: /^Approve pause ad set for Pause Set$/,
+      }),
     ).toBeNull();
     expect(screen.getByTestId('queue-row-blocked').textContent).toBe(
       "Withdrawn: this portfolio's ad sets are no longer on Meta, so there is nothing to pause.",
@@ -525,7 +548,9 @@ describe('OptimizerActionsPortfolioGroup — a pause on a roster that left Meta'
   it('keeps Approve on a pause whose roster still stands', () => {
     renderGroup();
     expect(
-      screen.getByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+      screen.getByRole('button', {
+        name: /^Approve pause ad set for Pause Set$/,
+      }),
     ).toBeDefined();
     expect(screen.queryByTestId('queue-row-blocked')).toBeNull();
   });
@@ -554,7 +579,9 @@ describe('OptimizerActionsPortfolioGroup — a pause in a portfolio with no Meta
   it('replaces Approve with why it cannot be approved here', () => {
     renderGroup({ platforms: ['google_ads'] });
     expect(
-      screen.queryByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+      screen.queryByRole('button', {
+        name: /^Approve pause ad set for Pause Set$/,
+      }),
     ).toBeNull();
     expect(screen.getByTestId('queue-row-blocked').textContent).toBe(
       'Not available here: the Optimizer pauses only Meta ad sets. Pause this campaign in Google Ads if you agree.',
@@ -566,7 +593,9 @@ describe('OptimizerActionsPortfolioGroup — a pause in a portfolio with no Meta
   it('keeps Approve on a pause in a portfolio that holds Meta', () => {
     renderGroup({ platforms: ['meta', 'google_ads'] });
     expect(
-      screen.getByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+      screen.getByRole('button', {
+        name: /^Approve pause ad set for Pause Set$/,
+      }),
     ).toBeDefined();
   });
 });
@@ -720,7 +749,9 @@ describe('OptimizerActionsPortfolioGroup — the unified queue', () => {
 
   it('disables approval in observe mode and explains why', () => {
     renderGroup({ apply_mode: 'observe' });
-    const approve = screen.getByRole('button', { name: /approve all/i }) as HTMLButtonElement;
+    const approve = screen.getByRole('button', {
+      name: /approve all/i,
+    }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     expect(document.body.textContent).toContain('Observe');
   });
@@ -781,7 +812,9 @@ describe('OptimizerActionsPortfolioGroup — confirm-dialog execute (Meta writes
     const applyBtn = screen.getByRole('button', {
       name: /apply 1 budget move/i,
     }) as HTMLButtonElement;
-    const pauseBtn = screen.getByRole('button', { name: /pause 1 ad set/i }) as HTMLButtonElement;
+    const pauseBtn = screen.getByRole('button', {
+      name: /pause 1 ad set/i,
+    }) as HTMLButtonElement;
     expect(applyBtn.disabled).toBe(true);
     expect(pauseBtn.disabled).toBe(true);
     fireEvent.click(applyBtn);
@@ -795,7 +828,11 @@ describe('OptimizerActionsPortfolioGroup — confirm-dialog execute (Meta writes
     activeReport = executableReport;
     applyApprovedHandler = (_payload, opts) => {
       opts.onSuccess?.(
-        ApplyRunResponseSchema.parse({ ok: false, dryRun: false, reason: 'observe_mode' }),
+        ApplyRunResponseSchema.parse({
+          ok: false,
+          dryRun: false,
+          reason: 'observe_mode',
+        }),
       );
     };
     renderGroup();
@@ -855,7 +892,9 @@ describe('OptimizerActionsPortfolioGroup — confirm-dialog execute (Meta writes
     // No money-write affordance exists for it, and it cannot be approved from this surface.
     expect(screen.queryByRole('button', { name: /budget move/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /ad set/i })).toBeNull();
-    const approveAll = screen.getByRole('button', { name: /approve all/i }) as HTMLButtonElement;
+    const approveAll = screen.getByRole('button', {
+      name: /approve all/i,
+    }) as HTMLButtonElement;
     expect(approveAll.disabled).toBe(true);
   });
 });
@@ -872,7 +911,11 @@ const rebalanceReport = {
     apply_mode: 'recommend',
     status: 'active',
   },
-  latest_run: { id: RUN_ID, cycle_ts: '2026-07-20T00:00:00Z', mode: 'balanced' },
+  latest_run: {
+    id: RUN_ID,
+    cycle_ts: '2026-07-20T00:00:00Z',
+    mode: 'balanced',
+  },
   latest_items: [
     {
       adset_id: 'as-cold',
@@ -1596,7 +1639,11 @@ describe('a cross-platform budget move in the queue', () => {
   });
 
   it('a portfolio whose only work is a move still shows its queue', () => {
-    activeReport = { ...report, latest_items: [], recommendations: [moveRec({ id: MOVE_REC_ID })] };
+    activeReport = {
+      ...report,
+      latest_items: [],
+      recommendations: [moveRec({ id: MOVE_REC_ID })],
+    };
     renderGroup();
     expect(screen.getByTestId('budget-move-row')).toBeTruthy();
   });
@@ -1658,7 +1705,11 @@ describe('a cross-platform budget move in the queue', () => {
 describe('the Actions tray', () => {
   it('approves one row from its own button through the same batch path', () => {
     renderGroup();
-    fireEvent.click(screen.getByRole('button', { name: 'Approve pause ad set for Pause Set' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Approve pause ad set for Pause Set',
+      }),
+    );
     expect(setStatusesMutate).toHaveBeenCalledTimes(1);
     const [payload] = setStatusesMutate.mock.calls[0] as [{ rec_ids: string[]; status: string }];
     expect(payload).toEqual({ rec_ids: [PAUSE_ID], status: 'approved' });
@@ -1666,12 +1717,19 @@ describe('the Actions tray', () => {
 
   it('dismisses one recommendation as a rejected decision, never a budget move', () => {
     renderGroup();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss pause ad set for Pause Set' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Dismiss pause ad set for Pause Set',
+      }),
+    );
     expect(setStatusMutate).toHaveBeenCalledTimes(1);
     const [payload] = setStatusMutate.mock.calls[0] as [
       { recommendation_id: string; status: string },
     ];
-    expect(payload).toEqual({ recommendation_id: PAUSE_ID, status: 'rejected' });
+    expect(payload).toEqual({
+      recommendation_id: PAUSE_ID,
+      status: 'rejected',
+    });
     expect(screen.queryByRole('button', { name: /^Dismiss budget move/ })).toBeNull();
     // The ad-level row cannot be acted on, so it offers neither button.
     expect(screen.queryByRole('button', { name: /pause this ad/i })).toBeNull();
@@ -1763,7 +1821,11 @@ describe('queueSentence', () => {
 
 describe('recRowLine', () => {
   const rec = (evidence: Record<string, unknown>) =>
-    ({ id: 'r1', kind: 'restore_delivery', evidence }) as unknown as RecommendationRow;
+    ({
+      id: 'r1',
+      kind: 'restore_delivery',
+      evidence,
+    }) as unknown as RecommendationRow;
 
   it('says a delivery finding in words, never its engine vocabulary', () => {
     const line = recRowLine(
@@ -1822,20 +1884,41 @@ describe('recRowLine', () => {
 
   it('clamps a negative engine figure when the comparator carries no date', () => {
     expect(
-      recRowLine(rec({ metric: 'days_absent', value: -1, comparator: 'off', window: 'd7' }), null),
+      recRowLine(
+        rec({
+          metric: 'days_absent',
+          value: -1,
+          comparator: 'off',
+          window: 'd7',
+        }),
+        null,
+      ),
     ).toBe('Not active for 0 days');
   });
 
   it('keeps the span when the comparator carries no date', () => {
     expect(
-      recRowLine(rec({ metric: 'days_absent', value: 3, comparator: 'off', window: 'd7' }), null),
+      recRowLine(
+        rec({
+          metric: 'days_absent',
+          value: 3,
+          comparator: 'off',
+          window: 'd7',
+        }),
+        null,
+      ),
     ).toBe('Not active for 3 days');
   });
 
   it('falls back to the shared evidence line for every other metric', () => {
     expect(
       recRowLine(
-        rec({ metric: 'ctr', value: 0.0027, comparator: 'down 56% vs 14d', window: 'd3' }),
+        rec({
+          metric: 'ctr',
+          value: 0.0027,
+          comparator: 'down 56% vs 14d',
+          window: 'd3',
+        }),
         null,
       ),
     ).toBe('CTR 0.27% down 56% vs 14d · 3d');
@@ -1890,8 +1973,9 @@ describe("a Google portfolio's pending platform card in its queue", () => {
       />,
     );
   const waiting = () =>
-    within(screen.getByTestId('queue-tray')).getByText(/waiting$/, { selector: 'span' })
-      .parentElement?.textContent;
+    within(screen.getByTestId('queue-tray')).getByText(/waiting$/, {
+      selector: 'span',
+    }).parentElement?.textContent;
 
   it('renders the card with its own control in place of a queue row, and counts it once', () => {
     activeReport = googleReport;
@@ -1910,7 +1994,12 @@ describe("a Google portfolio's pending platform card in its queue", () => {
 
   it('renders the control disabled with the reason when writes to Google are switched off', () => {
     activeReport = googleReport;
-    renderGoogle([{ ...BUDGET, card_action: { ...BUDGET.card_action, apply_enabled: false } }]);
+    renderGoogle([
+      {
+        ...BUDGET,
+        card_action: { ...BUDGET.card_action, apply_enabled: false },
+      },
+    ]);
     const control = screen.getByTestId('platform-card-action-unavailable');
     expect(control.getAttribute('data-reason')).toBe('apply_disabled');
     const button = within(control).getByRole('button') as HTMLButtonElement;
@@ -1957,7 +2046,10 @@ describe("a portfolio's money is in the portfolio's own currency", () => {
 // guardrails they are held to, and the action their state allows, on the queue's own paths.
 describe('the change preview at the head of the queue', () => {
   it("draws the cycle's budget move before → after with its guardrails", () => {
-    renderGroup({ max_change_pct_per_cycle: 0.2, max_daily_apply_minor: 500_000 });
+    renderGroup({
+      max_change_pct_per_cycle: 0.2,
+      max_daily_apply_minor: 500_000,
+    });
     const preview = screen.getByTestId('write-preview');
     expect(within(preview).getByTestId('write-bar').textContent).toBe(
       'Budget Set$100 USD$130 USD+30%',
@@ -1998,7 +2090,9 @@ describe('the change preview at the head of the queue', () => {
 
   it('holds both actions in observe mode', () => {
     renderGroup({ apply_mode: 'observe' });
-    const approve = screen.getByRole('button', { name: 'Approve 1 move' }) as HTMLButtonElement;
+    const approve = screen.getByRole('button', {
+      name: 'Approve 1 move',
+    }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     expect(screen.getByTestId('write-state').textContent).toContain('Observe mode writes nothing.');
   });

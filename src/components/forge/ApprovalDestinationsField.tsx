@@ -3,6 +3,7 @@
 import type { RenderApprovalDestination } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Hash, MessageCircle } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import {
   approvalDestinationsKey,
@@ -29,8 +30,6 @@ export const approvalRoomName = (destination: RenderApprovalDestination) =>
   destination.platform === 'slack' ? `#${destination.name}` : destination.name;
 
 /** Said wherever a Meta-bound render has no room: it is still gated, just decided here. */
-export const FORGE_APPROVAL_COPY =
-  'With no approval room, these ads wait under Approvals on this page until a brand member approves them.';
 
 const approverCount = (count: number) =>
   count ? `${count} approver${count === 1 ? '' : 's'}` : 'no approvers yet';
@@ -44,6 +43,8 @@ export function ApprovalDestinationsField({
   value: string[];
   onChange: (destinationIds: string[]) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [managing, setManaging] = useState<string | null>(null);
   const query = useQuery({
     queryKey: approvalDestinationsKey(brandId),
@@ -63,12 +64,17 @@ export function ApprovalDestinationsField({
   }, [defaults, value.length, onChange]);
 
   if (query.isPending) {
-    return <p className="text-xs text-muted-foreground">Loading approval rooms…</p>;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {translateUi('loading_approval_rooms_7fecf87e')}
+      </p>
+    );
   }
   if (query.isError) {
     return (
       <p className="text-xs text-muted-foreground">
-        Couldn’t load approval rooms: {query.error.message}
+        {' '}
+        {translateUi('couldn_t_load_approval_rooms_a8ce7efb')} {query.error.message}
       </p>
     );
   }
@@ -76,8 +82,8 @@ export function ApprovalDestinationsField({
   if (!destinations.length) {
     return (
       <p className="text-xs text-muted-foreground">
-        {FORGE_APPROVAL_COPY} To be asked in Slack too, add one of the brand’s Slack channels under
-        Slack; WhatsApp groups are added by a Continuum operator.
+        {translateUi('approvalRoomFallback')}{' '}
+        {translateUi('to_be_asked_in_slack_too_add_one_of_66a0838a')}{' '}
       </p>
     );
   }
@@ -92,13 +98,17 @@ export function ApprovalDestinationsField({
     <div className="space-y-1.5">
       <p className="text-xs text-muted-foreground">
         {value.length
-          ? `Every render in this batch is posted for approval in ${destinations
-              .filter((destination) => value.includes(destination.id))
-              .map(approvalRoomName)
-              .join(', ')}.`
-          : 'Ask for approval in'}
+          ? translateUi('every_render_in_this_batch_is_poste_50f50c7f', {
+              value0: String(
+                destinations
+                  .filter((destination) => value.includes(destination.id))
+                  .map(approvalRoomName)
+                  .join(', '),
+              ),
+            })
+          : translateUi('ask_for_approval_in_08799707')}
       </p>
-      <ul aria-label="Approval rooms" className="flex flex-col gap-1">
+      <ul aria-label={translateUi('approval_rooms_7fa3f1b3')} className="flex flex-col gap-1">
         {destinations.map((destination) => {
           const name = approvalRoomName(destination);
           const Icon = destination.platform === 'slack' ? Hash : MessageCircle;
@@ -127,7 +137,9 @@ export function ApprovalDestinationsField({
                 >
                   {approverCount(destination.activeApprovers)}
                   {destination.requestedApprovers
-                    ? ` · ${destination.requestedApprovers} asking`
+                    ? translateUi('value0_asking_3ca740ff', {
+                        count: Number(destination.requestedApprovers),
+                      })
                     : ''}
                 </span>
                 <Button
@@ -135,10 +147,13 @@ export function ApprovalDestinationsField({
                   size="xs"
                   variant="ghost"
                   aria-expanded={open}
-                  aria-label={`Manage approvers for ${name}`}
+                  aria-label={translateUi('manage_approvers_for_value0_e30d024a', {
+                    value0: String(name),
+                  })}
                   onClick={() => setManaging(open ? null : destination.id)}
                 >
-                  Manage approvers
+                  {' '}
+                  {translateUi('manage_approvers_e16ac95b')}{' '}
                 </Button>
               </div>
               {open ? (
@@ -150,8 +165,10 @@ export function ApprovalDestinationsField({
       </ul>
       {unstaffed.length ? (
         <p role="status" className="text-xs text-warning">
-          Nobody can approve in {unstaffed.map(approvalRoomName).join(', ')} yet. The package still
-          goes there; someone must ask for access and be activated before it can be decided.
+          {' '}
+          {translateUi('nobody_can_approve_in_30bfe27b')}{' '}
+          {unstaffed.map(approvalRoomName).join(', ')}{' '}
+          {translateUi('yet_the_package_still_goes_there_so_88c815fe')}{' '}
         </p>
       ) : null}
     </div>

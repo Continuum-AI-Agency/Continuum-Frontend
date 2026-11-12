@@ -29,7 +29,7 @@ import {
   Share2,
   Sparkles,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
@@ -37,12 +37,15 @@ import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { useElements } from '@/lib/ai-studio/elements';
 import {
   getHyperframesStoryAngles,
   getHyperframesStoryboard,
 } from '@/lib/api/hyperframesAgent.client';
+import { formatDecimal } from '@/lib/format/decimal';
 import {
   buildHyperframesProjectZip,
   downloadHyperframesProjectZip,
@@ -62,32 +65,26 @@ import {
   inspectHyperframesInputs,
   startHyperframesAgentNode,
 } from '../utils/startHyperframesAgent';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import { NodeDownloadButton } from './NodeDownloadButton';
 
-const labelForStatus = (status: HyperframesAgentNodeData['status']): string => {
-  switch (status) {
-    case 'queued':
-      return 'Queued';
-    case 'drafting':
-      return 'Drafting composition';
-    case 'reviewing':
-      return 'Reviewing frames';
-    case 'rendering':
-      return 'Rendering in browser';
-    case 'completed':
-      return 'Video ready';
-    case 'failed':
-      return 'Run failed';
-    case 'cancelled':
-      return 'Cancelled';
-    default:
-      return 'Ready';
-  }
-};
+const STATUS_KEYS = {
+  queued: 'queued_661ff40a',
+  drafting: 'statusDraftingComposition',
+  reviewing: 'statusReviewingFrames',
+  rendering: 'statusRenderingBrowser',
+  completed: 'statusVideoReady',
+  failed: 'runFailedFallback',
+  cancelled: 'statusCancelled',
+} as const;
 
 // Mirrors the NodeResizer minimums below.
-const HYPERFRAMES_NODE_BOUNDS = { minWidth: 360, minHeight: 360, fallbackWidth: 360 };
+const HYPERFRAMES_NODE_BOUNDS = {
+  minWidth: 360,
+  minHeight: 360,
+  fallbackWidth: 360,
+};
 
 type StageState = 'pending' | 'active' | 'done' | 'failed';
 
@@ -110,6 +107,12 @@ export function HyperframesAgentBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<HyperframesAgentNodeData>>) {
+  const decimalLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const runtime = useCanvasRuntime();
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
@@ -127,7 +130,10 @@ export function HyperframesAgentBlock({
   const [exporting, setExporting] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [openingEditor, setOpeningEditor] = useState(false);
-  const [embedCode, setEmbedCode] = useState<{ video: string; interactive: string } | null>(null);
+  const [embedCode, setEmbedCode] = useState<{
+    video: string;
+    interactive: string;
+  } | null>(null);
   const [previewMode, setPreviewMode] = useState<'video' | 'interactive'>('video');
   const [sceneFeedback, setSceneFeedback] = useState<Record<string, string>>({});
   const [motionTarget, setMotionTarget] = useState<MotionTarget | null>(null);
@@ -191,7 +197,7 @@ export function HyperframesAgentBlock({
         brandId: runtime.brandProfileId,
         assetId: data.generatedVideoAssetId,
         versionId: data.renderOutputAssetVersionId,
-        title: storyboard?.title ?? data.label ?? 'HyperFrames film',
+        title: storyboard?.title ?? data.label ?? translateUi('hyperframes_film_6314dff2'),
         durationSeconds: data.durationSeconds,
         width: landscape ? longEdge : shortEdge,
         height: landscape ? shortEdge : square ? shortEdge : longEdge,
@@ -209,44 +215,54 @@ export function HyperframesAgentBlock({
       router.push(href);
     } catch (error) {
       show({
-        title: 'Could not open Video Editor',
-        description: error instanceof Error ? error.message : 'The handoff failed.',
+        title: translateUi('could_not_open_video_editor_2476a8a0'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     } finally {
       setOpeningEditor(false);
     }
-  }, [data, openingEditor, revision, router, runtime, show, storyboard]);
+  }, [data, openingEditor, revision, router, runtime, show, storyboard, uiErrorText, translateUi]);
 
   // The film renders on the server; the run's events and the node's own status carry it.
-  const failure = runError || data.error;
+  const failure = runError || workflowNodeError(data, translateUi);
   const runStatus = runRecord?.run.status;
   const running =
     !failure &&
     (starting || runStatus === 'queued' || runStatus === 'running' || Boolean(data.isExecuting));
-  const displayedStatus = failure ? 'Run failed' : labelForStatus(data.status);
+  const displayedStatus = failure
+    ? translateUi('runFailedFallback')
+    : translateUi(
+        data.status && data.status in STATUS_KEYS
+          ? STATUS_KEYS[data.status as keyof typeof STATUS_KEYS]
+          : 'ready_5fa7aac5',
+      );
   const stages: Array<{ label: string; state: StageState }> = [
     {
-      label: 'Inputs',
+      label: translateUi('inputs_7abc49df'),
       state: inputs.issues.length > 0 ? 'failed' : effectivePrompt ? 'done' : 'pending',
     },
     {
-      label: 'Draft',
+      label: translateUi('draft_ebf12ef4'),
       state: revision ? 'done' : failure ? 'failed' : running ? 'active' : 'pending',
     },
     {
-      label: 'Review',
+      label: translateUi('review_aff0766a'),
       state: review ? 'done' : failure && revision ? 'failed' : revision ? 'active' : 'pending',
     },
     {
-      label: 'Render',
+      label: translateUi('render_6d89eb7d'),
       state: video ? 'done' : failure && review ? 'failed' : renderRequested ? 'active' : 'pending',
     },
   ];
 
   // Box re-snaps to the composition the agent actually rendered. `data.aspectRatio`
   // is the request the next run sends and is left alone.
-  useSnapToVideoAspect({ nodeId: id, src: video, bounds: HYPERFRAMES_NODE_BOUNDS });
+  useSnapToVideoAspect({
+    nodeId: id,
+    src: video,
+    bounds: HYPERFRAMES_NODE_BOUNDS,
+  });
 
   useEffect(() => {
     if (!review?.data.qualitySummary || data.qualitySummary?.revisionId === quality?.revisionId)
@@ -293,13 +309,31 @@ export function HyperframesAgentBlock({
         motionTarget: data.revisionTarget ? null : motionTarget,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not start HyperFrames Agent.';
-      updateNodeData(id, { status: 'failed', isExecuting: false, error: message });
-      show({ title: 'HyperFrames Agent failed to start', description: message, variant: 'error' });
+      const message = uiErrorText(error);
+      updateNodeData(id, {
+        status: 'failed',
+        isExecuting: false,
+        error: message,
+      });
+      show({
+        title: translateUi('hyperframes_agent_failed_to_start_83aa5258'),
+        description: message,
+        variant: 'error',
+      });
     } finally {
       setStarting(false);
     }
-  }, [data.revisionTarget, id, motionTarget, running, runtime, show, updateNodeData]);
+  }, [
+    data.revisionTarget,
+    id,
+    motionTarget,
+    running,
+    runtime,
+    show,
+    updateNodeData,
+    uiErrorText,
+    translateUi,
+  ]);
 
   const storyRequest = useCallback(() => {
     if (!runtime) throw new Error('Open this canvas in a brand workspace.');
@@ -329,11 +363,12 @@ export function HyperframesAgentBlock({
       });
       triggerSave();
     } catch (error) {
-      setPlanError(error instanceof Error ? error.message : 'Could not generate story angles.');
+      console.error('[HyperframesAgentBlock] Story angle generation failed', error);
+      setPlanError(uiErrorText(error));
     } finally {
       setPlanning(null);
     }
-  }, [id, storyboardInputKey, storyRequest, triggerSave, updateNodeData]);
+  }, [id, storyboardInputKey, storyRequest, triggerSave, updateNodeData, uiErrorText]);
 
   const selectAngle = useCallback(
     (angle: HyperframesStoryAngle) => {
@@ -363,11 +398,20 @@ export function HyperframesAgentBlock({
       });
       triggerSave();
     } catch (error) {
-      setPlanError(error instanceof Error ? error.message : 'Could not generate storyboard.');
+      console.error('[HyperframesAgentBlock] Storyboard generation failed', error);
+      setPlanError(uiErrorText(error));
     } finally {
       setPlanning(null);
     }
-  }, [data.selectedStoryAngle, id, storyboardInputKey, storyRequest, triggerSave, updateNodeData]);
+  }, [
+    data.selectedStoryAngle,
+    id,
+    storyboardInputKey,
+    storyRequest,
+    triggerSave,
+    updateNodeData,
+    uiErrorText,
+  ]);
 
   const exportProject = useCallback(async () => {
     if (!data.activeRunId) return;
@@ -377,14 +421,14 @@ export function HyperframesAgentBlock({
       downloadHyperframesProjectZip(zip);
     } catch (error) {
       show({
-        title: 'Project export failed',
-        description: error instanceof Error ? error.message : 'Could not export project.',
+        title: translateUi('project_export_failed_6804e57a'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     } finally {
       setExporting(false);
     }
-  }, [data.activeRunId, data.storyboard, show]);
+  }, [data.activeRunId, data.storyboard, show, uiErrorText, translateUi]);
 
   const createEmbed = useCallback(async () => {
     if (!runtime || !data.generatedVideoAssetId) return;
@@ -413,14 +457,14 @@ export function HyperframesAgentBlock({
       await navigator.clipboard.writeText(code.video).catch(() => undefined);
     } catch (error) {
       show({
-        title: 'Embed link failed',
-        description: error instanceof Error ? error.message : 'Could not create embed link.',
+        title: translateUi('embed_link_failed_9d612131'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     } finally {
       setSharing(false);
     }
-  }, [data.aspectRatio, data.generatedVideoAssetId, runtime, show]);
+  }, [data.aspectRatio, data.generatedVideoAssetId, runtime, show, uiErrorText, translateUi]);
 
   const handleToggleSkill = useCallback(
     (skillId: string) => {
@@ -432,7 +476,9 @@ export function HyperframesAgentBlock({
 
   const handleToggleBrandPiece = useCallback(
     (kind: BrandBookPieceKind) => {
-      updateNodeData(id, { brandBookPieces: toggleBrandPiece(data.brandBookPieces, kind) });
+      updateNodeData(id, {
+        brandBookPieces: toggleBrandPiece(data.brandBookPieces, kind),
+      });
       triggerSave();
     },
     [data.brandBookPieces, id, triggerSave, updateNodeData],
@@ -457,7 +503,7 @@ export function HyperframesAgentBlock({
       >
         <NodeTitleBar
           icon={Sparkles}
-          label="HyperFrames Agent"
+          label={translateUi('hyperframes_agent_792f74b0')}
           title={quality?.modelProvenance.draftModelId ?? HYPERFRAMES_AGENT_MODEL}
         >
           {/* IN the title bar, not floating over it. A pill parked at `top-2` painted over
@@ -486,21 +532,23 @@ export function HyperframesAgentBlock({
                 status: data.status === 'completed' ? 'idle' : data.status,
               })
             }
-            placeholder="Describe the video, motion, pacing, copy, and how to use the attached media…"
+            placeholder={translateUi('describe_the_video_motion_pacing_co_6043e725')}
             className="min-h-20 w-full resize-none rounded-lg border border-border/70 bg-muted/20 p-2.5 text-xs outline-none transition focus:border-brand-primary/60"
           />
 
           <div className="flex items-center justify-between gap-2 text-2xs">
-            <span className="font-semibold text-foreground">Source</span>
+            <span className="font-semibold text-foreground">{translateUi('source_0e570ca6')}</span>
             <span className={inputs.issues.length ? 'text-destructive' : 'text-muted-foreground'}>
               {inputs.issues[0]?.message ??
                 (inputs.media.length > 0
-                  ? `${inputs.media.length} connected media${inputs.prompt ? ' + Text node' : ''}`
+                  ? translateUi('value0_connected_media_value1_d01176b6', {
+                      count: Number(inputs.media.length),
+                    })
                   : effectivePrompt
                     ? inputs.prompt
-                      ? 'Connected Text node'
-                      : 'Text-only composition'
-                    : 'Add a prompt or connect Text')}
+                      ? translateUi('connected_text_node_7b023a90')
+                      : translateUi('text_only_composition_d6f46a1d')
+                    : translateUi('add_a_prompt_or_connect_text_3bc19423'))}
             </span>
           </div>
           {inputs.media
@@ -522,14 +570,18 @@ export function HyperframesAgentBlock({
                     updateNodeData(id, { [key]: [...next] });
                     triggerSave();
                   }}
-                />
-                Use {item.label} as a {item.kind === 'image' ? 'visual' : 'motion'} reference only
+                />{' '}
+                {translateUi('use_c36d819e')} {item.label} {translateUi('as_a_efc14e9d')}{' '}
+                {item.kind === 'image'
+                  ? translateUi('visual_a5961f3f')
+                  : translateUi('motion_30523827')}{' '}
+                {translateUi('reference_only_6f0c08f2')}{' '}
               </label>
             ))}
 
           <div className="grid grid-cols-2 gap-2 text-2xs">
             <label className="space-y-1 text-muted-foreground">
-              <span>Energy</span>
+              <span>{translateUi('energy_f2fcd3f7')}</span>
               <select
                 value={data.energy}
                 onChange={(event) =>
@@ -539,13 +591,13 @@ export function HyperframesAgentBlock({
                 }
                 className="w-full rounded-md border bg-background px-2 py-1.5 text-foreground"
               >
-                <option value="calm">Calm</option>
-                <option value="balanced">Balanced</option>
-                <option value="high-energy">High energy</option>
+                <option value="calm">{translateUi('calm_38f6b83e')}</option>
+                <option value="balanced">{translateUi('balanced_5386ea5d')}</option>
+                <option value="high-energy">{translateUi('high_energy_0cc1f098')}</option>
               </select>
             </label>
             <label className="space-y-1 text-muted-foreground">
-              <span>Format</span>
+              <span>{translateUi('format_2f343666')}</span>
               <select
                 value={data.aspectRatio}
                 onChange={(event) =>
@@ -561,11 +613,13 @@ export function HyperframesAgentBlock({
               </select>
             </label>
             <label className="space-y-1 text-muted-foreground">
-              <span>Length</span>
+              <span>{translateUi('length_adc95605')}</span>
               <select
                 value={data.durationSeconds}
                 onChange={(event) =>
-                  updateNodeData(id, { durationSeconds: Number(event.target.value) })
+                  updateNodeData(id, {
+                    durationSeconds: Number(event.target.value),
+                  })
                 }
                 className="w-full rounded-md border bg-background px-2 py-1.5 text-foreground"
               >
@@ -577,7 +631,7 @@ export function HyperframesAgentBlock({
               </select>
             </label>
             <label className="space-y-1 text-muted-foreground">
-              <span>Resolution</span>
+              <span>{translateUi('resolution_d4055faf')}</span>
               <select
                 value={data.resolution}
                 onChange={(event) =>
@@ -592,11 +646,13 @@ export function HyperframesAgentBlock({
               </select>
             </label>
             <label className="space-y-1 text-muted-foreground">
-              <span>Frame rate</span>
+              <span>{translateUi('frame_rate_68e19e4c')}</span>
               <select
                 value={data.fps ?? 30}
                 onChange={(event) =>
-                  updateNodeData(id, { fps: Number(event.target.value) as 30 | 60 })
+                  updateNodeData(id, {
+                    fps: Number(event.target.value) as 30 | 60,
+                  })
                 }
                 className="w-full rounded-md border bg-background px-2 py-1.5 text-foreground"
               >
@@ -609,10 +665,10 @@ export function HyperframesAgentBlock({
           {!data.revisionTarget ? (
             <section
               className="space-y-2 rounded-lg border border-border/60 p-2 text-2xs"
-              aria-label="Story planning"
+              aria-label={translateUi('story_planning_69a4b339')}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold">Story direction</span>
+                <span className="font-semibold">{translateUi('story_direction_70deffba')}</span>
                 <Button
                   size="sm"
                   variant="outline"
@@ -620,7 +676,9 @@ export function HyperframesAgentBlock({
                   onClick={() => void generateAngles()}
                   disabled={!runtime || Boolean(planning) || running}
                 >
-                  {planning === 'angles' ? 'Thinking…' : 'Generate 5 angles'}
+                  {planning === 'angles'
+                    ? translateUi('thinking_a02f1cea')
+                    : translateUi('generate_5_angles_3cc8c585')}
                 </Button>
               </div>
               {planCurrent &&
@@ -636,7 +694,9 @@ export function HyperframesAgentBlock({
                       {index + 1}. {angle.title}
                     </strong>
                     <span className="block text-muted-foreground">{angle.premise}</span>
-                    <span className="block">Viewer gets: {angle.viewerTakeaway}</span>
+                    <span className="block">
+                      {translateUi('viewer_gets_8d9f9ab4')} {angle.viewerTakeaway}
+                    </span>
                   </button>
                 ))}
               {planCurrent && data.selectedStoryAngle ? (
@@ -648,14 +708,16 @@ export function HyperframesAgentBlock({
                   disabled={Boolean(planning) || running}
                 >
                   {planning === 'storyboard'
-                    ? 'Building storyboard…'
-                    : 'Build storyboard contact sheet'}
+                    ? translateUi('building_storyboard_bad2e335')
+                    : translateUi('build_storyboard_contact_sheet_a73cfc72')}
                 </Button>
               ) : null}
               {storyboard ? (
                 <div className="space-y-2">
                   <p className="font-medium">
-                    {storyboard.title} · {storyboard.scenes.length} scenes
+                    {storyboard.title} · {storyboard.scenes.length} {translateUi(
+                      'scenes_6dd792f8',
+                    )}{' '}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {storyboard.scenes.map((scene, index) => {
@@ -677,7 +739,9 @@ export function HyperframesAgentBlock({
                         >
                           <div
                             className="relative flex min-h-24 items-center justify-center bg-slate-950 p-3 text-center text-white"
-                            style={{ aspectRatio: data.aspectRatio.replace(':', ' / ') }}
+                            style={{
+                              aspectRatio: data.aspectRatio.replace(':', ' / '),
+                            }}
                           >
                             {image ? (
                               <img
@@ -690,12 +754,20 @@ export function HyperframesAgentBlock({
                           </div>
                           <div className="space-y-0.5 p-1.5 text-muted-foreground">
                             <p className="font-medium text-foreground">
-                              {index + 1}. {scene.start_seconds.toFixed(1)}–
-                              {(scene.start_seconds + scene.duration_seconds).toFixed(1)}s ·{' '}
-                              {scene.role}
+                              {index + 1}. {formatDecimal(scene.start_seconds, 1, decimalLocale)}–
+                              {formatDecimal(
+                                scene.start_seconds + scene.duration_seconds,
+                                1,
+                                decimalLocale,
+                              )}
+                              s · {scene.role}
                             </p>
                             <p>{scene.motion}</p>
-                            {media ? <p>Media: {media.label}</p> : null}
+                            {media ? (
+                              <p>
+                                {translateUi('media_f69bf966')} {media.label}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       );
@@ -711,13 +783,16 @@ export function HyperframesAgentBlock({
                     }}
                     disabled={running}
                   >
-                    {approved ? 'Storyboard approved' : 'Approve storyboard'}
+                    {approved
+                      ? translateUi('storyboard_approved_5795aeb6')
+                      : translateUi('approve_storyboard_b744e7c3')}
                   </Button>
                 </div>
               ) : null}
               {!planCurrent && data.storyboardInputKey ? (
                 <p className="text-amber-600">
-                  Inputs changed. Generate new angles before rendering.
+                  {' '}
+                  {translateUi('inputs_changed_generate_new_angles__7b668cdd')}{' '}
                 </p>
               ) : null}
               {planError ? (
@@ -728,7 +803,10 @@ export function HyperframesAgentBlock({
             </section>
           ) : null}
 
-          <ol className="grid grid-cols-4 gap-1" aria-label="Production progress">
+          <ol
+            className="grid grid-cols-4 gap-1"
+            aria-label={translateUi('production_progress_9d62dac4')}
+          >
             {stages.map((stage) => (
               <li
                 key={stage.label}
@@ -762,7 +840,9 @@ export function HyperframesAgentBlock({
                 </div>
               ))}
               {review?.data.craftScore ? (
-                <p className="font-medium text-foreground">Craft {review.data.craftScore}/10</p>
+                <p className="font-medium text-foreground">
+                  {translateUi('craft_57f64bf9')} {review.data.craftScore}/10
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -779,17 +859,24 @@ export function HyperframesAgentBlock({
               className="inline-flex min-h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
               data-testid="hyperframes-edit-in-forge"
             >
-              Edit composition in Forge
+              {' '}
+              {translateUi('edit_composition_in_forge_3da99313')}{' '}
             </a>
           ) : null}
 
           {quality ? (
             <details className="rounded-lg border border-border/60 bg-muted/20 p-2 text-2xs" open>
               <summary className="cursor-pointer font-semibold text-foreground">
-                Production slate · {quality.gate === 'passed' ? 'passed' : 'needs revision'}
+                {' '}
+                {translateUi('production_slate_0574176b')}{' '}
+                {quality.gate === 'passed'
+                  ? translateUi('passed_284d1e8c')
+                  : translateUi('needs_revision_6bb3994a')}
                 {quality.advisoryScore === null
                   ? ''
-                  : ` · ${(quality.advisoryScore * 10).toFixed(1)}/10 advisory`}
+                  : translateUi('value0_10_advisory_6777c64e', {
+                      value0: String(formatDecimal(quality.advisoryScore * 10, 1, decimalLocale)),
+                    })}
               </summary>
               <div className="mt-2 space-y-1.5">
                 {quality.scenes.map((scene) => {
@@ -801,8 +888,13 @@ export function HyperframesAgentBlock({
                     >
                       <div className="min-w-0">
                         <p className="font-medium text-foreground">
-                          {scene.role} · {scene.start_seconds.toFixed(1)}–
-                          {(scene.start_seconds + scene.duration_seconds).toFixed(1)}s
+                          {scene.role} · {formatDecimal(scene.start_seconds, 1, decimalLocale)}–
+                          {formatDecimal(
+                            scene.start_seconds + scene.duration_seconds,
+                            1,
+                            decimalLocale,
+                          )}
+                          s
                         </p>
                         <p className={blocker ? 'text-destructive' : 'text-muted-foreground'}>
                           {blocker?.message ?? `${scene.motion.verb} · ${scene.layout}`}
@@ -817,8 +909,10 @@ export function HyperframesAgentBlock({
                               [scene.id]: event.target.value,
                             }))
                           }
-                          placeholder="Scene feedback"
-                          aria-label={`Feedback for ${scene.id}`}
+                          placeholder={translateUi('scene_feedback_3cf34f89')}
+                          aria-label={translateUi('feedback_for_value0_364808ad', {
+                            value0: String(scene.id),
+                          })}
                           className="h-6 w-28 rounded border bg-background px-1 text-2xs"
                         />
                         <Button
@@ -828,21 +922,29 @@ export function HyperframesAgentBlock({
                           className="h-6 px-2 text-2xs"
                           onClick={() => reviseScene(scene.id)}
                           disabled={!sceneFeedback[scene.id]?.trim() && !blocker}
-                          aria-label={`Revise ${scene.role} scene`}
+                          aria-label={translateUi('revise_value0_scene_e4a8f243', {
+                            value0: String(scene.role),
+                          })}
                         >
-                          Revise scene
+                          {' '}
+                          {translateUi('revise_scene_20faf316')}{' '}
                         </Button>
                       </div>
                     </div>
                   );
                 })}
                 <p className="text-muted-foreground">
-                  Creator {quality.modelProvenance.draftModelId}
+                  {' '}
+                  {translateUi('creator_88447b83')} {quality.modelProvenance.draftModelId}
                   {quality.modelProvenance.repairModelIds.length
-                    ? ` · Repair ${quality.modelProvenance.repairModelIds.join(', ')}`
+                    ? translateUi('repair_value0_92da5d02', {
+                        value0: String(quality.modelProvenance.repairModelIds.join(', ')),
+                      })
                     : ''}
                   {quality.modelProvenance.criticModelId
-                    ? ` · Critic ${quality.modelProvenance.criticModelId} (advisory)`
+                    ? translateUi('critic_value0_advisory_d31cc419', {
+                        value0: String(quality.modelProvenance.criticModelId),
+                      })
                     : ''}
                 </p>
               </div>
@@ -859,10 +961,10 @@ export function HyperframesAgentBlock({
                 }}
                 placeholder={
                   motionTarget
-                    ? 'Speak or type the change for the selected animations: stagger this animation…'
-                    : 'Global feedback: slow every zoom to 0.7x, adjust pacing, change the closing line…'
+                    ? translateUi('speak_or_type_the_change_for_the_se_92cdf611')
+                    : translateUi('global_feedback_slow_every_zoom_to__173b60b1')
                 }
-                aria-label="Global video feedback"
+                aria-label={translateUi('global_video_feedback_918b06f1')}
                 className="min-h-14 w-full resize-y rounded-md border bg-muted/20 p-2 pr-9 text-xs"
               />
               <DictationButton
@@ -881,7 +983,10 @@ export function HyperframesAgentBlock({
           ) : null}
 
           {data.activeRunId && (data.revisionId || revision) ? (
-            <fieldset className="flex gap-1 text-2xs" aria-label="Preview mode">
+            <fieldset
+              className="flex gap-1 text-2xs"
+              aria-label={translateUi('preview_mode_481bc90f')}
+            >
               <Button
                 size="sm"
                 variant={previewMode === 'video' ? 'default' : 'outline'}
@@ -894,7 +999,8 @@ export function HyperframesAgentBlock({
                 variant={previewMode === 'interactive' ? 'default' : 'outline'}
                 onClick={() => setPreviewMode('interactive')}
               >
-                Interactive composition
+                {' '}
+                {translateUi('interactive_composition_37c6a428')}{' '}
               </Button>
             </fieldset>
           ) : null}
@@ -903,7 +1009,7 @@ export function HyperframesAgentBlock({
               nodeType="hyperframesAgent"
               data={data}
               baseName="hyperframes"
-              label="Download rendered clip"
+              label={translateUi('download_rendered_clip_68ba71ab')}
             />
             {previewMode === 'interactive' && data.activeRunId && (data.revisionId || revision) ? (
               <InteractiveHyperframesPreview
@@ -918,12 +1024,14 @@ export function HyperframesAgentBlock({
                 <Film className="h-6 w-6 animate-pulse text-violet-400" />
                 <Progress value={(data.progress ?? 0) * 100} className="h-1.5 w-full" />
                 <span className="text-2xs text-muted-foreground">
-                  You can leave AI Studio; the film renders on our servers.
+                  {' '}
+                  {translateUi('you_can_leave_ai_studio_the_film_re_5b911193')}{' '}
                 </span>
               </div>
             ) : (
               <span className="text-xs text-muted-foreground">
-                Connect media, add a prompt, then run the agent.
+                {' '}
+                {translateUi('connect_media_add_a_prompt_then_run_eb64b265')}{' '}
               </span>
             )}
           </div>
@@ -942,12 +1050,12 @@ export function HyperframesAgentBlock({
           >
             <Play className="mr-2 h-3.5 w-3.5" />
             {data.revisionTarget
-              ? 'Send scene revision'
+              ? translateUi('send_scene_revision_cc0d5b29')
               : motionTarget
-                ? 'Send motion revision'
+                ? translateUi('send_motion_revision_4b258c72')
                 : data.sessionId
-                  ? 'Send global revision'
-                  : 'Animate approved storyboard'}
+                  ? translateUi('send_global_revision_30848b02')
+                  : translateUi('animate_approved_storyboard_9ffa3b68')}
           </Button>
 
           {data.revisionId || revision ? (
@@ -959,7 +1067,9 @@ export function HyperframesAgentBlock({
               disabled={exporting}
             >
               <Download className="mr-2 h-3.5 w-3.5" />
-              {exporting ? 'Exporting project…' : 'Download editable project ZIP'}
+              {exporting
+                ? translateUi('exporting_project_bc51f607')
+                : translateUi('download_editable_project_zip_e6f11f77')}
             </Button>
           ) : null}
           {data.generatedVideoAssetId && typeof data.renderOutputAssetVersionId === 'string' ? (
@@ -971,7 +1081,9 @@ export function HyperframesAgentBlock({
               disabled={openingEditor}
             >
               <ExternalLink className="mr-2 h-3.5 w-3.5" />
-              {openingEditor ? 'Opening Video Editor…' : 'Send to Video Editor'}
+              {openingEditor
+                ? translateUi('opening_video_editor_a5d5df33')
+                : translateUi('send_to_video_editor_7231e444')}
             </Button>
           ) : null}
           {data.generatedVideoAssetId ? (
@@ -983,13 +1095,16 @@ export function HyperframesAgentBlock({
               disabled={sharing}
             >
               <Share2 className="mr-2 h-3.5 w-3.5" />
-              {sharing ? 'Creating embeds…' : 'Create public embeds'}
+              {sharing
+                ? translateUi('creating_embeds_b9301ce6')
+                : translateUi('create_public_embeds_5349d393')}
             </Button>
           ) : null}
           {embedCode ? (
             <div className="space-y-1">
               <label className="block text-2xs">
-                MP4 embed
+                {' '}
+                {translateUi('mp4_embed_309cc07a')}{' '}
                 <textarea
                   readOnly
                   value={embedCode.video}
@@ -998,7 +1113,8 @@ export function HyperframesAgentBlock({
                 />
               </label>
               <label className="block text-2xs">
-                Interactive embed
+                {' '}
+                {translateUi('interactive_embed_dfcf87fb')}{' '}
                 <textarea
                   readOnly
                   value={embedCode.interactive}

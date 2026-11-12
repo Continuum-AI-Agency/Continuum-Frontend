@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -50,7 +51,11 @@ type PlatformCardsAnswer =
   | { status: 'unavailable' }
   | { status: 'error' }
   | { status: 'ready'; cards: unknown[] };
-type AccountReadAnswer = { data: unknown; isLoading: boolean; isError: boolean };
+type AccountReadAnswer = {
+  data: unknown;
+  isLoading: boolean;
+  isError: boolean;
+};
 type ApplySent = {
   portfolio_id: string;
   actions: unknown[];
@@ -63,7 +68,11 @@ type StatusSent = { recommendation_id: string; status: string };
 const AUDIT_ID = '0f0f0f0f-0000-4000-8000-000000000001';
 
 let platformCards: PlatformCardsAnswer = { status: 'loading' };
-let accountRead: AccountReadAnswer = { data: null, isLoading: false, isError: false };
+let accountRead: AccountReadAnswer = {
+  data: null,
+  isLoading: false,
+  isError: false,
+};
 let applySent: ApplySent[] = [];
 let statusSent: StatusSent[] = [];
 
@@ -88,7 +97,11 @@ mock.module('../../../useOptimizerData', () => ({
       mutationFn: async (request: ApplySent) => {
         applySent.push(request);
         return request.dryRun
-          ? { ok: true, dryRun: true, results: [{ status: 'would_apply', kind: 'set_budget' }] }
+          ? {
+              ok: true,
+              dryRun: true,
+              results: [{ status: 'would_apply', kind: 'set_budget' }],
+            }
           : {
               ok: true,
               dryRun: false,
@@ -207,13 +220,20 @@ function renderStack({
     },
   };
   // A fresh client per render: the mutation cache the cards read is this test's alone.
-  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
         <DecisionsStack
           ctx={ctx}
-          slot={{ module: 'decisions', size, score: 70, reason: '6 decisiones esperan.' }}
+          slot={{
+            module: 'decisions',
+            size,
+            score: 70,
+            reason: '6 decisiones esperan.',
+          }}
         />
       </TooltipProvider>
     </QueryClientProvider>,
@@ -326,7 +346,10 @@ describe('DecisionsStack · Google, you approve', () => {
     renderStack();
     fireEvent.click(screen.getByTestId('decision-dismiss'));
     expect(statusSent).toEqual([
-      { recommendation_id: '655b7c7e-0027-4036-8f21-970ef088a470', status: 'rejected' },
+      {
+        recommendation_id: '655b7c7e-0027-4036-8f21-970ef088a470',
+        status: 'rejected',
+      },
     ]);
     expect(screen.getByTestId('decision-dismissed').textContent).toBe('Dismissed');
   });
@@ -422,7 +445,10 @@ describe('DecisionsStack · the other modes', () => {
   });
 
   it('opens the steps of a fix and locks the write that waits for it', () => {
-    platformCards = { status: 'ready', cards: [VIVO_BUDGET_WRITE, VIVO_INFLATED_CONVERSION] };
+    platformCards = {
+      status: 'ready',
+      cards: [VIVO_BUDGET_WRITE, VIVO_INFLATED_CONVERSION],
+    };
     renderStack({ mode: 'fix' });
     const fix = cardTitled('La mayor parte de lo que Google llama conversión es una visita');
     expect(within(fix).queryByTestId('decision-steps')).toBeNull();

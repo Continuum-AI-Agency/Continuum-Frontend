@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { cloneElement, type ReactElement, type ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render as rtlRender } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import { buildPlannerPlatforms } from './planner-platforms';
 import type { OrganicCalendarDay } from './types';
@@ -34,7 +35,13 @@ mock.module('./AddPostMenu', () => ({
   }) =>
     cloneElement(children as ReactElement<{ onClick?: () => void }>, {
       onClick: () =>
-        onCreatePost({ dayId, platformKey, status: 'draft', mode: 'manual', format: 'Post' }),
+        onCreatePost({
+          dayId,
+          platformKey,
+          status: 'draft',
+          mode: 'manual',
+          format: 'Post',
+        }),
     }),
 }));
 
@@ -315,10 +322,14 @@ describe('TimeGridCanvas', () => {
     // The week chip hands the post to the workspace's preview panel, the month chip's path,
     // instead of opening a popover of its own.
     fireEvent.click(
-      screen.getByRole('button', { name: '3:00 PM Posted on YouTube: Published video' }),
+      screen.getByRole('button', {
+        name: '3:00 PM Posted on YouTube: Published video',
+      }),
     );
     expect(onSelectPost).toHaveBeenCalledTimes(1);
-    expect(onSelectPost.mock.calls[0]?.[0]).toMatchObject({ id: 'youtube-post' });
+    expect(onSelectPost.mock.calls[0]?.[0]).toMatchObject({
+      id: 'youtube-post',
+    });
     expect(onSelectPost.mock.calls[0]?.[1]).toBeNull();
     expect(screen.queryByRole('link', { name: /Open post/ })).toBeNull();
     // YouTube has a publisher, so its row IS creatable — that is the behaviour change.

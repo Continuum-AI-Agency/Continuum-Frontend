@@ -4,8 +4,8 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { GraphIssue } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { CanvasValidationPanel } from './CanvasValidationPanel';
 
@@ -72,7 +72,11 @@ describe('CanvasValidationPanel', () => {
   it('lists every issue message once the queue is opened', () => {
     const view = renderPanel([
       issue({ message: 'Add a prompt before running this node.' }),
-      issue({ nodeId: 'node-2', code: 'dangling_edge', message: 'This edge points nowhere.' }),
+      issue({
+        nodeId: 'node-2',
+        code: 'dangling_edge',
+        message: 'This edge points nowhere.',
+      }),
     ]);
     openQueue(view);
 
@@ -83,7 +87,12 @@ describe('CanvasValidationPanel', () => {
   it('heads a run-phase issue with "Before running" and any other phase with "Connection"', () => {
     const view = renderPanel([
       issue({ phase: 'run' }),
-      issue({ nodeId: 'node-2', code: 'invalid_connection', phase: 'edit', message: 'Bad wire.' }),
+      issue({
+        nodeId: 'node-2',
+        code: 'invalid_connection',
+        phase: 'edit',
+        message: 'Bad wire.',
+      }),
     ]);
     openQueue(view);
 
@@ -103,7 +112,12 @@ describe('CanvasValidationPanel', () => {
 
   it('does nothing for an issue that names no node', () => {
     const view = renderPanel([
-      issue({ nodeId: undefined, edgeId: 'edge-1', code: 'dangling_edge', phase: 'edit' }),
+      issue({
+        nodeId: undefined,
+        edgeId: 'edge-1',
+        code: 'dangling_edge',
+        phase: 'edit',
+      }),
     ]);
     openQueue(view);
 

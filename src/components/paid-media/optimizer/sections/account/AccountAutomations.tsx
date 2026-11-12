@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useTranslations as useBetaTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Automations (G14) — what this account is allowed to do on its own, on a tab of its own.
 //
 // Two halves. The account-level ceilings first: what each family of action may do across
@@ -42,10 +50,13 @@ export type AccountAutomationsProps = {
   onManagePortfolio: (portfolioId: string) => void;
 };
 
-function waitingLine(portfolio: PortfolioListItem): string {
+function waitingLine(portfolio: PortfolioListItem, uiTranslate?: ScaleCopy): string {
   const pending = pendingWorkCount(portfolio);
-  if (pending === 0) return 'nothing waiting';
-  return `${pending} waiting on a decision`;
+  if (pending === 0)
+    return uiTranslate ? uiTranslate('nothing_waiting_53fc431') : 'nothing waiting';
+  return uiTranslate
+    ? uiTranslate('helper_fd2aeddfc475', { v0: pending })
+    : `${pending} waiting on a decision`;
 }
 
 export function AccountAutomations({
@@ -54,6 +65,10 @@ export function AccountAutomations({
   portfolios,
   onManagePortfolio,
 }: AccountAutomationsProps) {
+  const betaUiText = useBetaTranslations('scale');
+
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
   const approvalMaps = useAccountApprovals(brandId, adAccountId);
   const approvals = useInsightApprovalMutations(brandId, adAccountId);
@@ -65,7 +80,10 @@ export function AccountAutomations({
   const stale = staleCount(autopilot);
 
   const setLevel = (portfolioId: string, level: AutonomyLevel) =>
-    update.mutateAsync({ portfolio_id: portfolioId, patch: patchForLevel(level) });
+    update.mutateAsync({
+      portfolio_id: portfolioId,
+      patch: patchForLevel(level),
+    });
   const setScope = (portfolioId: string, scope: AutopilotScope, enabled: boolean) =>
     update.mutateAsync({
       portfolio_id: portfolioId,
@@ -84,16 +102,14 @@ export function AccountAutomations({
         <FamilyCeilings
           current={approvalMaps.data.families}
           defaults={defaults}
-          error={
-            approvals.setFamily.error instanceof Error ? approvals.setFamily.error.message : null
-          }
+          error={approvals.setFamily.error ? formatUiError(approvals.setFamily.error) : null}
           onSetFamily={(family, state) => approvals.setFamily.mutate({ family, state })}
         />
       ) : (
         <section className="space-y-2">
           <FamilyCeilingsHeading />
           <p className="text-muted-foreground text-xs" data-testid="family-ceilings-pending">
-            The controls appear once the first account read has landed.
+            {uiText('the_controls_appear_once_the_first_account_re_d8a2713')}
           </p>
         </section>
       )}
@@ -101,14 +117,17 @@ export function AccountAutomations({
       <section className="space-y-3" data-testid="portfolio-autonomy">
         <div className="space-y-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-            <h3 className="font-semibold text-foreground text-sm">Per portfolio</h3>
+            <h3 className="font-semibold text-foreground text-sm">
+              {betaUiText('beta_2c5f76b42612')}
+            </h3>
             <span
               className="text-muted-foreground text-xs tabular-nums"
               data-testid="portfolio-autonomy-meta"
             >
-              {autopilot.length} of {portfolios.length} on autopilot
-              {stopped > 0 ? ` · ${stopped} stopped` : ''}
-              {stale > 0 ? ` · ${stale} stale` : ''}
+              {autopilot.length} {betaUiText('beta_28391d3bc64e')} {portfolios.length}{' '}
+              {betaUiText('beta_aca4282478cc')}
+              {stopped > 0 ? betaUiText('beta_17663b497161', { value0: String(stopped) }) : ''}
+              {stale > 0 ? betaUiText('beta_de74b607066b', { value0: String(stale) }) : ''}
             </span>
           </div>
           <AutonomySummary counts={levelCounts(portfolios)} />

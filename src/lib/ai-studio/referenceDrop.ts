@@ -1,3 +1,5 @@
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 export const MEBIBYTE_BYTES = 1024 * 1024;
 
 export const IMAGE_REFERENCE_MAX_BYTES = 100 * MEBIBYTE_BYTES;
@@ -22,7 +24,11 @@ export type ParsedReferenceDropPayload =
       durationMs?: number;
     };
 
-type LegacyCreativeAssetPayload = { name: string; path: string; contentType?: string | null };
+type LegacyCreativeAssetPayload = {
+  name: string;
+  path: string;
+  contentType?: string | null;
+};
 type ReactFlowAssetDropPayload = {
   type?: string;
   payload?: {
@@ -52,7 +58,11 @@ export function parseReferenceDropPayload(raw: string): ParsedReferenceDropPaylo
   const parsed = tryParseJson(raw);
   if (parsed) {
     if (isLegacyCreativeAssetPayload(parsed)) {
-      return { kind: 'remote', path: parsed.path, mimeType: parsed.contentType ?? undefined };
+      return {
+        kind: 'remote',
+        path: parsed.path,
+        mimeType: parsed.contentType ?? undefined,
+      };
     }
     if (isReactFlowAssetDropPayload(parsed)) {
       return {
@@ -71,7 +81,11 @@ export function parseReferenceDropPayload(raw: string): ParsedReferenceDropPaylo
   }
 
   // Plain text drop: treat as URL or path. Try to infer mime from the value.
-  return { kind: 'remote', publicUrl: raw, mimeType: inferMimeTypeFromPath(raw) ?? undefined };
+  return {
+    kind: 'remote',
+    publicUrl: raw,
+    mimeType: inferMimeTypeFromPath(raw) ?? undefined,
+  };
 }
 
 export function resolveReferenceMimeType(parsed: ParsedReferenceDropPayload): string {
@@ -108,8 +122,8 @@ export function estimateBase64DecodedBytes(base64: string): number {
   return Math.floor((trimmed.length * 3) / 4) - padding;
 }
 
-export function formatMiB(bytes: number): string {
-  return `${(bytes / MEBIBYTE_BYTES).toFixed(1)} MiB`;
+export function formatMiB(bytes: number, locale: UiLocale = 'en'): string {
+  return `${formatDecimal(bytes / MEBIBYTE_BYTES, 1, locale)} MiB`;
 }
 
 function positiveFiniteOrUndefined(value: unknown): number | undefined {

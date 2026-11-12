@@ -3,10 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 // `executeWorkflow` reaches the network and the whole graph; the node's contract here is
 // which CONTROLS it offers, so the run is stubbed at the module boundary.
 const executeWorkflowMock = mock(() => Promise.resolve(undefined as unknown));
-mock.module('../utils/executeWorkflow', () => ({ executeWorkflow: executeWorkflowMock }));
+mock.module('../utils/executeWorkflow', () => ({
+  executeWorkflow: executeWorkflowMock,
+}));
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { FrameExtractNodeData } from '../types';
@@ -41,7 +48,12 @@ function renderNode(data: Partial<FrameExtractNodeData> = {}) {
 
 describe('FrameExtractBlock', () => {
   beforeEach(() => {
-    useStudioStore.setState({ nodes: [], edges: [], brandId: 'brand-1', updateNodeData });
+    useStudioStore.setState({
+      nodes: [],
+      edges: [],
+      brandId: 'brand-1',
+      updateNodeData,
+    });
     updateNodeData.mockClear();
     executeWorkflowMock.mockClear();
   });

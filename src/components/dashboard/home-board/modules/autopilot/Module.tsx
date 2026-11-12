@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The expanded Overnight: every action of the last 24 h with its reason, what the cap held back
 // (or, without the Backend's read, the one note that outcomes are pending), and how each portfolio
@@ -24,11 +25,15 @@ function runLine(run: PortfolioRun): string {
 }
 
 function CapSkipped({ items }: { items: readonly HomeOvernightCapItem[] }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <section className="space-y-2" data-testid="home-overnight-cap">
-      <h4 className="font-medium text-sm">Held back by the cap · {items.length}</h4>
+      <h4 className="font-medium text-sm">
+        {betaUiText('beta_0a8c92fdf218')} {items.length}
+      </h4>
       <p className="text-muted-foreground text-xs leading-snug">
-        The autopilot did not write these because they were over the per-cycle change cap.
+        {betaUiText('beta_71147d47ea1c')}
       </p>
       <ul className="flex flex-col gap-1.5">
         {items.map((item) => (
@@ -59,10 +64,12 @@ export default function AutopilotModule({
   /** The window held more actions than the read listed. */
   truncated?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <div className="space-y-5" data-testid="home-overnight-module">
       <section className="space-y-2">
-        <h4 className="font-medium text-sm">Last 24 hours</h4>
+        <h4 className="font-medium text-sm">{betaUiText('beta_5c37cf8f018b')}</h4>
         {outcomesPending ? (
           <p
             className="text-muted-foreground text-xs leading-snug"
@@ -72,7 +79,7 @@ export default function AutopilotModule({
           </p>
         ) : null}
         {rows.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Nothing ran in the last 24 h.</p>
+          <p className="text-muted-foreground text-sm">{betaUiText('beta_3c1b6623b90c')}</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {rows.map((row) => (
@@ -81,12 +88,12 @@ export default function AutopilotModule({
           </ul>
         )}
         {truncated ? (
-          <p className="text-2xs text-muted-foreground">The newest actions of a longer list.</p>
+          <p className="text-2xs text-muted-foreground">{betaUiText('beta_76f43747f470')}</p>
         ) : null}
       </section>
       {capSkipped.length > 0 ? <CapSkipped items={capSkipped} /> : null}
       <section className="space-y-2">
-        <h4 className="font-medium text-sm">How each portfolio runs</h4>
+        <h4 className="font-medium text-sm">{betaUiText('beta_da21817fe212')}</h4>
         <ul className="flex flex-col gap-1.5">
           {runs.map((run) => (
             <li
@@ -100,7 +107,7 @@ export default function AutopilotModule({
           ))}
         </ul>
         <Link className={cn(ROW_LINK, 'inline-block text-xs')} href={OPTIMIZER_LINKS.automations}>
-          Change in Optimizer automations
+          {betaUiText('beta_98976a561082')}
         </Link>
       </section>
     </div>

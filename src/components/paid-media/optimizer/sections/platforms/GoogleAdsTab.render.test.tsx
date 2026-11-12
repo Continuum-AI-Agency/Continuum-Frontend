@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
 import {
   ambiguousAccountOverview,
@@ -57,7 +58,11 @@ describe('GoogleAdsTabView — from a recorded real response', () => {
     expect(tiles.length).toBeGreaterThanOrEqual(4);
     expect(tiles.length).toBeLessThanOrEqual(6);
     expect(tiles.map(tileText)).toEqual([
-      { label: 'Spend', value: '$55,205 MXN', sub: 'no prior period to compare' },
+      {
+        label: 'Spend',
+        value: '$55,205 MXN',
+        sub: 'no prior period to compare',
+      },
       {
         label: 'Conversions',
         value: '122',
@@ -177,7 +182,11 @@ describe('GoogleAdsTabView — currency and what the Optimizer reads', () => {
   it('says once that the currency is unknown, instead of printing bare figures as if known', () => {
     const { getByTestId } = render(
       <GoogleAdsTabView
-        state={{ status: 'ready', account: { ...VIVO_47, currency: null }, overview }}
+        state={{
+          status: 'ready',
+          account: { ...VIVO_47, currency: null },
+          overview,
+        }}
       />,
     );
     const subline = getByTestId('google-subline').textContent ?? '';
@@ -225,7 +234,11 @@ describe('GoogleCampaignTypeBreakdown — currency', () => {
   it('says once that the currency is unknown in its label', () => {
     const { getByTestId } = render(
       <GoogleCampaignTypeBreakdown
-        state={{ status: 'ready', account: { ...VIVO_47, currency: null }, overview }}
+        state={{
+          status: 'ready',
+          account: { ...VIVO_47, currency: null },
+          overview,
+        }}
       />,
     );
     expect(
@@ -249,7 +262,11 @@ describe('an account with no single business result', () => {
       'Google spent $55,205 MXN. Conversions are not shown: no single result is defined for this account.',
     );
     expect([...getByTestId('google-tiles').children].map(tileText)).toEqual([
-      { label: 'Spend', value: '$55,205 MXN', sub: 'no prior period to compare' },
+      {
+        label: 'Spend',
+        value: '$55,205 MXN',
+        sub: 'no prior period to compare',
+      },
       { label: 'Conversions', value: '—', sub: 'No single result defined' },
       {
         label: 'Search · 3 campaigns',
@@ -299,7 +316,12 @@ describe('no portfolio goal: each result type apart', () => {
     GoogleAccountOverviewSchema.parse(ambiguousAccountOverview),
     GoogleTopCampaignsSchema.parse(ambiguousTopCampaignsByResult),
   );
-  const state = { status: 'ready', account: VIVO_47, overview: apart, resultBucket: null } as const;
+  const state = {
+    status: 'ready',
+    account: VIVO_47,
+    overview: apart,
+    resultBucket: null,
+  } as const;
 
   it('names each result and its cost in the sentence and on every tile', () => {
     const { getByTestId } = render(<GoogleAdsTabView state={state} />);

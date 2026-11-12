@@ -1,7 +1,19 @@
 'use client';
-import { ChevronDown, RotateCw, Search, SquareArrowOutUpRight } from 'lucide-react';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { humanizeStatus } from '../campaigns/EntityStatusPill';
+import {
+  dashboardActionLabel,
+  dashboardMetricLabel,
+  dashboardScopeLabel,
+  dashboardStatusLabel,
+} from './dashboardPresentation';
 
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { ChevronDown, RotateCw, Search, SquareArrowOutUpRight } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { useMemo } from 'react';
 import {
   Area,
   AreaChart,
@@ -33,6 +45,9 @@ import {
   Tooltip as UiTooltip,
 } from '@/components/ui/tooltip';
 import { useTimelineBlocks } from '@/hooks/timeline/useTimelineBlocks';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
@@ -181,17 +196,6 @@ type ChartZoomRange = {
 
 const KPI_COLUMNS: MetricKey[] = ['spend', 'roas', 'ctr', 'cpc', 'cpa', 'impressions', 'clicks'];
 
-const radarConfig = {
-  baseline: {
-    label: 'Baseline',
-    color: 'var(--muted-foreground)',
-  },
-  delta: {
-    label: 'Delta',
-    color: 'var(--chart-2)',
-  },
-} satisfies ChartConfig;
-
 const LINE_COLORS = [
   '#34d399',
   '#60a5fa',
@@ -208,13 +212,6 @@ const META_RATE_LIMIT_COOLDOWN_MS = 60000;
 const IRIDESCENT_BADGE_CLASS =
   'border-cyan-300/70 bg-[linear-gradient(120deg,rgba(56,189,248,0.24),rgba(192,132,252,0.28),rgba(251,191,36,0.22))] text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.18)_inset,0_4px_16px_rgba(56,189,248,0.22)] backdrop-blur-sm';
 const LIVE_BADGE_CLASS = 'border-border/70 bg-background/70 text-muted-foreground';
-const SCOPE_SIGNPOST_STYLES: Record<ActionScopeType, { color: string; label: string }> = {
-  CAMPAIGN: { color: '#38bdf8', label: 'Campaign' },
-  ADSET: { color: '#f59e0b', label: 'Ad Set' },
-  AD: { color: '#f43f5e', label: 'Ad' },
-  ACCOUNT: { color: '#a78bfa', label: 'Account' },
-  GLOBAL: { color: '#94a3b8', label: 'Global' },
-};
 
 function daysForPreset(preset: TimePreset): number {
   switch (preset) {
@@ -237,48 +234,32 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+function formatCurrency(value: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 2,
   }).format(value);
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
+function formatNumber(value: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale).format(value);
 }
 
-function formatPercent(value: number): string {
-  return `${value.toFixed(2)}%`;
+function formatPercent(value: number, locale: UiLocale = 'en'): string {
+  return `${formatDecimal(value, 2, locale)}%`;
 }
 
-function formatMetricValue(metric: MetricKey, value: number): string {
-  if (metric === 'spend' || metric === 'cpc' || metric === 'cpa') return formatCurrency(value);
-  if (metric === 'ctr') return formatPercent(value);
-  if (metric === 'roas') return value.toFixed(2);
-  return formatNumber(value);
+function formatMetricValue(metric: MetricKey, value: number, locale: UiLocale = 'en'): string {
+  if (metric === 'spend' || metric === 'cpc' || metric === 'cpa')
+    return formatCurrency(value, locale);
+  if (metric === 'ctr') return formatPercent(value, locale);
+  if (metric === 'roas') return formatDecimal(value, 2, locale);
+  return formatNumber(value, locale);
 }
 
-function labelForMetric(metric: MetricKey): string {
-  switch (metric) {
-    case 'spend':
-      return 'Spend';
-    case 'roas':
-      return 'ROAS';
-    case 'ctr':
-      return 'CTR';
-    case 'cpc':
-      return 'CPC';
-    case 'cpa':
-      return 'CPA';
-    case 'impressions':
-      return 'Impr.';
-    case 'clicks':
-      return 'Clicks';
-    default:
-      return metric;
-  }
+function labelForMetric(metric: MetricKey, t: ScaleCopy): string {
+  return metric === 'impressions' ? t('impr_e23373c') : dashboardMetricLabel(metric, t);
 }
 
 // A period-over-period change, coloured by what the move MEANS rather than by its sign: a
@@ -297,6 +278,7 @@ export function MetricDeltaText({
   deltaPct: number;
   className?: string;
 }) {
+  const uiLocale = useLocale();
   return (
     <span
       className={cn(
@@ -305,7 +287,7 @@ export function MetricDeltaText({
       )}
     >
       {deltaPct >= 0 ? '+' : ''}
-      {deltaPct.toFixed(2)}%
+      {formatDecimal(deltaPct, 2, uiLocale)}%
     </span>
   );
 }
@@ -360,12 +342,17 @@ function parseNumericRowValue(
   return null;
 }
 
-function formatAdMetricValue(metric: keyof AdMetrics, value: number | null | undefined): string {
+function formatAdMetricValue(
+  metric: keyof AdMetrics,
+  value: number | null | undefined,
+  locale: UiLocale = 'en',
+): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '--';
-  if (metric === 'spend' || metric === 'cpc' || metric === 'cpa') return formatCurrency(value);
-  if (metric === 'ctr') return formatPercent(value);
-  if (metric === 'roas') return value.toFixed(2);
-  return formatNumber(value);
+  if (metric === 'spend' || metric === 'cpc' || metric === 'cpa')
+    return formatCurrency(value, locale);
+  if (metric === 'ctr') return formatPercent(value, locale);
+  if (metric === 'roas') return formatDecimal(value, 2, locale);
+  return formatNumber(value, locale);
 }
 
 function readString(values: unknown[]): string | null {
@@ -491,7 +478,10 @@ function getTrendMetricValue(point: PaidMetricsTrendPoint, metric: MetricKey): n
 }
 
 function getDcoManagedCampaignIds(
-  timelineCampaigns: Array<{ id: string; ad_sets?: Array<{ ads?: unknown[] }> }>,
+  timelineCampaigns: Array<{
+    id: string;
+    ad_sets?: Array<{ ads?: unknown[] }>;
+  }>,
 ): string[] {
   const explicitManagedIds = timelineCampaigns
     .filter((campaign) =>
@@ -608,6 +598,7 @@ function formatDenominatorSummary(
   metric: MetricKey,
   actualValue: number | null,
   targetValue: number | null,
+  locale: UiLocale = 'en',
 ): string | null {
   if (
     actualValue === null ||
@@ -619,7 +610,7 @@ function formatDenominatorSummary(
   }
 
   const ratioPct = (actualValue / targetValue) * 100;
-  return `${formatMetricValue(metric, actualValue)} / ${formatMetricValue(metric, targetValue)} (${ratioPct.toFixed(1)}%)`;
+  return `${formatMetricValue(metric, actualValue, locale)} / ${formatMetricValue(metric, targetValue, locale)} (${formatDecimal(ratioPct, 1, locale)}%)`;
 }
 
 function isMetaRateLimitMessage(message: string): boolean {
@@ -634,7 +625,11 @@ function isMetaRateLimitMessage(message: string): boolean {
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    const timer = setTimeout(() => {
+      const error = new Error(`${label} timed out`);
+      error.name = 'TimeoutError';
+      reject(error);
+    }, ms);
 
     promise
       .then((result) => {
@@ -655,7 +650,9 @@ async function extractInvokeErrorMessage(error: unknown): Promise<string> {
 
   const baseMessage = error.message;
   const maybeContext = (
-    error as { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }
+    error as {
+      context?: { json?: () => Promise<unknown>; text?: () => Promise<string> };
+    }
   ).context;
   if (!maybeContext) {
     return baseMessage;
@@ -732,6 +729,8 @@ export function ContextMetricCard({
   selected,
   onClick,
 }: ContextMetricCardProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   // Not `delta >= 0`: on CPA/CPC the good move is downwards, and this pill painted it red.
   const isGood = paidDeltaIsGood(metric, delta);
   return (
@@ -746,9 +745,11 @@ export function ContextMetricCard({
       )}
     >
       <div className="text-2xs uppercase tracking-[0.08em] text-muted-foreground">
-        {labelForMetric(metric)}
+        {labelForMetric(metric, uiText)}
       </div>
-      <div className="mt-1 text-base font-semibold">{formatMetricValue(metric, value)}</div>
+      <div className="mt-1 text-base font-semibold">
+        {formatMetricValue(metric, value, uiLocale)}
+      </div>
       <div
         className={cn(
           'mt-1 inline-flex items-center rounded-sm px-1.5 py-0.5 text-2xs font-medium',
@@ -756,7 +757,7 @@ export function ContextMetricCard({
         )}
       >
         {delta >= 0 ? '+' : ''}
-        {delta.toFixed(2)}%
+        {formatDecimal(delta, 2, uiLocale)}%
       </div>
     </button>
   );
@@ -775,11 +776,19 @@ function EntityRadarTooltip({
   isDcoEnabled,
   dcoDeltas,
 }: EntityRadarTooltipProps) {
+  const uiText = useTranslations('scale');
+  const radarConfig = {
+    baseline: {
+      label: uiText('dashboardBaseline'),
+      color: 'var(--muted-foreground)',
+    },
+    delta: { label: uiText('dashboardDelta'), color: 'var(--chart-2)' },
+  } satisfies ChartConfig;
   const radarData = KPI_COLUMNS.map((metric) => {
     const deltaPct = getEntityDeltaPct(metric, comparison, isDcoEnabled, dcoDeltas);
     return {
       metric,
-      kpi: labelForMetric(metric),
+      kpi: labelForMetric(metric, uiText),
       baseline: 50,
       delta: normalizeRadarValue(deltaPct),
       deltaPct,
@@ -792,7 +801,9 @@ function EntityRadarTooltip({
       side="top"
       align="start"
     >
-      <div className="mb-2 text-xs font-medium text-foreground">{label} KPI Delta Radar</div>
+      <div className="mb-2 text-xs font-medium text-foreground">
+        {uiText.rich('sentence_c700b77c59a8', { v0: label })}
+      </div>
       <div className="grid gap-2 md:grid-cols-[1fr_1fr]">
         <ChartContainer config={radarConfig} className="h-[clamp(140px,22svh,220px)] w-full">
           <RadarChart data={radarData} outerRadius={60}>
@@ -822,7 +833,7 @@ function EntityRadarTooltip({
         </div>
       </div>
       <div className="mt-2 text-2xs text-muted-foreground">
-        Center = no delta, outward = positive, inward = negative.
+        {uiText('center_no_delta_outward_positive_inward_negat_7e36e2d')}
       </div>
     </TooltipContent>
   );
@@ -881,6 +892,8 @@ function MetricSparkCell({
   showTarget,
   onClick,
 }: MetricSparkCellProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const currentValue = series.length > 0 ? series[series.length - 1].actual : 0;
   const areaGradientId = React.useMemo(
     () => `spark-area-${metric}-${Math.random().toString(36).slice(2, 8)}`,
@@ -909,9 +922,11 @@ function MetricSparkCell({
     >
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-          {labelForMetric(metric)}
+          {labelForMetric(metric, uiText)}
         </span>
-        <span className="text-xs font-semibold">{formatMetricValue(metric, currentValue)}</span>
+        <span className="text-xs font-semibold">
+          {formatMetricValue(metric, currentValue, uiLocale)}
+        </span>
       </div>
       <div className="h-10">
         {series.length > 0 ? (
@@ -959,7 +974,9 @@ function MetricSparkCell({
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center text-2xs text-muted-foreground">No data</div>
+          <div className="flex h-full items-center text-2xs text-muted-foreground">
+            {uiText('no_data_3b41ba9')}
+          </div>
         )}
       </div>
     </button>
@@ -975,8 +992,10 @@ function AdPreviewCard({
   isFocused: boolean;
   onClick: () => void;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const thumbnail = ad.creative?.thumbnailUrl || ad.creative?.imageUrl;
-  const adTitle = ad.creative?.title || ad.name || 'Untitled ad';
+  const adTitle = ad.creative?.title || ad.name || uiText('untitled_ad_7ff7472');
 
   return (
     <button
@@ -995,7 +1014,7 @@ function AdPreviewCard({
           variant={ad.effectiveStatus?.toUpperCase() === 'ACTIVE' ? 'default' : 'secondary'}
           className="text-2xs"
         >
-          {ad.effectiveStatus ?? ad.status ?? 'UNKNOWN'}
+          {ad.effectiveStatus ?? ad.status ?? uiText('unknown_2375999')}
         </Badge>
       </div>
 
@@ -1011,34 +1030,42 @@ function AdPreviewCard({
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            No preview image
+            {uiText('no_preview_image_2390949')}
           </div>
         )}
       </div>
 
       <div className="mb-2 grid grid-cols-2 gap-1.5">
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-3xs uppercase tracking-wide text-muted-foreground">Spend</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">
+            {uiText('spend_85f3d55')}
+          </div>
           <div className="text-xs font-semibold">
-            {formatAdMetricValue('spend', ad.metrics?.spend ?? null)}
+            {formatAdMetricValue('spend', ad.metrics?.spend ?? null, uiLocale)}
           </div>
         </div>
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-3xs uppercase tracking-wide text-muted-foreground">ROAS</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">
+            {uiText('roas_b81bd97')}
+          </div>
           <div className="text-xs font-semibold">
-            {formatAdMetricValue('roas', ad.metrics?.roas ?? null)}
+            {formatAdMetricValue('roas', ad.metrics?.roas ?? null, uiLocale)}
           </div>
         </div>
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-3xs uppercase tracking-wide text-muted-foreground">CTR</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">
+            {uiText('ctr_07fce34')}
+          </div>
           <div className="text-xs font-semibold">
-            {formatAdMetricValue('ctr', ad.metrics?.ctr ?? null)}
+            {formatAdMetricValue('ctr', ad.metrics?.ctr ?? null, uiLocale)}
           </div>
         </div>
         <div className="rounded border border-border/60 px-2 py-1">
-          <div className="text-3xs uppercase tracking-wide text-muted-foreground">Clicks</div>
+          <div className="text-3xs uppercase tracking-wide text-muted-foreground">
+            {uiText('clicks_921fc98')}
+          </div>
           <div className="text-xs font-semibold">
-            {formatAdMetricValue('clicks', ad.metrics?.clicks ?? null)}
+            {formatAdMetricValue('clicks', ad.metrics?.clicks ?? null, uiLocale)}
           </div>
         </div>
       </div>
@@ -1051,11 +1078,13 @@ function AdPreviewCard({
           className="inline-flex items-center gap-1 text-xs font-medium text-primary-ink hover:underline"
           onClick={(event) => event.stopPropagation()}
         >
-          Preview
+          {uiText('preview_324b134')}
           <SquareArrowOutUpRight className="h-3 w-3" />
         </a>
       ) : (
-        <span className="text-xs text-muted-foreground">Preview unavailable</span>
+        <span className="text-xs text-muted-foreground">
+          {uiText('preview_unavailable_b99fa6c')}
+        </span>
       )}
     </button>
   );
@@ -1076,6 +1105,23 @@ export function CampaignTimelineWorkspace({
   onActiveOnlyChange,
   onSelectedCampaignChange,
 }: CampaignTimelineWorkspaceProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  // Locale changes update guidance without retriggering the data-read callback.
+  const fetchCopyRef = React.useRef(uiText);
+  fetchCopyRef.current = uiText;
+  const SCOPE_SIGNPOST_STYLES: Record<ActionScopeType, { color: string; label: string }> = useMemo(
+    () => ({
+      CAMPAIGN: { color: '#38bdf8', label: uiText('campaign_268286d') },
+      ADSET: { color: '#f59e0b', label: uiText('ad_set_8fa52e4') },
+      AD: { color: '#f43f5e', label: uiText('ad_1d97c9f') },
+      ACCOUNT: { color: '#a78bfa', label: uiText('account_7e1b0d5') },
+      GLOBAL: { color: '#94a3b8', label: uiText('global_a258b30') },
+    }),
+    [uiText],
+  );
+
   const [sortMetric, setSortMetric] = React.useState<MetricKey>('spend');
   const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
   const [selectedMetric, setSelectedMetric] = React.useState<MetricKey>('spend');
@@ -1174,7 +1220,11 @@ export function CampaignTimelineWorkspace({
 
           const payload = (await response.json()) as {
             data?: unknown[];
-            pagination?: { hasNextPage?: boolean; totalPages?: number; page?: number };
+            pagination?: {
+              hasNextPage?: boolean;
+              totalPages?: number;
+              page?: number;
+            };
           };
 
           if (Array.isArray(payload.data)) {
@@ -1337,7 +1387,7 @@ export function CampaignTimelineWorkspace({
     if (unindexed.length > 0) {
       groups.push({
         id: 'index:unindexed',
-        label: 'Unindexed',
+        label: uiText('unindexed_cdbd6a8'),
         campaigns: unindexed,
         count: unindexed.length,
         isSelectedIndex: false,
@@ -1347,7 +1397,7 @@ export function CampaignTimelineWorkspace({
     if (groups.length === 0) {
       groups.push({
         id: 'index:all',
-        label: 'All campaigns',
+        label: uiText('all_campaigns_ffdb9c4'),
         campaigns: watchlistCampaigns,
         count: watchlistCampaigns.length,
         isSelectedIndex: false,
@@ -1360,7 +1410,7 @@ export function CampaignTimelineWorkspace({
       if (leftSelected !== rightSelected) return leftSelected - rightSelected;
       return left.label.localeCompare(right.label);
     });
-  }, [indexGroups, selectedIndexGroupId, watchlistCampaigns, watchlistGroupMode]);
+  }, [indexGroups, selectedIndexGroupId, watchlistCampaigns, watchlistGroupMode, uiText]);
 
   const loadAdSets = React.useCallback(
     async (campaignId: string) => {
@@ -1388,7 +1438,10 @@ export function CampaignTimelineWorkspace({
           [campaignId]: {
             status: 'error',
             adSets: prev[campaignId]?.adSets ?? [],
-            errorMessage: `Meta API rate limit active. Retry in ~${secondsLeft}s.`,
+            errorMessage: fetchCopyRef.current('dashboardRateLimit', {
+              platform: 'Meta',
+              seconds: secondsLeft,
+            }),
           },
         }));
         return;
@@ -1478,8 +1531,8 @@ export function CampaignTimelineWorkspace({
           },
         }));
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load ad sets';
-        if (isMetaRateLimitMessage(message)) {
+        const message = formatUiError(error);
+        if (isMetaRateLimitMessage(error instanceof Error ? error.message : '')) {
           rateLimitedUntilRef.current = Date.now() + META_RATE_LIMIT_COOLDOWN_MS;
         }
 
@@ -1496,7 +1549,7 @@ export function CampaignTimelineWorkspace({
         inFlightAdSetLoads.current.delete(campaignId);
       }
     },
-    [accountId, brandId, timeRangePreset, timelineAdSetFallbackByCampaignId],
+    [accountId, brandId, timeRangePreset, timelineAdSetFallbackByCampaignId, formatUiError],
   );
 
   const loadAdsForAdSet = React.useCallback(
@@ -1548,7 +1601,7 @@ export function CampaignTimelineWorkspace({
           },
         }));
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load ads';
+        const message = formatUiError(error);
         setAdsByAdSet((prev) => ({
           ...prev,
           [adSetId]: {
@@ -1561,7 +1614,7 @@ export function CampaignTimelineWorkspace({
         inFlightAdLoads.current.delete(adSetId);
       }
     },
-    [accountId, brandId, timeRangePreset],
+    [accountId, brandId, timeRangePreset, formatUiError],
   );
 
   React.useEffect(() => {
@@ -1695,10 +1748,10 @@ export function CampaignTimelineWorkspace({
 
   const focusMetrics = groupContext?.metrics ?? focusedCampaign?.metrics ?? latestSummaryMetrics;
   const focusLabel = groupContext
-    ? `Campaign Index: ${groupContext.label}`
+    ? uiText('dashboardCampaignIndexContext', { name: groupContext.label })
     : focusedCampaign
-      ? `Campaign: ${focusedCampaign.name}`
-      : 'Account Context';
+      ? uiText('dashboardCampaignContext', { name: focusedCampaign.name })
+      : uiText('dashboardAccountContext');
 
   const topChartModel = React.useMemo(() => {
     const rowsByTime = new Map<string, Record<string, unknown>>();
@@ -1719,7 +1772,11 @@ export function CampaignTimelineWorkspace({
         false,
       );
 
-      lines.push({ key: 'group_actual', label: groupContext.label, color: LINE_COLORS[0] });
+      lines.push({
+        key: 'group_actual',
+        label: groupContext.label,
+        color: LINE_COLORS[0],
+      });
       aggregateSeries.forEach((point) => {
         const row = ensureRow(point.timestamp);
         row.group_actual = point.actual;
@@ -1737,7 +1794,11 @@ export function CampaignTimelineWorkspace({
         focusedShowTarget,
       );
 
-      lines.push({ key: 'campaign_actual', label: 'Campaign', color: LINE_COLORS[0] });
+      lines.push({
+        key: 'campaign_actual',
+        label: uiText('campaign_268286d'),
+        color: LINE_COLORS[0],
+      });
       campaignSeries.forEach((point) => {
         const row = ensureRow(point.timestamp);
         row.campaign_actual = point.actual;
@@ -1749,7 +1810,7 @@ export function CampaignTimelineWorkspace({
       if (focusedShowTarget) {
         lines.push({
           key: 'campaign_target',
-          label: 'Target',
+          label: uiText('target_978354d'),
           color: DELTA_TARGET_COLOR,
           dashed: true,
         });
@@ -1814,7 +1875,11 @@ export function CampaignTimelineWorkspace({
         };
       });
 
-      lines.push({ key: 'account_actual', label: 'Account', color: LINE_COLORS[0] });
+      lines.push({
+        key: 'account_actual',
+        label: uiText('account_7e1b0d5'),
+        color: LINE_COLORS[0],
+      });
       accountSeries.forEach((point) => {
         const row = ensureRow(point.timestamp);
         row.account_actual = point.actual;
@@ -1826,7 +1891,7 @@ export function CampaignTimelineWorkspace({
       if (focusedShowTarget) {
         lines.push({
           key: 'account_target',
-          label: 'Target',
+          label: uiText('target_978354d'),
           color: DELTA_TARGET_COLOR,
           dashed: true,
         });
@@ -1849,6 +1914,7 @@ export function CampaignTimelineWorkspace({
     groupContext,
     latestDcoDeltas,
     selectedMetric,
+    uiText,
   ]);
 
   React.useEffect(() => {
@@ -1940,10 +2006,12 @@ export function CampaignTimelineWorkspace({
   }, [latestVisibleTimestampMs, now, resolution, zoomWindowDurationMs]);
 
   const graphTitle = groupContext
-    ? `${groupContext.label} - ${labelForMetric(selectedMetric)}`
+    ? `${groupContext.label} - ${labelForMetric(selectedMetric, uiText)}`
     : focusedCampaign
-      ? `${focusedCampaign.name} - ${labelForMetric(selectedMetric)}`
-      : `Account - ${labelForMetric(selectedMetric)}`;
+      ? `${focusedCampaign.name} - ${labelForMetric(selectedMetric, uiText)}`
+      : uiText('dashboardAccountGraph', {
+          metric: labelForMetric(selectedMetric, uiText),
+        });
 
   const topPrimaryLineKey = React.useMemo(() => {
     const preferred = topChartModel.lines.find(
@@ -2068,14 +2136,21 @@ export function CampaignTimelineWorkspace({
       const row = rowByBucket.get(group.bucket);
       if (!row) return;
       const style = SCOPE_SIGNPOST_STYLES[group.scope];
-      const timestampLabel = new Date(group.latestAt).toLocaleString('en-US');
-      const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(', ');
-      const statusLabel = Array.from(group.statuses).join(', ');
+      const timestampLabel = new Date(group.latestAt).toLocaleString(uiLocale);
+      const actionLabel = Array.from(group.actionTypes)
+        .slice(0, 2)
+        .map((action) => dashboardActionLabel(action, uiText))
+        .join(', ');
+      const statusLabel = Array.from(group.statuses)
+        .map((status) => dashboardStatusLabel(status, uiText))
+        .join(', ');
       const kpiShiftPct = calculateImmediateKpiShiftPct(orderedRows, resolution, group.bucket);
       const shiftLabel =
         kpiShiftPct === null
-          ? 'Next KPI shift: n/a'
-          : `Next KPI shift: ${kpiShiftPct >= 0 ? '+' : ''}${kpiShiftPct.toFixed(2)}%`;
+          ? uiText('next_kpi_shift_n_a_d8fb03b')
+          : uiText('dashboardKpiShift', {
+              value: (kpiShiftPct >= 0 ? '+' : '') + formatDecimal(kpiShiftPct, 2, uiLocale),
+            });
       markers.push({
         id,
         x: row.timestamp,
@@ -2083,13 +2158,27 @@ export function CampaignTimelineWorkspace({
         color: style.color,
         scopeLabel: style.label,
         count: group.count,
-        tooltip: `${style.label} action${group.count > 1 ? 's' : ''} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
+        tooltip: uiText('dashboardMarkerTooltip', {
+          scope: style.label,
+          count: group.count,
+          actions: actionLabel,
+          statuses: statusLabel,
+          shift: shiftLabel,
+          timestamp: timestampLabel,
+        }),
         kpiShiftPct,
       });
     });
 
     return markers;
-  }, [resolution, scopedTimelineActionLogs, topPrimaryLineKey, visibleTopChartData]);
+  }, [
+    resolution,
+    scopedTimelineActionLogs,
+    topPrimaryLineKey,
+    visibleTopChartData,
+    uiLocale,
+    uiText,
+  ]);
 
   const actionScopeSummary = React.useMemo(() => {
     const summary = {
@@ -2181,19 +2270,19 @@ export function CampaignTimelineWorkspace({
     [topPrimaryLineKey, visibleTopChartData],
   );
   const topDenominatorSummary = React.useMemo(
-    () => formatDenominatorSummary(selectedMetric, topActualValue, topTargetValue),
-    [selectedMetric, topActualValue, topTargetValue],
+    () => formatDenominatorSummary(selectedMetric, topActualValue, topTargetValue, uiLocale),
+    [selectedMetric, topActualValue, topTargetValue, uiLocale],
   );
   const totalScopedActionCount =
     actionScopeSummary.CAMPAIGN + actionScopeSummary.ADSET + actionScopeSummary.AD;
   const briefingMetrics = React.useMemo(
     () =>
       [
-        { metric: 'spend' as const, label: 'Spend' },
-        { metric: 'roas' as const, label: 'ROAS' },
-        { metric: 'ctr' as const, label: 'CTR' },
+        { metric: 'spend' as const, label: uiText('spend_85f3d55') },
+        { metric: 'roas' as const, label: uiText('roas_b81bd97') },
+        { metric: 'ctr' as const, label: uiText('ctr_07fce34') },
         { metric: 'cpa' as const, label: 'CPA' },
-        { metric: 'clicks' as const, label: 'Clicks' },
+        { metric: 'clicks' as const, label: uiText('clicks_921fc98') },
       ].map((item) => ({
         ...item,
         value: focusMetrics?.[item.metric] ?? 0,
@@ -2204,7 +2293,7 @@ export function CampaignTimelineWorkspace({
           latestDcoDeltas,
         ),
       })),
-    [focusMetrics, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas],
+    [focusMetrics, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas, uiText],
   );
   const briefingLineData = React.useMemo(() => {
     if (!topPrimaryLineKey) return [] as Array<{ timestamp: string; value: number }>;
@@ -2225,22 +2314,24 @@ export function CampaignTimelineWorkspace({
       .slice(0, 14)
       .map((log) => {
         const scope = toActionScope(log.scopeType);
-        const scopeLabel = SCOPE_SIGNPOST_STYLES[scope]?.label ?? 'Global';
+        const scopeLabel = SCOPE_SIGNPOST_STYLES[scope]?.label ?? uiText('global_a258b30');
         return {
           id: log.id,
           at: log.occurredAt,
-          text: `${scopeLabel} • ${log.actionType.replaceAll('_', ' ')} • ${log.status}`,
+          text: `${scopeLabel} • ${dashboardActionLabel(log.actionType, uiText)} • ${dashboardStatusLabel(log.status, uiText)}`,
           detail: log.decisionNote ?? log.error ?? '',
         };
       });
-  }, [scopedTimelineActionLogs]);
+  }, [scopedTimelineActionLogs, uiText]);
 
   return (
     <TooltipProvider>
       <Card className="overflow-hidden">
         <CardHeader className="border-b pb-2 pt-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-base">Campaign Timeline Workspace</CardTitle>
+            <CardTitle className="text-base">
+              {uiText('campaign_timeline_workspace_ab1dcb6')}
+            </CardTitle>
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex items-center rounded-md border border-border/70 p-0.5">
@@ -2250,7 +2341,7 @@ export function CampaignTimelineWorkspace({
                   className="h-7 px-2 text-xs"
                   onClick={() => onResolutionChange('daily')}
                 >
-                  Daily
+                  {uiText('daily_b36c261')}
                 </Button>
                 <Button
                   size="sm"
@@ -2258,7 +2349,7 @@ export function CampaignTimelineWorkspace({
                   className="h-7 px-2 text-xs"
                   onClick={() => onResolutionChange('hourly')}
                 >
-                  Hourly
+                  {uiText('hourly_eab0cd8')}
                 </Button>
               </div>
 
@@ -2273,7 +2364,9 @@ export function CampaignTimelineWorkspace({
                   })
                 }
               >
-                Sort: {labelForMetric(sortMetric)}
+                {uiText.rich('sentence_562176f8e5ae', {
+                  v0: labelForMetric(sortMetric, uiText),
+                })}
               </Button>
 
               <Button
@@ -2282,11 +2375,11 @@ export function CampaignTimelineWorkspace({
                 className="h-8 text-xs"
                 onClick={() => setSortDirection((current) => (current === 'desc' ? 'asc' : 'desc'))}
               >
-                {sortDirection === 'desc' ? 'Highest' : 'Lowest'}
+                {sortDirection === 'desc' ? uiText('highest_d402ef1') : uiText('lowest_5c59093')}
               </Button>
 
               <div className="flex h-8 items-center gap-2 rounded border px-2 text-xs">
-                <span>Active only</span>
+                <span>{uiText('active_only_a9b5ed3')}</span>
                 <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
               </div>
             </div>
@@ -2301,14 +2394,18 @@ export function CampaignTimelineWorkspace({
                   <span>{focusLabel}</span>
                   {focusedAdSet ? (
                     <span className="rounded border border-border/70 px-2 py-0.5 normal-case tracking-normal text-foreground">
-                      Ad set:{' '}
-                      {focusedCampaignAdSets.find((adSet) => adSet.id === focusedAdSet.adSetId)
-                        ?.name ?? focusedAdSet.adSetId}
+                      {uiText.rich('sentence_82ffc5148390', {
+                        v0:
+                          focusedCampaignAdSets.find((adSet) => adSet.id === focusedAdSet.adSetId)
+                            ?.name ?? focusedAdSet.adSetId,
+                      })}
                     </span>
                   ) : null}
                   {focusedAd ? (
                     <span className="rounded border border-border/70 px-2 py-0.5 normal-case tracking-normal text-foreground">
-                      Ad: {focusedAd.name}
+                      {uiText.rich('sentence_e6dc85f84648', {
+                        v0: focusedAd.name,
+                      })}
                     </span>
                   ) : null}
                   {groupContext ? (
@@ -2316,21 +2413,23 @@ export function CampaignTimelineWorkspace({
                       variant="outline"
                       className="border-blue-400/50 bg-blue-500/10 text-blue-500"
                     >
-                      Index
+                      {uiText('index_39c3be1')}
                     </Badge>
                   ) : focusedCampaign ? (
                     <Badge
                       variant="outline"
                       className={focusedIsDcoEnabled ? IRIDESCENT_BADGE_CLASS : LIVE_BADGE_CLASS}
                     >
-                      {focusedIsDcoEnabled ? 'DCO' : 'Live'}
+                      {focusedIsDcoEnabled ? 'DCO' : uiText('live_b64ac05')}
                     </Badge>
                   ) : null}
                 </div>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   {topDenominatorSummary ? (
                     <span className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-red-500">
-                      Target baseline: {topDenominatorSummary}
+                      {uiText.rich('sentence_4cce9b1b8e1b', {
+                        v0: topDenominatorSummary,
+                      })}
                     </span>
                   ) : null}
                   <span>{graphTitle}</span>
@@ -2369,7 +2468,10 @@ export function CampaignTimelineWorkspace({
                           <span
                             key={`scope-summary-${scope}`}
                             className="inline-flex items-center gap-1 rounded border px-2 py-0.5"
-                            style={{ borderColor: `${style.color}66`, color: style.color }}
+                            style={{
+                              borderColor: `${style.color}66`,
+                              color: style.color,
+                            }}
                           >
                             <span
                               className="h-1.5 w-1.5 rounded-full"
@@ -2380,27 +2482,32 @@ export function CampaignTimelineWorkspace({
                         );
                       })}
                       <span className="rounded border border-border/70 px-2 py-0.5 text-muted-foreground">
-                        Total markers: {totalScopedActionCount}
+                        {uiText.rich('sentence_39e3ec488698', {
+                          v0: totalScopedActionCount,
+                        })}
                       </span>
                     </div>
                     <span className="text-muted-foreground">
-                      Tooltips include next-bucket KPI shift after each action.
+                      {uiText('tooltips_include_next_bucket_kpi_shift_after__6dcc2c4')}
                     </span>
                   </div>
 
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
                       <span className="rounded border border-border/70 px-2 py-0.5">
-                        Window points: {visibleTopChartData.length}/{topChartModel.data.length}
+                        {uiText.rich('sentence_a6c02ea49fc1', {
+                          v0: visibleTopChartData.length,
+                          v1: topChartModel.data.length,
+                        })}
                       </span>
                       {topChartZoomRange ? (
                         <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-600 dark:text-emerald-300">
-                          Zoom active
+                          {uiText('zoom_active_5f9376d')}
                         </span>
                       ) : null}
                       {suggestHourlyZoom ? (
                         <span className="rounded border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-amber-700 dark:text-amber-300">
-                          Zoom window supports hourly drill-in
+                          {uiText('zoom_window_supports_hourly_drill_in_a2bdc1d')}
                         </span>
                       ) : null}
                     </div>
@@ -2412,7 +2519,7 @@ export function CampaignTimelineWorkspace({
                           className="h-7 px-2 text-xs"
                           onClick={clearTopChartZoom}
                         >
-                          Reset zoom
+                          {uiText('reset_zoom_91a661b')}
                         </Button>
                       ) : null}
                       {suggestHourlyZoom ? (
@@ -2422,7 +2529,7 @@ export function CampaignTimelineWorkspace({
                           className="h-7 border-amber-500/35 bg-amber-500/10 px-2 text-xs text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
                           onClick={() => onResolutionChange('hourly')}
                         >
-                          Switch to hourly
+                          {uiText('switch_to_hourly_acbd77d')}
                         </Button>
                       ) : null}
                     </div>
@@ -2448,7 +2555,7 @@ export function CampaignTimelineWorkspace({
                         <XAxis dataKey="timestamp" hide />
                         <YAxis
                           tickFormatter={(value) =>
-                            formatMetricValue(selectedMetric, Number(value))
+                            formatMetricValue(selectedMetric, Number(value), uiLocale)
                           }
                           width={90}
                           tickCount={4}
@@ -2456,12 +2563,12 @@ export function CampaignTimelineWorkspace({
                         />
                         <RechartsTooltip
                           labelFormatter={(value) =>
-                            new Date(String(value)).toLocaleString('en-US')
+                            new Date(String(value)).toLocaleString(uiLocale)
                           }
                           formatter={(value, name) => {
                             const lineMeta = topChartModel.lines.find((line) => line.key === name);
                             return [
-                              formatMetricValue(selectedMetric, Number(value)),
+                              formatMetricValue(selectedMetric, Number(value), uiLocale),
                               lineMeta?.label ?? String(name),
                             ];
                           }}
@@ -2510,7 +2617,9 @@ export function CampaignTimelineWorkspace({
                             strokeOpacity={0.45}
                             ifOverflow="extendDomain"
                             label={{
-                              value: `Target ${formatMetricValue(selectedMetric, topTargetValue)}`,
+                              value: uiText('template_97a8bdaa851c', {
+                                v0: formatMetricValue(selectedMetric, topTargetValue, uiLocale),
+                              }),
                               position: 'insideTopRight',
                               fill: DELTA_TARGET_COLOR,
                               fontSize: 10,
@@ -2544,7 +2653,7 @@ export function CampaignTimelineWorkspace({
                             travellerWidth={8}
                             stroke="var(--border)"
                             tickFormatter={(value) =>
-                              new Date(String(value)).toLocaleDateString('en-US', {
+                              new Date(String(value)).toLocaleDateString(uiLocale, {
                                 month: 'short',
                                 day: 'numeric',
                               })
@@ -2561,9 +2670,9 @@ export function CampaignTimelineWorkspace({
 
             <div className="flex-1 overflow-auto rounded-md border">
               <div className="grid grid-cols-[minmax(220px,1.12fr)_repeat(6,minmax(112px,1fr))] gap-2 border-b bg-muted/20 px-2.5 py-1.5 text-2xs uppercase tracking-wide text-muted-foreground">
-                <div>Campaign / Ad Set</div>
+                <div>{uiText('campaign_ad_set_8c7eecf')}</div>
                 {KPI_COLUMNS.map((metric) => (
-                  <div key={metric}>{labelForMetric(metric)}</div>
+                  <div key={metric}>{labelForMetric(metric, uiText)}</div>
                 ))}
               </div>
 
@@ -2586,13 +2695,16 @@ export function CampaignTimelineWorkspace({
                 </div>
               ) : filteredCampaigns.length === 0 ? (
                 <div className="p-6 text-center text-sm text-muted-foreground">
-                  No campaigns match this filter.
+                  {uiText('no_campaigns_match_this_filter_ce7eb33')}
                 </div>
               ) : (
                 <div className="divide-y">
                   {filteredCampaigns.map((campaign) => {
                     const isExpanded = expandedCampaignId === campaign.id;
-                    const adSetLoad = adSetState[campaign.id] ?? { status: 'idle', adSets: [] };
+                    const adSetLoad = adSetState[campaign.id] ?? {
+                      status: 'idle',
+                      adSets: [],
+                    };
                     const visibleAdSets = activeOnly
                       ? adSetLoad.adSets.filter((adSet) => isActiveStatus(adSet.status))
                       : adSetLoad.adSets;
@@ -2695,13 +2807,13 @@ export function CampaignTimelineWorkspace({
                                     : 'secondary'
                                 }
                               >
-                                {campaign.status}
+                                {humanizeStatus(campaign.status, uiText)}
                               </Badge>
                               <Badge
                                 variant="outline"
                                 className={isDcoManaged ? IRIDESCENT_BADGE_CLASS : LIVE_BADGE_CLASS}
                               >
-                                {isDcoManaged ? 'DCO' : 'Live'}
+                                {isDcoManaged ? 'DCO' : uiText('live_b64ac05')}
                               </Badge>
                             </div>
                           </div>
@@ -2739,14 +2851,17 @@ export function CampaignTimelineWorkspace({
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <RotateCw className="h-3 w-3 animate-spin" />
                                 {visibleAdSets.length > 0
-                                  ? 'Refreshing live ad sets...'
-                                  : 'Loading ad sets...'}
+                                  ? uiText('refreshing_live_ad_sets_eff1bec')
+                                  : uiText('loading_ad_sets_699310c')}
                               </div>
                             ) : null}
 
                             {adSetLoad.status === 'error' ? (
                               <div className="flex items-center gap-2 text-xs text-destructive">
-                                <span>{adSetLoad.errorMessage ?? 'Failed to load ad sets'}</span>
+                                <span>
+                                  {adSetLoad.errorMessage ??
+                                    uiText('failed_to_load_ad_sets_9622ee3')}
+                                </span>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -2754,12 +2869,15 @@ export function CampaignTimelineWorkspace({
                                   onClick={() => {
                                     setAdSetState((prev) => ({
                                       ...prev,
-                                      [campaign.id]: { status: 'idle', adSets: [] },
+                                      [campaign.id]: {
+                                        status: 'idle',
+                                        adSets: [],
+                                      },
                                     }));
                                     void loadAdSets(campaign.id);
                                   }}
                                 >
-                                  Retry
+                                  {uiText('retry_942087c')}
                                 </Button>
                               </div>
                             ) : null}
@@ -2768,8 +2886,8 @@ export function CampaignTimelineWorkspace({
                             visibleAdSets.length === 0 ? (
                               <div className="text-xs text-muted-foreground">
                                 {activeOnly
-                                  ? 'No active ad sets for this campaign.'
-                                  : 'No ad sets returned for this campaign.'}
+                                  ? uiText('no_active_ad_sets_for_this_campaign_bf09357')
+                                  : uiText('no_ad_sets_returned_for_this_campaign_70f6c16')}
                               </div>
                             ) : null}
 
@@ -2873,11 +2991,14 @@ export function CampaignTimelineWorkspace({
                                         const style = SCOPE_SIGNPOST_STYLES[group.scope];
                                         const timestampLabel = new Date(
                                           group.latestAt,
-                                        ).toLocaleString('en-US');
+                                        ).toLocaleString(uiLocale);
                                         const actionLabel = Array.from(group.actionTypes)
                                           .slice(0, 2)
+                                          .map((action) => dashboardActionLabel(action, uiText))
                                           .join(', ');
-                                        const statusLabel = Array.from(group.statuses).join(', ');
+                                        const statusLabel = Array.from(group.statuses)
+                                          .map((status) => dashboardStatusLabel(status, uiText))
+                                          .join(', ');
                                         const rowSeries = selectedSeries
                                           .map((point) => ({
                                             timestamp: point.timestamp,
@@ -2891,8 +3012,12 @@ export function CampaignTimelineWorkspace({
                                         );
                                         const shiftLabel =
                                           kpiShiftPct === null
-                                            ? 'Next KPI shift: n/a'
-                                            : `Next KPI shift: ${kpiShiftPct >= 0 ? '+' : ''}${kpiShiftPct.toFixed(2)}%`;
+                                            ? uiText('next_kpi_shift_n_a_d8fb03b')
+                                            : uiText('dashboardKpiShift', {
+                                                value:
+                                                  (kpiShiftPct >= 0 ? '+' : '') +
+                                                  formatDecimal(kpiShiftPct, 2, uiLocale),
+                                              });
                                         markers.push({
                                           id,
                                           x: row.timestamp,
@@ -2900,7 +3025,14 @@ export function CampaignTimelineWorkspace({
                                           color: style.color,
                                           scopeLabel: style.label,
                                           count: group.count,
-                                          tooltip: `${style.label} action${group.count > 1 ? 's' : ''} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
+                                          tooltip: uiText('dashboardMarkerTooltip', {
+                                            scope: style.label,
+                                            count: group.count,
+                                            actions: actionLabel,
+                                            statuses: statusLabel,
+                                            shift: shiftLabel,
+                                            timestamp: timestampLabel,
+                                          }),
                                           kpiShiftPct,
                                         });
                                       });
@@ -2910,6 +3042,7 @@ export function CampaignTimelineWorkspace({
                                       selectedMetric,
                                       adSetActualValue,
                                       adSetTargetValue,
+                                      uiLocale,
                                     );
 
                                     return (
@@ -2982,7 +3115,7 @@ export function CampaignTimelineWorkspace({
                                                     : 'secondary'
                                                 }
                                               >
-                                                {adSet.status ?? 'UNKNOWN'}
+                                                {humanizeStatus(adSet.status ?? '', uiText)}
                                               </Badge>
                                             </div>
                                           </div>
@@ -3024,20 +3157,28 @@ export function CampaignTimelineWorkspace({
                                           <div className="mt-2 rounded border bg-muted/20 p-2">
                                             <div className="mb-2 flex items-center justify-between text-xs">
                                               <span className="text-muted-foreground">
-                                                {adSet.name} {labelForMetric(selectedMetric)} trend
+                                                {uiText.rich('sentence_3b3ead6fa928', {
+                                                  v0: adSet.name,
+                                                  v1: labelForMetric(selectedMetric, uiText),
+                                                })}
                                               </span>
                                               <div className="flex items-center gap-2">
                                                 {adSetDenominatorSummary ? (
                                                   <span className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-red-500">
-                                                    Target baseline: {adSetDenominatorSummary}
+                                                    {uiText.rich('sentence_4cce9b1b8e1b', {
+                                                      v0: adSetDenominatorSummary,
+                                                    })}
                                                   </span>
                                                 ) : null}
                                                 <span>
-                                                  Delta:{' '}
-                                                  <MetricDeltaText
-                                                    metric={selectedMetric}
-                                                    deltaPct={adSetDeltaForSelected}
-                                                  />
+                                                  {uiText.rich('sentence_6fde31586366', {
+                                                    v0: () => (
+                                                      <MetricDeltaText
+                                                        metric={selectedMetric}
+                                                        deltaPct={adSetDeltaForSelected}
+                                                      />
+                                                    ),
+                                                  })}
                                                 </span>
                                               </div>
                                             </div>
@@ -3045,7 +3186,12 @@ export function CampaignTimelineWorkspace({
                                               <ResponsiveContainer width="100%" height="100%">
                                                 <AreaChart
                                                   data={adSetSeriesByMetric[selectedMetric]}
-                                                  margin={{ top: 6, right: 6, left: 0, bottom: 0 }}
+                                                  margin={{
+                                                    top: 6,
+                                                    right: 6,
+                                                    left: 0,
+                                                    bottom: 0,
+                                                  }}
                                                 >
                                                   <defs>
                                                     <linearGradient
@@ -3081,7 +3227,7 @@ export function CampaignTimelineWorkspace({
                                                   <RechartsTooltip
                                                     labelFormatter={(value) =>
                                                       new Date(String(value)).toLocaleString(
-                                                        'en-US',
+                                                        uiLocale,
                                                       )
                                                     }
                                                     formatter={(value, name) => {
@@ -3090,6 +3236,7 @@ export function CampaignTimelineWorkspace({
                                                           formatMetricValue(
                                                             selectedMetric,
                                                             Number(value),
+                                                            uiLocale,
                                                           ),
                                                           'Target',
                                                         ];
@@ -3098,6 +3245,7 @@ export function CampaignTimelineWorkspace({
                                                         formatMetricValue(
                                                           selectedMetric,
                                                           Number(value),
+                                                          uiLocale,
                                                         ),
                                                         'Actual',
                                                       ];
@@ -3153,7 +3301,13 @@ export function CampaignTimelineWorkspace({
                                                       strokeOpacity={0.45}
                                                       ifOverflow="extendDomain"
                                                       label={{
-                                                        value: `Target ${formatMetricValue(selectedMetric, adSetTargetValue)}`,
+                                                        value: uiText('template_97a8bdaa851c', {
+                                                          v0: formatMetricValue(
+                                                            selectedMetric,
+                                                            adSetTargetValue,
+                                                            uiLocale,
+                                                          ),
+                                                        }),
                                                         position: 'insideTopRight',
                                                         fill: DELTA_TARGET_COLOR,
                                                         fontSize: 10,
@@ -3185,17 +3339,21 @@ export function CampaignTimelineWorkspace({
                                             <div className="mt-2 rounded border border-border/70 bg-background/70 p-2">
                                               <div className="mb-2 flex items-center justify-between text-xs">
                                                 <span className="text-muted-foreground">
-                                                  Ads in {adSet.name}
+                                                  {uiText.rich('sentence_7ceb7bf4a369', {
+                                                    v0: adSet.name,
+                                                  })}
                                                 </span>
                                                 <span className="rounded border border-border/70 px-1.5 py-0.5 text-muted-foreground">
-                                                  {adSetAdsState.ads.length} loaded
+                                                  {uiText.rich('sentence_e5dc15de5da8', {
+                                                    v0: adSetAdsState.ads.length,
+                                                  })}
                                                 </span>
                                               </div>
 
                                               {adSetAdsState.status === 'loading' ? (
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                   <RotateCw className="h-3 w-3 animate-spin" />
-                                                  Loading ads and previews...
+                                                  {uiText('loading_ads_and_previews_e6e8c52')}
                                                 </div>
                                               ) : null}
 
@@ -3203,7 +3361,7 @@ export function CampaignTimelineWorkspace({
                                                 <div className="flex items-center gap-2 text-xs text-destructive">
                                                   <span>
                                                     {adSetAdsState.errorMessage ??
-                                                      'Failed to load ads'}
+                                                      uiText('failed_to_load_ads_244487a')}
                                                   </span>
                                                   <Button
                                                     variant="outline"
@@ -3212,12 +3370,15 @@ export function CampaignTimelineWorkspace({
                                                     onClick={() => {
                                                       setAdsByAdSet((prev) => ({
                                                         ...prev,
-                                                        [adSet.id]: { status: 'idle', ads: [] },
+                                                        [adSet.id]: {
+                                                          status: 'idle',
+                                                          ads: [],
+                                                        },
                                                       }));
                                                       void loadAdsForAdSet(adSet.id);
                                                     }}
                                                   >
-                                                    Retry
+                                                    {uiText('retry_942087c')}
                                                   </Button>
                                                 </div>
                                               ) : null}
@@ -3225,7 +3386,9 @@ export function CampaignTimelineWorkspace({
                                               {adSetAdsState.status === 'success' &&
                                               adSetVisibleAds.length === 0 ? (
                                                 <div className="text-xs text-muted-foreground">
-                                                  No ads returned for this ad set.
+                                                  {uiText(
+                                                    'no_ads_returned_for_this_ad_set_15f5269',
+                                                  )}
                                                 </div>
                                               ) : null}
 
@@ -3277,7 +3440,7 @@ export function CampaignTimelineWorkspace({
                       {item.label}
                     </div>
                     <div className="mt-0.5 text-xs font-semibold">
-                      {formatMetricValue(item.metric, item.value)}
+                      {formatMetricValue(item.metric, item.value, uiLocale)}
                     </div>
                     <MetricDeltaText
                       metric={item.metric}
@@ -3290,7 +3453,9 @@ export function CampaignTimelineWorkspace({
 
               <div className="rounded border border-border/70 bg-background/70 p-2">
                 <div className="mb-1 text-xs text-muted-foreground">
-                  Aggregated {labelForMetric(selectedMetric)} trend
+                  {uiText.rich('sentence_fb483d117a32', {
+                    v0: labelForMetric(selectedMetric, uiText),
+                  })}
                 </div>
                 <div className="h-24">
                   <ResponsiveContainer width="100%" height="100%">
@@ -3302,10 +3467,10 @@ export function CampaignTimelineWorkspace({
                       <XAxis dataKey="timestamp" hide />
                       <YAxis hide />
                       <RechartsTooltip
-                        labelFormatter={(value) => new Date(String(value)).toLocaleString('en-US')}
+                        labelFormatter={(value) => new Date(String(value)).toLocaleString(uiLocale)}
                         formatter={(value) => [
-                          formatMetricValue(selectedMetric, Number(value)),
-                          labelForMetric(selectedMetric),
+                          formatMetricValue(selectedMetric, Number(value), uiLocale),
+                          labelForMetric(selectedMetric, uiText),
                         ]}
                       />
                       <Area
@@ -3331,9 +3496,9 @@ export function CampaignTimelineWorkspace({
                 type="search"
                 value={campaignQuery}
                 onChange={(event) => setCampaignQuery(event.target.value)}
-                placeholder="Search campaigns"
+                placeholder={uiText('search_campaigns_8ef9b81')}
                 className="h-6 w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground/80"
-                aria-label="Search campaigns"
+                aria-label={uiText('search_campaigns_8ef9b81')}
               />
               <span className="rounded border border-border/70 px-1 py-0.5 text-2xs text-muted-foreground">
                 {watchlistCampaigns.length}
@@ -3347,7 +3512,7 @@ export function CampaignTimelineWorkspace({
                 className="h-6 px-2 text-2xs"
                 onClick={() => setWatchlistGroupMode('index')}
               >
-                Indexes
+                {uiText('indexes_90b901a')}
               </Button>
               <Button
                 size="sm"
@@ -3355,14 +3520,14 @@ export function CampaignTimelineWorkspace({
                 className="h-6 px-2 text-2xs"
                 onClick={() => setWatchlistGroupMode('objective')}
               >
-                Types
+                {uiText('types_a5fc918')}
               </Button>
             </div>
 
             <div className="mt-1.5 flex-1 space-y-1.5 overflow-auto pr-0.5">
               {watchlistCampaigns.length === 0 ? (
                 <div className="rounded border border-border/70 bg-background/70 px-2 py-1.5 text-xs text-muted-foreground">
-                  No campaigns match the current filter.
+                  {uiText('no_campaigns_match_the_current_filter_13aeece')}
                 </div>
               ) : (
                 watchlistGroups.map((group) => (
@@ -3411,6 +3576,7 @@ export function CampaignTimelineWorkspace({
                               {formatMetricValue(
                                 sortMetric,
                                 getCampaignMetricValue(campaign, sortMetric),
+                                uiLocale,
                               )}
                             </span>
                             <MetricDeltaText
@@ -3429,12 +3595,14 @@ export function CampaignTimelineWorkspace({
 
             <div className="mt-1.5 rounded border border-border/70 bg-background/70 p-1.5">
               <div className="mb-1 flex items-center justify-between text-2xs uppercase tracking-wide text-muted-foreground">
-                <span>DCO 24h</span>
+                <span>{uiText('dco_24h_30e8916')}</span>
                 <span>{recentActionMessages.length}</span>
               </div>
               <div className="max-h-32 space-y-1 overflow-auto">
                 {recentActionMessages.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No events in the last 24h.</div>
+                  <div className="text-xs text-muted-foreground">
+                    {uiText('no_events_in_the_last_24h_423c357')}
+                  </div>
                 ) : (
                   recentActionMessages.map((item) => (
                     <div
@@ -3443,7 +3611,7 @@ export function CampaignTimelineWorkspace({
                     >
                       <div className="truncate text-2xs text-foreground">{item.text}</div>
                       <div className="text-2xs text-muted-foreground">
-                        {formatRelativeTime(item.at)}
+                        {formatRelativeTime(item.at, undefined, uiLocale)}
                       </div>
                     </div>
                   ))

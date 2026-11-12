@@ -6,9 +6,11 @@ import {
   paidCreativeAudienceEvidenceSchema,
   paidCurrencyCodeSchema,
 } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { DataTableBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { useAnswerLanguage } from '../answerLanguageContext';
 import { JAINA_TABLE, JAINA_TYPE } from '../reading';
 import { BlockHeading } from './BlockHeading';
 import { CreativeCell } from './CreativeCell';
@@ -27,10 +29,12 @@ const displayValue = (
   format?: string | null,
   currency?: string | null,
   percentBasis?: 'fraction' | 'points' | null,
+  reportLocale: string = 'en',
 ): string => {
   if (value == null) return '—';
   // Money, known currency or not, is the one rule's (formatValue → contracts formatMoney).
   return formatValue(value, format ?? undefined, {
+    locale: reportLocale,
     ...(currency ? { currency } : {}),
     percentBasis: percentBasis ?? null,
   });
@@ -50,70 +54,80 @@ function SegmentEvidence({
   segment: PaidCreativeAudienceSegment;
   currency: string | null;
 }) {
+  const reportLocale = useAnswerLanguage();
+  const uiText = useTranslations('scale');
   return (
     <li className="rounded-lg bg-background/70 p-2">
       <p className="font-medium text-foreground">{segment.audienceCellId}</p>
       <dl className="mt-1 grid gap-1 text-xs text-muted-foreground">
         <div>
-          <dt className="inline font-medium">Observed: </dt>
+          <dt className="inline font-medium">{uiText('observed_90cdbe9')}</dt>
           <dd className="inline">{segment.observedAt}</dd>
         </div>
         <div>
-          <dt className="inline font-medium">Evidence: </dt>
+          <dt className="inline font-medium">{uiText('evidence_e56d516')}</dt>
           <dd className="inline">
-            {segment.eligibleAds} eligible ads · {displayValue(segment.spend, 'currency', currency)}
-            {segment.spendShare === null
-              ? ''
-              : ` · ${formatValue(segment.spendShare, 'percent')} of angle spend`}
+            {uiText.rich('sentence_5e467a009e20', {
+              count: segment.eligibleAds,
+              spend: displayValue(segment.spend, 'currency', currency, undefined, reportLocale),
+              hasShare: segment.spendShare === null ? 'no' : 'yes',
+              share:
+                segment.spendShare === null
+                  ? ''
+                  : formatValue(segment.spendShare, 'percent', {
+                      locale: reportLocale,
+                    }),
+            })}
           </dd>
         </div>
         {segment.ageMin !== null || segment.ageMax !== null ? (
           <div>
-            <dt className="inline font-medium">Age: </dt>
+            <dt className="inline font-medium">{uiText('age_f45aa5a')}</dt>
             <dd className="inline">
-              {segment.ageMin ?? 'unknown'}–{segment.ageMax ?? 'unknown'}
+              {segment.ageMin ?? uiText('unknown_b23a6a8')}–
+              {segment.ageMax ?? uiText('unknown_b23a6a8')}
             </dd>
           </div>
         ) : null}
         {segment.genders.length > 0 ? (
           <div>
-            <dt className="inline font-medium">Gender codes: </dt>
+            <dt className="inline font-medium">{uiText('gender_codes_592e162')}</dt>
             <dd className="inline">{segment.genders.join(', ')}</dd>
           </div>
         ) : null}
         {segment.geoNodeIds.length > 0 ? (
           <div>
-            <dt className="inline font-medium">Geographies: </dt>
+            <dt className="inline font-medium">{uiText('geographies_c0ee627')}</dt>
             <dd className="inline">{segment.geoNodeIds.join(', ')}</dd>
           </div>
         ) : null}
         {segment.customAudienceIds.length > 0 ? (
           <div>
-            <dt className="inline font-medium">Custom audiences: </dt>
+            <dt className="inline font-medium">{uiText('custom_audiences_3d6cecf')}</dt>
             <dd className="inline">{segment.customAudienceIds.join(', ')}</dd>
           </div>
         ) : null}
         {segment.excludedCustomAudienceIds.length > 0 ? (
           <div>
-            <dt className="inline font-medium">Excluded audiences: </dt>
+            <dt className="inline font-medium">{uiText('excluded_audiences_9626dba')}</dt>
             <dd className="inline">{segment.excludedCustomAudienceIds.join(', ')}</dd>
           </div>
         ) : null}
         {segment.publisherPlatforms.length > 0 ? (
           <div>
-            <dt className="inline font-medium">Platforms: </dt>
+            <dt className="inline font-medium">{uiText('platforms_8a1efd6')}</dt>
             <dd className="inline">{segment.publisherPlatforms.join(', ')}</dd>
           </div>
         ) : null}
         {segment.placements.length > 0 ? (
           <div>
-            <dt className="inline font-medium">Placements: </dt>
+            <dt className="inline font-medium">{uiText('placements_021525b')}</dt>
             <dd className="inline">{segment.placements.join(', ')}</dd>
           </div>
         ) : null}
         {segment.devicePlatforms.length > 0 ? (
           <div>
-            <dt className="inline font-medium">Devices: </dt>
+            <dt className="inline font-medium">{uiText('devices_4b233bc')}</dt>
             <dd className="inline">{segment.devicePlatforms.join(', ')}</dd>
           </div>
         ) : null}
@@ -129,30 +143,44 @@ function AudienceEvidence({
   audience: PaidCreativeAudienceEvidence | null;
   currency: string | null;
 }) {
+  const reportLocale = useAnswerLanguage();
+  const uiText = useTranslations('scale');
   if (!audience) return null;
   if (audience.coverage === 'unknown') {
-    return <p className="mt-1 text-xs text-muted-foreground">Audience evidence unknown</p>;
+    return (
+      <p className="mt-1 text-xs text-muted-foreground">
+        {uiText('audience_evidence_unknown_02f2068')}
+      </p>
+    );
   }
 
   const coverage = `${audience.coverage[0].toUpperCase()}${audience.coverage.slice(1)}`;
   return (
     <details className="mt-1 text-left text-xs">
       <summary className="cursor-pointer font-medium text-primary-ink">
-        Audience evidence: {coverage}
+        {uiText.rich('sentence_d8976db7c984', { v0: coverage })}
       </summary>
       <div className="mt-2 space-y-2 text-muted-foreground">
         <p>
-          {audience.coveredAds} of {audience.eligibleAds} eligible ads
+          {uiText.rich('sentence_4c638c02a23f', {
+            v0: audience.coveredAds,
+            v1: audience.eligibleAds,
+          })}
         </p>
         <p>
-          {displayValue(audience.coveredSpend, 'currency', currency)} covered spend
-          {audience.spendCoverage === null
-            ? ''
-            : ` (${formatValue(audience.spendCoverage, 'percent')})`}
+          {uiText.rich('sentence_646db32c516a', {
+            v0: displayValue(audience.coveredSpend, 'currency', currency, undefined, reportLocale),
+            v1:
+              audience.spendCoverage === null
+                ? ''
+                : ` (${formatValue(audience.spendCoverage, 'percent', { locale: reportLocale })})`,
+          })}
         </p>
         <p>{temporalBasisLabel(audience.temporalBasis)}</p>
         {audience.label ? <p>{audience.label}</p> : null}
-        {audience.source ? <p>Source: {audience.source}</p> : null}
+        {audience.source ? (
+          <p>{uiText.rich('sentence_39489fc9d95e', { v0: audience.source })}</p>
+        ) : null}
         {audience.segments.length > 0 ? (
           <ul className="space-y-2">
             {audience.segments.map((segment) => (
@@ -160,7 +188,7 @@ function AudienceEvidence({
             ))}
           </ul>
         ) : (
-          <p>No measured audience segments supplied.</p>
+          <p>{uiText('no_measured_audience_segments_supplied_5aee7de')}</p>
         )}
       </div>
     </details>
@@ -168,6 +196,7 @@ function AudienceEvidence({
 }
 
 export function DataTableBlock({ block }: DataTableBlockProps) {
+  const reportLocale = useAnswerLanguage();
   const cardFields = block.render_mode === 'creative_cards' ? block.card_fields : null;
   const columnsByKey = new Map(block.columns.map((column) => [column.key, column]));
 
@@ -201,12 +230,15 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
               titleColumn?.format,
               rowCurrency,
               titleColumn?.percent_basis,
+              reportLocale,
             );
             const creativeColumn = columnsByKey.get(cardFields.creative);
             const creativeLabel = displayValue(
               row[cardFields.creative],
               creativeColumn?.format,
               rowCurrency,
+              undefined,
+              reportLocale,
             );
             const subtitleColumn = cardFields.subtitle
               ? columnsByKey.get(cardFields.subtitle)
@@ -237,6 +269,7 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                               subtitleColumn?.format,
                               rowCurrency,
                               subtitleColumn?.percent_basis,
+                              reportLocale,
                             )}
                           </MediaText>
                         </p>
@@ -259,6 +292,7 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                                   column?.format,
                                   rowCurrency,
                                   column?.percent_basis,
+                                  reportLocale,
                                 )}
                                 {key === 'audience_coverage' ? (
                                   <AudienceEvidence audience={audience} currency={rowCurrency} />
@@ -306,7 +340,13 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                 return (
                   <tr key={rowIndex} className={JAINA_TABLE.row}>
                     {block.columns.map((column, columnIndex) => {
-                      const value = displayValue(row[column.key], column.format, rowCurrency);
+                      const value = displayValue(
+                        row[column.key],
+                        column.format,
+                        rowCurrency,
+                        undefined,
+                        reportLocale,
+                      );
                       const showEntityId = columnIndex === 0 && entityId !== null;
                       return (
                         <td

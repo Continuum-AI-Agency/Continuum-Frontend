@@ -4,7 +4,8 @@ import {
   type ChatMediaSignRequest,
   chatMediaRefKey,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { AgentMentionReference } from '@/lib/agent-references';
 
 Object.assign(global.window, {
@@ -45,7 +46,10 @@ const requestMock = mock(async (args: { path: string; body?: unknown }) => {
     })),
   };
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 const { MentionifiedText } = await import('./mentionified-text');
 const { resetChatMediaSignCache } = await import('@/lib/media/chatMediaRefs');
@@ -57,7 +61,11 @@ const libraryMention = (id: string, label: string, kind = 'image'): AgentMention
   type: 'media_asset',
   label,
   source: 'organic',
-  metadata: { assetId: id, kind, previewUrl: `https://storage.test/original-${id}.png` },
+  metadata: {
+    assetId: id,
+    kind,
+    previewUrl: `https://storage.test/original-${id}.png`,
+  },
 });
 
 const signCalls = () =>

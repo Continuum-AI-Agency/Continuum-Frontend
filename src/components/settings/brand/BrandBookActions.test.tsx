@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { brandBookResponseSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 let editorIsDirty = false;
 const buildBrandSystemExport = mock(async () => ({
@@ -93,7 +94,9 @@ describe('BrandBookActions export', () => {
     editorIsDirty = true;
     render(<BrandBookActions brandBook={brandBook} brandName="Example Brand" />);
 
-    const trigger = screen.getByRole('button', { name: 'Export' }) as HTMLButtonElement;
+    const trigger = screen.getByRole('button', {
+      name: 'Export',
+    }) as HTMLButtonElement;
     expect(trigger.disabled).toBe(true);
     expect(trigger.title).toContain('Save or discard');
   });
@@ -108,7 +111,10 @@ describe('BrandBookActions export', () => {
     await waitFor(() => expect(buildBrandSystemExport).toHaveBeenCalledTimes(1));
     expect(downloadBrandSystemArchive).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Brand system exported', variant: 'success' }),
+      expect.objectContaining({
+        title: 'Brand system exported',
+        variant: 'success',
+      }),
     );
   });
 
@@ -120,7 +126,10 @@ describe('BrandBookActions export', () => {
     await waitFor(() => expect(buildBrandSystemExport).toHaveBeenCalledTimes(1));
     expect(downloadBrandBookPdf).toHaveBeenCalledTimes(1);
     expect(showToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Brand Book PDF exported', variant: 'success' }),
+      expect.objectContaining({
+        title: 'Brand Book PDF exported',
+        variant: 'success',
+      }),
     );
   });
 });

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // CalmRule — the one element that moves — comes from motion/react. A passthrough keeps the
 // variant label readable ("calm" on the principal card, "still" on the rest) and the file free
@@ -17,14 +18,22 @@ mock.module('motion/react', () => {
       });
     });
   return {
-    motion: { section: passthrough('section'), span: passthrough('span'), div: passthrough('div') },
+    motion: {
+      section: passthrough('section'),
+      span: passthrough('span'),
+      div: passthrough('div'),
+    },
     useReducedMotion: () => false,
   };
 });
 
 // The card's own action control asks the platform through this hook; record what it sends.
 const realOptimizerData = await import('../../useOptimizerData');
-const sentActions: { portfolio_id: string; dryRun: boolean; actions: unknown[] }[] = [];
+const sentActions: {
+  portfolio_id: string;
+  dryRun: boolean;
+  actions: unknown[];
+}[] = [];
 mock.module('../../useOptimizerData', () => ({
   ...realOptimizerData,
   useApplyOptimizerActions: () => ({
@@ -38,7 +47,10 @@ mock.module('../../useOptimizerData', () => ({
     },
   }),
   // The card's control can undo an applied write; nothing in these tests applies one.
-  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
+  useRevertOptimizerAction: () => ({
+    mutateAsync: async () => null,
+    isPending: false,
+  }),
 }));
 
 import type { AccountCandidate } from '@continuum/contracts';
@@ -377,7 +389,9 @@ describe('AccountRead — nothing of the old surface survives', () => {
       detector: 'measurement_integrity',
       cta: { kind: 'none', target_id: null },
     });
-    const { container, getByRole } = view([guard, ...many(6)], { onOpenPortfolio: mock(() => {}) });
+    const { container, getByRole } = view([guard, ...many(6)], {
+      onOpenPortfolio: mock(() => {}),
+    });
     fireEvent.click(getByRole('button', { name: /more ·/ }));
     const text = container.textContent ?? '';
     expect(text).not.toContain('Across the account');
@@ -389,7 +403,9 @@ describe('AccountRead — nothing of the old surface survives', () => {
 
 describe('AccountRead — the platform chip', () => {
   it('puts the platform chip on every card', () => {
-    const { getAllByTestId } = view([reallocation, candidate({})], { platform: 'meta' });
+    const { getAllByTestId } = view([reallocation, candidate({})], {
+      platform: 'meta',
+    });
     const cards = getAllByTestId('account-card');
     expect(cards).toHaveLength(2);
     for (const card of cards) {
@@ -557,12 +573,25 @@ describe('AccountRead — platform-specific cards', () => {
 
 describe('AccountRead — a card with an executable action', () => {
   const actionsFor = (id: string, action: unknown) =>
-    new Map([[id, { portfolioId: PORTFOLIO_ID, action: action as typeof RAISE_GOOGLE_BUDGET }]]);
+    new Map([
+      [
+        id,
+        {
+          portfolioId: PORTFOLIO_ID,
+          action: action as typeof RAISE_GOOGLE_BUDGET,
+        },
+      ],
+    ]);
 
   it("shows the card's own control in place of the generic button and previews first", async () => {
     const { getByTestId, queryByTestId } = render(
       <AccountRead
-        candidates={[candidate({ id: 'google:budget', platform_card: GOOGLE_BUDGET_LIMITED })]}
+        candidates={[
+          candidate({
+            id: 'google:budget',
+            platform_card: GOOGLE_BUDGET_LIMITED,
+          }),
+        ]}
         cardActions={actionsFor('google:budget', RAISE_GOOGLE_BUDGET)}
         currency="MXN"
         dailySpend={1000}
@@ -577,7 +606,11 @@ describe('AccountRead — a card with an executable action', () => {
     fireEvent.click(control);
     await screen.findByTestId('platform-card-action-preview');
     expect(sentActions).toEqual([
-      { portfolio_id: PORTFOLIO_ID, actions: [RAISE_GOOGLE_BUDGET], dryRun: true },
+      {
+        portfolio_id: PORTFOLIO_ID,
+        actions: [RAISE_GOOGLE_BUDGET],
+        dryRun: true,
+      },
     ]);
   });
 
@@ -585,7 +618,12 @@ describe('AccountRead — a card with an executable action', () => {
     const REC = '7e7e7e7e-0000-4000-8000-00000000c4c4';
     const { getByTestId } = render(
       <AccountRead
-        candidates={[candidate({ id: 'google:budget', platform_card: GOOGLE_BUDGET_LIMITED })]}
+        candidates={[
+          candidate({
+            id: 'google:budget',
+            platform_card: GOOGLE_BUDGET_LIMITED,
+          }),
+        ]}
         cardActions={
           new Map([
             [
@@ -611,7 +649,10 @@ describe('AccountRead — a card with an executable action', () => {
     const { getByTestId, queryByTestId } = render(
       <AccountRead
         candidates={[
-          candidate({ id: 'tiktok:learning', platform_card: TIKTOK_BUDGET_BELOW_LEARNING }),
+          candidate({
+            id: 'tiktok:learning',
+            platform_card: TIKTOK_BUDGET_BELOW_LEARNING,
+          }),
         ]}
         cardActions={actionsFor('tiktok:learning', PAUSE_TIKTOK_AD_GROUP)}
         currency="MXN"

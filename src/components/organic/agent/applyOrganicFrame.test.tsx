@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Card terminality: a chat card must NOT remain in-flight once its job's terminal
 // frame arrives — on the live stream path and after a reload replay. Regression
 // coverage for the production incident where every job completed while the chat
@@ -7,7 +8,7 @@
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { organicStreamFrameSchema } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type { OrganicSessionMessage } from '@/lib/organic/agent-sessions';
 import { applyOrganicFrame } from './applyOrganicFrame';
 import { ConceptCard } from './ConceptCard';
@@ -53,13 +54,23 @@ const runningCardFrame = () =>
 const executingPlanFrame = () =>
   contractFrame({
     type: 'ui.plan_status',
-    data: { planId: PLAN_ID, itemId: PLAN_ITEM_ID, status: 'executing', jobId: JOB_ID },
+    data: {
+      planId: PLAN_ID,
+      itemId: PLAN_ITEM_ID,
+      status: 'executing',
+      jobId: JOB_ID,
+    },
   });
 
 const completedJobFrame = () =>
   contractFrame({
     type: 'job.completed',
-    data: { jobId: JOB_ID, brandId: BRAND_ID, draftId: DRAFT_ID, planItemId: PLAN_ITEM_ID },
+    data: {
+      jobId: JOB_ID,
+      brandId: BRAND_ID,
+      draftId: DRAFT_ID,
+      planItemId: PLAN_ITEM_ID,
+    },
   });
 
 const failedJobFrame = () =>
@@ -232,11 +243,19 @@ describe('failure and identity frames are heard', () => {
       [
         contractFrame({
           type: 'tool.call',
-          data: { toolCallId: TOOL_CALL_ID, toolName: 'generatePosts', args: {} },
+          data: {
+            toolCallId: TOOL_CALL_ID,
+            toolName: 'generatePosts',
+            args: {},
+          },
         }),
         contractFrame({
           type: 'tool.error',
-          data: { toolCallId: TOOL_CALL_ID, toolName: 'generatePosts', error: 'boom' },
+          data: {
+            toolCallId: TOOL_CALL_ID,
+            toolName: 'generatePosts',
+            error: 'boom',
+          },
         }),
       ],
       state,
@@ -258,7 +277,11 @@ describe('failure and identity frames are heard', () => {
       [
         contractFrame({
           type: 'tool.call',
-          data: { toolCallId: TOOL_CALL_ID, toolName: 'generatePosts', args: {} },
+          data: {
+            toolCallId: TOOL_CALL_ID,
+            toolName: 'generatePosts',
+            args: {},
+          },
         }),
         contractFrame({
           type: 'tool.output_denied',

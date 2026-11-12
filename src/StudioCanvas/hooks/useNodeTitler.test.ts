@@ -3,12 +3,16 @@
 // setState/getState off the module for every spec that ran afterwards in the
 // same process, which is exactly how a passing suite hides a broken one.
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { useNodeTitler } from './useNodeTitler';
 
-const mockInvoke = mock(async () => ({ data: { title: 'Ocean Dawn Haiku' }, error: null }));
+const mockInvoke = mock(async () => ({
+  data: { title: 'Ocean Dawn Haiku' },
+  error: null,
+}));
 
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({ functions: { invoke: mockInvoke } }),
@@ -39,7 +43,11 @@ afterEach(() => cleanup());
 describe('useNodeTitler', () => {
   it('does not request a title while the node is executing', async () => {
     renderHook(() =>
-      useNodeTitler({ id: 'n1', value: 'Write a haiku about the ocean', isExecuting: true }),
+      useNodeTitler({
+        id: 'n1',
+        value: 'Write a haiku about the ocean',
+        isExecuting: true,
+      }),
     );
     await act(async () => {
       await wait(1200);

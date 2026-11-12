@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The section's real grouping and row rendering run; the server-only reads and the two
 // dialog buttons (router + toast) are replaced.
@@ -50,7 +51,11 @@ import { MyConnectionsSharingSection } from './MyConnectionsSharingSection';
 afterEach(cleanup);
 
 const renderSection = async () =>
-  render(await MyConnectionsSharingSection({ userId: '00000000-0000-4000-8000-0000000000ff' }));
+  render(
+    await MyConnectionsSharingSection({
+      userId: '00000000-0000-4000-8000-0000000000ff',
+    }),
+  );
 
 const row = (id: string) =>
   screen

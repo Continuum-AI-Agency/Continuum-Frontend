@@ -38,11 +38,18 @@ import {
   UsersRound,
   Workflow,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { type DragEvent, type HTMLAttributes, useCallback, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import {
+  type DragEvent,
+  type HTMLAttributes,
+  useCallback,
+  useState,
+  useMemo as useUiConfigMemo,
+} from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/components/ui/toast-imperative';
+import { useRouter } from '@/i18n/navigation';
 import {
   createLibraryCollectionOperation,
   createLibrarySavedViewOperation,
@@ -95,23 +102,73 @@ type Props = {
 // The permanent sidebar answers "what is it?" only. Creation methods such as
 // Reel, Clip, HyperFrame, and Canvas live in the filter popover so the browse
 // tree stays short even as Continuum adds new generators.
-const BROWSE_FOLDERS: {
-  value: LibraryBrowseDestination;
-  label: string;
-  icon: typeof Folder;
-}[] = [
-  { value: 'home', label: 'Home', icon: LayoutGrid },
-  { value: 'images', label: 'Images', icon: ImageIcon },
-  { value: 'videos', label: 'Videos', icon: Film },
-  { value: 'canvas', label: 'Canvas', icon: Sparkles },
-  { value: 'elements', label: 'Elements', icon: Layers },
-  { value: 'sources', label: 'Source files', icon: PackageOpen },
-  { value: 'templates', label: 'Templates', icon: LayoutTemplate },
-  { value: 'review', label: 'Needs review', icon: ShieldAlert },
-  { value: 'everything', label: 'Everything', icon: HardDrive },
-  { value: 'typography', label: 'Typography', icon: Type },
-  { value: 'pipelines', label: 'Pipelines', icon: Workflow },
-];
+function useLocalBrowseFoldersMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value: {
+      value: LibraryBrowseDestination;
+      label: string;
+      icon: typeof Folder;
+    }[] = [
+      {
+        value: 'home',
+        label: translateConfig('home_3a786953'),
+        icon: LayoutGrid,
+      },
+      {
+        value: 'images',
+        label: translateConfig('images_be7e2f20'),
+        icon: ImageIcon,
+      },
+      {
+        value: 'videos',
+        label: translateConfig('videos_c9a96394'),
+        icon: Film,
+      },
+      {
+        value: 'canvas',
+        label: translateConfig('canvas_3824a9f4'),
+        icon: Sparkles,
+      },
+      {
+        value: 'elements',
+        label: translateConfig('elements_e1ff7a90'),
+        icon: Layers,
+      },
+      {
+        value: 'sources',
+        label: translateConfig('source_files_fa125556'),
+        icon: PackageOpen,
+      },
+      {
+        value: 'templates',
+        label: translateConfig('templates_56b564b7'),
+        icon: LayoutTemplate,
+      },
+      {
+        value: 'review',
+        label: translateConfig('needs_review_07297fa9'),
+        icon: ShieldAlert,
+      },
+      {
+        value: 'everything',
+        label: translateConfig('everything_75304cf7'),
+        icon: HardDrive,
+      },
+      {
+        value: 'typography',
+        label: translateConfig('typography_cab94aba'),
+        icon: Type,
+      },
+      {
+        value: 'pipelines',
+        label: translateConfig('pipelines_d1a8fffe'),
+        icon: Workflow,
+      },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 function activeDestination(
   mediaType: LibraryMediaType,
@@ -177,6 +234,8 @@ function CollectionRow({
   onDelete: () => void;
   dragHandlers: HTMLAttributes<HTMLDivElement> & { draggable?: boolean };
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <div
       {...dragHandlers}
@@ -207,13 +266,13 @@ function CollectionRow({
         <span className="truncate">{label}</span>
         {isPrivate ? (
           <Lock
-            aria-label="Private — only you can see it"
+            aria-label={translateUi('private_only_you_can_see_it_47a7fe94')}
             className="size-3 shrink-0 text-muted-foreground"
           />
         ) : null}
         {isRestricted ? (
           <UserLock
-            aria-label="Only members can see it"
+            aria-label={translateUi('only_members_can_see_it_7df9ea75')}
             data-testid="collection-restricted"
             className="size-3 shrink-0 text-muted-foreground"
           />
@@ -223,7 +282,9 @@ function CollectionRow({
         <button
           type="button"
           onClick={onMembers}
-          aria-label={`Members of ${label}`}
+          aria-label={translateUi('members_of_value0_68be1e65', {
+            value0: String(label),
+          })}
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
         >
           <UserLock className="size-3" />
@@ -233,7 +294,9 @@ function CollectionRow({
         <button
           type="button"
           onClick={onShare}
-          aria-label={`Share collection ${label}`}
+          aria-label={translateUi('share_collection_value0_d7797b68', {
+            value0: String(label),
+          })}
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
         >
           <Link2 className="size-3" />
@@ -243,7 +306,9 @@ function CollectionRow({
         <button
           type="button"
           onClick={onRequestReview}
-          aria-label={`Request review of ${label}`}
+          aria-label={translateUi('request_review_of_value0_062367c2', {
+            value0: String(label),
+          })}
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
         >
           <UsersRound className="size-3" />
@@ -254,7 +319,9 @@ function CollectionRow({
           <button
             type="button"
             onClick={onRename}
-            aria-label={`Rename collection ${label}`}
+            aria-label={translateUi('rename_collection_value0_8301b714', {
+              value0: String(label),
+            })}
             className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
           >
             <Pencil className="size-3" />
@@ -262,7 +329,9 @@ function CollectionRow({
           <button
             type="button"
             onClick={onDelete}
-            aria-label={`Delete collection ${label}`}
+            aria-label={translateUi('delete_collection_value0_2af36f31', {
+              value0: String(label),
+            })}
             className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-destructive group-focus-within:opacity-100 group-hover:opacity-100"
           >
             <Trash2 className="size-3" />
@@ -316,6 +385,10 @@ export function LibrarySidebar({
   section,
   onSelectDestination,
 }: Props) {
+  const BROWSE_FOLDERS = useLocalBrowseFoldersMessages();
+
+  const translateUi = useUiTranslations('library');
+
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -437,7 +510,12 @@ export function LibrarySidebar({
       });
       router.refresh();
     } catch (error) {
-      toast.error(`Could not move “${moving.name}” · ${(error as Error).message}`);
+      toast.error(
+        translateUi('could_not_move_value0_value1_541ab19e', {
+          value0: String(moving.name),
+          value1: String((error as Error).message),
+        }),
+      );
     }
   }
 
@@ -533,7 +611,8 @@ export function LibrarySidebar({
       <ScrollArea className="min-h-0 flex-1 px-1.5 pt-2">
         <div className="px-2 pb-1 pt-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Browse
+            {' '}
+            {translateUi('browse_3227aa96')}{' '}
           </span>
         </div>
         {BROWSE_FOLDERS.map((folder) => (
@@ -550,7 +629,8 @@ export function LibrarySidebar({
           <>
             <div className="mt-3 px-2 pb-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Views
+                {' '}
+                {translateUi('views_69c40459')}{' '}
               </span>
             </div>
             {systemViews.map((view) => (
@@ -567,13 +647,14 @@ export function LibrarySidebar({
 
         <div className="mt-3 flex items-center justify-between px-2 pb-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Saved views
+            {' '}
+            {translateUi('saved_views_81184cb5')}{' '}
           </span>
           <button
             type="button"
             onClick={() => setCreatingSavedView((value) => !value)}
             className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            title="Save current view"
+            title={translateUi('save_current_view_add4362f')}
           >
             <BookmarkPlus className="size-4" />
           </button>
@@ -591,14 +672,16 @@ export function LibrarySidebar({
                 if (event.key === 'Escape') setCreatingSavedView(false);
               }}
               onBlur={() => void submitSavedView()}
-              placeholder="View name…"
+              placeholder={translateUi('view_name_b67f1e8c')}
               className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm outline-none focus:border-border"
             />
           </div>
         ) : null}
 
         {savedViews.length === 0 && !creatingSavedView ? (
-          <p className="px-2 py-1 text-xs text-muted-foreground/70">No saved views yet.</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground/70">
+            {translateUi('no_saved_views_yet_0522378e')}
+          </p>
         ) : (
           savedViews.map((view) => (
             <div key={view.id} className="group flex items-center gap-0.5">
@@ -614,7 +697,9 @@ export function LibrarySidebar({
                 type="button"
                 onClick={() => void removeSavedView(view.id)}
                 className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-destructive group-focus-within:opacity-100 group-hover:opacity-100"
-                aria-label={`Delete saved view ${view.name}`}
+                aria-label={translateUi('delete_saved_view_value0_da751825', {
+                  value0: String(view.name),
+                })}
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -643,14 +728,15 @@ export function LibrarySidebar({
           )}
         >
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Collections
+            {' '}
+            {translateUi('collections_9f9feade')}{' '}
           </span>
           {canEdit ? (
             <button
               type="button"
               onClick={() => setCreating((v) => !v)}
               className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96] [transition-property:scale,color,background-color]"
-              title="New collection"
+              title={translateUi('new_collection_cefd66fe')}
             >
               <FolderPlus className="size-4" />
             </button>
@@ -687,14 +773,22 @@ export function LibrarySidebar({
                 }
               }}
               onBlur={() => void submitCreate()}
-              placeholder={nestUnder ? `Inside ${nestUnder.name}…` : 'Collection name…'}
+              placeholder={
+                nestUnder
+                  ? translateUi('inside_value0_8227e6f5', {
+                      value0: String(nestUnder.name),
+                    })
+                  : translateUi('collection_name_42e2a82b')
+              }
               className="w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-sm outline-none focus:border-border"
             />
           </div>
         )}
 
         {visibleCollections.length === 0 && !creating ? (
-          <p className="px-2 py-1 text-xs text-muted-foreground/70">No collections yet.</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground/70">
+            {translateUi('no_collections_yet_b344adc3')}
+          </p>
         ) : (
           visibleCollections.map((col) => (
             <div key={col.id} style={{ paddingLeft: `${(col.depth ?? 0) * 12}px` }}>

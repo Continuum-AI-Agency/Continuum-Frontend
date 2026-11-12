@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 import type { Trend } from '@/lib/organic/trends';
 import { TrendWorkbench } from './TrendWorkbench';
@@ -203,7 +204,9 @@ describe('TrendWorkbench', () => {
 
     fireEvent.click(generateButtons[0]);
     expect(onGenerateFromTrend).toHaveBeenCalledTimes(1);
-    expect(onGenerateFromTrend.mock.calls[0][0]).toMatchObject({ id: uuidTrend.id });
+    expect(onGenerateFromTrend.mock.calls[0][0]).toMatchObject({
+      id: uuidTrend.id,
+    });
     expect(onToggleTrend).not.toHaveBeenCalled();
   });
 

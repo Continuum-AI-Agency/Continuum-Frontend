@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -32,12 +33,19 @@ type ConvertState = {
   isError: boolean;
 };
 
-let convertState: ConvertState = { data: null, isPending: false, isError: false };
+let convertState: ConvertState = {
+  data: null,
+  isPending: false,
+  isError: false,
+};
 const mutateSpy = mock((_input: unknown) => {});
 
 // The as-if-converted preview hook — controlled per test. `mutate` records the engine
 // inputs the dialog synthesized; `data` drives the rendered preview body.
-let cyclePreviewState: { data: unknown; isPending: boolean } = { data: null, isPending: false };
+let cyclePreviewState: { data: unknown; isPending: boolean } = {
+  data: null,
+  isPending: false,
+};
 const cycleMutateSpy = mock((_input: unknown) => {});
 
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
@@ -67,7 +75,13 @@ function section(overrides: Partial<CampaignSection> & { campaignId: string }): 
   };
 }
 
-const ZERO = { spend: 0, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 };
+const ZERO = {
+  spend: 0,
+  purchases: 0,
+  addToCarts: 0,
+  clicks: 0,
+  impressions: 0,
+};
 
 function snap(id: string, campaignId: string, kpiField: string): AdSetSnapshot {
   return {
@@ -94,8 +108,18 @@ const OK_CONVERT = {
   dryRun: true,
   currency: 'USD',
   adset_budgets: [
-    { adset_id: 'as1', adset_name: 'Broad', daily_budget: 4200, daily_major: 42 },
-    { adset_id: 'as2', adset_name: 'Lookalike', daily_budget: 1500, daily_major: 15 },
+    {
+      adset_id: 'as1',
+      adset_name: 'Broad',
+      daily_budget: 4200,
+      daily_major: 42,
+    },
+    {
+      adset_id: 'as2',
+      adset_name: 'Lookalike',
+      daily_budget: 1500,
+      daily_major: 15,
+    },
   ],
 };
 
@@ -121,7 +145,13 @@ describe('CboCampaigns', () => {
         brandId="b1"
         accountId="act_1"
         currency="USD"
-        sections={[section({ campaignId: 'c1', campaignName: 'Summer CBO', totalCount: 3 })]}
+        sections={[
+          section({
+            campaignId: 'c1',
+            campaignName: 'Summer CBO',
+            totalCount: 3,
+          }),
+        ]}
         snapshots={[]}
       />,
     );
@@ -137,8 +167,18 @@ describe('CboCampaigns', () => {
       dryRun: true,
       currency: 'USD',
       adset_budgets: [
-        { adset_id: 'as1', adset_name: 'Broad', daily_budget: 4200, daily_major: 42 },
-        { adset_id: 'as2', adset_name: 'Lookalike', daily_budget: 1500, daily_major: 15 },
+        {
+          adset_id: 'as1',
+          adset_name: 'Broad',
+          daily_budget: 4200,
+          daily_major: 42,
+        },
+        {
+          adset_id: 'as2',
+          adset_name: 'Lookalike',
+          daily_budget: 1500,
+          daily_major: 15,
+        },
       ],
     };
     const { getByText, getByRole } = render(
@@ -195,7 +235,11 @@ describe('CboCampaigns', () => {
   });
 
   it('tells the user to ASSIGN (not reconnect) an unassigned account', () => {
-    convertState.data = { ok: false, reason: 'not_permitted', adset_budgets: [] };
+    convertState.data = {
+      ok: false,
+      reason: 'not_permitted',
+      adset_budgets: [],
+    };
     const { getByText } = render(
       <CboCampaigns
         brandId="b1"

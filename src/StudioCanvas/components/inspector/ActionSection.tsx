@@ -11,9 +11,10 @@
 // something failing to load.
 
 import { type ActionId, actionDef, isActionId } from '@continuum/contracts';
-
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Field, FieldContent, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Switch } from '@/components/ui/switch';
+import { useStudioMetadata } from '../../hooks/useStudioMetadata';
 import { ActionConfigFields } from '../../nodes/action/ActionConfigFields';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { ActionNodeData } from '../../types';
@@ -21,14 +22,18 @@ import { configFieldsFor } from '../../utils/actions/actionConfig';
 import { InspectorNote, InspectorSection } from './controls';
 
 export function ActionSection({ nodeId, data }: { nodeId: string; data: ActionNodeData }) {
+  const translateUi = useUiTranslations('studio');
+  const metadata = useStudioMetadata();
+
   const actionId: ActionId | undefined = isActionId(data.actionId) ? data.actionId : undefined;
   const def = actionDef(data.actionId);
 
   if (!actionId || !def) {
     return (
-      <InspectorSection title="Operation">
+      <InspectorSection title={translateUi('operation_0f044feb')}>
         <InspectorNote>
-          No operation is set. Pick one from the canvas menu to configure this node.
+          {' '}
+          {translateUi('no_operation_is_set_pick_one_from_t_68bf558c')}{' '}
         </InspectorNote>
       </InspectorSection>
     );
@@ -36,24 +41,31 @@ export function ActionSection({ nodeId, data }: { nodeId: string; data: ActionNo
 
   return (
     <>
-      <InspectorSection title="Operation">
-        <InspectorNote>{def.description}</InspectorNote>
+      <InspectorSection title={translateUi('operation_0f044feb')}>
+        <InspectorNote>{metadata(def.description)}</InspectorNote>
       </InspectorSection>
 
-      <InspectorSection title="Configuration">
+      <InspectorSection title={translateUi('configuration_b332c349')}>
         {configFieldsFor(actionId).length === 0 ? (
-          <InspectorNote>{def.label} takes no settings — wire it up and run it.</InspectorNote>
+          <InspectorNote>
+            {translateUi('actionNoSettings', {
+              operation: metadata(def.label),
+            })}
+          </InspectorNote>
         ) : (
           <ActionConfigFields nodeId={nodeId} actionId={actionId} config={data.config} />
         )}
       </InspectorSection>
 
-      <InspectorSection title="Library">
+      <InspectorSection title={translateUi('library_dc20b3d5')}>
         <Field orientation="horizontal">
           <FieldContent>
-            <FieldLabel htmlFor={`${nodeId}-keep`}>Keep in Library</FieldLabel>
+            <FieldLabel htmlFor={`${nodeId}-keep`}>
+              {translateUi('keep_in_library_0bd372b9')}
+            </FieldLabel>
             <FieldDescription>
-              Always stored so it can be wired. Keep files it in the Canvas library.
+              {' '}
+              {translateUi('always_stored_so_it_can_be_wired_ke_45fa656b')}{' '}
             </FieldDescription>
           </FieldContent>
           <Switch

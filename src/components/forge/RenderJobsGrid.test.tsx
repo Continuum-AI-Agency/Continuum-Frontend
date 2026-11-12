@@ -219,7 +219,9 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
-  createSupabaseBrowserClient: () => ({ realtime: { setAuth: async () => undefined } }),
+  createSupabaseBrowserClient: () => ({
+    realtime: { setAuth: async () => undefined },
+  }),
 }));
 mock.module('@/lib/supabase/realtime', () => ({
   subscribeToRowBroadcasts: (options: RowBroadcastSubscription) => {
@@ -229,7 +231,15 @@ mock.module('@/lib/supabase/realtime', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { RenderFileSpecs } from './RenderFileSpecs';
 import { RenderJobsGrid } from './RenderJobsGrid';
 
@@ -286,7 +296,10 @@ let naturalWidth: PropertyDescriptor | undefined;
 beforeAll(() => {
   imagePrototype = Object.getPrototypeOf(document.createElement('img')) as object;
   naturalWidth = Object.getOwnPropertyDescriptor(imagePrototype, 'naturalWidth');
-  Object.defineProperty(imagePrototype, 'naturalWidth', { configurable: true, get: () => 1 });
+  Object.defineProperty(imagePrototype, 'naturalWidth', {
+    configurable: true,
+    get: () => 1,
+  });
 });
 afterAll(() => {
   if (imagePrototype && naturalWidth) {
@@ -320,7 +333,9 @@ describe('RenderJobsGrid', () => {
     // its prettified display name, and the row reads its own label.
     jobsFixture = [BASE];
     templatesFixture = [];
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     render(
       <QueryClientProvider client={client}>
         <RenderJobsGrid brandId={BRAND} />
@@ -365,7 +380,9 @@ describe('RenderJobsGrid', () => {
       createdByEmail: 'duane@example.com',
       outputs: [],
     };
-    await renderLedger([MADRID, ROMA, later], [TEMPLATE], undefined, { open: false });
+    await renderLedger([MADRID, ROMA, later], [TEMPLATE], undefined, {
+      open: false,
+    });
     const rows = screen.getAllByText(/^\d+ renders? · \d+ files?$/).map((cell) => cell.textContent);
     // Newest click first; a batch counts every render in it and every file a zip would hold.
     expect(rows).toEqual(['1 render · 0 files', '2 renders · 1 file']);
@@ -386,7 +403,11 @@ describe('RenderJobsGrid', () => {
   test('each batch reads its outputs’ Library review in one read: approved of total, toned by the furthest behind', async () => {
     const OTHER = '99999999-9999-4999-8999-999999999992';
     const asset = (n: number) => `77777777-7777-4777-8777-77777777778${n}`;
-    const output = (n: number) => ({ ...MADRID.outputs[0]!, id: `o${n}`, assetId: asset(n) });
+    const output = (n: number) => ({
+      ...MADRID.outputs[0]!,
+      id: `o${n}`,
+      assetId: asset(n),
+    });
     const later: ApiRenderJob = {
       ...PROMO,
       batchId: OTHER,
@@ -406,7 +427,9 @@ describe('RenderJobsGrid', () => {
       state(3, 'in_review'),
       { ...state(0, 'needs_changes'), assetId: MADRID.outputs[0]!.assetId! },
     ];
-    await renderLedger([MADRID, ROMA, later], [TEMPLATE], undefined, { open: false });
+    await renderLedger([MADRID, ROMA, later], [TEMPLATE], undefined, {
+      open: false,
+    });
 
     const laterRow = within(screen.getByText('1 render · 3 files').closest('tr') as HTMLElement);
     const pill = await laterRow.findByText('2/3 approved');
@@ -429,7 +452,12 @@ describe('RenderJobsGrid', () => {
       ...BASE,
       id: 'job-pinned',
       label: 'Pinned',
-      templateSource: { assetId: 'asset-1', versionId: 'ver-1', sha256: SHA, versionNumber: null },
+      templateSource: {
+        assetId: 'asset-1',
+        versionId: 'ver-1',
+        sha256: SHA,
+        versionNumber: null,
+      },
     };
     const revised: ApiRenderJob = {
       ...BASE,
@@ -459,7 +487,9 @@ describe('RenderJobsGrid', () => {
     // that reads like "nothing to see here".
     expect(screen.getByText('Unrecorded')).toBeTruthy();
     // Pasting a digest out of a handoff finds the renders that used it.
-    fireEvent.change(screen.getByLabelText('Search renders'), { target: { value: SHA } });
+    fireEvent.change(screen.getByLabelText('Search renders'), {
+      target: { value: SHA },
+    });
     const table = () => screen.getByRole('table').textContent ?? '';
     expect(table()).toContain('Pinned');
     expect(table()).not.toContain('Legacy');
@@ -600,7 +630,9 @@ describe('RenderJobsGrid', () => {
     // No contract to name its formats: the file is shown as its own format, at its stored size.
     const preview = screen.getByRole('group', { name: 'Render preview' });
     expect(
-      within(preview).getByRole('img', { name: 'Madrid · madrid_1080x1920.png' }),
+      within(preview).getByRole('img', {
+        name: 'Madrid · madrid_1080x1920.png',
+      }),
     ).toBeTruthy();
     expect(
       (preview.querySelector('[data-slot="format-preview-frame"]') as HTMLElement).style
@@ -640,7 +672,13 @@ describe('RenderJobsGrid', () => {
   test('a job’s detail says where each output stands in the Library and links to its thread', async () => {
     const assetId = MADRID.outputs[0]!.assetId!;
     libraryStateFixture = [
-      { assetId, reviewStatus: 'in_review', versionNumber: 3, versionCount: 3, commentCount: 2 },
+      {
+        assetId,
+        reviewStatus: 'in_review',
+        versionNumber: 3,
+        versionCount: 3,
+        commentCount: 2,
+      },
     ];
     await renderLedger([MADRID, ROMA, PROMO], [TEMPLATE]);
     fireEvent.click(screen.getByText('Madrid'));
@@ -685,8 +723,12 @@ describe('RenderJobsGrid', () => {
   }, 30_000);
 
   test('reuses a fresh ledger page after the tab remounts', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const first = await renderLedger([MADRID], [TEMPLATE], client, { open: false });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const first = await renderLedger([MADRID], [TEMPLATE], client, {
+      open: false,
+    });
     first.unmount();
 
     await renderLedger([MADRID], [TEMPLATE], client, { open: false });
@@ -726,7 +768,11 @@ describe('RenderJobsGrid', () => {
         displayName: 'Winter Promo',
       },
     ];
-    const romaTwin = { ...ROMA, templateKey: '134', templateName: 'StarCraft Promo' };
+    const romaTwin = {
+      ...ROMA,
+      templateKey: '134',
+      templateName: 'StarCraft Promo',
+    };
     const promoClient = {
       ...PROMO,
       templateKey: '133',
@@ -737,7 +783,9 @@ describe('RenderJobsGrid', () => {
     await renderLedger([MADRID, romaTwin, promoClient], [TEMPLATE, TWIN]);
 
     await waitFor(() => expect(screen.getByRole('button', { name: /Winter Promo/ })).toBeTruthy());
-    const starcraft = screen.getAllByRole('button', { name: /StarCraft Promo/ });
+    const starcraft = screen.getAllByRole('button', {
+      name: /StarCraft Promo/,
+    });
     expect(starcraft).toHaveLength(1);
     expect(starcraft[0]!.textContent).toContain('1 finished · 1 failed');
     expect(starcraft[0]!.textContent).toMatch(/2$/);
@@ -846,7 +894,15 @@ describe('RenderJobsGrid', () => {
       >
         <RenderJobsGrid
           brandId={BRAND}
-          formats={[{ id: '4:5', label: '4:5', ratio: '4:5', width: null, height: null }]}
+          formats={[
+            {
+              id: '4:5',
+              label: '4:5',
+              ratio: '4:5',
+              width: null,
+              height: null,
+            },
+          ]}
         />
       </QueryClientProvider>,
     );
@@ -935,7 +991,14 @@ describe('RenderJobsGrid', () => {
     jobsFixture = [expired, legacy, timedOut];
     const madrid = { name: 'Madrid', width: 1080, height: 1920 };
     const formats = [
-      { id: 'madrid', label: 'Madrid', ratio: null, comp: madrid, width: 1080, height: 1920 },
+      {
+        id: 'madrid',
+        label: 'Madrid',
+        ratio: null,
+        comp: madrid,
+        width: 1080,
+        height: 1920,
+      },
     ];
     render(
       <QueryClientProvider
@@ -969,8 +1032,16 @@ describe('RenderJobsGrid', () => {
 
   test('Continuum’s New Renderer marks its jobs, and a job it handed to After Effects says why', async () => {
     const reason = 'text:raster:arithmetic-underived@Main/Headline';
-    const rendered: ApiRenderJob = { ...MADRID, label: 'Rendered here', engine: 'micro' };
-    const handedOver: ApiRenderJob = { ...ROMA, label: 'Handed over', engineFallback: reason };
+    const rendered: ApiRenderJob = {
+      ...MADRID,
+      label: 'Rendered here',
+      engine: 'micro',
+    };
+    const handedOver: ApiRenderJob = {
+      ...ROMA,
+      label: 'Handed over',
+      engineFallback: reason,
+    };
     const farm: ApiRenderJob = {
       ...ROMA,
       id: '11111111-1111-4111-8111-111111111141',
@@ -994,7 +1065,12 @@ describe('RenderJobsGrid', () => {
 
   test('a web component render wears a Web pill, and its detail reads no render workspace', async () => {
     const webKey = 'web:88888888-8888-4888-8888-888888888888';
-    const web: ApiRenderJob = { ...MADRID, label: 'Web hello', engine: 'web', templateKey: webKey };
+    const web: ApiRenderJob = {
+      ...MADRID,
+      label: 'Web hello',
+      engine: 'web',
+      templateKey: webKey,
+    };
     await renderLedger([web], [TEMPLATE]);
     const pill = within(screen.getByText('Web hello').closest('tr') as HTMLElement).getByText(
       'Web',
@@ -1050,7 +1126,14 @@ describe('RenderJobsGrid', () => {
     jobsFixture = [reel, pending];
     const story = { name: 'Story 9:16', width: 1080, height: 1920 };
     const formats = [
-      { id: 'story', label: 'Story', ratio: '9:16', comp: story, width: 1080, height: 1920 },
+      {
+        id: 'story',
+        label: 'Story',
+        ratio: '9:16',
+        comp: story,
+        width: 1080,
+        height: 1920,
+      },
     ];
     render(
       <QueryClientProvider
@@ -1146,7 +1229,15 @@ describe('RenderJobsGrid', () => {
         bitDepth: null,
         fieldOrder: 'tt',
       },
-      audioStreams: [{ index: 1, codec: 'aac', channels: 2, sampleRate: 44100, bitDepth: null }],
+      audioStreams: [
+        {
+          index: 1,
+          codec: 'aac',
+          channels: 2,
+          sampleRate: 44100,
+          bitDepth: null,
+        },
+      ],
       probedAt: '2026-10-09T00:00:00Z',
     }));
     render(
@@ -1156,7 +1247,9 @@ describe('RenderJobsGrid', () => {
         <RenderFileSpecs brandId={BRAND} jobId={BASE.id} output={output} />
       </QueryClientProvider>,
     );
-    const retry = await screen.findByRole('button', { name: 'Retry specs for Unknown.mp4' });
+    const retry = await screen.findByRole('button', {
+      name: 'Retry specs for Unknown.mp4',
+    });
     expect(screen.getByText(/Specs unavailable/)).toBeTruthy();
     fireEvent.click(retry);
     expect(await screen.findByText(/unknown bit depth/)).toBeTruthy();
@@ -1186,7 +1279,15 @@ describe('RenderJobsGrid', () => {
       >
         <RenderJobsGrid
           brandId={BRAND}
-          formats={[{ id: 'story', label: 'Story', ratio: '9:16', width: 1080, height: 1920 }]}
+          formats={[
+            {
+              id: 'story',
+              label: 'Story',
+              ratio: '9:16',
+              width: 1080,
+              height: 1920,
+            },
+          ]}
         />
       </QueryClientProvider>,
     );

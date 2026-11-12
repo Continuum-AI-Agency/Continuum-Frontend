@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { PortfolioOpenPlan } from './portfolioAccounts';
 
 // The archived section runs live React Query reads; stub the data layer so the card
@@ -33,10 +34,17 @@ mock.module('../useOptimizerData', () => ({
   }),
   // The foot band's source. Stubbed rather than stripped, because the band is now part of
   // what this file renders — leaving the hook out is how "No QueryClient set" gets in.
-  useOptimizerAccountRead: () => ({ data: { read: { candidates: accountReadCandidates } } }),
+  useOptimizerAccountRead: () => ({
+    data: { read: { candidates: accountReadCandidates } },
+  }),
   useOptimizerPortfolioPacing: () => pacingById,
   useOptimizerMutations: () => ({
-    restore: { mutate: () => {}, isPending: false, isError: false, error: null },
+    restore: {
+      mutate: () => {},
+      isPending: false,
+      isError: false,
+      error: null,
+    },
   }),
 }));
 mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
@@ -93,7 +101,10 @@ function portfolio(
 }
 
 const PROSPECTING = portfolio({ id: 'p1', name: 'Prospecting' });
-const openPlan: () => PortfolioOpenPlan = () => ({ kind: 'open', portfolioId: 'p1' });
+const openPlan: () => PortfolioOpenPlan = () => ({
+  kind: 'open',
+  portfolioId: 'p1',
+});
 
 function renderList(
   props: Partial<Parameters<typeof OptimizerPortfolios>[0]> = {},
@@ -261,7 +272,9 @@ describe('OptimizerPortfolios', () => {
         ['p1', run(1.2, 'overpacing')],
         ['p2', run(0.9, 'underpacing')],
       ]);
-      const { getByRole } = renderList({ portfolios: [leadPortfolio, purchasePortfolio] });
+      const { getByRole } = renderList({
+        portfolios: [leadPortfolio, purchasePortfolio],
+      });
 
       const formularios = getByRole('button', { name: 'Open FORMULARIOS' });
       const tours = getByRole('button', { name: 'Open Tours' });
@@ -288,7 +301,9 @@ describe('OptimizerPortfolios', () => {
     it('says what the portfolio buys when its own run holds no pacing verdict', () => {
       accountReadCandidates = [accountPacing];
       pacingById = new Map([['p1', run(1.2, 'overpacing')]]);
-      const { getByRole } = renderList({ portfolios: [leadPortfolio, purchasePortfolio] });
+      const { getByRole } = renderList({
+        portfolios: [leadPortfolio, purchasePortfolio],
+      });
 
       const tours = getByRole('button', { name: 'Open Tours' });
       expect(tours.querySelectorAll('[data-testid="portfolio-lead"]')).toHaveLength(0);
@@ -345,8 +360,16 @@ describe('OptimizerPortfolios', () => {
           known: true,
           isSelected: false,
           portfolios: [
-            portfolio({ id: 'g1', name: 'Leads // Google Ads only', ad_account_id: '5251780631' }),
-            portfolio({ id: 'g2', name: 'Test — Google Ads', ad_account_id: '5251780631' }),
+            portfolio({
+              id: 'g1',
+              name: 'Leads // Google Ads only',
+              ad_account_id: '5251780631',
+            }),
+            portfolio({
+              id: 'g2',
+              name: 'Test — Google Ads',
+              ad_account_id: '5251780631',
+            }),
           ],
         },
       ],
@@ -416,7 +439,10 @@ describe('OptimizerPortfolios — a portfolio dead on Meta reads stale', () => {
       adset_count: 2,
       platforms: ['meta', 'google_ads'],
     });
-    const { getByRole } = renderList({ portfolios: [google, mixed], brandPortfolioCount: 2 });
+    const { getByRole } = renderList({
+      portfolios: [google, mixed],
+      brandPortfolioCount: 2,
+    });
     expect(getByRole('button', { name: 'Open Leads Google' }).textContent).toContain('3 campaigns');
     expect(getByRole('button', { name: 'Open Mixed' }).textContent).toContain('2 members');
   });
@@ -432,26 +458,44 @@ describe('OptimizerPortfolios — a portfolio dead on Meta reads stale', () => {
   it('says how long since the last cycle and that the roster is gone on the card', () => {
     const { getByRole } = renderList({
       portfolios: [
-        portfolio({ id: 'p1', name: 'Citas Agosto - check leads', ...CITAS_OVER }),
-        portfolio({ id: 'p2', name: 'Daniel Gutierrez Buendia', ...DANIEL_OVER }),
-        portfolio({ id: 'p3', name: 'Reporte Agosto - Citas y Mensajes', ...REPORTE_OVER }),
+        portfolio({
+          id: 'p1',
+          name: 'Citas Agosto - check leads',
+          ...CITAS_OVER,
+        }),
+        portfolio({
+          id: 'p2',
+          name: 'Daniel Gutierrez Buendia',
+          ...DANIEL_OVER,
+        }),
+        portfolio({
+          id: 'p3',
+          name: 'Reporte Agosto - Citas y Mensajes',
+          ...REPORTE_OVER,
+        }),
       ],
     });
-    const citas = getByRole('button', { name: 'Open Citas Agosto - check leads' });
+    const citas = getByRole('button', {
+      name: 'Open Citas Agosto - check leads',
+    });
     expect(citas.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
       'last cycle 49 days ago',
     );
     expect(citas.querySelector('[data-testid="roster-chip"]')?.textContent).toBe(
       'roster gone since Aug 6 · 12 of 12 ad sets',
     );
-    const daniel = getByRole('button', { name: 'Open Daniel Gutierrez Buendia' });
+    const daniel = getByRole('button', {
+      name: 'Open Daniel Gutierrez Buendia',
+    });
     expect(daniel.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
       'last cycle 61 days ago',
     );
     expect(daniel.querySelector('[data-testid="roster-chip"]')?.textContent).toBe(
       'roster gone since Jul 24 · 2 of 2 ad sets',
     );
-    const reporte = getByRole('button', { name: 'Open Reporte Agosto - Citas y Mensajes' });
+    const reporte = getByRole('button', {
+      name: 'Open Reporte Agosto - Citas y Mensajes',
+    });
     expect(reporte.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
       'last cycle 48 days ago',
     );

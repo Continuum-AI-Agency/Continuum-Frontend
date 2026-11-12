@@ -8,8 +8,9 @@ import {
   readAdAccount,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import {
   easyFitTermsRead,
   PINK_COMPETITOR_CARD,
@@ -76,7 +77,9 @@ const CARDS = [PINK_INTENT_CARD, PINK_COMPETITOR_CARD].map((card) =>
 
 function atWidth(width: number) {
   (
-    window as unknown as { happyDOM: { setViewport(v: { width: number; height: number }): void } }
+    window as unknown as {
+      happyDOM: { setViewport(v: { width: number; height: number }): void };
+    }
   ).happyDOM.setViewport({ width, height: 900 });
   expect(window.innerWidth).toBe(width);
 }
@@ -271,7 +274,10 @@ describe('TermsLensView states', () => {
     expect(document.body.textContent).toContain('The Google Ads read did not answer.');
     expect(moduleState()).toBe('error');
     cleanup();
-    frame({ status: 'missing', reason: 'No Google Ads account is granted to this brand.' });
+    frame({
+      status: 'missing',
+      reason: 'No Google Ads account is granted to this brand.',
+    });
     expect(text('board-module-terms-missing')).toBe(
       'No Google Ads account is granted to this brand.',
     );
@@ -291,7 +297,9 @@ describe('TermsLensView states', () => {
 
 describe('TermsLens', () => {
   it("finds the brand's Google Ads customer and reads its terms with the profile, in one read", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );

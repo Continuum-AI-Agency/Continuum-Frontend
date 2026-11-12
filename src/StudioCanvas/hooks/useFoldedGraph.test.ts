@@ -1,9 +1,10 @@
+import { renderHook } from '@/i18n/__tests__/render';
 // This hook is what the canvas shell calls, so the two things it must never get wrong
 // are pinned here: it costs nothing when no module is folded, and a drag of the
 // collapsed card reaches the real nodes through the store rather than being swallowed.
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import type { Connection, Edge, NodeChange } from '@xyflow/react';
 
 import { useModuleFoldStore } from '../stores/useModuleFoldStore';
@@ -24,7 +25,12 @@ const nodes: StudioNode[] = [
 ];
 
 const edges: Edge[] = [
-  { id: 'inbound', source: 'ref', target: `${MODULE_A}:g`, targetHandle: 'ref-image' } as Edge,
+  {
+    id: 'inbound',
+    source: 'ref',
+    target: `${MODULE_A}:g`,
+    targetHandle: 'ref-image',
+  } as Edge,
 ];
 
 const handlers = () => ({
@@ -77,7 +83,11 @@ describe('useFoldedGraph', () => {
 
     act(() => {
       result.current.onNodesChange([
-        { id: collapsedNodeId(MODULE_A), type: 'position', position: { x: 150, y: 220 } },
+        {
+          id: collapsedNodeId(MODULE_A),
+          type: 'position',
+          position: { x: 150, y: 220 },
+        },
       ] as NodeChange<StudioNode>[]);
     });
 

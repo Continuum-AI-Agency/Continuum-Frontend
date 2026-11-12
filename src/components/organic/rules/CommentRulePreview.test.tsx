@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { CommentRulePreview } from './CommentRulePreview';
 import type { RuleFormValues } from './ruleFormSchema';
 
@@ -87,7 +88,10 @@ describe('the button', () => {
   it('sits inside the message bubble, not beside it', () => {
     render(
       <CommentRulePreview
-        values={values({ replyMessage: 'Here it is', linkButtonLabel: 'Get the guide' })}
+        values={values({
+          replyMessage: 'Here it is',
+          linkButtonLabel: 'Get the guide',
+        })}
       />,
     );
     const bubble = screen.getByText('Here it is').parentElement;
@@ -113,7 +117,10 @@ describe('the button', () => {
   it('puts the tracked link in the message when there is no button text', () => {
     render(
       <CommentRulePreview
-        values={values({ linkButtonLabel: '', destinationUrl: 'https://example.com/guide' })}
+        values={values({
+          linkButtonLabel: '',
+          destinationUrl: 'https://example.com/guide',
+        })}
         trackedLinkUrl="https://api.trycontinuum.ai/r/aB3xK9mQ2pLn"
       />,
     );
@@ -128,7 +135,10 @@ describe('the button', () => {
   it('says the short link comes on save, rather than showing the destination', () => {
     render(
       <CommentRulePreview
-        values={values({ linkButtonLabel: '', destinationUrl: 'https://example.com/guide' })}
+        values={values({
+          linkButtonLabel: '',
+          destinationUrl: 'https://example.com/guide',
+        })}
       />,
     );
     expect(screen.getByText(/created when you save/i)).toBeDefined();
@@ -204,7 +214,10 @@ describe('what the rule does', () => {
   it('counts the chosen posts', () => {
     render(
       <CommentRulePreview
-        values={values({ postScope: 'specific_posts', platformPostIds: ['a', 'b'] })}
+        values={values({
+          postScope: 'specific_posts',
+          platformPostIds: ['a', 'b'],
+        })}
       />,
     );
     expect(screen.getByText('2 chosen posts')).toBeDefined();
@@ -218,7 +231,10 @@ describe('what the rule does', () => {
   it('states the window when the rule has one', () => {
     render(
       <CommentRulePreview
-        values={values({ activeFrom: '2026-09-22T00:00', activeUntil: '2026-09-25T00:00' })}
+        values={values({
+          activeFrom: '2026-09-22T00:00',
+          activeUntil: '2026-09-25T00:00',
+        })}
       />,
     );
     expect(screen.getByText(/ to /)).toBeDefined();
@@ -229,7 +245,11 @@ describe('what the rule does', () => {
   it('warns when the rule would match and then do nothing', () => {
     render(
       <CommentRulePreview
-        values={values({ publicReplyMessages: [], replyMessage: '', destinationUrl: '' })}
+        values={values({
+          publicReplyMessages: [],
+          replyMessage: '',
+          destinationUrl: '',
+        })}
       />,
     );
     expect(screen.getByText(/would match a comment and then do nothing/i)).toBeDefined();
@@ -251,7 +271,9 @@ describe('what the rule does', () => {
   it('counts the wordings it rotates between', () => {
     render(
       <CommentRulePreview
-        values={values({ publicReplyMessages: ['Sent!', 'Check inbox', 'On its way'] })}
+        values={values({
+          publicReplyMessages: ['Sent!', 'Check inbox', 'On its way'],
+        })}
       />,
     );
     expect(screen.getByText(/rotates between your 3 replies/i)).toBeDefined();

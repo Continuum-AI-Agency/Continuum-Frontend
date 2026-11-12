@@ -1,3 +1,6 @@
+import { useTranslations as useBetaTranslations, useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 // The "Cost:" line under a budget move in the Actions queue: the engine's point estimate, its
 // 95% interval, and the events it rests on. A zero-conversion ad set has no estimate and no
 // upper bound (spend ÷ 0), so it says that instead of printing the engine's placeholder zeros.
@@ -17,11 +20,16 @@ export function CostIntervalLine({
   ci: CycleItemDiagnostics['ci'];
   currency: string | null;
 }) {
-  const note = upperBoundNote(ci);
+  const betaUiText = useBetaTranslations('scale');
+
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const note = upperBoundNote(ci, optimizerText);
   if (note) {
     return (
       <p>
-        <span className="font-medium text-foreground">Cost:</span>{' '}
+        <span className="font-medium text-foreground">{uiText('cost_97c94ef')}</span>{' '}
         <span {...figureProps(`queue.${adsetId}.detail.ci.hi`, null, currency)}>{note}</span>
       </p>
     );
@@ -32,25 +40,29 @@ export function CostIntervalLine({
   const hi = typeof ci?.hi === 'number' && Number.isFinite(ci.hi) ? ci.hi : null;
   return (
     <p>
-      <span className="font-medium text-foreground">Cost:</span>{' '}
+      <span className="font-medium text-foreground">{uiText('cost_97c94ef')}</span>{' '}
       <span {...figureProps(`queue.${adsetId}.detail.cost`, cpa, currency)}>
-        {formatCurrency(cpa, currency)}
+        {formatCurrency(cpa, currency, uiLocale)}
       </span>
       {lo != null && hi != null ? (
         <>
           {' (likely '}
           <span {...figureProps(`queue.${adsetId}.detail.ci.lo`, lo, currency)}>
-            {formatCurrency(lo, currency)}
+            {formatCurrency(lo, currency, uiLocale)}
           </span>
           –
           <span {...figureProps(`queue.${adsetId}.detail.ci.hi`, hi, currency)}>
-            {formatCurrency(hi, currency)}
+            {formatCurrency(hi, currency, uiLocale)}
           </span>
           {')'}
         </>
       ) : null}
       {/* Google credits fractions of a conversion: "420.6", never the raw sum. */}
-      {typeof ci?.events === 'number' ? ` from ${formatResults(ci.events)} events` : ''}
+      {typeof ci?.events === 'number'
+        ? betaUiText('beta_d5e363596b52', {
+            value0: String(formatResults(ci.events)),
+          })
+        : ''}
     </p>
   );
 }

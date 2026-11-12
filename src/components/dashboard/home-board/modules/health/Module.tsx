@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The expanded doctor: every check in three groups — what needs fixing (each with its fix), what
 // passes, and what Continuum cannot read yet (never counted as passing).
@@ -8,7 +9,10 @@ import type { DoctorCheck, DoctorCheckStatus, DoctorView } from './doctorModel';
 
 type ReadyView = Extract<DoctorView, { state: 'ready' }>;
 
-const GROUPS: { status: Exclude<DoctorCheckStatus, 'loading'>; title: string }[] = [
+const GROUPS: {
+  status: Exclude<DoctorCheckStatus, 'loading'>;
+  title: string;
+}[] = [
   { status: 'fail', title: 'Needs fixing' },
   { status: 'pass', title: 'Passing' },
   { status: 'unreadable', title: 'Not readable yet' },
@@ -44,11 +48,14 @@ function CheckRow({ check }: { check: DoctorCheck }) {
 }
 
 export default function HealthModule({ view }: { view: ReadyView }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <div className="space-y-5" data-testid="home-health-module">
       <p className="text-muted-foreground text-sm">
-        {view.passing} of {view.total} readable checks pass
-        {view.failing > 0 ? `; ${view.failing} need fixing` : ''}.
+        {view.passing} {betaUiText('beta_28391d3bc64e')} {view.total}{' '}
+        {betaUiText('beta_460b5f1eb2c5')}
+        {view.failing > 0 ? betaUiText('beta_8bdf57c93de1', { value0: String(view.failing) }) : ''}.
       </p>
       {GROUPS.map((group) => {
         const checks = view.checks.filter((check) => check.status === group.status);

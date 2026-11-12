@@ -4,6 +4,7 @@
 // (stored text in the account's language, newest first, then most confident). It reads the
 // same two stored sources as the tile, plus the brand's competitor list for the names.
 import Link from 'next/link';
+import { useTranslations as useBetaTranslations, useLocale as useMarketLocale } from 'next-intl';
 import { useMemo } from 'react';
 import { useCompetitors } from '@/lib/api/competitorSpy';
 import { groupMoves, moveSentence, orderTrends, shortDay } from './marketRadarModel';
@@ -17,6 +18,9 @@ function confidenceLabel(confidence: number | null): string | null {
 }
 
 export default function MarketRadarModule({ brandId }: { brandId: string }) {
+  const betaUiText = useBetaTranslations('dashboard');
+  const marketLocale = useMarketLocale();
+
   const radar = useMarketRadar(brandId);
   const competitors = useCompetitors(brandId);
   const nameById = useMemo(
@@ -28,20 +32,18 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-5" data-testid="home-market-module">
-      <p className="text-2xs text-muted-foreground">{RADAR_ORDER_NOTE}</p>
+      <p className="text-2xs text-muted-foreground">{betaUiText('radarOrder')}</p>
 
-      <section aria-label="Competitor moves" className="flex min-w-0 flex-col gap-2">
+      <section aria-label={betaUiText('beta_16b33aa7beea')} className="flex min-w-0 flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
-          <h4 className="font-semibold text-xs">Competitors</h4>
+          <h4 className="font-semibold text-xs">{betaUiText('beta_e699b0b54366')}</h4>
           <Link className="text-2xs underline underline-offset-2" href="/competitor-spy">
-            Open Brand Spy
+            {betaUiText('beta_b553090894da')}
           </Link>
         </div>
         {groups.length === 0 ? (
           <p className="text-muted-foreground text-xs">
-            {radar.reportExists
-              ? 'No competitor moves in the last scan.'
-              : 'No competitors tracked yet — add them in Brand Spy.'}
+            {radar.reportExists ? betaUiText('beta_aef98fb85064') : betaUiText('beta_e11a6e8744c8')}
           </p>
         ) : (
           <ul className="flex min-w-0 flex-col gap-1.5">
@@ -55,7 +57,7 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
                 <span className="min-w-0">
                   {moveSentence(group, nameById.get(group.competitorId) ?? null)}
                   <small className="block text-2xs text-muted-foreground">
-                    Competitor · {shortDay(group.day)}
+                    {betaUiText('beta_927aabe915b2')} {shortDay(group.day, marketLocale)}
                   </small>
                 </span>
               </li>
@@ -64,15 +66,15 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
         )}
       </section>
 
-      <section aria-label="Trends" className="flex min-w-0 flex-col gap-2">
+      <section aria-label={betaUiText('beta_e856c6c6a48b')} className="flex min-w-0 flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
-          <h4 className="font-semibold text-xs">Trends</h4>
+          <h4 className="font-semibold text-xs">{betaUiText('beta_e856c6c6a48b')}</h4>
           <Link className="text-2xs underline underline-offset-2" href="/organic?tab=metrics">
-            Open trends
+            {betaUiText('beta_d927bffe1e72')}
           </Link>
         </div>
         {trends.length === 0 ? (
-          <p className="text-muted-foreground text-xs">No trends read for this brand yet.</p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_cccfc051d870')}</p>
         ) : (
           <ul className="flex min-w-0 flex-col gap-1.5">
             {trends.map((trend) => {
@@ -90,7 +92,7 @@ export default function MarketRadarModule({ brandId }: { brandId: string }) {
                       <span className="mt-0.5 block text-muted-foreground">{trend.relevance}</span>
                     ) : null}
                     <small className="mt-0.5 block text-2xs text-muted-foreground tabular-nums">
-                      {['Trend', trend.day ? shortDay(trend.day) : null, confidence]
+                      {['Trend', trend.day ? shortDay(trend.day, marketLocale) : null, confidence]
                         .filter(Boolean)
                         .join(' · ')}
                     </small>

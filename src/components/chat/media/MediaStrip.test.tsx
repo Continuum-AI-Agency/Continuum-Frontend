@@ -5,7 +5,8 @@ import {
   type ChatMediaSignRequest,
   chatMediaRefKey,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -47,13 +48,22 @@ const requestMock = mock(async (args: { path: string; body?: unknown }) => {
     }),
   };
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 const { MEDIA_STRIP_TILE_HEIGHT, MediaStrip, mediaStripTileWidth } = await import('./MediaStrip');
 const { resetChatMediaSignCache } = await import('@/lib/media/chatMediaRefs');
 
 const items: ChatMediaItem[] = [
-  { ref: { type: 'draft', draftId: 'd1' }, kind: 'image', w: 1080, h: 1080, label: 'Square post' },
+  {
+    ref: { type: 'draft', draftId: 'd1' },
+    kind: 'image',
+    w: 1080,
+    h: 1080,
+    label: 'Square post',
+  },
   {
     ref: { type: 'platform', platform: 'instagram', mediaId: '1789' },
     kind: 'video',
@@ -63,7 +73,12 @@ const items: ChatMediaItem[] = [
     permalink: 'https://www.instagram.com/reel/abc/',
     label: 'Launch reel',
   },
-  { ref: { type: 'draft', draftId: 'd2', slide: 1 }, kind: 'carousel', w: null, h: null },
+  {
+    ref: { type: 'draft', draftId: 'd2', slide: 1 },
+    kind: 'carousel',
+    w: null,
+    h: null,
+  },
   {
     ref: { type: 'competitor', source: 'instagram', id: 'gone' },
     kind: 'image',

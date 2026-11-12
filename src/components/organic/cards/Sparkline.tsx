@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Lightweight inline trend line for dense cards. Generalized from the paid-media
 // MetricSparkline so it works on any numeric series without paid-media types.
 // Renders a flat baseline when there are fewer than two points.
@@ -38,7 +40,11 @@ export function sparklinePoints(
   const points = clean
     .map((value, index) => `${(index * stepX).toFixed(2)},${yFor(value).toFixed(2)}`)
     .join(' ');
-  return { points, lastX: (clean.length - 1) * stepX, lastY: yFor(clean[clean.length - 1]) };
+  return {
+    points,
+    lastX: (clean.length - 1) * stepX,
+    lastY: yFor(clean[clean.length - 1]),
+  };
 }
 
 type SparklineProps = {
@@ -56,8 +62,11 @@ export function Sparkline({
   width = 120,
   height = 28,
   className,
-  ariaLabel = 'trend',
+  ariaLabel: providedAriaLabel,
 }: SparklineProps) {
+  const uiText = useTranslations('organic');
+  const ariaLabel = providedAriaLabel ?? uiText('trend_9e21771');
+
   const geometry = React.useMemo(
     () => sparklinePoints(values, width, height),
     [values, width, height],

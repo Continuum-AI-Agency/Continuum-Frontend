@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // O03 Decisions: the cards waiting on this account, in impact order. Each one carries the title
 // the Optimizer generated, the line that names its figures, bars of the entities those figures
@@ -90,6 +91,8 @@ function useDismiss(brandId: string, adAccountId: string | null) {
 }
 
 function ReviewAll({ onOpenActions }: { onOpenActions: () => void }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <button
       className="hit-area inline-flex items-center gap-1 font-semibold text-primary-ink text-xs hover:underline"
@@ -97,13 +100,15 @@ function ReviewAll({ onOpenActions }: { onOpenActions: () => void }) {
       onClick={onOpenActions}
       type="button"
     >
-      Review all
+      {betaUiText('beta_d05163fabae8')}
       <ArrowRightIcon aria-hidden="true" className="size-3.5" />
     </button>
   );
 }
 
 function DecisionsModule({ ctx, slot, source }: BoardModuleProps & { source: DecisionsSource }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { dismiss, stateOf } = useDismiss(ctx.brandId, ctx.adAccountId);
   const cards = useMemo(
     () =>
@@ -141,7 +146,7 @@ function DecisionsModule({ ctx, slot, source }: BoardModuleProps & { source: Dec
       size={slot.size}
       state={FRAME_STATE[source.status]}
       testId={TEST_ID}
-      title="Decisions"
+      title={betaUiText('beta_cfa6a08af3ed')}
     >
       {source.status === 'ready' ? (
         <DecisionsView
@@ -175,7 +180,10 @@ function MetaDecisions({ ctx, slot }: BoardModuleProps) {
   const { isLoading, isError } = accountRead;
   const source = useMemo((): DecisionsSource => {
     if (ctx.adAccountId == null) {
-      return { status: 'empty', message: 'Pick a Meta ad account to see what waits on it.' };
+      return {
+        status: 'empty',
+        message: 'Pick a Meta ad account to see what waits on it.',
+      };
     }
     if (read) {
       return {

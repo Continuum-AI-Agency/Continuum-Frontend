@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { AdminPagination, AdminUser, PermissionRow } from '@/components/admin/adminUserTypes';
+import { render } from '@/i18n/__tests__/render';
 
 let searchParamsValue = 'query=a&page=1&pageSize=50';
 const pushMock = mock((_href: string) => {});
@@ -87,7 +87,9 @@ describe('AdminUserList search', () => {
       />,
     );
     await settleRenderedEffects();
-    const input = screen.getByRole('textbox', { name: 'Search users' }) as HTMLInputElement;
+    const input = screen.getByRole('textbox', {
+      name: 'Search users',
+    }) as HTMLInputElement;
 
     fireEvent.change(input, { target: { value: 'alex' } });
     expect(input.value).toBe('alex');
@@ -123,7 +125,9 @@ describe('AdminUserList search', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     fireEvent.change(input, { target: { value: 'alex' } });
 
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), { timeout: 700 });
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
+      timeout: 700,
+    });
 
     const [href, options] = replaceMock.mock.calls[0] ?? [];
     const params = new URLSearchParams(href?.replace(/^\?/, ''));
@@ -141,7 +145,12 @@ describe('AdminUserList search', () => {
       <AdminUserList
         users={visibleUsers}
         permissions={permissions}
-        pagination={{ ...pagination, totalCount: 1, totalPages: 1, lastPage: 1 }}
+        pagination={{
+          ...pagination,
+          totalCount: 1,
+          totalPages: 1,
+          lastPage: 1,
+        }}
         searchQuery=""
       />,
     );
@@ -172,9 +181,13 @@ describe('AdminUserList search', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 
-    expect((screen.getByRole('textbox', { name: 'Search users' }) as HTMLInputElement).value).toBe(
-      '',
-    );
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: 'Search users',
+        }) as HTMLInputElement
+      ).value,
+    ).toBe('');
     expect(replaceMock).toHaveBeenCalledTimes(1);
     const [href] = replaceMock.mock.calls[0] ?? [];
     const params = new URLSearchParams(href?.replace(/^\?/, ''));
@@ -217,7 +230,9 @@ describe('AdminUserList search', () => {
       />,
     );
     await settleRenderedEffects();
-    const input = screen.getByRole('textbox', { name: 'Search users' }) as HTMLInputElement;
+    const input = screen.getByRole('textbox', {
+      name: 'Search users',
+    }) as HTMLInputElement;
 
     window.history.replaceState(null, '', '/admin?query=back&page=2&pageSize=50');
     fireEvent(window, new Event('popstate'));
@@ -251,7 +266,12 @@ describe('AdminUserList search', () => {
       <AdminUserList
         users={visibleUsers}
         permissions={memberships}
-        pagination={{ ...pagination, totalCount: 1, totalPages: 1, lastPage: 1 }}
+        pagination={{
+          ...pagination,
+          totalCount: 1,
+          totalPages: 1,
+          lastPage: 1,
+        }}
         searchQuery=""
       />,
     );
@@ -289,7 +309,12 @@ describe('AdminUserList brand access', () => {
       <AdminUserList
         users={visibleUsers}
         permissions={permissions}
-        pagination={{ ...pagination, totalCount: 1, totalPages: 1, lastPage: 1 }}
+        pagination={{
+          ...pagination,
+          totalCount: 1,
+          totalPages: 1,
+          lastPage: 1,
+        }}
         searchQuery=""
         billingLive={billingLive}
       />,
@@ -334,7 +359,7 @@ describe('AdminUserList brand access', () => {
 
     expect(screen.queryByText(/^Tier \d$/)).toBeNull();
     expect(screen.queryByText('Product access activates at billing go-live.')).toBeNull();
-    expect(screen.getByTestId('brand-billing-plan').textContent).toBe('Performance Plus · active');
+    expect(screen.getByTestId('brand-billing-plan').textContent).toBe('Performance Plus · Active');
     const performance = screen.getByRole('checkbox', { name: 'Performance' });
     expect(performance.getAttribute('aria-checked')).toBe('true');
     expect(performance.getAttribute('aria-disabled')).toBe('true');
@@ -355,32 +380,36 @@ describe('AdminUserList brand access', () => {
     invokeMock.mockImplementation(async (name) => {
       if (name !== 'admin-update-access') return { data: null, error: null };
       return {
-      data: {
-        ok: true,
-        brandId: BRAND,
-        changes: [
-          {
-            kind: 'product',
-            product: 'studio',
-            before: null,
-            after: { active: true, source: 'admin' },
-          },
-        ],
-        access: saved,
-        entitlements: {
+        data: {
+          ok: true,
           brandId: BRAND,
-          planCode: 'paid_media',
-          status: 'active',
-          billingModel: 'stripe',
-          plans: ['paid_media'],
-          products: ['paid_media', 'studio'],
-          addons: [],
-          trendsTier: null,
-          buckets: [],
-          creditBalance: { totalCredits: 0, purchasedCredits: 0, rolloverCredits: 0 },
+          changes: [
+            {
+              kind: 'product',
+              product: 'studio',
+              before: null,
+              after: { active: true, source: 'admin' },
+            },
+          ],
+          access: saved,
+          entitlements: {
+            brandId: BRAND,
+            planCode: 'paid_media',
+            status: 'active',
+            billingModel: 'stripe',
+            plans: ['paid_media'],
+            products: ['paid_media', 'studio'],
+            addons: [],
+            trendsTier: null,
+            buckets: [],
+            creditBalance: {
+              totalCredits: 0,
+              purchasedCredits: 0,
+              rolloverCredits: 0,
+            },
+          },
         },
-      },
-      error: null,
+        error: null,
       };
     });
     renderList(membership({ brand_access: stripeAccess }), true);
@@ -391,7 +420,10 @@ describe('AdminUserList brand access', () => {
     const accessCalls = () =>
       invokeMock.mock.calls.filter(([name]) => name === 'admin-update-access');
     await waitFor(() => expect(accessCalls()).toHaveLength(1));
-    expect(accessCalls()[0]?.[1]?.body).toEqual({ brandId: BRAND, products: { studio: true } });
+    expect(accessCalls()[0]?.[1]?.body).toEqual({
+      brandId: BRAND,
+      products: { studio: true },
+    });
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'Canvas' }).getAttribute('aria-checked')).toBe(
         'true',
@@ -435,7 +467,11 @@ describe('AdminUserList brand access', () => {
         addons: [],
         trendsTier: null,
         buckets: [],
-        creditBalance: { totalCredits: 0, purchasedCredits: 0, rolloverCredits: 0 },
+        creditBalance: {
+          totalCredits: 0,
+          purchasedCredits: 0,
+          rolloverCredits: 0,
+        },
       },
     },
     error: null,
@@ -459,12 +495,17 @@ describe('AdminUserList brand access', () => {
     await settleRenderedEffects();
 
     fireEvent.click(screen.getByRole('button', { name: 'Full access' }));
-    const confirm = await screen.findByRole('button', { name: 'Give full access' });
+    const confirm = await screen.findByRole('button', {
+      name: 'Give full access',
+    });
     expect(accessCalls()).toHaveLength(0);
     fireEvent.click(confirm);
 
     await waitFor(() => expect(accessCalls()).toHaveLength(1));
-    expect(accessCalls()[0]?.[1]?.body).toEqual({ brandId: BRAND, fullAccess: true });
+    expect(accessCalls()[0]?.[1]?.body).toEqual({
+      brandId: BRAND,
+      fullAccess: true,
+    });
   });
 
   it('adds credits once with the reason, even on a double click, then clears the form', async () => {
@@ -479,8 +520,12 @@ describe('AdminUserList brand access', () => {
     await settleRenderedEffects();
 
     expect(screen.getByTestId('brand-canvas-credits').textContent).toBe('2,000 credits');
-    const amount = screen.getByRole('spinbutton', { name: 'Credits to add (USD)' });
-    const reason = screen.getByRole('textbox', { name: 'Reason for the credits' });
+    const amount = screen.getByRole('textbox', {
+      name: 'Credits to add (USD)',
+    });
+    const reason = screen.getByRole('textbox', {
+      name: 'Reason for the credits',
+    });
     const add = screen.getByRole('button', { name: 'Add credits' });
     fireEvent.change(amount, { target: { value: '25' } });
     expect(add).toHaveProperty('disabled', true);
@@ -510,7 +555,7 @@ describe('AdminUserList brand access', () => {
     renderList(membership({ brand_access: noPlan }), true);
     await settleRenderedEffects();
 
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Credits to add (USD)' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Credits to add (USD)' }), {
       target: { value: '1000.01' },
     });
     fireEvent.change(screen.getByRole('textbox', { name: 'Reason for the credits' }), {
@@ -520,7 +565,11 @@ describe('AdminUserList brand access', () => {
   });
 
   it('shows the Client switch and Internal badge only for a staff-created brand', async () => {
-    const internalAccess = { ...noPlan, internalAuthored: true, internal: true };
+    const internalAccess = {
+      ...noPlan,
+      internalAuthored: true,
+      internal: true,
+    };
     renderList(membership({ brand_access: internalAccess }), true);
     await settleRenderedEffects();
 
@@ -529,7 +578,10 @@ describe('AdminUserList brand access', () => {
     expect(client.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(client);
     await waitFor(() => expect(accessCalls()).toHaveLength(1));
-    expect(accessCalls()[0]?.[1]?.body).toEqual({ brandId: BRAND, client: true });
+    expect(accessCalls()[0]?.[1]?.body).toEqual({
+      brandId: BRAND,
+      client: true,
+    });
     cleanup();
 
     renderList(membership({ brand_access: noPlan }), true);
@@ -547,7 +599,9 @@ describe('AdminUserList brand access', () => {
         return {
           data: null,
           error: new FunctionsHttpError(
-            new Response(JSON.stringify({ error: 'billing_not_live' }), { status: 409 }),
+            new Response(JSON.stringify({ error: 'billing_not_live' }), {
+              status: 409,
+            }),
           ),
         };
       }

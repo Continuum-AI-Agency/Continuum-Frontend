@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 import { cn } from '@/lib/utils';
 
@@ -11,10 +14,10 @@ type CreativeRotationListProps = {
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 };
 
-function formatOccurredAt(iso: string): string {
+function formatOccurredAt(iso: string, uiLocale: UiLocale = 'en'): string {
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return iso;
-  return new Date(ms).toLocaleString('en-US', {
+  return new Date(ms).toLocaleString(uiLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -24,13 +27,16 @@ function formatOccurredAt(iso: string): string {
 }
 
 function ThumbTile({ url, label }: { url: string | null; label: string }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex min-w-0 flex-col items-center gap-1 text-xs text-muted-foreground">
       <div className="relative h-20 w-20 overflow-hidden rounded bg-muted/40">
         {url ? (
           <img src={url} alt={label} className="h-full w-full object-cover" loading="lazy" />
         ) : (
-          <div className="flex h-full items-center justify-center text-2xs">URL unavailable</div>
+          <div className="flex h-full items-center justify-center text-2xs">
+            {uiText('url_unavailable_82eb0d0')}
+          </div>
         )}
       </div>
       <span>{label}</span>
@@ -39,7 +45,12 @@ function ThumbTile({ url, label }: { url: string | null; label: string }) {
 }
 
 function RotationRow({ event, isFocused }: { event: RotationEvent; isFocused: boolean }) {
-  const reason = event.decisionNote ?? event.error ?? 'No reason recorded.';
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
+  const reason =
+    event.decisionNote ??
+    (event.error ? formatUiError(new Error(event.error)) : uiText('creativeNoReason'));
   const product = event.replacement ?? event.outgoing;
 
   return (
@@ -55,21 +66,25 @@ function RotationRow({ event, isFocused }: { event: RotationEvent; isFocused: bo
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {event.actionType.replace(/_/g, ' ').toLowerCase()}
         </span>
-        <span className="text-xs text-muted-foreground">{formatOccurredAt(event.occurredAt)}</span>
+        <span className="text-xs text-muted-foreground">
+          {formatOccurredAt(event.occurredAt, uiLocale)}
+        </span>
       </div>
 
       <p className="mt-2 text-sm leading-snug text-foreground">{reason}</p>
 
       <div className="mt-3 flex items-center gap-3">
-        <ThumbTile url={event.beforeUrl} label="Before" />
+        <ThumbTile url={event.beforeUrl} label={uiText('before_9bb7250')} />
         <span className="text-muted-foreground" aria-hidden>
           →
         </span>
-        <ThumbTile url={event.afterUrl} label="After" />
+        <ThumbTile url={event.afterUrl} label={uiText('after_7b68fe5')} />
         {product ? (
           <div className="min-w-0 flex-1 rounded border border-border/60 bg-muted/30 p-2">
             <div className="text-2xs uppercase tracking-wide text-muted-foreground">
-              {event.replacement ? 'Replacement product' : 'Outgoing product'}
+              {event.replacement
+                ? uiText('replacement_product_812fc1b')
+                : uiText('outgoing_product_cbdb5f1')}
             </div>
             <div className="mt-0.5 truncate text-sm font-medium">{product.name}</div>
             <div className="truncate text-xs text-muted-foreground">{product.brand}</div>
@@ -91,6 +106,7 @@ export function CreativeRotationList({
   className,
   scrollRef,
 }: CreativeRotationListProps) {
+  const uiText = useTranslations('scale');
   if (rotations.length === 0) {
     return (
       <div
@@ -100,7 +116,7 @@ export function CreativeRotationList({
           className,
         )}
       >
-        No DCO rotations recorded for this ad in the selected window.
+        {uiText('no_dco_rotations_recorded_for_this_ad_in_the__ff03317')}
       </div>
     );
   }

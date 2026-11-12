@@ -19,6 +19,7 @@ import {
   isTerminalAgentRunStatus,
 } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { streamCanvasComposer } from '@/lib/ai-studio/composer/streamCanvasComposer';
 import { http } from '@/lib/api/http';
@@ -139,7 +140,10 @@ export function applyComposerFrame(
     // Folded by callId so a delegation that reports running and then completed
     // is ONE card whose status changes, not two.
     case 'agent.delegated':
-      return { ...previous, delegations: foldDelegation(previous.delegations, frame.data) };
+      return {
+        ...previous,
+        delegations: foldDelegation(previous.delegations, frame.data),
+      };
     case 'composer.pipeline_proposal':
       return { ...previous, pipelineProposal: frame.data };
     case 'response.done':
@@ -176,8 +180,14 @@ export function buildHistoryPayload(turns: ComposerTurn[]): ComposerHistoryMessa
     if (turn.state.status !== 'done' && turn.state.status !== 'error') continue;
     const assistant = assistantLineFor(turn.state);
     if (!assistant) continue;
-    messages.push({ role: 'user', content: turn.prompt.slice(0, HISTORY_CONTENT_CAP) });
-    messages.push({ role: 'assistant', content: assistant.slice(0, HISTORY_CONTENT_CAP) });
+    messages.push({
+      role: 'user',
+      content: turn.prompt.slice(0, HISTORY_CONTENT_CAP),
+    });
+    messages.push({
+      role: 'assistant',
+      content: assistant.slice(0, HISTORY_CONTENT_CAP),
+    });
   }
   return messages.slice(-COMPOSER_HISTORY_MAX_MESSAGES);
 }
@@ -193,7 +203,11 @@ export function toCanvasComposerReferences(
     const key = `${reference.type}:${reference.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    result.push({ type: parsedType.data, id: reference.id, label: reference.label });
+    result.push({
+      type: parsedType.data,
+      id: reference.id,
+      label: reference.label,
+    });
     if (result.length === CANVAS_COMPOSER_MAX_REFERENCES) break;
   }
   return result;
@@ -242,6 +256,8 @@ const upsertComposerStoreRun = (
 };
 
 export function useCanvasComposer(brandProfileId: string | undefined, roomId: string | undefined) {
+  const uiErrorText = useUiErrorMessage();
+
   const [turns, setTurns] = useState<ComposerTurn[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const activeRunRef = useRef<ActiveComposerRun | null>(null);
@@ -404,7 +420,10 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
             // composer.started names the durable run this stream is a view of; that is
             // the moment the run becomes registerable (and cancellable) app-wide.
             if (frame.type === 'composer.started' && frame.data.runId) {
-              const active = { runId: frame.data.runId, roomId: frame.data.roomId };
+              const active = {
+                runId: frame.data.runId,
+                roomId: frame.data.roomId,
+              };
               activeRunRef.current = active;
               upsertComposerStoreRun(active, 'running');
             }
@@ -447,11 +466,11 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
         updateLastTurn((state) => ({
           ...state,
           status: 'error',
-          error: err instanceof Error ? err.message : 'The composer failed.',
+          error: uiErrorText(err),
         }));
       }
     },
-    [brandProfileId, roomId, updateLastTurn, cancel],
+    [brandProfileId, roomId, updateLastTurn, cancel, uiErrorText],
   );
 
   const state = turns.at(-1)?.state ?? IDLE_COMPOSER_STATE;

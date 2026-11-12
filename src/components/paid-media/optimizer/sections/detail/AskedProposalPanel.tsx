@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
 // The audience proposal an asked-for row opened, shown on that row.
 //
 // "Open the audience proposal" used to switch tabs and focus a queue row, which is a second
@@ -52,14 +55,23 @@ export type AskedProposalPanelProps = {
   cboPreviewByCampaign: ReadonlyMap<string, ConvertCboResponse>;
 };
 
-const RETRY_LABEL = 'Ask Jaina again';
+const requestedDates = new Map<UiLocale, Intl.DateTimeFormat>();
+function requestedAt(locale: UiLocale) {
+  let fmt = requestedDates.get(locale);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+    requestedDates.set(locale, fmt);
+  }
+  return fmt;
+}
 
-const requestedAt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-
-function whenLabel(iso: string | null): string | null {
+function whenLabel(iso: string | null, locale: UiLocale = 'en'): string | null {
   if (!iso) return null;
   const at = Date.parse(iso);
-  return Number.isNaN(at) ? null : requestedAt.format(at);
+  return Number.isNaN(at) ? null : requestedAt(locale).format(at);
 }
 
 function Fact({ label, value }: { label: string; value: string | null }) {
@@ -73,6 +85,8 @@ function Fact({ label, value }: { label: string; value: string | null }) {
 }
 
 export function AskedProposalPanel(props: AskedProposalPanelProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const { row, rec } = props;
   const [notice, setNotice] = React.useState<ActionNotice | null>(null);
   const handoff = row.handoff;
@@ -81,7 +95,7 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
   const plan = proposal ? readProposalPlan(proposal.row) : null;
 
   if (proposal && plan && rec) {
-    const view = audienceCardView([proposal.row], rec);
+    const view = audienceCardView([proposal.row], rec, uiText);
     const proposalId = proposal.row.id;
     const campaignId = view.block?.campaign_id ?? plan.source.campaign_id ?? null;
     return (
@@ -124,7 +138,13 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
           setNotice(null);
           props.actions.request(rec.id, {
             onDone: (proposalId) => {
-              const throttled = reaskThrottledNote(proposalId, proposal.row);
+              const throttled = reaskThrottledNote(
+                proposalId,
+                proposal.row,
+                undefined,
+                uiText,
+                uiLocale,
+              );
               setNotice(throttled ? { tone: 'info', text: throttled } : null);
             },
             onError: (message) => setNotice({ tone: 'error', text: message }),
@@ -132,16 +152,18 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
         }
       : null;
   const failure = proposal
-    ? proposalFailure(proposal.row, null, readProposalResult(proposal.row))
+    ? proposalFailure(proposal.row, null, readProposalResult(proposal.row), uiText)
     : null;
   return (
     <div className="space-y-4" data-testid="asked-proposal-panel">
       <section className="space-y-2" data-testid="asked-proposal-state">
-        <h4 className={`${typeScale.label} text-muted-foreground`}>Audience proposal</h4>
+        <h4 className={`${typeScale.label} text-muted-foreground`}>
+          {uiText('audience_proposal_a7f9785')}
+        </h4>
         {failure ? (
           <>
             <p className="font-medium text-destructive text-xs">
-              {AUDIENCE_PROPOSAL_STATE_LABEL.failed}
+              {uiText('audienceStateLabel', { state: 'failed' })}
             </p>
             <ProposalFailureBlock
               failure={failure}
@@ -157,28 +179,38 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
           <>
             {/* A blocked face carries its own badge; every other state wears the row's. */}
             {proposal.state === 'blocked' || proposal.state === 'blocked_cbo' ? null : (
-              <p className="text-muted-foreground text-xs">{proposalStateLabel(proposal)}</p>
+              <p className="text-muted-foreground text-xs">
+                {proposalStateLabel(proposal, uiText)}
+              </p>
             )}
             <WhatAudience block={proposal.block} plan={null} state={proposal.state} />
           </>
         ) : (
           <p className="flex items-center gap-2 text-muted-foreground text-sm">
             <Loader2Icon className="size-3.5 animate-spin" />
-            Reading the proposal…
+            {uiText('reading_the_proposal_4be8a34')}
           </p>
         )}
         {proposal?.closed ? (
           <p className="text-muted-foreground text-sm">
-            The cycle closed the recommendation this proposal came from.
+            {uiText('the_cycle_closed_the_recommendation_this_prop_42e591b')}
           </p>
         ) : null}
       </section>
       <section className="space-y-2" data-testid="asked-proposal-facts">
-        <h4 className={`${typeScale.label} text-muted-foreground`}>What is known</h4>
+        <h4 className={`${typeScale.label} text-muted-foreground`}>
+          {uiText('what_is_known_f19377a')}
+        </h4>
         <dl className="space-y-1.5">
-          <Fact label="Ad set" value={handoff.adset_name ?? handoff.adset_id} />
-          <Fact label="Signal" value={proposal ? triggerLabel(proposal.row.trigger) : null} />
-          <Fact label="Asked for" value={whenLabel(proposal?.row.created_at ?? handoff.built_at)} />
+          <Fact label={uiText('ad_set_639a64f')} value={handoff.adset_name ?? handoff.adset_id} />
+          <Fact
+            label={uiText('signal_1e9806e')}
+            value={proposal ? triggerLabel(proposal.row.trigger, uiText) : null}
+          />
+          <Fact
+            label={uiText('asked_for_0191afa')}
+            value={whenLabel(proposal?.row.created_at ?? handoff.built_at, uiLocale)}
+          />
         </dl>
       </section>
       {ask && !failure ? (
@@ -197,7 +229,7 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
             ) : (
               <SparklesIcon className="size-3.5" />
             )}
-            {RETRY_LABEL}
+            {uiText('askJainaAgain')}
           </Button>
           <NoticeLine notice={notice} />
         </div>

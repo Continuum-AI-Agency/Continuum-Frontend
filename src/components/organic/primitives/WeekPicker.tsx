@@ -1,6 +1,7 @@
 'use client';
 
 import { CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import type { CalendarState } from '@/components/kibo-ui/calendar';
@@ -34,6 +35,7 @@ export function WeekPicker({
   onPreviousWeek,
   onNextWeek,
 }: WeekPickerProps) {
+  const uiText = useTranslations('organic');
   const [open, setOpen] = React.useState(false);
   const [, setMonth] = useCalendarMonth();
   const [, setYear] = useCalendarYear();
@@ -51,7 +53,7 @@ export function WeekPicker({
         size="icon-sm"
         className="border-slate-400/80 bg-white/90 text-slate-900 hover:bg-slate-100"
         onClick={onPreviousWeek}
-        aria-label="Previous week"
+        aria-label={uiText('previous_week_c0f8bbc')}
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
@@ -100,7 +102,7 @@ export function WeekPicker({
         size="icon-sm"
         className="border-slate-400/80 bg-white/90 text-slate-900 hover:bg-slate-100"
         onClick={onNextWeek}
-        aria-label="Next week"
+        aria-label={uiText('next_week_21fbde1')}
       >
         <ChevronRight className="h-4 w-4" />
       </Button>

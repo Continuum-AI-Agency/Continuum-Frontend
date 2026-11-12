@@ -1,5 +1,18 @@
 'use client';
+
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useTranslations as useBetaTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import type { CreativeOutputManifest } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // One portfolio's UNIFIED actionable queue. The portfolio's performance report carries
 // two kinds of work a human decides on: budget moves (cycle_items — held, approved, or a
@@ -260,10 +273,20 @@ type SettingsActions = {
  *  cycle can queue a budget move AND a creative refresh on the same ad set, and labelling
  *  both "Select <ad set>" gave two different writes one indistinguishable name — a screen
  *  reader user could not tell which one they were authorizing. */
-export function selectionLabel(row: QueueRow): string {
+export function selectionLabel(row: QueueRow, uiTranslate?: ScaleCopy | number): string {
+  if (typeof uiTranslate !== 'function') uiTranslate = undefined;
+  const translate = uiTranslate ? createOptimizerDisplayTranslate(uiTranslate) : undefined;
   const subject = row.name ?? row.adsetId;
-  if (row.route === 'budget') return `Select budget move for ${subject}`;
-  return `Select ${recommendationLabel(row.rec.kind).label.toLowerCase()} for ${subject}`;
+  if (row.route === 'budget')
+    return uiTranslate
+      ? uiTranslate('helper_845c926f0a7b', { v0: subject })
+      : `Select budget move for ${subject}`;
+  return uiTranslate
+    ? uiTranslate('helper_f95dfd06c654', {
+        v0: recommendationLabel(row.rec.kind, translate).label.toLowerCase(),
+        v1: subject,
+      })
+    : `Select ${recommendationLabel(row.rec.kind, translate).label.toLowerCase()} for ${subject}`;
 }
 
 /** A row a human can select and approve. Approved rows (awaiting execute) and hidden
@@ -378,16 +401,22 @@ export function pauseBlockedNote(
   rec: Pick<RecommendationRow, 'kind' | 'adset_id'>,
   portfolio: Pick<PortfolioListItem, 'roster_state' | 'withdrawn_reason' | 'platforms'>,
   movedNotes: ReadonlyMap<string, string>,
+  uiTranslate?: ScaleCopy,
 ): string | null {
   if (actionRoute(rec.kind) !== 'pause') return null;
   // This row's Approve drains into the Meta ad-set writer, and the engine's pause rules also
   // fire on Google and TikTok entities: a portfolio with no Meta side cannot pause from here.
   const platforms = portfolio.platforms ?? [];
   if (platforms.length > 0 && !platforms.includes('meta')) {
-    return `Not available here: the Optimizer pauses only Meta ad sets. Pause this campaign in ${platformName({ platform: platforms[0], level: null })} if you agree.`;
+    return uiTranslate
+      ? uiTranslate('helper_54e0047b4194', {
+          v0: platformName({ platform: platforms[0], level: null }),
+        })
+      : `Not available here: the Optimizer pauses only Meta ad sets. Pause this campaign in ${platformName({ platform: platforms[0], level: null })} if you agree.`;
   }
   const moved = movedNotes.get(rec.adset_id);
-  if (moved) return `Withdrawn: ${moved}.`;
+  if (moved)
+    return uiTranslate ? uiTranslate('helper_f7805766154e', { v0: moved }) : `Withdrawn: ${moved}.`;
   if (
     portfolio.roster_state === 'absent' ||
     portfolio.withdrawn_reason === 'roster_absent' ||
@@ -420,7 +449,11 @@ export function queueWaitingCount(
 }
 
 /** A cross-platform move waiting on a person (pending) or on its write (approved). */
-export type MoveQueueRow = { key: string; rec: RecommendationRow; move: QueuedMove };
+export type MoveQueueRow = {
+  key: string;
+  rec: RecommendationRow;
+  move: QueuedMove;
+};
 
 /** The portfolio's cross-platform moves, biggest first. A row whose action does not parse
  *  against the contract is left out rather than shown with legs it cannot vouch for. */
@@ -440,7 +473,11 @@ export function buildMoveQueue(report: ParsedCycleRunReport | null): MoveQueueRo
 
 /** Who this ad set's budget came from, or went to. `direction` is from the row's point of
  *  view: a cut ad set FUNDS others, a raised one is FUNDED BY them. */
-export type Counterparty = { adsetId: string; name: string | null; amount: number };
+export type Counterparty = {
+  adsetId: string;
+  name: string | null;
+  amount: number;
+};
 
 /** Attribution → per-ad-set counterparty lists, largest first. Slivers under a dollar are
  *  dropped here rather than in the pure function, which stays exact so its sums test cleanly. */
@@ -453,7 +490,10 @@ export function buildCounterparties(
 
   for (const transfer of attribution.transfers) {
     if (transfer.amount < 1) continue;
-    const donor = byAdset.get(transfer.fromAdsetId) ?? { direction: 'funds' as const, parties: [] };
+    const donor = byAdset.get(transfer.fromAdsetId) ?? {
+      direction: 'funds' as const,
+      parties: [],
+    };
     donor.parties.push({
       adsetId: transfer.toAdsetId,
       name: name(transfer.toAdsetId),
@@ -523,7 +563,10 @@ function isInScrollView(node: HTMLElement): boolean {
   const panel = node.closest<HTMLElement>('[role="tabpanel"]');
   const frame = panel
     ? panel.getBoundingClientRect()
-    : { top: 0, bottom: window.innerHeight || document.documentElement.clientHeight };
+    : {
+        top: 0,
+        bottom: window.innerHeight || document.documentElement.clientHeight,
+      };
   return box.top >= frame.top - 1 && box.top < frame.bottom;
 }
 
@@ -592,6 +635,7 @@ export function useAudienceCardActions(
   busy: AudienceCardBusy;
   cboPreviewByCampaign: ReadonlyMap<string, ConvertCboResponse>;
 } {
+  const formatUiError = useUiErrorMessage();
   const audienceMutations = useAudienceProposalMutations(brandId);
   const convertCboMutation = useConvertCbo(brandId);
   const [cboPreviewByCampaign, setCboPreviewByCampaign] = React.useState<
@@ -607,7 +651,7 @@ export function useAudienceCardActions(
         audienceMutations.request.mutate(recId, {
           onSuccess: (proposalId) => handlers?.onDone?.(proposalId),
           onError: (error) => {
-            const message = error instanceof Error ? error.message : 'Could not ask Jaina.';
+            const message = formatUiError(error);
             noteFor(recId, message);
             handlers?.onError?.(message);
           },
@@ -666,7 +710,7 @@ export function useAudienceCardActions(
         );
       },
     }),
-    [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor],
+    [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor, formatUiError],
   );
   const approving = audienceMutations.approve.isPending;
   const convertingCbo = convertCboMutation.isPending;
@@ -697,6 +741,13 @@ export function OptimizerActionsPortfolioGroup({
   headerLead = null,
   platformCards = NO_PLATFORM_CARDS,
 }: OptimizerActionsPortfolioGroupProps) {
+  const betaUiText = useBetaTranslations('scale');
+
+  const formatUiError = useUiErrorMessage();
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
   // The account snapshots price each ad set for the story chart (shared cache with the
@@ -720,7 +771,10 @@ export function OptimizerActionsPortfolioGroup({
           portfolio_id: portfolio.id,
           patch: { [patch.field]: patch.to },
         });
-        await setStatus.mutateAsync({ recommendation_id: rec.id, status: 'applied' });
+        await setStatus.mutateAsync({
+          recommendation_id: rec.id,
+          status: 'applied',
+        });
       },
       decide: (rec, status) => setStatus.mutate({ recommendation_id: rec.id, status }),
     }),
@@ -746,8 +800,8 @@ export function OptimizerActionsPortfolioGroup({
     const items = report?.latest_items ?? [];
     return (report?.recommendations ?? [])
       .filter((rec) => !shownAsCards.has(rec.id))
-      .map((rec) => withHonestCapBinding(rec, items));
-  }, [platformCards, report?.recommendations, report?.latest_items]);
+      .map((rec) => withHonestCapBinding(rec, items, optimizerText, uiLocale));
+  }, [platformCards, report?.recommendations, report?.latest_items, optimizerText, uiLocale]);
   // A withdrawn cycle's moves, and a move whose ad set left this portfolio, are never queue
   // work: the budget rows come from the moves that still stand, so the rows agree with the
   // list read's pending_budget_moves. The story below still shows them, as history.
@@ -775,15 +829,19 @@ export function OptimizerActionsPortfolioGroup({
   const rows = React.useMemo(
     () =>
       buildActionQueue(
-        report && { ...report, latest_items: moves.current, recommendations: queueRecs },
+        report && {
+          ...report,
+          latest_items: moves.current,
+          recommendations: queueRecs,
+        },
         nameById,
         carriedRecs,
         (item) => itemWritable(portfolio, item),
-        (rec) => pauseBlockedNote(rec, portfolio, moves.notes),
+        (rec) => pauseBlockedNote(rec, portfolio, moves.notes, uiText),
       ),
-    [report, moves.current, moves.notes, nameById, carriedRecs, queueRecs, portfolio],
+    [report, moves.current, moves.notes, nameById, carriedRecs, queueRecs, portfolio, uiText],
   );
-  const proposalsOnly = proposalsOnlyNote(portfolio, moves.current);
+  const proposalsOnly = proposalsOnlyNote(portfolio, moves.current, uiText);
   const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
   // A move is approved by writing it (BudgetMoveQueueRow's dry run → confirm); dismissing it is
   // the one decision recorded here.
@@ -851,9 +909,15 @@ export function OptimizerActionsPortfolioGroup({
     (report?.latest_run as { cycle_ts?: string } | null)?.cycle_ts ?? null,
     portfolio.next_realloc_at ?? null,
     isStale(portfolio),
+    optimizerText,
+    uiLocale,
   );
-  const unwell = staleLine(portfolio) !== null || rosterLine(portfolio) !== null;
-  const summary = React.useMemo(() => queueSummary(queueRecs), [queueRecs]);
+  const unwell =
+    staleLine(portfolio, uiText) !== null || rosterLine(portfolio, uiText, uiLocale) !== null;
+  const summary = React.useMemo(
+    () => queueSummary(queueRecs, optimizerText),
+    [queueRecs, optimizerText],
+  );
   // Observe hard-halts every Meta write; approving/executing is disabled and the reason shown.
   const writesBlocked = portfolio.apply_mode === 'observe';
 
@@ -911,7 +975,10 @@ export function OptimizerActionsPortfolioGroup({
     () => new Map(snapshotsQuery.data.map((snapshot) => [snapshot.id, snapshot])),
     [snapshotsQuery.data],
   );
-  const metric = getOptimizationMetricDefinition(portfolio.objective);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(portfolio.objective),
+    optimizerText,
+  );
   const targetDisplay =
     portfolio.cpa_target != null && portfolio.cpa_target > 0
       ? portfolio.cpa_target * metric.denominatorMultiplier
@@ -954,10 +1021,7 @@ export function OptimizerActionsPortfolioGroup({
       flash.generate
         .mutateAsync(rec.id)
         .catch((error: unknown) => {
-          noteFor(
-            rec.id,
-            error instanceof Error ? error.message : 'Could not request flash creatives.',
-          );
+          noteFor(rec.id, formatUiError(error));
         })
         .finally(() => {
           setGeneratingIds((prev) => {
@@ -968,7 +1032,7 @@ export function OptimizerActionsPortfolioGroup({
           void swapJobsQuery.refetch();
         });
     },
-    [flash.generate, noteFor, swapJobsQuery],
+    [flash.generate, noteFor, swapJobsQuery, formatUiError],
   );
   const implementCreative = React.useCallback(
     (
@@ -985,7 +1049,7 @@ export function OptimizerActionsPortfolioGroup({
           const ads = await fetchAdsetAds(brandId, adAccountId, target.adsetId);
           predecessorAdId = predecessorAdIn(ads)?.id ?? null;
           if (!predecessorAdId) {
-            throw new Error(`${target.name} has no ad to place the variant beside.`);
+            throw new LocalizedUiError(uiText('queueNoPredecessor', { name: target.name }));
           }
         }
         await flash.implement.mutateAsync({
@@ -998,25 +1062,22 @@ export function OptimizerActionsPortfolioGroup({
       };
       run()
         .catch((error: unknown) => {
-          noteFor(
-            job.recommendation_id ?? job.id,
-            error instanceof Error ? error.message : 'Could not implement the creative.',
-          );
+          noteFor(job.recommendation_id ?? job.id, formatUiError(error));
         })
         .finally(() => {
           setImplementingKey((current) => (current === key ? null : current));
           void swapJobsQuery.refetch();
         });
     },
-    [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery],
+    [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery, formatUiError, uiText],
   );
   const retryCreative = React.useCallback(
     (job: CreativeSwapJobRow) => {
       flash.retry.mutate(job.id, {
-        onError: (error) => noteFor(job.recommendation_id ?? job.id, error.message),
+        onError: (error) => noteFor(job.recommendation_id ?? job.id, formatUiError(error)),
       });
     },
-    [flash.retry, noteFor],
+    [flash.retry, noteFor, formatUiError],
   );
   const audienceCard = useAudienceCardActions(brandId, adAccountId, noteFor);
   const portfolioSpecs = React.useMemo(
@@ -1099,7 +1160,10 @@ export function OptimizerActionsPortfolioGroup({
       <OptimizerReadError
         error={performanceQuery.error}
         onRetry={() => void performanceQuery.refetch()}
-        subject={`actions for ${portfolio.name}`}
+        subject={uiText('optimizerLoadSubject', {
+          kind: 'actions',
+          name: portfolio.name,
+        })}
       />
     );
   }
@@ -1135,7 +1199,7 @@ export function OptimizerActionsPortfolioGroup({
     const onDone = () => setApproving(new Set());
     const onFail = (label: string) => (err: unknown) => {
       setApproving(new Set());
-      setExecuteNote(err instanceof Error ? err.message : `Could not approve ${label}.`);
+      setExecuteNote(formatUiError(err));
     };
 
     if (budgetIds.length > 0 && runId) {
@@ -1176,14 +1240,13 @@ export function OptimizerActionsPortfolioGroup({
       {
         onSuccess: (data) => {
           if (!data?.ok) {
-            setExecuteNote(applyFailureNote(data?.reason, data?.error, 'budget moves'));
+            setExecuteNote(applyFailureNote(data?.reason, data?.error, 'budget moves', uiText));
             return;
           }
           recordFailures(data.results ?? [], setFailedAdsets);
-          setExecuteNote(applySummary('Applied', data.applied, data.failed, data.deduped));
+          setExecuteNote(applySummary('Applied', data.applied, data.failed, data.deduped, uiText));
         },
-        onError: (err) =>
-          setExecuteNote(err instanceof Error ? err.message : 'Applying budget moves failed.'),
+        onError: (err) => setExecuteNote(formatUiError(err)),
       },
     );
   };
@@ -1193,18 +1256,22 @@ export function OptimizerActionsPortfolioGroup({
     setExecuteNote(null);
     setFailedAdsets(new Set());
     applyAdsetStatus.mutate(
-      { portfolio_id: portfolio.id, brandId, accountId: adAccountId, dryRun: false },
+      {
+        portfolio_id: portfolio.id,
+        brandId,
+        accountId: adAccountId,
+        dryRun: false,
+      },
       {
         onSuccess: (data) => {
           if (!data?.ok) {
-            setExecuteNote(applyFailureNote(data?.reason, data?.error, 'pauses'));
+            setExecuteNote(applyFailureNote(data?.reason, data?.error, 'pauses', uiText));
             return;
           }
           recordFailures(data.results ?? [], setFailedAdsets);
-          setExecuteNote(applySummary('Paused', data.applied, data.failed, data.deduped));
+          setExecuteNote(applySummary('Paused', data.applied, data.failed, data.deduped, uiText));
         },
-        onError: (err) =>
-          setExecuteNote(err instanceof Error ? err.message : 'Pausing ad sets failed.'),
+        onError: (err) => setExecuteNote(formatUiError(err)),
       },
     );
   };
@@ -1245,7 +1312,7 @@ export function OptimizerActionsPortfolioGroup({
   const busyApprove = requestApplyItems.isPending || setStatuses.isPending || setStatus.isPending;
 
   const waitingCount = queueWaitingCount(rows, moveRows, platformCards.length);
-  const sentence = queueSentence(waitingCount, summary, currency);
+  const sentence = queueSentence(waitingCount, summary, currency, uiText, uiLocale);
 
   // The change preview (G12): the cycle's budget moves before → after, the guardrails they are
   // held to, and the one action their state allows, on the queue's own approve and apply paths.
@@ -1268,8 +1335,8 @@ export function OptimizerActionsPortfolioGroup({
             {headerLead}
             <h3 className="font-semibold text-base tracking-tight">{portfolio.name}</h3>
             <span className="font-mono font-semibold text-primary-ink text-sm tabular-nums">
-              {waitingCount}
-              <span className="sr-only"> waiting</span>
+              {waitingCount.toLocaleString(uiLocale)}
+              <span className="sr-only"> {uiText('waiting_80cfa3e')}</span>
             </span>
           </div>
           {/* Is this queue current? One line, before anything in it is read. Every pending
@@ -1284,10 +1351,10 @@ export function OptimizerActionsPortfolioGroup({
           ) : null}
         </div>
         <Input
-          aria-label={`Search ${portfolio.name} actions`}
+          aria-label={uiText('template_2ab418c2b5f6', { v0: portfolio.name })}
           className="h-8 w-full max-w-72 text-sm @lg:w-72"
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search name, id, kind, reason"
+          placeholder={uiText('search_name_id_kind_reason_d96b57c')}
           value={search}
         />
       </header>
@@ -1321,7 +1388,7 @@ export function OptimizerActionsPortfolioGroup({
           role="status"
         >
           {shownCount === 0
-            ? `No actions match “${searchTerm}”.`
+            ? betaUiText('beta_cb036ac158c4', { value0: String(searchTerm) })
             : `${shownCount} ${shownCount === 1 ? 'action matches' : 'actions match'} “${searchTerm}”.`}
         </p>
       ) : null}
@@ -1352,7 +1419,9 @@ export function OptimizerActionsPortfolioGroup({
       />
 
       {writesBlocked ? (
-        <p className="text-warning text-xs">{applyModeExplainer(portfolio.apply_mode)}</p>
+        <p className="text-warning text-xs">
+          {applyModeExplainer(portfolio.apply_mode, undefined, optimizerText, uiLocale)}
+        </p>
       ) : null}
 
       {proposalsOnly ? (
@@ -1408,8 +1477,7 @@ export function OptimizerActionsPortfolioGroup({
 
       {focusMissing ? (
         <p className="text-foreground text-sm" data-testid="queue-focus-missing" role="status">
-          The row that button points at isn't in the queue yet. If it was just created, it shows up
-          with the cycle's next read.
+          {uiText('the_row_that_button_points_at_isn_t_in_the_qu_41161a5')}
         </p>
       ) : null}
       {/* Cross-platform moves lead the queue: the biggest decision, and the one a person
@@ -1424,12 +1492,17 @@ export function OptimizerActionsPortfolioGroup({
               busy={dismissingMove === rec.id}
               key={key}
               move={move}
-              onApplied={() => setStatus.mutate({ recommendation_id: rec.id, status: 'approved' })}
+              onApplied={() =>
+                setStatus.mutate({
+                  recommendation_id: rec.id,
+                  status: 'approved',
+                })
+              }
               onDismiss={() => dismissMove(rec)}
               portfolioId={portfolio.id}
               rec={rec}
               writesBlocked={writesBlocked}
-              writesOffNote={moveWritesOffNote(portfolio, move)}
+              writesOffNote={moveWritesOffNote(portfolio, move, uiText)}
             />
           ))}
         </ul>
@@ -1510,19 +1583,23 @@ export function OptimizerActionsPortfolioGroup({
           <AlertDialogHeader>
             <AlertDialogTitle>
               {confirm === 'pause'
-                ? `Pause ${approvedPauseCount} ad set${approvedPauseCount === 1 ? '' : 's'} on Meta?`
-                : `Apply ${approvedBudgetCount} budget move${approvedBudgetCount === 1 ? '' : 's'} to Meta?`}
+                ? uiText('template_4efde4ae716c', { count: approvedPauseCount })
+                : uiText('template_bffe6fcb5212', {
+                    count: approvedBudgetCount,
+                  })}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === 'pause'
-                ? 'Pausing stops these ad sets from spending immediately. Every pause lands in Recently applied below, where one click unpauses it.'
-                : 'This writes the approved daily budgets to Meta now. Every change lands in Recently applied below, where one click puts the prior budget back.'}
+                ? uiText('pausing_stops_these_ad_sets_from_spending_imm_ecaa4d0')
+                : uiText('this_writes_the_approved_daily_budgets_to_met_af9b0e7')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
             <AlertDialogAction onClick={confirm === 'pause' ? pauseAdsets : applyBudgets}>
-              {confirm === 'pause' ? 'Pause ad sets' : 'Apply budget moves'}
+              {confirm === 'pause'
+                ? uiText('pause_ad_sets_fd742e8')
+                : uiText('apply_budget_moves_0402dd0')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1576,6 +1653,7 @@ function PortfolioRecentActions({
   /** Ad-set id → name, so a recent write names what it touched instead of printing its id. */
   entityNames: ReadonlyMap<string, string>;
 }) {
+  const uiText = useTranslations('scale');
   const actionsQuery = useOptimizerActions(brandId);
   // A failed or empty action read must not push an error into the queue — the queue's own work
   // is unaffected by it. The full feed reports its own outage in Activity → Actions.
@@ -1588,7 +1666,9 @@ function PortfolioRecentActions({
 
   return (
     <div className="space-y-1 pt-2">
-      <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Recently applied</p>
+      <p className={`${typeScale.label} font-semibold text-muted-foreground`}>
+        {uiText('recently_applied_3dd70a2')}
+      </p>
       <ul className="divide-y divide-border/60">
         {recent.map((item) =>
           item.kind === 'move' ? (
@@ -1653,7 +1733,23 @@ function rowSearchText(row: QueueRow): string {
   return parts.join(' ').toLowerCase();
 }
 
-function applySummary(verb: string, applied?: number, failed?: number, deduped?: number): string {
+function applySummary(
+  verb: string,
+  applied?: number,
+  failed?: number,
+  deduped?: number,
+  uiTranslate?: ScaleCopy,
+): string {
+  if (uiTranslate)
+    return uiTranslate('queueApplyResult', {
+      verb: verb === 'Paused' ? 'pause' : 'apply',
+      applied: applied ?? 0,
+      failed: failed ?? 0,
+      deduped: deduped ?? 0,
+      hasFailed: failed ? 'yes' : 'no',
+      hasDeduped: deduped ? 'yes' : 'no',
+      already: 'done',
+    });
   return (
     `${verb} ${applied ?? 0}` +
     (failed ? ` · ${failed} failed` : '') +
@@ -1665,8 +1761,14 @@ function applyFailureNote(
   reason: string | undefined,
   error: string | undefined,
   label: string,
+  uiTranslate?: ScaleCopy,
 ): string {
-  if (reason === 'observe_mode') return 'Observe mode blocks Meta writes.';
+  if (reason === 'observe_mode')
+    return uiTranslate
+      ? uiTranslate('observe_mode_blocks_meta_writes_1a47680')
+      : 'Observe mode blocks Meta writes.';
+  if (uiTranslate)
+    return reason === 'stale_run' ? uiTranslate('queueNewCycle') : uiTranslate('queueApplyFailed');
   return error?.trim() || reason || `Applying ${label} failed.`;
 }
 
@@ -1698,8 +1800,58 @@ export function queueSentence(
   waiting: number,
   groups: readonly QueueSummaryGroup[],
   currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): QueueSentencePart[] | null {
   if (waiting <= 0) return null;
+  if (uiTranslate) {
+    let prefix = '\uFFF0queue';
+    const source = groups.map((group) => group.label).join(' ');
+    while (source.includes(prefix)) prefix += '_';
+    const slots = new Map<string, QueueSentencePart>();
+    const slot = (part: QueueSentencePart) => {
+      const marker = `${prefix}${slots.size}\uFFF1`;
+      slots.set(marker, part);
+      return marker;
+    };
+    const details =
+      groups.length <= 1
+        ? ''
+        : groups
+            .map((group) =>
+              uiTranslate('queueSentenceGroup', {
+                count: slot({
+                  text: group.count.toLocaleString(uiLocale),
+                  figure: true,
+                }),
+                label: group.label.toLocaleLowerCase(uiLocale),
+                reason: triggerReason(group.trigger, createOptimizerDisplayTranslate(uiTranslate)),
+                hasImpact: group.impactPerDay > 0 ? 'yes' : 'no',
+                impact:
+                  group.impactPerDay > 0
+                    ? slot({
+                        text: uiTranslate('helper_34dd8b60efe4', {
+                          v0: formatCurrency(group.impactPerDay, currency, uiLocale),
+                        }),
+                        figure: true,
+                        figureKey: `queue.summary.${group.kind}:${group.trigger}.impact`,
+                        raw: group.impactPerDay,
+                      })
+                    : '',
+              }),
+            )
+            .join('; ');
+    const message = uiTranslate('queueSentence', {
+      count: slot({ text: waiting.toLocaleString(uiLocale), figure: true }),
+      hasGroups: groups.length > 1 ? 'yes' : 'no',
+      details,
+    });
+    return message
+      .split(new RegExp(`(${prefix}\\d+\uFFF1)`, 'g'))
+      .filter(Boolean)
+      .map((text) => slots.get(text) ?? { text });
+  }
+
   const parts: QueueSentencePart[] = [
     { text: String(waiting), figure: true },
     { text: ' waiting on a decision' },
@@ -1718,7 +1870,7 @@ export function queueSentence(
     if (group.impactPerDay > 0) {
       parts.push({ text: ', ' });
       parts.push({
-        text: `${formatCurrency(group.impactPerDay, currency)}/day`,
+        text: `${formatCurrency(group.impactPerDay, currency, uiLocale)}/day`,
         figure: true,
         figureKey: `queue.summary.${group.kind}:${group.trigger}.impact`,
         raw: group.impactPerDay,
@@ -1744,8 +1896,10 @@ export function recRowLine(
   currency: string | null,
   now: Date = new Date(),
   timeZone?: string,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): string | null {
-  const headline = queueHeadlineLine(rec, currency);
+  const headline = queueHeadlineLine(rec, currency, uiLocale);
   if (headline) return headline;
   const evidence = rec.evidence;
   if (evidence?.metric === 'days_absent') {
@@ -1759,15 +1913,35 @@ export function recRowLine(
     const days = Number.isNaN(sinceAt)
       ? Math.max(0, Math.round(evidence.value))
       : (daysSince(since as string, now, timeZone) ?? Math.max(0, Math.round(evidence.value)));
+    if (uiTranslate)
+      return uiTranslate('queueInactive', {
+        hasDate: Number.isNaN(sinceAt) ? 'no' : 'yes',
+        date: Number.isNaN(sinceAt)
+          ? ''
+          : new Intl.DateTimeFormat(uiLocale, {
+              month: 'short',
+              day: 'numeric',
+              timeZone,
+            }).format(new Date(sinceAt)),
+        days,
+      });
     const span = `${days} day${days === 1 ? '' : 's'}`;
     return Number.isNaN(sinceAt)
       ? `Not active for ${span}`
       : `Not active since ${SINCE_DAY.format(new Date(sinceAt))} · ${span}`;
   }
-  return evidenceLine(evidence, currency);
+  return evidenceLine(
+    evidence,
+    currency,
+    uiTranslate ? createOptimizerDisplayTranslate(uiTranslate) : undefined,
+    uiLocale,
+  );
 }
 
-const SINCE_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const SINCE_DAY = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+});
 
 const STALE_HINT =
   'The scheduler keeps claiming this portfolio, but no cycle has landed on it in at least two intervals.';
@@ -1775,19 +1949,21 @@ const ROSTER_HINT = 'These enrolled ad sets are no longer on Meta, so no cycle c
 
 /** The staleness of the queue, said quietly on the as-of line: a coloured dot and the words. */
 function QueueStaleness({ portfolio }: { portfolio: PortfolioListItem }) {
-  const stale = staleLine(portfolio);
-  const roster = rosterLine(portfolio);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const stale = staleLine(portfolio, uiText);
+  const roster = rosterLine(portfolio, uiText, uiLocale);
   const tone = rosterTone(portfolio);
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2" data-testid="queue-staleness">
       {stale ? (
-        <span className="inline-flex items-center gap-1.5" title={STALE_HINT}>
+        <span className="inline-flex items-center gap-1.5" title={uiText('portfolioStaleHint')}>
           <span aria-hidden className="size-1.5 rounded-full bg-warning" />
           <span data-testid="stale-chip">{stale}</span>
         </span>
       ) : null}
       {roster && tone ? (
-        <span className="inline-flex items-center gap-1.5" title={ROSTER_HINT}>
+        <span className="inline-flex items-center gap-1.5" title={uiText('portfolioRosterHint')}>
           <span
             aria-hidden
             className={cn(
@@ -1801,15 +1977,6 @@ function QueueStaleness({ portfolio }: { portfolio: PortfolioListItem }) {
     </span>
   );
 }
-
-const ROUTE_FILTERS: { route: QueueRow['route']; label: string }[] = [
-  { route: 'budget', label: 'Budget' },
-  { route: 'pause', label: 'Pause' },
-  { route: 'creative', label: 'Creative' },
-  { route: 'fatigue', label: 'Fatigue' },
-  { route: 'settings', label: 'Settings' },
-  { route: 'hidden', label: 'Ad-level' },
-];
 
 /** The filter line: select-all, the kinds as quiet segmented text, and — on the right — the
  *  execute steps an approval leads to. "Approve all" sits here only while nothing is selected;
@@ -1847,16 +2014,32 @@ function QueueToolbar({
   selectableCount: number;
   writesBlocked: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const ROUTE_FILTERS: { route: QueueRow['route']; label: string }[] = useMemo(
+    () => [
+      { route: 'budget', label: uiText('budget_1c6225e') },
+      { route: 'pause', label: uiText('pause_858e4ba') },
+      { route: 'creative', label: uiText('creative_2c7e633') },
+      { route: 'fatigue', label: 'Fatigue' },
+      { route: 'settings', label: uiText('settings_74a883a') },
+      { route: 'hidden', label: 'Ad-level' },
+    ],
+    [uiText],
+  );
+
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <span className="flex items-center gap-2 text-muted-foreground text-xs">
-        <Checkbox
-          aria-label="Select all actionable"
-          checked={allSelected}
-          disabled={writesBlocked || selectableCount === 0}
-          onCheckedChange={onToggleSelectAll}
-        />
-        All
+        {uiText.rich('sentence_f385f63ccfcc', {
+          v0: () => (
+            <Checkbox
+              aria-label={uiText('select_all_actionable_0392d22')}
+              checked={allSelected}
+              disabled={writesBlocked || selectableCount === 0}
+              onCheckedChange={onToggleSelectAll}
+            />
+          ),
+        })}
       </span>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -1888,7 +2071,7 @@ function QueueToolbar({
             type="button"
             variant="ghost"
           >
-            Approve all
+            {uiText('approve_all_ae067b6')}
           </Button>
         )}
         {applyBudgetCount > 0 ? (
@@ -1899,8 +2082,13 @@ function QueueToolbar({
             size="sm"
             type="button"
           >
-            {applyApprovedPending ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null}
-            Apply {applyBudgetCount} budget move{applyBudgetCount === 1 ? '' : 's'}
+            {uiText.rich('sentence_80045f771fa9', {
+              icon: () =>
+                applyApprovedPending ? (
+                  <Loader2Icon className="mr-1 size-3.5 animate-spin" />
+                ) : null,
+              count: applyBudgetCount,
+            })}
           </Button>
         ) : null}
         {approvedPauseCount > 0 ? (
@@ -1912,8 +2100,11 @@ function QueueToolbar({
             type="button"
             variant="destructive"
           >
-            {pausePending ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null}
-            Pause {approvedPauseCount} ad set{approvedPauseCount === 1 ? '' : 's'}
+            {uiText.rich('sentence_78447c88868c', {
+              icon: () =>
+                pausePending ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null,
+              count: approvedPauseCount,
+            })}
           </Button>
         ) : null}
       </div>
@@ -1945,26 +2136,33 @@ function SelectionBar({
   selectionNetDelta: number | null;
   writesBlocked: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <div
       className="sticky bottom-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-foreground px-4 py-2.5 text-background shadow-lg"
       data-testid="queue-selection-bar"
     >
       <span className="font-medium text-sm">
-        <span className="font-mono tabular-nums">{selectedCount}</span> selected
+        {uiText.rich('sentence_bea8277e1ceb', {
+          v0: () => <span className="font-mono tabular-nums">{selectedCount}</span>,
+        })}
       </span>
       {selectionNetDelta == null ? null : Math.abs(selectionNetDelta) < 0.5 ? (
-        <span className="text-background/70 text-xs">Spend stays flat</span>
+        <span className="text-background/70 text-xs">{uiText('spend_stays_flat_2138646')}</span>
       ) : (
         <span className="text-background/70 text-xs tabular-nums">
-          Net {selectionNetDelta > 0 ? '+' : '−'}
-          <span
-            className="font-mono"
-            {...figureProps('queue.net', Math.abs(selectionNetDelta), currency)}
-          >
-            {formatCurrency(Math.abs(selectionNetDelta), currency)}
-          </span>
-          /day
+          {uiText.rich('sentence_1682e9cb3c3b', {
+            v0: selectionNetDelta > 0 ? '+' : '−',
+            v1: () => (
+              <span
+                className="font-mono"
+                {...figureProps('queue.net', Math.abs(selectionNetDelta), currency)}
+              >
+                {formatCurrency(Math.abs(selectionNetDelta), currency, uiLocale)}
+              </span>
+            ),
+          })}
         </span>
       )}
       <span className="ml-auto flex flex-wrap items-center gap-2">
@@ -1976,7 +2174,9 @@ function SelectionBar({
           type="button"
           variant="ghost"
         >
-          Approve all <span className="font-mono tabular-nums">{selectableCount}</span>
+          {uiText.rich('sentence_4e928b1bbe82', {
+            v0: () => <span className="font-mono tabular-nums">{selectableCount}</span>,
+          })}
         </Button>
         <Button
           className="h-8 px-4 text-sm"
@@ -1985,8 +2185,9 @@ function SelectionBar({
           size="sm"
           type="button"
         >
-          {busy ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null}
-          Approve selected
+          {uiText.rich('sentence_cb3c36af49d5', {
+            v0: () => (busy ? <Loader2Icon className="mr-1 size-3.5 animate-spin" /> : null),
+          })}
         </Button>
       </span>
     </div>
@@ -2017,22 +2218,23 @@ function BudgetTransferHeader({
   onToggleGroup: () => void;
   writesBlocked: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const { donors, recipients, moved, net } = attribution;
   const name = (id: string) => resolveAdsetName({ adset_id: id }, nameById) ?? id;
   const pair = donors.length === 1 && recipients.length === 1;
 
   // net is ground truth for the items actually shown; mode only words the exception.
-  const conservation =
-    Math.abs(net) < 1
-      ? 'Total daily spend unchanged.'
-      : mode === 'scale'
-        ? `Total daily spend ${net > 0 ? '+' : '−'}${formatCurrency(Math.abs(net), currency)}/day — this cycle grows the pool.`
-        : `Total daily spend ${net > 0 ? '+' : '−'}${formatCurrency(Math.abs(net), currency)}/day — this is not a flat reallocation.`;
+  const conservation = uiText('queueBudgetConservation', {
+    state: Math.abs(net) < 1 ? 'unchanged' : mode === 'scale' ? 'growth' : 'other',
+    sign: net > 0 ? '+' : '−',
+    amount: formatCurrency(Math.abs(net), currency, uiLocale),
+  });
 
   return (
     <li className="grid grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-3 py-3">
       <Checkbox
-        aria-label="Select all budget moves in this cycle"
+        aria-label={uiText('select_all_budget_moves_in_this_cycle_b2c727b')}
         checked={allSelected}
         className="mt-0.5"
         disabled={writesBlocked}
@@ -2042,21 +2244,36 @@ function BudgetTransferHeader({
         <p className="font-semibold text-sm tracking-tight">
           {pair ? (
             <>
-              Moving{' '}
-              <span className="font-mono tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
-              from {name(donors[0].adsetId)} into {name(recipients[0].adsetId)}
+              {uiText.rich('sentence_024f5f35c874', {
+                v0: () => (
+                  <span className="font-mono tabular-nums">
+                    {uiText.rich('sentence_72ced7255fc0', {
+                      v0: formatCurrency(moved, currency, uiLocale),
+                    })}
+                  </span>
+                ),
+                v1: name(donors[0].adsetId),
+                v2: name(recipients[0].adsetId),
+              })}
             </>
           ) : (
             <>
-              Reallocating{' '}
-              <span className="font-mono tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
-              — {donors.length} ad set{donors.length === 1 ? '' : 's'} fund {recipients.length}
+              {uiText.rich('sentence_308970bc833a', {
+                amount: () => (
+                  <span className="font-mono tabular-nums">
+                    {uiText.rich('sentence_72ced7255fc0', {
+                      v0: formatCurrency(moved, currency, uiLocale),
+                    })}
+                  </span>
+                ),
+                donors: donors.length,
+                recipients: recipients.length,
+              })}
             </>
           )}
         </p>
         <p className="mt-0.5 text-muted-foreground text-xs">
-          {conservation} These moves are one decision — approving only some of them changes the
-          total.
+          {uiText.rich('sentence_12dfd5f13a68', { v0: conservation })}
         </p>
       </div>
     </li>
@@ -2073,24 +2290,33 @@ function CounterpartyLine({
   currency: string | null;
   limit: number;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const shown = entry.parties.slice(0, limit);
   const rest = entry.parties.length - shown.length;
   if (shown.length === 0) return null;
   return (
     <span className="text-muted-foreground text-xs">
-      {entry.direction === 'funds' ? '→ funds ' : '← funded by '}
+      {entry.direction === 'funds' ? uiText('funds_28c635e') : uiText('funded_by_83f05c7')}
       {shown
-        .map((party) => `${party.name ?? party.adsetId} ${formatCurrency(party.amount, currency)}`)
+        .map(
+          (party) =>
+            `${party.name ?? party.adsetId} ${formatCurrency(party.amount, currency, uiLocale)}`,
+        )
         .join(' · ')}
-      {rest > 0 ? ` +${rest} more` : ''}
+      {rest > 0 ? uiText('template_5bea7822d675', { v0: rest }) : ''}
     </span>
   );
 }
 
 /** The kind tag a queue row leads with — the colour, not a glyph, says what kind it is. */
-function rowKindTag(row: QueueRow): { tone: KindTone; word: string } {
-  if (row.route === 'budget') return { tone: 'budget', word: 'Budget' };
-  return { tone: kindTone(row.rec.kind), word: kindWord(row.rec.kind) };
+function rowKindTag(
+  row: QueueRow,
+  t: ReturnType<typeof useTranslations<'scale'>>,
+): { tone: KindTone; word: string } {
+  if (row.route === 'budget')
+    return { tone: 'budget', word: t('actionKindTag', { tone: 'budget' }) };
+  return { tone: kindTone(row.rec.kind), word: kindWord(row.rec.kind, t) };
 }
 
 /**
@@ -2127,7 +2353,10 @@ function QueueRowView({
   writesBlocked: boolean;
   /** A decision on this row (or a batch it is in) is in flight. */
   busyDecision: boolean;
-  counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
+  counterparty?: {
+    direction: 'funds' | 'fundedBy';
+    parties: Counterparty[];
+  } | null;
   onToggleSelect: () => void;
   onToggleExpand: () => void;
   onApprove: () => void;
@@ -2138,9 +2367,10 @@ function QueueRowView({
   /** The Meta ad account's IANA zone (the snapshot read's): the day a delivery row counts to. */
   timeZone: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const selectable = isSelectableRow(row);
   const hidden = row.route === 'hidden';
-  const tag = rowKindTag(row);
+  const tag = rowKindTag(row, uiText);
   // Dismiss is a decision on a still-pending recommendation; a settings row decides in its
   // detail, an ad-level row cannot be acted on, and an approved row is past deciding.
   const dismissable =
@@ -2166,7 +2396,7 @@ function QueueRowView({
           <AdLevelDangerIcon />
         ) : (
           <Checkbox
-            aria-label={selectionLabel(row)}
+            aria-label={selectionLabel(row, uiText)}
             checked={selected}
             className="mt-0.5"
             disabled={!selectable || writesBlocked}
@@ -2179,13 +2409,20 @@ function QueueRowView({
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <KindTag tone={tag.tone}>{tag.word}</KindTag>
             <RowHeadline brandId={brandId} currency={currency} row={row} />
-            {row.approved ? <span className="text-muted-foreground text-xs">Approved</span> : null}
+            {row.approved ? (
+              <span className="text-muted-foreground text-xs">{uiText('approved_87b42e4')}</span>
+            ) : null}
             {approving ? (
               <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
-                <Loader2Icon className="size-3 animate-spin" /> approving
+                <Loader2Icon className="size-3 animate-spin" />
+                {uiText('approving_8b64d4c')}
               </span>
             ) : null}
-            {failed ? <span className="font-medium text-destructive text-xs">Failed</span> : null}
+            {failed ? (
+              <span className="font-medium text-destructive text-xs">
+                {uiText('failed_031a8f0')}
+              </span>
+            ) : null}
           </div>
           {row.route === 'budget' ? (
             <>
@@ -2194,7 +2431,9 @@ function QueueRowView({
                   className="mt-0.5 line-clamp-2 text-muted-foreground text-xs"
                   title={row.item.reason}
                 >
-                  Why: {row.item.reason}
+                  {uiText.rich('sentence_b8fcef5f90e9', {
+                    v0: row.item.reason,
+                  })}
                 </p>
               ) : null}
               {counterparty ? (
@@ -2221,7 +2460,9 @@ function QueueRowView({
           <div className="flex items-center justify-end gap-1 pointer-coarse:gap-[12px]">
             {dismissable ? (
               <Button
-                aria-label={`Dismiss ${selectionLabel(row).replace(/^Select /, '')}`}
+                aria-label={uiText('template_351bf5051aac', {
+                  v0: selectionLabel(row, uiText).replace(/^Select /, ''),
+                })}
                 className="h-7 px-2.5 text-xs pointer-coarse:h-8"
                 disabled={writesBlocked || busyDecision}
                 onClick={(event) => {
@@ -2232,7 +2473,7 @@ function QueueRowView({
                 type="button"
                 variant="ghost"
               >
-                Dismiss
+                {uiText('dismiss_48845bf')}
               </Button>
             ) : null}
             {row.route !== 'budget' && row.blocked ? (
@@ -2245,7 +2486,9 @@ function QueueRowView({
             ) : null}
             {selectable ? (
               <Button
-                aria-label={`Approve ${selectionLabel(row).replace(/^Select /, '')}`}
+                aria-label={uiText('template_d4c60449ac4f', {
+                  v0: selectionLabel(row, uiText).replace(/^Select /, ''),
+                })}
                 className="h-7 px-3 text-xs pointer-coarse:h-8"
                 disabled={writesBlocked || busyDecision}
                 onClick={(event) => {
@@ -2256,12 +2499,12 @@ function QueueRowView({
                 type="button"
                 variant="default"
               >
-                Approve
+                {uiText('approve_6007acb')}
               </Button>
             ) : null}
             <button
               aria-expanded={expanded}
-              aria-label={expanded ? 'Hide detail' : 'Show detail'}
+              aria-label={expanded ? uiText('hide_detail_6c9aeec') : uiText('show_detail_67c90da')}
               className="hit-area rounded p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground pointer-coarse:p-2"
               onClick={(event) => {
                 event.stopPropagation();
@@ -2296,6 +2539,9 @@ function QueueRowView({
  *  (green when it raises, red when it cuts), a recommendation's money at stake. The change is
  *  the difference of the two figures in the title, which carry the provenance; it adds none. */
 function RowImpact({ row, currency }: { row: QueueRow; currency: string | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   if (row.route === 'budget') {
     const change = row.item.change_abs ?? 0;
     if (Math.abs(change) < 0.005) return null;
@@ -2307,14 +2553,16 @@ function RowImpact({ row, currency }: { row: QueueRow; currency: string | null }
             change > 0 ? 'text-success' : 'text-destructive',
           )}
         >
-          {change > 0 ? '+' : '−'}
-          {formatCurrency(Math.abs(change), currency)}/day
+          {uiText.rich('sentence_e9dc34d70586', {
+            v0: change > 0 ? '+' : '−',
+            v1: formatCurrency(Math.abs(change), currency, uiLocale),
+          })}
         </span>
-        <span className="block text-muted-foreground">daily budget</span>
+        <span className="block text-muted-foreground">{uiText('daily_budget_c6371b3')}</span>
       </p>
     );
   }
-  const money = impactLabel(row.rec, currency);
+  const money = impactLabel(row.rec, currency, optimizerText, uiLocale);
   if (!money) return null;
   return (
     <p className="text-xs">
@@ -2330,7 +2578,7 @@ function RowImpact({ row, currency }: { row: QueueRow; currency: string | null }
       >
         {money.replace(/ at stake$/, '')}
       </span>
-      <span className="block text-muted-foreground">at stake</span>
+      <span className="block text-muted-foreground">{uiText('at_stake_adda7fd')}</span>
     </p>
   );
 }
@@ -2347,14 +2595,16 @@ function RecWhy({
   currency: string | null;
   timeZone: string | null;
 }) {
-  const line = recRowLine(rec, currency, undefined, timeZone ?? undefined);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const line = recRowLine(rec, currency, undefined, timeZone ?? undefined, uiText, uiLocale);
   if (!line && !rec.reason) return null;
   return (
     <div className="mt-0.5 space-y-0.5 text-muted-foreground text-xs">
       {line ? <p className="text-foreground/80 tabular-nums">{line}</p> : null}
       {rec.reason ? (
         <p className="line-clamp-2" title={rec.reason}>
-          Why: {rec.reason}
+          {uiText.rich('sentence_b8fcef5f90e9', { v0: rec.reason })}
         </p>
       ) : null}
     </div>
@@ -2370,18 +2620,21 @@ function RowHeadline({
   brandId: string;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   // The ad set by name, its raw id on hover — the id is never the line a person reads.
   const subject =
     row.route === 'settings' ? null : (
       <span className="font-semibold text-sm tracking-tight" title={row.adsetId}>
-        {row.name ?? 'Unnamed ad set'}
+        {row.name ?? uiText('unnamed_ad_set_b8a5745')}
       </span>
     );
   if (row.route === 'budget') {
     const changePct = row.item.change_pct != null ? row.item.change_pct * 100 : null;
     return (
       <span className="min-w-0 font-semibold text-sm tracking-tight">
-        <span title={row.adsetId}>{row.name ?? 'Budget move'}</span>{' '}
+        <span title={row.adsetId}>{row.name ?? uiText('budget_move_5b0ff1c')}</span>{' '}
         <span className="font-mono font-normal text-muted-foreground tabular-nums">
           <span
             {...figureProps(
@@ -2390,7 +2643,7 @@ function RowHeadline({
               currency,
             )}
           >
-            {formatCurrency(row.item.current_budget ?? 0, currency)}
+            {formatCurrency(row.item.current_budget ?? 0, currency, uiLocale)}
           </span>{' '}
           →{' '}
           <span
@@ -2401,7 +2654,7 @@ function RowHeadline({
               currency,
             )}
           >
-            {formatCurrency(row.item.final_budget ?? 0, currency)}
+            {formatCurrency(row.item.final_budget ?? 0, currency, uiLocale)}
           </span>
           {changePct != null ? (
             <>
@@ -2416,7 +2669,7 @@ function RowHeadline({
                 )}
               >
                 {changePct > 0 ? '+' : ''}
-                {changePct.toFixed(0)}%
+                {formatDecimal(changePct, 0, uiLocale)}%
               </span>
               {')'}
             </>
@@ -2429,7 +2682,7 @@ function RowHeadline({
     return (
       <span className="min-w-0 text-sm">
         <span className="font-semibold text-muted-foreground tracking-tight">
-          {recommendationLabel(row.rec.kind).label}
+          {recommendationLabel(row.rec.kind, optimizerText).label}
         </span>
         {subject ? <> · {subject}</> : null}
       </span>
@@ -2460,10 +2713,16 @@ function RowDetail({
 }: {
   row: QueueRow;
   currency: string | null;
-  counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
+  counterparty?: {
+    direction: 'funds' | 'fundedBy';
+    parties: Counterparty[];
+  } | null;
   settingsActions: SettingsActions;
   evidence: EvidenceContext;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   return (
     <div
       className="mt-3 ml-7 space-y-1.5 border-border/60 border-l pl-4 text-muted-foreground text-xs"
@@ -2477,11 +2736,11 @@ function RowDetail({
         <>
           <CreativeCardHost evidence={evidence} name={row.name} rec={row.rec} />
           {row.route === 'hidden' ? (
-            <p className="mt-2">{notImplementedMessage(row.rec.kind)}</p>
+            <p className="mt-2">{notImplementedMessage(row.rec.kind, optimizerText)}</p>
           ) : null}
         </>
       ) : row.route === 'hidden' ? (
-        <p>{notImplementedMessage(row.rec.kind)}</p>
+        <p>{notImplementedMessage(row.rec.kind, optimizerText)}</p>
       ) : row.route === 'creative' ? (
         <CreativeBriefDetail rec={row.rec} />
       ) : row.route === 'settings' ? (
@@ -2567,9 +2826,10 @@ function AudienceCardHost({
   name: string | null;
   evidence: EvidenceContext;
 }) {
+  const uiText = useTranslations('scale');
   const view = React.useMemo(
-    () => audienceCardView(evidence.audienceProposals, rec),
-    [evidence.audienceProposals, rec],
+    () => audienceCardView(evidence.audienceProposals, rec, uiText),
+    [evidence.audienceProposals, rec, uiText],
   );
   const proposalId = view.row?.id ?? null;
   const campaignId = view.block?.campaign_id ?? view.plan?.source.campaign_id ?? null;
@@ -2623,6 +2883,10 @@ function SettingsDetail({
   actions: SettingsActions;
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const patch = settingsPatchOf(rec);
   const decided = rec.status !== 'pending';
   return (
@@ -2630,15 +2894,17 @@ function SettingsDetail({
       <RecDetail rec={rec} />
       {patch ? (
         <p className="text-foreground tabular-nums">
-          <span className="font-medium">{settingsFieldLabel(patch.field)}:</span>{' '}
-          {formatSettingsValue(patch.field, patch.from, currency)} →{' '}
+          <span className="font-medium">{settingsFieldLabel(patch.field, optimizerText)}:</span>{' '}
+          {formatSettingsValue(patch.field, patch.from, currency, optimizerText, uiLocale)} →{' '}
           <span className="font-semibold">
-            {formatSettingsValue(patch.field, patch.to, currency)}
+            {formatSettingsValue(patch.field, patch.to, currency, optimizerText, uiLocale)}
           </span>
         </p>
       ) : null}
       {decided ? (
-        <p className="text-muted-foreground">Decided: {rec.status}.</p>
+        <p className="text-muted-foreground">
+          {uiText.rich('sentence_f5b935428629', { v0: rec.status })}
+        </p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {patch ? (
@@ -2648,7 +2914,7 @@ function SettingsDetail({
               size="sm"
               type="button"
             >
-              Apply setting
+              {uiText('apply_setting_c14e4e4')}
             </Button>
           ) : (
             <Button
@@ -2658,7 +2924,7 @@ function SettingsDetail({
               type="button"
               variant="secondary"
             >
-              Got it
+              {uiText('got_it_5ad3dbd')}
             </Button>
           )}
           <Button
@@ -2668,7 +2934,7 @@ function SettingsDetail({
             type="button"
             variant="ghost"
           >
-            Dismiss
+            {uiText('dismiss_48845bf')}
           </Button>
         </div>
       )}
@@ -2681,10 +2947,15 @@ function SettingsDetail({
  *  builder — the same brief the request email and the swap worker receive. Falls back to the
  *  plain reason for an older rec that carries no seed. */
 function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
+  const uiText = useTranslations('scale');
   const brief = creativeBriefForRec(rec);
   if (!brief) return <RecDetail rec={rec} />;
   const seed = rec.seed as
-    | { posterUrl?: string | null; winnerAssetId?: string | null; angleId?: string | null }
+    | {
+        posterUrl?: string | null;
+        winnerAssetId?: string | null;
+        angleId?: string | null;
+      }
     | null
     | undefined;
   const posterUrl = typeof seed?.posterUrl === 'string' ? seed.posterUrl : null;
@@ -2703,7 +2974,7 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
           {posterUrl ? (
             // biome-ignore lint/performance/noImgElement: Meta CDN poster with a signed, expiring URL; next/image cannot optimise it and would break the signature.
             <img
-              alt="Winning creative"
+              alt={uiText('winning_creative_2b49fd6')}
               className="h-24 w-24 shrink-0 rounded-md border border-border/60 object-cover"
               loading="lazy"
               referrerPolicy="no-referrer"
@@ -2718,7 +2989,7 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
             ) : null}
             {!inLibrary ? (
               <p className="text-xs text-muted-foreground">
-                Not in the Library yet — import it from the ad account to generate from it.
+                {uiText('not_in_the_library_yet_import_it_from_the_ad__7f34796')}
               </p>
             ) : null}
           </div>
@@ -2728,13 +2999,13 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
       <p className="leading-relaxed">{brief.brief}</p>
       {brief.groundedOn.length > 0 ? (
         <p>
-          <span className="font-medium text-foreground">Grounded on:</span>{' '}
+          <span className="font-medium text-foreground">{uiText('grounded_on_79d5004')}</span>{' '}
           {brief.groundedOn.join(' · ')}
         </p>
       ) : null}
       {rec.ad_id ? (
         <p>
-          <span className="font-medium text-foreground">Winning ad:</span>{' '}
+          <span className="font-medium text-foreground">{uiText('winning_ad_c09a6be')}</span>{' '}
           <code className="text-xs">{rec.ad_id}</code>
         </p>
       ) : null}
@@ -2772,23 +3043,28 @@ function BudgetDetail({
 }: {
   item: CycleItemRow;
   currency: string | null;
-  counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
+  counterparty?: {
+    direction: 'funds' | 'fundedBy';
+    parties: Counterparty[];
+  } | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const windowText = scoreWindows(item);
 
   return (
     <>
       {item.reason ? (
         <p>
-          <span className="font-medium text-foreground">Why:</span> {item.reason}
+          <span className="font-medium text-foreground">{uiText('why_ad389aa')}</span> {item.reason}
         </p>
       ) : null}
       <p>
-        <span className="font-medium text-foreground">Before → after:</span>{' '}
+        <span className="font-medium text-foreground">{uiText('before_after_cb98fe2')}</span>{' '}
         <span
           {...figureProps(`queue.${item.adset_id}.detail.now`, item.current_budget ?? 0, currency)}
         >
-          {formatCurrency(item.current_budget ?? 0, currency)}
+          {formatCurrency(item.current_budget ?? 0, currency, uiLocale)}
         </span>{' '}
         →{' '}
         <span
@@ -2798,12 +3074,13 @@ function BudgetDetail({
             currency,
           )}
         >
-          {formatCurrency(item.final_budget ?? 0, currency)}
+          {formatCurrency(item.final_budget ?? 0, currency, uiLocale)}
         </span>
       </p>
       {windowText ? (
         <p>
-          <span className="font-medium text-foreground">Score:</span> {windowText}
+          <span className="font-medium text-foreground">{uiText('score_9689a81')}</span>{' '}
+          {windowText}
         </p>
       ) : null}
       <CostIntervalLine adsetId={item.adset_id} ci={item.diagnostics?.ci} currency={currency} />
@@ -2817,15 +3094,18 @@ function BudgetDetail({
 }
 
 function RecDetail({ rec }: { rec: RecommendationRow }) {
+  const uiText = useTranslations('scale');
   return (
     <>
       {rec.reason ? (
         <p>
-          <span className="font-medium text-foreground">Why:</span> {rec.reason}
+          <span className="font-medium text-foreground">{uiText('why_ad389aa')}</span> {rec.reason}
         </p>
       ) : null}
       <p>
-        Trigger: <span className="font-mono">{rec.trigger}</span>
+        {uiText.rich('sentence_20a66c5279a4', {
+          v0: () => <span className="font-mono">{rec.trigger}</span>,
+        })}
       </p>
     </>
   );
@@ -2835,13 +3115,14 @@ function RecDetail({ rec }: { rec: RecommendationRow }) {
  *  yet, so it is never a button — just a focusable icon whose tooltip says so on hover/focus.
  *  Replaces the standing AdLevelPreviewNotice banner. */
 function AdLevelDangerIcon() {
+  const uiText = useTranslations('scale');
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger
           render={
             <span
-              aria-label="Ad-level execution is in progress — not yet surfaced here"
+              aria-label={uiText('ad_level_execution_is_in_progress_not_yet_sur_909c8d7')}
               className="mt-0.5 inline-flex text-amber-600 dark:text-amber-500"
               role="img"
             >
@@ -2850,7 +3131,7 @@ function AdLevelDangerIcon() {
           }
         />
         <TooltipContent className="max-w-xs">
-          Ad-level execution is in progress — not yet surfaced here.
+          {uiText('ad_level_execution_is_in_progress_not_yet_sur_78efcfc')}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

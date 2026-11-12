@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Audience by location. Country mode paints the world choropleth; city mode
 // pins the mapped cities on MapLibre, each carrying its name as a persistent
@@ -112,13 +113,20 @@ const CITY_COORDS: Record<string, [number, number]> = {
   zurich: [8.54, 47.37],
 };
 
-const TIMEFRAME_LABELS: Record<string, string> = {
-  this_week: 'Last 7 days',
-  this_month: 'Last 30 days',
-  prev_month: 'Previous month',
-  last_14_days: 'Last 14 days',
-  last_30_days: 'Last 30 days',
-  last_90_days: 'Last 90 days',
+type TimeframeMessageKey =
+  | 'audienceLast7Days'
+  | 'audienceLast14Days'
+  | 'audienceLast30Days'
+  | 'audienceLast90Days'
+  | 'audiencePreviousMonth'
+  | 'audienceTimeframeUnavailable';
+const TIMEFRAME_LABELS: Record<string, TimeframeMessageKey> = {
+  this_week: 'audienceLast7Days',
+  this_month: 'audienceLast30Days',
+  prev_month: 'audiencePreviousMonth',
+  last_14_days: 'audienceLast14Days',
+  last_30_days: 'audienceLast30Days',
+  last_90_days: 'audienceLast90Days',
 };
 
 function normalizeCityKey(value: string) {
@@ -131,16 +139,24 @@ function normalizeCityKey(value: string) {
     .trim();
 }
 
-function timeframeLabel(value?: string) {
-  if (!value) return 'Timeframe unavailable';
-  return TIMEFRAME_LABELS[value] ?? value.replace(/_/g, ' ');
+function timeframeLabel(
+  value: string | undefined,
+  translate: (key: TimeframeMessageKey) => string,
+) {
+  return translate((value && TIMEFRAME_LABELS[value]) || 'audienceTimeframeUnavailable');
 }
 
-function resolveCountryLabel(value: string) {
+const regionFormatters = new globalThis.Map<string, Intl.DisplayNames>();
+
+function resolveCountryLabel(value: string, locale: string, fallback?: string) {
   const normalized = value.trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(normalized)) return value;
+  if (!/^[A-Z]{2}$/.test(normalized)) return fallback || value;
   try {
-    const formatter = new Intl.DisplayNames(['en'], { type: 'region' });
+    let formatter = regionFormatters.get(locale);
+    if (!formatter) {
+      formatter = new Intl.DisplayNames([locale], { type: 'region' });
+      regionFormatters.set(locale, formatter);
+    }
     return formatter.of(normalized) ?? normalized;
   } catch {
     return normalized;
@@ -295,16 +311,18 @@ function averageCenter(points: LocationPoint[]): [number, number] {
 }
 
 export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, timeframe }: Props) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const [mode, setMode] = React.useState<'country' | 'city'>('country');
 
   const countryChoroplethData = React.useMemo(
     () =>
       countryEntries.map((entry) => ({
         alpha2: entry.key,
-        label: resolveCountryLabel(entry.label || entry.key),
+        label: resolveCountryLabel(entry.key, uiLocale, entry.label),
         value: entry.value,
       })),
-    [countryEntries],
+    [countryEntries, uiLocale],
   );
 
   const cityPoints = React.useMemo<LocationPoint[]>(
@@ -353,10 +371,13 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
       className="rounded-lg border border-border bg-surface"
     >
       <SectionHeader
-        title="Audience Location"
+        title={uiText('audience_location_797fe83')}
         meta={
           <span className="text-xs text-muted-foreground">
-            Followers by {mode} ({timeframeLabel(timeframe)})
+            {uiText('audienceFollowersBy', {
+              mode,
+              timeframe: timeframeLabel(timeframe, uiText),
+            })}
           </span>
         }
         action={
@@ -368,10 +389,10 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 mode === 'country' ? 'bg-accent/20 text-foreground' : 'text-muted-foreground',
               )}
               onClick={() => setMode('country')}
-              aria-label="Show country location data"
+              aria-label={uiText('show_country_location_data_84ab911')}
               aria-pressed={mode === 'country'}
             >
-              Country
+              {uiText('country_701d021')}
             </button>
             <button
               type="button"
@@ -380,10 +401,10 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 mode === 'city' ? 'bg-accent/20 text-foreground' : 'text-muted-foreground',
               )}
               onClick={() => setMode('city')}
-              aria-label="Show city location data"
+              aria-label={uiText('show_city_location_data_ac2479d')}
               aria-pressed={mode === 'city'}
             >
-              City
+              {uiText('city_fc33f73')}
             </button>
           </div>
         }
@@ -395,7 +416,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
               countryChoroplethData.length === 0 ? (
                 <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
                   <span className="text-sm text-muted-foreground">
-                    Country breakdown unavailable.
+                    {uiText('country_breakdown_unavailable_cb69c96')}
                   </span>
                 </div>
               ) : (
@@ -403,7 +424,9 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
               )
             ) : cityPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
-                <span className="text-sm text-muted-foreground">City breakdown unavailable.</span>
+                <span className="text-sm text-muted-foreground">
+                  {uiText('city_breakdown_unavailable_fd32a80')}
+                </span>
               </div>
             ) : (
               <Map
@@ -458,7 +481,9 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                         <div className="space-y-1">
                           <div className="text-xs font-semibold text-white">{point.label}</div>
                           <div className="text-xs text-zinc-300">
-                            {point.value.toLocaleString()} people
+                            {uiText.rich('sentence_2b6c0be1f536', {
+                              count: point.value,
+                            })}
                           </div>
                         </div>
                       </MarkerTooltip>
@@ -472,7 +497,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
             <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-border bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur">
               {countryLayerVisible ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Fewer</span>
+                  <span className="text-xs text-muted-foreground">{uiText('fewer_2a246cc')}</span>
                   <span
                     className="h-2.5 w-2.5 rounded-sm"
                     style={{ backgroundColor: 'var(--chart-scale-02)' }}
@@ -489,15 +514,17 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                     className="h-2.5 w-2.5 rounded-sm"
                     style={{ backgroundColor: 'var(--chart-scale-05)' }}
                   />
-                  <span className="text-xs text-muted-foreground">More followers</span>
+                  <span className="text-xs text-muted-foreground">
+                    {uiText('more_followers_7980b9e')}
+                  </span>
                 </div>
               ) : (
                 <div className="flex gap-2 items-center">
-                  <span className="text-xs">High</span>
+                  <span className="text-xs">{uiText('high_c4ebc6d')}</span>
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  <span className="text-xs">Medium</span>
+                  <span className="text-xs">{uiText('medium_8e588cd')}</span>
                   <span className="h-2.5 w-2.5 rounded-full bg-teal-400" />
-                  <span className="text-xs">Low</span>
+                  <span className="text-xs">{uiText('low_f793de2')}</span>
                   <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
                 </div>
               )}
@@ -506,11 +533,15 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
 
           <div className="rounded-lg border border-border bg-white/70 p-3">
             <h3 className="mb-2 text-sm font-semibold">
-              Top {countryLayerVisible ? 'countries' : 'cities'}
+              {uiText.rich('sentence_5893a3ac78df', {
+                location: countryLayerVisible ? 'country' : 'city',
+              })}
             </h3>
             <div className="space-y-2 pr-1">
               {topEntries.length === 0 ? (
-                <span className="text-sm text-muted-foreground">No entries available.</span>
+                <span className="text-sm text-muted-foreground">
+                  {uiText('no_entries_available_61b03f5')}
+                </span>
               ) : (
                 topEntries.map((entry, index) => (
                   <div
@@ -519,17 +550,22 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                   >
                     <span className="truncate pr-2 text-sm text-muted-foreground">
                       {countryLayerVisible
-                        ? resolveCountryLabel(entry.label || entry.key)
+                        ? resolveCountryLabel(entry.key, uiLocale, entry.label)
                         : entry.label}
                     </span>
-                    <span className="text-sm font-medium">{entry.value.toLocaleString()}</span>
+                    <span className="text-sm font-medium">
+                      {entry.value.toLocaleString(uiLocale)}
+                    </span>
                   </div>
                 ))
               )}
             </div>
             {!countryLayerVisible && cityEntries.length > cityPoints.length ? (
               <span className="mt-3 block text-xs text-muted-foreground">
-                Mapped {cityPoints.length}/{cityEntries.length} cities with known coordinates.
+                {uiText.rich('sentence_cad49f240285', {
+                  mapped: cityPoints.length,
+                  total: cityEntries.length,
+                })}
               </span>
             ) : null}
           </div>

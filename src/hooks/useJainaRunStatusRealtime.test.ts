@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { isTerminalRunStatus, useJainaRunStatusRealtime } from './useJainaRunStatusRealtime';
 
@@ -24,7 +25,11 @@ mock.module('@/lib/supabase/client', () => ({
 }));
 
 mock.module('@/hooks/useSession', () => ({
-  useSession: () => ({ user: { id: 'user_1' }, session: null, isLoading: false }),
+  useSession: () => ({
+    user: { id: 'user_1' },
+    session: null,
+    isLoading: false,
+  }),
 }));
 
 /** The trigger's broadcast for one run row change. */

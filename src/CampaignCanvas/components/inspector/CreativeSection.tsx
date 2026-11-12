@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
 /*
  * A creative is one image, one video, or a carousel of 2-10 ordered cards. Assets come
  * from the brand's Library — picked, uploaded into it first, or dropped on the node — so
@@ -44,12 +47,12 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { creativeGenerationPrompt, useCanvasJaina } from '../../canvasJaina';
 import { type PickedAsset, useCreativeAssetPlacement } from '../../hooks/useCreativeAssetPlacement';
+import { usePersonEdit } from '../../hooks/usePersonEdit';
 import {
   creativePreviewSources,
   unsignedCreativeAssetIds,
   useSignedCreativeUrls,
 } from '../../nodes/CreativeNode';
-import { usePersonEdit } from '../../hooks/usePersonEdit';
 import { useCampaignStore } from '../../stores/useCampaignStore';
 import {
   CAROUSEL_MAX_CARDS,
@@ -60,12 +63,6 @@ import {
 } from '../../types';
 import { ChipGroup, CommitInput, InspectorField, InspectorSection, isHttpUrl } from './fields';
 import { NameField } from './NodeSections';
-
-const FORMAT_OPTIONS: { value: CreativeAssetType; label: string }[] = [
-  { value: 'image', label: 'Image' },
-  { value: 'video', label: 'Video' },
-  { value: 'carousel', label: 'Carousel' },
-];
 
 const FILE_ACCEPT: Record<CreativeAssetType, string> = {
   image: 'image/*',
@@ -139,6 +136,7 @@ function CarouselCardRow({
   onMove: (to: number) => void;
   onRemove: () => void;
 }) {
+  const uiText = useTranslations('scale');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: sortableId,
   });
@@ -158,7 +156,7 @@ function CarouselCardRow({
     >
       <button
         type="button"
-        aria-label={`Drag card ${position}`}
+        aria-label={uiText('template_86858cc81ba6', { v0: position })}
         className="flex w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
         {...attributes}
         {...listeners}
@@ -174,14 +172,17 @@ function CarouselCardRow({
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-center justify-between gap-1">
           <span className="text-2xs font-medium text-muted-foreground tabular-nums">
-            Card {position} · {card.kind === 'video' ? 'Video' : 'Image'}
+            {uiText.rich('sentence_036862d3c3af', {
+              v0: position,
+              v1: card.kind === 'video' ? uiText('video_d534be8') : uiText('image_1aa4cb0'),
+            })}
           </span>
           <div className="flex items-center">
             <Button
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label="Move card up"
+              aria-label={uiText('move_card_up_86fba2e')}
               disabled={index === 0}
               onClick={() => onMove(index - 1)}
             >
@@ -191,7 +192,7 @@ function CarouselCardRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label="Move card down"
+              aria-label={uiText('move_card_down_98fab71')}
               disabled={index === count - 1}
               onClick={() => onMove(index + 1)}
             >
@@ -201,7 +202,7 @@ function CarouselCardRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label="Remove card"
+              aria-label={uiText('remove_card_dcf7d38')}
               className="text-muted-foreground hover:text-destructive"
               onClick={onRemove}
             >
@@ -211,8 +212,8 @@ function CarouselCardRow({
         </div>
         <CommitInput
           testId="inspector-carousel-card-headline"
-          aria-label={`Card ${position} headline`}
-          placeholder="Headline"
+          aria-label={uiText('template_416d3cc1ecec', { v0: position })}
+          placeholder={uiText('headline_c5f5a4c')}
           maxLength={255}
           value={card.headline ?? ''}
           className="h-7 px-2 text-xs"
@@ -220,10 +221,10 @@ function CarouselCardRow({
         />
         <CommitInput
           testId="inspector-carousel-card-link"
-          aria-label={`Card ${position} link`}
+          aria-label={uiText('template_f9f970f60716', { v0: position })}
           type="url"
           inputMode="url"
-          placeholder="Link (defaults to the ad's)"
+          placeholder={uiText('link_defaults_to_the_ad_s_2db7b53')}
           value={card.linkUrl ?? ''}
           invalid={linkInvalid}
           className="h-7 px-2 text-xs"
@@ -231,7 +232,7 @@ function CarouselCardRow({
         />
         {linkInvalid ? (
           <p className="text-2xs text-destructive" role="alert">
-            Enter a full URL, including https://
+            {uiText('enter_a_full_url_including_https_fe3e14d')}
           </p>
         ) : null}
       </div>
@@ -241,11 +242,14 @@ function CarouselCardRow({
 
 function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[] }) {
   // A person's edit: it relabels what it changes 'user_gave' (see usePersonEdit).
+  const uiText = useTranslations('scale');
   const updateNodeData = usePersonEdit();
   const signed = useSignedCreativeUrls(unsignedCreativeAssetIds({ cards }));
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
   // Positional ids, as the organic carousel strip uses: a card's identity IS its slot,
   // and the same asset may legitimately appear twice.
@@ -260,8 +264,10 @@ function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[
   if (cards.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs leading-snug text-muted-foreground">
-        No cards yet. Add {CAROUSEL_MIN_CARDS} to {CAROUSEL_MAX_CARDS} images or videos from the
-        Library, or upload them.
+        {uiText.rich('sentence_a1376fd602a6', {
+          v0: CAROUSEL_MIN_CARDS,
+          v1: CAROUSEL_MAX_CARDS,
+        })}
       </p>
     );
   }
@@ -269,7 +275,7 @@ function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        <ol className="flex flex-col gap-2" aria-label="Carousel cards">
+        <ol className="flex flex-col gap-2" aria-label={uiText('carousel_cards_55af24f')}>
           {cards.map((card, index) => (
             <CarouselCardRow
               key={ids[index]}
@@ -292,6 +298,16 @@ function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[
 }
 
 export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creative'] }) {
+  const uiText = useTranslations('scale');
+  const FORMAT_OPTIONS: { value: CreativeAssetType; label: string }[] = useMemo(
+    () => [
+      { value: 'image', label: uiText('image_1aa4cb0') },
+      { value: 'video', label: uiText('video_d534be8') },
+      { value: 'carousel', label: uiText('carousel_37219fb') },
+    ],
+    [uiText],
+  );
+
   const { data } = node;
   const setCreativeFormat = useCampaignStore((store) => store.setCreativeFormat);
   // A person's edit: it relabels what it changes 'user_gave' (see usePersonEdit).
@@ -335,12 +351,15 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
 
   return (
     <>
-      <InspectorSection title="Creative">
+      <InspectorSection title={uiText('creative_2c7e633')}>
         <NameField id={node.id} label={data.label} keptOnSave={false} />
-        <InspectorField label="Format" hint="The ad this creative feeds takes the same format.">
+        <InspectorField
+          label={uiText('format_2f34366')}
+          hint={uiText('the_ad_this_creative_feeds_takes_the_same_for_7d15ead')}
+        >
           <ChipGroup
             testId="inspector-creative-format"
-            label="Creative format"
+            label={uiText('creative_format_f211a16')}
             value={[format]}
             options={FORMAT_OPTIONS}
             onChange={([next]) => {
@@ -351,7 +370,7 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
       </InspectorSection>
 
       <InspectorSection
-        title={format === 'carousel' ? 'Cards' : 'Asset'}
+        title={format === 'carousel' ? uiText('cards_a52fcbb') : uiText('asset_80d298c')}
         aside={
           format === 'carousel' ? (
             <span
@@ -361,7 +380,10 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
               )}
               data-testid="inspector-carousel-count"
             >
-              {cards.length} of {CAROUSEL_MAX_CARDS}
+              {uiText.rich('sentence_e900eefa5ce5', {
+                v0: cards.length,
+                v1: CAROUSEL_MAX_CARDS,
+              })}
             </span>
           ) : null
         }
@@ -371,7 +393,9 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
             <CarouselCards nodeId={node.id} cards={cards} />
             {cards.length > 0 && cards.length < CAROUSEL_MIN_CARDS ? (
               <p className="text-2xs leading-snug text-destructive" role="alert">
-                A carousel needs at least {CAROUSEL_MIN_CARDS} cards.
+                {uiText.rich('sentence_302e3135bb30', {
+                  v0: CAROUSEL_MIN_CARDS,
+                })}
               </p>
             ) : null}
           </>
@@ -387,9 +411,9 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
               <span className={data.mediaId ? 'text-foreground' : 'text-muted-foreground'}>
                 {data.mediaId
                   ? format === 'video'
-                    ? 'Video attached'
-                    : 'Image attached'
-                  : `No ${format} yet`}
+                    ? uiText('video_attached_a7b561b')
+                    : uiText('image_attached_0e0c8f0')
+                  : uiText('template_458bdbbe9290', { format: format })}
               </span>
               {data.mediaId ? (
                 <Button
@@ -405,7 +429,7 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
                     })
                   }
                 >
-                  Remove
+                  {uiText('remove_c3812fc')}
                 </Button>
               ) : null}
             </div>
@@ -422,7 +446,7 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload aria-hidden />
-            Upload
+            {uiText('upload_865e89d')}
           </Button>
           <Button
             type="button"
@@ -433,7 +457,7 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
             onClick={() => setLibraryOpen(true)}
           >
             <LibraryBig aria-hidden />
-            From library
+            {uiText('from_library_0ee5bc0')}
           </Button>
         </div>
         {canvasJaina ? (
@@ -447,11 +471,11 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
               onClick={() => canvasJaina.generateForCreative(node.id)}
             >
               <Sparkles aria-hidden />
-              Generate with Jaina
+              {uiText('generate_with_jaina_d8c7e8e')}
             </Button>
             <p className="text-2xs leading-snug text-muted-foreground">
               {generateBlockedBecause ??
-                "Made from this ad's copy and attached to it. Spend waits for your approval."}
+                uiText('made_from_this_ad_s_copy_and_attached_to_it_s_7e075b4')}
             </p>
           </div>
         ) : null}
@@ -469,7 +493,7 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
         />
 
         {activeUploads.length > 0 ? (
-          <ul className="flex flex-col gap-2" aria-label="Uploads">
+          <ul className="flex flex-col gap-2" aria-label={uiText('uploads_d084236')}>
             {activeUploads.map((upload) => (
               <li key={upload.id} className="flex flex-col gap-1 text-2xs">
                 <div className="flex items-center justify-between gap-2">
@@ -481,7 +505,7 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
                     )}
                   >
                     {upload.status === 'error'
-                      ? (upload.error ?? 'Upload failed')
+                      ? (upload.error ?? uiText('upload_failed_6efc5d2'))
                       : `${Math.round(upload.progress)}%`}
                   </span>
                 </div>

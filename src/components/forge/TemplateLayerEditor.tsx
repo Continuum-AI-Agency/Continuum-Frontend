@@ -42,12 +42,14 @@ import {
   Type,
   Undo2,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { usePanelRef } from 'react-resizable-panels';
 import { z } from 'zod';
 import { AuthoredTemplateLayerPreview as TemplateLayerPreview } from '@/components/forge/AuthoredTemplateLayerPreview';
 import { DesignLayersPanel } from '@/components/forge/DesignLayersPanel';
+import { ForgeAgentPanel } from '@/components/forge/ForgeAgentPanel';
 import {
   appendLayerDraftCommand,
   commandsFromLayerSnapshot,
@@ -55,7 +57,6 @@ import {
   type LayerDraftState,
   layerSnapshotFromCommands,
 } from '@/components/forge/layerDraft';
-import { ForgeAgentPanel } from '@/components/forge/ForgeAgentPanel';
 import {
   createLayerHistory,
   endLayerHistoryGroup,
@@ -126,6 +127,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { stageHyperframesRevisionForForge } from '@/lib/api/hyperframesAgent.client';
 import {
   editableTemplateFonts,
@@ -140,10 +143,14 @@ import {
   previewTemplateRevision,
   putTemplateAuthoringDraft,
 } from '@/lib/library/templateSources';
+import { useForgePresentationText } from './useForgePresentationText';
 
 type Edits = Record<string, TemplateLayerEdit>;
 type TemplateLayerSaveTarget = TemplateAuthoringArtifactCommit['saveTo'];
-type Changes = { edits: TemplateLayerEdit[]; orders: { compId: number; layerIds: number[] }[] };
+type Changes = {
+  edits: TemplateLayerEdit[];
+  orders: { compId: number; layerIds: number[] }[];
+};
 type AuthoringComposition = TemplateAuthoringDocument['compositions'][number];
 type AuthoringFontChoice = TemplateAuthoringDocument['fontChoices'][number];
 
@@ -153,7 +160,11 @@ const authoringFontChoiceKey = (font: AuthoringFontChoice) =>
     : `${font.kind}:${font.packageChecksum}:${font.postScriptName}:${font.sha256}`;
 const authoringFontRef = (font: AuthoringFontChoice) =>
   'fontId' in font
-    ? { fontId: font.fontId, postScriptName: font.postScriptName, sha256: font.sha256 }
+    ? {
+        fontId: font.fontId,
+        postScriptName: font.postScriptName,
+        sha256: font.sha256,
+      }
     : {
         kind: font.kind,
         packageChecksum: font.packageChecksum,
@@ -219,9 +230,7 @@ const artboardLockCopy = (reason: string | null | undefined) => {
   if (reason === null) return null;
   if (reason === 'authoring_artboard_preflight_pending' || reason == null)
     return 'Composition size editing is waiting for a verified source check.';
-  return reason.startsWith('authoring_')
-    ? 'Composition size editing is unavailable for this source.'
-    : reason;
+  return 'Composition size editing is unavailable for this source.';
 };
 const hasChanges = (c: Changes) => c.edits.length > 0 || c.orders.length > 0;
 const layerKey = (layer: Pick<TemplateEditableLayer, 'compId' | 'layerId'>) =>
@@ -290,7 +299,10 @@ const pins = (revision: TemplateRevision, assetId: string, versionId: string | n
     (source) => source.assetId === assetId && source.versionId === versionId,
   );
 
-const nameSchema = z.object({ name: z.string().trim().min(1, 'Name your variant').max(120) });
+const nameSchema = (translateUi: ReturnType<typeof useUiTranslations<'forge'>>) =>
+  z.object({
+    name: z.string().trim().min(1, translateUi('validationVariantName')).max(120),
+  });
 
 export function TemplateLayerEditor({
   brandId,
@@ -324,6 +336,15 @@ export function TemplateLayerEditor({
   /** Move from an exact preparation font diagnostic to Forge's existing Fonts check. */
   onOpenFontRepair?: () => void;
 }) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const displayLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('forge');
+  const presentForge = useForgePresentationText();
+
   const [history, setHistory] = useState<LayerHistory>(() => createLayerHistory(EMPTY_DRAFT));
   const historyRef = useRef(history);
   historyRef.current = history;
@@ -411,7 +432,9 @@ export function TemplateLayerEditor({
     setArtworkPickerOpen(true);
   };
   const form = useForm<{ name: string }>({
-    resolver: zodResolver(nameSchema),
+    resolver: zodResolver(nameSchema(translateUi), {
+      error: validationErrorMap,
+    }),
     defaultValues: { name: `${name} variant` },
   });
   const sourceKey = `${brandId}:${assetId}:${versionId ?? ''}`;
@@ -500,7 +523,10 @@ export function TemplateLayerEditor({
   const changes = useMemo<Changes>(
     () => ({
       edits: Object.values(edits),
-      orders: Object.entries(orders).map(([id, layerIds]) => ({ compId: Number(id), layerIds })),
+      orders: Object.entries(orders).map(([id, layerIds]) => ({
+        compId: Number(id),
+        layerIds,
+      })),
     }),
     [edits, orders],
   );
@@ -559,7 +585,11 @@ export function TemplateLayerEditor({
   // reconciled by the person before the agent may write.
   const prepareAgentTurn = useCallback(async () => {
     const draftState = agentDraftRef.current;
-    if (!draftState.ready || draftState.status === 'conflict' || draftState.status === 'source-mismatch')
+    if (
+      !draftState.ready ||
+      draftState.status === 'conflict' ||
+      draftState.status === 'source-mismatch'
+    )
       return null;
     if (!(await draftState.save())) return null;
     return agentDraftRef.current.persistedDraft?.revision ?? 0;
@@ -923,7 +953,9 @@ export function TemplateLayerEditor({
           ? layer.visibilityReason
           : (node.visibilityReason ?? 'Visibility editing is unavailable for this source layer.'),
         ...(!node.capabilities.font
-          ? { fontReason: node.fontReason ?? 'Font editing is unavailable for this source layer.' }
+          ? {
+              fontReason: node.fontReason ?? 'Font editing is unavailable for this source layer.',
+            }
           : {}),
       };
     });
@@ -1085,7 +1117,10 @@ export function TemplateLayerEditor({
       : null);
   const previewCompId = shownScene?.compId ?? selectedAuthoringComposition?.sourceCompId ?? null;
   const previewArtboard = selectedAuthoringComposition
-    ? { width: selectedAuthoringComposition.width, height: selectedAuthoringComposition.height }
+    ? {
+        width: selectedAuthoringComposition.width,
+        height: selectedAuthoringComposition.height,
+      }
     : shownScene
       ? (() => {
           const composition = authoringDocument?.compositions.find(
@@ -1098,7 +1133,14 @@ export function TemplateLayerEditor({
   const previewEdits = useMemo<PreviewEdits | undefined>(() => {
     if (!shownScene)
       return draftOnlyArtboard
-        ? { compId: null, layers: [], rendered: {}, current: {}, renderedOrder: [], order: [] }
+        ? {
+            compId: null,
+            layers: [],
+            rendered: {},
+            current: {},
+            renderedOrder: [],
+            order: [],
+          }
         : undefined;
     const sceneComp = shownScene.compId;
     const stableOrder =
@@ -1179,7 +1221,9 @@ export function TemplateLayerEditor({
               ...projectedCurrent[layerId],
               ...(channel.channel === 'position'
                 ? { x: sample.value[0]!, y: sample.value[1]! }
-                : { scale: [sample.value[0]!, sample.value[1]!] as [number, number] }),
+                : {
+                    scale: [sample.value[0]!, sample.value[1]!] as [number, number],
+                  }),
             };
           } else if (typeof sample.value === 'number') {
             const property =
@@ -1261,7 +1305,7 @@ export function TemplateLayerEditor({
           node?.name ||
           sourceLayer?.text ||
           sourceLayer?.name ||
-          'Untitled layer',
+          translateUi('untitled_layer_aed92de8'),
         detail: sourceLayer
           ? query
             ? compName
@@ -1335,7 +1379,10 @@ export function TemplateLayerEditor({
           role: currentVariant.original ? ('golden' as const) : ('variant' as const),
           parent:
             !currentVariant.original && originalRevision && originalVariant
-              ? { assetId: originalRevision.sourceAssetId, name: originalVariant.name }
+              ? {
+                  assetId: originalRevision.sourceAssetId,
+                  name: originalVariant.name,
+                }
               : null,
         }
       : undefined;
@@ -1348,6 +1395,7 @@ export function TemplateLayerEditor({
         authoringCommands,
         authoringDraft.serverDraft.commands,
         authoringLayerNames,
+        { t: translateUi, locale: displayLocale, present: presentForge },
       )
     : [];
   const busy = saving || !inventoryData || !authoringDraft.ready || staleSource;
@@ -1436,7 +1484,7 @@ export function TemplateLayerEditor({
       if (result.artifact.purpose !== 'workspace_seed')
         throw new Error('Forge returned an artifact that is not a private workspace seed.');
       authoringDraft.refresh();
-      toast.success('Private composition attached to this Forge workspace.');
+      toast.success(translateUi('private_composition_attached_to_thi_ccd0a4d8'));
     } catch (reason) {
       // The server can complete the private export and attach before the response reaches the
       // browser. Re-read the owner-scoped draft so a lost response cannot leave the UI offering
@@ -1491,6 +1539,7 @@ export function TemplateLayerEditor({
     authoringDraft.status,
     authoringDraft.dirty,
     authoringDocument?.dependencies ?? [],
+    { t: translateUi, locale: displayLocale },
   );
   const showRepair = () => {
     setPreparationDetailsOpen(true);
@@ -1502,19 +1551,19 @@ export function TemplateLayerEditor({
   const currentComposition =
     hasChanges(changes) && composedView && same(changes, composedView.changes);
   const fidelity = currentComposition
-    ? 'Composed preview'
+    ? translateUi('composed_preview_82b9d3b8')
     : hasChanges(changes)
-      ? 'Local estimate'
-      : 'Source preview';
+      ? translateUi('previewLocalEstimate')
+      : translateUi('previewSource');
   const previewLabel =
     sceneIsError && !shownScene
-      ? 'Preview unavailable'
+      ? translateUi('previewUnavailable')
       : previewing
-        ? `${fidelity} · updating`
+        ? translateUi('previewFidelityUpdating', { fidelity })
         : compositionError
           ? currentComposition
-            ? 'Composed preview · refresh unavailable'
-            : 'Local estimate · composition unavailable'
+            ? translateUi('previewRefreshUnavailable')
+            : translateUi('previewCompositionUnavailable')
           : fidelity;
   // Until the layer list lands, the shell stands in for it from the parse the page holds.
   const defaultComp = parse?.comps.find((c) => c.isDelivery) ?? parse?.comps[0];
@@ -1579,7 +1628,10 @@ export function TemplateLayerEditor({
       onEdit={(change, group) => editAndPersistGesture(target, change, group ?? null)}
       onEditCommit={closeHistoryGroup}
       onValidity={(invalid) =>
-        setLayerValidity((current) => ({ ...current, [layerKey(target)]: invalid }))
+        setLayerValidity((current) => ({
+          ...current,
+          [layerKey(target)]: invalid,
+        }))
       }
     />
   );
@@ -1821,7 +1873,12 @@ export function TemplateLayerEditor({
         height === selectedAuthoringComposition.height)
     )
       return;
-    recordAuthoringCommand({ type: 'artboard.resize', ...target, width, height });
+    recordAuthoringCommand({
+      type: 'artboard.resize',
+      ...target,
+      width,
+      height,
+    });
   };
   const editAuthoredNode = (
     node: NonNullable<typeof selectedNode>,
@@ -2052,7 +2109,11 @@ export function TemplateLayerEditor({
           `Choose an image with the exact ${dependency.width} × ${dependency.height} dimensions required by this package dependency.`,
         );
       if (!requestStillTargetsCurrentSource()) return;
-      recordAuthoringCommand({ type: 'dependency.relink', footageItemId, assetRef });
+      recordAuthoringCommand({
+        type: 'dependency.relink',
+        footageItemId,
+        assetRef,
+      });
       if (attempt === artworkRelinkAttemptRef.current) {
         setArtworkRetryFootageItemId(null);
         setArtworkMessage(
@@ -2093,7 +2154,10 @@ export function TemplateLayerEditor({
   };
   const deleteSelected = () => {
     if (!selectedNode || selectedNode.deleteReason) return;
-    recordAuthoringCommand({ type: 'layer.delete', nodeId: selectedNode.nodeId });
+    recordAuthoringCommand({
+      type: 'layer.delete',
+      nodeId: selectedNode.nodeId,
+    });
     const remaining = baseNodeIds.filter((id) => id !== selectedNode.nodeId);
     setSelected(remaining[0] ?? null);
   };
@@ -2124,7 +2188,10 @@ export function TemplateLayerEditor({
         ? templateAuthoringSourceGroupMemberIds(authoringDocument, selectedNode.nodeId)
         : null);
     if (!memberNodeIds?.length) return;
-    recordAuthoringCommand({ type: 'layer.ungroup', nodeId: selectedNode.nodeId });
+    recordAuthoringCommand({
+      type: 'layer.ungroup',
+      nodeId: selectedNode.nodeId,
+    });
     setSelected(memberNodeIds[0] ?? null);
   };
   const reset = () => {
@@ -2137,7 +2204,7 @@ export function TemplateLayerEditor({
   const save = async (saveTo: TemplateLayerSaveTarget, openAfterSave = true): Promise<boolean> => {
     if (hasUncompiledLifecycle) {
       if (Object.values(layerValidity).some((fields) => fields.length > 0)) {
-        setError('Correct the highlighted layer properties before publishing.');
+        setError(translateUi('correct_the_highlighted_layer_prope_74246957'));
         return false;
       }
       if (
@@ -2148,9 +2215,7 @@ export function TemplateLayerEditor({
         !dirty ||
         !authoringLifecycle.canPublish
       ) {
-        setError(
-          'This authoring change stays private until its exact package passes verification and receives review.',
-        );
+        setError(translateUi('this_authoring_change_stays_private_d7dd38e1'));
         return false;
       }
       let variantName: string | undefined;
@@ -2173,15 +2238,13 @@ export function TemplateLayerEditor({
           ...(variantName ? { name: variantName } : {}),
         });
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : 'Could not save the verified package.');
+        setError(uiErrorText(reason));
         setSaving(false);
         return false;
       }
       const result = committed?.commit;
       if (!result) {
-        setError(
-          'The verified package did not return a saved version. Your private draft is retained.',
-        );
+        setError(translateUi('the_verified_package_did_not_return_3c73e354'));
         setSaving(false);
         return false;
       }
@@ -2202,14 +2265,13 @@ export function TemplateLayerEditor({
       try {
         await onSaved();
       } catch {
-        setError('Package saved as a version. The template list could not refresh.');
+        setError(translateUi('package_saved_as_a_version_the_temp_e254cb90'));
       }
       const stillDirty =
         sourceKeyRef.current.startsWith(`${brandId}:${assetId}:`) &&
         isLayerHistoryDirty(historyRef.current);
       if (saveTo === 'new_variant' && openAfterSave && !stillDirty) onOpenVariant?.(result.assetId);
-      if (stillDirty)
-        setError('The reviewed version was saved. Your newer edits stay in this private draft.');
+      if (stillDirty) setError(translateUi('the_reviewed_version_was_saved_your_85e5045e'));
       setSaving(false);
       return !stillDirty;
     }
@@ -2274,13 +2336,14 @@ export function TemplateLayerEditor({
   if (!effectiveVersionId)
     return (
       <p className="text-xs text-muted-foreground">
-        Import and parse the source to edit its layers.
+        {' '}
+        {translateUi('import_and_parse_the_source_to_edit_14d0109c')}{' '}
       </p>
     );
   return (
     <>
       <section
-        aria-label="Template layer editor"
+        aria-label={translateUi('template_layer_editor_80f96deb')}
         className="flex flex-col overflow-hidden rounded-lg border border-border bg-card [&_.text-3xs]:text-[length:max(12px,0.75rem)] [&_.text-2xs]:text-[length:max(12px,0.75rem)] [&_.text-3xs]:leading-snug [&_.text-2xs]:leading-snug [&_button]:text-[length:max(12px,0.75rem)] [--text-xs:max(12px,0.75rem)] [--text-sm:max(14px,0.875rem)] lg:h-[min(56rem,calc(100dvh-9rem))]"
       >
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -2291,18 +2354,18 @@ export function TemplateLayerEditor({
             {!lineage ? (
               <span role="status" className="text-xs text-muted-foreground">
                 {variants.isError && workspaceSeed
-                  ? 'Template history unavailable'
-                  : 'Loading template history…'}
+                  ? translateUi('template_history_unavailable_2450e04c')
+                  : translateUi('loading_template_history_04797241')}
               </span>
             ) : null}
             {lineage?.role === 'golden' ? (
               <Pill variant="warning">
-                <Lock className="size-3" aria-hidden /> Golden source
+                <Lock className="size-3" aria-hidden /> {translateUi('golden_source_db333f6d')}{' '}
               </Pill>
             ) : null}
             {onVariant ? (
               <Pill variant="violet">
-                <GitFork className="size-3" aria-hidden /> Variant
+                <GitFork className="size-3" aria-hidden /> {translateUi('variant_3f19fe84')}{' '}
               </Pill>
             ) : null}
             {onVariant && lineage?.parent ? (
@@ -2313,14 +2376,15 @@ export function TemplateLayerEditor({
                 disabled={!onOpenVariant}
                 onClick={() => lineage.parent && onOpenVariant?.(lineage.parent.assetId)}
               >
-                of {lineage.parent.name}
+                {' '}
+                {translateUi('of_28391d3b')} {lineage.parent.name}
               </Button>
             ) : null}
             {lineage ? (
               <p className="text-xs text-muted-foreground">
                 {onVariant
-                  ? 'Save writes this variant’s next revision.'
-                  : 'Your original upload stays intact. Publishing creates a variant.'}
+                  ? translateUi('save_writes_this_variant_s_next_rev_17c4186a')
+                  : translateUi('your_original_upload_stays_intact_p_31f2fa01')}
               </p>
             ) : null}
           </div>
@@ -2336,19 +2400,29 @@ export function TemplateLayerEditor({
             ) : null}
             {authoringDraft.status !== 'saved' || authoringDraft.revision > 0 ? (
               <span role="status" aria-live="polite" className="text-2xs text-muted-foreground">
-                {authoringDraft.status === 'loading' ? 'Loading private draft…' : null}
-                {authoringDraft.status === 'saving' ? 'Saving private draft…' : null}
+                {authoringDraft.status === 'loading'
+                  ? translateUi('loading_private_draft_cebce351')
+                  : null}
+                {authoringDraft.status === 'saving'
+                  ? translateUi('saving_private_draft_64568f37')
+                  : null}
                 {authoringDraft.status === 'saved'
-                  ? `Draft saved${authoringDraft.revision ? ` · revision ${authoringDraft.revision}` : ''}`
+                  ? translateUi('draft_saved_value0_197d0b89', {
+                      value0: String(
+                        authoringDraft.revision
+                          ? ` · ${translateUi('revision_value0_76f40621', { value0: authoringDraft.revision })}`
+                          : '',
+                      ),
+                    })
                   : null}
                 {authoringDraft.status === 'unsaved' || authoringDraft.status === 'error'
-                  ? 'Draft not saved'
+                  ? translateUi('draft_not_saved_c535842f')
                   : null}
                 {authoringDraft.status === 'conflict'
-                  ? 'Draft conflict · local copy preserved'
+                  ? translateUi('draft_conflict_local_copy_preserved_16156687')
                   : null}
                 {authoringDraft.status === 'source-mismatch'
-                  ? 'Source changed · local copy preserved'
+                  ? translateUi('source_changed_local_copy_preserved_39644c18')
                   : null}
               </span>
             ) : null}
@@ -2356,7 +2430,8 @@ export function TemplateLayerEditor({
             authoringDraft.status === 'unsaved' ||
             authoringDraft.error ? (
               <Button size="xs" variant="outline" onClick={() => void authoringDraft.retry()}>
-                Retry draft save
+                {' '}
+                {translateUi('retry_draft_save_ed1f81a2')}{' '}
               </Button>
             ) : null}
             <Button
@@ -2366,13 +2441,13 @@ export function TemplateLayerEditor({
               onClick={() => setAgentOpen((open) => !open)}
               data-testid="forge-agent-toggle"
             >
-              <Sparkles data-icon="inline-start" aria-hidden /> Agent
+              <Sparkles data-icon="inline-start" aria-hidden /> {translateUi('agent_11b39c93')}{' '}
             </Button>
             <Button
               size="icon-sm"
               variant="ghost"
-              aria-label="Undo layer change"
-              title="Undo (⌘Z)"
+              aria-label={translateUi('undo_layer_change_532bd931')}
+              title={translateUi('undo_z_9c72706a')}
               disabled={saving || history.past.length === 0}
               onClick={() => moveHistory(undoLayerHistory)}
             >
@@ -2381,15 +2456,17 @@ export function TemplateLayerEditor({
             <Button
               size="icon-sm"
               variant="ghost"
-              aria-label="Redo layer change"
-              title="Redo (⇧⌘Z)"
+              aria-label={translateUi('redo_layer_change_5ab3cec0')}
+              title={translateUi('redo_z_a212a69e')}
               disabled={saving || history.future.length === 0}
               onClick={() => moveHistory(redoLayerHistory)}
             >
               <Redo2 aria-hidden />
             </Button>
             <Button size="sm" variant="ghost" disabled={saving || !dirty} onClick={reset}>
-              <RotateCcw data-icon="inline-start" aria-hidden /> Reset
+              <RotateCcw data-icon="inline-start" aria-hidden /> {translateUi(
+                'reset_daee7606',
+              )}{' '}
             </Button>
           </div>
         </header>
@@ -2400,10 +2477,12 @@ export function TemplateLayerEditor({
             className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs"
             data-testid="hyperframes-seed-attached"
           >
-            <p className="font-medium text-foreground">Private composition workspace attached</p>
+            <p className="font-medium text-foreground">
+              {translateUi('private_composition_workspace_attac_00590fcb')}
+            </p>
             <p className="mt-1 text-muted-foreground">
-              Editing this composition privately. Your original source and published versions stay
-              intact.
+              {' '}
+              {translateUi('editing_this_composition_privately__0bade28b')}{' '}
             </p>
           </div>
         ) : hyperframesRevisionId ? (
@@ -2412,21 +2491,22 @@ export function TemplateLayerEditor({
             data-testid="hyperframes-seed-handoff"
           >
             <p className="font-medium text-foreground">
-              HyperFrames composition ready for this source
+              {' '}
+              {translateUi('hyperframes_composition_ready_for_t_68a15072')}{' '}
             </p>
             <p className="mt-1 text-muted-foreground">
-              Forge will privately stage and verify the composition package, then attach it as this
-              workspace’s editable source. Nothing is published by this step.
+              {' '}
+              {translateUi('forge_will_privately_stage_and_veri_d6f6bb01')}{' '}
             </p>
             {hasUnreconciledLocalCommands ? (
               <p className="mt-2 text-amber-700 dark:text-amber-300">
-                Resolve the saved local recovery copies before attaching a different workspace
-                package. They remain available in the recovery list below.
+                {' '}
+                {translateUi('resolve_the_saved_local_recovery_co_b6c9e7cd')}{' '}
               </p>
             ) : authoringDraft.persistedDraft?.commands.length ? (
               <p className="mt-2 text-amber-700 dark:text-amber-300">
-                Save or reset the existing private authoring commands before attaching the
-                composition.
+                {' '}
+                {translateUi('save_or_reset_the_existing_private__2de505f9')}{' '}
               </p>
             ) : null}
             {seedImportError ? (
@@ -2442,12 +2522,13 @@ export function TemplateLayerEditor({
             >
               {seedImporting ? (
                 <>
-                  <Loader2 className="animate-spin" aria-hidden /> Preparing private workspace…
+                  <Loader2 className="animate-spin" aria-hidden />{' '}
+                  {translateUi('preparing_private_workspace_fced2b6e')}{' '}
                 </>
               ) : canBootstrapEmptyDraft ? (
-                'Create private draft and import'
+                translateUi('create_private_draft_and_import_776ff462')
               ) : (
-                'Import into this Forge workspace'
+                translateUi('import_into_this_forge_workspace_40c30503')
               )}
             </Button>
           </div>
@@ -2457,23 +2538,35 @@ export function TemplateLayerEditor({
           <div role="alert" className="border-b border-border px-3 py-2 text-xs">
             <p className="text-destructive">
               {authoringDraft.serverDraft.requiresReconciliation
-                ? `The pinned source changed. Current source: ${authoringDraft.serverDraft.currentSource.templateSourceVersionId ?? authoringDraft.serverDraft.currentSource.assetHeadVersionId ?? 'unavailable'}. Authoring is paused; both snapshots are preserved.`
-                : 'A newer server draft exists. Both snapshots are preserved; review the differences before choosing one.'}
+                ? translateUi('the_pinned_source_changed_current_s_189e3826', {
+                    value0: String(
+                      authoringDraft.serverDraft.currentSource.templateSourceVersionId ??
+                        authoringDraft.serverDraft.currentSource.assetHeadVersionId ??
+                        'unavailable',
+                    ),
+                  })
+                : translateUi('a_newer_server_draft_exists_both_sn_dbf6fa67')}
             </p>
             <details className="mt-2">
               <summary className="cursor-pointer text-muted-foreground">
-                Review changes in both copies
+                {' '}
+                {translateUi('review_changes_in_both_copies_4a69daaa')}{' '}
               </summary>
               <div className="mt-2 overflow-x-auto rounded-md border border-border">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/60 text-muted-foreground">
                     <tr>
-                      <th className="px-2 py-1.5 font-medium">Layer or setting</th>
                       <th className="px-2 py-1.5 font-medium">
-                        This copy · rev {authoringDraft.revision}
+                        {translateUi('layer_or_setting_dab41ad6')}
                       </th>
                       <th className="px-2 py-1.5 font-medium">
-                        Saved copy · rev {authoringDraft.serverDraft.revision}
+                        {' '}
+                        {translateUi('this_copy_rev_5a2beca3')} {authoringDraft.revision}
+                      </th>
+                      <th className="px-2 py-1.5 font-medium">
+                        {' '}
+                        {translateUi('saved_copy_rev_ff4be5c5')}{' '}
+                        {authoringDraft.serverDraft.revision}
                       </th>
                     </tr>
                   </thead>
@@ -2488,7 +2581,8 @@ export function TemplateLayerEditor({
                     {!draftDifferences.length ? (
                       <tr>
                         <td colSpan={3} className="px-2 py-2 text-muted-foreground">
-                          Both copies contain the same changes.
+                          {' '}
+                          {translateUi('both_copies_contain_the_same_change_e71e52da')}{' '}
                         </td>
                       </tr>
                     ) : null}
@@ -2502,7 +2596,8 @@ export function TemplateLayerEditor({
               className="mt-2"
               onClick={() => void authoringDraft.adoptServerDraft()}
             >
-              Use server draft · keep local recovery
+              {' '}
+              {translateUi('use_server_draft_keep_local_recover_4e8f4ca2')}{' '}
             </Button>
           </div>
         ) : null}
@@ -2510,7 +2605,9 @@ export function TemplateLayerEditor({
           <div className="border-b border-border px-3 py-2 text-xs">
             <details>
               <summary className="cursor-pointer text-muted-foreground">
-                Browse saved recovery copies ({authoringDraft.recoveries.length})
+                {' '}
+                {translateUi('browse_saved_recovery_copies_b05927ef')}
+                {authoringDraft.recoveries.length})
               </summary>
               <ul className="mt-2 grid gap-2">
                 {authoringDraft.recoveries.map((recovery) => (
@@ -2521,22 +2618,35 @@ export function TemplateLayerEditor({
                     <details className="min-w-0 flex-1">
                       <summary className="cursor-pointer text-muted-foreground">
                         {recovery.reason === 'conflict'
-                          ? `Conflict copy · revision ${recovery.revision}${recovery.serverRevision === undefined ? '' : ` / saved ${recovery.serverRevision}`}`
+                          ? translateUi('conflict_copy_revision_value0_value_3a66149c', {
+                              value0: String(recovery.revision),
+                              value1: String(
+                                recovery.serverRevision === undefined
+                                  ? ''
+                                  : ` / saved ${recovery.serverRevision}`,
+                              ),
+                            })
                           : recovery.reason === 'source-change'
-                            ? 'Previous source copy'
-                            : 'Local recovery'}
+                            ? translateUi('previous_source_copy_bf63bbdb')
+                            : translateUi('local_recovery_fba4ee82')}
                         {' · '}
-                        {new Date(recovery.savedAt).toLocaleString()}
-                        {' · source '}
+                        {new Date(recovery.savedAt).toLocaleString(displayLocale)}
+                        {translateUi('sourceRevisionSeparator')}
                         {recovery.scope.baseVersionId.slice(0, 8)}
                       </summary>
                       <div className="mt-2 overflow-x-auto rounded-md border border-border">
                         <table className="w-full text-left text-xs">
                           <thead className="bg-muted/60 text-muted-foreground">
                             <tr>
-                              <th className="px-2 py-1.5 font-medium">Layer or setting</th>
-                              <th className="px-2 py-1.5 font-medium">Recovery copy</th>
-                              <th className="px-2 py-1.5 font-medium">Saved baseline</th>
+                              <th className="px-2 py-1.5 font-medium">
+                                {translateUi('layer_or_setting_dab41ad6')}
+                              </th>
+                              <th className="px-2 py-1.5 font-medium">
+                                {translateUi('recovery_copy_39746b37')}
+                              </th>
+                              <th className="px-2 py-1.5 font-medium">
+                                {translateUi('saved_baseline_8c459c61')}
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2544,6 +2654,11 @@ export function TemplateLayerEditor({
                               recovery.commands,
                               recovery.serverCommands ?? recovery.persistedCommands,
                               authoringLayerNames,
+                              {
+                                t: translateUi,
+                                locale: displayLocale,
+                                present: presentForge,
+                              },
                             ).map((difference, index) => (
                               <tr
                                 key={`${difference.label}:${index}`}
@@ -2562,10 +2677,16 @@ export function TemplateLayerEditor({
                               recovery.commands,
                               recovery.serverCommands ?? recovery.persistedCommands,
                               authoringLayerNames,
+                              {
+                                t: translateUi,
+                                locale: displayLocale,
+                                present: presentForge,
+                              },
                             ).length ? (
                               <tr>
                                 <td colSpan={3} className="px-2 py-2 text-muted-foreground">
-                                  No changes in this copy.
+                                  {' '}
+                                  {translateUi('no_changes_in_this_copy_9067af51')}{' '}
                                 </td>
                               </tr>
                             ) : null}
@@ -2590,10 +2711,10 @@ export function TemplateLayerEditor({
                           onClick={() => void authoringDraft.restoreRecovery(recovery.id)}
                         >
                           {authoringDraft.serverDraft?.requiresReconciliation
-                            ? 'Restore unavailable for changed source'
+                            ? translateUi('restore_unavailable_for_changed_sou_9b3811cb')
                             : !matchesWorkspace
-                              ? 'Different workspace · preserved'
-                              : 'Restore this copy'}
+                              ? translateUi('different_workspace_preserved_fb791d0f')
+                              : translateUi('restore_this_copy_f6a79d58')}
                         </Button>
                       );
                     })()}
@@ -2623,16 +2744,15 @@ export function TemplateLayerEditor({
             role="status"
             className="border-b border-border px-3 py-2 text-xs text-muted-foreground"
           >
-            The source version changed while this draft was open. Your edits stay pinned to the
-            original version; save may report a conflict. Undo all edits or Reset to load the latest
-            version.
+            {' '}
+            {translateUi('the_source_version_changed_while_th_a1457228')}{' '}
           </p>
         ) : null}
 
         <ResizablePanelGroup
           orientation={wideWorkspace ? 'horizontal' : 'vertical'}
           className="min-h-0 flex-1 max-lg:min-h-[70rem]"
-          aria-label="Authoring workspace panes"
+          aria-label={translateUi('authoring_workspace_panes_d9095c49')}
         >
           <ResizablePanel
             id="forge-layers"
@@ -2640,7 +2760,11 @@ export function TemplateLayerEditor({
             minSize={wideWorkspace ? 180 : 220}
             maxSize={wideWorkspace ? '35%' : '45%'}
           >
-            <aside className="flex h-full min-h-0 flex-col" aria-label="Layer workspace" inert={agentRunning}>
+            <aside
+              className="flex h-full min-h-0 flex-col"
+              aria-label={translateUi('layer_workspace_715ab4b5')}
+              inert={agentRunning}
+            >
               <div className="min-h-0 max-h-[55%] shrink overflow-y-auto flex flex-col gap-2 border-b border-border p-2">
                 <Select
                   value={draftArtboardId ? `draft:${draftArtboardId}` : `aep:${shownComp ?? ''}`}
@@ -2662,8 +2786,12 @@ export function TemplateLayerEditor({
                     }
                   }}
                 >
-                  <SelectTrigger size="sm" aria-label="Composition" className="w-full min-w-0">
-                    <SelectValue placeholder="Composition">
+                  <SelectTrigger
+                    size="sm"
+                    aria-label={translateUi('composition_47fca483')}
+                    className="w-full min-w-0"
+                  >
+                    <SelectValue placeholder={translateUi('composition_47fca483')}>
                       <span className="truncate">{compName ?? defaultComp?.name}</span>
                     </SelectValue>
                   </SelectTrigger>
@@ -2673,8 +2801,8 @@ export function TemplateLayerEditor({
                         key={authoringCompositionKey(composition)}
                         value={authoringCompositionKey(composition)}
                       >
-                        {composition.name ?? 'Untitled composition'}
-                        {composition.artboardId ? ' · draft' : ''}
+                        {composition.name ?? translateUi('untitled_composition_17e43c35')}
+                        {composition.artboardId ? translateUi('draft_fb763746') : ''}
                       </SelectItem>
                     )) ??
                       inventoryData?.comps.map((c) => (
@@ -2685,20 +2813,23 @@ export function TemplateLayerEditor({
                   </SelectContent>
                 </Select>
                 <Input
-                  aria-label="Search layers"
-                  placeholder="Search text or layer name"
+                  aria-label={translateUi('search_layers_8e21bbb5')}
+                  placeholder={translateUi('search_text_or_layer_name_64de1dd0')}
                   className="h-8 text-xs"
                   disabled={!inventoryData}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
                 {authoringDraft.sourceDocument ? (
-                  <FieldSet className="flex-row items-center gap-1" aria-label="Create layer tools">
+                  <FieldSet
+                    className="flex-row items-center gap-1"
+                    aria-label={translateUi('create_layer_tools_3cae8b27')}
+                  >
                     <Button
                       size="icon-sm"
                       variant="outline"
-                      aria-label="Add rectangle layer"
-                      title="Add rectangle"
+                      aria-label={translateUi('add_rectangle_layer_b930e582')}
+                      title={translateUi('add_rectangle_debac7c7')}
                       disabled={
                         busy ||
                         staleSource ||
@@ -2712,8 +2843,8 @@ export function TemplateLayerEditor({
                     <Button
                       size="icon-sm"
                       variant="outline"
-                      aria-label="Add ellipse layer"
-                      title="Add ellipse"
+                      aria-label={translateUi('add_ellipse_layer_5d80bb2b')}
+                      title={translateUi('add_ellipse_a2705b78')}
                       disabled={
                         busy ||
                         staleSource ||
@@ -2727,8 +2858,8 @@ export function TemplateLayerEditor({
                     <Button
                       size="icon-sm"
                       variant="outline"
-                      aria-label="Add text layer tools"
-                      title="Add text"
+                      aria-label={translateUi('add_text_layer_tools_f152dea0')}
+                      title={translateUi('add_text_1b4d1003')}
                       disabled={
                         busy ||
                         staleSource ||
@@ -2739,9 +2870,7 @@ export function TemplateLayerEditor({
                         setCreationToolsOpen(true);
                         requestAnimationFrame(() =>
                           document
-                            .querySelector<HTMLInputElement>(
-                              '[aria-label="New text layer content"]',
-                            )
+                            .querySelector<HTMLInputElement>('[data-template-new-text]')
                             ?.focus(),
                         );
                       }}
@@ -2751,8 +2880,8 @@ export function TemplateLayerEditor({
                     <Button
                       size="icon-sm"
                       variant="outline"
-                      aria-label="Add Library image"
-                      title="Add image from Library"
+                      aria-label={translateUi('add_library_image_3317f77f')}
+                      title={translateUi('add_image_from_library_f05d8a94')}
                       disabled={
                         busy ||
                         staleSource ||
@@ -2772,7 +2901,8 @@ export function TemplateLayerEditor({
                   <>
                     <Collapsible open={creationToolsOpen} onOpenChange={setCreationToolsOpen}>
                       <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium hover:bg-accent">
-                        Create and artboard tools
+                        {' '}
+                        {translateUi('create_and_artboard_tools_d9260521')}{' '}
                         <ChevronDown
                           className={`size-3 transition-transform ${creationToolsOpen ? 'rotate-180' : ''}`}
                           aria-hidden
@@ -2780,10 +2910,11 @@ export function TemplateLayerEditor({
                       </CollapsibleTrigger>
                       <CollapsibleContent className="flex flex-col gap-2 border-t border-border p-2">
                         <p className="text-2xs font-medium text-muted-foreground">
-                          Draft artboards
+                          {' '}
+                          {translateUi('draft_artboards_d7bd29e5')}{' '}
                         </p>
                         <Input
-                          aria-label="New artboard name"
+                          aria-label={translateUi('new_artboard_name_aa570c51')}
                           className="h-8 text-xs"
                           maxLength={180}
                           value={newArtboardName}
@@ -2800,7 +2931,7 @@ export function TemplateLayerEditor({
                             }
                             onClick={createArtboard}
                           >
-                            <Plus aria-hidden /> Add artboard
+                            <Plus aria-hidden /> {translateUi('add_artboard_291b8762')}{' '}
                           </Button>
                           <Button
                             size="xs"
@@ -2816,15 +2947,16 @@ export function TemplateLayerEditor({
                             }
                             onClick={duplicateArtboard}
                           >
-                            <Copy aria-hidden /> Duplicate
+                            <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}{' '}
                           </Button>
                         </div>
                         <p className="text-2xs font-medium text-muted-foreground">
-                          Composition size
+                          {' '}
+                          {translateUi('composition_size_06cff32e')}{' '}
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                           <Input
-                            aria-label="Composition width"
+                            aria-label={translateUi('composition_width_49deed4a')}
                             inputMode="numeric"
                             type="number"
                             min={4}
@@ -2840,7 +2972,7 @@ export function TemplateLayerEditor({
                             onChange={(event) => setArtboardWidth(event.target.value)}
                           />
                           <Input
-                            aria-label="Composition height"
+                            aria-label={translateUi('composition_height_2cb6e950')}
                             inputMode="numeric"
                             type="number"
                             min={4}
@@ -2874,14 +3006,19 @@ export function TemplateLayerEditor({
                             }
                             onClick={resizeArtboard}
                           >
-                            Apply composition size
+                            {' '}
+                            {translateUi('apply_composition_size_1a235cde')}{' '}
                           </Button>
                         ) : (
                           <p className="text-2xs text-muted-foreground">
-                            {artboardLockCopy(selectedAuthoringComposition?.artboardReason)}
+                            {presentForge(
+                              artboardLockCopy(selectedAuthoringComposition?.artboardReason) ?? '',
+                            )}
                           </p>
                         )}
-                        <p className="text-2xs font-medium text-muted-foreground">Add shape</p>
+                        <p className="text-2xs font-medium text-muted-foreground">
+                          {translateUi('add_shape_c04644da')}
+                        </p>
                         <div className="grid grid-cols-2 gap-2">
                           <Button
                             size="xs"
@@ -2893,7 +3030,8 @@ export function TemplateLayerEditor({
                             }
                             onClick={() => createShape('rectangle')}
                           >
-                            Rectangle
+                            {' '}
+                            {translateUi('rectangle_03069962')}{' '}
                           </Button>
                           <Button
                             size="xs"
@@ -2905,7 +3043,8 @@ export function TemplateLayerEditor({
                             }
                             onClick={() => createShape('ellipse')}
                           >
-                            Ellipse
+                            {' '}
+                            {translateUi('ellipse_cb1ee8cb')}{' '}
                           </Button>
                         </div>
                         {selectedAuthoringComposition?.shapeCreationReason ? (
@@ -2913,7 +3052,9 @@ export function TemplateLayerEditor({
                             {selectedAuthoringComposition.shapeCreationReason}
                           </p>
                         ) : null}
-                        <p className="text-2xs font-medium text-muted-foreground">Add image</p>
+                        <p className="text-2xs font-medium text-muted-foreground">
+                          {translateUi('add_image_04136060')}
+                        </p>
                         <Button
                           size="xs"
                           variant="outline"
@@ -2925,13 +3066,16 @@ export function TemplateLayerEditor({
                           }
                           onClick={openArtworkCreation}
                         >
-                          <Plus aria-hidden /> Choose from Library
+                          <Plus aria-hidden /> {translateUi('choose_from_library_626d06a7')}{' '}
                         </Button>
-                        <p className="text-2xs font-medium text-muted-foreground">Add text</p>
+                        <p className="text-2xs font-medium text-muted-foreground">
+                          {translateUi('add_text_1b4d1003')}
+                        </p>
                         <Input
-                          aria-label="New text layer content"
+                          data-template-new-text
+                          aria-label={translateUi('new_text_layer_content_5e146501')}
                           className="h-8 text-xs"
-                          placeholder="Text to add"
+                          placeholder={translateUi('text_to_add_34e78489')}
                           value={newText}
                           onChange={(event) => setNewText(event.target.value)}
                         />
@@ -2941,10 +3085,12 @@ export function TemplateLayerEditor({
                         >
                           <SelectTrigger
                             size="sm"
-                            aria-label="Authorized text font"
+                            aria-label={translateUi('authorized_text_font_b25c2974')}
                             className="w-full"
                           >
-                            <SelectValue placeholder="Choose an authorized font">
+                            <SelectValue
+                              placeholder={translateUi('choose_an_authorized_font_377ee9a4')}
+                            >
                               {fontChoice?.postScriptName}
                             </SelectValue>
                           </SelectTrigger>
@@ -2960,22 +3106,27 @@ export function TemplateLayerEditor({
                           </SelectContent>
                         </Select>
                         <p role="status" className="text-2xs text-muted-foreground">
-                          {fontPreview === 'loading' ? 'Verifying authorized font…' : null}
-                          {fontPreview === 'ready' ? 'Exact font verified for preview.' : null}
+                          {fontPreview === 'loading'
+                            ? translateUi('verifying_authorized_font_c254adb4')
+                            : null}
+                          {fontPreview === 'ready'
+                            ? translateUi('exact_font_verified_for_preview_020ec709')
+                            : null}
                           {fontPreview === 'error' ? (
                             <>
-                              <span>This font could not be verified.</span>{' '}
+                              <span>{translateUi('this_font_could_not_be_verified_5265dce3')}</span>{' '}
                               <button
                                 type="button"
                                 className="underline"
                                 onClick={() => setFontRetry((attempt) => attempt + 1)}
                               >
-                                Retry
+                                {' '}
+                                {translateUi('retry_942087cc')}{' '}
                               </button>
                             </>
                           ) : null}
                           {fontPreview === 'idle' && !fontChoice
-                            ? 'No authorized font is available for new text.'
+                            ? translateUi('no_authorized_font_is_available_for_389efeda')
                             : null}
                         </p>
                         <Button
@@ -2991,7 +3142,7 @@ export function TemplateLayerEditor({
                           }
                           onClick={createText}
                         >
-                          <Plus aria-hidden /> Add text layer
+                          <Plus aria-hidden /> {translateUi('add_text_layer_20d15151')}{' '}
                         </Button>
                         {selectedAuthoringComposition?.creationReason ? (
                           <p className="text-2xs text-muted-foreground">
@@ -3010,11 +3161,11 @@ export function TemplateLayerEditor({
                         if (!open) setRepairFootageItemId(null);
                       }}
                       copy={{
-                        title: 'Add Library image',
+                        title: translateUi('add_library_image_3317f77f'),
                         description:
                           repairFootageItemId === null
-                            ? 'Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.'
-                            : 'Choose a verified Library image with the exact format and dimensions required by this package dependency.',
+                            ? translateUi('choose_a_png_or_jpeg_version_alread_5552979d')
+                            : translateUi('choose_a_verified_library_image_wit_4791ceed'),
                         confirm: repairFootageItemId === null ? 'Add image' : 'Relink dependency',
                       }}
                       onPickAssets={handleLibraryAssetPick}
@@ -3031,14 +3182,15 @@ export function TemplateLayerEditor({
                         disabled={busy || staleSource || !canUngroupSelected}
                         title={
                           selectedGroupHasMotion && !canUngroupAnimatedSelected
-                            ? 'Ungroup requires a static group and supported direct-child motion; unsupported or nested animation stays locked.'
+                            ? translateUi('ungroup_requires_a_static_group_and_310426fd')
                             : canUngroupSelected
                               ? undefined
-                              : 'Ungroup needs a verified generated group in this draft with supported 2D transforms.'
+                              : translateUi('ungroup_needs_a_verified_generated__8241e134')
                         }
                         onClick={ungroupSelected}
                       >
-                        Ungroup
+                        {' '}
+                        {translateUi('ungroup_b57ef478')}{' '}
                       </Button>
                     ) : null}
                     <Button
@@ -3049,7 +3201,7 @@ export function TemplateLayerEditor({
                       title={selectedNode.duplicateReason ?? undefined}
                       onClick={duplicateSelected}
                     >
-                      <Copy aria-hidden /> Duplicate
+                      <Copy aria-hidden /> {translateUi('duplicate_02cdaabf')}{' '}
                     </Button>
                     <Button
                       size="xs"
@@ -3059,7 +3211,7 @@ export function TemplateLayerEditor({
                       title={selectedNode.deleteReason ?? undefined}
                       onClick={deleteSelected}
                     >
-                      <Trash2 aria-hidden /> Delete
+                      <Trash2 aria-hidden /> {translateUi('delete_e2d0a549')}{' '}
                     </Button>
                   </div>
                 ) : null}
@@ -3069,8 +3221,10 @@ export function TemplateLayerEditor({
                   <div className="flex items-center justify-between gap-2 px-1 pb-1">
                     <span className="text-2xs text-muted-foreground">
                       {groupSelectionIds.length
-                        ? `${groupSelectionIds.length} group members selected`
-                        : 'Select eligible layers to group'}
+                        ? translateUi('value0_group_members_selected_cf82d785', {
+                            count: Number(groupSelectionIds.length),
+                          })
+                        : translateUi('select_eligible_layers_to_group_d8375144')}
                     </span>
                     <Button
                       size="xs"
@@ -3078,13 +3232,13 @@ export function TemplateLayerEditor({
                       disabled={busy || staleSource || !groupSelectionReady}
                       onClick={createGroup}
                     >
-                      <Layers aria-hidden /> Group
+                      <Layers aria-hidden /> {translateUi('group_34ca0e76')}{' '}
                     </Button>
                   </div>
                 ) : null}
                 {inventoryData ? (
                   <TemplateLayerList
-                    label="Layers"
+                    label={translateUi('layers_0bcd66e6')}
                     rows={rows}
                     selectedId={selectedId}
                     groupSelectionIds={groupSelectionIds}
@@ -3132,13 +3286,14 @@ export function TemplateLayerEditor({
                   >
                     {inventoryError?.message}
                     <Button size="xs" variant="outline" onClick={() => void inventoryRefetch()}>
-                      Retry
+                      {' '}
+                      {translateUi('retry_942087cc')}{' '}
                     </Button>
                   </div>
                 ) : (
                   <div
                     role="status"
-                    aria-label="Reading template layers…"
+                    aria-label={translateUi('reading_template_layers_e90bf666')}
                     className="flex flex-col gap-1 p-1"
                   >
                     {Array.from({ length: Math.min(placeholderRows, 12) }, (_, i) => (
@@ -3149,20 +3304,25 @@ export function TemplateLayerEditor({
               </div>
               {comp?.orderReason || query ? (
                 <p className="border-t border-border p-2 text-2xs text-muted-foreground">
-                  {query ? 'Clear the search to re-order layers.' : comp?.orderReason}
+                  {query
+                    ? translateUi('clear_the_search_to_re_order_layers_191b7218')
+                    : comp?.orderReason}
                 </p>
               ) : null}
             </aside>
           </ResizablePanel>
-          <ResizableHandle withHandle aria-label="Resize layer pane" />
+          <ResizableHandle withHandle aria-label={translateUi('resize_layer_pane_8f9991c3')} />
           <ResizablePanel
             id="forge-canvas"
             defaultSize={wideWorkspace ? '60%' : '45%'}
             minSize={wideWorkspace ? 280 : 320}
           >
-            <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/40" inert={agentRunning}>
+            <div
+              className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/40"
+              inert={agentRunning}
+            >
               <SectionHeader
-                title={compName ?? defaultComp?.name ?? 'Composition'}
+                title={compName ?? defaultComp?.name ?? translateUi('composition_47fca483')}
                 action={
                   <Popover>
                     <PopoverTrigger
@@ -3170,25 +3330,28 @@ export function TemplateLayerEditor({
                         <Button
                           size="icon-xs"
                           variant="ghost"
-                          aria-label="Canvas shortcuts"
-                          title="Canvas shortcuts"
+                          aria-label={translateUi('canvas_shortcuts_263aa1e0')}
+                          title={translateUi('canvas_shortcuts_263aa1e0')}
                         />
                       }
                     >
                       <CircleHelp aria-hidden />
                     </PopoverTrigger>
                     <PopoverContent side="bottom" align="end" className="w-80">
-                      <h3 className="text-sm font-semibold">Canvas shortcuts</h3>
+                      <h3 className="text-sm font-semibold">
+                        {translateUi('canvas_shortcuts_263aa1e0')}
+                      </h3>
                       <ul className="mt-2 flex flex-col gap-1.5 text-xs text-muted-foreground">
-                        <li>Select a layer; hold Shift to select several.</li>
-                        <li>Drag to move. Arrow keys nudge; Shift moves 10 px.</li>
-                        <li>Hold Space and drag to pan. Wheel or plus/minus zooms.</li>
-                        <li>Shift+2 frames the selection; 0 fits the artboard.</li>
-                        <li>Ctrl/Cmd+D duplicates; Delete removes an eligible layer.</li>
-                        <li>Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes.</li>
+                        <li>{translateUi('select_a_layer_hold_shift_to_select_2aadcc8d')}</li>
+                        <li>{translateUi('drag_to_move_arrow_keys_nudge_shift_5c80079d')}</li>
+                        <li>{translateUi('hold_space_and_drag_to_pan_wheel_or_320934e4')}</li>
+                        <li>{translateUi('shift_2_frames_the_selection_0_fits_c19b48a1')}</li>
+                        <li>{translateUi('ctrl_cmd_d_duplicates_delete_remove_8e0ab3be')}</li>
+                        <li>{translateUi('ctrl_cmd_z_undoes_ctrl_cmd_shift_z__89067f60')}</li>
                       </ul>
                       <p className="mt-3 text-xs text-muted-foreground">
-                        Edits save privately. Publishing requires verification and your review.
+                        {' '}
+                        {translateUi('edits_save_privately_publishing_req_535ba746')}{' '}
                       </p>
                     </PopoverContent>
                   </Popover>
@@ -3199,15 +3362,22 @@ export function TemplateLayerEditor({
                     title={selectedNode?.name ?? layer?.name}
                   >
                     {selectedNode || layer
-                      ? `Selected: ${selectedNode?.name ?? selectedNode?.textContent ?? layer?.name ?? 'Layer'}`
-                      : 'Select a layer'}
+                      ? translateUi('selected_value0_d5dd95d0', {
+                          value0: String(
+                            selectedNode?.name ??
+                              selectedNode?.textContent ??
+                              layer?.name ??
+                              translateUi('layer_ac9ffcb2'),
+                          ),
+                        })
+                      : translateUi('select_a_layer_a994c4bb')}
                   </span>
                 }
               />
               <ResizablePanelGroup
                 orientation="vertical"
                 className="min-h-0 flex-1"
-                aria-label="Canvas and timeline panes"
+                aria-label={translateUi('canvas_and_timeline_panes_ffb79853')}
               >
                 <ResizablePanel id="forge-artboard" defaultSize="70%" minSize={100}>
                   <div className="relative flex h-full min-h-0 items-center justify-center p-2">
@@ -3216,12 +3386,20 @@ export function TemplateLayerEditor({
                         markup={markup}
                         selectedText={
                           selectedNode?.capabilities.text && authoringDraft.ready && !staleSource
-                            ? { nodeId: selectedNode.nodeId, text: selectedNode.textContent ?? '' }
+                            ? {
+                                nodeId: selectedNode.nodeId,
+                                text: selectedNode.textContent ?? '',
+                              }
                             : null
                         }
                         onTextChange={(text) => {
                           if (selectedNode)
-                            editAuthoredNode(selectedNode, { text }, `text:${selectedNode.nodeId}`, false);
+                            editAuthoredNode(
+                              selectedNode,
+                              { text },
+                              `text:${selectedNode.nodeId}`,
+                              false,
+                            );
                         }}
                         onTextCommit={closeHistoryGroup}
                         controls={
@@ -3257,7 +3435,11 @@ export function TemplateLayerEditor({
                             editGeneratedGroup(node, edit);
                             return;
                           }
-                          recordAuthoringCommand({ type: 'layer.edit', nodeId, edit });
+                          recordAuthoringCommand({
+                            type: 'layer.edit',
+                            nodeId,
+                            edit,
+                          });
                         }}
                         onDuplicateNode={
                           selectedNode && !selectedNode.duplicateReason && !staleSource
@@ -3330,7 +3512,10 @@ export function TemplateLayerEditor({
                     )}
                   </div>
                 </ResizablePanel>
-                <ResizableHandle withHandle aria-label="Resize timeline pane" />
+                <ResizableHandle
+                  withHandle
+                  aria-label={translateUi('resize_timeline_pane_1e784ab3')}
+                />
                 <ResizablePanel
                   id="forge-timeline"
                   panelRef={timelinePanel}
@@ -3366,9 +3551,8 @@ export function TemplateLayerEditor({
                 </ResizablePanel>
               </ResizablePanelGroup>
               <p id="template-preview-help" className="sr-only">
-                Click a layer for controls. Drag to move; arrow keys nudge, Shift moves 10 px. Edits
-                save privately as you work; version saving stays locked until verification and
-                review.
+                {' '}
+                {translateUi('click_a_layer_for_controls_drag_to__e74a760b')}{' '}
               </p>
               {sceneIsError || compositionError || shownScene?.warnings.length ? (
                 <div className="max-h-24 overflow-y-auto border-t border-border px-3 py-2">
@@ -3389,7 +3573,8 @@ export function TemplateLayerEditor({
                               : baseScene.refetch())
                         }
                       >
-                        Retry preview
+                        {' '}
+                        {translateUi('retry_preview_ceba3527')}{' '}
                       </Button>
                     </div>
                   ) : null}
@@ -3402,7 +3587,7 @@ export function TemplateLayerEditor({
               ) : null}
             </div>
           </ResizablePanel>
-          <ResizableHandle withHandle aria-label="Resize properties pane" />
+          <ResizableHandle withHandle aria-label={translateUi('resize_properties_pane_12502285')} />
           <ResizablePanel
             id="forge-properties"
             defaultSize={wideWorkspace ? '22%' : '30%'}
@@ -3411,7 +3596,7 @@ export function TemplateLayerEditor({
           >
             <aside
               className="h-full min-h-0 overflow-y-auto p-3"
-              aria-label="Properties and repair"
+              aria-label={translateUi('properties_and_repair_427bcfc5')}
               inert={agentRunning}
             >
               {hasUncompiledLifecycle ? (
@@ -3421,7 +3606,8 @@ export function TemplateLayerEditor({
                   className="mb-3 border-b border-border pb-3"
                 >
                   <CollapsibleTrigger className="group flex w-full items-center justify-between text-xs font-medium text-foreground">
-                    Repair and checks
+                    {' '}
+                    {translateUi('repair_and_checks_5f30e53e')}{' '}
                     <ChevronDown
                       className={`size-3 transition-transform ${preparationDetailsOpen ? 'rotate-180' : ''}`}
                       aria-hidden
@@ -3482,8 +3668,8 @@ export function TemplateLayerEditor({
                                 authoringDocument?.nodes.some(
                                   (node) => node.kind === 'artwork' && node.artworkAssetRef,
                                 )
-                                  ? 'Retry pinned preview'
-                                  : 'Choose image again'}
+                                  ? translateUi('retry_pinned_preview_f165aa0a')
+                                  : translateUi('choose_image_again_90df9e7a')}
                               </button>
                             </>
                           ) : null}
@@ -3501,10 +3687,11 @@ export function TemplateLayerEditor({
                       htmlFor="layer-text-content"
                       className="mt-3 flex flex-col gap-1 text-2xs text-muted-foreground"
                     >
-                      Text content
+                      {' '}
+                      {translateUi('text_content_c2462350')}{' '}
                       <Input
                         id="layer-text-content"
-                        aria-label="Layer text content"
+                        aria-label={translateUi('layer_text_content_5f47371c')}
                         maxLength={20000}
                         className="text-xs text-foreground"
                         value={selectedNode.textContent ?? ''}
@@ -3550,16 +3737,24 @@ export function TemplateLayerEditor({
                 <div className="flex flex-col gap-4">
                   <section
                     className="flex flex-col gap-2"
-                    aria-label={`Authored ${selectedNode.kind} layer`}
+                    aria-label={translateUi('authored_value0_layer_96c0deb9', {
+                      value0: String(selectedNode.kind),
+                    })}
                   >
                     <h4 className="text-xs font-medium text-foreground">
-                      {`Authored ${selectedNode.kind}`}
+                      {translateUi('authored_value0_80bee76d', {
+                        value0: String(selectedNode.kind),
+                      })}
                     </h4>
-                    <p className="text-sm font-medium">{selectedNode.name ?? 'New layer'}</p>
+                    <p className="text-sm font-medium">
+                      {selectedNode.name ?? translateUi('new_layer_66afc01a')}
+                    </p>
                     {selectedNode.kind === 'shape' && selectedNode.shape && selectedNode.size ? (
                       <p className="text-2xs text-muted-foreground">
-                        {selectedNode.shape === 'rectangle' ? 'Rectangle' : 'Ellipse'} ·{' '}
-                        {selectedNode.size[0]} × {selectedNode.size[1]} px
+                        {selectedNode.shape === 'rectangle'
+                          ? translateUi('rectangle_03069962')
+                          : translateUi('ellipse_cb1ee8cb')}{' '}
+                        · {selectedNode.size[0]} × {selectedNode.size[1]} px
                       </p>
                     ) : null}
                     {selectedNode.textContent !== null ? (
@@ -3575,10 +3770,11 @@ export function TemplateLayerEditor({
                         htmlFor="draft-text-content"
                         className="flex flex-col gap-1 text-2xs text-muted-foreground"
                       >
-                        Text content
+                        {' '}
+                        {translateUi('text_content_c2462350')}{' '}
                         <Input
                           id="draft-text-content"
-                          aria-label="Draft text content"
+                          aria-label={translateUi('draft_text_content_3a374b4c')}
                           maxLength={20000}
                           className="text-xs text-foreground"
                           value={selectedNode.textContent ?? ''}
@@ -3599,12 +3795,19 @@ export function TemplateLayerEditor({
                   {selectedNode.capabilities.transform ||
                   (selectedNode.kind === 'group' &&
                     (canMutateSelectedGroup || selectedGroupHasMotion)) ? (
-                    <section className="grid grid-cols-2 gap-2" aria-label="Draft layer transform">
+                    <section
+                      className="grid grid-cols-2 gap-2"
+                      aria-label={translateUi('draft_layer_transform_019a87f8')}
+                    >
                       {(['X', 'Y'] as const).map((axis, index) => (
                         <NumberScrubField
                           key={axis}
-                          label={`${axis} position`}
-                          ariaLabel={`${axis} position`}
+                          label={translateUi('value0_position_0178c1ee', {
+                            value0: String(axis),
+                          })}
+                          ariaLabel={translateUi('value0_position_0178c1ee', {
+                            value0: String(axis),
+                          })}
                           suffix="px"
                           value={selectedNode.position?.[index] ?? 0}
                           disabled={
@@ -3637,8 +3840,8 @@ export function TemplateLayerEditor({
                       {selectedNode.kind !== 'group' ? (
                         <>
                           <NumberScrubField
-                            label="Rotation"
-                            ariaLabel="Draft rotation"
+                            label={translateUi('rotation_57b5e2fc')}
+                            ariaLabel={translateUi('draftRotationLabel')}
                             suffix="°"
                             step={0.1}
                             min={-36_000}
@@ -3660,8 +3863,8 @@ export function TemplateLayerEditor({
                             onCommit={closeHistoryGroup}
                           />
                           <NumberScrubField
-                            label="Opacity"
-                            ariaLabel="Draft opacity"
+                            label={translateUi('opacity_6062652e')}
+                            ariaLabel={translateUi('draftOpacityLabel')}
                             suffix="%"
                             min={0}
                             max={100}
@@ -3684,8 +3887,12 @@ export function TemplateLayerEditor({
                           {(['X', 'Y'] as const).map((axis, index) => (
                             <NumberScrubField
                               key={axis}
-                              label={`Scale ${axis}`}
-                              ariaLabel={`Draft scale ${axis}`}
+                              label={translateUi('scale_value0_cc2c926a', {
+                                value0: String(axis),
+                              })}
+                              ariaLabel={translateUi('draftScaleAxisLabel', {
+                                axis,
+                              })}
                               suffix="%"
                               step={0.1}
                               min={0.01}
@@ -3720,14 +3927,14 @@ export function TemplateLayerEditor({
                             <p className="col-span-2 text-2xs text-muted-foreground">
                               {selectedGroupHasMotion
                                 ? canUngroupSelected
-                                  ? 'Group transform controls stay locked while this group contains motion. Ungroup can bake only a constant translation into supported direct-child tracks.'
-                                  : 'Static group edits and ungroup are locked while unsupported or nested motion must stay intact.'
-                                : 'Group transforms and ungroup stay locked until native writer readback verifies this group structure.'}
+                                  ? translateUi('group_transform_controls_stay_locke_57527071')
+                                  : translateUi('static_group_edits_and_ungroup_are__6d289ac9')
+                                : translateUi('group_transforms_and_ungroup_stay_l_9afc3f1e')}
                             </p>
                           ) : null}
                           <NumberScrubField
-                            label="Group rotation"
-                            ariaLabel="Group rotation"
+                            label={translateUi('group_rotation_db26a144')}
+                            ariaLabel={translateUi('group_rotation_db26a144')}
                             suffix="°"
                             step={0.1}
                             min={-36_000}
@@ -3750,8 +3957,12 @@ export function TemplateLayerEditor({
                           {(['X', 'Y'] as const).map((axis, index) => (
                             <NumberScrubField
                               key={axis}
-                              label={`Group scale ${axis}`}
-                              ariaLabel={`Group scale ${axis}`}
+                              label={translateUi('group_scale_value0_e870382f', {
+                                value0: String(axis),
+                              })}
+                              ariaLabel={translateUi('group_scale_value0_e870382f', {
+                                value0: String(axis),
+                              })}
                               suffix="%"
                               step={0.1}
                               min={0.01}
@@ -3809,14 +4020,15 @@ export function TemplateLayerEditor({
                       htmlFor="draft-text-size"
                       className="flex flex-col gap-1 text-2xs text-muted-foreground"
                     >
-                      Text size
+                      {' '}
+                      {translateUi('text_size_d68761cc')}{' '}
                       <Input
                         id="draft-text-size"
                         type="number"
                         min={1}
                         max={1000}
                         className="h-8 text-xs text-foreground"
-                        aria-label="Draft text size"
+                        aria-label={translateUi('draft_text_size_5c111679')}
                         value={selectedNode.fontSize ?? 48}
                         onChange={(event) => {
                           const value = Number(event.target.value);
@@ -3828,12 +4040,15 @@ export function TemplateLayerEditor({
                   ) : null}
                   {!selectedNode.capabilities.transform && !selectedNode.capabilities.font ? (
                     <p className="text-xs text-muted-foreground">
-                      Controls become available after the server confirms writer support.
+                      {' '}
+                      {translateUi('controls_become_available_after_the_2efe2651')}{' '}
                     </p>
                   ) : null}
                 </div>
               ) : inventoryData ? (
-                <p className="text-xs text-muted-foreground">Select a layer to edit it.</p>
+                <p className="text-xs text-muted-foreground">
+                  {translateUi('select_a_layer_to_edit_it_7dcdc450')}
+                </p>
               ) : (
                 <div className="flex flex-col gap-3" aria-hidden>
                   <Skeleton className="h-5 w-32" />
@@ -3847,7 +4062,8 @@ export function TemplateLayerEditor({
               )}
               {fonts.isError ? (
                 <p role="alert" className="mt-3 text-xs text-destructive">
-                  Available font faces could not be loaded.
+                  {' '}
+                  {translateUi('available_font_faces_could_not_be_l_afa93115')}{' '}
                 </p>
               ) : null}
               {templateKey ? (
@@ -3863,7 +4079,8 @@ export function TemplateLayerEditor({
                 className="mt-5 border-t border-border pt-3"
               >
                 <CollapsibleTrigger className="group flex w-full items-center justify-between text-xs font-medium text-foreground">
-                  Fields each render row asks for
+                  {' '}
+                  {translateUi('fields_each_render_row_asks_for_fa55a962')}{' '}
                   <ChevronDown
                     className="size-3 transition-transform group-data-[panel-open]:rotate-180"
                     aria-hidden
@@ -3873,7 +4090,8 @@ export function TemplateLayerEditor({
                   {fields.isPending ? <Skeleton className="h-16 w-full" /> : null}
                   {fields.isError ? (
                     <p role="alert" className="text-xs text-destructive">
-                      Template fields could not be loaded.
+                      {' '}
+                      {translateUi('template_fields_could_not_be_loaded_07238082')}{' '}
                     </p>
                   ) : null}
                   {fields.data?.variables.map((field) => (
@@ -3887,10 +4105,15 @@ export function TemplateLayerEditor({
                         disabled={field.reserved || !authoringDraft.ready || staleSource}
                         checked={exposures[field.key] ?? field.exposed ?? true}
                         onCheckedChange={(exposed) => {
-                          const next = { ...historyRef.current.present.exposures };
+                          const next = {
+                            ...historyRef.current.present.exposures,
+                          };
                           if (exposed === (field.exposed ?? true)) delete next[field.key];
                           else next[field.key] = exposed;
-                          let snapshot = { ...historyRef.current.present, exposures: next };
+                          let snapshot = {
+                            ...historyRef.current.present,
+                            exposures: next,
+                          };
                           snapshot = appendLayerDraftCommand(snapshot, {
                             type: 'exposure.set',
                             slotKey: field.key,
@@ -3911,14 +4134,17 @@ export function TemplateLayerEditor({
           </ResizablePanel>
           {agentOpen ? (
             <>
-              <ResizableHandle withHandle aria-label="Resize agent pane" />
+              <ResizableHandle withHandle aria-label={translateUi('resize_agent_pane_eaf6050a')} />
               <ResizablePanel
                 id="forge-agent"
                 defaultSize={wideWorkspace ? '24%' : '35%'}
                 minSize={wideWorkspace ? 260 : 300}
                 maxSize={wideWorkspace ? '45%' : '60%'}
               >
-                <aside className="h-full min-h-0 border-l border-border" aria-label="Template agent">
+                <aside
+                  className="h-full min-h-0 border-l border-border"
+                  aria-label={translateUi('template_agent_74ff2573')}
+                >
                   <ForgeAgentPanel
                     assetId={assetId}
                     brandId={brandId}
@@ -3944,7 +4170,7 @@ export function TemplateLayerEditor({
                   {authoringLifecycle.artifact ? (
                     <span className="font-normal text-muted-foreground">
                       {' '}
-                      · revision {authoringLifecycle.artifact.draftRevision}
+                      {translateUi('revision_c281c642')} {authoringLifecycle.artifact.draftRevision}
                     </span>
                   ) : null}
                 </p>
@@ -3957,19 +4183,21 @@ export function TemplateLayerEditor({
               </div>
               {preparationSummary.action === 'fonts' && onOpenFontRepair ? (
                 <Button size="xs" variant="outline" onClick={onOpenFontRepair}>
-                  Resolve fonts
+                  {' '}
+                  {translateUi('resolve_fonts_1272847e')}{' '}
                 </Button>
               ) : preparationSummary.action === 'save' && authoringDraft.status === 'error' ? (
                 <Button size="xs" variant="outline" onClick={() => void authoringDraft.retry()}>
-                  Retry draft save
+                  {' '}
+                  {translateUi('retry_draft_save_ed1f81a2')}{' '}
                 </Button>
               ) : preparationSummary.action === 'checks' ? (
                 <Button size="xs" variant="outline" onClick={showRepair}>
                   {preparationSummary.label.includes('Artwork')
-                    ? 'Relink artwork'
+                    ? translateUi('relink_artwork_82ae8da6')
                     : preparationSummary.label.includes('format')
-                      ? 'Review format checks'
-                      : 'Review checks'}
+                      ? translateUi('review_format_checks_0b5b9ae0')
+                      : translateUi('review_checks_549fc190')}
                 </Button>
               ) : null}
               <Button
@@ -3979,7 +4207,9 @@ export function TemplateLayerEditor({
                 className="shrink-0"
                 onClick={() => setPreparationDetailsOpen((open) => !open)}
               >
-                {preparationDetailsOpen ? 'Hide preparation details' : 'Show preparation details'}
+                {preparationDetailsOpen
+                  ? translateUi('hide_preparation_details_4359e51a')
+                  : translateUi('show_preparation_details_bc5cbaf7')}
               </Button>
             </div>
           ) : null}
@@ -3992,7 +4222,7 @@ export function TemplateLayerEditor({
           >
             <div className="min-w-48 flex-1 flex flex-col gap-1">
               <Input
-                aria-label="Variant name"
+                aria-label={translateUi('variant_name_0f204472')}
                 className="h-8 text-xs"
                 disabled={saving}
                 {...form.register('name')}
@@ -4015,8 +4245,8 @@ export function TemplateLayerEditor({
                 }
                 onClick={() => void save('this_variant')}
               >
-                {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
-                Review and publish revision
+                {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
+                {translateUi('review_and_publish_revision_05597d26')}{' '}
               </Button>
             ) : null}
             <Button
@@ -4033,14 +4263,20 @@ export function TemplateLayerEditor({
               {saving && !onVariant ? (
                 <Loader2 className="animate-spin" data-icon="inline-start" />
               ) : null}
-              {onVariant ? 'Review and publish new variant' : 'Review and publish variant'}
+              {onVariant
+                ? translateUi('review_and_publish_new_variant_88a645d3')
+                : translateUi('review_and_publish_variant_6e1ebfbb')}
             </Button>
           </form>
           {savedVariant ? (
             <div role="status" className="flex items-center gap-2 text-xs">
               {savedVariant.published
-                ? `Published ${savedVariant.name}.`
-                : `Version created for ${savedVariant.name} · publication confirmation pending.`}
+                ? translateUi('published_value0_96c8bd6a', {
+                    value0: String(savedVariant.name),
+                  })
+                : translateUi('version_created_for_value0_publicat_3b319f75', {
+                    value0: String(savedVariant.name),
+                  })}
               <Button
                 size="xs"
                 variant="ghost"
@@ -4049,17 +4285,19 @@ export function TemplateLayerEditor({
                     await onSaved();
                     onOpenVariant?.(savedVariant.assetId);
                   } catch {
-                    setError('Variant saved. The template list could not refresh. Try again.');
+                    setError(translateUi('variant_saved_the_template_list_cou_7c9618c9'));
                   }
                 }}
               >
-                Open variant
+                {' '}
+                {translateUi('open_variant_a9b56930')}{' '}
               </Button>
             </div>
           ) : null}
           <Collapsible open={variantsOpen} onOpenChange={setVariantsOpen}>
             <CollapsibleTrigger className="group flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground">
-              Variants of this template
+              {' '}
+              {translateUi('variants_of_this_template_6103d548')}{' '}
               <ChevronDown
                 className="size-3 transition-transform group-data-[panel-open]:rotate-180"
                 aria-hidden
@@ -4067,7 +4305,9 @@ export function TemplateLayerEditor({
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-wrap items-center gap-1 pt-1 text-2xs text-muted-foreground">
               {variants.isPending ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-              {variants.isSuccess && !variantChoices.length ? 'None yet.' : null}
+              {variants.isSuccess && !variantChoices.length
+                ? translateUi('none_yet_bd3ce633')
+                : null}
               {variantChoices.map((v) => (
                 <Button
                   key={v.assetId}

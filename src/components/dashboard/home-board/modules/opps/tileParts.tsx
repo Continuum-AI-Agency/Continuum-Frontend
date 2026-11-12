@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // Small pieces the Opportunities, Overnight and checklist tiles draw alike.
 
@@ -14,11 +15,13 @@ export const ROW_LINK = 'hit-area py-0.5 underline-offset-2 hover:underline';
 
 /** A read that failed: what the tile cannot say, and a Retry. */
 export function TileReadError({ children, onRetry }: { children: ReactNode; onRetry: () => void }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <div className="flex flex-col items-start gap-2" data-testid="home-tile-error" role="alert">
       <p className="text-muted-foreground text-xs leading-snug">{children}</p>
       <Button onClick={onRetry} size="xs" type="button" variant="outline">
-        Retry
+        {betaUiText('beta_942087cc2d41')}
       </Button>
     </div>
   );

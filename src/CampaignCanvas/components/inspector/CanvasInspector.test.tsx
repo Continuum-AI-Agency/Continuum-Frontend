@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
-import { useCampaignStore } from '../../stores/useCampaignStore';
+import { render } from '@/i18n/__tests__/render';
 import type { CanvasHydration } from '@/lib/campaign-canvas/hydrate';
+import { useCampaignStore } from '../../stores/useCampaignStore';
 import type { AdData, CampaignCanvasNode } from '../../types';
 import { CanvasInspector } from './CanvasInspector';
 
@@ -109,7 +110,12 @@ describe('CanvasInspector', () => {
       type: 'audience',
       position: { x: 0, y: 0 },
       selected: true,
-      data: { label: 'Lapsed buyers', mode: 'broad', locations: ['MX'], validationStatus: 'valid' },
+      data: {
+        label: 'Lapsed buyers',
+        mode: 'broad',
+        locations: ['MX'],
+        validationStatus: 'valid',
+      },
     };
     cleanup();
     load([audience]);
@@ -143,7 +149,10 @@ describe('CanvasInspector', () => {
 });
 
 describe('CanvasInspector — budget mode, bid, schedule, event, URL tags (P5)', () => {
-  const campaignNode = (selected: boolean, data: Record<string, unknown> = {}): CampaignCanvasNode => ({
+  const campaignNode = (
+    selected: boolean,
+    data: Record<string, unknown> = {},
+  ): CampaignCanvasNode => ({
     id: 'campaign',
     type: 'campaign',
     position: { x: 0, y: 0 },
@@ -157,7 +166,10 @@ describe('CanvasInspector — budget mode, bid, schedule, event, URL tags (P5)',
       ...data,
     },
   });
-  const adSetNode = (selected: boolean, data: Record<string, unknown> = {}): CampaignCanvasNode => ({
+  const adSetNode = (
+    selected: boolean,
+    data: Record<string, unknown> = {},
+  ): CampaignCanvasNode => ({
     id: 'adset',
     type: 'ad-set',
     position: { x: 0, y: 300 },
@@ -184,7 +196,10 @@ describe('CanvasInspector — budget mode, bid, schedule, event, URL tags (P5)',
       editLocked: false,
     });
   const dataOf = (id: string) =>
-    useCampaignStore.getState().nodes.find((node) => node.id === id)?.data as Record<string, unknown>;
+    useCampaignStore.getState().nodes.find((node) => node.id === id)?.data as Record<
+      string,
+      unknown
+    >;
   const commit = async (testId: string, value: string) => {
     const input = screen.getByTestId(testId) as HTMLInputElement;
     await act(async () => {
@@ -234,7 +249,12 @@ describe('CanvasInspector — budget mode, bid, schedule, event, URL tags (P5)',
 
   it('under CBO hides the ad set budget and strategy, keeping its own cap when the campaign is capped', async () => {
     loadGraph([
-      campaignNode(false, { budgetMode: 'cbo', campaignBudgetAmount: 120, bidStrategy: 'COST_CAP', bidAmount: 18 }),
+      campaignNode(false, {
+        budgetMode: 'cbo',
+        campaignBudgetAmount: 120,
+        bidStrategy: 'COST_CAP',
+        bidAmount: 18,
+      }),
       adSetNode(true),
     ]);
     await renderInspector();
@@ -266,7 +286,11 @@ describe('CanvasInspector — budget mode, bid, schedule, event, URL tags (P5)',
     await commit('inspector-field-pixelId', ' 123456789012 ');
     expect(dataOf('adset')).toMatchObject({
       pixelId: '123456789012',
-      fieldProvenance: { start_time: 'user_gave', end_time: 'user_gave', pixel_id: 'user_gave' },
+      fieldProvenance: {
+        start_time: 'user_gave',
+        end_time: 'user_gave',
+        pixel_id: 'user_gave',
+      },
     });
   });
 

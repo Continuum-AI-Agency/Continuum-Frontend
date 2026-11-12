@@ -24,7 +24,7 @@ import {
   Undo2,
   Waves,
 } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -67,8 +67,10 @@ import {
   VIDEO_STUDIO_ASSET_DRAG_TYPE,
   type VideoStudioContext,
 } from '@/components/video-studio/types';
+import { Link } from '@/i18n/navigation';
 import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import { cn } from '@/lib/utils';
+import { useStudioMetadata } from '@/StudioCanvas/hooks/useStudioMetadata';
 import type { TimelineInputSource } from '../../../types';
 import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
 import { probeAudioDuration, probeVideoDuration } from '../mediaProbe';
@@ -159,6 +161,10 @@ export function EditWorkspace({
   productionAvailable: boolean;
   onOpenProduction: () => void;
 }) {
+  const registryText = useStudioMetadata();
+
+  const translateUi = useUiTranslations('studio');
+
   const { project, apply, runOp, undo, redo, canUndo, canRedo, busy, refresh } = controller;
   const { show } = useToast();
   const [store] = useState(createPlayheadStore);
@@ -264,7 +270,11 @@ export function EditWorkspace({
       apply((current) => {
         if (placesFirstFootage(current, asset)) offerFor.current = asset.assetId;
         const atSec = at?.atSec ?? store.getSec();
-        if (!at?.newTrack) return placeAssetEdit(current, asset, { atSec, trackId: at?.trackId });
+        if (!at?.newTrack)
+          return placeAssetEdit(current, asset, {
+            atSec,
+            trackId: at?.trackId,
+          });
         const add = addTrackDraft(current, laneKindForAsset(asset));
         if (add.commandType !== 'add_track') return null;
         const placed = placeAssetEdit(
@@ -301,7 +311,9 @@ export function EditWorkspace({
         } catch (error) {
           if (offerFor.current === asset.assetId) offerFor.current = null;
           show({
-            title: `Could not add ${asset.title}`,
+            title: translateUi('could_not_add_value0_1e1a11d7', {
+              value0: String(asset.title),
+            }),
             description: errorText(error),
             variant: 'error',
           });
@@ -311,7 +323,7 @@ export function EditWorkspace({
       placements.current = next;
       return next;
     },
-    [runOp, show, store],
+    [runOp, show, store, translateUi],
   );
 
   // The canvas node already counts what is wired into it ("4 inputs · 4 clips"), but those
@@ -329,12 +341,12 @@ export function EditWorkspace({
       }
     })().catch((error) =>
       show({
-        title: 'Could not add the clips wired on the canvas',
+        title: translateUi('could_not_add_the_clips_wired_on_th_51bd513b'),
         description: errorText(error),
         variant: 'error',
       }),
     );
-  }, [origin, runOp, show]);
+  }, [origin, runOp, show, translateUi]);
 
   const importFiles = useCallback(
     (files: readonly File[], at?: { atSec: number; trackId?: string }) => {
@@ -351,7 +363,9 @@ export function EditWorkspace({
           })
           .catch((error) =>
             show({
-              title: `Could not import ${file.name}`,
+              title: translateUi('could_not_import_value0_ec2b3e9a', {
+                value0: String(file.name),
+              }),
               description: errorText(error),
               variant: 'error',
             }),
@@ -359,7 +373,7 @@ export function EditWorkspace({
           .finally(() => setImporting((current) => current.filter((item) => item.id !== id)));
       }
     },
-    [placeImported, brandId, show],
+    [placeImported, brandId, show, translateUi],
   );
 
   /** Motion ops report only failure; success is on the stage and the timeline already. */
@@ -368,11 +382,17 @@ export function EditWorkspace({
       try {
         return await run();
       } catch (error) {
-        show({ title: `${label} failed`, description: errorText(error), variant: 'error' });
+        show({
+          title: translateUi('value0_failed_afc83119', {
+            value0: String(label),
+          }),
+          description: errorText(error),
+          variant: 'error',
+        });
         return undefined;
       }
     },
-    [show],
+    [show, translateUi],
   );
 
   const placeTemplate = useCallback(
@@ -417,12 +437,21 @@ export function EditWorkspace({
     async (label: string, run: () => Promise<unknown>) => {
       try {
         const output = (await run()) as { commit?: { summary?: string } } | undefined;
-        show({ title: label, description: output?.commit?.summary ?? 'Done.' });
+        show({
+          title: label,
+          description: output?.commit?.summary ?? translateUi('done_ed251864'),
+        });
       } catch (error) {
-        show({ title: `${label} failed`, description: errorText(error), variant: 'error' });
+        show({
+          title: translateUi('value0_failed_afc83119', {
+            value0: String(label),
+          }),
+          description: errorText(error),
+          variant: 'error',
+        });
       }
     },
-    [show],
+    [show, translateUi],
   );
   const detectBeats = useCallback(
     (clipId?: string) =>
@@ -560,9 +589,20 @@ export function EditWorkspace({
         getPlayheadSec: store.getSec,
         runOp,
         runQuiet,
+        ui: { t: translateUi, metadata: registryText },
       }),
     };
-  }, [apply, cutPauses, deleteClips, detectBeats, runOp, runQuiet, store]);
+  }, [
+    apply,
+    cutPauses,
+    deleteClips,
+    detectBeats,
+    runOp,
+    runQuiet,
+    store,
+    registryText,
+    translateUi,
+  ]);
 
   const onAddTrack = useCallback(
     (kind: LaneKind) => void apply((current) => addTrackEdit(current, kind)),
@@ -609,7 +649,7 @@ export function EditWorkspace({
   const presetId = project.exportSettings.presetId as PlatformExportPresetId | undefined;
   const formatLabel =
     presetId && presetId in PLATFORM_EXPORT_PRESETS
-      ? PLATFORM_EXPORT_PRESETS[presetId].label
+      ? registryText(PLATFORM_EXPORT_PRESETS[presetId].label)
       : `${project.canvas.width}×${project.canvas.height}`;
   const sources = useMemo(() => projectSources(project, imported), [imported, project]);
   const previewForAsset = useCallback(
@@ -658,60 +698,92 @@ export function EditWorkspace({
   const transitionsFromSelected = orderedVideoClips(mainVideoTrack(project))
     .slice(0, -1)
     .some((clip) => clip.id === selectedId);
-  const paletteGroups = useMemo((): Array<{ heading: string; actions: PaletteAction[] }> => {
+  const paletteGroups = useMemo((): Array<{
+    heading: string;
+    actions: PaletteAction[];
+  }> => {
     const key = TIMELINE_SHORTCUT_KEYS;
     const run = (shortcut: TimelineShortcut) => () => void shortcuts[shortcut]?.();
     return [
       {
-        heading: 'Timeline',
+        heading: translateUi('timeline_9dcff98e'),
         actions: [
-          { id: 'play', label: 'Play / pause', shortcut: key.togglePlay, run: run('togglePlay') },
-          { id: 'split', label: 'Split at playhead', shortcut: key.split, run: run('split') },
+          {
+            id: 'play',
+            label: translateUi('play_pause_d42bcb22'),
+            shortcut: key.togglePlay,
+            run: run('togglePlay'),
+          },
+          {
+            id: 'split',
+            label: translateUi('split_at_playhead_c4a4b9c3'),
+            shortcut: key.split,
+            run: run('split'),
+          },
           {
             id: 'trim-start',
-            label: 'Trim start to playhead',
+            label: translateUi('trim_start_to_playhead_cde78870'),
             shortcut: key.trimStartToPlayhead,
             run: run('trimStartToPlayhead'),
           },
           {
             id: 'trim-end',
-            label: 'Trim end to playhead',
+            label: translateUi('trim_end_to_playhead_8cd297c2'),
             shortcut: key.trimEndToPlayhead,
             run: run('trimEndToPlayhead'),
           },
           {
             id: 'ripple',
-            label: 'Ripple delete selection',
+            label: translateUi('ripple_delete_selection_8af78f4f'),
             shortcut: key.rippleDelete,
             disabled: !hasSelection,
             run: run('rippleDelete'),
           },
           {
             id: 'copy',
-            label: 'Copy selection',
+            label: translateUi('copy_selection_63a5c4dc'),
             shortcut: key.copy,
             disabled: !hasSelection,
             run: run('copy'),
           },
-          { id: 'paste', label: 'Paste at playhead', shortcut: key.paste, run: run('paste') },
+          {
+            id: 'paste',
+            label: translateUi('paste_at_playhead_a0dfec15'),
+            shortcut: key.paste,
+            run: run('paste'),
+          },
           {
             id: 'duplicate',
-            label: 'Duplicate selection',
+            label: translateUi('duplicate_selection_907adf3e'),
             shortcut: key.duplicate,
             disabled: !hasSelection,
             run: run('duplicate'),
           },
           {
             id: 'marker',
-            label: 'Add marker at playhead',
+            label: translateUi('add_marker_at_playhead_1e77d8db'),
             shortcut: key.marker,
             run: run('marker'),
           },
-          { id: 'undo', label: 'Undo', shortcut: key.undo, disabled: !canUndo, run: run('undo') },
-          { id: 'redo', label: 'Redo', shortcut: key.redo, disabled: !canRedo, run: run('redo') },
+          {
+            id: 'undo',
+            label: translateUi('undo_a8283ade'),
+            shortcut: key.undo,
+            disabled: !canUndo,
+            run: run('undo'),
+          },
+          {
+            id: 'redo',
+            label: translateUi('redo_74273989'),
+            shortcut: key.redo,
+            disabled: !canRedo,
+            run: run('redo'),
+          },
           ...(['video', 'overlay', 'text', 'caption', 'audio'] as const).map((kind) => ({
             id: `track-${kind}`,
-            label: `Add ${kind === 'caption' ? 'captions' : kind} track`,
+            label: translateUi('add_value0_track_1def92d9', {
+              value0: String(kind === 'caption' ? 'captions' : kind),
+            }),
             run: () => onAddTrack(kind),
           })),
         ],
@@ -719,10 +791,26 @@ export function EditWorkspace({
       {
         heading: 'Quick edits',
         actions: [
-          { id: 'cut-pauses', label: 'Cut pauses', run: () => void cutPauses() },
-          { id: 'captions', label: 'Auto-captions', run: () => void autoCaptions() },
-          { id: 'beat-cut', label: 'Quick cuts on the beat', run: () => void cutOnBeat() },
-          { id: 'beats', label: 'Detect beats', run: () => void detectBeats() },
+          {
+            id: 'cut-pauses',
+            label: translateUi('cut_pauses_ded96bea'),
+            run: () => void cutPauses(),
+          },
+          {
+            id: 'captions',
+            label: translateUi('auto_captions_90ab215c'),
+            run: () => void autoCaptions(),
+          },
+          {
+            id: 'beat-cut',
+            label: translateUi('quick_cuts_on_the_beat_f0077c4e'),
+            run: () => void cutOnBeat(),
+          },
+          {
+            id: 'beats',
+            label: translateUi('detect_beats_a8d9bcb5'),
+            run: () => void detectBeats(),
+          },
         ],
       },
       ...motionPaletteGroups({
@@ -731,24 +819,52 @@ export function EditWorkspace({
         actions: clipActions,
         placeTemplate: onPlaceTemplate,
         openTextTab: () => setLeftTab('text'),
+        ui: { t: translateUi, metadata: registryText },
       }),
       {
-        heading: 'Format',
+        heading: translateUi('format_2f343666'),
         actions: Object.values(PLATFORM_EXPORT_PRESETS).map((preset) => ({
           id: `format-${preset.id}`,
-          label: `Format for ${preset.label} (${preset.width}×${preset.height})`,
+          label: translateUi('format_for_value0_value1_value2_0458da0c', {
+            value0: String(registryText(preset.label)),
+            value1: String(preset.width),
+            value2: String(preset.height),
+          }),
           run: () => void setFormat(preset.id),
         })),
       },
       {
-        heading: 'Project',
+        heading: translateUi('project_98595978'),
         actions: [
-          { id: 'first-cut', label: 'First cut from a brief…', run: () => openBrief() },
-          { id: 'export', label: 'Export…', disabled: !canExport, run: () => setExportOpen(true) },
-          { id: 'agent', label: 'Ask the agent', run: () => setRightTab('agent') },
-          { id: 'generate', label: 'Generate media', run: () => setLeftTab('generate') },
+          {
+            id: 'first-cut',
+            label: translateUi('first_cut_from_a_brief_c605f7c9'),
+            run: () => openBrief(),
+          },
+          {
+            id: 'export',
+            label: translateUi('export_4a4c59c5'),
+            disabled: !canExport,
+            run: () => setExportOpen(true),
+          },
+          {
+            id: 'agent',
+            label: translateUi('ask_the_agent_1805e2f1'),
+            run: () => setRightTab('agent'),
+          },
+          {
+            id: 'generate',
+            label: translateUi('generate_media_279349a3'),
+            run: () => setLeftTab('generate'),
+          },
           ...(productionAvailable
-            ? [{ id: 'production', label: 'Open Production mode', run: onOpenProduction }]
+            ? [
+                {
+                  id: 'production',
+                  label: translateUi('open_production_mode_fd272431'),
+                  run: onOpenProduction,
+                },
+              ]
             : []),
         ],
       },
@@ -772,6 +888,8 @@ export function EditWorkspace({
     setFormat,
     shortcuts,
     transitionsFromSelected,
+    translateUi,
+    registryText,
   ]);
 
   const toolbarExtra = useMemo(
@@ -783,7 +901,7 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void cutPauses()}
         >
-          <AudioLines className="size-3.5" /> Cut pauses
+          <AudioLines className="size-3.5" /> {translateUi('cut_pauses_ded96bea')}{' '}
         </Button>
         <Button
           size="sm"
@@ -791,7 +909,7 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void autoCaptions()}
         >
-          <Captions className="size-3.5" /> Auto-captions
+          <Captions className="size-3.5" /> {translateUi('auto_captions_90ab215c')}{' '}
         </Button>
         <Button
           size="sm"
@@ -799,13 +917,14 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void cutOnBeat()}
         >
-          <Music className="size-3.5" /> Quick cuts
+          <Music className="size-3.5" /> {translateUi('quick_cuts_86dbac6a')}{' '}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" />}
           >
-            <Clapperboard className="size-3.5" /> Collage <ChevronDown className="size-3" />
+            <Clapperboard className="size-3.5" /> {translateUi('collage_78842cd4')}{' '}
+            <ChevronDown className="size-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             {(['stack', 'side_by_side', 'grid'] as const).map((layout) => (
@@ -814,19 +933,24 @@ export function EditWorkspace({
                 onSelect={() => {
                   const ids = selectionRef.current;
                   void quickOp('Collage', () =>
-                    runOp('collage', { clipIds: ids, layout, atSec: store.getSec() }),
+                    runOp('collage', {
+                      clipIds: ids,
+                      layout,
+                      atSec: store.getSec(),
+                    }),
                   );
                 }}
               >
                 {layout === 'stack'
-                  ? 'Film strips'
+                  ? translateUi('film_strips_f8cddc4d')
                   : layout === 'side_by_side'
-                    ? 'Side by side'
-                    : 'Four-panel grid'}
+                    ? translateUi('side_by_side_a3d7b387')
+                    : translateUi('four_panel_grid_907d504f')}
               </DropdownMenuItem>
             ))}
             <div className="px-2 py-1 text-xs text-muted-foreground">
-              Select 2–4 picture clips first.
+              {' '}
+              {translateUi('select_2_4_picture_clips_first_31fd98f3')}{' '}
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -836,11 +960,11 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void detectBeats()}
         >
-          <Waves className="size-3.5" /> Beats
+          <Waves className="size-3.5" /> {translateUi('beats_b886ee35')}{' '}
         </Button>
       </div>
     ),
-    [autoCaptions, cutOnBeat, cutPauses, detectBeats, quickOp, runOp, store],
+    [autoCaptions, cutOnBeat, cutPauses, detectBeats, quickOp, runOp, store, translateUi],
   );
 
   const key = TIMELINE_SHORTCUT_KEYS;
@@ -866,14 +990,15 @@ export function EditWorkspace({
         <Link
           href={origin === 'library' ? '/library' : '/ai-studio'}
           className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'size-8')}
-          aria-label={`Back to ${origin === 'library' ? 'Library' : 'Canvas'}`}
+          aria-label={translateUi('backToOrigin', { origin })}
         >
           <ArrowLeft className="size-4" />
         </Link>
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold tracking-tight">{project.title}</h1>
           <p className="text-2xs text-muted-foreground" data-testid="project-revision">
-            Revision {project.revision}
+            {' '}
+            {translateUi('revision_2e516d68')} {project.revision}
             {busy ? ` · ${busy.replaceAll('_', ' ')}…` : ''}
           </p>
         </div>
@@ -885,7 +1010,7 @@ export function EditWorkspace({
                   size="icon"
                   variant="ghost"
                   className="size-8"
-                  aria-label="Undo"
+                  aria-label={translateUi('undo_a8283ade')}
                   disabled={!canUndo}
                   onClick={() => void undo()}
                 />
@@ -894,7 +1019,9 @@ export function EditWorkspace({
               <Undo2 className="size-4" />
             </TooltipTrigger>
             <TooltipContent>
-              Undo <span className="ml-1 text-muted-foreground">{key.undo}</span>
+              {' '}
+              {translateUi('undo_a8283ade')}{' '}
+              <span className="ml-1 text-muted-foreground">{key.undo}</span>
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -904,7 +1031,7 @@ export function EditWorkspace({
                   size="icon"
                   variant="ghost"
                   className="size-8"
-                  aria-label="Redo"
+                  aria-label={translateUi('redo_74273989')}
                   disabled={!canRedo}
                   onClick={() => void redo()}
                 />
@@ -913,7 +1040,9 @@ export function EditWorkspace({
               <Redo2 className="size-4" />
             </TooltipTrigger>
             <TooltipContent>
-              Redo <span className="ml-1 text-muted-foreground">{key.redo}</span>
+              {' '}
+              {translateUi('redo_74273989')}{' '}
+              <span className="ml-1 text-muted-foreground">{key.redo}</span>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -924,7 +1053,7 @@ export function EditWorkspace({
                 size="sm"
                 variant="outline"
                 className="h-8 gap-1 text-xs"
-                aria-label="Format"
+                aria-label={translateUi('format_2f343666')}
               />
             }
           >
@@ -933,7 +1062,7 @@ export function EditWorkspace({
           <DropdownMenuContent>
             {Object.values(PLATFORM_EXPORT_PRESETS).map((preset) => (
               <DropdownMenuItem key={preset.id} onClick={() => void setFormat(preset.id)}>
-                {preset.label}
+                {registryText(preset.label)}
                 <span className="ml-auto pl-3 text-2xs text-muted-foreground">
                   {preset.width}×{preset.height}
                 </span>
@@ -956,7 +1085,7 @@ export function EditWorkspace({
               data-testid="draft-running"
               onClick={() => setBriefOpen(true)}
             >
-              <Spinner className="size-3.5" /> Drafting…
+              <Spinner className="size-3.5" /> {translateUi('drafting_bafe3bfa')}{' '}
             </Button>
           ) : null}
           <Button
@@ -965,7 +1094,7 @@ export function EditWorkspace({
             className="h-8 gap-1 text-xs"
             onClick={() => openBrief()}
           >
-            <Sparkles className="size-3.5" /> First cut
+            <Sparkles className="size-3.5" /> {translateUi('first_cut_e5063f71')}{' '}
           </Button>
           {productionAvailable ? (
             <Button
@@ -974,7 +1103,7 @@ export function EditWorkspace({
               className="h-8 gap-1 text-xs"
               onClick={onOpenProduction}
             >
-              <Clapperboard className="size-3.5" /> Production
+              <Clapperboard className="size-3.5" /> {translateUi('production_13a7c655')}{' '}
             </Button>
           ) : null}
           <Tooltip>
@@ -984,7 +1113,7 @@ export function EditWorkspace({
                   size="sm"
                   variant="ghost"
                   className="h-8 gap-1 text-xs"
-                  aria-label="Command palette"
+                  aria-label={translateUi('command_palette_0347f794')}
                   onClick={() => setPaletteOpen(true)}
                 />
               }
@@ -992,7 +1121,9 @@ export function EditWorkspace({
               <CommandIcon className="size-3.5" /> K
             </TooltipTrigger>
             <TooltipContent>
-              Every action <span className="ml-1 text-muted-foreground">{key.palette}</span>
+              {' '}
+              {translateUi('every_action_ad22c1fa')}{' '}
+              <span className="ml-1 text-muted-foreground">{key.palette}</span>
             </TooltipContent>
           </Tooltip>
           {blockers.length > 0 ? (
@@ -1010,7 +1141,7 @@ export function EditWorkspace({
             disabled={!canExport}
             onClick={() => setExportOpen(true)}
           >
-            <Download className="size-3.5" /> Export
+            <Download className="size-3.5" /> {translateUi('export_36648955')}{' '}
           </Button>
         </div>
       </header>
@@ -1025,10 +1156,10 @@ export function EditWorkspace({
                 className="flex h-full min-h-0 flex-col"
               >
                 <TabsList className="mx-2 mt-2 shrink-0">
-                  <TabsTrigger value="media">Media</TabsTrigger>
-                  <TabsTrigger value="text">Text</TabsTrigger>
-                  <TabsTrigger value="graph">Graph</TabsTrigger>
-                  <TabsTrigger value="generate">Generate</TabsTrigger>
+                  <TabsTrigger value="media">{translateUi('media_d357175c')}</TabsTrigger>
+                  <TabsTrigger value="text">{translateUi('text_71988c4d')}</TabsTrigger>
+                  <TabsTrigger value="graph">{translateUi('graph_32ab018f')}</TabsTrigger>
+                  <TabsTrigger value="generate">{translateUi('generate_49e49bb4')}</TabsTrigger>
                 </TabsList>
                 {/* Kept mounted: a recording in progress lives here and survives a tab switch. */}
                 <TabsContent value="media" keepMounted className="min-h-0 flex-1">
@@ -1073,8 +1204,8 @@ export function EditWorkspace({
                 className="flex h-full min-h-0 flex-col"
               >
                 <TabsList className="mx-2 mt-2 shrink-0">
-                  <TabsTrigger value="inspector">Inspector</TabsTrigger>
-                  <TabsTrigger value="agent">Agent</TabsTrigger>
+                  <TabsTrigger value="inspector">{translateUi('inspector_da188e3b')}</TabsTrigger>
+                  <TabsTrigger value="agent">{translateUi('agent_11b39c93')}</TabsTrigger>
                 </TabsList>
                 <TabsContent value="inspector" className="min-h-0 flex-1 p-2">
                   <Inspector

@@ -1,5 +1,7 @@
 'use client';
+
 import { Rocket } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 // Jaina Setup Concierge (FEAT-004) — GUIDED UI ONLY. When Jaina has no ad
 // account it can't run (the chat contract hard-requires adAccountId), so instead
@@ -17,17 +19,17 @@ type JainaSetupConciergeProps = {
 };
 
 export function JainaSetupConcierge({ brandId, platform = 'meta' }: JainaSetupConciergeProps) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex h-full flex-col items-center justify-center overflow-y-auto p-4">
       <div className="w-full max-w-xl space-y-4">
         <div className="space-y-2 text-center">
           <Rocket className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
           <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            Let&apos;s connect Jaina to your paid data
+            {uiText('let_s_connect_jaina_to_your_paid_data_d12c18c')}
           </h2>
           <p className="mx-auto max-w-md text-sm text-muted-foreground">
-            Jaina reads campaign spend, creative performance, and budget pacing to give you a
-            decision-ready brief. Finish the steps below to unlock it.
+            {uiText('jaina_reads_campaign_spend_creative_performan_668066c')}
           </p>
         </div>
 

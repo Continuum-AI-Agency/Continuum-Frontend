@@ -1,0 +1,53 @@
+import type { useTranslations } from 'next-intl';
+
+const LABEL_KEYS = {
+  Working: 'working_a92f044',
+  Answered: 'm_e0aafffa02',
+  Failed: 'failed_031a8f0',
+  'Still running': 'm_42fb7b1c49',
+  Refused: 'm_735ec50d7d',
+  'Your message': 'm_f190c98ece',
+  Response: 'm_6e617e4fc9',
+  Checkpoint: 'm_5cb9afc059',
+  Media: 'm_0c77aeece8',
+  Canvas: 'm_a3f80b87a4',
+  Pipeline: 'm_32b1d5a784',
+  Skill: 'm_ec9f630c86',
+  Document: 'document_d6bd8c0',
+  Trend: 'm_dae07c6ee8',
+  Event: 'm_ad8919ace0',
+  Question: 'm_002ff59811',
+  Draft: 'm_23d33e22ac',
+  Campaign: 'm_69390e1665',
+  'Ad set': 'm_ed78bb1810',
+  "What's Working": 'm_e40eee0e45',
+  Insight: 'm_1ed1264f96',
+  Metric: 'm_b2bb7604c8',
+  Link: 'm_d0517071aa',
+  Reference: 'm_db1c784524',
+  Image: 'm_50e19fda0d',
+  Carousel: 'm_f1f842e195',
+  Video: 'm_bc17c1f017',
+  Brand: 'brand_090ed43',
+  Competitor: 'm_4705687644',
+  'Buy intent': 'm_afe882bc86',
+  Complaint: 'm_949af86d4f',
+  Feedback: 'm_c8d7677e19',
+  Praise: 'm_cebd485316',
+  'Uploading…': 'uploading_5ce44dd',
+  'Uploading to Library…': 'm_79b1c6b889',
+  'Indexing…': 'm_1fd8094536',
+  'Upload failed': 'upload_failed_6efc5d2',
+  'Temporary · 14d': 'm_567b263307',
+  Included: 'm_3e2c570409',
+  'In Library': 'm_ed32f151ed',
+  Temporary: 'm_33d5667cd5',
+} as const;
+export function translateControlLabel(
+  label: string,
+  t?: ReturnType<typeof useTranslations<'common'>>,
+): string {
+  return t && Object.hasOwn(LABEL_KEYS, label)
+    ? t(LABEL_KEYS[label as keyof typeof LABEL_KEYS])
+    : label;
+}

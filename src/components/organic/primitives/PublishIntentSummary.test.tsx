@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import type { ReactElement } from 'react';
+import { render as renderUI } from '@/i18n/__tests__/render';
+import en from '../../../../messages/organic/en.json';
 import {
   intentAccountName,
   PublishIntentSummary,
@@ -12,11 +16,23 @@ import {
 
 afterEach(cleanup);
 
+const render = (ui: ReactElement) =>
+  renderUI(
+    <NextIntlClientProvider locale="en" timeZone="UTC" messages={{ organic: en }}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+
 const intent = (overrides: Partial<PublishIntentSummaryData> = {}): PublishIntentSummaryData => ({
   platform: 'instagram',
   blockers: [],
   format: 'POST',
-  account: { id: 'acct-1', handle: 'acme_a', displayName: 'Acme A', avatarUrl: null },
+  account: {
+    id: 'acct-1',
+    handle: 'acme_a',
+    displayName: 'Acme A',
+    avatarUrl: null,
+  },
   caption: { length: 5, preview: 'Hello' },
   media: { count: 1, required: 1 },
   ...overrides,
@@ -24,15 +40,23 @@ const intent = (overrides: Partial<PublishIntentSummaryData> = {}): PublishInten
 
 describe('intentAccountName — the account is never a UUID', () => {
   it('names the account by its handle', () => {
-    expect(intentAccountName({ id: 'acct-1', handle: 'acme_a', displayName: 'Acme A' })).toBe(
-      '@acme_a',
-    );
+    expect(
+      intentAccountName({
+        id: 'acct-1',
+        handle: 'acme_a',
+        displayName: 'Acme A',
+      }),
+    ).toBe('@acme_a');
   });
 
   it('names a Page by its name', () => {
-    expect(intentAccountName({ id: 'page-1', handle: null, displayName: 'Acme Page' })).toBe(
-      'Acme Page',
-    );
+    expect(
+      intentAccountName({
+        id: 'page-1',
+        handle: null,
+        displayName: 'Acme Page',
+      }),
+    ).toBe('Acme Page');
   });
 
   it('says "Unknown account" for a stamp the server could not describe', () => {

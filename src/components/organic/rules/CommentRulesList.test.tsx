@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { CommentTriggerRule } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { CommentRulesList, ruleState } from './CommentRulesList';
 
 afterEach(cleanup);
@@ -52,7 +53,10 @@ function renderList(props: Partial<React.ComponentProps<typeof CommentRulesList>
 
 describe('ruleState', () => {
   it('reads off before anything else, so a switched-off rule never looks live', () => {
-    const scheduled = rule({ enabled: false, activeFrom: '2026-01-01T00:00:00.000Z' });
+    const scheduled = rule({
+      enabled: false,
+      activeFrom: '2026-01-01T00:00:00.000Z',
+    });
     expect(ruleState(scheduled, NOW)).toBe('off');
   });
 
@@ -61,7 +65,10 @@ describe('ruleState', () => {
     expect(ruleState(rule({ activeUntil: '2026-09-01T00:00:00.000Z' }), NOW)).toBe('expired');
     expect(
       ruleState(
-        rule({ activeFrom: '2026-09-01T00:00:00.000Z', activeUntil: '2026-09-30T00:00:00.000Z' }),
+        rule({
+          activeFrom: '2026-09-01T00:00:00.000Z',
+          activeUntil: '2026-09-30T00:00:00.000Z',
+        }),
         NOW,
       ),
     ).toBe('live');
@@ -109,7 +116,9 @@ describe('CommentRulesList', () => {
   });
 
   it('says how many posts a scoped rule watches', () => {
-    renderList({ rules: [rule({ postScope: 'specific_posts', platformPostIds: ['a', 'b'] })] });
+    renderList({
+      rules: [rule({ postScope: 'specific_posts', platformPostIds: ['a', 'b'] })],
+    });
     expect(screen.getByText('on 2 posts')).toBeDefined();
   });
 });
@@ -146,7 +155,10 @@ describe('click totals', () => {
   });
 
   it('says nothing for a rule with no link, rather than inventing a zero', () => {
-    renderList({ rules: [rule({ trackedLinkId: null })], linkStats: stats(62) });
+    renderList({
+      rules: [rule({ trackedLinkId: null })],
+      linkStats: stats(62),
+    });
     expect(screen.queryByText('62')).toBeNull();
   });
 

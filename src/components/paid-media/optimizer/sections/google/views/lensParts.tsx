@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // What the adaptive board's Google lenses (Search terms, Quality Score, Performance Max) share
 // with these views: the brand's Google Ads customer resolved the way the Google tab resolves it,
@@ -56,7 +57,10 @@ export function useGoogleCustomer(
   if (adAccountId) {
     const wanted = bareAccountId(adAccountId);
     const listed = google.find((account) => bareAccountId(account.account_id) === wanted);
-    return lensReady({ customerId: wanted, currency: listed?.currency ?? null });
+    return lensReady({
+      customerId: wanted,
+      currency: listed?.currency ?? null,
+    });
   }
   if (accounts.isLoading) return lensLoading;
   if (accounts.isError) {
@@ -261,13 +265,16 @@ export function LensWindow({
   range: { since: string; until: string } | null;
   testId: string;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <span
       className="whitespace-nowrap text-muted-foreground text-xs"
       data-testid={`${testId}-window`}
       title={range ? windowRangeLabel(range.since, range.until) : undefined}
     >
-      Last {range ? daysIn(range) : LENS_WINDOW_DAYS} days
+      {betaUiText('beta_eb970eb0951c')} {range ? daysIn(range) : LENS_WINDOW_DAYS}{' '}
+      {betaUiText('beta_ab51004e9d71')}
     </span>
   );
 }

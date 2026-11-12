@@ -7,6 +7,7 @@ import {
   ChevronUpIcon,
   MinusIcon,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,8 +15,10 @@ import {
   deltaTone,
   formatDeltaPct,
   formatMetric,
+  getMetric,
   type HeatmapPaint,
   heatmapPaint,
+  localizeHeatmapLabel,
   MATRIX_METRICS,
   paintToStyle,
   percentile,
@@ -69,6 +72,15 @@ export function CampaignMetricHeatmap({
   onMetricChange,
   onCampaignSelect,
 }: CampaignMetricHeatmapProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const displayMetrics = React.useMemo(
+    () =>
+      MATRIX_METRICS.map((metric) =>
+        getMetric(metric.key, (source) => localizeHeatmapLabel(source, uiText)),
+      ),
+    [uiText],
+  );
   const [density, setDensityState] = React.useState<Density>('comfortable');
 
   React.useEffect(() => {
@@ -94,14 +106,14 @@ export function CampaignMetricHeatmap({
 
   const valuesByMetric = React.useMemo(() => {
     return new Map(
-      MATRIX_METRICS.map((metric) => [
+      displayMetrics.map((metric) => [
         metric.key,
         sortedCampaigns
           .map((campaign) => campaign.metrics?.[metric.key])
           .filter((value): value is number => typeof value === 'number' && Number.isFinite(value)),
       ]),
     );
-  }, [sortedCampaigns]);
+  }, [sortedCampaigns, displayMetrics]);
 
   if (sortedCampaigns.length === 0) return null;
 
@@ -113,20 +125,24 @@ export function CampaignMetricHeatmap({
       <section className="overflow-hidden rounded-lg border border-border/70 bg-card">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/15 px-3 py-2">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold tracking-tight">Heatmap</h3>
+            <h3 className="text-sm font-semibold tracking-tight">{uiText('heatmap_3aa6826')}</h3>
             <p className="text-xs text-muted-foreground">
-              Campaigns ranked by{' '}
-              <span className="font-medium text-foreground">
-                {MATRIX_METRICS.find((m) => m.key === selectedMetric)?.label ?? selectedMetric}
-              </span>
-              . Cell color encodes percentile across the visible set.
+              {uiText.rich('sentence_4b81709371d8', {
+                v0: () => (
+                  <span className="font-medium text-foreground">
+                    {displayMetrics.find((m) => m.key === selectedMetric)?.label ?? selectedMetric}
+                  </span>
+                ),
+              })}
             </p>
           </div>
           <button
             type="button"
             onClick={toggleDensity}
             className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            aria-label={`Switch to ${density === 'comfortable' ? 'compact' : 'comfortable'} density`}
+            aria-label={uiText('template_f9b5a31cf6e2', {
+              density: density === 'comfortable' ? 'compact' : 'comfortable',
+            })}
           >
             {density === 'comfortable' ? (
               <ChevronUpIcon className="h-3 w-3" />
@@ -134,7 +150,7 @@ export function CampaignMetricHeatmap({
               <ChevronDownIcon className="h-3 w-3" />
             )}
             <span className="font-mono uppercase tracking-[0.08em]">
-              {density === 'comfortable' ? 'Comfy' : 'Compact'}
+              {density === 'comfortable' ? uiText('comfy_74e9e5e') : uiText('compact_9945264')}
             </span>
           </button>
         </header>
@@ -143,7 +159,7 @@ export function CampaignMetricHeatmap({
           <div
             className="grid min-w-full"
             style={{
-              gridTemplateColumns: `minmax(200px, 1.4fr) repeat(${MATRIX_METRICS.length}, minmax(92px, 1fr))`,
+              gridTemplateColumns: `minmax(200px, 1.4fr) repeat(${displayMetrics.length}, minmax(92px, 1fr))`,
             }}
           >
             <div
@@ -153,9 +169,9 @@ export function CampaignMetricHeatmap({
                 rowHeight,
               )}
             >
-              Campaign
+              {uiText('campaign_268286d')}
             </div>
-            {MATRIX_METRICS.map((metric) => {
+            {displayMetrics.map((metric) => {
               const isActive = metric.key === selectedMetric;
               return (
                 <button
@@ -204,7 +220,7 @@ export function CampaignMetricHeatmap({
                     </span>
                   </button>
 
-                  {MATRIX_METRICS.map((metric) => {
+                  {displayMetrics.map((metric) => {
                     const value = campaign.metrics?.[metric.key];
                     const rank =
                       typeof value === 'number'
@@ -250,7 +266,7 @@ export function CampaignMetricHeatmap({
                                 <DeltaGlyph tone={tone} size={density === 'compact' ? 9 : 10} />
                               </span>
                               <span className="truncate font-mono text-sm font-medium tabular-nums text-foreground">
-                                {formatMetric(metric.key, value)}
+                                {formatMetric(metric.key, value, uiLocale)}
                               </span>
                             </button>
                           }
@@ -262,12 +278,14 @@ export function CampaignMetricHeatmap({
                             </div>
                             <div className="flex items-center gap-2 font-mono text-sm tabular-nums">
                               <span className="font-medium">
-                                {MATRIX_METRICS.find((m) => m.key === metric.key)?.label}
+                                {displayMetrics.find((m) => m.key === metric.key)?.label}
                               </span>
-                              <span>{formatMetric(metric.key, value)}</span>
+                              <span>{formatMetric(metric.key, value, uiLocale)}</span>
                             </div>
                             <div className="flex items-center gap-2 text-xs">
-                              <span className="text-muted-foreground">vs prior</span>
+                              <span className="text-muted-foreground">
+                                {uiText('vs_prior_9f1b14a')}
+                              </span>
                               <span
                                 className={cn(
                                   'font-mono tabular-nums',
@@ -276,10 +294,12 @@ export function CampaignMetricHeatmap({
                                   tone === 'flat' && 'text-muted-foreground',
                                 )}
                               >
-                                {formatDeltaPct(comparison?.percentageChange)}
+                                {formatDeltaPct(comparison?.percentageChange, uiLocale)}
                               </span>
                               <span className="text-muted-foreground">
-                                · {Math.round(rank * 100)}th pct
+                                {uiText.rich('sentence_37213f7bdebf', {
+                                  percentile: Math.round(rank * 100),
+                                })}
                               </span>
                             </div>
                           </div>

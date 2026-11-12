@@ -5,8 +5,9 @@ import { useMutation } from '@tanstack/react-query';
 import { CreditCard, TriangleAlert } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useRef, useState, useTransition } from 'react';
-import { switchActiveBrandAction } from '@/app/(post-auth)/settings/actions';
+import { switchActiveBrandAction } from '@/app/[locale]/(post-auth)/settings/actions';
 import { CheckoutReceiptDialog } from '@/components/billing/CheckoutReceiptDialog';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -27,12 +28,13 @@ import {
 } from '@/components/settings/billing/CanvasCreditsMeter';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { isBillingManagerRequired, openBillingPortal } from '@/lib/billing/billingApi';
 import {
   formatCredits,
   formatUsd,
+  getBillingNeedLabel,
   isBrandOwner,
-  NEED_LABEL,
   type PendingBillingChange,
   type SelfServeBillingView,
   toBillingView,
@@ -58,9 +60,11 @@ type BrandBillingPanelProps = {
 };
 
 export function BrandBillingPanel({ billingLive }: BrandBillingPanelProps) {
+  const tUi = useTranslations('settings');
+
   const { activeBrandId, brandSummaries, permissions } = useActiveBrandContext();
   const brandName =
-    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'this brand';
+    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? tUi('m_0380f51a7b');
   usePaywallViewed(billingLive, isBrandOwner(permissions, activeBrandId));
   // A credit-alert email names its brand (`?brand=`); the app opens the ACTIVE one.
   const linkedBrand = brandToOffer(useSearchParams().get('brand'), activeBrandId, brandSummaries);
@@ -105,6 +109,8 @@ function SwitchBrandNotice({
   name: string;
   activeName: string;
 }) {
+  const tUi = useTranslations('settings');
+
   const router = useRouter();
   const [switching, startSwitch] = useTransition();
   return (
@@ -114,7 +120,10 @@ function SwitchBrandNotice({
       className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2.5 text-sm text-foreground"
     >
       <p>
-        This link is about <span className="font-medium">{name}</span>. You're viewing {activeName}.
+        {tUi('m_cc1a2c6073')}
+        <span className="font-medium">{name}</span>
+        {tUi('m_bae13a78d1')}
+        {activeName}.
       </p>
       <Button
         variant="outline"
@@ -127,7 +136,7 @@ function SwitchBrandNotice({
           })
         }
       >
-        {switching ? 'Switching…' : `Switch to ${name}`}
+        {switching ? tUi('m_ca40b0ec34') : tUi('m_96e02e721b', { v0: String(name) })}
       </Button>
     </div>
   );
@@ -145,6 +154,9 @@ function usePaywallViewed(billingLive: boolean, owner: boolean) {
 }
 
 function OwnerBillingPanel({ brandId, brandName }: { brandId: string; brandName: string }) {
+  const tUi = useTranslations('settings');
+  const uiLocale = useLocale();
+  const uiErrorMessage = useUiErrorMessage();
   const { overview, pending, track, receipt, closeReceipt } =
     useBillingOverviewWithPendingChange(brandId);
   const need = productCodeSchema.safeParse(useSearchParams().get('need'));
@@ -164,13 +176,16 @@ function OwnerBillingPanel({ brandId, brandName }: { brandId: string; brandName:
       return <BillingLockedState brandName={brandName} />;
     return withReceipt(
       <BillingErrorState
-        message={overview.error.message}
+        message={uiErrorMessage(overview.error)}
         onRetry={() => void overview.refetch()}
       />,
     );
   }
 
-  const view = toBillingView(overview.data, need.success ? need.data : null);
+  const view = toBillingView(overview.data, need.success ? need.data : null, {
+    locale: uiLocale,
+    t: tUi,
+  });
   if (view.kind === 'contract') {
     return withReceipt(
       <div className="space-y-6">
@@ -184,7 +199,7 @@ function OwnerBillingPanel({ brandId, brandName }: { brandId: string; brandName:
     <SelfServeBilling
       brandId={brandId}
       view={view}
-      needLabel={need.success ? NEED_LABEL[need.data] : null}
+      needLabel={need.success ? getBillingNeedLabel(need.data, tUi) : null}
       waitingOnStripe={pending !== null}
       onPlanChanged={track}
     />,
@@ -214,12 +229,14 @@ const HIGHLIGHT_MS = 2_400;
 function CreditsRow({
   children,
   anchor = CREDITS_ANCHOR,
-  title = 'Canvas credits',
+  title: providedTitle,
 }: {
   children: ReactNode;
   anchor?: string;
   title?: string;
 }) {
+  const tUi = useTranslations('settings');
+  const title = providedTitle ?? tUi('m_1d63df100a');
   const ref = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
   const [highlighted, setHighlighted] = useState(false);
@@ -228,7 +245,10 @@ function CreditsRow({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const focusIfTargeted = () => {
       if (window.location.hash !== `#${anchor}`) return;
-      ref.current?.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+      ref.current?.scrollIntoView({
+        block: 'start',
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
       setHighlighted(true);
       clearTimeout(timer);
       timer = setTimeout(() => setHighlighted(false), HIGHLIGHT_MS);
@@ -271,12 +291,16 @@ function SelfServeBilling({
   waitingOnStripe: boolean;
   onPlanChanged: (change: PendingBillingChange) => void;
 }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+
   return (
     <div className="divide-y divide-border" aria-busy={waitingOnStripe}>
       {view.paymentFailed ? (
         <PaymentFailedNotice brandId={brandId} state={view.paymentFailed} />
       ) : null}
-      <PanelRow title="Plans">
+      <PanelRow title={tUi('m_cf2e5f26fe')}>
         <BillingPlans
           brandId={brandId}
           plans={view.plans}
@@ -288,20 +312,17 @@ function SelfServeBilling({
         {view.canBuyCredits || view.credits.availableCredits > 0 ? (
           <CanvasCreditsMeter credits={view.credits} />
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Canvas credits come with Organic Plus every month. Once a plan is active you can also
-            buy credit packs.
-          </p>
+          <p className="text-sm text-muted-foreground">{tUi('m_fce4f51a5a')}</p>
         )}
         {view.outOfCredits ? <OutOfCreditsNotice canAutoBill={view.hasLiveSubscription} /> : null}
         {view.canBuyCredits ? (
           <div className="space-y-2">
             <div>
-              <p className="text-sm font-medium text-foreground">Top up with credit packs</p>
+              <p className="text-sm font-medium text-foreground">{tUi('m_41bf14bea2')}</p>
               <p className="text-xs text-muted-foreground tabular-nums">
-                {formatCredits(view.creditPack.credits)} credits for{' '}
-                {formatUsd(view.creditPack.priceUsd)} a pack, paid once and added as soon as Stripe
-                confirms.
+                {formatCredits(view.creditPack.credits, uiLocale)}
+                {tUi('m_b3dc599bb9')} {formatUsd(view.creditPack.priceUsd, 'usd', uiLocale)}
+                {tUi('m_a5a49a9db0')}
               </p>
             </div>
             <BuyCreditsControl
@@ -320,13 +341,13 @@ function SelfServeBilling({
         </div>
       </CreditsRow>
       {view.x ? (
-        <CreditsRow anchor={X_CREDITS_ANCHOR} title="X API credits">
+        <CreditsRow anchor={X_CREDITS_ANCHOR} title={tUi('m_cf13da279f')}>
           <XCreditsMeter x={view.x} />
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground tabular-nums">
-              {formatCredits(view.x.creditPack.credits)} X API credits for{' '}
-              {formatUsd(view.x.creditPack.priceUsd)} a pack, paid once and added as soon as Stripe
-              confirms.
+              {formatCredits(view.x.creditPack.credits, uiLocale)}
+              {tUi('m_7b7ba3ea08')} {formatUsd(view.x.creditPack.priceUsd, 'usd', uiLocale)}
+              {tUi('m_a5a49a9db0')}
             </p>
             <BuyCreditsControl
               brandId={brandId}
@@ -345,10 +366,10 @@ function SelfServeBilling({
           </div>
         </CreditsRow>
       ) : null}
-      <PanelRow title="Payment method">
+      <PanelRow title={tUi('m_0e55fb3b04')}>
         <PaymentMethodRow brandId={brandId} view={view} />
       </PanelRow>
-      <PanelRow title="Invoices">
+      <PanelRow title={tUi('m_35f8f37b92')}>
         <BillingInvoices invoices={view.invoices} />
       </PanelRow>
     </div>
@@ -357,6 +378,8 @@ function SelfServeBilling({
 
 /** Auto-billing needs a subscription, so a brand on packs alone (grandfathered) is only told to buy. */
 function OutOfCreditsNotice({ canAutoBill }: { canAutoBill: boolean }) {
+  const tUi = useTranslations('settings');
+
   return (
     <div
       role="status"
@@ -365,37 +388,37 @@ function OutOfCreditsNotice({ canAutoBill }: { canAutoBill: boolean }) {
     >
       <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
       <p>
-        <span className="font-medium">This brand is out of Canvas credits.</span> Generation is
-        paused.{' '}
-        {canAutoBill
-          ? 'Buy a credit pack below, or turn on auto-billing to keep generating.'
-          : 'Buy a credit pack below to keep generating.'}
+        <span className="font-medium">{tUi('m_8db4113242')}</span>
+        {tUi('m_b50f533bf0')} {canAutoBill ? tUi('m_d479f037ba') : tUi('m_193494a6c1')}
       </p>
     </div>
   );
 }
 
-const renewalFormat = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-
 /** Stripe's portal, where the card is updated. Pending until the browser has left the page. */
 function useBillingPortal(brandId: string) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const { show } = useToast();
   const portal = useMutation({
     mutationFn: () =>
-      openBillingPortal(brandId, { returnUrl: billingReturnUrl('section=billing') }),
+      openBillingPortal(brandId, {
+        returnUrl: billingReturnUrl('section=billing'),
+      }),
     onSuccess: (session) => window.location.assign(session.url),
     onError: (error) =>
       show({
-        title: 'Could not open billing portal',
-        description: error.message,
+        title: tUi('m_13d745d533'),
+        description: uiErrorMessage(error),
         variant: 'error',
       }),
   });
-  return { open: () => portal.mutate(), redirecting: portal.isPending || portal.isSuccess };
+  return {
+    open: () => portal.mutate(),
+    redirecting: portal.isPending || portal.isSuccess,
+  };
 }
 
 /**
@@ -409,6 +432,8 @@ function PaymentFailedNotice({
   brandId: string;
   state: NonNullable<SelfServeBillingView['paymentFailed']>;
 }) {
+  const tUi = useTranslations('settings');
+
   const { open, redirecting } = useBillingPortal(brandId);
   return (
     <div
@@ -420,24 +445,31 @@ function PaymentFailedNotice({
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
         {state === 'retrying' ? (
           <span>
-            <span className="font-medium">Your last payment didn't go through.</span> Your plan
-            stays on while Stripe retries. Update your card to keep it running.
+            <span className="font-medium">{tUi('m_6cdf1da969')}</span>
+            {tUi('m_22c6da9f9b')}
           </span>
         ) : (
           <span>
-            <span className="font-medium">Your plan is paused</span> because the last payment didn't
-            go through. Update your card in Stripe to turn it back on.
+            <span className="font-medium">{tUi('m_9f4b776827')}</span>
+            {tUi('m_42af7e900f')}
           </span>
         )}
       </p>
       <Button variant="outline" disabled={redirecting} aria-busy={redirecting} onClick={open}>
-        {redirecting ? 'Opening Stripe…' : 'Update card'}
+        {redirecting ? tUi('m_8ed3c2197f') : tUi('m_b1c7bbc2f2')}
       </Button>
     </div>
   );
 }
 
 function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeBillingView }) {
+  const tUi = useTranslations('settings');
+  const dateFormat = new Intl.DateTimeFormat(useLocale(), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
   const { open, redirecting } = useBillingPortal(brandId);
 
   return (
@@ -446,25 +478,23 @@ function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeB
         <span className="flex items-center gap-2 text-sm text-foreground">
           <CreditCard className="size-4 text-muted-foreground" aria-hidden />
           <span data-testid="billing-card-status">
-            {view.hasPaymentMethod ? 'Card on file' : 'No card on file'}
+            {view.hasPaymentMethod ? tUi('m_5de09ce2f8') : tUi('m_4fd1ac2ecc')}
           </span>
         </span>
         {view.renewsAt ? (
           <Pill>
             <PillIndicator variant={view.cancelAtPeriodEnd ? 'warning' : 'success'} />
-            {view.cancelAtPeriodEnd ? 'Ends' : 'Renews'}{' '}
-            {renewalFormat.format(new Date(view.renewsAt))}
+            {view.cancelAtPeriodEnd ? tUi('m_91856dcb7d') : tUi('m_78906379a6')}{' '}
+            {dateFormat.format(new Date(view.renewsAt))}
           </Pill>
         ) : null}
       </div>
       {view.hasLiveSubscription || view.hasPaymentMethod ? (
         <Button variant="outline" disabled={redirecting} aria-busy={redirecting} onClick={open}>
-          {redirecting ? 'Opening Stripe…' : 'Manage payment method'}
+          {redirecting ? tUi('m_8ed3c2197f') : tUi('m_32a48afeec')}
         </Button>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          Checkout asks for a card when you choose a plan.
-        </p>
+        <p className="text-xs text-muted-foreground">{tUi('m_8b7a2ffc26')}</p>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { PaidCreativeVerdict } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -147,7 +148,14 @@ function props(over: Partial<CreativeInsightsViewProps> = {}): CreativeInsightsV
       verdictsByKind: {
         scale: [verdict({ adId: 'ad-1', adName: 'Testimonial Ana', cpa: 58.2 })],
         iterate: [],
-        kill: [verdict({ adId: 'ad-2', adName: 'Special price', verdict: 'kill', cpa: 142 })],
+        kill: [
+          verdict({
+            adId: 'ad-2',
+            adName: 'Special price',
+            verdict: 'kill',
+            cpa: 142,
+          }),
+        ],
       },
       synopsis: null,
       freshUrlById: {},

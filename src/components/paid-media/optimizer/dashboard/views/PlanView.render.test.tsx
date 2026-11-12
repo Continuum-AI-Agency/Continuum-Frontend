@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { configFixture } from '../__fixtures__/easyfitPayload';
 import { PlanView } from './PlanView';
 

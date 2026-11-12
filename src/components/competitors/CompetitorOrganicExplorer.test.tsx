@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
-let feedData: { items: unknown[]; syncFaults: unknown[] } = { items: [], syncFaults: [] };
+let feedData: { items: unknown[]; syncFaults: unknown[] } = {
+  items: [],
+  syncFaults: [],
+};
 
 const postsMock = mock((_params: unknown) => ({
   isLoading: false,
@@ -11,7 +15,12 @@ const postsMock = mock((_params: unknown) => ({
 }));
 
 mock.module('@/lib/api/competitorSpy', () => ({
-  useInstagramCompetitorSearch: () => ({ isLoading: false, isError: false, error: null, data: undefined }),
+  useInstagramCompetitorSearch: () => ({
+    isLoading: false,
+    isError: false,
+    error: null,
+    data: undefined,
+  }),
   useInstagramPosts: postsMock,
 }));
 
@@ -60,7 +69,9 @@ describe('CompetitorOrganicExplorer sync-fault banner', () => {
     const { container, getByLabelText, queryByText } = render(
       <CompetitorOrganicExplorer brandId="b1" />,
     );
-    fireEvent.change(getByLabelText('Search competitors'), { target: { value: 'nike' } });
+    fireEvent.change(getByLabelText('Search competitors'), {
+      target: { value: 'nike' },
+    });
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
     expect(queryByText(/Live previews for/)).toBeNull();
     expect(queryByText(/Showing results for/)).not.toBeNull();
@@ -74,7 +85,10 @@ describe('CompetitorOrganicExplorer platforms', () => {
       <CompetitorOrganicExplorer brandId="b1" />,
     );
     fireEvent.click(getByRole('button', { name: 'Facebook' }));
-    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({ platform: 'facebook', sort: 'recent' });
+    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      platform: 'facebook',
+      sort: 'recent',
+    });
     expect(queryByLabelText('Search competitors')).toBeNull();
     expect(getByRole('button', { name: 'Outlier' })).toBeDefined();
     expect(queryByRole('button', { name: 'For your brand' })).toBeNull();

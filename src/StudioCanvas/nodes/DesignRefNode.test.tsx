@@ -5,12 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 // hook's fetch would add a promise chain every assertion here has to wait on for nothing.
 let designState: Record<string, unknown> = {};
 const createSignedUrlMock = mock(() =>
-  Promise.resolve({ data: { signedUrl: 'https://storage/exemplar.png' }, error: null }),
+  Promise.resolve({
+    data: { signedUrl: 'https://storage/exemplar.png' },
+    error: null,
+  }),
 );
 const executeGenerationMock = mock(() =>
   Promise.resolve({
     success: true,
-    output: { type: 'image', url: 'https://storage/plate.png', mimeType: 'image/png' },
+    output: {
+      type: 'image',
+      url: 'https://storage/plate.png',
+      mimeType: 'image/png',
+    },
   }),
 );
 
@@ -27,8 +34,15 @@ mock.module('../hooks/useWorkflowExecution', () => ({
 }));
 
 import type { DesignSection, DesignSystemSnapshot } from '@continuum/contracts';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { useStudioStore } from '../stores/useStudioStore';
 import { DesignRefNode } from './DesignRefNode';
 
@@ -71,7 +85,12 @@ const systemOf = (sections: ReturnType<typeof card>[]) => {
     rigor: { tier: 'strict', evidence: {}, override: null },
     tokens: [],
     fonts: [],
-    adherence: { forbidRawPx: false, forbidRawHex: false, fontAllowlist: [], tokenAllowlist: [] },
+    adherence: {
+      forbidRawPx: false,
+      forbidRawHex: false,
+      fontAllowlist: [],
+      tokenAllowlist: [],
+    },
     sections,
     conflicts: [],
   } as unknown as DesignSystemSnapshot;
@@ -135,7 +154,12 @@ describe('DesignRefNode', () => {
 
   beforeEach(() => {
     originalUpdateNodeData = useStudioStore.getState().updateNodeData as typeof updateNodeData;
-    useStudioStore.setState({ nodes: [], edges: [], brandId: 'brand-1', updateNodeData });
+    useStudioStore.setState({
+      nodes: [],
+      edges: [],
+      brandId: 'brand-1',
+      updateNodeData,
+    });
     updateNodeData.mockClear();
     executeGenerationMock.mockClear();
     createSignedUrlMock.mockClear();
@@ -157,7 +181,10 @@ describe('DesignRefNode', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Logo' }));
     // The logo preset is image-only on purpose: a DESCRIBED mark is a wrong mark.
-    expect(updateNodeData).toHaveBeenCalledWith('d1', { section: 'logo', mode: 'image' });
+    expect(updateNodeData).toHaveBeenCalledWith('d1', {
+      section: 'logo',
+      mode: 'image',
+    });
   });
 
   it('lists only the sections this brand actually has', () => {
@@ -257,7 +284,11 @@ describe('DesignRefNode', () => {
 
   it('names the rung the specimen came from', () => {
     systemOf([card('palette')]);
-    renderNode({ section: 'palette', mode: 'both', specimenSource: 'generated' });
+    renderNode({
+      section: 'palette',
+      mode: 'both',
+      specimenSource: 'generated',
+    });
     expect(screen.getByText('Specimen · generated')).toBeDefined();
 
     cleanup();
@@ -279,7 +310,11 @@ describe('DesignRefNode', () => {
   // blocks a run) is held in `executeWorkflow.designref.test.ts`.
   it('says the reference informs the generation rather than constraining it', () => {
     systemOf([card('palette')]);
-    renderNode({ section: 'palette', mode: 'both', specimenSource: 'generated' });
+    renderNode({
+      section: 'palette',
+      mode: 'both',
+      specimenSource: 'generated',
+    });
 
     expect(
       screen.getByText('Informs the generation and its critique. Not enforced on the result.'),

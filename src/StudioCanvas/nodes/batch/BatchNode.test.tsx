@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { type BatchItem, MAX_BATCH_ITEMS } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { type Edge, ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { BatchNodeData, StudioNode } from '../../types';
@@ -9,7 +14,11 @@ import { BatchNode } from './BatchNode';
 
 const NODE_ID = 'batch-1';
 
-const textItem = (value: string): BatchItem => ({ id: `t-${value}`, kind: 'text', value });
+const textItem = (value: string): BatchItem => ({
+  id: `t-${value}`,
+  kind: 'text',
+  value,
+});
 const imageItem = (id: string): BatchItem => ({
   id,
   kind: 'image',
@@ -30,7 +39,12 @@ const renderNode = (
     brandId: 'brand-1',
     edges: upstream.edges ?? [],
     nodes: [
-      { id: NODE_ID, type: 'batch', position: { x: 0, y: 0 }, data: nodeData } as StudioNode,
+      {
+        id: NODE_ID,
+        type: 'batch',
+        position: { x: 0, y: 0 },
+        data: nodeData,
+      } as StudioNode,
       ...(upstream.nodes ?? []),
     ],
   });
@@ -63,9 +77,13 @@ const storedItems = (): BatchItem[] =>
 const pasteText = (text: string, mode?: 'newline' | 'comma' | 'csv') => {
   fireEvent.click(screen.getByText('Paste text'));
   if (mode) {
-    fireEvent.change(screen.getByTestId('batch-node-paste-mode'), { target: { value: mode } });
+    fireEvent.change(screen.getByTestId('batch-node-paste-mode'), {
+      target: { value: mode },
+    });
   }
-  fireEvent.change(screen.getByTestId('batch-node-csv'), { target: { value: text } });
+  fireEvent.change(screen.getByTestId('batch-node-csv'), {
+    target: { value: text },
+  });
   fireEvent.click(screen.getByText('Add items'));
 };
 
@@ -125,7 +143,14 @@ describe('BatchNode', () => {
       {},
       {
         nodes: [source],
-        edges: [{ id: 'e1', source: 'copy-1', target: NODE_ID, targetHandle: 'items' } as Edge],
+        edges: [
+          {
+            id: 'e1',
+            source: 'copy-1',
+            target: NODE_ID,
+            targetHandle: 'items',
+          } as Edge,
+        ],
       },
     );
 

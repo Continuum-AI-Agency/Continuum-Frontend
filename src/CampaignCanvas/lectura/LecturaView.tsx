@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // Lectura: a campaign laid out to be READ (design C, options 20 over 4 and 19), at three sizes
 // of one drawing (option 27): `chat` — a compact summary card in the conversation, changes
@@ -52,8 +53,14 @@ const TAG: Record<LecturaMark, { label: string; className: string } | null> = {
     label: 'Changes',
     className: 'bg-[color:var(--warning)]/15 text-[color:var(--warning)]',
   },
-  added: { label: 'New · paused', className: 'bg-[color:var(--success)] text-white' },
-  paused: { label: 'Pauses', className: 'bg-[color:var(--destructive)] text-white' },
+  added: {
+    label: 'New · paused',
+    className: 'bg-[color:var(--success)] text-white',
+  },
+  paused: {
+    label: 'Pauses',
+    className: 'bg-[color:var(--destructive)] text-white',
+  },
   removed: { label: 'Removed', className: 'bg-muted text-muted-foreground' },
   unchanged: null,
 };
@@ -124,7 +131,11 @@ function Rows({ rows }: { rows: LecturaRow[] }) {
   );
 }
 
-const KIND_ICON = { image: ImageIcon, video: PlayCircle, carousel: Images } as const;
+const KIND_ICON = {
+  image: ImageIcon,
+  video: PlayCircle,
+  carousel: Images,
+} as const;
 
 /** Meta says ACTIVE, Google ENABLED: delivering needs no word of its own. */
 const DELIVERING_STATUS = new Set(['ACTIVE', 'ENABLED']);
@@ -154,9 +165,15 @@ function AdThumb({ ad }: { ad: LecturaAd }) {
 const ADS_SHOWN = 6;
 
 function AdList({ ads, labels }: { ads: LecturaAd[]; labels: PlatformLabels }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [showAll, setShowAll] = React.useState(false);
   if (ads.length === 0) {
-    return <p className="text-[13px] text-muted-foreground">No {labels.plural.ad} read</p>;
+    return (
+      <p className="text-[13px] text-muted-foreground">
+        {betaUiText('beta_1ea442a134b2')} {labels.plural.ad} {betaUiText('beta_3316348dbadf')}
+      </p>
+    );
   }
   const shown = showAll ? ads : ads.slice(0, ADS_SHOWN);
   return (
@@ -172,7 +189,7 @@ function AdList({ ads, labels }: { ads: LecturaAd[]; labels: PlatformLabels }) {
             <span className="block truncate text-[13px] font-medium">{ad.name}</span>
             {ad.stops ? (
               <span className="block text-xs text-muted-foreground">
-                Stops with its {labels.singular.adset}
+                {betaUiText('beta_75e759de7030')} {labels.singular.adset}
               </span>
             ) : ad.mark !== 'unchanged' ? (
               <span className="block text-xs text-muted-foreground">
@@ -189,7 +206,12 @@ function AdList({ ads, labels }: { ads: LecturaAd[]; labels: PlatformLabels }) {
             className="text-[13px] font-medium text-primary-ink hover:underline focus-visible:underline focus-visible:outline-none"
             onClick={() => setShowAll((value) => !value)}
           >
-            {showAll ? 'Show fewer' : `Show all ${ads.length} ${labels.plural.ad}`}
+            {showAll
+              ? betaUiText('beta_255beb6510e7')
+              : betaUiText('beta_85d1d24f631f', {
+                  value0: String(ads.length),
+                  value1: String(labels.plural.ad),
+                })}
           </button>
         </li>
       ) : null}
@@ -198,6 +220,8 @@ function AdList({ ads, labels }: { ads: LecturaAd[]; labels: PlatformLabels }) {
 }
 
 function BudgetLine({ adSet, currency }: { adSet: LecturaAdSet; currency: string | null }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const before = lecturaMoney(adSet.budgetBefore, currency);
   const after = lecturaMoney(adSet.budgetAfter, currency);
   if (!before && !after) return null;
@@ -207,27 +231,33 @@ function BudgetLine({ adSet, currency }: { adSet: LecturaAdSet; currency: string
     // Under a campaign budget the ad set has none of its own to stop.
     return before ? <BeforeAfter before={`${before}/day`} after="stops" /> : null;
   }
-  return <span className="tabular-nums">{`${after ?? before}/day`}</span>;
+  return (
+    <span className="tabular-nums">
+      {betaUiText('beta_a2fa02fd878f', { value0: String(after ?? before) })}
+    </span>
+  );
 }
 
 function ProvenancePills({ adSet }: { adSet: LecturaAdSet }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (!adSet.provenance) return null;
   const { userGave, jainaFilled, jainaAsks } = adSet.provenance;
   return (
     <div className="flex flex-wrap gap-1">
       {userGave > 0 ? (
         <span className="rounded-full bg-sky-500/12 px-2 py-px text-xs text-sky-700 dark:text-sky-300">
-          You gave {userGave}
+          {betaUiText('beta_60e8665d1f84')} {userGave}
         </span>
       ) : null}
       {jainaFilled > 0 ? (
         <span className="rounded-full bg-primary/10 px-2 py-px text-xs text-primary-ink">
-          Jaina filled {jainaFilled}
+          {betaUiText('beta_d9e76c7cc12b')} {jainaFilled}
         </span>
       ) : null}
       {jainaAsks > 0 ? (
         <span className="rounded-full bg-[color:var(--warning)]/15 px-2 py-px text-xs text-[color:var(--warning)]">
-          Jaina asks {jainaAsks}
+          {betaUiText('beta_cd36f303f7e6')} {jainaAsks}
         </span>
       ) : null}
     </div>
@@ -236,11 +266,13 @@ function ProvenancePills({ adSet }: { adSet: LecturaAdSet }) {
 
 /** Performance Max: an asset group holds a pool of assets, not ads — one line says what. */
 function AssetSummary({ adSet }: { adSet: LecturaAdSet }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <p className="text-[13px] text-muted-foreground" data-testid={`lectura-assets-${adSet.id}`}>
-      <span className="font-medium text-foreground">Assets</span>
+      <span className="font-medium text-foreground">{betaUiText('beta_bd12731d7bc9')}</span>
       {' · '}
-      {adSet.assetSummary ?? 'No assets read'}
+      {adSet.assetSummary ?? betaUiText('beta_2b9e7cf2cb6e')}
     </p>
   );
 }
@@ -256,6 +288,8 @@ export function LecturaAdSetCard({
   dimUnchanged: boolean;
   labels?: PlatformLabels;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const stopped = adSet.mark === 'paused' || adSet.stopsWithParent;
   return (
     <article
@@ -279,7 +313,9 @@ export function LecturaAdSetCard({
         <MarkTag mark={adSet.stopsWithParent ? 'paused' : adSet.mark} />
       </div>
       {adSet.basedOnName ? (
-        <p className="text-xs text-[color:var(--success)]">Based on {adSet.basedOnName}</p>
+        <p className="text-xs text-[color:var(--success)]">
+          {betaUiText('beta_e90a77266e29')} {adSet.basedOnName}
+        </p>
       ) : null}
       <Rows rows={stopped ? adSet.rows.filter((row) => row.field !== 'status') : adSet.rows} />
       <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-muted-foreground">
@@ -288,7 +324,7 @@ export function LecturaAdSetCard({
         {adSet.status && !stopped && !DELIVERING_STATUS.has(adSet.status) ? (
           <span className="opacity-75">{humanStatus(adSet.status)}</span>
         ) : null}
-        {adSet.stopsWithParent ? <span>Stops with its campaign</span> : null}
+        {adSet.stopsWithParent ? <span>{betaUiText('beta_ceccf6ac08a0')}</span> : null}
       </div>
       <ProvenancePills adSet={adSet} />
       {labels.hasAds ? <AdList ads={adSet.ads} labels={labels} /> : <AssetSummary adSet={adSet} />}
@@ -375,6 +411,8 @@ function ChangeCard({
 }
 
 function BudgetBand({ model }: { model: LecturaModel }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { before, after, newWhenActivated } = model.totals;
   const currency = model.currency;
   if (after === null && before === null && newWhenActivated === 0) return null;
@@ -383,11 +421,11 @@ function BudgetBand({ model }: { model: LecturaModel }) {
   return (
     <section
       className="grid gap-2 rounded-xl border border-border bg-card p-3"
-      aria-label="Daily budget"
+      aria-label={betaUiText('beta_7b0a1f03fc02')}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Daily budget
+          {betaUiText('beta_7b0a1f03fc02')}
         </span>
         <span className="text-[15px] font-semibold tabular-nums">
           {model.kind === 'change' && before !== null && after !== null && before !== after ? (
@@ -396,13 +434,16 @@ function BudgetBand({ model }: { model: LecturaModel }) {
               after={`${lecturaMoney(after, currency)}/day`}
             />
           ) : (
-            `${lecturaMoney(after ?? before, currency)}/day`
+            betaUiText('beta_a2fa02fd878f', {
+              value0: String(lecturaMoney(after ?? before, currency)),
+            })
           )}
         </span>
       </div>
       {newWhenActivated > 0 ? (
         <p className="text-[13px] text-muted-foreground">
-          +{lecturaMoney(newWhenActivated, currency)}/day once the new, paused items are activated
+          +{lecturaMoney(newWhenActivated, currency)}
+          {betaUiText('beta_9f3493cbefa8')}
         </p>
       ) : null}
       {total > 0 ? (
@@ -438,6 +479,8 @@ function BudgetBand({ model }: { model: LecturaModel }) {
 }
 
 function LecturaTable({ model }: { model: LecturaModel }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const labels = platformLabelsOf(model.platform);
   return (
     <div
@@ -448,9 +491,11 @@ function LecturaTable({ model }: { model: LecturaModel }) {
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="px-3 py-2 font-medium">{labels.level.adset}</th>
-            <th className="px-3 py-2 font-medium">Budget/day</th>
-            <th className="px-3 py-2 font-medium">Change</th>
-            <th className="px-3 py-2 text-right font-medium">{labels.hasAds ? 'Ads' : 'Assets'}</th>
+            <th className="px-3 py-2 font-medium">{betaUiText('beta_050231baacaa')}</th>
+            <th className="px-3 py-2 font-medium">{betaUiText('beta_c0bf75bd78bf')}</th>
+            <th className="px-3 py-2 text-right font-medium">
+              {labels.hasAds ? betaUiText('beta_9210f3b6cd17') : betaUiText('beta_bd12731d7bc9')}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -479,7 +524,7 @@ function LecturaTable({ model }: { model: LecturaModel }) {
                       <span className="block break-words font-medium">{adSet.name}</span>
                       {adSet.basedOnName ? (
                         <span className="block text-xs text-[color:var(--success)]">
-                          Based on {adSet.basedOnName}
+                          {betaUiText('beta_e90a77266e29')} {adSet.basedOnName}
                         </span>
                       ) : null}
                     </td>
@@ -504,15 +549,19 @@ function LecturaTable({ model }: { model: LecturaModel }) {
                     <td className="px-3 py-2">
                       {stopped ? (
                         <span className="text-[color:var(--destructive)]">
-                          {adSet.stopsWithParent ? 'Stops with campaign' : 'Pauses'}
+                          {adSet.stopsWithParent
+                            ? betaUiText('beta_27d8ac4d1003')
+                            : betaUiText('beta_395dbf54520c')}
                         </span>
                       ) : adSet.mark === 'added' ? (
-                        <span className="text-[color:var(--success)]">New, paused</span>
+                        <span className="text-[color:var(--success)]">
+                          {betaUiText('beta_95c872102dd5')}
+                        </span>
                       ) : adSet.rows.length > 0 ? (
                         adSet.rows
                           .filter((row) => row.field !== 'daily_budget')
                           .map((row) => row.label)
-                          .join(' · ') || 'Budget'
+                          .join(' · ') || betaUiText('beta_1c6225ec7092')
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
@@ -544,6 +593,8 @@ export const CHAT_AD_SETS_SHOWN = 4;
 
 /** A brand-new campaign at chat size: one line per ad set — name, budget, how many ads. */
 function ChatAdSetLines({ model, labels }: { model: LecturaModel; labels: PlatformLabels }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const adSets = model.campaigns.flatMap((campaign) => campaign.adSets);
   const shown = adSets.slice(0, CHAT_AD_SETS_SHOWN);
   const more = adSets.length - shown.length;
@@ -572,7 +623,7 @@ function ChatAdSetLines({ model, labels }: { model: LecturaModel; labels: Platfo
       })}
       {more > 0 ? (
         <li className="px-2.5 py-1.5 text-xs text-muted-foreground">
-          +{countOf(labels, 'adset', more)} more in the canvas
+          +{countOf(labels, 'adset', more)} {betaUiText('beta_ba0d9b3f33b7')}
         </li>
       ) : null}
     </ul>
@@ -581,11 +632,13 @@ function ChatAdSetLines({ model, labels }: { model: LecturaModel; labels: Platfo
 
 /** The daily total as one line: "$1,150 → $1,000/day", or "$600/day". */
 function BudgetSummary({ model }: { model: LecturaModel }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { before, after, newWhenActivated } = model.totals;
   if (before === null && after === null) return null;
   return (
     <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
-      <span className="text-muted-foreground">Daily budget</span>
+      <span className="text-muted-foreground">{betaUiText('beta_7b0a1f03fc02')}</span>
       <span className="font-semibold tabular-nums">
         {before !== null && after !== null && before !== after ? (
           <BeforeAfter
@@ -593,12 +646,14 @@ function BudgetSummary({ model }: { model: LecturaModel }) {
             after={`${lecturaMoney(after, model.currency)}/day`}
           />
         ) : (
-          `${lecturaMoney(after ?? before, model.currency)}/day`
+          betaUiText('beta_a2fa02fd878f', {
+            value0: String(lecturaMoney(after ?? before, model.currency)),
+          })
         )}
       </span>
       {newWhenActivated > 0 ? (
         <span className="text-xs text-muted-foreground">
-          +{lecturaMoney(newWhenActivated, model.currency)} once activated
+          +{lecturaMoney(newWhenActivated, model.currency)} {betaUiText('beta_51132af88761')}
         </span>
       ) : null}
     </p>
@@ -626,6 +681,8 @@ export function LecturaChatCard({
   openHref?: string | null;
   testId?: string;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const labels = platformLabelsOf(model.platform);
   const shown = model.changes.slice(0, CHAT_CHANGES_SHOWN);
   const more = model.changes.length - shown.length;
@@ -635,20 +692,20 @@ export function LecturaChatCard({
       data-testid={testId}
       data-size="chat"
       data-platform={model.platform}
-      aria-label={title ?? 'Campaign changes'}
+      aria-label={title ?? betaUiText('beta_ce69fd306d0d')}
     >
       <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
         <h3 className="flex min-w-0 items-baseline gap-2 break-words text-sm font-semibold leading-snug">
           <PlatformChip platform={model.platform} />
-          <span className="min-w-0">{title ?? model.campaigns[0]?.name ?? 'Campaign'}</span>
+          <span className="min-w-0">
+            {title ?? model.campaigns[0]?.name ?? betaUiText('beta_268286d2ef75')}
+          </span>
         </h3>
         {/* A given title (Jaina's subject) already counts the changes; the campaign name does not. */}
         <span className={cn('text-xs text-muted-foreground', title && 'sr-only')}>
           {model.changes.length === 0
             ? countOf(labels, 'adset', model.adSetCount)
-            : model.changes.length === 1
-              ? '1 change'
-              : `${model.changes.length} changes`}
+            : betaUiText('beta_7947398736bd', { value0: model.changes.length })}
         </span>
       </header>
       {shown.length > 0 ? (
@@ -668,7 +725,9 @@ export function LecturaChatCard({
       ) : null}
       {more > 0 ? (
         <p className="text-xs text-muted-foreground">
-          +{more} more {more === 1 ? 'change' : 'changes'} in the canvas
+          +{more} {betaUiText('beta_187897ce0afc')}{' '}
+          {more === 1 ? betaUiText('beta_12ea12eace7d') : betaUiText('beta_d0b4ba2311b3')}{' '}
+          {betaUiText('beta_ac37afe7eaa3')}
         </p>
       ) : null}
       {model.changes.length === 0 ? <ChatAdSetLines model={model} labels={labels} /> : null}
@@ -681,12 +740,12 @@ export function LecturaChatCard({
           data-testid="lectura-open-in-canvas"
         >
           <PanelRightOpen className="size-3.5" aria-hidden />
-          Open in canvas
+          {betaUiText('beta_02597bb20cb5')}
         </button>
       ) : openHref ? (
         <Link href={openHref} className={OPEN_CLASS} data-testid="lectura-open-in-canvas">
           <PanelRightOpen className="size-3.5" aria-hidden />
-          Open in canvas
+          {betaUiText('beta_02597bb20cb5')}
         </Link>
       ) : null}
     </section>
@@ -737,6 +796,8 @@ function LecturaPane({
   initialLayout?: LecturaLayout;
   size: Exclude<CampaignViewSize, 'chat'>;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [expandedId, setExpandedId] = React.useState<string | null>(initialExpandedId);
   const [layout, setLayout] = React.useState<LecturaLayout>(
     initialLayout ?? (prefersLecturaTable(model) ? 'table' : 'cards'),
@@ -771,9 +832,11 @@ function LecturaPane({
         )}
       >
         {showChanges ? (
-          <section className="grid gap-2" aria-label="Changes">
+          <section className="grid gap-2" aria-label={betaUiText('beta_bbd4b6a86bc6')}>
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {model.changes.length === 1 ? '1 change' : `${model.changes.length} changes`}
+              {betaUiText('beta_7947398736bd', {
+                value0: model.changes.length,
+              })}
             </h3>
             <ul className="grid gap-2">
               {model.changes.map((change) => {
@@ -800,11 +863,11 @@ function LecturaPane({
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {showChanges ? 'Whole campaign · ' : ''}
+            {showChanges ? betaUiText('beta_d76027e8e7cd') : ''}
             {countOf(labels, 'adset', model.adSetCount)}
           </h3>
           <fieldset
-            aria-label="Layout"
+            aria-label={betaUiText('beta_a511909161e1')}
             className="inline-flex rounded-lg border border-border bg-card p-0.5 text-[13px]"
           >
             {(['cards', 'table'] as const).map((value) => (
@@ -818,7 +881,9 @@ function LecturaPane({
                   layout === value ? 'bg-primary/12 text-foreground' : 'text-muted-foreground',
                 )}
               >
-                {value === 'cards' ? 'Cards' : 'Table'}
+                {value === 'cards'
+                  ? betaUiText('beta_a52fcbbc3364')
+                  : betaUiText('beta_16d1c9050a0b')}
               </button>
             ))}
           </fieldset>
@@ -836,7 +901,9 @@ function LecturaPane({
                 </div>
               ) : null}
               {campaign.adSets.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground">No ad sets yet</p>
+                <p className="text-[13px] text-muted-foreground">
+                  {betaUiText('beta_8a2e5ad75179')}
+                </p>
               ) : (
                 <div
                   className={cn(
@@ -860,9 +927,7 @@ function LecturaPane({
         )}
 
         {model.truncated ? (
-          <p className="text-[13px] text-muted-foreground">
-            Large campaign: only the first items were read.
-          </p>
+          <p className="text-[13px] text-muted-foreground">{betaUiText('beta_388e75147ef9')}</p>
         ) : null}
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { JainaEntryChips } from './JainaEntryChips';
 
 afterEach(cleanup);
@@ -92,8 +93,16 @@ const accountEntries = [
     label: '¿Qué pausar esta semana?',
     prompt: 'Para la cuenta "Acme": ¿qué pausar?',
   },
-  { key: 'budget', label: '¿Dónde está el presupuesto?', prompt: 'Para la cuenta "Acme": ¿dónde?' },
-  { key: 'summary', label: 'Resumen para el cliente', prompt: 'Para la cuenta "Acme": resumen.' },
+  {
+    key: 'budget',
+    label: '¿Dónde está el presupuesto?',
+    prompt: 'Para la cuenta "Acme": ¿dónde?',
+  },
+  {
+    key: 'summary',
+    label: 'Resumen para el cliente',
+    prompt: 'Para la cuenta "Acme": resumen.',
+  },
 ];
 
 const mountAccount = () =>
@@ -131,7 +140,11 @@ describe('JainaEntryChips (account variant)', () => {
 describe('JainaEntryChips (platform)', () => {
   it('opens a NEW conversation scoped to the platform, from every question', () => {
     const entries = [
-      { key: 'search_terms', label: 'Which search terms bring leads?', prompt: 'Q' },
+      {
+        key: 'search_terms',
+        label: 'Which search terms bring leads?',
+        prompt: 'Q',
+      },
     ];
     const { getByTestId } = render(
       <JainaEntryChips entries={entries} label="Ask Jaina" platform="google_ads" />,

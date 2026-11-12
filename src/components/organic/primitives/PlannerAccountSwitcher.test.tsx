@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { PublishAccountsResponse } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 type RequestArgs = { path: string; method?: string; body?: unknown };
 const request = mock(
@@ -29,7 +30,12 @@ const base: PublishAccount = {
   isDefault: true,
 };
 const IG_A = base;
-const IG_B: PublishAccount = { ...base, id: 'ig-b', handle: 'acme_b', isDefault: false };
+const IG_B: PublishAccount = {
+  ...base,
+  id: 'ig-b',
+  handle: 'acme_b',
+  isDefault: false,
+};
 const IG_OLD: PublishAccount = {
   ...base,
   id: 'ig-old',
@@ -46,7 +52,9 @@ const TT_ONLY: PublishAccount = {
 };
 
 function renderSwitcher(accounts: PublishAccount[]) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   queryClient.setQueryData(publishAccountsKey(BRAND), { accounts });
   render(
     <QueryClientProvider client={queryClient}>
@@ -83,10 +91,18 @@ describe('PlannerAccountSwitcher', () => {
     'falls back to the store default when the server has none',
     () => {
       useCalendarStore.setState({
-        accountContext: { accountIds: { tiktok: 'tt-1' }, accountOptions: {}, brandId: BRAND },
+        accountContext: {
+          accountIds: { tiktok: 'tt-1' },
+          accountOptions: {},
+          brandId: BRAND,
+        },
       });
       renderSwitcher([TT_ONLY]);
-      expect(screen.getByRole('button', { name: 'Default TikTok account: @acme.tt' })).toBeTruthy();
+      expect(
+        screen.getByRole('button', {
+          name: 'Default TikTok account: @acme.tt',
+        }),
+      ).toBeTruthy();
     },
     TIMEOUT_MS,
   );
@@ -95,8 +111,14 @@ describe('PlannerAccountSwitcher', () => {
     'offers the accounts as radios, a reconnect-only one disabled with a Reconnect link',
     () => {
       renderSwitcher([IG_A, IG_B, IG_OLD]);
-      fireEvent.click(screen.getByRole('button', { name: 'Default Instagram account: @acme_a' }));
-      const group = screen.getByRole('radiogroup', { name: 'New Instagram posts go to' });
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Default Instagram account: @acme_a',
+        }),
+      );
+      const group = screen.getByRole('radiogroup', {
+        name: 'New Instagram posts go to',
+      });
       expect(within(group).getAllByRole('radio')).toHaveLength(3);
       expect(
         within(group).getByRole('radio', { name: '@acme_a' }).getAttribute('aria-checked'),
@@ -115,16 +137,28 @@ describe('PlannerAccountSwitcher', () => {
     'sets the default for new drafts on the server and in the store',
     () => {
       renderSwitcher([IG_A, IG_B]);
-      fireEvent.click(screen.getByRole('button', { name: 'Default Instagram account: @acme_a' }));
-      const acmeB = within(screen.getByRole('radiogroup')).getByRole('radio', { name: '@acme_b' });
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Default Instagram account: @acme_a',
+        }),
+      );
+      const acmeB = within(screen.getByRole('radiogroup')).getByRole('radio', {
+        name: '@acme_b',
+      });
       fireEvent.pointerDown(acmeB);
       fireEvent.click(acmeB);
 
       const put = request.mock.calls.find(([args]) => args.method === 'PUT')?.[0];
-      expect(put?.body).toEqual({ brandId: BRAND, platform: 'instagram', accountId: 'ig-b' });
+      expect(put?.body).toEqual({
+        brandId: BRAND,
+        platform: 'instagram',
+        accountId: 'ig-b',
+      });
       expect(useCalendarStore.getState().accountContext.accountIds.instagram).toBe('ig-b');
       expect(
-        screen.getByRole('button', { name: 'Default Instagram account: @acme_b' }),
+        screen.getByRole('button', {
+          name: 'Default Instagram account: @acme_b',
+        }),
       ).toBeTruthy();
     },
     TIMEOUT_MS,

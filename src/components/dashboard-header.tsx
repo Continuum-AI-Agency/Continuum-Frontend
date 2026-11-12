@@ -3,9 +3,11 @@
 import { motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import React, { Suspense } from 'react';
 import { WhatsNewBell } from '@/components/changelog/WhatsNewBell';
 import { ClientRenderInbox } from '@/components/client-render/ClientRenderInbox';
+import { useNavigation } from '@/components/navigation/useNavigation';
 import { ClientOnly } from '@/components/ui/ClientOnly';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -39,6 +41,7 @@ const NotificationsBell = dynamic(
 );
 
 function DashboardHeaderInner({ changelogEntries }: { changelogEntries: ChangelogEntry[] }) {
+  const { items: APP_NAVIGATION, footer: APP_NAVIGATION_FOOTER, labelForHref } = useNavigation();
   useDashboardWelcomeToast();
   useInviteToast();
   const pathname = usePathname();
@@ -46,7 +49,7 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
   // The area that owns this path, sub-routes included (/scale/approvals is Performance +).
   const currentRoute = headerRouteFor(pathname);
 
-  const breadcrumbLabel = currentRoute?.label || 'Home';
+  const breadcrumbLabel = currentRoute?.label || labelForHref('/dashboard', '');
   const CurrentIcon = currentRoute?.icon;
   const shouldReduceMotion = useReducedMotion();
 
@@ -110,12 +113,17 @@ export function DashboardHeader({ changelogEntries }: { changelogEntries: Change
 }
 
 function useDashboardWelcomeToast() {
+  const uiText = useTranslations('common');
   const pathname = usePathname();
   const toast = useToastContext();
   const { user } = useSession();
   const lastShownKeyRef = React.useRef<string | null>(null);
 
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || null;
+  const profileName: unknown = user?.user_metadata?.name;
+  const displayName =
+    typeof profileName === 'string' && profileName.trim()
+      ? profileName
+      : (user?.email?.split('@')[0] ?? '');
 
   React.useEffect(() => {
     if (!user) return;
@@ -133,11 +141,12 @@ function useDashboardWelcomeToast() {
     }
     lastShownKeyRef.current = key;
 
-    toast.show(createDashboardWelcomeToastOptions(displayName ?? 'User'));
-  }, [displayName, pathname, toast, user]);
+    toast.show(createDashboardWelcomeToastOptions(displayName, uiText));
+  }, [displayName, pathname, toast, user, uiText]);
 }
 
 function useInviteToast() {
+  const t = useTranslations('navigation');
   const toast = useToastContext();
   const searchParams = useSearchParams();
   const lastShownKeyRef = React.useRef<string | null>(null);
@@ -154,22 +163,22 @@ function useInviteToast() {
 
     if (inviteStatus === 'accepted') {
       toast.show({
-        title: 'Invite accepted',
-        description: "You're now a member of this brand.",
+        title: t('inviteAccepted'),
+        description: t('inviteAcceptedDetail'),
         variant: 'success',
         durationMs: 6000,
       });
     } else if (inviteStatus === 'missing_params') {
       toast.show({
-        title: 'Invite link incomplete',
-        description: 'The invite link is missing details. Please request a new invite.',
+        title: t('inviteIncomplete'),
+        description: t('inviteIncompleteDetail'),
         variant: 'warning',
         durationMs: 6000,
       });
     } else if (inviteStatus === 'error') {
       toast.show({
-        title: 'Invite failed',
-        description: messageParam ?? 'The invite could not be accepted.',
+        title: t('inviteFailed'),
+        description: t('inviteFailedDetail'),
         variant: 'error',
         durationMs: 7000,
       });
@@ -181,5 +190,5 @@ function useInviteToast() {
       url.searchParams.delete('message');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [searchParams, toast]);
+  }, [searchParams, toast, t]);
 }

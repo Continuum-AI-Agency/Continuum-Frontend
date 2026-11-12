@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // A change across several campaigns (design C, option 29): one row per campaign — its daily
 // total before → after and its change counts by mark. The companion draws the band with every
@@ -34,6 +35,8 @@ function Money({
   after: number | null;
   currency: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (before === null && after === null) return null;
   const was = lecturaMoney(before, currency);
   const will = lecturaMoney(after ?? before, currency);
@@ -45,20 +48,25 @@ function Money({
           <span className="px-1 text-muted-foreground">→</span>
         </>
       ) : null}
-      <span className="font-semibold">{will}/day</span>
+      <span className="font-semibold">
+        {will}
+        {betaUiText('beta_ea30d1c554b8')}
+      </span>
     </span>
   );
 }
 
 /** The row's budget: what delivers before → after, or what a new paused campaign would add. */
 function RowBudget({ row }: { row: PortfolioRow }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (row.before !== null || row.after !== null) {
     return (
       <span className="flex flex-wrap items-baseline gap-x-1.5">
         <Money before={row.before} after={row.after} currency={row.currency} />
         {row.onceActivated > 0 ? (
           <span className="text-xs text-muted-foreground">
-            +{lecturaMoney(row.onceActivated, row.currency)} new
+            +{lecturaMoney(row.onceActivated, row.currency)} {betaUiText('beta_11507a0e2f5e')}
           </span>
         ) : null}
       </span>
@@ -67,9 +75,12 @@ function RowBudget({ row }: { row: PortfolioRow }) {
   if (row.onceActivated > 0) {
     return (
       <span className="tabular-nums">
-        <span className="text-muted-foreground">New, paused · </span>
-        <span className="font-semibold">{lecturaMoney(row.onceActivated, row.currency)}/day</span>
-        <span className="text-muted-foreground"> once activated</span>
+        <span className="text-muted-foreground">{betaUiText('beta_77e4bbb41f8e')} </span>
+        <span className="font-semibold">
+          {lecturaMoney(row.onceActivated, row.currency)}
+          {betaUiText('beta_ea30d1c554b8')}
+        </span>
+        <span className="text-muted-foreground"> {betaUiText('beta_51132af88761')}</span>
       </span>
     );
   }
@@ -77,8 +88,11 @@ function RowBudget({ row }: { row: PortfolioRow }) {
 }
 
 function Counts({ row }: { row: PortfolioRow }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const words = portfolioCountWords(row.counts);
-  if (words.length === 0) return <span className="text-xs text-muted-foreground">No change</span>;
+  if (words.length === 0)
+    return <span className="text-xs text-muted-foreground">{betaUiText('beta_41f9d57c3c4a')}</span>;
   return (
     <span className="flex flex-wrap gap-1">
       {words.map((word) => (
@@ -110,22 +124,20 @@ function RowBody({ row }: { row: PortfolioRow }) {
 }
 
 function PortfolioTotal({ portfolio }: { portfolio: PortfolioViewModel }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (portfolio.mixedCurrency) {
-    return (
-      <p className="text-[13px] text-muted-foreground">
-        Campaigns in different currencies: totals per campaign below.
-      </p>
-    );
+    return <p className="text-[13px] text-muted-foreground">{betaUiText('beta_2785e3446622')}</p>;
   }
   const { before, after, onceActivated } = portfolio.totals;
   if (before === null && after === null && onceActivated === 0) return null;
   return (
     <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]" data-testid="portfolio-total">
-      <span className="text-muted-foreground">Daily budget, all campaigns</span>
+      <span className="text-muted-foreground">{betaUiText('beta_17d815caa429')}</span>
       <Money before={before} after={after} currency={portfolio.currency} />
       {onceActivated > 0 ? (
         <span className="text-xs text-muted-foreground">
-          +{lecturaMoney(onceActivated, portfolio.currency)} once activated
+          +{lecturaMoney(onceActivated, portfolio.currency)} {betaUiText('beta_51132af88761')}
         </span>
       ) : null}
     </p>
@@ -140,16 +152,18 @@ export function PortfolioBand({
   portfolio: PortfolioViewModel;
   onOpenRow: (row: PortfolioRow) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background">
       <section
         className="mx-auto grid w-full max-w-3xl gap-3 p-3 sm:p-4"
         data-testid="portfolio-band"
-        aria-label="Portfolio"
+        aria-label={betaUiText('beta_1853eb2e9e5e')}
       >
         <header className="grid gap-1">
           <span className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-            Portfolio
+            {betaUiText('beta_1853eb2e9e5e')}
           </span>
           <h3 className="text-base font-semibold" data-testid="portfolio-headline">
             {portfolioHeadline(portfolio)}
@@ -196,20 +210,22 @@ export function PortfolioChatCard({
   /** Absent where no canvas sits beside the chat: the card then only reads. */
   onOpen?: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const shown = portfolio.rows.slice(0, PORTFOLIO_CHAT_ROWS);
   const more = portfolio.rows.length - shown.length;
   return (
     <section
       className="grid min-w-0 gap-2.5 rounded-xl border border-border bg-card p-3"
       data-testid="portfolio-chat-card"
-      aria-label="Portfolio"
+      aria-label={betaUiText('beta_1853eb2e9e5e')}
     >
       <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
         <h3 className="text-sm font-semibold" data-testid="portfolio-headline">
           {portfolioHeadline(portfolio)}
         </h3>
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-          Portfolio
+          {betaUiText('beta_1853eb2e9e5e')}
         </span>
       </header>
       <ul className="grid gap-1.5">
@@ -226,7 +242,9 @@ export function PortfolioChatCard({
       </ul>
       {more > 0 ? (
         <p className="text-xs text-muted-foreground">
-          +{more} more {more === 1 ? 'campaign' : 'campaigns'} in the canvas
+          +{more} {betaUiText('beta_187897ce0afc')}{' '}
+          {more === 1 ? betaUiText('beta_3dc260b24720') : betaUiText('beta_7a4c3d21f9c6')}{' '}
+          {betaUiText('beta_ac37afe7eaa3')}
         </p>
       ) : null}
       <PortfolioTotal portfolio={portfolio} />
@@ -238,7 +256,7 @@ export function PortfolioChatCard({
           data-testid="portfolio-open-in-canvas"
         >
           <PanelRightOpen className="size-3.5" aria-hidden />
-          Open in canvas
+          {betaUiText('beta_02597bb20cb5')}
         </button>
       ) : null}
     </section>

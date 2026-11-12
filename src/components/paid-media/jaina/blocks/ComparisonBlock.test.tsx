@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { ComparisonBlockV2 } from '@/lib/jaina/schemas';
 import ComparisonBlock from './ComparisonBlock';
 
@@ -120,8 +121,16 @@ describe('ComparisonBlock — two sides, money by the one rule', () => {
     title: 'CAÑADAS // MENSAJES vs SATÉLITE // MENSAJES',
     before_label: 'CAÑADAS // MENSAJES',
     after_label: 'SATÉLITE // MENSAJES',
-    side_a: { label: 'CAÑADAS // MENSAJES', window: 'Last 7 days', entity: null },
-    side_b: { label: 'SATÉLITE // MENSAJES', window: 'Last 7 days', entity: null },
+    side_a: {
+      label: 'CAÑADAS // MENSAJES',
+      window: 'Last 7 days',
+      entity: null,
+    },
+    side_b: {
+      label: 'SATÉLITE // MENSAJES',
+      window: 'Last 7 days',
+      entity: null,
+    },
   });
 
   it('heads each column with its side and names a shared window once', () => {
@@ -153,7 +162,10 @@ describe('ComparisonBlock — two sides, money by the one rule', () => {
       <ComparisonBlock
         block={{
           ...twoAdSets(),
-          pairs: twoAdSets().pairs.map((p) => ({ ...p, label: 'Costo por resultado' })),
+          pairs: twoAdSets().pairs.map((p) => ({
+            ...p,
+            label: 'Costo por resultado',
+          })),
         }}
         isStreaming={false}
       />,

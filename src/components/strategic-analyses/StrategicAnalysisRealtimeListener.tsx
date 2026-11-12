@@ -1,6 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { useToast } from '@/components/ui/ToastProvider';
@@ -15,6 +16,8 @@ type Props = {
 };
 
 export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
+  const tUi = useTranslations('common');
+
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const queryClient = useQueryClient();
   const { show } = useToast();
@@ -50,13 +53,17 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
       }
 
       show({
-        title: 'Strategic analysis ready',
-        description: 'Your latest run finished processing.',
+        title: tUi('m_94b552ffdd'),
+        description: tUi('m_b9c17bb739'),
         variant: 'success',
       });
 
-      queryClient.invalidateQueries({ queryKey: ['strategic-analysis', brandId] });
-      queryClient.invalidateQueries({ queryKey: ['strategic-analysis-runs', brandId] });
+      queryClient.invalidateQueries({
+        queryKey: ['strategic-analysis', brandId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['strategic-analysis-runs', brandId],
+      });
     };
 
     const catchUpMissed = async () => {

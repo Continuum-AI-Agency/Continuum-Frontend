@@ -3,6 +3,7 @@
 import type { BrandBookResponse } from '@continuum/contracts';
 import { Download, FileText, Package } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { deepenBrandBook } from '@/lib/api/brandBook.client';
 import {
   buildBrandSystemExport,
@@ -34,6 +36,10 @@ export function BrandBookActions({
   brandBook: BrandBookResponse;
   brandName: string;
 }) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const brandId = brandBook.brand_id;
   const router = useRouter();
   const { show } = useToast();
@@ -75,17 +81,14 @@ export function BrandBookActions({
       try {
         const res = await deepenBrandBook(brandId);
         show({
-          title:
-            res.status === 'already_running'
-              ? 'Deep analysis already running'
-              : 'Deep analysis started',
-          description: 'The deeper sections of your Brand Book will fill in shortly.',
+          title: res.status === 'already_running' ? tUi('m_3dcb164c2b') : tUi('m_c4f979950c'),
+          description: tUi('m_932084657f'),
           variant: 'success',
         });
       } catch (e) {
         show({
-          title: "Couldn't start deep analysis",
-          description: e instanceof Error ? e.message : 'Please try again.',
+          title: tUi('m_6cb8c209ea'),
+          description: uiErrorMessage(e),
           variant: 'error',
         });
       }
@@ -102,19 +105,19 @@ export function BrandBookActions({
 
       const warningCount = exported.manifest.warnings.length;
       show({
-        title: format === 'zip' ? 'Brand system exported' : 'Brand Book PDF exported',
+        title: format === 'zip' ? tUi('m_7875ec197a') : tUi('m_05f0ab7207'),
         description:
           warningCount > 0
-            ? `${warningCount} optional item could not be included. See manifest.json for details.`
+            ? tUi('m_093063219d', { v0: String(warningCount) })
             : format === 'zip'
-              ? 'Includes portable tokens, normalized knowledge, available assets, and PDF.'
-              : 'Your current saved Brand Book is ready to share.',
+              ? tUi('m_46664d29a1')
+              : tUi('m_beccfa8587'),
         variant: 'success',
       });
     } catch (error) {
       show({
-        title: 'Export failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        title: tUi('m_d6c17e9bd7'),
+        description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
         variant: 'error',
       });
     } finally {
@@ -130,10 +133,10 @@ export function BrandBookActions({
             <Button
               variant="outline"
               disabled={editorIsDirty || exporting !== null}
-              title={editorIsDirty ? 'Save or discard brand.md edits before exporting.' : undefined}
+              title={editorIsDirty ? tUi('m_81d7fb23cd') : undefined}
             >
               <Download aria-hidden />
-              {exporting ? 'Exporting…' : 'Export'}
+              {exporting ? tUi('m_583cccdcd1') : tUi('m_f3e4fadb9e')}
             </Button>
           }
         />
@@ -144,10 +147,8 @@ export function BrandBookActions({
           >
             <Package aria-hidden />
             <span className="flex flex-col">
-              <span>Download brand system</span>
-              <span className="text-xs text-muted-foreground">
-                ZIP with tokens, assets, and PDF
-              </span>
+              <span>{tUi('m_9872d8677f')}</span>
+              <span className="text-xs text-muted-foreground">{tUi('m_4fd67b33be')}</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -156,14 +157,14 @@ export function BrandBookActions({
           >
             <FileText aria-hidden />
             <span className="flex flex-col">
-              <span>Download PDF</span>
-              <span className="text-xs text-muted-foreground">Shareable Brand Book</span>
+              <span>{tUi('m_98e5ef062b')}</span>
+              <span className="text-xs text-muted-foreground">{tUi('m_a7c79f179e')}</span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <Button onClick={handleDeepen} disabled={isPending} variant="secondary">
-        {isPending ? 'Starting…' : 'Deepen analysis'}
+        {isPending ? tUi('m_e5f58095ac') : tUi('m_50a4dfae79')}
       </Button>
     </div>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/components/ui/toast-imperative';
 import { useSession } from '@/hooks/useSession';
@@ -40,6 +41,8 @@ const mergeMessages = (existing: ChatMessage[], incoming: ChatMessage[]) => {
 };
 
 export function useAIStudioChatRealtime(brandProfileId: string, roomId: string = 'main') {
+  const translateUi = useUiTranslations('studio');
+
   const supabase = createSupabaseBrowserClient();
   const { user } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -64,7 +67,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
       if (error) {
         console.error('Error loading chat messages:', error);
         if (showErrorToast) {
-          toast.error('Failed to load chat history');
+          toast.error(translateUi('failed_to_load_chat_history_4382711b'));
         }
         return;
       }
@@ -72,7 +75,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
       const latestMessages = [...(data ?? [])].reverse() as ChatMessage[];
       setMessages(latestMessages);
     },
-    [brandProfileId, roomId, supabase],
+    [brandProfileId, roomId, supabase, translateUi],
   );
 
   // Load initial messages
@@ -141,7 +144,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
 
       if (error) {
         console.error('Error sending message:', error);
-        toast.error('Failed to send message');
+        toast.error(translateUi('failed_to_send_message_66b8e077'));
         return;
       }
 
@@ -153,7 +156,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
         void loadLatestMessages(false);
       }
     },
-    [brandProfileId, roomId, user, supabase, channelStatus, loadLatestMessages],
+    [brandProfileId, roomId, user, supabase, channelStatus, loadLatestMessages, translateUi],
   );
 
   return { messages, sendMessage, isLoading };

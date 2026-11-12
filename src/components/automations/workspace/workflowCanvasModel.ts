@@ -5,6 +5,8 @@ import {
   getAutomationNodePortSpec,
 } from '@continuum/contracts';
 import type { Connection, Edge } from '@xyflow/react';
+import type { useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
 import type { WorkflowCanvasEdge } from './WorkflowEdge';
 import type { WorkflowCanvasNode } from './WorkflowNodeCard';
 
@@ -142,10 +144,18 @@ export function evaluateWorkflowConnection({
     !connection.sourceHandle ||
     !connection.targetHandle
   ) {
-    return { valid: false, code: 'incomplete', reason: 'Choose both an output and an input.' };
+    return {
+      valid: false,
+      code: 'incomplete',
+      reason: 'Choose both an output and an input.',
+    };
   }
   if (connection.source === connection.target) {
-    return { valid: false, code: 'self_connection', reason: 'A node cannot connect to itself.' };
+    return {
+      valid: false,
+      code: 'self_connection',
+      reason: 'A node cannot connect to itself.',
+    };
   }
 
   if (
@@ -157,13 +167,21 @@ export function evaluateWorkflowConnection({
         edge.targetHandle === connection.targetHandle,
     )
   ) {
-    return { valid: false, code: 'duplicate', reason: 'This connection already exists.' };
+    return {
+      valid: false,
+      code: 'duplicate',
+      reason: 'This connection already exists.',
+    };
   }
 
   const source = nodes.find((node) => node.id === connection.source)?.data.workflowNode;
   const target = nodes.find((node) => node.id === connection.target)?.data.workflowNode;
   if (!source || !target) {
-    return { valid: false, code: 'missing_node', reason: 'One of these nodes is unavailable.' };
+    return {
+      valid: false,
+      code: 'missing_node',
+      reason: 'One of these nodes is unavailable.',
+    };
   }
   if (source.disabled || target.disabled) {
     return {
@@ -176,7 +194,11 @@ export function evaluateWorkflowConnection({
   const sourcePort = getAutomationNodePortSpec(source).outputs[connection.sourceHandle];
   const targetPort = getAutomationNodePortSpec(target).inputs[connection.targetHandle];
   if (!sourcePort || !targetPort) {
-    return { valid: false, code: 'missing_port', reason: 'This port is no longer available.' };
+    return {
+      valid: false,
+      code: 'missing_port',
+      reason: 'This port is no longer available.',
+    };
   }
   if (!portTypesCompatible(sourcePort, targetPort)) {
     return {
@@ -228,9 +250,24 @@ export function findCompatibleWorkflowConnection({
   const targetHandles = Object.keys(getAutomationNodePortSpec(target).inputs);
   for (const sourceHandle of sourceHandles) {
     for (const targetHandle of targetHandles) {
-      const connection = { source: sourceId, sourceHandle, target: targetId, targetHandle };
+      const connection = {
+        source: sourceId,
+        sourceHandle,
+        target: targetId,
+        targetHandle,
+      };
       if (evaluateWorkflowConnection({ connection, nodes, edges }).valid) return connection;
     }
   }
   return null;
+}
+
+/** Presentation-only; validation codes and port compatibility remain canonical. */
+export function workflowConnectionMessage(
+  evaluation: WorkflowConnectionEvaluation,
+  t: ReturnType<typeof useTranslations<'automations'>>,
+): string {
+  return evaluation.code === 'incompatible_ports'
+    ? t('m_04876d3481')
+    : localizeAutomationsCopy(evaluation.reason, t);
 }

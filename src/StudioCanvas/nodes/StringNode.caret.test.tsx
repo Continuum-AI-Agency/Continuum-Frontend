@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
@@ -30,7 +35,9 @@ import { StringNode } from './StringNode';
 
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
-    functions: { invoke: async () => ({ data: null, error: new Error('offline in test') }) },
+    functions: {
+      invoke: async () => ({ data: null, error: new Error('offline in test') }),
+    },
   }),
 }));
 
@@ -63,7 +70,11 @@ function Canvas() {
 }
 
 const mountCanvas = async (value: string) => {
-  useStudioStore.setState({ brandId: undefined, nodes: [seedNode(value)], edges: [] });
+  useStudioStore.setState({
+    brandId: undefined,
+    nodes: [seedNode(value)],
+    edges: [],
+  });
   const utils = render(<Canvas />);
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -85,7 +96,11 @@ const typeAt = async (textarea: HTMLTextAreaElement, caret: number, char: string
   textarea.selectionEnd = caret;
   await act(async () => {
     fireEvent.change(textarea, {
-      target: { value: next, selectionStart: caret + 1, selectionEnd: caret + 1 },
+      target: {
+        value: next,
+        selectionStart: caret + 1,
+        selectionEnd: caret + 1,
+      },
     });
   });
 };

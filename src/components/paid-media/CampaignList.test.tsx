@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { CampaignList } from './CampaignList';
 
 // Mock Supabase client
@@ -32,8 +33,20 @@ describe('CampaignList', () => {
         json: () =>
           Promise.resolve({
             campaigns: [
-              { id: 'cmp_1', name: 'Summer Sale', status: 'ACTIVE', spend: 1000, roas: 3.5 },
-              { id: 'cmp_2', name: 'Winter Promo', status: 'PAUSED', spend: 500, roas: 2.0 },
+              {
+                id: 'cmp_1',
+                name: 'Summer Sale',
+                status: 'ACTIVE',
+                spend: 1000,
+                roas: 3.5,
+              },
+              {
+                id: 'cmp_2',
+                name: 'Winter Promo',
+                status: 'PAUSED',
+                spend: 500,
+                roas: 2.0,
+              },
             ],
           }),
       } as Response);

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -135,6 +136,7 @@ export type UseRescheduleDraftResult = {
  * refetch put the card back on its old row; it is persisted with the move now.
  */
 export function useRescheduleDraft(): UseRescheduleDraftResult {
+  const uiText = useTranslations('organic');
   const { show } = useToast();
   const { moveDraft, bulkMoveDrafts, updateDraft, requestCalendarRefetch } = useCalendarStore(
     useShallow((state) => ({
@@ -164,7 +166,10 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
           ? { platform, accountId: retargeted.targetAccountId ?? null }
           : {};
 
-      const moved: Array<{ member: OrganicCalendarDraft; updatedAt: string | null }> = [];
+      const moved: Array<{
+        member: OrganicCalendarDraft;
+        updatedAt: string | null;
+      }> = [];
       for (const member of groupMemberDrafts(draft)) {
         if (!member.backendDraftId) continue;
         const schedule = movesDay ? scheduleFieldPatch(targetDayId, member.timeLabel) : null;
@@ -243,13 +248,13 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
       if (!ok) {
         rollback(snapshot, targetDayId);
         show({
-          title: 'Reschedule failed',
-          description: 'Could not move the post. It was restored to its original slot.',
+          title: uiText('reschedule_failed_e4c2c78'),
+          description: uiText('could_not_move_the_post_it_was_restored_to_it_5bd7fb4'),
           variant: 'error',
         });
       }
     },
-    [moveDraft, applyMove, persistDraft, rollback, show],
+    [moveDraft, applyMove, persistDraft, rollback, show, uiText],
   );
 
   const rescheduleMany = React.useCallback(
@@ -276,13 +281,16 @@ export function useRescheduleDraft(): UseRescheduleDraftResult {
       if (failures.length > 0) {
         for (const snapshot of failures) rollback(snapshot, targetDayId);
         show({
-          title: 'Some posts could not be moved',
-          description: `${failures.length} of ${snapshots.length} could not be rescheduled and were restored.`,
+          title: uiText('some_posts_could_not_be_moved_52c595d'),
+          description: uiText('rescheduleRollback', {
+            failed: failures.length,
+            total: snapshots.length,
+          }),
           variant: 'error',
         });
       }
     },
-    [bulkMoveDrafts, applyMove, persistDraft, rollback, show],
+    [bulkMoveDrafts, applyMove, persistDraft, rollback, show, uiText],
   );
 
   return { reschedule, rescheduleMany };

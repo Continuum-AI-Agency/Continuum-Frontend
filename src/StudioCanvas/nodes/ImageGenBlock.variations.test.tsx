@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps, ReactNode } from 'react';
 import * as RealToolbar from '@/components/ai-elements/toolbar';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { NanoGenNodeData, StudioNode } from '../types';
@@ -127,7 +127,10 @@ describe('ImageGenBlock variation collapse', () => {
   });
 
   it('removes the edges on the handles it stops drawing, and says how many', () => {
-    const data = nodeData({ variationCount: 4, generatedImages: fourVariations });
+    const data = nodeData({
+      variationCount: 4,
+      generatedImages: fourVariations,
+    });
     seedGraph(data, ['image', 'image-1', 'image-2', 'image-3']);
     expect(useStudioStore.getState().edges).toHaveLength(4);
 
@@ -155,12 +158,15 @@ describe('ImageGenBlock variation collapse', () => {
   it('does not touch another node’s variation edges', () => {
     const data = nodeData({ variationCount: 4 });
     seedGraph(data, ['image', 'image-2']);
-    useStudioStore
-      .getState()
-      .setEdges([
-        ...useStudioStore.getState().edges,
-        { ...variationEdge('image-3'), id: 'e-other', source: 'consumer', target: 'gen1' },
-      ]);
+    useStudioStore.getState().setEdges([
+      ...useStudioStore.getState().edges,
+      {
+        ...variationEdge('image-3'),
+        id: 'e-other',
+        source: 'consumer',
+        target: 'gen1',
+      },
+    ]);
 
     const { getByTitle } = renderNode(data);
     fireEvent.click(getByTitle('Generate 1 variation'));

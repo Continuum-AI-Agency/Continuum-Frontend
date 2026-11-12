@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The board's header (O01): how Continuum works this account — the mode, as a badge, and the
 // reading's sentence for it, in the account's language — and the result that counts, as a chip.
@@ -36,8 +37,14 @@ const MODE_TONE: Record<AdAccountMode, { band: string; badge: string }> = {
     band: 'border-destructive/30 bg-destructive/5',
     badge: 'border-destructive/30 text-destructive-ink',
   },
-  operate: { band: 'border-success/30 bg-success/5', badge: 'border-success/30 text-success-ink' },
-  approve: { band: 'border-primary/30 bg-primary/5', badge: 'border-primary/30 text-primary-ink' },
+  operate: {
+    band: 'border-success/30 bg-success/5',
+    badge: 'border-success/30 text-success-ink',
+  },
+  approve: {
+    band: 'border-primary/30 bg-primary/5',
+    badge: 'border-primary/30 text-primary-ink',
+  },
   recommend: { band: 'bg-card', badge: 'border-border text-foreground' },
   setup: { band: 'bg-card', badge: 'border-border/60 text-muted-foreground' },
 };
@@ -60,6 +67,8 @@ export function BoardHeader({
   /** The layout switch, drawn at the header's right. */
   toggle?: ReactNode;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const Icon = MODE_ICON[reading.mode];
   const tone = MODE_TONE[reading.mode];
   return (
@@ -88,7 +97,7 @@ export function BoardHeader({
         <span
           className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs"
           data-testid="board-result-chip"
-          title="The result that counts on this account"
+          title={betaUiText('beta_99311daf6473')}
         >
           <TargetIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{resultChipText(reading.result)}</span>

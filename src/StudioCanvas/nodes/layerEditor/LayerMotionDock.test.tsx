@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { LayerEditorLayer } from '../../types';
 import { LayerMotionDock, layerMotionDurationSec } from './LayerMotionDock';
 
@@ -51,7 +51,9 @@ describe('LayerMotionDock', () => {
       />,
     );
     expect(view.getByTestId('layer-motion-dock')).toBeTruthy();
-    fireEvent.change(view.getByLabelText('Layer motion playhead'), { target: { value: '1.5' } });
+    fireEvent.change(view.getByLabelText('Layer motion playhead'), {
+      target: { value: '1.5' },
+    });
     expect(seeks.at(-1)).toBe(1.5);
   });
 });

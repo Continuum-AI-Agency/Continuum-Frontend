@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 /**
  * The bar that turns the OpenAI canvas from a sketchpad into a view of a real campaign —
  * and, unlike its Meta sibling `ScaffoldRecordBar`, back again.
@@ -62,6 +65,8 @@ type OpenAiCampaignBarProps = {
 };
 
 export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const { show } = useToast();
   const nodes = useCampaignStore((store) => store.nodes);
   const edges = useCampaignStore((store) => store.edges);
@@ -95,15 +100,15 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
         );
       } catch (error) {
         show({
-          title: 'Could not open the campaign',
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: uiText('could_not_open_the_campaign_1ccdae6'),
+          description: formatUiError(error),
           variant: 'error',
         });
       } finally {
         setIsLoadingGraph(false);
       }
     },
-    [account.data?.account.currency_code, loadOpenAiGraph, scope, show],
+    [account.data?.account.currency_code, loadOpenAiGraph, scope, show, formatUiError, uiText],
   );
 
   const handleSelect = React.useCallback(
@@ -121,8 +126,16 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
 
   /** Build the plan and show it. Nothing is sent until the dialog is confirmed. */
   const handlePreviewPublish = React.useCallback(() => {
-    setPlan(planOpenAiPublish({ nodes, edges, baseline }));
-  }, [baseline, edges, nodes]);
+    setPlan(
+      planOpenAiPublish({
+        nodes,
+        edges,
+        baseline,
+        translateIssue: (code, label) =>
+          uiText('openai_publish_issue', { code, label: label ?? '' }),
+      }),
+    );
+  }, [baseline, edges, nodes, uiText]);
 
   const handleConfirmPublish = React.useCallback(async () => {
     if (!plan || !scope) return;
@@ -150,14 +163,21 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
         // Report what LANDED as well as what broke. A partial publish is a real state, and
         // a bare "failed" would have someone retry a create that already succeeded.
         show({
-          title: `Published ${outcome.applied.length} of ${plan.steps.length} changes`,
-          description: `${describeOpenAiPublishStep(outcome.failure.step)} failed: ${outcome.failure.message}`,
+          title: uiText('canvas_published_count', {
+            applied: outcome.applied.length,
+            total: plan.steps.length,
+          }),
+          description: uiText('canvas_partial_failure', {
+            error: formatUiError(outcome.failure),
+          }),
           variant: 'error',
         });
       } else {
         show({
-          title: 'Published',
-          description: `${plan.steps.length} change${plan.steps.length === 1 ? '' : 's'} applied. Everything new is paused.`,
+          title: uiText('published_2ef42ec'),
+          description: uiText('canvas_change_paused_count', {
+            count: plan.steps.length,
+          }),
           variant: 'success',
         });
       }
@@ -173,7 +193,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
     } finally {
       setIsPublishing(false);
     }
-  }, [campaigns, hydration?.campaignId, nodes, plan, reload, scope, show]);
+  }, [campaigns, hydration?.campaignId, nodes, plan, reload, scope, show, uiText, formatUiError]);
 
   const handleStateChange = React.useCallback(
     async (action: 'activate' | 'pause') => {
@@ -182,21 +202,24 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
       try {
         await setOpenAiEntityState(scope, 'campaign', hydration.campaignId, action);
         show({
-          title: action === 'activate' ? 'Campaign activated' : 'Campaign paused',
+          title:
+            action === 'activate'
+              ? uiText('campaign_activated_6b334c0')
+              : uiText('campaign_paused_e6927ba'),
           variant: 'success',
         });
         await reload(hydration.campaignId);
       } catch (error) {
         show({
-          title: 'Could not change the campaign state',
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: uiText('could_not_change_the_campaign_state_c970716'),
+          description: formatUiError(error),
           variant: 'error',
         });
       } finally {
         setIsChangingState(false);
       }
     },
-    [hydration?.campaignId, reload, scope, show],
+    [hydration?.campaignId, reload, scope, show, formatUiError, uiText],
   );
 
   const servable = account.data?.servable ?? true;
@@ -206,7 +229,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
   if (!adAccountId) {
     return (
       <div className="pointer-events-auto rounded-full border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
-        Pick an OpenAI ad account to start.
+        {uiText('pick_an_openai_ad_account_to_start_271b897')}
       </div>
     );
   }
@@ -219,7 +242,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
         ) : (
           <Select value={selectedId} onValueChange={handleSelect}>
             <SelectTrigger className="h-7 min-w-[11rem] rounded-full border-0 bg-muted/50 text-xs">
-              <SelectValue placeholder="Open a campaign" />
+              <SelectValue placeholder={uiText('open_a_campaign_cf3c8cc')} />
             </SelectTrigger>
             <SelectContent>
               {(campaigns.data?.data ?? []).map((campaign) => (
@@ -238,7 +261,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
           onClick={handleNew}
         >
           <Plus className="h-3 w-3" />
-          New
+          {uiText('new_18fdd54')}
         </Button>
 
         {isLoadingGraph ? (
@@ -254,15 +277,18 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
 
         {isDirty ? (
           <Pill className="h-6 gap-1 px-2 text-2xs">
-            <PillIndicator variant="warning" />
-            Edited
+            {uiText.rich('sentence_08508529d397', {
+              v0: () => <PillIndicator variant="warning" />,
+            })}
           </Pill>
         ) : null}
 
         {!servable ? (
           <Pill className="h-6 gap-1 px-2 text-2xs" title={reviewReason ?? undefined}>
-            <PillIndicator variant="warning" />
-            Review {account.data?.account.review?.status ?? 'pending'}
+            {uiText.rich('sentence_ca3479ce4660', {
+              v0: () => <PillIndicator variant="warning" />,
+              v1: account.data?.account.review?.status ?? 'pending',
+            })}
           </Pill>
         ) : null}
 
@@ -273,7 +299,7 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
           disabled={isPublishing || nodes.length === 0}
         >
           <Send className="h-3 w-3" />
-          Publish changes
+          {uiText('publish_changes_defa65f')}
         </Button>
 
         {hydration ? (
@@ -285,12 +311,12 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
             disabled={isChangingState || (!isActive && !servable)}
             title={
               !isActive && !servable
-                ? 'This ad account cannot serve until its brand review is approved.'
+                ? uiText('this_ad_account_cannot_serve_until_its_brand__ddd4e27')
                 : undefined
             }
           >
             {isActive ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-            {isActive ? 'Pause' : 'Activate'}
+            {isActive ? uiText('pause_858e4ba') : uiText('activate_24433c7')}
           </Button>
         ) : null}
       </div>
@@ -299,12 +325,14 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {plan?.issues.length ? 'This campaign is not ready' : 'Publish to OpenAI Ads'}
+              {plan?.issues.length
+                ? uiText('this_campaign_is_not_ready_af040d7')
+                : uiText('publish_to_openai_ads_883f8d7')}
             </DialogTitle>
             <DialogDescription>
               {plan?.issues.length
-                ? 'Fix these before publishing.'
-                : 'Everything created lands paused. Activating is a separate action.'}
+                ? uiText('fix_these_before_publishing_6e3058d')
+                : uiText('everything_created_lands_paused_activating_is_cb7ab89')}
             </DialogDescription>
           </DialogHeader>
 
@@ -328,26 +356,34 @@ export function OpenAiCampaignBar({ brandId, adAccountId }: OpenAiCampaignBarPro
                       : 'rounded-md border px-2 py-1.5'
                   }
                 >
-                  {describeOpenAiPublishStep(step)}
+                  {describeOpenAiPublishStep(step, (kind, values) =>
+                    uiText('openai_publish_step', {
+                      ...values,
+                      kind: kind.replaceAll('-', '_'),
+                    }),
+                  )}
                 </li>
               ))}
             </ol>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Nothing has changed since this campaign was opened.
+              {uiText('nothing_has_changed_since_this_campaign_was_o_37e477a')}
             </p>
           )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setPlan(null)} disabled={isPublishing}>
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button
               onClick={handleConfirmPublish}
               disabled={isPublishing || !plan || plan.issues.length > 0 || plan.steps.length === 0}
             >
-              {isPublishing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-              Publish {plan?.steps.length ?? 0}
+              {uiText.rich('sentence_762b7c93acd5', {
+                icon: () =>
+                  isPublishing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null,
+                count: plan?.steps.length ?? 0,
+              })}
             </Button>
           </DialogFooter>
         </DialogContent>

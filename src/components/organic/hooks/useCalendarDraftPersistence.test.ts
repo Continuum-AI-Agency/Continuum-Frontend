@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { renderHook, waitFor } from '@testing-library/react';
-
+import { waitFor } from '@testing-library/react';
 import { makeCalendarDay } from '@/components/organic/primitives/calendar-utils';
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
 } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
-type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+type RequestOptions = {
+  path: string;
+  method?: string;
+  body?: Record<string, unknown>;
+};
 const requestCalls: RequestOptions[] = [];
 const request = mock(async (opts: RequestOptions) => {
   requestCalls.push(opts);
@@ -20,14 +24,19 @@ const request = mock(async (opts: RequestOptions) => {
 const upserts: Record<string, unknown>[] = [];
 const updates: Record<string, unknown>[] = [];
 const supabase = {
-  auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1' } } } }) },
+  auth: {
+    getSession: async () => ({ data: { session: { user: { id: 'user-1' } } } }),
+  },
   schema: () => ({
     from: () => ({
       upsert: (row: Record<string, unknown>) => {
         upserts.push(row);
         return {
           select: () => ({
-            single: async () => ({ data: { id: 'srv-new', updated_at: 'T0' }, error: null }),
+            single: async () => ({
+              data: { id: 'srv-new', updated_at: 'T0' },
+              error: null,
+            }),
           }),
         };
       },
@@ -40,7 +49,9 @@ const supabase = {
 };
 
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
-mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: () => supabase }));
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => supabase,
+}));
 mock.module('@/lib/organic/store', () => createCalendarStoreStub({}));
 
 const { useCalendarDraftPersistence } = await import('./useCalendarDraftPersistence');
@@ -104,7 +115,12 @@ describe('useCalendarDraftPersistence', () => {
     await waitFor(() => expect(result.current.isHydrated).toBe(true));
 
     rerender({
-      days: onDay({ ...saved, captionPreview: 'edited', timeLabel: '1:00 PM', status: 'draft' }),
+      days: onDay({
+        ...saved,
+        captionPreview: 'edited',
+        timeLabel: '1:00 PM',
+        status: 'draft',
+      }),
     });
     await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -139,7 +155,10 @@ describe('useCalendarDraftPersistence', () => {
     const stamped = updateDraftById.mock.calls
       .filter(([id]) => id === 'local-1')
       .reduce((draft, [, updater]) => updater(draft), manualDraft());
-    expect(stamped).toMatchObject({ backendDraftId: 'srv-new', updatedAt: 'T1' });
+    expect(stamped).toMatchObject({
+      backendDraftId: 'srv-new',
+      updatedAt: 'T1',
+    });
     expect(updates).toEqual([]);
   });
 });

@@ -100,7 +100,6 @@ mock.module('next/link', () => ({
   ),
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
 import { useState } from 'react';
 import {
@@ -108,6 +107,13 @@ import {
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { RenderPreflightRow } from './DeliveryTargetPicker';
 import {
   DeliveryTargetPicker,
@@ -131,7 +137,12 @@ const CONNECTED: ApiRenderDeliveryDestinationsResponse['meta'] = {
 
 const ROWS: RenderPreflightRow[] = [
   { rowId: 'root', label: 'Root', labelPath: ['Root'], outputIds: [] },
-  { rowId: 'spain', label: 'Spain', labelPath: ['Root', 'Spain'], outputIds: ['story'] },
+  {
+    rowId: 'spain',
+    label: 'Spain',
+    labelPath: ['Root', 'Spain'],
+    outputIds: ['story'],
+  },
 ];
 
 let latest: { rows: RenderPreflightRow[]; formats: Record<string, string> } = {
@@ -319,7 +330,9 @@ describe('DeliveryTargetPicker', () => {
     ]);
     // A new paused ad needs no format, so the drill-down still opens.
     expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Change the ad for Root' }).disabled,
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Change the ad for Root',
+      }).disabled,
     ).toBe(false);
   }, 30_000);
 

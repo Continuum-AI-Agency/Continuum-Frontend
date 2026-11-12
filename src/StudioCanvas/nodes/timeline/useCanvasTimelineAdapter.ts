@@ -1,7 +1,8 @@
 'use client';
 
 import { timelineRenderFingerprint } from '@continuum/contracts';
-import { useCallback, useMemo } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useCallback, useMemo, useMemo as useUiConfigMemo } from 'react';
 import { completeCanvasRender } from '@/lib/api/canvasRender.client';
 import { useCanvasRuntime } from '../../contexts/CanvasRuntimeContext';
 import { useStudioStore } from '../../stores/useStudioStore';
@@ -33,19 +34,30 @@ import type {
 const EMPTY_ITEMS: TimelineItem[] = [];
 const EMPTY_NODE_DATA: TimelineEditorNodeData = { items: EMPTY_ITEMS };
 
-const CANVAS_RENDER_SINKS: TimelineRenderSink[] = [
-  {
-    kind: 'canvas-workflow',
-    label: 'Render & Continue',
-    description: 'Save the clip to your library and resume the workflow.',
-  },
-];
+function useLocalCanvasRenderSinksMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: TimelineRenderSink[] = [
+      {
+        kind: 'canvas-workflow',
+        label: translateConfig('render_continue_e998df3b'),
+        description: translateConfig('save_the_clip_to_your_library_and_r_7a7892a3'),
+      },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
-const CANVAS_HEADER = {
-  title: 'Video Editor',
-  description:
-    'Place clips & stills, trim, split, then render. The clip is saved to your library and the workflow continues.',
-};
+function useLocalCanvasHeaderMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value = {
+      title: translateConfig('video_editor_d9393765'),
+      description: translateConfig('place_clips_stills_trim_split_then__d3e3fd2c'),
+    };
+    return value;
+  }, [translateConfig]);
+}
 
 function reportPlannerCompositionStatus(
   brandId: string | undefined,
@@ -57,7 +69,12 @@ function reportPlannerCompositionStatus(
   void fetch('/api/organic/ai-studio/compositions', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brandId, compositionId, status, ...(error ? { error } : {}) }),
+    body: JSON.stringify({
+      brandId,
+      compositionId,
+      status,
+      ...(error ? { error } : {}),
+    }),
   });
 }
 
@@ -129,6 +146,12 @@ export function patchNodeDocument(
 }
 
 export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter {
+  const CANVAS_RENDER_SINKS = useLocalCanvasRenderSinksMessages();
+
+  const CANVAS_HEADER = useLocalCanvasHeaderMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
   const edges = useStudioStore((state) => state.edges);
   const brandId = useStudioStore((state) => state.brandId);
@@ -257,9 +280,17 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
             ...(request
               ? {
                   agentRenderRequest: state.error
-                    ? { ...request, status: 'error' as const, error: state.error }
+                    ? {
+                        ...request,
+                        status: 'error' as const,
+                        error: state.error,
+                      }
                     : state.isExecuting && request.status === 'pending'
-                      ? { ...request, status: 'accepted' as const, error: undefined }
+                      ? {
+                          ...request,
+                          status: 'accepted' as const,
+                          error: undefined,
+                        }
                       : request,
                 }
               : {}),
@@ -278,11 +309,11 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
             brandProfileId: runtime.brandProfileId,
             roomId: runtime.roomId,
             nodeId,
-            label: 'Video Editor',
+            label: translateUi('video_editor_d9393765'),
             viewHref: `/ai-studio?roomId=${encodeURIComponent(runtime.roomId)}&focusNodeId=${encodeURIComponent(nodeId)}`,
           }
         : undefined,
-    [nodeId, runtime],
+    [nodeId, runtime, translateUi],
   );
 
   const captureRenderSnapshot = useCallback((): TimelineRenderSnapshot => {
@@ -497,6 +528,8 @@ export function useCanvasTimelineAdapter(nodeId: string): TimelineEditorAdapter 
       resolveAudioTracks,
       resolveSources,
       runtime,
+      CANVAS_HEADER,
+      CANVAS_RENDER_SINKS,
     ],
   );
 }

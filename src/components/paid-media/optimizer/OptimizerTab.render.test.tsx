@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // What gates the surface: the portfolio read, and nothing else. Every section is a stub so
 // this file is about the shell's loading behaviour, not the sections' own reads.
@@ -35,7 +36,11 @@ let onPlatform: Record<'google_ads' | 'tiktok_ads', PortfolioListItem[]> = {
 let actionsProps: Record<string, unknown> | null = null;
 let portfoliosProps: Record<string, unknown> | null = null;
 /** The brand's assigned ad accounts (plugin_mcp.list_brand_ad_accounts rows). */
-let assignedAccounts: { platform: string; account_id: string; name: string | null }[] = [];
+let assignedAccounts: {
+  platform: string;
+  account_id: string;
+  name: string | null;
+}[] = [];
 
 mock.module('./useOptimizerData', () => ({
   ...realOptimizerData,
@@ -49,7 +54,10 @@ mock.module('./useOptimizerData', () => ({
   }),
   // Secondary reads: a pending one must never hold the surface.
   useOptimizerRenewals: () => ({ data: [], isLoading: pendingSecondaryRead }),
-  useOptimizerAdAccounts: () => ({ data: assignedAccounts, isLoading: pendingSecondaryRead }),
+  useOptimizerAdAccounts: () => ({
+    data: assignedAccounts,
+    isLoading: pendingSecondaryRead,
+  }),
   useOptimizerPlatformPortfolios: (_brandId: string, platform: 'google_ads' | 'tiktok_ads') => ({
     data: onPlatform[platform],
   }),
@@ -151,7 +159,12 @@ function renderTab() {
 }
 
 beforeEach(() => {
-  portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [PORTFOLIO] };
+  portfolios = {
+    isLoading: false,
+    isError: false,
+    hasAnswer: true,
+    data: [PORTFOLIO],
+  };
   pendingSecondaryRead = false;
   view = 'overview';
   platformTab = 'all';
@@ -173,9 +186,18 @@ beforeEach(() => {
 // names is the same New portfolio control every other state of the surface carries.
 describe('OptimizerTab on an account with no portfolios while the brand has them elsewhere', () => {
   beforeEach(() => {
-    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
+    portfolios = {
+      isLoading: false,
+      isError: false,
+      hasAnswer: true,
+      data: [],
+    };
     elsewhere = [
-      { ...PORTFOLIO, id: '22222222-2222-4222-8222-222222222222', ad_account_id: 'act_2' },
+      {
+        ...PORTFOLIO,
+        id: '22222222-2222-4222-8222-222222222222',
+        ad_account_id: 'act_2',
+      },
     ];
   });
 
@@ -195,7 +217,11 @@ describe('OptimizerTab on an account with no portfolios while the brand has them
     renderTab();
 
     expect(screen.getByTestId('create-section')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'No portfolios on this ad account' })).toBeNull();
+    expect(
+      screen.queryByRole('heading', {
+        name: 'No portfolios on this ad account',
+      }),
+    ).toBeNull();
   });
 });
 
@@ -206,7 +232,12 @@ afterEach(() => {
 
 describe('OptimizerTab loading behaviour', () => {
   it('shows the skeleton only while the portfolio read has never answered', () => {
-    portfolios = { isLoading: true, isError: false, hasAnswer: false, data: [] };
+    portfolios = {
+      isLoading: true,
+      isError: false,
+      hasAnswer: false,
+      data: [],
+    };
     renderTab();
 
     expect(screen.getByText('Loading optimizer')).toBeTruthy();
@@ -214,7 +245,12 @@ describe('OptimizerTab loading behaviour', () => {
   });
 
   it('goes offline when the first read fails and there is nothing to show', () => {
-    portfolios = { isLoading: false, isError: true, hasAnswer: false, data: [] };
+    portfolios = {
+      isLoading: false,
+      isError: true,
+      hasAnswer: false,
+      data: [],
+    };
     renderTab();
 
     expect(screen.getByText("Can't reach the optimizer")).toBeTruthy();
@@ -222,7 +258,12 @@ describe('OptimizerTab loading behaviour', () => {
   });
 
   it('keeps painting the last answer when a refresh fails, with a retry in place', () => {
-    portfolios = { isLoading: false, isError: true, hasAnswer: true, data: [PORTFOLIO] };
+    portfolios = {
+      isLoading: false,
+      isError: true,
+      hasAnswer: true,
+      data: [PORTFOLIO],
+    };
     renderTab();
 
     expect(screen.queryByText("Can't reach the optimizer")).toBeNull();
@@ -366,7 +407,11 @@ describe('OptimizerTab — the Google tab (G2)', () => {
 
   it('still drops the id of a Meta portfolio on another account, as after an account switch', () => {
     elsewhere = [
-      { ...GOOGLE_ONLY, ad_account_id: 'act_2', platforms: ['meta', 'google_ads'] },
+      {
+        ...GOOGLE_ONLY,
+        ad_account_id: 'act_2',
+        platforms: ['meta', 'google_ads'],
+      },
     ] as PortfolioListItem[];
     openPortfolioId = GOOGLE_ONLY.id;
     renderTab();
@@ -394,19 +439,33 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
   const EASY_FIT_G2 = google('aaaaaaaa-0000-4000-8000-000000000002');
 
   it("opens Easy Fit's shape on the Google tab, not the other-account notice", () => {
-    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
+    portfolios = {
+      isLoading: false,
+      isError: false,
+      hasAnswer: true,
+      data: [],
+    };
     elsewhere = [EASY_FIT_G1, EASY_FIT_G2];
     onPlatform = { google_ads: [EASY_FIT_G1, EASY_FIT_G2], tiktok_ads: [] };
     renderTab();
     expect(screen.getByTestId('overview-section')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'No portfolios on this ad account' })).toBeNull();
+    expect(
+      screen.queryByRole('heading', {
+        name: 'No portfolios on this ad account',
+      }),
+    ).toBeNull();
     expect(screen.queryByTestId('onboarding-section')).toBeNull();
     expect(setPlatform).toHaveBeenCalledTimes(1);
     expect(setPlatform).toHaveBeenCalledWith('google_ads');
   });
 
   it('lands once: a person who then picks Meta stays on Meta, and a Google link is left alone', () => {
-    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
+    portfolios = {
+      isLoading: false,
+      isError: false,
+      hasAnswer: true,
+      data: [],
+    };
     onPlatform = { google_ads: [EASY_FIT_G1], tiktok_ads: [] };
     const { rerender } = renderTab();
     platformTab = 'meta';
@@ -420,7 +479,12 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
   });
 
   it('keeps the other-account notice for a Meta portfolio on a different Meta account', () => {
-    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
+    portfolios = {
+      isLoading: false,
+      isError: false,
+      hasAnswer: true,
+      data: [],
+    };
     elsewhere = [
       {
         ...PORTFOLIO,
@@ -436,7 +500,12 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
   });
 
   it('keeps onboarding for a brand with no portfolio anywhere', () => {
-    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [] };
+    portfolios = {
+      isLoading: false,
+      isError: false,
+      hasAnswer: true,
+      data: [],
+    };
     renderTab();
     expect(screen.getByTestId('onboarding-section')).toBeTruthy();
     expect(setPlatform).not.toHaveBeenCalled();
@@ -448,7 +517,12 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
       pending_recommendations: 1,
       platforms: ['meta', 'google_ads'],
     } as PortfolioListItem;
-    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [mixed] };
+    portfolios = {
+      isLoading: false,
+      isError: false,
+      hasAnswer: true,
+      data: [mixed],
+    };
     onPlatform = { google_ads: [mixed, EASY_FIT_G1], tiktok_ads: [] };
     view = 'actions';
     renderTab();
@@ -462,14 +536,22 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
   // view, narrowed to the selected Meta account, never listed its Google-only portfolios
   // (5aaf5931 "Test — Google Ads (Easy Fit)") on any account the person could pick.
   it("lists the brand's Google-only portfolios in Portfolios beside the account's own, each once", () => {
-    const mixed = { ...PORTFOLIO, platforms: ['meta', 'google_ads'] } as PortfolioListItem;
+    const mixed = {
+      ...PORTFOLIO,
+      platforms: ['meta', 'google_ads'],
+    } as PortfolioListItem;
     const otherMetaAccount = {
       ...PORTFOLIO,
       id: '22222222-2222-4222-8222-222222222222',
       ad_account_id: 'act_2',
       platforms: ['meta'],
     } as PortfolioListItem;
-    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [mixed] };
+    portfolios = {
+      isLoading: false,
+      isError: false,
+      hasAnswer: true,
+      data: [mixed],
+    };
     elsewhere = [otherMetaAccount, EASY_FIT_G1];
     onPlatform = { google_ads: [mixed, EASY_FIT_G1], tiktok_ads: [] };
     view = 'portfolios';
@@ -486,7 +568,11 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
 describe('OptimizerTab on a brand whose selected account is a Google one', () => {
   it('reads Meta as not connected, Google as connected', () => {
     assignedAccounts = [
-      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+      {
+        platform: 'google_ads',
+        account_id: '6619636193',
+        name: 'Pink Elephant',
+      },
     ];
     render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
     const meta = screen.getByTestId('platform-tab-meta');
@@ -509,7 +595,11 @@ describe('OptimizerTab on a brand whose selected account is a Google one', () =>
 describe('OptimizerTab opened on a Google account', () => {
   it('lands on the Google tab instead of an empty All', () => {
     assignedAccounts = [
-      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+      {
+        platform: 'google_ads',
+        account_id: '6619636193',
+        name: 'Pink Elephant',
+      },
     ];
     render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
     expect(setPlatform).toHaveBeenCalledWith('google_ads');

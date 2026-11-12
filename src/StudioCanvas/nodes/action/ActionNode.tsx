@@ -1,3 +1,4 @@
+import { workflowNodeError } from '../../utils/workflowUiFailure';
 // ONE component for all 31 catalog ops. An op is a registry entry in
 // `action-registry.ts` plus a runner row in `utils/actions/` — never a React file, and
 // never a branch in here. Anything that differs between ops (label, ports, knobs,
@@ -22,10 +23,11 @@ import {
   type Node as ReactFlowNode,
 } from '@xyflow/react';
 import { ChevronDown, ChevronUp, Loader2, Wand2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback } from 'react';
-
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
+import { useStudioMetadata } from '../../hooks/useStudioMetadata';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { ActionNodeData } from '../../types';
@@ -38,18 +40,24 @@ import { NodeDownloadButton } from '../NodeDownloadButton';
 import { ActionBrandNote } from './ActionBrandNote';
 import { ActionConfigPopover } from './ActionConfigPopover';
 
-const sourceLabel = (node: { type?: string; data?: unknown } | undefined): string => {
+const sourceLabel = (
+  node: { type?: string; data?: unknown } | undefined,
+  metadata: (source: string) => string,
+): string => {
   const nodeData = (node?.data ?? {}) as Record<string, unknown>;
   if (typeof nodeData.label === 'string' && nodeData.label.trim()) return nodeData.label.trim();
   if (typeof nodeData.fileName === 'string' && nodeData.fileName.trim()) {
     return nodeData.fileName.trim();
   }
   const action = actionDef(nodeData.actionId);
-  if (action) return action.label;
-  return STUDIO_NODE_REGISTRY[node?.type as StudioNodeType]?.label ?? 'Input';
+  if (action) return metadata(action.label);
+  return metadata(STUDIO_NODE_REGISTRY[node?.type as StudioNodeType]?.label ?? 'Input');
 };
 
 export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<ActionNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+  const metadata = useStudioMetadata();
+
   const executionControls = useWorkflowExecution();
   const brandId = useStudioStore((state) => state.brandId);
   const roomId = useStudioStore((state) => state.activeRoomId);
@@ -70,7 +78,11 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
 
   // Handles are DERIVED from the same functions the connection validator consults, so a
   // drawn port can never disagree with an allowed one (studio:handle-parity:bench).
-  const graphNode = { id, type: 'action', data: data as Record<string, unknown> };
+  const graphNode = {
+    id,
+    type: 'action',
+    data: data as Record<string, unknown>,
+  };
   const targetHandles = getAllowedTargetHandles(graphNode);
   const sourceHandles = getAllowedSourceHandles(graphNode);
   const outputModality = actionOutputModality(data.actionId);
@@ -117,10 +129,12 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
       >
         <NodeTitleBar
           icon={Wand2}
-          label={def?.label ?? 'Pick an operation'}
-          title={def?.description}
+          label={def ? metadata(def.label) : translateUi('pick_an_operation_e779937c')}
+          title={def ? metadata(def.description) : undefined}
         >
-          {outputModality ? <NodeBadge>{MODALITY_LABEL[outputModality]}</NodeBadge> : null}
+          {outputModality ? (
+            <NodeBadge>{metadata(MODALITY_LABEL[outputModality])}</NodeBadge>
+          ) : null}
           {/* Still no per-op branch in here: which ops have a brand value to name is decided
               inside ActionBrandNote, beside the resolver it reads. */}
           {actionId ? <ActionBrandNote actionId={actionId} /> : null}
@@ -137,23 +151,31 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 data={data}
                 emptyLabel={
                   implemented
-                    ? 'Ready to run'
-                    : (heldBack ??
-                      `${def.label} is not available yet — no runner has shipped for it.`)
+                    ? metadata('Ready to run')
+                    : heldBack
+                      ? metadata(heldBack)
+                      : translateUi('actionUnavailable', {
+                          operation: metadata(def.label),
+                        })
                 }
               />
               {orderedEdges.length > 0 ? (
                 <div className="nodrag absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-4.5rem)] space-y-0.5 rounded-md border border-border/60 bg-background/95 p-1 shadow-sm">
                   {orderedEdges.map((edge, index) => {
-                    const label = sourceLabel(nodes.find((node) => node.id === edge.source));
-                    const position =
-                      orderedEdges.length === 1
-                        ? ' · First · Last'
-                        : index === 0
-                          ? ' · First'
-                          : index === orderedEdges.length - 1
-                            ? ' · Last'
-                            : '';
+                    const label = sourceLabel(
+                      nodes.find((node) => node.id === edge.source),
+                      metadata,
+                    );
+                    const position = translateUi('orderedInputPosition', {
+                      position:
+                        orderedEdges.length === 1
+                          ? 'both'
+                          : index === 0
+                            ? 'first'
+                            : index === orderedEdges.length - 1
+                              ? 'last'
+                              : 'other',
+                    });
                     return (
                       <div key={edge.id} className="flex min-w-0 items-center gap-0.5 text-2xs">
                         <span className="min-w-0 flex-1 truncate">{`${index + 1} · ${label}${position}`}</span>
@@ -161,7 +183,9 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                           variant="ghost"
                           size="icon"
                           className="size-5"
-                          aria-label={`Move ${label} earlier`}
+                          aria-label={translateUi('move_value0_earlier_46194c47', {
+                            value0: String(label),
+                          })}
                           disabled={index === 0}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={() => moveInput(edge.id, -1)}
@@ -172,7 +196,9 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                           variant="ghost"
                           size="icon"
                           className="size-5"
-                          aria-label={`Move ${label} later`}
+                          aria-label={translateUi('move_value0_later_aef5684d', {
+                            value0: String(label),
+                          })}
                           disabled={index === orderedEdges.length - 1}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={() => moveInput(edge.id, 1)}
@@ -191,8 +217,8 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={() => void run()}
               >
-                {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                Run
+                {data.isExecuting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}{' '}
+                {translateUi('run_00d60e31')}{' '}
               </Button>
               {/* Every op that lands an image or a clip carries the save; the text ops
                   render nothing here, because the button reads the OUTPUT and a string
@@ -203,12 +229,15 @@ export function ActionNode({ id, data, selected }: NodeProps<ReactFlowNode<Actio
                 baseName={def.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
               />
               {data.error ? (
-                <NodeOverlayNote tone="destructive">{data.error}</NodeOverlayNote>
+                <NodeOverlayNote tone="destructive">
+                  {workflowNodeError(data, translateUi)}
+                </NodeOverlayNote>
               ) : null}
             </>
           ) : (
             <span className="px-3 text-center text-xs text-muted-foreground">
-              Choose an operation for this node from the canvas menu.
+              {' '}
+              {translateUi('choose_an_operation_for_this_node_f_fee91761')}{' '}
             </span>
           )}
         </NodeContent>

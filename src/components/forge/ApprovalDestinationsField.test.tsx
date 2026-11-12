@@ -7,8 +7,14 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import type { RenderApprovalDestination } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const SLACK_ROOM: RenderApprovalDestination = {
@@ -142,7 +148,11 @@ test('Manage approvers opens that room’s approver panel and closes it again', 
     name: 'Manage approvers for Vivo47 approvals',
   });
   fireEvent.click(manage);
-  expect(await screen.findByRole('group', { name: 'Approvers for Vivo47 approvals' })).toBeTruthy();
+  expect(
+    await screen.findByRole('group', {
+      name: 'Approvers for Vivo47 approvals',
+    }),
+  ).toBeTruthy();
   await waitFor(() => expect(fetchDestinationApprovers).toHaveBeenCalledWith(WHATSAPP_ROOM.id));
   expect(manage.getAttribute('aria-expanded')).toBe('true');
 
@@ -156,7 +166,9 @@ test('pre-selects the rooms this brand last asked in', async () => {
   picked.length = 0;
   defaultDestinationIds = [WHATSAPP_ROOM.id];
   renderField();
-  const whatsapp = await screen.findByRole('checkbox', { name: /Vivo47 approvals/ });
+  const whatsapp = await screen.findByRole('checkbox', {
+    name: /Vivo47 approvals/,
+  });
   await waitFor(() => expect(isChecked(whatsapp)).toBe(true));
   expect(isChecked(roomBox(/#client-review/))).toBe(false);
 });
@@ -165,7 +177,9 @@ test('clearing every room stays cleared — the default does not argue back', as
   picked.length = 0;
   defaultDestinationIds = [WHATSAPP_ROOM.id];
   renderField();
-  const whatsapp = await screen.findByRole('checkbox', { name: /Vivo47 approvals/ });
+  const whatsapp = await screen.findByRole('checkbox', {
+    name: /Vivo47 approvals/,
+  });
   await waitFor(() => expect(isChecked(whatsapp)).toBe(true));
 
   clickRoom('Vivo47 approvals');

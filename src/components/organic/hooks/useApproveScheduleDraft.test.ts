@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import * as React from 'react';
-
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+} from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { publishAccountsKey } from '@/lib/organic/publishTargets';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -41,7 +45,9 @@ const candidate = (id: string, platform: string, handle: string) => ({
 
 // The brand's posting accounts, already in the cache: the toast names them, never their ids.
 function wrapper({ children }: { children: React.ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   client.setQueryData(publishAccountsKey(BRAND_ID), {
     accounts: [
       candidate('acct-ig', 'instagram', 'acme_a'),
@@ -62,7 +68,12 @@ const draft = {
   dateLabel: 'Tue, Oct 20',
   timeLabel: '9:00 AM',
   groupMembers: [
-    { backendDraftId: 'draft-1', platform: 'instagram', status: 'draft', accountId: 'acct-ig' },
+    {
+      backendDraftId: 'draft-1',
+      platform: 'instagram',
+      status: 'draft',
+      accountId: 'acct-ig',
+    },
   ],
 } as never;
 
@@ -71,7 +82,12 @@ const group = {
   platforms: ['instagram', 'tiktok'],
   groupId: 'group-1',
   groupMembers: [
-    { backendDraftId: 'draft-1', platform: 'instagram', status: 'draft', accountId: 'acct-ig' },
+    {
+      backendDraftId: 'draft-1',
+      platform: 'instagram',
+      status: 'draft',
+      accountId: 'acct-ig',
+    },
     {
       backendDraftId: 'draft-2',
       platform: 'tiktok',
@@ -141,7 +157,9 @@ describe('useApproveScheduleDraft', () => {
     expect(scheduleUrl).toBe(`${API_BASE}/api/organic/calendar/drafts/draft-1`);
     expect(scheduleInit.method).toBe('PATCH');
     // scheduled_date must be ABSENT (the route treats its presence as an overwrite).
-    expect(JSON.parse(scheduleInit.body as string)).toEqual({ status: 'scheduled' });
+    expect(JSON.parse(scheduleInit.body as string)).toEqual({
+      status: 'scheduled',
+    });
     expect(updateDraftMock).toHaveBeenCalledWith('placement-1', expect.any(Function));
   });
 
@@ -181,12 +199,18 @@ describe('useApproveScheduleDraft', () => {
   });
 
   it('never re-schedules a member that is already live', async () => {
-    const g = group as unknown as { groupMembers: { draft?: { status: string } }[] };
+    const g = group as unknown as {
+      groupMembers: { draft?: { status: string } }[];
+    };
     const partlyLive = {
       ...g,
       groupMembers: g.groupMembers.map((member, index) =>
         index === 1 && member.draft
-          ? { ...member, status: 'published', draft: { ...member.draft, status: 'published' } }
+          ? {
+              ...member,
+              status: 'published',
+              draft: { ...member.draft, status: 'published' },
+            }
           : member,
       ),
     } as never;
@@ -246,7 +270,7 @@ describe('useApproveScheduleDraft', () => {
     expect(updateDraftMock).not.toHaveBeenCalled();
     expect(showMock.mock.calls[0][0]).toMatchObject({
       title: 'Approval blocked',
-      description: 'TikTok: Choose which TikTok account posts this: @acme_tt or @acme_tt2',
+      description: 'TikTok: Choose a TikTok account to publish this draft',
       variant: 'error',
     });
   });
@@ -266,7 +290,10 @@ describe('useApproveScheduleDraft', () => {
 
     const { result } = render();
     await act(async () => {
-      await result.current.approveAndSchedule(draft, { silent: true, onFailure });
+      await result.current.approveAndSchedule(draft, {
+        silent: true,
+        onFailure,
+      });
     });
 
     expect(onFailure).toHaveBeenCalledWith(
@@ -280,7 +307,10 @@ describe('useApproveScheduleDraft', () => {
       .fn()
       .mockResolvedValueOnce(approved([['draft-1', 'instagram']]))
       .mockResolvedValueOnce(
-        jsonResponse(422, { error: 'approval_required', message: 'Draft must be approved' }),
+        jsonResponse(422, {
+          error: 'approval_required',
+          message: 'Draft must be approved',
+        }),
       );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -332,7 +362,7 @@ describe('useApproveScheduleDraft', () => {
     expect(showMock).toHaveBeenCalledTimes(1);
     expect(showMock.mock.calls[0][0]).toMatchObject({
       title: 'Scheduling failed',
-      description: 'Nothing was scheduled. TikTok: Draft must be approved',
+      description: 'Nothing was scheduled. TikTok: Check the highlighted fields and try again.',
       variant: 'error',
     });
   });
@@ -344,7 +374,9 @@ describe('useApproveScheduleDraft', () => {
     const { result } = render();
     let outcome = true;
     await act(async () => {
-      outcome = await result.current.approveAndSchedule({ id: 'local-only' } as never);
+      outcome = await result.current.approveAndSchedule({
+        id: 'local-only',
+      } as never);
     });
 
     expect(outcome).toBe(false);

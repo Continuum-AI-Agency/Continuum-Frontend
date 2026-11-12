@@ -142,9 +142,17 @@ type MoveLabel = { verb: string; singular: string; plural: string };
 
 export const MOVE_LABELS: Record<string, MoveLabel> = {
   new_ad: { verb: 'launched a new ad', singular: 'new ad', plural: 'new ads' },
-  resumed: { verb: 'resumed an ad', singular: 'ad resumed', plural: 'ads resumed' },
+  resumed: {
+    verb: 'resumed an ad',
+    singular: 'ad resumed',
+    plural: 'ads resumed',
+  },
   paused: { verb: 'paused an ad', singular: 'ad paused', plural: 'ads paused' },
-  removed: { verb: 'removed an ad', singular: 'ad removed', plural: 'ads removed' },
+  removed: {
+    verb: 'removed an ad',
+    singular: 'ad removed',
+    plural: 'ads removed',
+  },
   variant_spawned: {
     verb: 'spun off an ad variant',
     singular: 'new ad variant',
@@ -187,8 +195,8 @@ export function moveSentence(group: MoveGroup, competitorName: string | null): s
 }
 
 /** "Nov 3", for a YYYY-MM-DD day. */
-export function shortDay(day: string): string {
-  return new Date(`${day}T12:00:00.000Z`).toLocaleDateString('en-US', {
+export function shortDay(day: string, locale: string = 'en-US'): string {
+  return new Date(`${day}T12:00:00.000Z`).toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',

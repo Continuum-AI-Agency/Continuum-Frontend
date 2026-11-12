@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
@@ -7,13 +8,15 @@ type Props = {
 };
 
 export function AudienceDetail({ audience }: Props) {
+  const tUi = useTranslations('onboarding');
+
   const sections: { label: string; items?: string[] | null }[] = [
-    { label: 'Demographics', items: audience.demographics },
-    { label: 'Psychographics', items: audience.psychographics },
-    { label: 'Pain points', items: audience.pain_points },
-    { label: 'Goals', items: audience.goals },
-    { label: 'Buying criteria', items: audience.buying_criteria },
-    { label: 'Interests', items: audience.interests },
+    { label: tUi('m_17e51bb179'), items: audience.demographics },
+    { label: tUi('m_4c3a249a0f'), items: audience.psychographics },
+    { label: tUi('m_65882c75a8'), items: audience.pain_points },
+    { label: tUi('m_48d8c627be'), items: audience.goals },
+    { label: tUi('m_5cb8cee8ec'), items: audience.buying_criteria },
+    { label: tUi('m_3fc5473287'), items: audience.interests },
   ].filter((s) => s.items && s.items.length > 0);
 
   if (sections.length === 0) return null;

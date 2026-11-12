@@ -1,4 +1,5 @@
 import { ArrowSquareOut, Sparkle } from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
@@ -37,6 +38,8 @@ export function IdentityPanel({
   agentBuckets,
   onRename,
 }: IdentityPanelProps) {
+  const tUi = useTranslations('onboarding');
+
   const resolvedLogo = useResolvedLogo(logoPath);
   const resolved = resolveFromBuckets({ name, colors, typography, heroStatement }, agentBuckets);
   const colours = deriveRevealedPalette(resolved.colors, resolved.palette);
@@ -67,7 +70,9 @@ export function IdentityPanel({
               {resolvedLogo ? (
                 <AvatarImage
                   src={resolvedLogo}
-                  alt={`${resolved.name || 'brand'} logo`}
+                  alt={tUi('m_1daa445f91', {
+                    v0: String(resolved.name || 'brand'),
+                  })}
                   className="object-cover"
                 />
               ) : null}
@@ -78,7 +83,7 @@ export function IdentityPanel({
             <div className="min-w-0 flex-1">
               <EditableHeading
                 value={resolved.name}
-                placeholder="Untitled brand"
+                placeholder={tUi('m_992d3dcc44')}
                 onCommit={onRename}
               />
               {host ? (
@@ -97,44 +102,42 @@ export function IdentityPanel({
           <ProvenanceMark
             field="hero-statement"
             provenance={provenanceOf(resolved.heroStatement, resolved.heroSource)}
-            emptyLabel="no statement found"
+            emptyLabel={tUi('m_97b6f6de45')}
           />
         </Subsection>
 
         {hideFirstImpression ? null : (
           <Subsection>
-            <SubsectionHeader title="First impression" />
+            <SubsectionHeader title={tUi('m_adac6e0342')} />
             {firstImpression ? (
               <p className="flex items-start gap-1.5 text-sm italic leading-snug text-foreground">
                 <Sparkle className="mt-0.5 h-3 w-3 shrink-0 text-[var(--primary)]" />
                 <span className="min-w-0">{firstImpression}</span>
               </p>
             ) : firstImpressionStatus === 'running' ? (
-              <p className="text-sm italic text-muted-foreground">Listening for the hook…</p>
+              <p className="text-sm italic text-muted-foreground">{tUi('m_1099728045')}</p>
             ) : null}
             {firstImpressionStatus === 'running' ? null : (
               <ProvenanceMark
                 field="first-impression"
                 provenance={provenanceOf(firstImpression, 'site analysis')}
-                emptyLabel="nothing found"
+                emptyLabel={tUi('m_bc45bfd7e5')}
               />
             )}
           </Subsection>
         )}
 
         <Subsection testId="reveal-palette-section">
-          <SubsectionHeader title="Palette" chip={brandIdentityChip} />
+          <SubsectionHeader title={tUi('m_bd6f1035d2')} chip={brandIdentityChip} />
           {colours.length > 0 ? (
             <PaletteReadout colours={colours} />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No colour read from this brand&apos;s material.
-            </p>
+            <p className="text-sm text-muted-foreground">{tUi('m_fa5655c5af')}</p>
           )}
           <ProvenanceMark
             field="palette"
             provenance={provenanceOf(colours, resolved.colorsSource)}
-            emptyLabel="nothing found"
+            emptyLabel={tUi('m_bc45bfd7e5')}
           />
         </Subsection>
 
@@ -145,7 +148,7 @@ export function IdentityPanel({
           Badging it either way would be the same invention the specimen was.
         */}
         <Subsection testId="reveal-typography">
-          <SubsectionHeader title="Typography" chip={brandIdentityChip} />
+          <SubsectionHeader title={tUi('m_f4beb9af58')} chip={brandIdentityChip} />
           <div className="flex gap-5">
             {typefaces.map((typeface) => (
               <TypefaceReadout key={typeface.slot} {...typeface} />
@@ -157,7 +160,7 @@ export function IdentityPanel({
 
       <div className="border-t border-border/70">
         <Subsection>
-          <SubsectionHeader title="Tone of voice" chip={messagingChip} />
+          <SubsectionHeader title={tUi('m_5ee7eed40a')} chip={messagingChip} />
           <div className="space-y-3">
             <TonePicker />
             {toneFinding ? <FindingCallout finding={toneFinding} /> : null}

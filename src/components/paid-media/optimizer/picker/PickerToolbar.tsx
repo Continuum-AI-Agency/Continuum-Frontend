@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
 // The picker's browsing controls.
 //
 // The old picker rendered its search box only when there were more than 6 ad sets
@@ -30,15 +33,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { CampaignSection, PickerChip } from './campaignGroups';
-
-const CHIPS: { value: PickerChip; label: string; hint: string }[] = [
-  { value: 'eligible', label: 'Eligible', hint: 'Ad sets whose budget the optimizer can move' },
-  { value: 'spending', label: 'Spending', hint: 'Spent something in the last 14 days' },
-  { value: 'held', label: 'Held', hint: 'Budget lives at the campaign level, or ingest froze it' },
-  { value: 'mismatch', label: 'Wrong KPI', hint: 'Buys a different event than this objective' },
-  { value: 'inactive', label: 'Inactive', hint: 'Recoverable Meta ad sets held until active' },
-  { value: 'terminal', label: 'Archived/deleted', hint: 'Terminal or unavailable Meta ad sets' },
-];
 
 export function PickerToolbar({
   sections,
@@ -71,6 +65,43 @@ export function PickerToolbar({
   onJumpTo: (adsetId: string) => void;
   onSelectTop: (count: number) => void;
 }) {
+  const uiText = useTranslations('scale');
+  const CHIPS: { value: PickerChip; label: string; hint: string }[] = useMemo(
+    () => [
+      {
+        value: 'eligible',
+        label: uiText('eligible_1889cf7'),
+        hint: uiText('ad_sets_whose_budget_the_optimizer_can_move_b7ee6f7'),
+      },
+      {
+        value: 'spending',
+        label: uiText('spending_c2c7ae2'),
+        hint: uiText('spent_something_in_the_last_14_days_276c34f'),
+      },
+      {
+        value: 'held',
+        label: uiText('held_85cd61f'),
+        hint: uiText('budget_lives_at_the_campaign_level_or_ingest__08a8eb9'),
+      },
+      {
+        value: 'mismatch',
+        label: uiText('wrong_kpi_a089c11'),
+        hint: uiText('buys_a_different_event_than_this_objective_4a509de'),
+      },
+      {
+        value: 'inactive',
+        label: uiText('inactive_ac7c949'),
+        hint: uiText('recoverable_meta_ad_sets_held_until_active_4a4a03d'),
+      },
+      {
+        value: 'terminal',
+        label: uiText('archived_deleted_aa7b77a'),
+        hint: uiText('terminal_or_unavailable_meta_ad_sets_41206a2'),
+      },
+    ],
+    [uiText],
+  );
+
   const [jumpOpen, setJumpOpen] = useState(false);
   const hasMismatch = counts.mismatch > 0;
 
@@ -86,8 +117,8 @@ export function PickerToolbar({
             value={query}
             disabled={disabled}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search ad sets or campaigns…"
-            aria-label="Search ad sets or campaigns"
+            placeholder={uiText('search_ad_sets_or_campaigns_289c8d1')}
+            aria-label={uiText('search_ad_sets_or_campaigns_a0f6e39')}
             className="h-8 pl-7 text-xs"
           />
         </div>
@@ -103,15 +134,18 @@ export function PickerToolbar({
                 className="h-8 gap-1.5 px-2 text-xs"
               >
                 <ListFilterIcon className="size-3.5" aria-hidden="true" />
-                Jump to…
+                {uiText('jump_to_bf48883')}
               </Button>
             }
           />
           <PopoverContent align="end" className="w-[22rem] p-0">
             <Command>
-              <CommandInput placeholder="Type an ad set name…" className="text-xs" />
+              <CommandInput
+                placeholder={uiText('type_an_ad_set_name_e119891')}
+                className="text-xs"
+              />
               <CommandList>
-                <CommandEmpty>No ad set matches.</CommandEmpty>
+                <CommandEmpty>{uiText('no_ad_set_matches_0f0ab24')}</CommandEmpty>
                 {sections.map((section) => (
                   <CommandGroup key={section.campaignId} heading={section.campaignName}>
                     {section.adsets.map((item) => (
@@ -129,10 +163,13 @@ export function PickerToolbar({
                         <span className="truncate">{item.name}</span>
                         {!item.eligible ? (
                           <span className="ml-auto shrink-0 text-xs text-warning">
-                            {item.providerStatus?.replaceAll('_', ' ').toLowerCase() ?? 'held'}
+                            {item.providerStatus?.replaceAll('_', ' ').toLowerCase() ??
+                              uiText('held_c20dea4')}
                           </span>
                         ) : item.mismatch ? (
-                          <span className="ml-auto shrink-0 text-xs text-warning">wrong KPI</span>
+                          <span className="ml-auto shrink-0 text-xs text-warning">
+                            {uiText('wrong_kpi_6feb703')}
+                          </span>
                         ) : null}
                       </CommandItem>
                     ))}
@@ -152,7 +189,7 @@ export function PickerToolbar({
           className="h-8 gap-1.5 px-2 text-xs"
         >
           <ZapIcon className="size-3.5" aria-hidden="true" />
-          Top 10 by spend
+          {uiText('top_10_by_spend_1dceef5')}
         </Button>
       </div>
 
@@ -185,15 +222,41 @@ export function PickerToolbar({
         {/* The real fleet totals, always. A filter that hides rows without saying how many is
             how an operator concludes an account is empty. */}
         <p className="text-xs text-muted-foreground tabular-nums">
-          {counts.total} ad sets · {counts.eligible} eligible · {counts.held} held
-          {hasMismatch ? (
-            <span className={cn('text-warning')}> · {counts.mismatch} wrong KPI</span>
-          ) : null}
-          {counts.inactive > 0 ? <span> · {counts.inactive} inactive</span> : null}
-          {counts.terminal > 0 ? <span> · {counts.terminal} archived/deleted</span> : null}
-          {selectedCount > 0 ? (
-            <span className="text-foreground"> · {selectedCount} selected</span>
-          ) : null}
+          {uiText.rich('sentence_ac412c01fd39', {
+            v0: counts.total,
+            v1: counts.eligible,
+            v2: counts.held,
+            v3: () =>
+              hasMismatch ? (
+                <span className={cn('text-warning')}>
+                  {uiText.rich('sentence_12cce7ff48c7', {
+                    v0: counts.mismatch,
+                  })}
+                </span>
+              ) : null,
+            v4: () =>
+              counts.inactive > 0 ? (
+                <span>
+                  {uiText.rich('sentence_c396b2e79271', {
+                    v0: counts.inactive,
+                  })}
+                </span>
+              ) : null,
+            v5: () =>
+              counts.terminal > 0 ? (
+                <span>
+                  {uiText.rich('sentence_d3f030444922', {
+                    v0: counts.terminal,
+                  })}
+                </span>
+              ) : null,
+            v6: () =>
+              selectedCount > 0 ? (
+                <span className="text-foreground">
+                  {uiText.rich('sentence_f7dcea1e32b7', { v0: selectedCount })}
+                </span>
+              ) : null,
+          })}
         </p>
       </div>
     </div>

@@ -32,8 +32,15 @@ mock.module('@/components/ui/select', () => ({
 
 import type { ElementRecord, Skill } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import { ElementBoard } from './ElementBoard';
 
@@ -81,9 +88,24 @@ const skill = (slug: string): Skill => ({
 
 const BRAND_ELEMENTS = [
   buildElement(),
-  buildElement({ id: 'mood-1', name: 'Coastal Mood', slug: 'coastal-mood', category: 'moodboard' }),
-  buildElement({ id: 'studio-1', name: 'White Studio', slug: 'white-studio', category: 'setting' }),
-  buildElement({ id: 'model-1', name: 'Nova', slug: 'nova', category: 'model' }),
+  buildElement({
+    id: 'mood-1',
+    name: 'Coastal Mood',
+    slug: 'coastal-mood',
+    category: 'moodboard',
+  }),
+  buildElement({
+    id: 'studio-1',
+    name: 'White Studio',
+    slug: 'white-studio',
+    category: 'setting',
+  }),
+  buildElement({
+    id: 'model-1',
+    name: 'Nova',
+    slug: 'nova',
+    category: 'model',
+  }),
 ];
 
 const respond = (options: RequestOptions): unknown => {
@@ -163,8 +185,12 @@ describe('ElementBoard', () => {
     renderBoard();
 
     const selects = screen.getAllByRole('combobox') as HTMLSelectElement[];
-    fireEvent.change(selects[0] as HTMLSelectElement, { target: { value: 'none' } });
-    fireEvent.change(selects[1] as HTMLSelectElement, { target: { value: 'label' } });
+    fireEvent.change(selects[0] as HTMLSelectElement, {
+      target: { value: 'none' },
+    });
+    fireEvent.change(selects[1] as HTMLSelectElement, {
+      target: { value: 'label' },
+    });
     fireEvent.click(await screen.findByRole('button', { name: /Coastal Mood/ }));
 
     const textarea = typeStyle('/film');
@@ -189,14 +215,22 @@ describe('ElementBoard', () => {
   });
 
   it('removes a linked board and a style, and saves the cleared lists', async () => {
-    renderBoard(buildElement({ boardElementIds: ['mood-1'], styleSlugs: ['golden-hour'] }));
+    renderBoard(
+      buildElement({
+        boardElementIds: ['mood-1'],
+        styleSlugs: ['golden-hour'],
+      }),
+    );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Unlink Coastal Mood' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove /golden-hour' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save board' }));
 
     await waitFor(() => expect(patchCall()).toBeTruthy());
-    expect(patchCall()?.body).toMatchObject({ styleSlugs: [], boardElementIds: [] });
+    expect(patchCall()?.body).toMatchObject({
+      styleSlugs: [],
+      boardElementIds: [],
+    });
   });
 
   it('refuses a brand-book switch as an Element style', async () => {
@@ -210,11 +244,15 @@ describe('ElementBoard', () => {
     expect(screen.queryByRole('button', { name: 'Remove /nobrand' })).toBeNull();
   });
 
-  it('says what a 422 style conflict means, with the Backend’s own message', async () => {
+  it('localizes a 422 style conflict and preserves its structured style identities', async () => {
     requestMock.mockImplementation((options) =>
       options.method === 'PATCH'
         ? Promise.reject(
-            new ApiError('/noir conflicts with /golden-hour', 422, 'element_style_conflict'),
+            new ApiError('/noir conflicts with /golden-hour', 422, 'element_style_conflict', {
+              error: 'element_style_conflict',
+              message: '/noir conflicts with /golden-hour',
+              styleSlugs: ['noir', 'golden-hour'],
+            }),
           )
         : Promise.resolve(respond(options)),
     );
@@ -224,6 +262,8 @@ describe('ElementBoard', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Two of these styles contradict each other');
-    expect(alert.textContent).toContain('/noir conflicts with /golden-hour');
+    expect(alert.textContent).toContain('/noir');
+    expect(alert.textContent).toContain('/golden-hour');
+    expect(alert.textContent).not.toContain('conflicts with');
   });
 });

@@ -1,5 +1,5 @@
 import { ArrowUpRight } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 
 // The "go to the full workspace" affordance used across every module/panel: a
 // quiet inline link with a trailing up-right arrow. A panel is a teaser; this

@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 // Pure readers for the optimizer SERVER LOG feed. The feed is lifecycle-only now — the
 // server split actions out of it (public.optimizer_list_actions), so the client-side
 // family triage that used to live here is gone with it.
@@ -77,11 +81,15 @@ const SKIP_REASONS: Record<string, string> = {
     'No performance snapshots had landed for this portfolio yet, so there was nothing to score.',
 };
 
-function counts(fields: Fields, spec: [string, string][]): LifecycleFact[] {
+function counts(
+  fields: Fields,
+  spec: [string, string][],
+  uiLocale: UiLocale = 'en',
+): LifecycleFact[] {
   const facts: LifecycleFact[] = [];
   for (const [key, label] of spec) {
     const value = readNumber(fields[key]);
-    if (value != null) facts.push({ label, value: value.toLocaleString('en-US') });
+    if (value != null) facts.push({ label, value: value.toLocaleString(uiLocale) });
   }
   return facts;
 }
@@ -110,7 +118,11 @@ function applyFailures(fields: Fields): string[] {
   const lines: string[] = [];
   for (const entry of raw) {
     if (entry == null || typeof entry !== 'object') continue;
-    const failure = entry as { adsetId?: unknown; adset_id?: unknown; error?: unknown };
+    const failure = entry as {
+      adsetId?: unknown;
+      adset_id?: unknown;
+      error?: unknown;
+    };
     const id = readText(failure.adsetId) ?? readText(failure.adset_id);
     const error = readText(failure.error);
     if (id && error) lines.push(`${id}: ${error}`);
@@ -135,10 +147,13 @@ function humanizeEvent(event: string): string {
  * ACTION_EVENTS is the explicit allowlist), so there is no long tail to guess at —
  * everything else is an ops event that never reaches a brand-scoped feed.
  */
-export function readLifecycleRow(row: {
-  event: string;
-  fields?: Record<string, unknown> | null;
-}): LifecycleRow {
+export function readLifecycleRow(
+  row: {
+    event: string;
+    fields?: Record<string, unknown> | null;
+  },
+  uiTranslate?: ScaleCopy,
+): LifecycleRow {
   const fields = row.fields ?? {};
 
   switch (row.event) {
@@ -148,14 +163,14 @@ export function readLifecycleRow(row: {
       const skipped = readText(fields.skipped);
       if (skipped) {
         return {
-          title: 'Cycle skipped',
+          title: uiTranslate ? uiTranslate('cycle_skipped_c2c666a') : 'Cycle skipped',
           summary: SKIP_REASONS[skipped] ?? `Skipped: ${skipped}.`,
           facts: [],
           detail: [],
         };
       }
       return {
-        title: 'Cycle complete',
+        title: uiTranslate ? uiTranslate('cycle_complete_716f25e') : 'Cycle complete',
         summary: null,
         facts: counts(fields, [
           ['snapshotCount', 'Ad sets scored'],
@@ -172,7 +187,7 @@ export function readLifecycleRow(row: {
     case 'cycle_skipped': {
       const reason = readText(fields.reason);
       return {
-        title: 'Cycle skipped',
+        title: uiTranslate ? uiTranslate('cycle_skipped_c2c666a') : 'Cycle skipped',
         summary: (reason && SKIP_REASONS[reason]) ?? (reason ? `Skipped: ${reason}.` : null),
         facts: [],
         detail: [],
@@ -181,7 +196,7 @@ export function readLifecycleRow(row: {
 
     case 'cycle_failed':
       return {
-        title: 'Cycle failed',
+        title: uiTranslate ? uiTranslate('cycle_failed_8b702bf') : 'Cycle failed',
         summary: readText(fields.error) ?? 'The cycle threw before it finished.',
         facts: [],
         detail: [],
@@ -191,7 +206,7 @@ export function readLifecycleRow(row: {
       const missing = readNumber(fields.missing);
       const adsets = driftedAdsets(fields);
       return {
-        title: 'Roster drift',
+        title: uiTranslate ? uiTranslate('roster_drift_d0f7096') : 'Roster drift',
         summary:
           missing == null
             ? 'Enrolled ad sets no longer appear in the account’s live fleet.'
@@ -207,7 +222,7 @@ export function readLifecycleRow(row: {
     case 'apply_partial_failure': {
       const failures = applyFailures(fields);
       return {
-        title: 'Some writes failed',
+        title: uiTranslate ? uiTranslate('some_writes_failed_10c7e11') : 'Some writes failed',
         summary: 'The cycle wrote part of what it decided; these did not land on Meta.',
         facts: counts(fields, [
           ['applied', 'Applied'],
@@ -219,7 +234,9 @@ export function readLifecycleRow(row: {
 
     case 'apply_results_persist_failed':
       return {
-        title: 'Results could not be saved',
+        title: uiTranslate
+          ? uiTranslate('results_could_not_be_saved_905bbe9')
+          : 'Results could not be saved',
         summary:
           readText(fields.error) ??
           'The writes happened on Meta but recording them failed. The apply ledger is still authoritative.',
@@ -231,7 +248,9 @@ export function readLifecycleRow(row: {
       const malformed = readNumber(fields.malformed);
       const total = readNumber(fields.total);
       return {
-        title: 'Malformed snapshots skipped',
+        title: uiTranslate
+          ? uiTranslate('malformed_snapshots_skipped_cd039fd')
+          : 'Malformed snapshots skipped',
         summary:
           malformed != null && total != null
             ? `${malformed} of ${total} snapshot rows could not be read and were dropped before scoring.`

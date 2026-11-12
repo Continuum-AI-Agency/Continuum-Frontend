@@ -22,6 +22,7 @@ import {
   snapNodeDimensionsToAspectRatio,
   VIDEO_GENERATOR_NODE_BOUNDS,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback } from 'react';
 import { useToastContext } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -77,6 +78,8 @@ export type NodeConfigPatcher = (
  * the whole panel on every store tick.
  */
 export function useNodeConfigPatch(): NodeConfigPatcher {
+  const translateUi = useUiTranslations('studio');
+
   const getNodeById = useStudioStore((state) => state.getNodeById);
   const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
@@ -105,13 +108,13 @@ export function useNodeConfigPatch(): NodeConfigPatcher {
 
       if (changes.length > 0) {
         toast?.show({
-          title: 'Setting adjusted',
+          title: translateUi('setting_adjusted_f425eaf2'),
           description: changes.join(' · '),
           variant: 'info',
           dedupeKey: `node-config-${nodeId}`,
         });
       }
     },
-    [getNodeById, toast, triggerSave, updateNode],
+    [getNodeById, toast, triggerSave, updateNode, translateUi],
   );
 }

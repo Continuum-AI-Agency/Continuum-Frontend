@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The Mapa / Lectura switch at the top of a campaign canvas (companion pane and Canvas page),
 // the hook that decides which one shows (lib/campaign-canvas/canvasView.ts holds the rules)
@@ -70,7 +71,10 @@ export function useCanvasView(
   const isPhone = usePhoneViewport();
   const [stored, setStored] = React.useState<Partial<Record<CanvasViewContext, CanvasView>>>({});
   const [hintDismissed, setHintDismissed] = React.useState(true);
-  const [task, setTask] = React.useState<CanvasViewTask>({ context, editing: false });
+  const [task, setTask] = React.useState<CanvasViewTask>({
+    context,
+    editing: false,
+  });
   React.useEffect(() => {
     setStored(readStoredCanvasViews(browserStorage()));
     setHintDismissed(readCanvasViewHintDismissed(browserStorage()));
@@ -108,8 +112,20 @@ export function useCanvasView(
     () => setTask((current) => nextCanvasViewTask(current, { type: 'task', context: 'manual' })),
     [],
   );
-  const hint = canvasViewHintOf({ context: task.context, decision, dismissed: hintDismissed });
-  return { view: decision.view, setView, isPhone, startEditing, openByHand, hint, dismissHint };
+  const hint = canvasViewHintOf({
+    context: task.context,
+    decision,
+    dismissed: hintDismissed,
+  });
+  return {
+    view: decision.view,
+    setView,
+    isPhone,
+    startEditing,
+    openByHand,
+    hint,
+    dismissHint,
+  };
 }
 
 /** The tiny note beside the toggle that says why the pane opened in Read. Dismissible. */
@@ -120,6 +136,8 @@ export function CanvasViewHint({
   hint: string | null;
   onDismiss: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (!hint) return null;
   return (
     <span
@@ -132,7 +150,7 @@ export function CanvasViewHint({
         type="button"
         className="grid size-4 shrink-0 place-items-center rounded-full hover:bg-foreground/10 hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
         onClick={onDismiss}
-        aria-label="Dismiss"
+        aria-label={betaUiText('beta_48845bff334a')}
       >
         <X className="size-3" aria-hidden />
       </button>
@@ -155,9 +173,11 @@ export function CanvasViewToggle({
   /** On a phone the map does not fit; the switch says so instead of hiding. */
   mapDisabled?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <fieldset
-      aria-label="Canvas view"
+      aria-label={betaUiText('beta_7741e354636b')}
       className="inline-flex shrink-0 rounded-lg border border-border bg-card p-0.5 text-[13px]"
       data-testid="canvas-view-toggle"
     >
@@ -169,7 +189,7 @@ export function CanvasViewToggle({
             type="button"
             aria-pressed={view === value}
             disabled={disabled}
-            title={disabled ? 'The map needs a wider screen' : undefined}
+            title={disabled ? betaUiText('beta_437247500558') : undefined}
             onClick={() => onChange(value)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40',
@@ -178,7 +198,7 @@ export function CanvasViewToggle({
             data-view={value}
           >
             <Icon className="size-3.5" aria-hidden />
-            {label}
+            {betaUiText('canvasViewMode', { view: value })}
           </button>
         );
       })}

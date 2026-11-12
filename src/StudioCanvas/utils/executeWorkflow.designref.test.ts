@@ -1,3 +1,5 @@
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../../messages/studio/en.json';
 // Airtable #289 — a Design Reference INFORMS a generation; it never blocks one.
 //
 // The owner's ruling: a connected palette contributes to the generation and its critique,
@@ -15,6 +17,11 @@ import { executeWorkflow } from './executeWorkflow';
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
 
 const buildControls = (executeGeneration: ReturnType<typeof mock>) => ({
+  translateUi: createTranslator({
+    locale: 'en',
+    messages: { studio: studioMessages },
+    namespace: 'studio',
+  }),
   executeGeneration,
   executeVideoExtension: mock(async () => ({
     success: true,
@@ -34,7 +41,10 @@ const generator = (): StudioNode => ({
   id: 'gen',
   position: { x: 0, y: 0 },
   type: 'nanoGen',
-  data: { model: 'nano-banana', positivePrompt: 'a founder lifting the bottle off the counter' },
+  data: {
+    model: 'nano-banana',
+    positivePrompt: 'a founder lifting the bottle off the counter',
+  },
 });
 
 /** A Palette reference the user chose but never generated a specimen for. */
@@ -55,6 +65,11 @@ const run = async (nodes: StudioNode[], edges: Edge[]) => {
   await executeWorkflow(buildControls(executeGeneration) as never);
   await new Promise((resolve) => setTimeout(resolve, 0));
   return {
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration,
     node: useStudioStore.getState().nodes.find((entry) => entry.id === 'gen'),
   };
@@ -62,7 +77,9 @@ const run = async (nodes: StudioNode[], edges: Edge[]) => {
 
 describe('#289 a designRef never blocks a generation', () => {
   beforeEach(() => {
-    mock.module('./rehydrateWorkflowMedia', () => ({ rehydrateWorkflowMediaNodes }));
+    mock.module('./rehydrateWorkflowMedia', () => ({
+      rehydrateWorkflowMediaNodes,
+    }));
     rehydrateWorkflowMediaNodes.mockImplementation(async (input: StudioNode[]) => input);
     useStudioStore.setState({
       nodes: [],
@@ -93,7 +110,15 @@ describe('#289 a designRef never blocks a generation', () => {
   it('falls back to the generator own prompt when the palette has no tokens to add', async () => {
     const { executeGeneration, node } = await run(
       [generator(), emptyPaletteRef()],
-      [{ id: 'e1', source: 'ref', target: 'gen', sourceHandle: 'text', targetHandle: 'prompt' }],
+      [
+        {
+          id: 'e1',
+          source: 'ref',
+          target: 'gen',
+          sourceHandle: 'text',
+          targetHandle: 'prompt',
+        },
+      ],
     );
 
     expect(node?.data.error).toBeFalsy();
@@ -106,7 +131,15 @@ describe('#289 a designRef never blocks a generation', () => {
     // The rule is scoped to the designRef, not widened into "nothing is ever required":
     // an Image node wired to ref-image with no media is still the run's blocker.
     const { executeGeneration, node } = await run(
-      [generator(), { id: 'img', position: { x: 0, y: 0 }, type: 'image', data: {} } as StudioNode],
+      [
+        generator(),
+        {
+          id: 'img',
+          position: { x: 0, y: 0 },
+          type: 'image',
+          data: {},
+        } as StudioNode,
+      ],
       [{ id: 'e1', source: 'img', target: 'gen', targetHandle: 'ref-image' }],
     );
 

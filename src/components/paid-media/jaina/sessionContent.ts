@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 import type { AgentMentionReference, AgentMentionSuggestion } from '@/lib/agent-references';
 import type { JainaChatMessage } from './types';
 
@@ -15,6 +19,7 @@ function shorten(text: string): string {
  */
 export function jainaSessionContent(
   messages: readonly JainaChatMessage[],
+  uiTranslate?: ScaleCopy,
 ): AgentMentionSuggestion[] {
   const byAsset = new Map<string, AgentMentionSuggestion>();
   let ordinal = 0;
@@ -48,11 +53,14 @@ export function jainaSessionContent(
         label,
         type: 'media_asset',
         source: 'jaina',
-        group: 'This session',
+        group: uiTranslate ? uiTranslate('jainaSessionGroup') : 'This session',
         description: [creative.platform, creative.format].filter(Boolean).join(' · '),
         reference,
         // A video's thumbnail is a still, so it previews as an image.
-        preview: { url: previewUrl, kind: previewUrl === creative.thumbnail_url ? 'image' : kind },
+        preview: {
+          url: previewUrl,
+          kind: previewUrl === creative.thumbnail_url ? 'image' : kind,
+        },
       });
     }
   }

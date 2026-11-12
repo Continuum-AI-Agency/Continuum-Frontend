@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -18,8 +19,13 @@ const requestMock = mock(async (call: Call) => {
   return answer(call);
 });
 
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show: showMock }) }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show: showMock }),
+}));
 mock.module('@/lib/organic/store', () =>
   createCalendarStoreStub({
     requestCalendarRefetch: requestCalendarRefetchMock,
@@ -53,7 +59,12 @@ function card(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDra
     backendDraftId: 'row-fb',
     updatedAt: 'T0',
     groupMembers: [
-      { backendDraftId: 'row-fb', platform: 'facebook', status: 'draft', accountId: 'acct-fb' },
+      {
+        backendDraftId: 'row-fb',
+        platform: 'facebook',
+        status: 'draft',
+        accountId: 'acct-fb',
+      },
     ],
     ...overrides,
   };
@@ -125,10 +136,18 @@ describe('useDraftMembership', () => {
   });
 
   it('keeps a known member its own draft when the server answers', () => {
-    const own = card({ id: 'placement-1::linkedin', captionPreview: 'LinkedIn words' });
+    const own = card({
+      id: 'placement-1::linkedin',
+      captionPreview: 'LinkedIn words',
+    });
     const grouped = card({
       groupMembers: [
-        { backendDraftId: 'row-fb', platform: 'facebook', status: 'draft', accountId: 'acct-fb' },
+        {
+          backendDraftId: 'row-fb',
+          platform: 'facebook',
+          status: 'draft',
+          accountId: 'acct-fb',
+        },
         {
           backendDraftId: 'row-linkedin',
           platform: 'linkedin',
@@ -144,7 +163,12 @@ describe('useDraftMembership', () => {
 
   // The post as the server holds it after group/remove: `remaining` rows, `sourceId` the source.
   const groupAnswer = (
-    remaining: { id: string; platform: string; caption: string; accountId: string }[],
+    remaining: {
+      id: string;
+      platform: string;
+      caption: string;
+      accountId: string;
+    }[],
     sourceId: string,
   ) => ({
     groupId: GROUP_ID,
@@ -169,7 +193,12 @@ describe('useDraftMembership', () => {
       groupId: GROUP_ID,
       clientKey: 'post-abc',
       groupMembers: [
-        { backendDraftId: 'row-fb', platform: 'facebook', status: 'draft', accountId: 'acct-fb' },
+        {
+          backendDraftId: 'row-fb',
+          platform: 'facebook',
+          status: 'draft',
+          accountId: 'acct-fb',
+        },
         {
           backendDraftId: 'row-linkedin',
           platform: 'linkedin',
@@ -252,7 +281,12 @@ describe('useDraftMembership', () => {
     answer = () =>
       groupAnswer(
         [
-          { id: 'row-fb', platform: 'facebook', caption: 'Shared copy', accountId: 'acct-fb' },
+          {
+            id: 'row-fb',
+            platform: 'facebook',
+            caption: 'Shared copy',
+            accountId: 'acct-fb',
+          },
           {
             id: 'row-linkedin',
             platform: 'linkedin',

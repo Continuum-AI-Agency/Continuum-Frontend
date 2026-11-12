@@ -1,8 +1,9 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from '@/i18n/navigation';
 import { revalidateBrandInsightsAction } from '@/lib/dashboard/actions';
 import {
   isWarmLeaseOpen,
@@ -41,6 +42,7 @@ function queryKeyMentionsBrand(queryKey: unknown, brandId: string): boolean {
 // "Syncing brand context" indicator only shows on a cold dashboard, where
 // there is nothing else to look at; a warm dashboard re-warms silently.
 export function DashboardWarmOnMount({ brandId, isCold }: { brandId: string; isCold: boolean }) {
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   const queryClient = useQueryClient();
   const routerRef = useRef(router);
@@ -89,7 +91,9 @@ export function DashboardWarmOnMount({ brandId, isCold }: { brandId: string; isC
   return (
     <div className="flex items-center gap-2 rounded-md border border-border/70 bg-card px-3 py-2">
       <span className="size-1.5 shrink-0 rounded-full bg-primary live-pulse" aria-hidden="true" />
-      <span className="text-xs font-medium text-muted-foreground">Syncing brand context…</span>
+      <span className="text-xs font-medium text-muted-foreground">
+        {uiText('syncing_brand_context_44fc98a')}
+      </span>
     </div>
   );
 }

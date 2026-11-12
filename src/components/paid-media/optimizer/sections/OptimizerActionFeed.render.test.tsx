@@ -1,14 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  cleanup,
-  fireEvent,
-  render as renderWithoutClient,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { render as renderWithoutClient } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -120,7 +114,9 @@ beforeEach(() => {
   actionsState = { data: [], isLoading: false };
   rosterRows = [];
   rosterReads = 0;
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
 });
 
 afterEach(cleanup);
@@ -168,7 +164,13 @@ describe('OptimizerActionFeed', () => {
 
   it('reads a status write as an unpause rather than a budget revert', () => {
     actionsState = {
-      data: [action({ op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } })],
+      data: [
+        action({
+          op: 'status',
+          before: { status: 'ACTIVE' },
+          after: { status: 'PAUSED' },
+        }),
+      ],
       isLoading: false,
     };
     renderFeed('USD');
@@ -185,7 +187,12 @@ describe('OptimizerActionFeed', () => {
 
   it('says "reverted" instead of offering the button a second time', () => {
     actionsState = {
-      data: [action({ reversible: true, reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' })],
+      data: [
+        action({
+          reversible: true,
+          reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        }),
+      ],
       isLoading: false,
     };
     renderFeed('USD');
@@ -319,9 +326,23 @@ describe('OptimizerActionFeed — timeline by day', () => {
     actionsState = {
       data: [
         nth(1),
-        nth(2, { op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } }),
-        nth(3, { family: 'decision', op: 'decision', before: null, after: { status: 'pending' } }),
-        nth(4, { family: 'settings', op: 'setting', entity_id: 'daily_total', reversible: false }),
+        nth(2, {
+          op: 'status',
+          before: { status: 'ACTIVE' },
+          after: { status: 'PAUSED' },
+        }),
+        nth(3, {
+          family: 'decision',
+          op: 'decision',
+          before: null,
+          after: { status: 'pending' },
+        }),
+        nth(4, {
+          family: 'settings',
+          op: 'setting',
+          entity_id: 'daily_total',
+          reversible: false,
+        }),
       ],
       isLoading: false,
     };
@@ -417,7 +438,10 @@ describe('OptimizerActionFeed — entity names', () => {
 
   it('falls back to the id when no name is known for it', () => {
     seedRoster();
-    actionsState = { data: [action({ entity_id: '555000111' })], isLoading: false };
+    actionsState = {
+      data: [action({ entity_id: '555000111' })],
+      isLoading: false,
+    };
     renderFeed('USD');
     const timeline = screen.getByTestId('action-timeline');
     expect(within(timeline).getByText('555000111')).toBeTruthy();
@@ -476,7 +500,10 @@ describe('OptimizerActionFeed — platform chip and receipt', () => {
   });
 
   it('falls back to Meta when the row names a platform the contract does not know', () => {
-    actionsState = { data: [action({ platform: 'snapchat' })], isLoading: false };
+    actionsState = {
+      data: [action({ platform: 'snapchat' })],
+      isLoading: false,
+    };
     renderFeed('USD');
     expect(chipsIn(timeline())).toEqual(['meta']);
   });
@@ -586,7 +613,11 @@ describe('each row is priced in its own currency, never the selected account’s
     queryClient.setQueryData(optimizerQueryKeys.portfolios('brand-1'), {
       rows: [
         { id: GOOGLE_PORTFOLIO, ad_account_id: '5251780631', currency: 'MXN' },
-        { id: UNRECORDED_PORTFOLIO, ad_account_id: 'act_2870759213321514', currency: null },
+        {
+          id: UNRECORDED_PORTFOLIO,
+          ad_account_id: 'act_2870759213321514',
+          currency: null,
+        },
       ],
       dropped: 0,
     });
@@ -652,7 +683,11 @@ describe('money is divided by the currency’s own minor unit', () => {
 describe('a cross-platform move in the action feed', () => {
   const MOVE = '7b0e3a52-5d1f-4b8e-9a51-0c3c1d2e4f60';
   const legRow = (over: Record<string, unknown>) =>
-    action({ move_id: MOVE, outcome: 'applied', ...over } as Partial<OptimizerActionFeedRow>);
+    action({
+      move_id: MOVE,
+      outcome: 'applied',
+      ...over,
+    } as Partial<OptimizerActionFeedRow>);
 
   it('folds the legs into one Decision entry beside the single writes', () => {
     actionsState = {

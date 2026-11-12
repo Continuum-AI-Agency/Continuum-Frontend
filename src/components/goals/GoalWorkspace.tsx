@@ -5,12 +5,13 @@ import type {
   UpsertGoalCapabilityRouteRequest,
 } from '@continuum/contracts';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Link } from '@/i18n/navigation';
 import type { GoalFocus } from '@/lib/goals/focus';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
 import { goalArtifactProgress } from '@/lib/goals/models';
@@ -67,6 +68,9 @@ export function GoalWorkspace({
   onArtifactAction,
   onSaveCapabilityRoute,
 }: GoalWorkspaceProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('dashboard');
   const orderedArtifactIds = useMemo(() => goal.artifacts.map((artifact) => artifact.id), [goal]);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(
     focus?.kind === 'artifact' && orderedArtifactIds.includes(focus.id)
@@ -135,25 +139,34 @@ export function GoalWorkspace({
           <span className="flex flex-wrap items-center gap-x-2">
             <span>
               {goal.accountableHumanName
-                ? `Accountable · ${goal.accountableHumanName}`
-                : 'No accountable teammate assigned'}
+                ? uiText('m_14727aeefa', {
+                    v0: String(goal.accountableHumanName),
+                  })
+                : uiText('no_accountable_teammate_assigned_f79cdb1')}
             </span>
             <span aria-hidden>·</span>
-            <span>Updated {formatRelativeTime(goal.updatedAt)}</span>
+            <span>
+              {uiText.rich('sentence_5f1f7fcaedd2', {
+                v0: () => formatRelativeTime(goal.updatedAt, Date.now(), uiLocale),
+              })}
+            </span>
           </span>
         }
         action={
           <>
             <Pill variant="secondary" className="font-mono">
-              {progress.accepted}/{progress.total} resolved
+              {uiText.rich('sentence_0c1650969955', {
+                v0: () => progress.accepted,
+                v1: () => progress.total,
+              })}
             </Pill>
             <Button type="button" size="sm" variant="outline" onClick={onRefresh}>
               <RefreshCw className="size-3.5" />
-              Refresh
+              {uiText('refresh_0e91610')}
             </Button>
             <Link href="/goals" className={buttonVariants({ size: 'sm', variant: 'ghost' })}>
               <ArrowLeft className="size-3.5" />
-              All goals
+              {uiText('m_1f4dc475bf')}
             </Link>
           </>
         }
@@ -173,9 +186,9 @@ export function GoalWorkspace({
         className="flex min-h-0 flex-1 flex-col lg:hidden"
       >
         <TabsList className="grid w-full shrink-0 grid-cols-3">
-          <TabsTrigger value="manifest">Manifest</TabsTrigger>
-          <TabsTrigger value="artifact">Artifact</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="manifest">{uiText('manifest_3c99f1f')}</TabsTrigger>
+          <TabsTrigger value="artifact">{uiText('artifact_e06171a')}</TabsTrigger>
+          <TabsTrigger value="activity">{uiText('activity_38da150')}</TabsTrigger>
         </TabsList>
         <TabsContent
           value="manifest"

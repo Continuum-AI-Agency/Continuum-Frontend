@@ -1,10 +1,12 @@
 'use client';
 
 import { motion, useReducedMotion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import { useTranslations as useBetaTranslations, useTranslations } from 'next-intl';
 import React from 'react';
 import { FirstRunSetup } from '@/components/dashboard/first-run/FirstRunSetup';
 import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+import { useRouter } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -54,6 +56,9 @@ export function HomeBaseDashboard({
   setup,
   brandBookRefreshedAt = null,
 }: Props) {
+  const betaUiText = useBetaTranslations('dashboard');
+
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   const [, startTransition] = React.useTransition();
   const shouldReduceMotion = useReducedMotion();
@@ -78,7 +83,9 @@ export function HomeBaseDashboard({
       }
       const query = params.toString();
       startTransition(() => {
-        router.replace(query ? `/dashboard?${query}` : '/dashboard', { scroll: false });
+        router.replace(query ? `/dashboard?${query}` : '/dashboard', {
+          scroll: false,
+        });
       });
     },
     [activeView, router],
@@ -107,13 +114,13 @@ export function HomeBaseDashboard({
 
             <div className="flex shrink-0 items-center gap-2">
               <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Dashboard view
+                {uiText('dashboard_view_f9d4b29')}
               </span>
               {/* The segments touch, so the row caps each pad at its own edge: under a coarse
                   pointer a 44 px pad reached into the next segment's drawn box. */}
               <nav
                 className="hit-area-row inline-flex rounded-md border border-border bg-background p-0.5"
-                aria-label="Dashboard view options"
+                aria-label={betaUiText('beta_f3d55dbbd3c4')}
               >
                 {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
                   const config = DASHBOARD_VIEWS[view];
@@ -132,10 +139,12 @@ export function HomeBaseDashboard({
                           ? 'bg-muted/60 text-foreground'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
-                      style={{ transitionProperty: 'background-color, color, scale' }}
+                      style={{
+                        transitionProperty: 'background-color, color, scale',
+                      }}
                       aria-pressed={isActive}
                     >
-                      {config.label}
+                      {localizeDashboardCopy(config.label, uiText)}
                     </button>
                   );
                 })}
@@ -144,7 +153,7 @@ export function HomeBaseDashboard({
           </>
         ) : (
           <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Get started
+            {uiText('get_started_61e8d44')}
           </h1>
         )}
       </div>
@@ -159,7 +168,7 @@ export function HomeBaseDashboard({
         {firstRunSetup ? (
           <div className="flex items-center gap-2 px-[var(--card-pad)]">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Your live data
+              {betaUiText('beta_a338995bdaca')}
             </span>
             <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
           </div>

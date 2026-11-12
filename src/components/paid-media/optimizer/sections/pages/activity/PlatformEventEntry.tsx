@@ -1,10 +1,12 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale } from 'next-intl';
 
 // A platform event in the Activity list, beside the action rows: a change the platform's own
 // history saw, a roster that drifted (the server log's own row), or a day the account stopped or
 // started showing ads (read off its daily spend). A day has no clock time, so a day event says
 // "day" where a write prints its time.
 
+import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 import { TimelineEntry } from '../../feedTimeline';
 import { type ActivityPlatformItem, deliveryWords, SOURCE_COLOR } from './activityModel';
@@ -17,6 +19,9 @@ export function PlatformEventEntry({
   item: ActivityPlatformItem;
   highlighted: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const locale = useLocale() as UiLocale;
+
   if (item.kind === 'log') {
     return <LifecycleLogRow eventId={item.id} highlighted={highlighted} row={item.row} />;
   }
@@ -44,7 +49,7 @@ export function PlatformEventEntry({
       </TimelineEntry>
     );
   }
-  const words = deliveryWords(item.event);
+  const words = deliveryWords(item.event, betaUiText, locale);
   return (
     <li
       className={cn(
@@ -55,7 +60,9 @@ export function PlatformEventEntry({
       data-highlighted={highlighted ? 'true' : undefined}
       data-testid="activity-delivery-entry"
     >
-      <span className="pt-0.5 font-mono text-muted-foreground text-xs">day</span>
+      <span className="pt-0.5 font-mono text-muted-foreground text-xs">
+        {betaUiText('beta_944c27e5b97a')}
+      </span>
       <span
         aria-hidden="true"
         className="mt-1.5 size-2 rounded-full"

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OrganicPublishAccountOption } from '@/lib/organic/platformAccountOptions';
 import { OrganicPublishTargetPicker } from './OrganicPublishTargetPicker';
 import { installPickerDomGlobals, stubSource } from './pickerTestHarness';
@@ -16,7 +17,12 @@ const accounts: OrganicPublishAccountOption[] = [
     accountId: 'ig-main',
     label: 'Main profile',
   },
-  { platform: 'linkedin', platformLabel: 'LinkedIn', accountId: 'li-page', label: 'Company page' },
+  {
+    platform: 'linkedin',
+    platformLabel: 'LinkedIn',
+    accountId: 'li-page',
+    label: 'Company page',
+  },
 ];
 
 function openTarget() {
@@ -58,7 +64,10 @@ describe('OrganicPublishTargetPicker', () => {
     fireEvent.click(screen.getByText('Company page'));
 
     // The stored platform was instagram; picking a LinkedIn account moves both.
-    expect(onChange).toHaveBeenLastCalledWith({ platform: 'linkedin', accountId: 'li-page' });
+    expect(onChange).toHaveBeenLastCalledWith({
+      platform: 'linkedin',
+      accountId: 'li-page',
+    });
   });
 
   test('renders the catalog placeholder id as unset', () => {
@@ -94,7 +103,10 @@ describe('OrganicPublishTargetPicker', () => {
     expect(field.value).toBe('li-page');
 
     fireEvent.change(field, { target: { value: 'li-other' } });
-    expect(onChange).toHaveBeenLastCalledWith({ platform: 'linkedin', accountId: 'li-other' });
+    expect(onChange).toHaveBeenLastCalledWith({
+      platform: 'linkedin',
+      accountId: 'li-other',
+    });
   });
 
   test('shows an empty raw field for the placeholder id while degraded', () => {

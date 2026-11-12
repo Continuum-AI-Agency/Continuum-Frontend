@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ElementDetail } from './ElementDetail';
 
 // A signed-preview round trip through react-query does not settle inside
@@ -141,7 +148,10 @@ describe('ElementDetail', () => {
     // newest history entry here would print a picture the model never sees directly
     // above the words "this image is what gets sent".
     renderDetail(
-      buildElement({ referenceHistory: ['ref-1', 'ref-2'], defaultReferenceAssetId: null }),
+      buildElement({
+        referenceHistory: ['ref-1', 'ref-2'],
+        defaultReferenceAssetId: null,
+      }),
     );
 
     expect(await screen.findByAltText('Aria reference sheet')).toBeTruthy();
@@ -165,14 +175,22 @@ describe('ElementDetail', () => {
     expect(screen.getByRole('button', { name: 'Generate character sheet' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open the Aria character sheet' }));
-    const fullSize = await screen.findByRole('link', { name: 'Open full size' });
+    const fullSize = await screen.findByRole('link', {
+      name: 'Open full size',
+    });
     expect(fullSize.getAttribute('href')).toBe(signedUrlFor('sheet-1'));
   });
 
   it('says a generation failed instead of just stopping the spinner', () => {
-    renderDetail(buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }), {
-      generateError: new Error('element_reference_generation_failed'),
-    });
+    renderDetail(
+      buildElement({
+        referenceHistory: ['ref-1'],
+        defaultReferenceAssetId: 'ref-1',
+      }),
+      {
+        generateError: new Error('element_reference_generation_failed'),
+      },
+    );
 
     expect(screen.getByRole('alert').textContent).toContain('element_reference_generation_failed');
     // And says the failure cost nothing, which is true: append is non-destructive.
@@ -181,7 +199,10 @@ describe('ElementDetail', () => {
 
   it('surfaces a set-default failure', () => {
     renderDetail(
-      buildElement({ referenceHistory: ['ref-1', 'ref-2'], defaultReferenceAssetId: 'ref-2' }),
+      buildElement({
+        referenceHistory: ['ref-1', 'ref-2'],
+        defaultReferenceAssetId: 'ref-2',
+      }),
       { setDefaultError: new Error('element_reference_not_in_history') },
     );
 
@@ -189,9 +210,15 @@ describe('ElementDetail', () => {
   });
 
   it('counts real elapsed seconds while generating rather than inventing a bar', () => {
-    renderDetail(buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }), {
-      isGenerating: true,
-    });
+    renderDetail(
+      buildElement({
+        referenceHistory: ['ref-1'],
+        defaultReferenceAssetId: 'ref-1',
+      }),
+      {
+        isGenerating: true,
+      },
+    );
 
     expect(screen.getByRole('button', { name: /Generating sheet… 0s/ })).toBeTruthy();
     expect(screen.getByText('One paid image call, usually 15–20 seconds.')).toBeTruthy();
@@ -200,7 +227,10 @@ describe('ElementDetail', () => {
 
   it('marks the entry being pinned as pending', () => {
     renderDetail(
-      buildElement({ referenceHistory: ['ref-1', 'ref-2'], defaultReferenceAssetId: 'ref-2' }),
+      buildElement({
+        referenceHistory: ['ref-1', 'ref-2'],
+        defaultReferenceAssetId: 'ref-2',
+      }),
       { pendingDefaultAssetId: 'ref-1' },
     );
 
@@ -219,7 +249,9 @@ describe('ElementDetail', () => {
     );
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Generate product sheet — two paid image calls' }),
+      screen.getByRole('button', {
+        name: 'Generate product sheet — two paid image calls',
+      }),
     );
     expect(props.onGenerateReference).toHaveBeenCalled();
     const preview = await screen.findByAltText('Aria product sheet');
@@ -231,7 +263,9 @@ describe('ElementDetail', () => {
     renderDetail(buildElement({ category: 'object' }));
 
     expect(
-      screen.getByRole('button', { name: 'Generate product sheet — two paid image calls' }),
+      screen.getByRole('button', {
+        name: 'Generate product sheet — two paid image calls',
+      }),
     ).toBeTruthy();
   });
 
@@ -244,7 +278,10 @@ describe('ElementDetail', () => {
 
   it('regenerates from the members', () => {
     const props = renderDetail(
-      buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }),
+      buildElement({
+        referenceHistory: ['ref-1'],
+        defaultReferenceAssetId: 'ref-1',
+      }),
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Generate candidate sheet/ }));
@@ -256,8 +293,11 @@ describe('ElementDetail', () => {
     renderDetail(buildElement({ members: [] }));
 
     expect(
-      (screen.getByRole('button', { name: /Generate candidate sheet/ }) as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole('button', {
+          name: /Generate candidate sheet/,
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 
@@ -281,9 +321,13 @@ describe('ElementDetail', () => {
       buildElement({ category: 'character', rightsNote: 'licensed stock' }),
     );
 
-    fireEvent.change(screen.getByLabelText('Rights basis'), { target: { value: '  ' } });
+    fireEvent.change(screen.getByLabelText('Rights basis'), {
+      target: { value: '  ' },
+    });
 
-    const save = screen.getByRole('button', { name: 'Replace Element' }) as HTMLButtonElement;
+    const save = screen.getByRole('button', {
+      name: 'Replace Element',
+    }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     expect(screen.getByText('A Character Element needs a rights basis.')).toBeTruthy();
     fireEvent.click(save);

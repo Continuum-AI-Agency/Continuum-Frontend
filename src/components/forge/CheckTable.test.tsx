@@ -5,7 +5,14 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { type CheckRow, CheckTable, checkSummary, TickBar } from './CheckTable';
 
 afterEach(cleanup);
@@ -100,8 +107,16 @@ describe('CheckTable', () => {
       <CheckTable
         rows={[
           { ...rowOf('Parse'), state: 'fail' },
-          { ...rowOf('Fonts'), state: 'warn', detail: <p>Inter · not uploaded</p> },
-          { ...rowOf('Build'), state: 'fail', detail: <p>Spec did not validate</p> },
+          {
+            ...rowOf('Fonts'),
+            state: 'warn',
+            detail: <p>Inter · not uploaded</p>,
+          },
+          {
+            ...rowOf('Build'),
+            state: 'fail',
+            detail: <p>Spec did not validate</p>,
+          },
         ]}
       />,
     );
@@ -125,7 +140,10 @@ describe('CheckTable', () => {
       <CheckTable
         rows={[
           rowOf('Parse'),
-          { ...rowOf('Fonts'), detail: <p>FoundrySans-Regular · not uploaded</p> },
+          {
+            ...rowOf('Fonts'),
+            detail: <p>FoundrySans-Regular · not uploaded</p>,
+          },
         ]}
         focusRowRequest={{ name: 'Fonts', requestId: 1 }}
       />,

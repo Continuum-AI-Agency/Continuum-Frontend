@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AccountCandidate, AdAccount, PlatformCard } from '@continuum/contracts';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { platformCardOf } from '../../../platformCards/platformCardModel';
 import { buildGoogleOverview } from '../../../platforms/googleAdsOverviewModel';
 import type { GoogleAdsOverviewState } from '../../../platforms/useGoogleAdsOverview';
@@ -64,7 +65,12 @@ function ready(
   name: string,
   resultBucket: 'leads' | 'purchases' | null,
 ): GoogleAdsOverviewState {
-  return { status: 'ready', account: account('1', name), overview, resultBucket };
+  return {
+    status: 'ready',
+    account: account('1', name),
+    overview,
+    resultBucket,
+  };
 }
 
 const readyCards = (candidates: AccountCandidate[], extra: PlatformCard[] = []) => ({
@@ -188,14 +194,24 @@ describe('MixLensView — when the results do not split', () => {
     const google = ready(buildGoogleOverview(PINK_ACCOUNT, PINK_CAMPAIGNS), 'Pink', 'purchases');
     const base = { google, cards: readyCards([]), goal: null };
     expect(
-      mixLensState({ ...base, campaigns: { data: undefined, isError: false, error: null } }),
+      mixLensState({
+        ...base,
+        campaigns: { data: undefined, isError: false, error: null },
+      }),
     ).toEqual({ status: 'loading' });
     expect(
       mixLensState({
         ...base,
-        campaigns: { data: undefined, isError: true, error: new Error('Quota exceeded.') },
+        campaigns: {
+          data: undefined,
+          isError: true,
+          error: new Error('Quota exceeded.'),
+        },
       }),
-    ).toEqual({ status: 'error', line: 'The campaigns could not be read: Quota exceeded.' });
+    ).toEqual({
+      status: 'error',
+      line: 'The campaigns could not be read: Quota exceeded.',
+    });
   });
 });
 
@@ -263,7 +279,11 @@ describe('MixLensView — nothing to draw, and the frame says which', () => {
     const state = mixLensState({
       google,
       cards: readyCards([]),
-      campaigns: { data: undefined, isError: true, error: new Error('Quota exceeded.') },
+      campaigns: {
+        data: undefined,
+        isError: true,
+        error: new Error('Quota exceeded.'),
+      },
       goal: null,
     });
     render(<MixLensView size="m" state={state} />);

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The Scale / Iterate / Kill calls as three borderless columns: a coloured uppercase heading,
 // then one hairline-separated row per ad — thumbnail, name, its angle when the labeller
@@ -51,6 +52,7 @@ function VerdictRow({
   currency: string | null;
   angleLabel: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const media = mediaFromPaidVerdict({
     ...verdict,
     thumbnailUrl: freshUrl ?? verdict.thumbnailUrl,
@@ -72,7 +74,7 @@ function VerdictRow({
         </span>
       ) : (
         <span className="grid h-11 w-9 shrink-0 place-items-center rounded-md bg-muted text-xs text-muted-foreground">
-          AD
+          {uiText('ad_c7bf4bb')}
         </span>
       )}
       <span className="min-w-0">
@@ -112,6 +114,7 @@ export function VerdictColumns({
   currency,
   angleLabelByAd,
 }: VerdictColumnsProps) {
+  const uiText = useTranslations('scale');
   return (
     <div className="grid gap-6 @3xl/ci:grid-cols-3 @3xl/ci:gap-9">
       {COLUMN_ORDER.map((kind) => {
@@ -128,7 +131,7 @@ export function VerdictColumns({
             </h4>
             {verdicts.length === 0 ? (
               <p className="border-border/60 border-t py-2 text-xs text-muted-foreground">
-                None right now.
+                {uiText('none_right_now_7212e8d')}
               </p>
             ) : (
               verdicts

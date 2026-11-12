@@ -11,7 +11,7 @@ import {
   type VideoEditorOpOutput,
 } from '@continuum/contracts';
 import { Download, ExternalLink, RotateCcw, TriangleAlert } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -25,7 +25,9 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { useStudioMetadata } from '@/StudioCanvas/hooks/useStudioMetadata';
 import type { VideoStudioContext } from '../types';
 import { exportRunning, useVariantExports, type VariantExport } from './variantExports';
 
@@ -39,6 +41,8 @@ const POLL_MAX_MS = 8_000;
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 function VariantExportRow({ row, onRetry }: { row: VariantExport; onRetry: () => void }) {
+  const translateUi = useUiTranslations('studio');
+
   const progress = row.progress !== undefined ? Math.round(row.progress * 100) : null;
   return (
     <li
@@ -55,17 +59,25 @@ function VariantExportRow({ row, onRetry }: { row: VariantExport; onRetry: () =>
               <a
                 href={row.downloadUrl}
                 download
-                className={buttonVariants({ size: 'sm', className: 'h-7 text-xs' })}
+                className={buttonVariants({
+                  size: 'sm',
+                  className: 'h-7 text-xs',
+                })}
               >
-                <Download data-icon="inline-start" />
-                Download {row.label}
+                <Download data-icon="inline-start" /> {translateUi('download_d6eafe82')} {row.label}
               </a>
             ) : null}
             {row.assetId ? (
               <Link
                 href={buildLibraryAssetHref({ assetId: row.assetId })}
-                aria-label={`Open ${row.label} in Library`}
-                className={buttonVariants({ size: 'sm', variant: 'outline', className: 'h-7' })}
+                aria-label={translateUi('open_value0_in_library_4c0112e2', {
+                  value0: String(row.label),
+                })}
+                className={buttonVariants({
+                  size: 'sm',
+                  variant: 'outline',
+                  className: 'h-7',
+                })}
               >
                 <ExternalLink className="size-3.5" />
               </Link>
@@ -73,8 +85,7 @@ function VariantExportRow({ row, onRetry }: { row: VariantExport; onRetry: () =>
           </>
         ) : row.state === 'failed' ? (
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onRetry}>
-            <RotateCcw data-icon="inline-start" />
-            Retry {row.label}
+            <RotateCcw data-icon="inline-start" /> {translateUi('retry_942087cc')} {row.label}
           </Button>
         ) : null}
       </div>
@@ -82,7 +93,11 @@ function VariantExportRow({ row, onRetry }: { row: VariantExport; onRetry: () =>
         <div className="flex items-center gap-2">
           <Progress value={progress} className="flex-1" />
           <span className="w-24 shrink-0 text-right text-2xs text-muted-foreground">
-            {row.state === 'running' ? 'Rendering' : row.state === 'queued' ? 'Queued' : 'Starting'}
+            {row.state === 'running'
+              ? translateUi('rendering_e2fe3539')
+              : row.state === 'queued'
+                ? translateUi('queued_661ff40a')
+                : translateUi('starting_aeed4d26')}
             {progress !== null ? ` · ${progress}%` : '…'}
           </span>
         </div>
@@ -112,6 +127,11 @@ export function ExportDialog({
   /** Opens on every variant of the brief family instead of this cut alone. */
   allVariants?: boolean;
 }): React.ReactNode {
+  const registryText = useStudioMetadata();
+
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const family = Boolean(studio.project.brief);
   const [scope, setScope] = useState<Scope>(allVariants ? 'all' : 'one');
   const all = family && scope === 'all';
@@ -186,10 +206,10 @@ export function ExportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl" data-testid="video-studio-export-dialog">
         <DialogHeader>
-          <DialogTitle>Export</DialogTitle>
+          <DialogTitle>{uiText('export_3664895')}</DialogTitle>
           <DialogDescription>
-            Pick where it's going. The timeline is reframed to the platform's format, rendered as an
-            H.264 MP4 and saved to the Library.
+            {' '}
+            {translateUi('pick_where_it_s_going_the_timeline__d75a0150')}{' '}
           </DialogDescription>
         </DialogHeader>
 
@@ -199,7 +219,7 @@ export function ExportDialog({
             variant="outline"
             size="sm"
             spacing={0}
-            aria-label="What to export"
+            aria-label={translateUi('what_to_export_c5d8660a')}
             value={scope}
             onValueChange={(value) => {
               const next: string = value;
@@ -207,10 +227,12 @@ export function ExportDialog({
             }}
           >
             <ToggleGroupItem value="one" disabled={busy}>
-              This cut
+              {' '}
+              {translateUi('this_cut_e59af306')}{' '}
             </ToggleGroupItem>
             <ToggleGroupItem value="all" disabled={busy}>
-              All variants
+              {' '}
+              {translateUi('all_variants_9b016a7a')}{' '}
             </ToggleGroupItem>
           </ToggleGroup>
         ) : null}
@@ -238,7 +260,7 @@ export function ExportDialog({
                   style={{ aspectRatio: `${card.width} / ${card.height}` }}
                 />
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-medium">{card.label}</span>
+                  <span className="truncate text-sm font-medium">{registryText(card.label)}</span>
                   <span className="text-xs text-muted-foreground">
                     {card.width}×{card.height}
                   </span>
@@ -249,7 +271,7 @@ export function ExportDialog({
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-muted-foreground">Framing</span>
+          <span className="text-sm text-muted-foreground">{translateUi('framing_4de57f8f')}</span>
           <ToggleGroup
             type="single"
             variant="outline"
@@ -262,10 +284,12 @@ export function ExportDialog({
             }}
           >
             <ToggleGroupItem value="cover" disabled={busy}>
-              Fill (crop)
+              {' '}
+              {translateUi('fill_crop_2e3a0f02')}{' '}
             </ToggleGroupItem>
             <ToggleGroupItem value="contain" disabled={busy}>
-              Fit (letterbox)
+              {' '}
+              {translateUi('fit_letterbox_1b0f383d')}{' '}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -306,7 +330,9 @@ export function ExportDialog({
           <div className="flex flex-col gap-1.5">
             <Progress value={progress} />
             <span className="text-xs text-muted-foreground">
-              {status?.state === 'running' ? 'Rendering' : 'Queued'}
+              {status?.state === 'running'
+                ? translateUi('rendering_e2fe3539')
+                : translateUi('queued_661ff40a')}
               {progress !== null ? ` · ${progress}%` : '…'}
             </span>
           </div>
@@ -316,8 +342,7 @@ export function ExportDialog({
           <div className="flex flex-wrap items-center gap-2" data-testid="export-complete">
             {status.downloadUrl ? (
               <a href={status.downloadUrl} download className={buttonVariants()}>
-                <Download data-icon="inline-start" />
-                Download MP4
+                <Download data-icon="inline-start" /> {translateUi('download_mp4_4ec38a29')}{' '}
               </a>
             ) : null}
             {status.assetId ? (
@@ -325,8 +350,9 @@ export function ExportDialog({
                 href={buildLibraryAssetHref({ assetId: status.assetId })}
                 className={buttonVariants({ variant: 'outline' })}
               >
-                <ExternalLink data-icon="inline-start" />
-                Open in Library
+                <ExternalLink data-icon="inline-start" /> {translateUi(
+                  'open_in_library_c0a66bb6',
+                )}{' '}
               </Link>
             ) : null}
           </div>
@@ -347,7 +373,10 @@ export function ExportDialog({
               data-testid="export-all-start"
             >
               {busy ? <Spinner data-icon="inline-start" /> : null}
-              {`Export ${variants.rows.length} variants for ${PLATFORM_EXPORT_PRESETS[preset].label}`}
+              {translateUi('export_value0_variants_for_value1_25770b02', {
+                value0: String(variants.rows.length),
+                value1: String(registryText(PLATFORM_EXPORT_PRESETS[preset].label)),
+              })}
             </Button>
           ) : (
             <Button
@@ -357,8 +386,10 @@ export function ExportDialog({
             >
               {busy ? <Spinner data-icon="inline-start" /> : null}
               {status?.state === 'completed'
-                ? 'Export again'
-                : `Export for ${PLATFORM_EXPORT_PRESETS[preset].label}`}
+                ? translateUi('export_again_8bed251d')
+                : translateUi('export_for_value0_d852a820', {
+                    value0: String(registryText(PLATFORM_EXPORT_PRESETS[preset].label)),
+                  })}
             </Button>
           )}
         </DialogFooter>

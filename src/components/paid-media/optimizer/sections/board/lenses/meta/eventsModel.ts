@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type FlagCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // The Optimization events view's figures (Meta twin of the conversion signal): the event each
 // portfolio teaches Meta to find, what that event is worth, and the goal it is held to. On Meta
 // only a purchase carries a value (the purchase value the pixel or WhatsApp reports), so the one
@@ -199,11 +204,39 @@ export function buildEvents(
   const rank = (event: PortfolioEvent) =>
     event.valuePerResult != null ? 0 : event.goal != null ? 1 : 2;
   const ordered = [...events].sort((a, b) => rank(a) - rank(b));
-  return { events: ordered, valued, takeaway: takeawayOf(ordered, valued, currency) };
+  return {
+    events: ordered,
+    valued,
+    takeaway: takeawayOf(ordered, valued, currency),
+  };
 }
 
 /** What a flag says, in product chrome. */
-export function flagText(flag: PortfolioEventFlag, unitMany: string): string {
+export function flagText(
+  flag: PortfolioEventFlag,
+  unitMany: string,
+  t?: FlagCopy,
+  locale: UiLocale = 'en',
+): string {
+  if (t) {
+    switch (flag.kind) {
+      case 'lost': {
+        const date = flag.since ? t('metaOnDate', { date: monthDayEn(flag.since, locale) }) : '';
+        return flag.count === null
+          ? t('metaFlagLostUnknown', { date })
+          : t('metaFlagLostCount', { count: flag.count, date });
+      }
+      case 'partial':
+        return flag.count === null
+          ? t('metaFlagPartialUnknown')
+          : t('metaFlagPartialCount', { count: flag.count });
+      case 'empty':
+        return t('metaFlagEmpty');
+      case 'silent':
+        return t('metaFlagSilent', { result: unitMany });
+    }
+  }
+
   switch (flag.kind) {
     case 'lost': {
       const what = flag.count != null ? `its ${flag.count} ad sets` : 'its ad sets';

@@ -14,16 +14,29 @@ mock.module('@/components/forge/BrandColorField', () => ({
 mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   MediaSelectPopover: ({ anchor }: { anchor: React.ReactNode }) => anchor,
 }));
-const uploadMediaAsset = mock(async () => ({ assetId: 'asset-1', versionId: 'version-1' }));
+const uploadMediaAsset = mock(async () => ({
+  assetId: 'asset-1',
+  versionId: 'version-1',
+}));
 const mediaUpload = { ...(await import('@/lib/library/uploadMediaAsset')) };
-mock.module('@/lib/library/uploadMediaAsset', () => ({ ...mediaUpload, uploadMediaAsset }));
+mock.module('@/lib/library/uploadMediaAsset', () => ({
+  ...mediaUpload,
+  uploadMediaAsset,
+}));
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { TemplateSlotEdit, TemplateVariable } from '@/lib/library/templateSources';
 import { VariableEditor } from './VariableEditor';
 
@@ -57,7 +70,12 @@ function variable(overrides: Partial<TemplateVariable>): TemplateVariable {
 
 const VARIABLES = [
   variable({ required: true }),
-  variable({ key: 'Brand colour', label: 'Brand colour', kind: 'color', charBudget: null }),
+  variable({
+    key: 'Brand colour',
+    label: 'Brand colour',
+    kind: 'color',
+    charBudget: null,
+  }),
 ];
 
 function renderEditor(onSave: (edits: TemplateSlotEdit[]) => Promise<boolean>) {
@@ -79,14 +97,23 @@ describe('VariableEditor', () => {
     render(
       <VariableEditor
         brandId="22222222-2222-4222-8222-222222222222"
-        variables={[variable({ key: 'Hero', label: 'Hero', kind: 'image', charBudget: null })]}
+        variables={[
+          variable({
+            key: 'Hero',
+            label: 'Hero',
+            kind: 'image',
+            charBudget: null,
+          }),
+        ]}
         savedDefaults={{}}
         parseState="parsed"
         saving={false}
         onSave={onSave}
       />,
     );
-    const target = screen.getByRole('group', { name: 'Default image for Hero' });
+    const target = screen.getByRole('group', {
+      name: 'Default image for Hero',
+    });
     const file = new File(['image'], 'hero.png', { type: 'image/png' });
     const dataTransfer = { types: ['Files'], files: [file] };
     fireEvent.dragOver(target, { dataTransfer });
@@ -100,7 +127,10 @@ describe('VariableEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith([
-        { slotKey: 'Hero', defaultValue: { assetId: 'asset-1', versionId: 'version-1' } },
+        {
+          slotKey: 'Hero',
+          defaultValue: { assetId: 'asset-1', versionId: 'version-1' },
+        },
       ]),
     );
   });
@@ -113,7 +143,12 @@ describe('VariableEditor', () => {
         variables={[
           variable({}),
           variable({ key: 'Outline', label: 'Outline' }),
-          variable({ key: 'Brand colour', label: 'Brand colour', kind: 'color', charBudget: null }),
+          variable({
+            key: 'Brand colour',
+            label: 'Brand colour',
+            kind: 'color',
+            charBudget: null,
+          }),
         ]}
         savedDefaults={{}}
         savedBindings={{}}
@@ -195,7 +230,9 @@ describe('VariableEditor', () => {
     const onSave = mock(async (_edits: TemplateSlotEdit[]) => answer);
     renderEditor(onSave);
 
-    fireEvent.change(screen.getByLabelText('Headline default'), { target: { value: 'New copy' } });
+    fireEvent.change(screen.getByLabelText('Headline default'), {
+      target: { value: 'New copy' },
+    });
     expect(screen.getByText('1 changed')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -270,7 +307,10 @@ describe('VariableEditor', () => {
             charBudget: null,
           }),
         ]}
-        savedDefaults={{ 'boolean__show-carrera': true, 'boolean__dark-mode': false }}
+        savedDefaults={{
+          'boolean__show-carrera': true,
+          'boolean__dark-mode': false,
+        }}
         parseState="parsed"
         saving={false}
         onSave={mock(async () => true)}
@@ -293,14 +333,20 @@ describe('VariableEditor', () => {
     );
     renderEditor(onSave);
 
-    fireEvent.change(screen.getByLabelText('Headline default'), { target: { value: 'New copy' } });
+    fireEvent.change(screen.getByLabelText('Headline default'), {
+      target: { value: 'New copy' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
 
     // Typed while the save is still in flight: a new field on the same slot, and another slot.
-    fireEvent.change(screen.getByLabelText('Reference length'), { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText('Reference length'), {
+      target: { value: '30' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /Brand colour/ }));
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Accent' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Accent' },
+    });
 
     answers[0]!(true);
     await waitFor(() => expect(screen.getByText('2 changed')).toBeTruthy());
@@ -323,7 +369,12 @@ describe('VariableEditor', () => {
         variables={[
           variable({ role: 'headline' }),
           variable({ key: 'Subhead', label: 'Subhead', role: 'headline' }),
-          variable({ key: 'Hero', label: 'Hero', kind: 'image', charBudget: null }),
+          variable({
+            key: 'Hero',
+            label: 'Hero',
+            kind: 'image',
+            charBudget: null,
+          }),
         ]}
         savedDefaults={{}}
         parseState="parsed"
@@ -345,10 +396,16 @@ describe('VariableEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Text' }));
     await waitFor(() => expect(screen.getAllByText('2 of 3')).toHaveLength(1));
 
-    fireEvent.change(screen.getByLabelText('Headline default'), { target: { value: 'Copy' } });
+    fireEvent.change(screen.getByLabelText('Headline default'), {
+      target: { value: 'Copy' },
+    });
     expect(screen.getByText('1 changed')).toBeTruthy();
     expect(
-      (screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Save changes',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 });

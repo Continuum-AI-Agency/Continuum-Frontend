@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import type { ReactElement } from 'react';
 import { Separator } from '@/components/ui/separator';
@@ -10,6 +11,7 @@ type ComingSoonPrimitiveProps = {
 };
 
 export function ComingSoonPrimitive({ title, summary, icon }: ComingSoonPrimitiveProps) {
+  const uiText = useTranslations('scale');
   return (
     <div className="glass-panel rounded-lg p-4">
       <div className="flex flex-col gap-3">
@@ -20,7 +22,7 @@ export function ComingSoonPrimitive({ title, summary, icon }: ComingSoonPrimitiv
         <span className="text-muted-foreground">{summary}</span>
         <Separator />
         <span className="text-muted-foreground">
-          Add requirements and sample assets here to keep the build aligned.
+          {uiText('add_requirements_and_sample_assets_here_to_ke_7692911')}
         </span>
       </div>
     </div>

@@ -1,9 +1,11 @@
 'use client';
 
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { ComparisonBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { useAnswerLanguage } from '../answerLanguageContext';
 import {
   explicitSeverity,
   fallsAreGood,
@@ -56,10 +58,15 @@ function sideOf(
   const detail = [side.entity, side.window].filter(
     (part): part is string => Boolean(part) && part !== side.label,
   );
-  return { label: side.label, detail: detail.length > 0 ? detail.join(' · ') : null };
+  return {
+    label: side.label,
+    detail: detail.length > 0 ? detail.join(' · ') : null,
+  };
 }
 
 export default function ComparisonBlock({ block }: ComparisonBlockProps) {
+  const reportLocale = useAnswerLanguage();
+  const uiText = useTranslations('scale');
   // Two entities read on one window name that window once, under the title, rather than
   // twice in narrow column heads.
   const sharedWindow =
@@ -71,13 +78,30 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
   const sideA = sideOf(unshared(block.side_a), block.before_label);
   const sideB = sideOf(unshared(block.side_b), block.after_label);
   const headings = [
-    { key: 'metric', label: 'Metric', detail: null, numeric: false },
+    {
+      key: 'metric',
+      label: uiText('metric_2d275a7'),
+      detail: null,
+      numeric: false,
+    },
     { key: 'before', ...sideA, numeric: true },
     { key: 'after', ...sideB, numeric: true },
     ...(block.baseline_label
-      ? [{ key: 'baseline', label: block.baseline_label, detail: null, numeric: true }]
+      ? [
+          {
+            key: 'baseline',
+            label: block.baseline_label,
+            detail: null,
+            numeric: true,
+          },
+        ]
       : []),
-    { key: 'change', label: 'Change', detail: null, numeric: true },
+    {
+      key: 'change',
+      label: uiText('change_c0bf75b'),
+      detail: null,
+      numeric: true,
+    },
   ];
   // Money by the one rule (M1): each leg of a money pair prints through `formatMoney` in the
   // pair's own currency, and carries its raw value and currency for the parity checks.
@@ -87,6 +111,7 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
       {...blockFigureAttributes(`${pair.label} · ${legKey}`, value, pair.currency)}
     >
       {formatValue(value, pair.format ?? undefined, {
+        locale: reportLocale,
         currency: pair.currency ?? undefined,
         percentBasis: pair.percent_basis ?? null,
       })}

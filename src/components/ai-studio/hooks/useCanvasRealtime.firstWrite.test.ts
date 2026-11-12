@@ -1,3 +1,4 @@
+import { renderHook } from '@/i18n/__tests__/render';
 // The first write into a canvas room that has no canvas_sessions row yet.
 //
 // A save requested before the room finished loading parks in pendingSaveRef. The
@@ -7,7 +8,7 @@
 // early, which is why the regression below drives a room switch rather than a mount.
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import { useSyncExternalStore } from 'react';
 import { useCanvasRealtime } from './useCanvasRealtime';
 
@@ -41,7 +42,10 @@ const createQueryBuilder = () => {
   let write: Write['kind'] | null = null;
   const capture = (kind: Write['kind']) => (payload: any) => {
     write = kind;
-    writes.push({ kind, payload: Array.isArray(payload) ? payload[0] : payload });
+    writes.push({
+      kind,
+      payload: Array.isArray(payload) ? payload[0] : payload,
+    });
     return queryBuilder;
   };
   const queryBuilder: any = {
@@ -79,11 +83,17 @@ mock.module('@/lib/supabase/client', () => ({
 
 mock.module('@/hooks/useSession', () => ({
   useSession: () => ({
-    user: { id: 'user-1', email: 'test@example.com', user_metadata: { full_name: 'Test User' } },
+    user: {
+      id: 'user-1',
+      email: 'test@example.com',
+      user_metadata: { full_name: 'Test User' },
+    },
   }),
 }));
 
-mock.module('@/lib/api/http', () => ({ request: mock(async () => ({ items: [] })) }));
+mock.module('@/lib/api/http', () => ({
+  request: mock(async () => ({ items: [] })),
+}));
 
 // A zustand stand-in that HONOURS the selector, so the hook's saveTrigger subscription
 // is live and triggerSave() drives a save the way the canvas does in production.
@@ -160,7 +170,11 @@ describe('useCanvasRealtime — first write into a room with no canvas_sessions 
   beforeEach(() => {
     reads = [];
     writes = [];
-    writeResponse = { updated_at: '2026-08-24T01:00:00.000Z', revision: 1, editor_session_id: 's' };
+    writeResponse = {
+      updated_at: '2026-08-24T01:00:00.000Z',
+      revision: 1,
+      editor_session_id: 's',
+    };
     readGate = null;
     releaseRead = null;
     listeners.clear();

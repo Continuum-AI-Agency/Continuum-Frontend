@@ -14,7 +14,7 @@ import {
   customFieldChoiceOptions,
 } from '@continuum/contracts';
 import { ratingMax } from './customFields';
-import { formatDateValue } from './customFieldValue';
+import { type CustomFieldDisplay, formatDateValue } from './customFieldValue';
 
 export type FilterMember = { userId: string; label: string };
 
@@ -26,6 +26,7 @@ export type FilterMember = { userId: string; label: string };
 export function filterChoices(
   field: CustomField,
   members: readonly FilterMember[] = [],
+  translate?: CustomFieldDisplay['translate'],
 ): CustomFieldOption[] | null {
   switch (field.type) {
     case 'single_select':
@@ -39,14 +40,20 @@ export function filterChoices(
       }));
     case 'checkbox':
       return [
-        { id: 'true', label: 'Yes' },
-        { id: 'false', label: 'No' },
+        { id: 'true', label: translate?.('fieldFilterYes') ?? 'Yes' },
+        { id: 'false', label: translate?.('fieldFilterNo') ?? 'No' },
       ];
     case 'user':
     case 'user_multi':
       return [
-        { id: CURRENT_USER_FILTER_TOKEN, label: 'Me' },
-        ...members.map((member) => ({ id: member.userId, label: member.label })),
+        {
+          id: CURRENT_USER_FILTER_TOKEN,
+          label: translate?.('fieldFilterMe') ?? 'Me',
+        },
+        ...members.map((member) => ({
+          id: member.userId,
+          label: member.label,
+        })),
       ];
     default:
       return null;
@@ -124,19 +131,26 @@ export function fieldFilterSummary(
   field: CustomField,
   filter: CustomFieldFilter | null,
   members: readonly FilterMember[] = [],
+  display?: CustomFieldDisplay,
 ): string {
   if (!filter) return '';
-  if (filter.operator === 'is_empty') return 'Empty';
+  if (filter.operator === 'is_empty') return display?.translate('fieldFilterEmpty') ?? 'Empty';
   if (filter.operator === 'is') {
     const literal = filter.values[0] ?? '';
-    return field.type === 'date' ? formatDateValue(literal) : literal;
+    return field.type === 'date' ? formatDateValue(literal, display?.locale) : literal;
   }
   if (filter.values.length === 0) return '';
   if (filter.values.length === 1) {
     const [only] = filter.values;
     return (
-      filterChoices(field, members)?.find((choice) => choice.id === only)?.label ?? 'Removed option'
+      filterChoices(field, members, display?.translate)?.find((choice) => choice.id === only)
+        ?.label ??
+      display?.translate('fieldRemovedOption') ??
+      'Removed option'
     );
   }
-  return `${filter.values.length} selected`;
+  return (
+    display?.translate('fieldSelectedCount', { count: filter.values.length }) ??
+    `${filter.values.length} selected`
+  );
 }

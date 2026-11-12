@@ -12,6 +12,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { CalendarDateRange } from '@/lib/organic/store';
 import { useCalendarStore } from '@/lib/organic/store';
+import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
 import { cn } from '@/lib/utils';
 import { DisabledControl } from '../DisabledControl';
 import { describeAddPlaceholderBlock, describeClearBlock } from '../disabledReasons';
@@ -49,20 +51,21 @@ const WEEK_OPTS = { weekStartsOn: 1 } as const; // Monday-started, matches the p
  * teal, `placeholder` was missing entirely, and Failed was a solid destructive fill.
  */
 function StatusLegend() {
+  const uiText = useTranslations('organic');
   return (
     <Popover>
       <PopoverTrigger
         render={
           <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs">
-            Status legend
+            {uiText('status_legend_6da20ca')}
           </Button>
         }
       />
       <PopoverContent align="start" className="w-72">
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold text-foreground">Post status</p>
+          <p className="text-xs font-semibold text-foreground">{uiText('post_status_5db4bfb')}</p>
           <ul className="flex flex-col gap-1.5">
-            {draftStatusLegendEntries().map((entry) => (
+            {draftStatusLegendEntries(uiText).map((entry) => (
               <li key={entry.status} className="flex items-start gap-2">
                 <StatusBadge status={entry.status} className="shrink-0" />
                 <span className="text-2xs leading-snug text-muted-foreground">{entry.hint}</span>
@@ -70,7 +73,7 @@ function StatusLegend() {
             ))}
           </ul>
           <p className="border-t border-border/50 pt-2 text-2xs text-muted-foreground">
-            {DRAFT_READINESS_LEGEND_NOTE}
+            {uiText('draftReadinessNote')}
           </p>
         </div>
       </PopoverContent>
@@ -97,10 +100,14 @@ function rangesEqual(a: CalendarDateRange | null, b: CalendarDateRange): boolean
   return a !== null && a.from === b.from && a.to === b.to;
 }
 
-function formatRangeLabel(range: CalendarDateRange): string {
+function formatRangeLabel(range: CalendarDateRange, locale: string): string {
   const from = parseISO(range.from);
   const to = parseISO(range.to);
-  const fmt = (d: Date) => format(d, 'MMM d');
+  const formatter = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+  });
+  const fmt = (d: Date) => formatter.format(d);
   return range.from === range.to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
 }
 
@@ -115,6 +122,8 @@ function TimeframeSelector({
   dateRange: CalendarDateRange | null;
   onDateRangeChange: (range: CalendarDateRange | null) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const [customOpen, setCustomOpen] = React.useState(false);
 
   const activePreset: 'all' | 'week' | 'month' | 'custom' = !dateRange
@@ -134,7 +143,10 @@ function TimeframeSelector({
       onDateRangeChange(null);
       return;
     }
-    onDateRangeChange({ from: toDayId(range.from), to: toDayId(range.to ?? range.from) });
+    onDateRangeChange({
+      from: toDayId(range.from),
+      to: toDayId(range.to ?? range.from),
+    });
   };
 
   const presetButton = (key: 'all' | 'week' | 'month', label: string) => (
@@ -152,9 +164,9 @@ function TimeframeSelector({
 
   return (
     <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/35 p-0.5">
-      {presetButton('all', 'All')}
-      {presetButton('week', 'Week')}
-      {presetButton('month', 'Month')}
+      {presetButton('all', uiText('calendarPresetLabel', { preset: 'all' }))}
+      {presetButton('week', uiText('calendarPresetLabel', { preset: 'week' }))}
+      {presetButton('month', uiText('calendarPresetLabel', { preset: 'month' }))}
       <Popover open={customOpen} onOpenChange={setCustomOpen}>
         <PopoverTrigger
           render={
@@ -167,7 +179,9 @@ function TimeframeSelector({
             >
               <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
-                {activePreset === 'custom' && dateRange ? formatRangeLabel(dateRange) : 'Custom'}
+                {activePreset === 'custom' && dateRange
+                  ? formatRangeLabel(dateRange, uiLocale)
+                  : uiText('calendarPresetLabel', { preset: 'custom' })}
               </span>
             </Button>
           }
@@ -214,6 +228,8 @@ type CalendarToolbarProps = {
 };
 
 export function CalendarToolbar(props: CalendarToolbarProps) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const {
     compact = false,
     viewMode,
@@ -241,8 +257,8 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
   const showPlanned = useCalendarStore((state) => state.showPlanned);
   const setShowPlanned = useCalendarStore((state) => state.setShowPlanned);
 
-  const addHint = describeAddPlaceholderBlock({ isGenerating });
-  const clearHint = describeClearBlock({ isGenerating, draftsCount });
+  const addHint = describeAddPlaceholderBlock({ isGenerating }, uiText);
+  const clearHint = describeClearBlock({ isGenerating, draftsCount }, uiText);
   // draftsCount already counts placeholder slots, so an empty calendar is the whole
   // condition for the planning note.
   const showPlanningNote = !isGenerating && draftsCount === 0;
@@ -264,7 +280,11 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                 aria-pressed={viewMode === mode}
                 onClick={() => onViewModeChange(mode)}
               >
-                {mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : 'List'}
+                {mode === 'week'
+                  ? uiText('week_e78041a')
+                  : mode === 'month'
+                    ? uiText('month_310ca50')
+                    : uiText('list_6f202f5')}
               </Button>
             ))}
           </div>
@@ -278,20 +298,20 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                 onClick={onGeneratePlan}
               >
                 <Sparkles data-icon="inline-start" />
-                {isProposingPlan ? 'Proposing…' : 'Generate plan'}
+                {isProposingPlan ? uiText('proposing_adf1e98') : uiText('generate_plan_307cfb3')}
               </Button>
             )}
             <AddPostMenu onCreatePost={onCreatePost} align="end">
               <Button type="button" size="sm" disabled={isGenerating}>
                 <Plus data-icon="inline-start" />
-                Create content
+                {uiText('createContent')}
               </Button>
             </AddPostMenu>
           </div>
         </div>
         <details className="mt-1">
           <summary className="hit-area w-fit cursor-pointer rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
-            More calendar tools
+            {uiText('more_calendar_tools_c835f4e')}
           </summary>
           <div className="mt-2">
             <CalendarToolbar {...props} compact={false} />
@@ -332,7 +352,11 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                       // "List → Month still shows the list".
                       onClick={() => onViewModeChange(mode)}
                     >
-                      {mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : 'List'}
+                      {mode === 'week'
+                        ? uiText('week_e78041a')
+                        : mode === 'month'
+                          ? uiText('month_310ca50')
+                          : uiText('list_6f202f5')}
                     </Button>
                   ))}
                 </div>
@@ -344,9 +368,9 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                     aria-pressed={showPlanned}
                     className="h-7 rounded px-2.5 text-xs"
                     onClick={() => setShowPlanned(!showPlanned)}
-                    title="Show or hide planned (bulk-plan) content on the calendar"
+                    title={uiText('show_or_hide_planned_bulk_plan_content_on_the_2f11390')}
                   >
-                    Planned
+                    {uiText('planned_fb6f7c9')}
                   </Button>
                 ) : (
                   <TimeframeSelector dateRange={dateRange} onDateRangeChange={onDateRangeChange} />
@@ -364,15 +388,16 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                         variant="outline"
                         className="text-2xs @max-[58rem]/planner-toolbar:hidden"
                       >
-                        Trends selected: {selectedTrendCount}
-                        {typeof maxTrendSelections === 'number' ? ` of ${maxTrendSelections}` : ''}
+                        {uiText.rich('sentence_0702ac8a21e6', {
+                          count: selectedTrendCount,
+                          limited: typeof maxTrendSelections === 'number' ? 'yes' : 'no',
+                          limit: maxTrendSelections ?? 0,
+                        })}
                       </Badge>
                     }
                   />
                   <TooltipContent className="max-w-xs">
-                    A trend is a topic Continuum found moving in your market. Selecting one tags it
-                    onto the posts you generate next. Open Trends to see what we found for your
-                    brand, or generate a fresh set there.
+                    {uiText('a_trend_is_a_topic_continuum_found_moving_in__c53de40')}
                   </TooltipContent>
                 </Tooltip>
                 {postedContentCount > 0 ? (
@@ -383,11 +408,16 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                           variant="outline"
                           className="text-2xs uppercase tracking-wide @max-[58rem]/planner-toolbar:hidden"
                         >
-                          {scopeLabel} · {postedContentCount} posted
+                          {uiText.rich('sentence_7b72e752a266', {
+                            scope: () => scopeLabel,
+                            count: postedContentCount,
+                          })}
                         </Badge>
                       }
                     />
-                    <TooltipContent>Published posts loaded into this planning week</TooltipContent>
+                    <TooltipContent>
+                      {uiText('published_posts_loaded_into_this_planning_wee_b497a72')}
+                    </TooltipContent>
                   </Tooltip>
                 ) : null}
               </div>
@@ -397,10 +427,10 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                     type="button"
                     size="sm"
                     variant="outline"
-                    aria-label="Fetch third-party posted content"
+                    aria-label={uiText('fetch_third_party_posted_content_aa266bc')}
                     disabled={isFetchingPostedContent}
                     onClick={onFetchPostedContent}
-                    title="Fetch third-party posted content"
+                    title={uiText('fetch_third_party_posted_content_aa266bc')}
                   >
                     <RefreshCw
                       className={cn(
@@ -408,7 +438,9 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                         isFetchingPostedContent && 'animate-spin',
                       )}
                     />
-                    <span className="@max-[68rem]/planner-toolbar:sr-only">Posts</span>
+                    <span className="@max-[68rem]/planner-toolbar:sr-only">
+                      {uiText('posts_a80811c')}
+                    </span>
                   </Button>
                 ) : null}
                 {/* Which of the brand's accounts this planner generates for and publishes to.
@@ -418,12 +450,14 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                   type="button"
                   size="sm"
                   variant="outline"
-                  aria-label="Open trends"
+                  aria-label={uiText('open_trends_d927bff')}
                   onClick={onOpenTrends}
-                  title="Open trends: what is moving for this brand right now"
+                  title={uiText('open_trends_what_is_moving_for_this_brand_rig_9f5d4ff')}
                 >
                   <Zap className="mr-1 h-3.5 w-3.5 @max-[68rem]/planner-toolbar:mr-0" />
-                  <span className="@max-[68rem]/planner-toolbar:sr-only">Trends</span>
+                  <span className="@max-[68rem]/planner-toolbar:sr-only">
+                    {uiText('trends_e856c6c')}
+                  </span>
                 </Button>
                 <Separator orientation="vertical" className="h-5" />
                 {onGeneratePlan ? (
@@ -431,11 +465,11 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                     type="button"
                     size="sm"
                     variant="outline"
-                    aria-label="Generate plan"
+                    aria-label={uiText('generate_plan_307cfb3')}
                     data-testid="calendar-generate"
                     disabled={isGenerating || isProposingPlan}
                     onClick={onGeneratePlan}
-                    title="Propose a content plan for this week. You approve it before anything is generated."
+                    title={uiText('propose_a_content_plan_for_this_week_you_appr_3c52994')}
                   >
                     <Sparkles
                       className={cn(
@@ -444,7 +478,7 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                       )}
                     />
                     <span className="@max-[68rem]/planner-toolbar:sr-only">
-                      {isProposingPlan ? 'Proposing…' : 'Generate'}
+                      {isProposingPlan ? uiText('proposing_adf1e98') : uiText('generate_49e49bb')}
                     </span>
                   </Button>
                 ) : null}
@@ -452,14 +486,14 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                   <DisabledControl hint={addHint}>
                     <Button type="button" size="sm" disabled>
                       <Plus className="animate-pulse" data-icon="inline-start" />
-                      Create content
+                      {uiText('createContent')}
                     </Button>
                   </DisabledControl>
                 ) : (
                   <AddPostMenu onCreatePost={onCreatePost} align="end">
                     <Button type="button" size="sm">
                       <Plus data-icon="inline-start" />
-                      Create content
+                      {uiText('createContent')}
                     </Button>
                   </AddPostMenu>
                 )}
@@ -472,10 +506,12 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
                     variant="outline"
                     disabled={isGenerating || draftsCount === 0}
                     onClick={onClear}
-                    title="Hides posts from this view. Nothing is deleted."
+                    title={uiText('hides_posts_from_this_view_nothing_is_deleted_78728de')}
                   >
                     <EyeOff className="mr-1 h-3.5 w-3.5 @max-[68rem]/planner-toolbar:mr-0" />
-                    <span className="@max-[68rem]/planner-toolbar:sr-only">Clear view</span>
+                    <span className="@max-[68rem]/planner-toolbar:sr-only">
+                      {uiText('clear_view_428ffb8')}
+                    </span>
                   </Button>
                 </DisabledControl>
               </div>
@@ -483,9 +519,9 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
 
             {showPlanningNote ? (
               <div className="mt-2 rounded-md bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground text-pretty">
-                <span className="font-medium text-foreground">Planning mode</span> — no account
-                needed. Add a placeholder or open Trends to sketch a week, or ask the agent to draft
-                ideas. AI drafts pull from your Brand Book; publishing needs a connected account.
+                {uiText.rich('toolbarPlanningNote', {
+                  mode: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+                })}
               </div>
             ) : null}
 
@@ -493,17 +529,23 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
               <div className="mt-2 space-y-1" aria-live="polite" aria-atomic="true">
                 <div className="space-y-0.5">
                   <p className="text-xs font-medium text-muted-foreground">
-                    {slotProgress.completed}/{slotProgress.total} completed
-                    {slotProgress.failed > 0 ? ` • ${slotProgress.failed} failed` : ''}
+                    {uiText.rich('sentence_3d8b12a4946d', {
+                      completed: slotProgress.completed,
+                      total: slotProgress.total,
+                      hasFailed: slotProgress.failed > 0 ? 'yes' : 'no',
+                      failed: slotProgress.failed ?? 0,
+                    })}
                   </p>
                   {gridProgress.stage ? (
                     <p className="text-2xs uppercase tracking-wide text-muted-foreground/70">
-                      {gridProgress.stage}
+                      {uiText('generationStageLabel', {
+                        stage: gridProgress.stage,
+                      })}
                     </p>
                   ) : null}
                   {gridProgress.message ? (
                     <p className="line-clamp-2 text-xs text-muted-foreground/80">
-                      {gridProgress.message}
+                      {uiText('generationWorking')}
                     </p>
                   ) : null}
                 </div>
@@ -515,21 +557,26 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
             {gridStatus === 'complete' && (
               <div className="mt-2 flex items-center gap-2 rounded-md bg-emerald-500/5 px-3 py-1.5 text-xs text-emerald-600 dark:text-emerald-400">
                 <Check className="h-3.5 w-3.5" />
-                All {slotProgress?.total ?? 0} posts generated
+                {uiText('allPostsGenerated', {
+                  count: slotProgress?.total ?? 0,
+                })}
               </div>
             )}
             {gridStatus === 'complete_with_errors' && (
               <div className="mt-2 flex items-center gap-2 rounded-md bg-amber-500/5 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400">
                 <TriangleAlert className="h-3.5 w-3.5" />
-                {slotProgress?.completed ?? 0} of {slotProgress?.total ?? 0} generated.{' '}
-                {slotProgress?.failed ?? 0} failed
+                {uiText('gridPartialGeneration', {
+                  completed: slotProgress?.completed ?? 0,
+                  total: slotProgress?.total ?? 0,
+                  failed: slotProgress?.failed ?? 0,
+                })}
                 {onRetryGeneration && (
                   <button
                     type="button"
                     onClick={onRetryGeneration}
                     className="ml-1 underline underline-offset-2 hover:text-amber-700"
                   >
-                    — retry
+                    {uiText('retry_2026dde')}
                   </button>
                 )}
               </div>
@@ -537,14 +584,16 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
             {gridStatus === 'error' && gridError && (
               <div className="mt-2 flex items-center gap-2 rounded-md bg-red-500/5 px-3 py-1.5 text-xs text-red-600 dark:text-red-400">
                 <X className="h-3.5 w-3.5" />
-                Generation failed: {gridError}
+                {uiText('gridGenerationError', {
+                  error: friendlyStreamError(gridError, uiText),
+                })}
                 {onRetryGeneration && (
                   <button
                     type="button"
                     onClick={onRetryGeneration}
                     className="ml-1 underline underline-offset-2 hover:text-red-700"
                   >
-                    — retry
+                    {uiText('retry_2026dde')}
                   </button>
                 )}
               </div>
@@ -553,17 +602,17 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
         }
       />
       <ContextMenuContent>
-        <ContextMenuLabel>Weekly Actions</ContextMenuLabel>
+        <ContextMenuLabel>{uiText('weekly_actions_6c465e8')}</ContextMenuLabel>
         <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() => onCreatePost({ status: 'draft', mode: 'manual', format: 'Post' })}
         >
-          Create content
+          {uiText('create_content_8cfba0b')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={onClear}>
           <EyeOff className="mr-2 h-3.5 w-3.5" />
-          Clear view
+          {uiText('clear_view_428ffb8')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

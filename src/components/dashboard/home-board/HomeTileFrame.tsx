@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The frame every Home tile draws inside: the Optimizer board's ModuleFrame (same sizes, same
 // states, same bench contract: data-module-state), with the Home's own header actions — the pin,
@@ -62,6 +63,8 @@ export function HomeTileFrame({
   onOpenChange,
   children,
 }: HomeTileFrameProps) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const { isPinned, togglePin } = useHomeBoardChrome();
   const [ownOpen, setOwnOpen] = useState(false);
   const open = controlledOpen ?? ownOpen;
@@ -69,7 +72,7 @@ export function HomeTileFrame({
     setOwnOpen(next);
     onOpenChange?.(next);
   };
-  const title = HOME_TILE_LABELS[tile.id];
+  const title = betaUiText('homeTileTitle', { id: tile.id });
   const pinned = isPinned(tile.id);
   const reason = tile.why ?? badge ?? undefined;
 
@@ -80,7 +83,11 @@ export function HomeTileFrame({
           <div className="flex items-center gap-0.5">
             {action}
             <Button
-              aria-label={pinned ? `Unpin ${title}` : `Pin ${title}`}
+              aria-label={
+                pinned
+                  ? betaUiText('beta_37b805178061', { value0: String(title) })
+                  : betaUiText('beta_8a6c5eb47894', { value0: String(title) })
+              }
               aria-pressed={pinned}
               className={cn('size-7', pinned ? 'text-foreground' : 'text-muted-foreground')}
               data-testid={`${homeTileTestId(tile)}-pin`}
@@ -100,7 +107,7 @@ export function HomeTileFrame({
                 type="button"
                 variant="ghost"
               >
-                Open <ArrowUpRightIcon className="size-3" />
+                {betaUiText('beta_ed077f3d8125')} <ArrowUpRightIcon className="size-3" />
               </Button>
             ) : null}
           </div>

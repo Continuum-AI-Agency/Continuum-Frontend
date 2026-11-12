@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const preview = mock(async () => ({
   confirmationToken: 'token',
@@ -66,7 +72,11 @@ describe('PresentationExportPanel', () => {
   test('blocking diagnostics prevent preparation and export', () => {
     render(<PresentationExportPanel {...props} blocked />);
     expect(
-      (screen.getByRole('button', { name: 'Review export' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Review export',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     expect(preview).not.toHaveBeenCalled();
   });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { LayerEditorLayer } from '../../types';
 import type { LayerMove } from '../../utils/layers/layerOps';
@@ -142,7 +142,9 @@ describe('LayersPanel', () => {
     });
 
     fireEvent.doubleClick(getByRole('button', { name: 'Logo' }));
-    const input = getByRole('textbox', { name: 'Rename Logo' }) as HTMLInputElement;
+    const input = getByRole('textbox', {
+      name: 'Rename Logo',
+    }) as HTMLInputElement;
     fireEvent.blur(input, { target: { value: '  Badge  ' } });
 
     expect(renames).toEqual([['a', 'Badge']]);

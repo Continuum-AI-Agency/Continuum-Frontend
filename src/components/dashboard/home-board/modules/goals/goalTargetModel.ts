@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type TargetCopy = ReturnType<typeof useTranslations<'dashboard'>>;
+
 // How much of a goal the team is aiming for, and by when (H02): which target applies to the
 // primary goal, the period it runs over, and the figure held against it. Pure.
 //
@@ -102,7 +106,10 @@ export function goalTargetFor(
   );
 }
 
-export type GoalActiveTarget = { target: HomeGoalTarget; period: GoalTargetPeriod };
+export type GoalActiveTarget = {
+  target: HomeGoalTarget;
+  period: GoalTargetPeriod;
+};
 
 export type GoalTargetStatus =
   | { kind: 'unavailable' }
@@ -111,7 +118,10 @@ export type GoalTargetStatus =
   /** Set, with no complete day to compare yet. */
   | ({ kind: 'not-running' } & GoalActiveTarget)
   /** Money in another currency than the figures: said, never compared. */
-  | ({ kind: 'mismatch'; figureCurrencies: (string | null)[] } & GoalActiveTarget)
+  | ({
+      kind: 'mismatch';
+      figureCurrencies: (string | null)[];
+    } & GoalActiveTarget)
   | ({
       kind: 'compared';
       /** The figure the target is held against. */
@@ -190,10 +200,16 @@ export type GoalTargetRequestResult =
 
 /** The form's fields as the PUT's body, refused here in the contract's words when it would be
  *  refused there. */
-export function goalTargetRequest(fields: GoalTargetFields): GoalTargetRequestResult {
+export function goalTargetRequest(
+  fields: GoalTargetFields,
+  t?: TargetCopy,
+): GoalTargetRequestResult {
   const target = Number(fields.target);
   if (fields.target.trim() === '' || !Number.isFinite(target) || target <= 0) {
-    return { ok: false, message: 'Enter a target above zero.' };
+    return {
+      ok: false,
+      message: t ? t('goalTargetPositive') : 'Enter a target above zero.',
+    };
   }
   const { metric, id } = fields.objective;
   const custom = fields.period === 'custom';
@@ -209,7 +225,24 @@ export function goalTargetRequest(fields: GoalTargetFields): GoalTargetRequestRe
     periodEnd: custom && fields.periodEnd ? fields.periodEnd : null,
     currency: isMoney && fields.currency.trim() ? fields.currency.trim().toUpperCase() : null,
   });
+  if (!parsed.success && t) {
+    const field = parsed.error.issues[0]?.path[0];
+    const message =
+      custom && (!fields.periodStart || !fields.periodEnd)
+        ? t('goalCustomDates')
+        : custom && fields.periodEnd < fields.periodStart
+          ? t('goalDateOrder')
+          : isMoney && !fields.currency.trim()
+            ? t('goalCurrencyRequired')
+            : field === 'currency'
+              ? t('goalCurrencyInvalid')
+              : t('goalTargetInvalid');
+    return { ok: false, message };
+  }
   return parsed.success
     ? { ok: true, request: parsed.data }
-    : { ok: false, message: parsed.error.issues[0]?.message ?? 'This target cannot be saved.' };
+    : {
+        ok: false,
+        message: parsed.error.issues[0]?.message ?? 'This target cannot be saved.',
+      };
 }

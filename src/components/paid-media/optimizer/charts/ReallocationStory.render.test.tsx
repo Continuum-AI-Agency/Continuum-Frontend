@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdSetSnapshot, CycleItemRow } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 const { ReallocationStory } = await import('./ReallocationStory');
 
@@ -21,7 +22,14 @@ function item(adset_id: string, current: number, final: number, reason?: string)
 }
 
 function snapshot(id: string, spend: number, leads: number): AdSetSnapshot {
-  const w = { spend, leads, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 };
+  const w = {
+    spend,
+    leads,
+    purchases: 0,
+    addToCarts: 0,
+    clicks: 0,
+    impressions: 0,
+  };
   return {
     id,
     status: 'active',

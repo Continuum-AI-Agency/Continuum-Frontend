@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 const storeState: {
@@ -404,9 +405,13 @@ describe('findSelectionFocusTarget', () => {
   it('falls back to the day overflow when the chip is folded into "+N more"', () => {
     const root = grid('<button data-day-overflow="2026-08-03"></button>');
 
-    expect(findSelectionFocusTarget(root, { kind: 'draft', id: 'gone', dayId: '2026-08-03' })).toBe(
-      root.querySelector('button') as HTMLElement,
-    );
+    expect(
+      findSelectionFocusTarget(root, {
+        kind: 'draft',
+        id: 'gone',
+        dayId: '2026-08-03',
+      }),
+    ).toBe(root.querySelector('button') as HTMLElement);
   });
 
   // A draft in another week has no chip on screen; its dock row is the next best place, and
@@ -432,7 +437,13 @@ describe('findSelectionFocusTarget', () => {
   it('falls back to the planner root when nothing matches', () => {
     const root = grid('<button data-draft-id="other"></button>');
 
-    expect(findSelectionFocusTarget(root, { kind: 'draft', id: 'gone', dayId: null })).toBe(root);
+    expect(
+      findSelectionFocusTarget(root, {
+        kind: 'draft',
+        id: 'gone',
+        dayId: null,
+      }),
+    ).toBe(root);
   });
 });
 

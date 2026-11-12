@@ -1,5 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { fullSrc, OutputFile, previewSrc, thumbnailSrc } from './renderOutputMedia';
 
 afterEach(cleanup);
@@ -11,7 +17,10 @@ let naturalWidth: PropertyDescriptor | undefined;
 beforeAll(() => {
   imagePrototype = Object.getPrototypeOf(document.createElement('img')) as object;
   naturalWidth = Object.getOwnPropertyDescriptor(imagePrototype, 'naturalWidth');
-  Object.defineProperty(imagePrototype, 'naturalWidth', { configurable: true, get: () => 1 });
+  Object.defineProperty(imagePrototype, 'naturalWidth', {
+    configurable: true,
+    get: () => 1,
+  });
 });
 afterAll(() => {
   if (imagePrototype && naturalWidth) {
@@ -53,7 +62,10 @@ describe('a render video', () => {
     return video;
   };
   const playedOnce = (video: HTMLVideoElement, atSec: number) => {
-    Object.defineProperty(video, 'played', { configurable: true, get: () => ({ length: 1 }) });
+    Object.defineProperty(video, 'played', {
+      configurable: true,
+      get: () => ({ length: 1 }),
+    });
     Object.defineProperty(video, 'currentTime', {
       configurable: true,
       writable: true,

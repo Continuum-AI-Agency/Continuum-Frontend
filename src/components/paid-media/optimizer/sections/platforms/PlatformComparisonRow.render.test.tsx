@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import {
   buildMetrics,
   EASY_FIT_MP1,
@@ -66,7 +67,13 @@ describe('PlatformComparisonRow — the table', () => {
   it('greys a platform that spent nothing in the window, and keeps its row', () => {
     const metrics = buildMetrics([
       META_TOTALS,
-      { ...GOOGLE_TOTALS, spend: 0, share_of_spend: 0, unclassified_spend: 0, results_by_kind: [] },
+      {
+        ...GOOGLE_TOTALS,
+        spend: 0,
+        share_of_spend: 0,
+        unclassified_spend: 0,
+        results_by_kind: [],
+      },
     ]);
     const { getAllByTestId } = render(<PlatformComparisonRow metrics={metrics} />);
     const [meta, google] = getAllByTestId('comparison-column');
@@ -97,7 +104,11 @@ describe('PlatformComparisonRow — the table', () => {
       <PlatformComparisonRow
         metrics={buildMetrics([
           META_TOTALS,
-          { ...GOOGLE_TOTALS, results_by_kind: [], unclassified_spend: GOOGLE_TOTALS.spend ?? 0 },
+          {
+            ...GOOGLE_TOTALS,
+            results_by_kind: [],
+            unclassified_spend: GOOGLE_TOTALS.spend ?? 0,
+          },
         ])}
       />,
     );

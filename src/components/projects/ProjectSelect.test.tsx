@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Project } from '@continuum/contracts';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 const { ProjectSelect } = await import('./ProjectSelect');
 
@@ -45,15 +46,15 @@ const openPicker = async () => {
 };
 
 const type = (value: string) =>
-  fireEvent.change(screen.getByPlaceholderText('Search or create…'), { target: { value } });
+  fireEvent.change(screen.getByPlaceholderText('Search or create…'), {
+    target: { value },
+  });
 
 describe('ProjectSelect create row', () => {
   it('creates the typed project and selects it', async () => {
     const onCreate = mock(async () => 'project-new');
     const onChange = mock(() => {});
-    render(
-      <ProjectSelect projects={[]} value={null} onChange={onChange} onCreate={onCreate} />,
-    );
+    render(<ProjectSelect projects={[]} value={null} onChange={onChange} onCreate={onCreate} />);
 
     await openPicker();
     type('Winter challenge');
@@ -92,9 +93,7 @@ describe('ProjectSelect create row', () => {
       throw new Error('Creating the project failed: 409');
     });
     const onChange = mock(() => {});
-    render(
-      <ProjectSelect projects={[]} value={null} onChange={onChange} onCreate={onCreate} />,
-    );
+    render(<ProjectSelect projects={[]} value={null} onChange={onChange} onCreate={onCreate} />);
 
     await openPicker();
     type('Duplicate');

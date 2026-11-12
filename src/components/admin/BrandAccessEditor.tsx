@@ -5,6 +5,7 @@ import {
   type AdminBrandAccess,
   type ProductCode,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
 import {
@@ -19,6 +20,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { localizeAdminCopy } from '@/i18n/adminCopy';
+import { readPrice } from '@/lib/onboarding/catalog';
 
 type BrandAccessEditorProps = {
   brandId: string;
@@ -35,8 +38,6 @@ type BrandAccessEditorProps = {
   onSetClient: (next: boolean) => void;
 };
 
-const credits = new Intl.NumberFormat('en-US');
-
 // One brand's product grid, Contract override, full-access preset, Canvas credits and client
 // flag. Stripe-sourced products are shown checked and locked: only Stripe (or a Contract
 // override) may take them away.
@@ -52,6 +53,9 @@ export function BrandAccessEditor({
   onAddCredits,
   onSetClient,
 }: BrandAccessEditorProps) {
+  const uiText = useTranslations('admin');
+  const uiLocale = useLocale();
+  const credits = new Intl.NumberFormat(uiLocale);
   const disabled = !live || pending;
   const isContract = access?.billingModel === 'contract';
   const contractId = `access-${brandId}-contract`;
@@ -59,7 +63,9 @@ export function BrandAccessEditor({
   const [confirmingContract, setConfirmingContract] = useState(false);
   const [creditAmount, setCreditAmount] = useState('');
   const [creditReason, setCreditReason] = useState('');
-  const amountUsd = Number(creditAmount);
+  const parsedAmount = readPrice(creditAmount, 'USD', uiLocale);
+  const amountUsd =
+    parsedAmount.ok && parsedAmount.price ? parsedAmount.price.amountMinor / 100 : Number.NaN;
   const creditValid =
     creditAmount !== '' &&
     amountUsd > 0 &&
@@ -85,22 +91,22 @@ export function BrandAccessEditor({
           variant="label"
           className="mb-0 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground data-[variant=label]:text-xs"
         >
-          Product access
+          {uiText('product_access_d8f65c7')}
         </FieldLegend>
         {live ? (
           <span className="truncate text-xs text-muted-foreground" data-testid="brand-billing-plan">
-            {describeBillingPlan(access)}
+            {describeBillingPlan(access, uiText)}
           </span>
         ) : null}
       </div>
       {access?.internal ? (
         <Badge variant="secondary" className="w-fit" data-testid="brand-internal-badge">
-          Internal · unmetered
+          {uiText('internal_unmetered_3e44a65')}
         </Badge>
       ) : null}
       {live ? null : (
         <FieldDescription className="text-xs">
-          Product access activates at billing go-live.
+          {uiText('product_access_activates_at_billing_go_live_ce6af68')}
         </FieldDescription>
       )}
       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
@@ -117,11 +123,11 @@ export function BrandAccessEditor({
                 onCheckedChange={(checked) => onToggleProduct(product, checked === true)}
               />
               <FieldLabel htmlFor={id} className="flex-none text-sm font-normal">
-                {label}
+                {localizeAdminCopy(label, uiText)}
               </FieldLabel>
               {stripe ? (
                 <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                  Stripe
+                  {uiText('m_4d08ec5874')}
                 </Badge>
               ) : null}
             </Field>
@@ -137,20 +143,22 @@ export function BrandAccessEditor({
           onCheckedChange={() => setConfirmingContract(true)}
         />
         <FieldLabel htmlFor={contractId} className="text-sm font-normal">
-          Contract
+          {uiText('contract_a6f5b0e')}
         </FieldLabel>
         <AdminActionConfirmation
           open={confirmingContract}
           onOpenChange={setConfirmingContract}
           title={
-            isContract ? `Remove Contract from ${brandName}?` : `Set ${brandName} to Contract?`
+            isContract
+              ? uiText('m_903a770945', { v0: String(brandName) })
+              : uiText('m_251a6afdb0', { v0: String(brandName) })
           }
           description={
             isContract
-              ? 'The brand goes back to no billing model. Its products stay on — turn them off one by one if it should lose access. This is written to the admin audit log.'
-              : 'Contract turns every product on, billed off Stripe: never metered, never blocked. This is written to the admin audit log.'
+              ? uiText('the_brand_goes_back_to_no_billing_model_its_p_839e0e8')
+              : uiText('contract_turns_every_product_on_billed_off_st_3bfc970')
           }
-          confirmLabel={isContract ? 'Remove Contract' : 'Set Contract'}
+          confirmLabel={isContract ? uiText('m_e61faef69e') : uiText('m_cf76b165e3')}
           onConfirm={() => onSetContract(!isContract)}
         />
       </Field>
@@ -164,7 +172,7 @@ export function BrandAccessEditor({
             onCheckedChange={(checked) => onSetClient(checked === true)}
           />
           <FieldLabel htmlFor={clientId} className="text-sm font-normal">
-            Client (metered)
+            {uiText('client_metered_0ed5143')}
           </FieldLabel>
         </Field>
       ) : null}
@@ -172,41 +180,44 @@ export function BrandAccessEditor({
         <AdminActionConfirmation
           trigger={
             <Button size="sm" variant="outline" disabled={disabled}>
-              Full access
+              {uiText('full_access_f19611c')}
             </Button>
           }
-          title={`Give ${brandName} full access?`}
-          description="Turns on every product (Canvas, Organic, Performance, Trends Pro, MCP) and the providers Trends Pro uses (Exa, SerpAPI, Apify), granted by an admin. Stripe and Contract grants stay as they are. Canvas stays metered: the brand still spends credits — set Contract for an unmetered brand. This is written to the admin audit log."
-          confirmLabel="Give full access"
+          title={uiText('m_ba5a41a392', { v0: String(brandName) })}
+          description={uiText('turns_on_every_product_canvas_organic_perform_1696785')}
+          confirmLabel={uiText('m_acc06b922d')}
           onConfirm={onFullAccess}
         />
       </div>
       <div className="flex flex-col gap-2 pt-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Canvas credits</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            {uiText('canvas_credits_e61faef')}
+          </span>
           <span className="text-xs tabular-nums text-foreground" data-testid="brand-canvas-credits">
-            {credits.format(access?.canvasCredits ?? 0)} credits
+            {uiText.rich('sentence_d02b54d07351', {
+              count: access?.canvasCredits ?? 0,
+              amount: credits.format(access?.canvasCredits ?? 0),
+            })}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Input
-            type="number"
+            type="text"
             inputSize="sm"
             inputMode="decimal"
-            min={0.01}
-            max={ADMIN_CREDIT_GRANT_MAX_USD}
-            step={0.01}
-            placeholder="USD"
-            aria-label="Credits to add (USD)"
+            placeholder={uiText('m_57814cfbae')}
+            aria-label={uiText('credits_to_add_usd_468d9b1')}
             className="w-24"
             value={creditAmount}
+            aria-invalid={creditAmount !== '' && !Number.isFinite(amountUsd)}
             disabled={disabled}
             onChange={(event) => setCreditAmount(event.target.value)}
           />
           <Input
             inputSize="sm"
-            placeholder="Reason"
-            aria-label="Reason for the credits"
+            placeholder={uiText('reason_f81ab83')}
+            aria-label={uiText('reason_for_the_credits_327b09b')}
             className="min-w-0 flex-1"
             maxLength={500}
             value={creditReason}
@@ -219,11 +230,18 @@ export function BrandAccessEditor({
             disabled={disabled || !creditValid}
             onClick={() => void submitCredits()}
           >
-            Add credits
+            {uiText('add_credits_d22feb6')}
           </Button>
         </div>
+        {creditAmount !== '' && !Number.isFinite(amountUsd) ? (
+          <p role="alert" className="text-xs text-destructive">
+            {uiText('m_f47bf7764a')}
+          </p>
+        ) : null}
         <FieldDescription className="text-xs">
-          Up to ${ADMIN_CREDIT_GRANT_MAX_USD} per grant (1 credit = $0.01). Credits never expire.
+          {uiText.rich('sentence_63bb18a718ed', {
+            v0: () => credits.format(ADMIN_CREDIT_GRANT_MAX_USD),
+          })}
         </FieldDescription>
       </div>
     </FieldSet>

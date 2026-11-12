@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The apply-mode pill wants a tooltip provider ancestor and is not what these tests are
 // about. `mock.module` replaces it for the whole process, so this file is run on its own.
@@ -276,19 +277,31 @@ describe('PortfolioRowCard — the state chip', () => {
   };
 
   it('reads "33% over" and goes red past the warning ceiling', () => {
-    expect(chipFor(portfolio({ cpa_target: 30 }))).toEqual({ text: '33% over', state: 'bad' });
+    expect(chipFor(portfolio({ cpa_target: 30 }))).toEqual({
+      text: '33% over',
+      state: 'bad',
+    });
   });
 
   it('reads "11% over" and goes amber inside the warning ceiling', () => {
-    expect(chipFor(portfolio({ cpa_target: 36 }))).toEqual({ text: '11% over', state: 'warn' });
+    expect(chipFor(portfolio({ cpa_target: 36 }))).toEqual({
+      text: '11% over',
+      state: 'warn',
+    });
   });
 
   it('reads "20% under" and goes green under the target', () => {
-    expect(chipFor(portfolio({ cpa_target: 50 }))).toEqual({ text: '20% under', state: 'ok' });
+    expect(chipFor(portfolio({ cpa_target: 50 }))).toEqual({
+      text: '20% under',
+      state: 'ok',
+    });
   });
 
   it('reads "on target" exactly on the target', () => {
-    expect(chipFor(portfolio({ cpa_target: 40 }))).toEqual({ text: 'on target', state: 'ok' });
+    expect(chipFor(portfolio({ cpa_target: 40 }))).toEqual({
+      text: 'on target',
+      state: 'ok',
+    });
   });
 
   it('reads "0 resultados" when the window bought nothing, target or not', () => {
@@ -322,9 +335,18 @@ describe('PortfolioRowCard — the state chip', () => {
       count: '3',
     });
     expect(
-      pending(portfolio({ cpa_target: 30, pending_recommendations: 0, pending_budget_moves: 1 })),
+      pending(
+        portfolio({
+          cpa_target: 30,
+          pending_recommendations: 0,
+          pending_budget_moves: 1,
+        }),
+      ),
     ).toEqual({ state: '33% over', count: '1' });
-    expect(pending(portfolio({ cpa_target: 30 }))).toEqual({ state: '33% over', count: null });
+    expect(pending(portfolio({ cpa_target: 30 }))).toEqual({
+      state: '33% over',
+      count: null,
+    });
   });
 
   it('maps every tile state to its own tone', () => {
@@ -372,7 +394,10 @@ describe('portfolioLeads', () => {
       portfolio_ids: ['pf_1'],
       impact_per_day: 10,
     });
-    const strong = candidate({ portfolio_ids: ['pf_1', 'pf_2'], impact_per_day: 400 });
+    const strong = candidate({
+      portfolio_ids: ['pf_1', 'pf_2'],
+      impact_per_day: 400,
+    });
     const { leads, emphasised } = portfolioLeads([weak, strong]);
     expect(leads.get('pf_1')?.id).toBe(strong.id);
     expect(leads.get('pf_2')?.id).toBe(strong.id);
@@ -453,7 +478,10 @@ describe('PortfolioRowCard — a portfolio dead on Meta wears its staleness besi
     const { container, getByTestId } = render(
       <PortfolioRowCard
         currency="USD"
-        portfolio={portfolio({ name: 'Citas Agosto - check leads', ...CITAS_OVER })}
+        portfolio={portfolio({
+          name: 'Citas Agosto - check leads',
+          ...CITAS_OVER,
+        })}
       />,
     );
     expect(getByTestId('stale-chip').textContent).toBe('last cycle 49 days ago');
@@ -478,7 +506,11 @@ describe('PortfolioRowCard — a portfolio dead on Meta wears its staleness besi
   });
 
   it('still says what waits on a decision beside the staleness', () => {
-    const pf = portfolio({ ...CITAS_OVER, cpa_target: 30, pending_recommendations: 2 });
+    const pf = portfolio({
+      ...CITAS_OVER,
+      cpa_target: 30,
+      pending_recommendations: 2,
+    });
     const { getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
@@ -558,7 +590,10 @@ describe('PortfolioRowCard — the pacing verdict against the flight the row hol
     const { getByTestId } = render(
       <PortfolioRowCard
         currency="MXN"
-        pacing={{ source: 'pacing', planVersion: '2026-10-01..2026-10-31@45000' }}
+        pacing={{
+          source: 'pacing',
+          planVersion: '2026-10-01..2026-10-31@45000',
+        }}
         portfolio={rebased}
       />,
     );
@@ -573,7 +608,10 @@ describe('PortfolioRowCard — the pacing verdict against the flight the row hol
     const current = render(
       <PortfolioRowCard
         currency="MXN"
-        pacing={{ source: 'pacing', planVersion: '2026-10-08..2026-10-31@26101' }}
+        pacing={{
+          source: 'pacing',
+          planVersion: '2026-10-08..2026-10-31@26101',
+        }}
         portfolio={rebased}
       />,
     );

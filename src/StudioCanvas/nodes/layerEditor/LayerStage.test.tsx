@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { LayerEditorLayer } from '../../types';
 import { LayerStage } from './LayerStage';
 
@@ -83,7 +88,13 @@ function renderStage(over: Partial<Parameters<typeof LayerStage>[0]> = {}) {
  * against a DOM React has not re-rendered yet.
  */
 const pointer = (type: string, x: number, y: number) =>
-  new PointerEventCtor(type, { pointerId: 1, clientX: x, clientY: y, bubbles: true, button: 0 });
+  new PointerEventCtor(type, {
+    pointerId: 1,
+    clientX: x,
+    clientY: y,
+    bubbles: true,
+    button: 0,
+  });
 
 const dispatch = (element: Element, type: string, x: number, y: number) => {
   act(() => {
@@ -92,7 +103,12 @@ const dispatch = (element: Element, type: string, x: number, y: number) => {
 };
 
 const press = (element: Element, x: number, y: number) =>
-  fireEvent.pointerDown(element, { pointerId: 1, clientX: x, clientY: y, button: 0 });
+  fireEvent.pointerDown(element, {
+    pointerId: 1,
+    clientX: x,
+    clientY: y,
+    button: 0,
+  });
 
 const positionOf = (layers: LayerEditorLayer[], id: string) =>
   layers.find((entry) => entry.id === id)?.position;
@@ -403,7 +419,10 @@ describe('marquee selection', () => {
   const spread = () => [layer('a'), layer('far', { position: { x: 400, y: 400 } })];
 
   it('rubber-bands from empty space and catches what it touches', () => {
-    const { calls, frame, view } = renderStage({ layers: spread(), selectedIds: [] });
+    const { calls, frame, view } = renderStage({
+      layers: spread(),
+      selectedIds: [],
+    });
 
     press(frame, 20, 20);
     dispatch(frame, 'pointermove', 200, 200);
@@ -422,7 +441,10 @@ describe('marquee selection', () => {
   });
 
   it('disappears when the drag ends, and the selection stays', () => {
-    const { calls, frame, view } = renderStage({ layers: spread(), selectedIds: [] });
+    const { calls, frame, view } = renderStage({
+      layers: spread(),
+      selectedIds: [],
+    });
 
     press(frame, 20, 20);
     dispatch(frame, 'pointermove', 200, 200);
@@ -433,7 +455,10 @@ describe('marquee selection', () => {
   });
 
   it('a bare click on empty space still just deselects', () => {
-    const { calls, frame, view } = renderStage({ layers: spread(), selectedIds: ['a'] });
+    const { calls, frame, view } = renderStage({
+      layers: spread(),
+      selectedIds: ['a'],
+    });
 
     press(frame, 20, 20);
     dispatch(frame, 'pointerup', 20, 20);
@@ -461,11 +486,19 @@ describe('a multi-selection transforms as one box', () => {
   });
 
   it('dragging a group corner scales every member', () => {
-    const { calls, view } = renderStage({ layers: spread(), selectedIds: ['a', 'b'] });
+    const { calls, view } = renderStage({
+      layers: spread(),
+      selectedIds: ['a', 'b'],
+    });
     const handle = view.getByTestId('layer-group-resize-se');
 
     // Group bounds are 50..450. Dragging se from (450,450) to (850,850) doubles it.
-    fireEvent.pointerDown(handle, { pointerId: 1, clientX: 450, clientY: 450, button: 0 });
+    fireEvent.pointerDown(handle, {
+      pointerId: 1,
+      clientX: 450,
+      clientY: 450,
+      button: 0,
+    });
     dispatch(handle, 'pointermove', 850, 850);
 
     const preview = calls.previews.at(-1) as LayerEditorLayer[];
@@ -495,7 +528,9 @@ describe('the gizmo is operable without a mouse', () => {
   it('an arrow key on a focused handle resizes the layer', () => {
     const { calls, view } = renderStage({ selectedIds: ['a'] });
 
-    fireEvent.keyDown(view.getByTestId('layer-resize-se'), { key: 'ArrowRight' });
+    fireEvent.keyDown(view.getByTestId('layer-resize-se'), {
+      key: 'ArrowRight',
+    });
 
     expect(calls.begin).toBe(1);
     const next = (calls.previews.at(-1) as LayerEditorLayer[]).find((l) => l.id === 'a');
@@ -506,7 +541,9 @@ describe('the gizmo is operable without a mouse', () => {
 
   it('shift makes the step coarse', () => {
     const fine = renderStage({ selectedIds: ['a'] });
-    fireEvent.keyDown(fine.view.getByTestId('layer-resize-se'), { key: 'ArrowRight' });
+    fireEvent.keyDown(fine.view.getByTestId('layer-resize-se'), {
+      key: 'ArrowRight',
+    });
     const fineScale = (fine.calls.previews.at(-1) as LayerEditorLayer[])[0].scale.x;
 
     cleanup();

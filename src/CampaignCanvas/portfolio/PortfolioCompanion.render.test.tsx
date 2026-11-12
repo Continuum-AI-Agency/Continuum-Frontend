@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { LiveChangePreviewPayload } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { LIVE_BATCH_PREVIEW } from '@/lib/campaign-canvas/lectura.fixtures';
 import { portfolioOfParts } from '@/lib/campaign-canvas/portfolio';
 import { liveChangeVersionsOf } from '@/lib/campaign-canvas/versions';
@@ -22,7 +23,9 @@ const other: LiveChangePreviewPayload = {
 
 describe('PortfolioCompanion', () => {
   it('lists every campaign, opens one in Read, and goes back', () => {
-    const portfolio = portfolioOfParts({ liveChangePreviews: [LIVE_BATCH_PREVIEW, other] });
+    const portfolio = portfolioOfParts({
+      liveChangePreviews: [LIVE_BATCH_PREVIEW, other],
+    });
     render(<PortfolioCompanion portfolio={portfolio} />);
     expect(screen.getByTestId('portfolio-headline').textContent).toBe('2 campaigns · 6 changes');
     fireEvent.click(screen.getByTestId('portfolio-row-live:o-1201'));

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import * as React from 'react';
-
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
 } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // PP-L2-planner-draft-autosave-fires-from-approvals: hydrating the planner used to
 // PATCH every manual draft straight back to organic_calendar_drafts because the
@@ -25,13 +25,21 @@ const updateChain = {
   },
   upsert: (payload: unknown) => {
     upsertCalls.push(payload);
-    return { select: () => ({ single: async () => ({ data: { id: 'be-new' }, error: null }) }) };
+    return {
+      select: () => ({
+        single: async () => ({ data: { id: 'be-new' }, error: null }),
+      }),
+    };
   },
   delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
 };
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
-    auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1' } } } }) },
+    auth: {
+      getSession: async () => ({
+        data: { session: { user: { id: 'user-1' } } },
+      }),
+    },
     schema: () => ({ from: () => updateChain }),
   }),
 }));
@@ -129,7 +137,9 @@ describe('useCalendarDraftPersistence autosave', () => {
       newer = result.current.refetch();
     });
     await act(async () => {
-      answerNew({ drafts: [manualRow('be-1', 'Hello'), manualRow('be-2', 'World')] });
+      answerNew({
+        drafts: [manualRow('be-1', 'Hello'), manualRow('be-2', 'World')],
+      });
       await newer;
       answerOld({ drafts: [manualRow('be-1', 'Hello')] });
       await older;
@@ -185,7 +195,12 @@ describe('useCalendarDraftPersistence autosave', () => {
             ...card,
             platforms: ['instagram', 'linkedin'],
             groupMembers: [
-              { backendDraftId: 'be-1', platform: 'instagram', status: 'draft', accountId: 'ig-1' },
+              {
+                backendDraftId: 'be-1',
+                platform: 'instagram',
+                status: 'draft',
+                accountId: 'ig-1',
+              },
               {
                 backendDraftId: 'be-2',
                 platform: 'linkedin',

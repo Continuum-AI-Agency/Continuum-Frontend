@@ -1,6 +1,7 @@
 'use client';
 
 import type { EditorKeyframe } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { sampleValueSpeedGraph } from './sampleValueSpeedGraph';
 
@@ -40,6 +41,8 @@ export function MotionGraph({
   label: string;
   keyframeOffsetSec?: number;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const points = useMemo(
     () => sampleValueSpeedGraph(keys, durationSec, fallback, 80, keyframeOffsetSec),
     [keys, durationSec, fallback, keyframeOffsetSec],
@@ -71,7 +74,9 @@ export function MotionGraph({
   if (keys.length === 0) {
     return (
       <p className="px-3 py-2 text-2xs text-muted-foreground">
-        Add keys on {label} to plot value and speed.
+        {' '}
+        {translateUi('add_keys_on_4bc8dcc7')} {label}{' '}
+        {translateUi('to_plot_value_and_speed_511b305e')}{' '}
       </p>
     );
   }
@@ -80,15 +85,23 @@ export function MotionGraph({
     <div className="border-t border-border/60 px-3 py-2" data-testid="motion-graph">
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-2xs font-medium">{label}</span>
-        <span className="font-mono text-2xs tabular-nums text-muted-foreground">value / speed</span>
+        <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+          {translateUi('value_speed_70de7390')}
+        </span>
       </div>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="h-[4.5rem] w-full text-primary"
         role="img"
-        aria-label={`${label} value and speed graph`}
+        aria-label={translateUi('value0_value_and_speed_graph_be112325', {
+          value0: String(label),
+        })}
       >
-        <title>{`${label} value and speed`}</title>
+        <title>
+          {translateUi('value0_value_and_speed_4f9be37c', {
+            value0: String(label),
+          })}
+        </title>
         <rect
           x={PAD_X}
           y={PAD_Y}

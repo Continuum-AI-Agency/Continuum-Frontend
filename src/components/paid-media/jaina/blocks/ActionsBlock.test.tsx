@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // `CalmRule` is a `motion.span`. The animation is the point of the component and worthless to
 // assert in jsdom, so the element is rendered as a plain span and what the tests check is that
@@ -12,7 +13,11 @@ mock.module('motion/react', () => {
       return React.createElement(tag, { ...rest, ref });
     });
   return {
-    motion: { span: passthrough('span'), div: passthrough('div'), p: passthrough('p') },
+    motion: {
+      span: passthrough('span'),
+      div: passthrough('div'),
+      p: passthrough('p'),
+    },
     useReducedMotion: () => false,
   };
 });
@@ -26,7 +31,12 @@ type Row = ActionsBlockV2['rows'][number];
 
 const row = (overrides: Partial<Row> = {}): Row => ({
   priority: 'P1',
-  entity: { id: '120210', name: 'Prospecting — Broad', kind: 'campaign', level: 'campaign' },
+  entity: {
+    id: '120210',
+    name: 'Prospecting — Broad',
+    kind: 'campaign',
+    level: 'campaign',
+  },
   action: 'Cut daily budget by 30%',
   sizing: '−$450/day',
   evidence: {
@@ -57,7 +67,9 @@ describe('ActionsBlock', () => {
     const { container } = render(
       <ActionsBlock
         block={block([
-          row({ action: 'Shift 30% of budget into **CAÑADAS** at [positive: 1.50 ROAS]' }),
+          row({
+            action: 'Shift 30% of budget into **CAÑADAS** at [positive: 1.50 ROAS]',
+          }),
         ])}
         isStreaming={false}
       />,
@@ -142,7 +154,14 @@ describe('ActionsBlock', () => {
     rerender(
       <ActionsBlock
         block={block([
-          row({ entity: { id: null, name: 'Summer Lookalike', kind: null, level: null } }),
+          row({
+            entity: {
+              id: null,
+              name: 'Summer Lookalike',
+              kind: null,
+              level: null,
+            },
+          }),
         ])}
         isStreaming={false}
       />,

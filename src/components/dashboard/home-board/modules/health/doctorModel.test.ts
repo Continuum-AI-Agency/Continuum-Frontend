@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import type { HomeHygieneCheck } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
 import { deriveDashboardSetup } from '@/components/dashboard/first-run/setupState';
+import esDashboard from '../../../../../../messages/dashboard/es.json';
+import ptDashboard from '../../../../../../messages/dashboard/pt-BR.json';
+import esScale from '../../../../../../messages/scale/es.json';
+import ptScale from '../../../../../../messages/scale/pt-BR.json';
 import { EASY_FIT_GOOGLE, EASY_FIT_META } from '../pacing/__fixtures__/ctx';
 import {
   GOOGLE_PORTFOLIO,
@@ -79,7 +84,11 @@ describe('doctorView', () => {
 
   it('reads one dark campaign as that campaign’s card, not the account’s status', () => {
     const view = ready(
-      doctorView(inputs({ googleCards: { status: 'ready', cards: [ONE_DARK_CAMPAIGN] } })),
+      doctorView(
+        inputs({
+          googleCards: { status: 'ready', cards: [ONE_DARK_CAMPAIGN] },
+        }),
+      ),
     );
     expect(view.checks.find((check) => check.id === `delivery:${EASY_FIT_GOOGLE.id}`)?.status).toBe(
       'pass',
@@ -100,8 +109,16 @@ describe('doctorView', () => {
       doctorView(
         inputs({
           accountReads: [
-            { account: EASY_FIT_META, status: 'success', data: READ_WITH_GUARD },
-            { account: EASY_FIT_GOOGLE, status: 'success', data: READ_NO_GUARDS },
+            {
+              account: EASY_FIT_META,
+              status: 'success',
+              data: READ_WITH_GUARD,
+            },
+            {
+              account: EASY_FIT_GOOGLE,
+              status: 'success',
+              data: READ_NO_GUARDS,
+            },
           ],
         }),
       ),
@@ -120,7 +137,11 @@ describe('doctorView', () => {
         inputs({
           accountReads: [
             { account: EASY_FIT_META, status: 'success', data: null },
-            { account: EASY_FIT_GOOGLE, status: 'success', data: READ_NO_GUARDS },
+            {
+              account: EASY_FIT_GOOGLE,
+              status: 'success',
+              data: READ_NO_GUARDS,
+            },
           ],
         }),
       ),
@@ -205,7 +226,12 @@ describe('doctorView with the Account hygiene read', () => {
     total: 88,
     detail: 'No active ad has run longer than 30 days (88 active).',
     examples: [],
-    source: { kind: 'paid_media.ads', ref: null, since: null, until: '2026-11-04' },
+    source: {
+      kind: 'paid_media.ads',
+      ref: null,
+      since: null,
+      until: '2026-11-04',
+    },
     ...over,
   });
   const ready = (checks: HomeHygieneCheck[]): DoctorInputs['hygiene'] => ({
@@ -233,7 +259,13 @@ describe('doctorView with the Account hygiene read', () => {
   it('a warning and a failure both need fixing, and keep what the read said', () => {
     const [naming, stale] = checksOf(
       ready([
-        check({ id: 'naming', status: 'fail', count: 9, total: 10, detail: '9 of 10 do not.' }),
+        check({
+          id: 'naming',
+          status: 'fail',
+          count: 9,
+          total: 10,
+          detail: '9 of 10 do not.',
+        }),
         check({
           status: 'warn',
           count: 18,
@@ -283,7 +315,10 @@ describe('doctorView with the Account hygiene read', () => {
   it('a read that holds nothing names why, and counts as nothing', () => {
     const [naming, stale] = checksOf({
       status: 'missing',
-      missing: { reason: 'no_data', detail: 'Ads were last synced 20 days ago.' },
+      missing: {
+        reason: 'no_data',
+        detail: 'Ads were last synced 20 days ago.',
+      },
     });
     expect(naming?.status).toBe('unreadable');
     expect(stale?.status).toBe('unreadable');
@@ -293,4 +328,36 @@ describe('doctorView with the Account hygiene read', () => {
   it('waits for the read', () => {
     expect(doctorView(inputs({ hygiene: { status: 'loading' } })).state).toBe('loading');
   });
+});
+
+describe('localized account doctor', () => {
+  for (const [locale, dashboard, scale] of [
+    ['pt-BR', ptDashboard, ptScale],
+    ['es', esDashboard, esScale],
+  ] as const) {
+    it(`localizes status and fixes in ${locale} while retaining account names and links`, () => {
+      const t = createTranslator({
+        locale,
+        namespace: 'dashboard',
+        messages: { dashboard },
+      });
+      const scaleCopy = createTranslator({
+        locale,
+        namespace: 'scale',
+        messages: { scale },
+      });
+      const view = ready(doctorView(inputs({ setup: null }), t, scaleCopy, locale));
+      const google = view.checks.find((check) => check.id === `delivery:${EASY_FIT_GOOGLE.id}`);
+      expect(google?.label).toContain(EASY_FIT_GOOGLE.name);
+      expect(google?.label).not.toContain('Google shows');
+      const portfolio = view.checks.find((check) => check.id === 'portfolios');
+      expect(portfolio?.fix?.href).toContain('/scale');
+      expect(portfolio?.fix?.label).toBe(
+        locale === 'pt-BR' ? 'Abrir no Otimizador' : 'Abrir en el Optimizador',
+      );
+      expect(view.checks.find((check) => check.id === 'hygiene:naming')?.detail).not.toContain(
+        'not readable yet',
+      );
+    });
+  }
 });

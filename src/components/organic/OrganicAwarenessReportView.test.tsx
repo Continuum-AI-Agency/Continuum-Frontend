@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { OrganicAwarenessReportPayload } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { OrganicAwarenessReportView } from './OrganicAwarenessReportView';
 
 // happy-dom does not expose these constructors on `window`; testing-library's
@@ -16,7 +17,13 @@ afterEach(() => cleanup());
 const report: OrganicAwarenessReportPayload = {
   windowStart: '2026-06-03',
   windowEnd: '2026-06-10',
-  summary: { posts: 2, reach: 1000, views: 2000, topHookRate: 80, lowHookCount: 1 },
+  summary: {
+    posts: 2,
+    reach: 1000,
+    views: 2000,
+    topHookRate: 80,
+    lowHookCount: 1,
+  },
   blocks: [
     {
       category: 'summary',
@@ -26,7 +33,15 @@ const report: OrganicAwarenessReportPayload = {
     {
       category: 'top_posts',
       title: 'Top posts by hook rate',
-      data: [{ id: '1', mediaProductType: 'REELS', hookRate: 80, views: 900, reach: 700 }],
+      data: [
+        {
+          id: '1',
+          mediaProductType: 'REELS',
+          hookRate: 80,
+          views: 900,
+          reach: 700,
+        },
+      ],
     },
     {
       category: 'narrative',

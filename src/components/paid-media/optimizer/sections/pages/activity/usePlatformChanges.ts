@@ -6,6 +6,8 @@
 // Continuum writes through it, and those writes are already listed with their undo. Meta keeps no
 // change history this app reads, so a Meta account adds nothing here.
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 import { useMemo } from 'react';
 import { changeHistoryWindow, changeLine } from '../../google/campaignExplorerModel';
 import { useGoogleChangeHistory } from '../../google/googleReads';
@@ -31,6 +33,8 @@ export function usePlatformChanges({
   account: ChartAccount | null;
   days: readonly ActivityDay[];
 }): PlatformChangesRead {
+  const t = useTranslations('scale');
+  const locale = useLocale() as UiLocale;
   const range = useMemo(() => changeHistoryWindow(), []);
   const history = useGoogleChangeHistory({
     brandId,
@@ -43,9 +47,9 @@ export function usePlatformChanges({
     return history.data.changes.flatMap((change): PlatformChange[] => {
       const day = dayKeyOf(change.at);
       if (change.clientType === CONTINUUM_CHANNEL || !day || !inWindow.has(day)) return [];
-      return [changeLine(change)];
+      return [changeLine(change, t, locale)];
     });
-  }, [history.data, days]);
+  }, [history.data, days, t, locale]);
   return {
     changes,
     failed: history.isError,

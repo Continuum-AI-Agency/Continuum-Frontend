@@ -2,8 +2,9 @@
 
 import { normalizeTemplateFontFamily, type TemplateSourceSummary } from '@continuum/contracts';
 import { Loader2, Type, Upload } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NO_SPECIMEN_NOTE, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
+import { NoSpecimenText, TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { type BrandFontSummary, fetchBrandFonts } from '@/lib/library/templateSources';
@@ -28,6 +29,8 @@ export function TypographyPanel({
   templateSources: TemplateSourceSummary[];
   onReviewFiles: (files: File[]) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [fonts, setFonts] = useState<BrandFontSummary[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -55,12 +58,13 @@ export function TypographyPanel({
     <div className="flex flex-col gap-4 p-1">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold">Typography</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{NO_SPECIMEN_NOTE}</p>
+          <h2 className="text-lg font-semibold">{translateUi('typography_cab94aba')}</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            <NoSpecimenText />
+          </p>
         </div>
         <Button size="sm" onClick={() => inputRef.current?.click()}>
-          <Upload className="size-4" />
-          Add fonts
+          <Upload className="size-4" /> {translateUi('add_fonts_420422d6')}{' '}
         </Button>
         <input
           ref={inputRef}
@@ -78,23 +82,25 @@ export function TypographyPanel({
 
       {missingFamilies.length > 0 ? (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
-          {missingFamilies.length} {missingFamilies.length === 1 ? 'family' : 'families'} used by
-          your templates {missingFamilies.length === 1 ? 'is' : 'are'} not in the engine. A render
-          that needs one still finishes — in a face that is not yours.
+          {translateUi('missingFontFamilies', {
+            count: missingFamilies.length,
+          })}{' '}
         </div>
       ) : null}
 
       {fonts === null ? (
         <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Loading fonts…
+          <Loader2 className="size-4 animate-spin" /> {translateUi('loading_fonts_59a92bbd')}{' '}
         </div>
       ) : fonts.length === 0 && neededBy.size === 0 ? (
         <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
           <Type className="mx-auto size-6 text-muted-foreground" />
-          <p className="mt-2 text-sm font-medium">No fonts in the engine</p>
+          <p className="mt-2 text-sm font-medium">
+            {translateUi('no_fonts_in_the_engine_82813310')}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add the faces your templates use. They are stored privately and never served to a
-            browser.
+            {' '}
+            {translateUi('add_the_faces_your_templates_use_th_ecf5e7f3')}{' '}
           </p>
         </div>
       ) : (
@@ -110,8 +116,14 @@ export function TypographyPanel({
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-medium">{font.family}</span>
                   <span className="text-xs text-muted-foreground">
-                    {font.weight ?? 'regular'} · {font.style} · {font.format.toUpperCase()}
-                    {used > 0 ? ` · used by ${used} ${used === 1 ? 'template' : 'templates'}` : ''}
+                    {font.weight ?? translateUi('regular_667937c3')} · {font.style} ·{' '}
+                    {font.format.toUpperCase()}
+                    {used > 0
+                      ? translateUi('used_by_value0_value1_94988fdb', {
+                          value0: String(used),
+                          value1: String(used === 1 ? 'template' : 'templates'),
+                        })
+                      : ''}
                   </span>
                 </div>
                 <TypefaceHoldBadge held />
@@ -133,11 +145,14 @@ export function TypographyPanel({
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-medium">{family}</span>
                   <span className="text-xs text-muted-foreground">
-                    needed by {assetIds.length} {assetIds.length === 1 ? 'template' : 'templates'}
+                    {' '}
+                    {translateUi('fontNeededByTemplates', {
+                      count: assetIds.length,
+                    })}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">not uploaded</Badge>
+                  <Badge variant="outline">{translateUi('not_uploaded_bfe15267')}</Badge>
                   <TypefaceHoldBadge held={false} />
                 </div>
               </div>

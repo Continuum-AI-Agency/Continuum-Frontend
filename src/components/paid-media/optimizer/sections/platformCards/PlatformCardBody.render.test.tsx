@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { CrossPlatformMoveCardSchema, PlatformCardSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { PORTFOLIO_ID, RAISE_GOOGLE_BUDGET } from './__fixtures__/platformCardActions';
 import {
   CROSS_PLATFORM_MOVE,
@@ -83,7 +84,10 @@ describe('Google budget-limited', () => {
     const absent = render(<PlatformCardBody card={GOOGLE_BUDGET_LIMITED} />);
     expect(absent.queryByTestId('platform-card-projection')).toBeNull();
     cleanup();
-    const card = PlatformCardSchema.parse({ ...GOOGLE_BUDGET_LIMITED, projection: null });
+    const card = PlatformCardSchema.parse({
+      ...GOOGLE_BUDGET_LIMITED,
+      projection: null,
+    });
     const nulled = render(<PlatformCardBody card={card} />);
     expect(nulled.queryByTestId('platform-card-projection')).toBeNull();
   });
@@ -498,7 +502,7 @@ describe('Google delivery issue', () => {
     );
     expect(getByRole('heading').textContent).toBe('PMax Necesidades SLP has not served for 1 day');
     expect(getByTestId('platform-card-delivery').textContent).toBe(
-      'Google says: no asset groups; some new reason.',
+      'Google says: no asset groups; delivery status unavailable (SOME_NEW_REASON).',
     );
     expect(queryByTestId('platform-card-account-wide')).toBeNull();
     expect(getByTestId('platform-card-open-google').getAttribute('href')).toBe(
@@ -537,7 +541,7 @@ describe('TikTok delivery issue', () => {
     });
     const { getByRole, getByTestId } = render(<PlatformCardBody card={card} />);
     expect(getByRole('heading').textContent).toBe(
-      'EF | Leads | Intereses fitness is not serving: something new',
+      'EF | Leads | Intereses fitness is not serving: status unavailable (ADGROUP_STATUS_SOMETHING_NEW)',
     );
     expect(getByTestId('platform-card-delivery').textContent).toContain(
       'TikTok gives no review reason',
@@ -717,8 +721,20 @@ describe('Google account finding (P8)', () => {
     expect(middle).toEqual({ width: 0.2 / 0.71, target: 0.35 / 0.71 });
     expect(
       accountBarGeometry([
-        { label: 'Mobile', value: 30, share: null, target_share: null, flagged: true },
-        { label: 'Desktop', value: 60, share: null, target_share: 0.5, flagged: false },
+        {
+          label: 'Mobile',
+          value: 30,
+          share: null,
+          target_share: null,
+          flagged: true,
+        },
+        {
+          label: 'Desktop',
+          value: 60,
+          share: null,
+          target_share: 0.5,
+          flagged: false,
+        },
       ]),
     ).toEqual([
       { width: 0.5, target: null },
@@ -726,7 +742,13 @@ describe('Google account finding (P8)', () => {
     ]);
     expect(
       accountBarGeometry([
-        { label: 'None', value: 0, share: null, target_share: null, flagged: false },
+        {
+          label: 'None',
+          value: 0,
+          share: null,
+          target_share: null,
+          flagged: false,
+        },
       ]),
     ).toEqual([{ width: 0, target: null }]);
   });
@@ -766,7 +788,10 @@ describe('Google account finding (P8)', () => {
     const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     const writeText = mock(async (_text: string) => undefined);
     beforeEach(() => {
-      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      });
     });
     afterEach(() => {
       writeText.mockClear();
@@ -815,7 +840,11 @@ describe('Google account finding (P8)', () => {
       expect(platformsOf(card)).toEqual(['google_ads']);
       const { queryByTestId, queryAllByRole, unmount } = render(
         <PlatformCardBody
-          action={{ portfolioId: PORTFOLIO_ID, action: RAISE_GOOGLE_BUDGET, applyEnabled: true }}
+          action={{
+            portfolioId: PORTFOLIO_ID,
+            action: RAISE_GOOGLE_BUDGET,
+            applyEnabled: true,
+          }}
           card={card}
         />,
       );
@@ -840,7 +869,8 @@ describe('the P8 bench document', () => {
     expect(cards.length).toBeGreaterThan(0);
     for (const raw of cards) {
       const card = PlatformCardSchema.parse(raw);
-      if (card.variant !== 'google_account_finding') throw new Error(`not a P8 card: ${card.variant}`);
+      if (card.variant !== 'google_account_finding')
+        throw new Error(`not a P8 card: ${card.variant}`);
       expect(isReadOnly(card)).toBe(true);
       const { getByRole, queryByTestId, getAllByTestId, unmount } = render(
         <PlatformCardBody card={card} />,
@@ -849,14 +879,15 @@ describe('the P8 bench document', () => {
       expect(getAllByTestId('account-finding-fact')).toHaveLength(card.facts.length);
       expect(queryByTestId('platform-card-action')).toBeNull();
       expect(queryByTestId('platform-card-add-negatives')).toBeNull();
-      if (card.recommend_only) expect(queryByTestId('account-finding-recommend-only')).not.toBeNull();
+      if (card.recommend_only)
+        expect(queryByTestId('account-finding-recommend-only')).not.toBeNull();
       unmount();
     }
   });
 });
 
 describe('Meta cost cap', () => {
-  it("names the Meta cost cap (bid setting) apart from the portfolio CPA goal, with the step and cooldown in words", () => {
+  it('names the Meta cost cap (bid setting) apart from the portfolio CPA goal, with the step and cooldown in words', () => {
     const { getByRole, getByTestId, queryByTestId } = render(
       <PlatformCardBody card={META_COST_CAP} />,
     );
@@ -906,7 +937,10 @@ describe('Meta cost cap', () => {
 
   it('drops a meta_cost_cap card whose figures are missing, rather than half-render it', () => {
     expect(
-      PlatformCardSchema.safeParse({ ...META_COST_CAP, portfolio_goal: undefined }).success,
+      PlatformCardSchema.safeParse({
+        ...META_COST_CAP,
+        portfolio_goal: undefined,
+      }).success,
     ).toBe(false);
   });
 });

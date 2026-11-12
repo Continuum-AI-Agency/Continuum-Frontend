@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import type { AgentRunDto, AgentRunEventDto } from '@continuum/contracts';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import type { PanelAction } from './useOrganicAgentReducer';
 import { useProjectedRun } from './useProjectedRun';
@@ -65,7 +66,10 @@ describe('useProjectedRun', () => {
 
     const { actions } = project();
 
-    expect(actions[0]).toEqual({ type: 'RESUME_STREAMING', messageId: 'run_1' });
+    expect(actions[0]).toEqual({
+      type: 'RESUME_STREAMING',
+      messageId: 'run_1',
+    });
     expect(deltasOf(actions)).toEqual(['Hello ', 'world']);
   });
 

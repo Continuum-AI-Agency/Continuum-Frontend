@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The expanded Opportunities: every portfolio with a decision waiting, most first. Opening one
 // mounts the Optimizer's own queue for it (OptimizerActionsPortfolioGroup, the Actions page's
@@ -66,6 +67,8 @@ export default function OppsModule({
   /** The Backend's Opportunity stack; null until it is deployed or when it holds nothing. */
   stack: HomeOpportunitiesData | null;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const [openId, setOpenId] = useState<string | null>(portfolios[0]?.id ?? null);
 
   const priced = stack && stack.opportunities.length > 0 ? stack : null;
@@ -74,9 +77,9 @@ export default function OppsModule({
     return (
       <div className="space-y-4 text-sm" data-testid="home-opps-module">
         {priced ? <OppStack stack={priced} /> : null}
-        <p>Nothing waits for a decision right now.</p>
+        <p>{betaUiText('beta_e5b7556ea7de')}</p>
         <Link className={cn(ROW_LINK, 'text-xs')} href={OPTIMIZER_LINKS.actions}>
-          Open the Optimizer's Actions
+          {betaUiText('beta_10044b235272')}
         </Link>
       </div>
     );
@@ -121,7 +124,8 @@ export default function OppsModule({
                     className={cn(ROW_LINK, 'text-xs')}
                     href={portfolioDecisionsHref(waiting.id)}
                   >
-                    Open {waiting.name} in the Optimizer
+                    {betaUiText('beta_ed077f3d8125')} {waiting.name}{' '}
+                    {betaUiText('beta_104ba91c867e')}
                   </Link>
                 </div>
               ) : null}

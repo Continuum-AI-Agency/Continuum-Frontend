@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
-import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { useAgentRunStore } from '@/lib/agents/runStore';
+import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData } from '../types';
@@ -103,7 +109,10 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
 
   it('re-snaps the box to the rendered composition, above its resizer minimums', async () => {
     const { container } = renderNode(
-      hyperData({ generatedVideoUrl: 'https://example.com/portrait.mp4', status: 'completed' }),
+      hyperData({
+        generatedVideoUrl: 'https://example.com/portrait.mp4',
+        status: 'completed',
+      }),
     );
 
     // The ratio is read from the element ALREADY showing the clip. Measuring with a
@@ -115,8 +124,14 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     const detection = rendered[0];
     if (!detection) throw new Error('the node rendered no video to measure');
 
-    Object.defineProperty(detection, 'videoWidth', { configurable: true, value: 1080 });
-    Object.defineProperty(detection, 'videoHeight', { configurable: true, value: 1920 });
+    Object.defineProperty(detection, 'videoWidth', {
+      configurable: true,
+      value: 1080,
+    });
+    Object.defineProperty(detection, 'videoHeight', {
+      configurable: true,
+      value: 1920,
+    });
     await act(async () => {
       fireEvent.loadedMetadata(detection);
     });
@@ -159,7 +174,10 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
 
   it('plays the composition in the Kobra player, letterboxed inside the node', () => {
     const { container } = renderNode(
-      hyperData({ generatedVideoUrl: 'https://example.com/clip.mp4', status: 'completed' }),
+      hyperData({
+        generatedVideoUrl: 'https://example.com/clip.mp4',
+        status: 'completed',
+      }),
     );
 
     const video = container.querySelector(
@@ -198,7 +216,11 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
         seq: 0,
         ts: '2026-09-10T00:00:01.000Z',
         type: 'hyperframes.agent.step',
-        data: { phase: 'drafting', message: 'Designing the composition', pass: 0 },
+        data: {
+          phase: 'drafting',
+          message: 'Designing the composition',
+          pass: 0,
+        },
       },
       {
         eventId: 'event-1',
@@ -209,7 +231,10 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
           revisionId: 'revision-1',
           revisionNumber: 1,
           fingerprint: 'f'.repeat(64),
-          compositionStorage: { bucket: 'compositions', path: 'revision-1.html' },
+          compositionStorage: {
+            bucket: 'compositions',
+            path: 'revision-1.html',
+          },
           feedback: {
             summary: 'A three-beat introduction led by the portrait.',
             assetDecisions: [
@@ -227,7 +252,13 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
         seq: 2,
         ts: '2026-09-10T00:00:03.000Z',
         type: 'hyperframes.visual_review.completed',
-        data: { revisionId: 'revision-1', accepted: true, warnings: [], pass: 0, craftScore: 8 },
+        data: {
+          revisionId: 'revision-1',
+          accepted: true,
+          warnings: [],
+          pass: 0,
+          craftScore: 8,
+        },
       },
     ]);
 
@@ -265,7 +296,11 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
           advisoryScore: 0.82,
           criticGating: 'advisory-only',
           blockers: [
-            { sceneId: 'cta', criterionId: 'motion', message: 'Make the CTA entrance legible.' },
+            {
+              sceneId: 'cta',
+              criterionId: 'motion',
+              message: 'Make the CTA entrance legible.',
+            },
           ],
           rubric: [],
           scenes: [

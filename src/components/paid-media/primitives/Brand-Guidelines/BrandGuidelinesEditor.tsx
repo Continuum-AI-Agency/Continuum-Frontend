@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, SquarePen } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, type FieldError, type FieldErrors, type Path, useForm } from 'react-hook-form';
 import { Pill, type PillProps } from '@/components/kibo-ui/pill';
@@ -9,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useValidationErrorMap } from '@/i18n/validation';
 import {
   approveBrandGuidelineAction,
   saveBrandGuidelineDraftAction,
@@ -17,6 +20,7 @@ import {
   type BrandGuidelineDetail,
   type BrandGuidelineDraft,
   brandGuidelineDraftSchema,
+  createBrandGuidelineSchemas,
   EMPTY_BRAND_GUIDELINE_FORM,
 } from '@/lib/schemas/brandGuidelines';
 import { BrandGuidelineTagsSection } from './BrandGuidelineTagsSection';
@@ -36,15 +40,6 @@ const COLOR_FIELDS = [
 ] as const;
 
 const HEX_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-
-const VERBAL_IDENTITY_FIELDS: { name: Path<BrandGuidelineDraft>; label: string }[] = [
-  { name: 'verbalIdentity.audiencePersona', label: 'Audience persona' },
-  { name: 'verbalIdentity.story', label: 'Brand story' },
-  { name: 'verbalIdentity.values', label: 'Values' },
-  { name: 'verbalIdentity.vision', label: 'Vision' },
-  { name: 'verbalIdentity.mission', label: 'Mission' },
-  { name: 'verbalIdentity.message', label: 'Core message' },
-];
 
 type BrandGuidelinesEditorProps = {
   brandId: string;
@@ -70,6 +65,26 @@ function fieldError(
 }
 
 export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuidelinesEditorProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
+  const VERBAL_IDENTITY_FIELDS: {
+    name: Path<BrandGuidelineDraft>;
+    label: string;
+  }[] = useMemo(
+    () => [
+      {
+        name: 'verbalIdentity.audiencePersona',
+        label: uiText('brandAudiencePersona'),
+      },
+      { name: 'verbalIdentity.story', label: uiText('brandStoryLabel') },
+      { name: 'verbalIdentity.values', label: uiText('brandValuesLabel') },
+      { name: 'verbalIdentity.vision', label: uiText('vision_c587c26') },
+      { name: 'verbalIdentity.mission', label: uiText('mission_e6b85bf') },
+      { name: 'verbalIdentity.message', label: uiText('brandCoreMessage') },
+    ],
+    [uiText],
+  );
+
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const defaultValues = useMemo<BrandGuidelineDraft>(() => {
@@ -89,8 +104,15 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
     };
   }, [guideline]);
 
+  const localizedSchema = useMemo(
+    () => createBrandGuidelineSchemas(uiText).brandGuidelineDraftSchema,
+    [uiText],
+  );
+  const validationErrorMap = useValidationErrorMap();
   const form = useForm<BrandGuidelineDraft>({
-    resolver: zodResolver(brandGuidelineDraftSchema),
+    resolver: zodResolver(localizedSchema, {
+      error: validationErrorMap,
+    }),
     defaultValues,
     mode: 'onBlur',
   });
@@ -110,7 +132,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
       const saved = await saveBrandGuidelineDraftAction(brandId, guideline?.id ?? null, values);
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save draft.');
+      setError(formatUiError(err));
     } finally {
       setIsSaving(false);
     }
@@ -123,7 +145,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
       const saved = await approveBrandGuidelineAction(brandId, guideline?.id ?? null, values);
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to approve guideline.');
+      setError(formatUiError(err));
     } finally {
       setIsSaving(false);
     }
@@ -136,26 +158,37 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <h4 className="text-lg font-semibold text-white">Brand Guidelines</h4>
-            <Pill variant={STATUS_PILL_VARIANT[status]}>{status}</Pill>
+            <h4 className="text-lg font-semibold text-white">
+              {uiText('brand_guidelines_7d8b9dd')}
+            </h4>
+            <Pill variant={STATUS_PILL_VARIANT[status]}>
+              {uiText('brandGuidelineStatus', { status })}
+            </Pill>
           </div>
           <div className="flex items-center gap-2">
             {version ? (
-              <span className="text-sm text-muted-foreground">Version {version}</span>
+              <span className="text-sm text-muted-foreground">
+                {uiText.rich('sentence_6f34daf78edd', { v0: version })}
+              </span>
             ) : (
-              <span className="text-sm text-muted-foreground">New guideline</span>
+              <span className="text-sm text-muted-foreground">
+                {uiText('new_guideline_f111c9e')}
+              </span>
             )}
           </div>
         </div>
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Purpose</span>
+            <span className="text-sm text-muted-foreground">{uiText('purpose_d4e8830')}</span>
             <Controller
               control={form.control}
               name="purpose"
               render={({ field }) => (
-                <Input {...field} placeholder="Winter launch, evergreen brand book, etc." />
+                <Input
+                  {...field}
+                  placeholder={uiText('winter_launch_evergreen_brand_book_etc_2bb60f7')}
+                />
               )}
             />
             {fieldError(errors, 'purpose')?.message ? (
@@ -166,14 +199,14 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">Notes</span>
+            <span className="text-sm text-muted-foreground">{uiText('notes_8a7525b')}</span>
             <Controller
               control={form.control}
               name="notes"
               render={({ field }) => (
                 <Textarea
                   {...field}
-                  placeholder="Context, intended usage, or special constraints."
+                  placeholder={uiText('context_intended_usage_or_special_constraints_45db88b')}
                   rows={3}
                 />
               )}
@@ -189,18 +222,18 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
 
         <Tabs defaultValue="color">
           <TabsList className="h-auto flex-wrap">
-            <TabsTrigger value="color">Color</TabsTrigger>
-            <TabsTrigger value="logo">Logo</TabsTrigger>
-            <TabsTrigger value="typography">Typography</TabsTrigger>
-            <TabsTrigger value="stationery">Stationery</TabsTrigger>
-            <TabsTrigger value="styleDesign">Style Design</TabsTrigger>
-            <TabsTrigger value="verbalIdentity">Verbal Identity</TabsTrigger>
+            <TabsTrigger value="color">{uiText('color_6b73191')}</TabsTrigger>
+            <TabsTrigger value="logo">{uiText('logo_d707dc2')}</TabsTrigger>
+            <TabsTrigger value="typography">{uiText('typography_cab94ab')}</TabsTrigger>
+            <TabsTrigger value="stationery">{uiText('stationery_d86b481')}</TabsTrigger>
+            <TabsTrigger value="styleDesign">{uiText('style_design_d948fcd')}</TabsTrigger>
+            <TabsTrigger value="verbalIdentity">{uiText('verbal_identity_dd8f896')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="color">
             <div className="flex flex-col gap-3 pt-3">
               <span className="text-sm text-muted-foreground">
-                Hex values only. Color comes first and drives the rest of the guideline system.
+                {uiText('hex_values_only_color_comes_first_and_drives__2dae4b3')}
               </span>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {COLOR_FIELDS.map((fieldDef) => (
@@ -213,7 +246,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       const swatch = isValid ? field.value : 'transparent';
                       return (
                         <div className="flex flex-col gap-1">
-                          <span className="text-sm text-muted-foreground">{fieldDef.label}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {uiText('brandColorLabel', { color: fieldDef.key })}
+                          </span>
                           <div className="flex items-center gap-2">
                             <div
                               className="h-8 w-8 rounded-md border border-[var(--glass-border)]"
@@ -246,7 +281,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
             <div className="flex flex-col gap-4 pt-3">
               <div className="rounded-lg border border-[var(--glass-border)] p-3">
                 <div className="flex flex-col gap-2">
-                  <span className="text-sm text-muted-foreground">Usage guidelines</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uiText('usage_guidelines_729d134')}
+                  </span>
                   <Controller
                     control={form.control}
                     name="logo.usageGuidelines"
@@ -254,7 +291,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       <Textarea
                         {...field}
                         rows={3}
-                        placeholder="Where and how the logo should appear."
+                        placeholder={uiText('where_and_how_the_logo_should_appear_0a9b519')}
                       />
                     )}
                   />
@@ -263,34 +300,46 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="rounded-lg border border-[var(--glass-border)] p-3">
                   <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Clear space</span>
+                    <span className="text-sm text-muted-foreground">
+                      {uiText('clear_space_5921f13')}
+                    </span>
                     <Controller
                       control={form.control}
                       name="logo.clearSpace"
                       render={({ field }) => (
-                        <Textarea {...field} rows={2} placeholder="Minimum clear space guidance." />
+                        <Textarea
+                          {...field}
+                          rows={2}
+                          placeholder={uiText('minimum_clear_space_guidance_c23d3d6')}
+                        />
                       )}
                     />
                   </div>
                 </div>
                 <div className="rounded-lg border border-[var(--glass-border)] p-3">
                   <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Misuse</span>
+                    <span className="text-sm text-muted-foreground">
+                      {uiText('misuse_0f20ff3')}
+                    </span>
                     <Controller
                       control={form.control}
                       name="logo.misuse"
                       render={({ field }) => (
-                        <Textarea {...field} rows={2} placeholder="Common misuse to avoid." />
+                        <Textarea
+                          {...field}
+                          rows={2}
+                          placeholder={uiText('common_misuse_to_avoid_96edd08')}
+                        />
                       )}
                     />
                   </div>
                 </div>
               </div>
               <BrandGuidelineTagsSection
-                title="Logo"
+                title={uiText('logo_d707dc2')}
                 name="tags.logo"
                 control={form.control}
-                helper="3-5 tags that capture how the logo should feel and appear."
+                helper={uiText('brandTagsHelper', { section: 'logo' })}
               />
             </div>
           </TabsContent>
@@ -300,39 +349,51 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="rounded-lg border border-[var(--glass-border)] p-3">
                   <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Heading font</span>
+                    <span className="text-sm text-muted-foreground">
+                      {uiText('heading_font_20d26b0')}
+                    </span>
                     <Controller
                       control={form.control}
                       name="typography.headingFont"
-                      render={({ field }) => <Input {...field} placeholder="e.g., Space Grotesk" />}
-                    />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-[var(--glass-border)] p-3">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Body font</span>
-                    <Controller
-                      control={form.control}
-                      name="typography.bodyFont"
-                      render={({ field }) => <Input {...field} placeholder="e.g., Inter" />}
-                    />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-[var(--glass-border)] p-3">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Accent font</span>
-                    <Controller
-                      control={form.control}
-                      name="typography.accentFont"
                       render={({ field }) => (
-                        <Input {...field} placeholder="Optional accent font" />
+                        <Input {...field} placeholder={uiText('e_g_space_grotesk_5097b42')} />
                       )}
                     />
                   </div>
                 </div>
                 <div className="rounded-lg border border-[var(--glass-border)] p-3">
                   <div className="flex flex-col gap-2">
-                    <span className="text-sm text-muted-foreground">Usage guidance</span>
+                    <span className="text-sm text-muted-foreground">
+                      {uiText('body_font_2448d20')}
+                    </span>
+                    <Controller
+                      control={form.control}
+                      name="typography.bodyFont"
+                      render={({ field }) => (
+                        <Input {...field} placeholder={uiText('e_g_inter_3ccef4b')} />
+                      )}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {uiText('accent_font_2b05cd8')}
+                    </span>
+                    <Controller
+                      control={form.control}
+                      name="typography.accentFont"
+                      render={({ field }) => (
+                        <Input {...field} placeholder={uiText('optional_accent_font_6a3e896')} />
+                      )}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[var(--glass-border)] p-3">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {uiText('usage_guidance_0c1d12d')}
+                    </span>
                     <Controller
                       control={form.control}
                       name="typography.usageGuidelines"
@@ -340,7 +401,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                         <Textarea
                           {...field}
                           rows={2}
-                          placeholder="Hierarchy, weights, or pairing notes."
+                          placeholder={uiText('hierarchy_weights_or_pairing_notes_b5ebc0c')}
                         />
                       )}
                     />
@@ -348,10 +409,10 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                 </div>
               </div>
               <BrandGuidelineTagsSection
-                title="Typography"
+                title={uiText('typography_cab94ab')}
                 name="tags.typography"
                 control={form.control}
-                helper="3-5 tags describing the typographic tone."
+                helper={uiText('brandTagsHelper', { section: 'typography' })}
               />
             </div>
           </TabsContent>
@@ -360,7 +421,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
             <div className="flex flex-col gap-4 pt-3">
               <div className="rounded-lg border border-[var(--glass-border)] p-3">
                 <div className="flex flex-col gap-2">
-                  <span className="text-sm text-muted-foreground">Stationery overview</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uiText('stationery_overview_271d761')}
+                  </span>
                   <Controller
                     control={form.control}
                     name="stationery.overview"
@@ -368,7 +431,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       <Textarea
                         {...field}
                         rows={3}
-                        placeholder="Packaging, print, or collateral guidance."
+                        placeholder={uiText('packaging_print_or_collateral_guidance_3d4c3e6')}
                       />
                     )}
                   />
@@ -376,7 +439,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
               </div>
               <div className="rounded-lg border border-[var(--glass-border)] p-3">
                 <div className="flex flex-col gap-2">
-                  <span className="text-sm text-muted-foreground">Applications</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uiText('applications_98e33b0')}
+                  </span>
                   <Controller
                     control={form.control}
                     name="stationery.applications"
@@ -384,17 +449,17 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       <Textarea
                         {...field}
                         rows={2}
-                        placeholder="Business cards, envelopes, decks, etc."
+                        placeholder={uiText('business_cards_envelopes_decks_etc_729d931')}
                       />
                     )}
                   />
                 </div>
               </div>
               <BrandGuidelineTagsSection
-                title="Stationery"
+                title={uiText('stationery_d86b481')}
                 name="tags.stationery"
                 control={form.control}
-                helper="3-5 tags for print and collateral style."
+                helper={uiText('brandTagsHelper', { section: 'stationery' })}
               />
             </div>
           </TabsContent>
@@ -403,7 +468,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
             <div className="flex flex-col gap-4 pt-3">
               <div className="rounded-lg border border-[var(--glass-border)] p-3">
                 <div className="flex flex-col gap-2">
-                  <span className="text-sm text-muted-foreground">Visual direction</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uiText('visual_direction_66799e8')}
+                  </span>
                   <Controller
                     control={form.control}
                     name="styleDesign.visualDirection"
@@ -411,7 +478,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       <Textarea
                         {...field}
                         rows={3}
-                        placeholder="Core visual principles and layout direction."
+                        placeholder={uiText('core_visual_principles_and_layout_direction_e29bf5c')}
                       />
                     )}
                   />
@@ -419,7 +486,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
               </div>
               <div className="rounded-lg border border-[var(--glass-border)] p-3">
                 <div className="flex flex-col gap-2">
-                  <span className="text-sm text-muted-foreground">Imagery guidance</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uiText('imagery_guidance_0547846')}
+                  </span>
                   <Controller
                     control={form.control}
                     name="styleDesign.imageryGuidance"
@@ -427,17 +496,17 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       <Textarea
                         {...field}
                         rows={2}
-                        placeholder="Photography, illustration, or texture guidance."
+                        placeholder={uiText('photography_illustration_or_texture_guidance_cd9139c')}
                       />
                     )}
                   />
                 </div>
               </div>
               <BrandGuidelineTagsSection
-                title="Style Design"
+                title={uiText('style_design_d948fcd')}
                 name="tags.style_design"
                 control={form.control}
-                helper="3-5 tags that define the overall aesthetic."
+                helper={uiText('brandTagsHelper', { section: 'style' })}
               />
             </div>
           </TabsContent>
@@ -470,7 +539,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
               </div>
               <div className="rounded-lg border border-[var(--glass-border)] p-3">
                 <div className="flex flex-col gap-2">
-                  <span className="text-sm text-muted-foreground">Tone of voice</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uiText('tone_of_voice_54eea37')}
+                  </span>
                   <Controller
                     control={form.control}
                     name="verbalIdentity.toneOfVoice"
@@ -478,7 +549,7 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       <Textarea
                         {...field}
                         rows={3}
-                        placeholder="Define tone, cadence, and vocabulary."
+                        placeholder={uiText('define_tone_cadence_and_vocabulary_01516dc')}
                       />
                     )}
                   />
@@ -486,7 +557,9 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
               </div>
               <div className="rounded-lg border border-[var(--glass-border)] p-3">
                 <div className="flex flex-col gap-2">
-                  <span className="text-sm text-muted-foreground">Channel guidelines</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uiText('channel_guidelines_4704ae4')}
+                  </span>
                   <Controller
                     control={form.control}
                     name="verbalIdentity.channelGuidelines"
@@ -494,17 +567,17 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
                       <Textarea
                         {...field}
                         rows={3}
-                        placeholder="How we do content on X, Instagram, Stories, etc."
+                        placeholder={uiText('how_we_do_content_on_x_instagram_stories_etc_809fba1')}
                       />
                     )}
                   />
                 </div>
               </div>
               <BrandGuidelineTagsSection
-                title="Verbal Identity"
+                title={uiText('verbal_identity_dd8f896')}
                 name="tags.verbal_identity"
                 control={form.control}
-                helper="3-5 tags that summarize voice and messaging."
+                helper={uiText('brandTagsHelper', { section: 'verbal' })}
               />
             </div>
           </TabsContent>
@@ -512,10 +585,12 @@ export function BrandGuidelinesEditor({ brandId, guideline, onSaved }: BrandGuid
 
         <div className="flex items-center justify-end gap-2">
           <Button type="button" variant="secondary" onClick={handleSaveDraft} disabled={isSaving}>
-            <SquarePen /> Save draft
+            <SquarePen />
+            {uiText('save_draft_3de1001')}
           </Button>
           <Button type="button" onClick={handleApprove} disabled={isSaving}>
-            <Check /> Approve
+            <Check />
+            {uiText('approve_6007acb')}
           </Button>
         </div>
       </div>

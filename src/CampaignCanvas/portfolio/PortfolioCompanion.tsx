@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The companion pane when one Jaina turn changes several campaigns: the portfolio band first;
 // a tap on a row opens that campaign in Read or the Map — the same pieces every campaign view
@@ -24,6 +25,8 @@ export function PortfolioCompanion({
   versionsByRow?: Readonly<Record<string, VersionLine>>;
   initialRowId?: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [rowId, setRowId] = React.useState<string | null>(initialRowId);
   const row = portfolio.rows.find((entry) => entry.id === rowId) ?? null;
   return (
@@ -39,9 +42,7 @@ export function PortfolioCompanion({
       ) : (
         <>
           <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 text-[13px] text-muted-foreground">
-            <span className="min-w-0">
-              One proposal across several campaigns · approve each in chat
-            </span>
+            <span className="min-w-0">{betaUiText('beta_6fa747a2ae81')}</span>
           </div>
           <div className="min-h-0 flex-1">
             <PortfolioBand portfolio={portfolio} onOpenRow={(entry) => setRowId(entry.id)} />
@@ -63,6 +64,8 @@ function PortfolioCampaign({
   versions: VersionLine | null;
   onBack: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const current =
     row.source.kind === 'live' ? (row.source.partIds.at(-1) ?? null) : row.source.versionId;
@@ -73,7 +76,7 @@ function PortfolioCampaign({
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
         <nav
-          aria-label="Breadcrumb"
+          aria-label={betaUiText('beta_2bd873d6c734')}
           className="flex min-w-[12rem] flex-1 items-center gap-1 text-[13px]"
           data-testid="portfolio-breadcrumb"
         >
@@ -84,7 +87,7 @@ function PortfolioCampaign({
             data-testid="portfolio-back"
           >
             <ChevronLeft className="size-3.5" aria-hidden />
-            {portfolio.campaignCount} campaigns
+            {portfolio.campaignCount} {betaUiText('beta_7a4c3d21f9c6')}
           </button>
           <span aria-hidden className="text-muted-foreground">
             ›

@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useTranslations as useBetaTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+
 // Overview — the optimizer's front page, as the Performance+ redesign orders it (proposal O1,
 // docs/performance-plus-redesign/overview.html). Above the fold, in this order and nothing
 // else: one sentence with figures (what the account spent over the window and how many
@@ -159,17 +167,48 @@ type OptimizerOverviewProps = {
 
 /** The tile's second line for one result kind: cost and target — or why not. The move against
  *  last week is its own element (KindPriorDelta), the one place the row spends colour. */
-export function kindTileSub(kind: ResultKind, currency: string | null | undefined): string {
+export function kindTileSub(
+  kind: ResultKind,
+  currency: string | null | undefined,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
   if (kind.costPerResult == null) {
-    return kind.spend > 0 ? `${formatCurrency(kind.spend, currency)} no results` : 'no spend';
+    if (uiTranslate)
+      return uiTranslate('overviewKindCost', {
+        state: kind.spend > 0 ? 'noResults' : 'noSpend',
+        amount: formatCurrency(kind.spend, currency, uiLocale),
+      });
+    return kind.spend > 0
+      ? `${formatCurrency(kind.spend, currency, uiLocale)} no results`
+      : 'no spend';
   }
-  const parts = [`${formatCpa(kind.costPerResult, currency)} each`];
-  if (kind.targetRange == null) parts.push('no target');
+  const parts = [
+    uiTranslate
+      ? uiTranslate('overviewKindCost', {
+          state: 'ready',
+          amount: formatCpa(kind.costPerResult, currency, uiLocale),
+        })
+      : `${formatCpa(kind.costPerResult, currency, uiLocale)} each`,
+  ];
+  if (kind.targetRange == null)
+    parts.push(uiTranslate ? uiTranslate('no_target_8581bd7') : 'no target');
   else if (kind.targetRange.min === kind.targetRange.max)
-    parts.push(`target ${formatCpa(kind.targetRange.min, currency)}`);
+    parts.push(
+      uiTranslate
+        ? uiTranslate('helper_4ab023dac333', {
+            v0: formatCpa(kind.targetRange.min, currency, uiLocale),
+          })
+        : `target ${formatCpa(kind.targetRange.min, currency, uiLocale)}`,
+    );
   else
     parts.push(
-      `target ${formatCpa(kind.targetRange.min, currency)}–${formatCpa(kind.targetRange.max, currency)}`,
+      uiTranslate
+        ? uiTranslate('helper_0f0bc36d7d35', {
+            v0: formatCpa(kind.targetRange.min, currency, uiLocale),
+            v1: formatCpa(kind.targetRange.max, currency, uiLocale),
+          })
+        : `target ${formatCpa(kind.targetRange.min, currency, uiLocale)}–${formatCpa(kind.targetRange.max, currency, uiLocale)}`,
     );
   return parts.join(' · ');
 }
@@ -183,13 +222,18 @@ export function KindPriorDelta({
   kind: ResultKind;
   currency: string | null | undefined;
 }) {
+  const uiText = useTranslations('scale');
+
+  const uiLocale = useLocale();
   if (kind.vsPriorPct == null || kind.priorCostPerResult == null) return null;
   return (
     <KpiDelta
       better="down"
       pct={kind.vsPriorPct}
       testId="cost-prior-delta"
-      title={`prev. week ${formatCpa(kind.priorCostPerResult, currency)}`}
+      title={uiText('template_5b033c9787e6', {
+        v0: formatCpa(kind.priorCostPerResult, currency, uiLocale),
+      })}
     />
   );
 }
@@ -197,6 +241,7 @@ export function KindPriorDelta({
 /** A cost's distance to its target, coloured by side: under is green, over is red. Nothing
  *  when the kind has no target or no cost to measure against one. */
 export function KindTargetDistance({ kind }: { kind: ResultKind }) {
+  const uiText = useTranslations('scale');
   const side = targetSide(kind.vsTargetPct);
   if (side === 'none' || kind.costPerResult == null) return null;
   return (
@@ -209,18 +254,26 @@ export function KindTargetDistance({ kind }: { kind: ResultKind }) {
       data-side={side}
       data-testid="cost-target-distance"
     >
-      {vsTargetLabel(kind.vsTargetPct)}
+      {vsTargetLabel(kind.vsTargetPct, uiText)}
     </span>
   );
 }
 
 /** The tile's second line for autopilot: who only recommends, or what is stopped. */
-export function autopilotTileSub(summary: ReturnType<typeof autopilotSummary>): string {
-  if (summary.paused > 0) return `${summary.paused} paused`;
+export function autopilotTileSub(
+  summary: ReturnType<typeof autopilotSummary>,
+  uiTranslate?: ScaleCopy,
+): string {
+  if (summary.paused > 0)
+    return uiTranslate
+      ? uiTranslate('helper_b6968c9bb359', { v0: summary.paused })
+      : `${summary.paused} paused`;
   if (summary.recommending.length === 0) return 'all apply on their own';
   if (summary.recommending.length <= 2)
     return `${summary.recommending.join(' and ')} ${summary.recommending.length === 1 ? 'recommends, does not apply' : 'recommend, do not apply'}`;
-  return `${summary.recommending.length} recommend, do not apply`;
+  return uiTranslate
+    ? uiTranslate('helper_ad155f8a02cf', { v0: summary.recommending.length })
+    : `${summary.recommending.length} recommend, do not apply`;
 }
 
 function capitalise(word: string): string {
@@ -240,6 +293,10 @@ export function OptimizerOverview({
   onPrefetchPortfolio,
   chromeInShell = false,
 }: OptimizerOverviewProps) {
+  const betaUiText = useBetaTranslations('scale');
+
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
   const pacingById = useOptimizerPortfolioPacing(portfolios);
@@ -286,7 +343,10 @@ export function OptimizerOverview({
   const spendDelta = spendVsPriorPct(spend);
   // A sum over the portfolios that answered is not the account's spend.
   const complete = efficiency.failed === 0;
-  const kinds = useMemo(() => resultKinds(portfolios, windows), [portfolios, windows]);
+  const kinds = useMemo(
+    () => resultKinds(portfolios, windows, uiText),
+    [portfolios, windows, uiText],
+  );
   const autopilot = autopilotSummary(portfolios);
   const book = underManagement(portfolios);
   const dailyTotal = portfolios.reduce(
@@ -296,7 +356,7 @@ export function OptimizerOverview({
   const portfoliosWithDecisions = portfolios.filter(
     (portfolio) => pendingWorkCount(portfolio) > 0,
   ).length;
-  const window = windowLabel(latestCycle(windows));
+  const window = windowLabel(latestCycle(windows), undefined, uiLocale);
 
   const read = accountRead.data?.read ?? null;
   // The stored read is a nightly snapshot, so the state baked into it is last night's. Apply
@@ -324,16 +384,20 @@ export function OptimizerOverview({
         worst = { name: portfolio.name, pct: row.vsTargetPct };
       if (silent == null && row.spend > 0 && row.results === 0) silent = portfolio.name;
     }
-    return jainaTabEntryPrompts(platformTab, {
-      accountLabel: adAccountId,
-      portfolios: portfolios.map((portfolio) => ({
-        name: portfolio.name,
-        objective: portfolio.objective,
-      })),
-      worstOverTarget: worst?.name ?? null,
-      noResults: silent,
-    });
-  }, [platformTab, portfolios, windows, adAccountId]);
+    return jainaTabEntryPrompts(
+      platformTab,
+      {
+        accountLabel: adAccountId,
+        portfolios: portfolios.map((portfolio) => ({
+          name: portfolio.name,
+          objective: portfolio.objective,
+        })),
+        worstOverTarget: worst?.name ?? null,
+        noResults: silent,
+      },
+      uiText,
+    );
+  }, [platformTab, portfolios, windows, adAccountId, uiText]);
   // "All" spans every platform, so its questions carry none; a platform's tab carries its own.
   const jainaPlatform = platformTab === 'all' ? null : platformTab;
   // An unconnected tab is its empty state and nothing else: a question that deep-links to a
@@ -344,7 +408,7 @@ export function OptimizerOverview({
       <JainaEntryChips
         entries={jainaEntries}
         frame={false}
-        label="Ask Jaina"
+        label={uiText('ask_jaina_0d70d16')}
         platform={jainaPlatform}
       />
     </div>
@@ -412,7 +476,7 @@ export function OptimizerOverview({
           data-testid="multiplatform-error"
           role="status"
         >
-          {allFrame.message} The figures below are Meta's.
+          {uiText.rich('sentence_d4314e2d640c', { v0: allFrame.message })}
         </p>
       ) : null}
 
@@ -422,7 +486,7 @@ export function OptimizerOverview({
           <AllPlatformsHeadline metrics={multiplatform} pendingCount={pendingCount} />
         ) : producerLoading ? (
           <HeadlineSkeleton
-            label="Reading the account across platforms…"
+            label={uiText('reading_the_account_across_platforms_af2a3ba')}
             platforms={connectedCount}
           />
         ) : efficiency.failed > 0 && !efficiency.pending ? (
@@ -431,30 +495,36 @@ export function OptimizerOverview({
             data-incomplete="true"
             data-testid="overview-headline"
           >
-            Could not read the cycle of {efficiency.failed}{' '}
-            {efficiency.failed === 1 ? 'portfolio' : 'portfolios'}, so the account figure is
-            incomplete.{' '}
-            <button
-              className="text-primary-ink underline-offset-2 hover:underline"
-              data-testid="overview-retry"
-              onClick={efficiency.retryFailed}
-              type="button"
-            >
-              Retry
-            </button>
+            {uiText.rich('sentence_47d46ed27997', {
+              count: efficiency.failed,
+              retry: () => (
+                <button
+                  className="text-primary-ink underline-offset-2 hover:underline"
+                  data-testid="overview-retry"
+                  onClick={efficiency.retryFailed}
+                  type="button"
+                >
+                  {uiText('retry_942087c')}
+                </button>
+              ),
+            })}
           </p>
         ) : spend && !readingFigures ? (
           <HeadlineSentence
-            segments={accountHeadlineSegments({
-              spends: [
-                {
-                  text: formatCurrency(spend.spend, currency),
-                  figure: figureProps('overview.spend', spend.spend, currency, 'd7'),
-                },
-              ],
-              span: `in ${WINDOW_DAYS} days`,
-              decisions: pendingCount,
-            })}
+            segments={accountHeadlineSegments(
+              {
+                spends: [
+                  {
+                    text: formatCurrency(spend.spend, currency, uiLocale),
+                    figure: figureProps('overview.spend', spend.spend, currency, 'd7'),
+                  },
+                ],
+                span: uiText('overviewDaySpan', { count: WINDOW_DAYS }),
+                decisions: pendingCount,
+              },
+              uiLocale,
+              uiText,
+            )}
           />
         ) : (
           <p
@@ -463,8 +533,10 @@ export function OptimizerOverview({
             data-testid="overview-headline"
           >
             {readingFigures
-              ? "Reading the account's last 7 days…"
-              : `No portfolio has a measured cycle yet. ${capitalise(decisionsLabel(pendingCount))}.`}
+              ? uiText('reading_the_account_s_last_7_days_998f327')
+              : uiText('template_211e5613fd6d', {
+                  v0: capitalise(decisionsLabel(pendingCount, uiText)),
+                })}
           </p>
         )}
         {/* 2 — the meta line: the window the figures cover, what they cover, and when the read
@@ -482,9 +554,9 @@ export function OptimizerOverview({
           ) : null}
           {multiplatform || producerLoading || window ? <span aria-hidden="true">·</span> : null}
           <span data-testid="book-line">
-            {portfolios.length} {portfolioNoun} · {book.managed}{' '}
-            {book.managed === 1 ? 'ad set' : 'ad sets'}
-            {book.gone > 0 ? ` · ${book.gone} lost` : null}
+            {uiText('portfolio_count', { count: portfolios.length })} ·{' '}
+            {uiText('adset_count', { count: book.managed })}
+            {book.gone > 0 ? uiText('template_de46bef41bdb', { v0: book.gone }) : null}
           </span>
           {accountRead.data ? (
             <>
@@ -538,33 +610,47 @@ export function OptimizerOverview({
           <KpiTile
             emphasis="hero"
             figure={figureProps('tiles.spend', spend?.spend ?? null, currency, 'd7')}
-            label={`Spend · ${WINDOW_DAYS} days`}
+            label={uiText('template_1507d20c1b93', { v0: WINDOW_DAYS })}
             state={complete && spend ? spendState(spend.spend / WINDOW_DAYS, dailyTotal) : 'none'}
             sub={
               !complete ? (
-                `incomplete read · plan ${formatCurrency(dailyTotal, currency)} per day`
+                uiText('overviewPlanSpend', {
+                  incomplete: 'yes',
+                  amount: formatCurrency(dailyTotal, currency, uiLocale),
+                })
               ) : spend ? (
                 <>
-                  {spendDelta != null ? (
-                    <>
-                      <KpiDelta
-                        better="neutral"
-                        pct={spendDelta}
-                        testId="spend-prior-delta"
-                        title={`prev. week ${formatCurrency(spend.priorSpend, currency)}`}
-                      />{' '}
-                      vs prev. week ·{' '}
-                    </>
-                  ) : null}
-                  {formatCurrency(spend.spend / WINDOW_DAYS, currency)} per day · plan{' '}
-                  {formatCurrency(dailyTotal, currency)}
+                  {uiText.rich('sentence_bb014a412db3', {
+                    v0: () =>
+                      spendDelta != null ? (
+                        <>
+                          {uiText.rich('sentence_bb66b1a3757b', {
+                            v0: () => (
+                              <KpiDelta
+                                better="neutral"
+                                pct={spendDelta}
+                                testId="spend-prior-delta"
+                                title={uiText('template_5b033c9787e6', {
+                                  v0: formatCurrency(spend.priorSpend, currency, uiLocale),
+                                })}
+                              />
+                            ),
+                          })}
+                        </>
+                      ) : null,
+                    v1: formatCurrency(spend.spend / WINDOW_DAYS, currency, uiLocale),
+                    v2: formatCurrency(dailyTotal, currency, uiLocale),
+                  })}
                 </>
               ) : (
-                `plan ${formatCurrency(dailyTotal, currency)} per day`
+                uiText('overviewPlanSpend', {
+                  incomplete: 'no',
+                  amount: formatCurrency(dailyTotal, currency, uiLocale),
+                })
               )
             }
             testId="tile-spend"
-            value={complete && spend ? formatCurrency(spend.spend, currency) : '—'}
+            value={complete && spend ? formatCurrency(spend.spend, currency, uiLocale) : '—'}
             variant="inline"
           />
           {kinds.slice(0, MAX_KIND_TILES).map((kind) => (
@@ -575,7 +661,7 @@ export function OptimizerOverview({
               state={kind.state}
               sub={
                 <>
-                  {kindTileSub(kind, currency)}
+                  {kindTileSub(kind, currency, uiText, uiLocale)}
                   {targetSide(kind.vsTargetPct) !== 'none' && kind.costPerResult != null
                     ? ' · '
                     : null}
@@ -585,7 +671,7 @@ export function OptimizerOverview({
                 </>
               }
               testId={`tile-kind-${kind.kind}`}
-              value={kind.results.toLocaleString('en-US')}
+              value={kind.results.toLocaleString(uiLocale)}
               variant="inline"
             />
           ))}
@@ -597,27 +683,25 @@ export function OptimizerOverview({
                   onClick={onOpenActions}
                   type="button"
                 >
-                  Review →
+                  {uiText('review_ab7681e')}
                 </button>
               ) : null
             }
             emphasis={pendingCount > 0 ? 'decision' : undefined}
             figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
-            label="Decisions"
-            sub={
-              pendingCount > 0
-                ? `in ${portfoliosWithDecisions} ${portfoliosWithDecisions === 1 ? 'portfolio' : 'portfolios'}`
-                : 'nothing waits for your decision'
-            }
+            label={uiText('decisions_cfa6a08')}
+            sub={uiText('overviewDecisionPortfolios', {
+              count: pendingCount > 0 ? portfoliosWithDecisions : 0,
+            })}
             testId="tile-decisions"
-            value={String(pendingCount)}
+            value={pendingCount.toLocaleString(uiLocale)}
             variant="inline"
           />
           <KpiTile
             figure={figureProps('tiles.on-autopilot', autopilot.autopilot, null, 'none', 'count')}
-            label="Autopilot"
+            label={uiText('autopilot_0c62cfc')}
             state={autopilot.paused > 0 ? 'warn' : 'none'}
-            sub={autopilotTileSub(autopilot)}
+            sub={autopilotTileSub(autopilot, uiText)}
             testId="tile-autopilot"
             value={String(autopilot.autopilot)}
             valueSuffix={`/${autopilot.total}`}
@@ -653,7 +737,9 @@ export function OptimizerOverview({
        *  last, at the bottom, they move nothing. */}
       {accountRead.isLoading || readingFigures ? null : (
         <PortfolioRows
-          empty={<p className="text-xs text-muted-foreground">No portfolios yet.</p>}
+          empty={
+            <p className="text-xs text-muted-foreground">{uiText('no_portfolios_yet_1fd0b5f')}</p>
+          }
           onPrefetchPortfolio={onPrefetchPortfolio}
           onSelectPortfolio={onSelectPortfolio}
           pacingById={pacingById}
@@ -681,7 +767,7 @@ export function OptimizerOverview({
               type="button"
               variant="secondary"
             >
-              Review {pendingCount} pending
+              {betaUiText('beta_aff0766a5290')} {pendingCount} {betaUiText('beta_62a2fed3d6e0')}
               <ArrowRightIcon aria-hidden="true" className="size-3.5" />
             </Button>
           ) : null}
@@ -697,7 +783,7 @@ export function OptimizerOverview({
               href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
             >
               <FileTextIcon aria-hidden="true" className="size-3.5" />
-              Weekly report
+              {betaUiText('beta_53f750c31972')}
             </a>
           ) : null}
           <Button
@@ -707,7 +793,7 @@ export function OptimizerOverview({
             type="button"
           >
             <PlusIcon aria-hidden="true" className="size-3.5" />
-            New portfolio
+            {betaUiText('beta_2ea4a3307e0a')}
           </Button>
         </div>
       )}
@@ -737,13 +823,14 @@ export function OptimizerOverview({
 
 /** The recommendation cards under their heading, as every tab with cards shows them. */
 function Recommendations(props: ComponentProps<typeof AccountRead>) {
+  const uiText = useTranslations('scale');
   return (
     <section className="space-y-2" data-testid="overview-recommendations">
       <h2
         className={`${typeScale.label} flex items-center gap-1.5 px-1 font-semibold text-muted-foreground`}
       >
         <SparklesIcon aria-hidden="true" className="size-3.5 text-primary-ink" />
-        What Jaina recommends
+        {uiText('what_jaina_recommends_865694a')}
       </h2>
       <AccountRead {...props} />
     </section>
@@ -759,11 +846,12 @@ function OverviewLinks({
   onOpenActions: () => void;
   onOpenActivity: () => void;
 }) {
+  const uiText = useTranslations('scale');
   const link =
     'hit-area inline-flex items-center gap-1 font-semibold text-primary-ink hover:underline';
   return (
     <nav
-      aria-label="Optimizer views"
+      aria-label={uiText('optimizer_views_dc2cfe3')}
       className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs"
       data-testid="overview-links"
     >
@@ -773,7 +861,7 @@ function OverviewLinks({
         onClick={onOpenActions}
         type="button"
       >
-        Review in Actions
+        {uiText('review_in_actions_74ef371')}
         <ArrowRightIcon aria-hidden="true" className="size-3.5" />
       </button>
       <button
@@ -782,7 +870,7 @@ function OverviewLinks({
         onClick={onOpenActivity}
         type="button"
       >
-        Activity
+        {uiText('activity_38da150')}
         <ArrowRightIcon aria-hidden="true" className="size-3.5" />
       </button>
     </nav>
@@ -811,18 +899,21 @@ function PortfolioRows({
   /** What the section says when there is no portfolio to list. */
   empty: ReactNode;
 }) {
+  const uiText = useTranslations('scale');
   const [sortKey, setSortKey] = useState<RowSortKey>('distance');
   const [sortDir, setSortDir] = useState<RowSortDir>('asc');
   const sorted = sortPortfolioRows(portfolios, windows, sortKey, sortDir);
   return (
     <section className="space-y-2" data-testid="portfolio-rows">
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
+        <p className={`${typeScale.label} font-semibold text-muted-foreground`}>
+          {uiText('portfolios_e8af9d8')}
+        </p>
         {sorted.length === 0 ? null : (
           // On touch the direction button's 44px hit area would reach the last sort chip.
           <div className="flex items-center gap-1.5 pointer-coarse:gap-[12px]">
             <ToggleGroup
-              aria-label="Sort portfolios by"
+              aria-label={uiText('sort_portfolios_by_703463b')}
               className="flex-wrap"
               onValueChange={(value) => {
                 if (value) setSortKey(value as RowSortKey);
@@ -833,20 +924,22 @@ function PortfolioRows({
               variant="outline"
             >
               <ToggleGroupItem className="h-7 px-2 text-xs" value="distance">
-                Distance to target
+                {uiText('distance_to_target_e5a5f0f')}
               </ToggleGroupItem>
               <ToggleGroupItem className="h-7 px-2 text-xs" value="name">
-                Name
+                {uiText('name_dcd1d52')}
               </ToggleGroupItem>
               <ToggleGroupItem className="h-7 px-2 text-xs" value="daily">
-                Budget
+                {uiText('budget_1c6225e')}
               </ToggleGroupItem>
               <ToggleGroupItem className="h-7 px-2 text-xs" value="pending">
-                Pending
+                {uiText('pending_331551b')}
               </ToggleGroupItem>
             </ToggleGroup>
             <Button
-              aria-label={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+              aria-label={
+                sortDir === 'asc' ? uiText('ascending_7718459') : uiText('descending_79479a6')
+              }
               className="size-7 p-0"
               onClick={() => setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
               size="sm"
@@ -958,6 +1051,8 @@ function PlatformPortfolioSections({
   onCreatePortfolio: () => void;
   onPrefetchPortfolio?: (portfolioId: string) => void;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const portfoliosQuery = useOptimizerPlatformPortfolios(brandId, platform);
   const portfolios = portfoliosQuery.data;
   const cards = useOptimizerPlatformCards(brandId, platform);
@@ -976,14 +1071,18 @@ function PlatformPortfolioSections({
   };
   const windows = new Map<string, PortfolioFigure>();
   portfolios.forEach((portfolio, index) => {
-    const figure = portfolioFigureFromReads({
-      portfolio,
-      snapshots: null,
-      readAt: null,
-      memberIds: null,
-      series: efficiency.series[index] ?? [],
-      metrics: metricsOf(portfolio),
-    });
+    const figure = portfolioFigureFromReads(
+      {
+        portfolio,
+        snapshots: null,
+        readAt: null,
+        memberIds: null,
+        series: efficiency.series[index] ?? [],
+        metrics: metricsOf(portfolio),
+      },
+      uiLocale,
+      uiText,
+    );
     if (figure) windows.set(portfolio.id, figure);
   });
   const names = useMemo(
@@ -1030,8 +1129,7 @@ function PlatformPortfolioSections({
           data-testid="platform-cards-error"
           role="status"
         >
-          {name}'s recommendations could not be read, so this page cannot say which wait for a
-          decision.
+          {uiText.rich('sentence_0f21c6664557', { v0: name })}
         </p>
       ) : cards.status === 'ready' && cards.cards.length > 0 ? (
         <Recommendations
@@ -1050,14 +1148,18 @@ function PlatformPortfolioSections({
       <PortfolioRows
         empty={
           <p className="text-xs text-muted-foreground" data-testid="platform-portfolios-empty">
-            No portfolio holds {name} campaigns yet.{' '}
-            <button
-              className="text-primary-ink hover:underline"
-              onClick={onCreatePortfolio}
-              type="button"
-            >
-              Create a portfolio
-            </button>
+            {uiText.rich('sentence_bf00dc992a72', {
+              v0: name,
+              v1: () => (
+                <button
+                  className="text-primary-ink hover:underline"
+                  onClick={onCreatePortfolio}
+                  type="button"
+                >
+                  {uiText('create_a_portfolio_2283fad')}
+                </button>
+              ),
+            })}
           </p>
         }
         onPrefetchPortfolio={onPrefetchPortfolio}
@@ -1111,7 +1213,10 @@ function PlatformTab({
   // the same 7 complete days ending yesterday the producer would read.
   const window =
     metrics.status === 'ready'
-      ? { since: metrics.metrics.window.since, until: metrics.metrics.window.until }
+      ? {
+          since: metrics.metrics.window.since,
+          until: metrics.metrics.window.until,
+        }
       : metrics.status === 'loading'
         ? ('pending' as const)
         : null;

@@ -3,6 +3,7 @@
 import type { PlanCode } from '@continuum/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { changePlan, startPlanCheckout } from '@/lib/billing/billingApi';
 import {
   checkoutReturnParams,
@@ -39,6 +41,8 @@ type BillingPlansProps = {
 };
 
 export function BillingPlans({ brandId, plans, onPlanChanged, needLabel }: BillingPlansProps) {
+  const tUi = useTranslations('settings');
+
   const highlightedRef = useRef<HTMLLIElement>(null);
   // A gated page sent the user here: bring the plan that unlocks it into view (on a phone the
   // two plans stack, and the one they need may be the second).
@@ -49,7 +53,7 @@ export function BillingPlans({ brandId, plans, onPlanChanged, needLabel }: Billi
 
   return (
     <ul
-      aria-label="Plans"
+      aria-label={tUi('m_cf2e5f26fe')}
       className="grid divide-y divide-border @[36rem]/settings-section:grid-cols-2 @[36rem]/settings-section:divide-x @[36rem]/settings-section:divide-y-0"
     >
       {plans.map((plan) => (
@@ -67,7 +71,7 @@ export function BillingPlans({ brandId, plans, onPlanChanged, needLabel }: Billi
                 {plan.priceLabel}
                 <span className="font-sans text-xs font-normal text-muted-foreground">
                   {' '}
-                  / month
+                  {tUi('m_f7fa5df80f')}
                 </span>
               </p>
             </div>
@@ -79,7 +83,8 @@ export function BillingPlans({ brandId, plans, onPlanChanged, needLabel }: Billi
               className="flex items-center gap-1.5 text-xs font-medium text-primary"
             >
               <span aria-hidden className="size-1.5 rounded-full bg-primary" />
-              Unlocks {needLabel}
+              {tUi('m_896b841f3b')}
+              {needLabel}
             </p>
           ) : null}
           <ul className="flex-1 space-y-1.5">
@@ -102,13 +107,18 @@ export function BillingPlans({ brandId, plans, onPlanChanged, needLabel }: Billi
   );
 }
 
-const PLAN_STATUS_PILL = {
-  active: { label: 'Active', tone: 'success', pulse: false },
-  activating: { label: 'Activating', tone: 'warning', pulse: true },
-  payment_failed: { label: 'Payment failed', tone: 'error', pulse: false },
-} as const;
+function getPlanStatusPills(tUi: ReturnType<typeof useTranslations<'settings'>>) {
+  return {
+    active: { label: tUi('m_a733b809d2'), tone: 'success', pulse: false },
+    activating: { label: tUi('m_d91d2edc90'), tone: 'warning', pulse: true },
+    payment_failed: { label: tUi('m_b1e8e75fdc'), tone: 'error', pulse: false },
+  } as const;
+}
 
 function PlanStatusPill({ status }: { status: PlanCardView['status'] }) {
+  const tUi = useTranslations('settings');
+  const PLAN_STATUS_PILL = getPlanStatusPills(tUi);
+
   if (status === 'available') return null;
   const { label, tone, pulse } = PLAN_STATUS_PILL[status];
   return (
@@ -131,6 +141,8 @@ function PlanAction({
   /** False for the plan that is NOT the one a gated page asked for — it steps back to outline. */
   emphasis: boolean;
 }) {
+  const tUi = useTranslations('settings');
+
   switch (plan.action) {
     case 'checkout':
       return <CheckoutButton brandId={brandId} plan={plan} emphasis={emphasis} />;
@@ -145,15 +157,9 @@ function PlanAction({
         />
       );
     case 'none':
-      return (
-        <p className="text-xs text-muted-foreground">
-          Your only plan. To cancel it, open Manage payment method.
-        </p>
-      );
+      return <p className="text-xs text-muted-foreground">{tUi('m_2c8487e4a0')}</p>;
     case 'requires_organic':
-      return (
-        <p className="text-xs text-muted-foreground">Add Organic Plus first — Trends+ builds on it.</p>
-      );
+      return <p className="text-xs text-muted-foreground">{tUi('m_eb885520a1')}</p>;
   }
 }
 
@@ -166,10 +172,17 @@ function CheckoutButton({
   plan: PlanCardView;
   emphasis: boolean;
 }) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const { show } = useToast();
   const checkout = useMutation({
     mutationFn: (planCode: PlanCode) => {
-      const query = checkoutReturnParams({ kind: 'plan_added', plan: planCode });
+      const query = checkoutReturnParams({
+        kind: 'plan_added',
+        plan: planCode,
+      });
       return startPlanCheckout(brandId, {
         plans: [planCode],
         successUrl: billingReturnUrl(query.success),
@@ -178,7 +191,11 @@ function CheckoutButton({
     },
     onSuccess: (session) => window.location.assign(session.url),
     onError: (error) =>
-      show({ title: 'Could not open checkout', description: error.message, variant: 'error' }),
+      show({
+        title: tUi('m_12369214b3'),
+        description: uiErrorMessage(error),
+        variant: 'error',
+      }),
   });
   const redirecting = checkout.isPending || checkout.isSuccess;
 
@@ -190,7 +207,7 @@ function CheckoutButton({
       aria-busy={redirecting}
       onClick={() => checkout.mutate(plan.planCode)}
     >
-      {redirecting ? 'Opening checkout…' : `Choose ${plan.name}`}
+      {redirecting ? tUi('m_4b149ef50a') : tUi('m_fed72e3d29', { v0: String(plan.name) })}
     </Button>
   );
 }
@@ -206,10 +223,14 @@ function PlanChangeButton({
   direction: 'add' | 'remove';
   onPlanChanged: (change: PendingBillingChange) => void;
 }) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const { show } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const verb = direction === 'add' ? 'Add' : 'Remove';
+  const verb = direction === 'add' ? tUi('m_61cc55aa04') : tUi('m_e963907dac');
 
   const change = useMutation({
     mutationFn: () =>
@@ -220,15 +241,22 @@ function PlanChangeButton({
         kind: direction === 'add' ? 'plan_added' : 'plan_removed',
         plan: plan.planCode,
       });
-      void queryClient.invalidateQueries({ queryKey: billingOverviewKey(brandId) });
+      void queryClient.invalidateQueries({
+        queryKey: billingOverviewKey(brandId),
+      });
     },
     onError: (error) => {
       show({
-        title: `Could not ${verb.toLowerCase()} ${plan.name}`,
-        description: error.message,
+        title: tUi('m_6d9863fb0b', {
+          v0: String(verb.toLowerCase()),
+          v1: String(plan.name),
+        }),
+        description: uiErrorMessage(error),
         variant: 'error',
       });
-      void queryClient.invalidateQueries({ queryKey: billingOverviewKey(brandId) });
+      void queryClient.invalidateQueries({
+        queryKey: billingOverviewKey(brandId),
+      });
     },
   });
 
@@ -248,12 +276,15 @@ function PlanChangeButton({
           </AlertDialogTitle>
           <AlertDialogDescription>
             {direction === 'add'
-              ? `${plan.name} joins your subscription now, charged to the card on file. Stripe prorates it: your next invoice includes the rest of this billing period, then ${plan.priceLabel} a month.`
-              : `${plan.name} leaves your subscription now and its features lock. Stripe prorates it: the unused part of this billing period is credited on your next invoice.`}
+              ? tUi('m_3fd0e57d69', {
+                  v0: String(plan.name),
+                  v1: String(plan.priceLabel),
+                })
+              : tUi('m_de4f32ec20', { v0: String(plan.name) })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={change.isPending}>Keep current plans</AlertDialogCancel>
+          <AlertDialogCancel disabled={change.isPending}>{tUi('m_d1eb0f16a2')}</AlertDialogCancel>
           <AlertDialogAction
             variant={direction === 'add' ? 'cta' : 'destructive'}
             disabled={change.isPending}
@@ -261,8 +292,13 @@ function PlanChangeButton({
             onClick={() => change.mutate()}
           >
             {change.isPending
-              ? `${verb === 'Add' ? 'Adding' : 'Removing'}…`
-              : `${verb} ${plan.name}`}
+              ? tUi('m_e315ee966a', {
+                  v0: String(direction === 'add' ? tUi('m_48a693c488') : tUi('m_b7d2c38b79')),
+                })
+              : tUi('m_a79fb214ea', {
+                  v0: String(verb),
+                  v1: String(plan.name),
+                })}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

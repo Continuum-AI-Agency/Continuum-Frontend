@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { createContext, type ReactNode, useCallback, useContext, useRef, useState } from 'react';
 import {
@@ -54,6 +55,7 @@ const DestructiveConfirmationContext = createContext<DestructiveConfirmationValu
 });
 
 export function DestructiveConfirmationProvider({ children }: { children: ReactNode }) {
+  const uiText = useTranslations('organic');
   const [pending, setPending] = useState<PendingConfirmation | null>(null);
   // Held in a ref as well so dismissal (Escape, overlay click) can resolve the promise
   // the caller is awaiting; a state read inside onOpenChange would be the stale one.
@@ -89,7 +91,9 @@ export function DestructiveConfirmationProvider({ children }: { children: ReactN
             <div className="text-sm">{pending.options.details}</div>
           ) : null}
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => settle(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => settle(false)}>
+              {uiText('cancel_19766ed')}
+            </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={pending?.options.confirmDisabled}

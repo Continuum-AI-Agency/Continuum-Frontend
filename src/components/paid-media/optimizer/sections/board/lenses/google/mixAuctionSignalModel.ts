@@ -1,3 +1,4 @@
+import type { UiLocale } from '@/i18n/config';
 // What the Google lenses G05 Mix, G06 Auction and G10 Signal share, without React: the Optimizer's
 // account findings (P8, variant google_account_finding) and the figures they state, and shares and
 // counts as the board prints them. A lens reads a finding by its stable keys (idea, bars, flags,
@@ -38,15 +39,24 @@ export function leadingNumber(text: string | null | undefined): number | null {
 
 /** A 0–1 share as a whole percent. A share that is not zero never prints as 0%, and one short of
  *  the whole never prints as 100%. */
-export function shareLabel(share: number): string {
+export function shareLabel(share: number, locale: UiLocale = 'en'): string {
+  if (locale !== 'en') {
+    const format = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+    });
+    if (share > 0 && share < 0.005) return '<' + format.format(0.01);
+    if (share < 1 && share > 0.995) return '>' + format.format(0.99);
+    return format.format(Math.round(share * 100) / 100);
+  }
   if (share > 0 && share < 0.005) return '<1%';
   if (share < 1 && share > 0.995) return '>99%';
   return `${Math.round(share * 100)}%`;
 }
 
 /** A count as every screen prints it: whole, with thousands grouped ("4,051"). */
-export function countLabel(value: number): string {
-  return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+export function countLabel(value: number, locale: UiLocale = 'en'): string {
+  return value.toLocaleString(locale, { maximumFractionDigits: 0 });
 }
 
 const DAY_MS = 86_400_000;

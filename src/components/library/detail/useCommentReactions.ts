@@ -5,6 +5,7 @@
 // the realtime publication), and an optimistic toggle for the viewer's own.
 
 import type { CommentReaction } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '@/components/ui/toast-imperative';
 import { listCommentReactions, setCommentReaction } from '@/lib/library/comments';
@@ -39,6 +40,8 @@ export function useCommentReactions(
   assetId: string,
   currentUserId: string | null,
 ) {
+  const translateUi = useUiTranslations('library');
+
   const [reactions, setReactions] = useState<CommentReaction[]>([]);
   const reactionsRef = useRef(reactions);
   reactionsRef.current = reactions;
@@ -76,7 +79,11 @@ export function useCommentReactions(
             if (row.asset_id !== assetId) return;
             const gone = row as Partial<ReactionRow>;
             if (!gone.comment_id || !gone.user_id || !gone.emoji) return;
-            const key = { commentId: gone.comment_id, userId: gone.user_id, emoji: gone.emoji };
+            const key = {
+              commentId: gone.comment_id,
+              userId: gone.user_id,
+              emoji: gone.emoji,
+            };
             setReactions((prev) => prev.filter((reaction) => !sameReaction(key)(reaction)));
           },
         },
@@ -99,10 +106,14 @@ export function useCommentReactions(
       setCommentReaction({ brandId, commentId, emoji, on }).catch((error: unknown) => {
         // Put the list back the way the server has it.
         setReactions(on ? remove : add);
-        toast.error(`Could not update the reaction · ${(error as Error).message}`);
+        toast.error(
+          translateUi('could_not_update_the_reaction_value_81b00547', {
+            value0: String((error as Error).message),
+          }),
+        );
       });
     },
-    [brandId, assetId, currentUserId],
+    [brandId, assetId, currentUserId, translateUi],
   );
 
   return { reactions, toggle };

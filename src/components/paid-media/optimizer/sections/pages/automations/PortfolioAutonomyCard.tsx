@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // One portfolio on the Automations page (G14): its autonomy dial, what blocks a level and why, the
 // scopes autopilot may approve on its own, the caps it writes inside, and its kill switch.
@@ -71,6 +72,8 @@ export function PortfolioAutonomyCard({
   onSetScope,
   onSetStopped,
 }: PortfolioAutonomyCardProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   // What the database confirmed, held until the list read catches up with it: only an answered
   // write lands here, so a pending or refused one never moves the dial. It is tied to the row it
   // was written over, and any newer row from the list read is the truth again.
@@ -85,7 +88,10 @@ export function PortfolioAutonomyCard({
   const [writtenScopes, setWrittenScopes] = useState<WrittenScopes | null>(null);
   const confirmedScopes = writtenScopes?.row === scopesRow ? writtenScopes.values : null;
   const scopes = confirmedScopes
-    ? { ...(portfolio.autopilot_scopes ?? DEFAULT_AUTOPILOT_SCOPES), ...confirmedScopes }
+    ? {
+        ...(portfolio.autopilot_scopes ?? DEFAULT_AUTOPILOT_SCOPES),
+        ...confirmedScopes,
+      }
     : (portfolio.autopilot_scopes ?? null);
 
   const confirmed = written?.row === row ? written : null;
@@ -128,7 +134,11 @@ export function PortfolioAutonomyCard({
     setPending({ kind: 'stop' });
     onSetStopped(next)
       .then(() =>
-        setWritten((prev) => ({ ...(prev?.row === over ? prev : {}), row: over, paused: next })),
+        setWritten((prev) => ({
+          ...(prev?.row === over ? prev : {}),
+          row: over,
+          paused: next,
+        })),
       )
       .catch((failure: unknown) => setError(autonomyErrorText(failure, null)))
       .finally(() => setPending(null));
@@ -143,7 +153,10 @@ export function PortfolioAutonomyCard({
       .then(() =>
         setWrittenScopes((prev) => ({
           row: over,
-          values: { ...(prev?.row === over ? prev.values : {}), [scope]: enabled },
+          values: {
+            ...(prev?.row === over ? prev.values : {}),
+            [scope]: enabled,
+          },
         })),
       )
       .catch((failure: unknown) => {
@@ -190,7 +203,7 @@ export function PortfolioAutonomyCard({
           type="button"
           variant="ghost"
         >
-          Manage
+          {betaUiText('beta_5a23444828db')}
         </Button>
       </div>
 
@@ -234,7 +247,7 @@ export function PortfolioAutonomyCard({
       </div>
 
       <div className="space-y-1.5">
-        <p className="font-medium text-foreground text-xs">What autopilot may approve on its own</p>
+        <p className="font-medium text-foreground text-xs">{betaUiText('beta_0e715c773ab3')}</p>
         <AutopilotScopesField
           disabled={!read.scopesEditable || busy}
           noActor={
@@ -251,7 +264,7 @@ export function PortfolioAutonomyCard({
         />
         {read.scopesEditable ? null : (
           <p className="text-muted-foreground text-xs" data-testid="autonomy-scopes-locked">
-            These take effect on Autopilot.
+            {betaUiText('beta_61898407db36')}
           </p>
         )}
       </div>
@@ -275,7 +288,7 @@ export function PortfolioAutonomyCard({
           onClick={onManage}
           type="button"
         >
-          {read.capsReady ? 'Edit caps' : 'Set caps'}
+          {read.capsReady ? betaUiText('beta_97aaa7caf108') : betaUiText('beta_a04c254abb4a')}
         </button>
       </div>
 
@@ -296,12 +309,10 @@ export function PortfolioAutonomyCard({
             ) : (
               <PauseIcon aria-hidden="true" className="size-3.5" />
             )}
-            {read.stopped ? 'Resume autopilot' : 'Stop autopilot'}
+            {read.stopped ? betaUiText('beta_05810efa0813') : betaUiText('beta_1971a79fcd4a')}
           </Button>
           <span className="text-muted-foreground text-xs">
-            {read.stopped
-              ? 'Ingest and scoring still run; nothing is written.'
-              : 'Halts every autonomous write without leaving Autopilot.'}
+            {read.stopped ? betaUiText('beta_3661b1f3aab6') : betaUiText('beta_50a38ff7b092')}
           </span>
         </div>
       ) : null}
@@ -315,16 +326,18 @@ export function PortfolioAutonomyCard({
       <AlertDialog onOpenChange={(open) => setArming(open)} open={arming}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Turn on autopilot for “{portfolio.name}”?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {betaUiText('beta_a4c876e7ff68')}
+              {portfolio.name}”?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Autopilot writes real budgets to {writesTo} on every cycle, without waiting for a
-              person, inside its caps: {capsLabel}. Anything a scope creates is born paused. Stop
-              halts every write without leaving Autopilot. To see the cycle it would run first,
-              preview it in Manage.
+              {betaUiText('beta_4a3e61adeed4')} {writesTo} {betaUiText('beta_6352fb5dbf3a')}{' '}
+              {capsLabel}
+              {betaUiText('beta_9cc482ba3e40')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{betaUiText('beta_19766ed6ccb2')}</AlertDialogCancel>
             <Button
               onClick={() => {
                 setArming(false);
@@ -333,7 +346,7 @@ export function PortfolioAutonomyCard({
               type="button"
               variant="outline"
             >
-              Preview in Manage
+              {betaUiText('beta_7ee1ba3565c6')}
             </Button>
             <Button
               onClick={() => {
@@ -342,7 +355,7 @@ export function PortfolioAutonomyCard({
               }}
               type="button"
             >
-              Turn on autopilot
+              {betaUiText('beta_67b12ff99794')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

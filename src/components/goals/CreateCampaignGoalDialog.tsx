@@ -10,7 +10,7 @@ import {
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +25,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { createGoal } from '@/lib/api/goals.client';
 
 const campaignTemplate = getGoalTemplate(CAMPAIGN_CREATION_TEMPLATE_ID);
@@ -90,6 +92,9 @@ export function CreateCampaignGoalDialog({
   brandId,
   compact = false,
 }: CreateCampaignGoalDialogProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = React.useState(false);
@@ -117,7 +122,7 @@ export function CreateCampaignGoalDialog({
       setOpen(false);
       router.push(`/goals/${encodeURIComponent(created.goal.id)}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The campaign Goal could not be created.');
+      setError(getUiErrorMessage(cause));
     } finally {
       setIsSubmitting(false);
     }
@@ -129,44 +134,51 @@ export function CreateCampaignGoalDialog({
         render={
           <Button type="button" size="sm" variant={compact ? 'secondary' : 'default'}>
             <Plus className="size-3.5" />
-            {compact ? 'New' : 'Create campaign Goal'}
+            {compact ? uiText('m_6403f2b7eb') : uiText('m_010e2a2e7f')}
           </Button>
         }
       />
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Create a campaign Goal</DialogTitle>
+            <DialogTitle>{uiText('create_a_campaign_goal_d7754eb')}</DialogTitle>
             <DialogDescription>
-              Define the campaign outcome here. Continuum will create the 11 required campaign
-              artifacts and their stakeholder, evidence, approval, and confidence checklists.
+              {uiText('define_the_campaign_outcome_here_continuum_wi_1490b56')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-5 py-5">
             <div className="grid gap-2">
-              <Label htmlFor="campaign-goal-title">Campaign name</Label>
+              <Label htmlFor="campaign-goal-title">{uiText('campaign_name_e092a1f')}</Label>
               <Input
                 id="campaign-goal-title"
                 value={draft.title}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, title: event.target.value }))
+                  setDraft((current) => ({
+                    ...current,
+                    title: event.target.value,
+                  }))
                 }
-                placeholder="Q4 acquisition campaign"
+                placeholder={uiText('q4_acquisition_campaign_58744da')}
                 maxLength={300}
                 required
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="campaign-goal-objective">Business objective</Label>
+              <Label htmlFor="campaign-goal-objective">
+                {uiText('business_objective_6c4aa05')}
+              </Label>
               <Textarea
                 id="campaign-goal-objective"
                 value={draft.objective}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, objective: event.target.value }))
+                  setDraft((current) => ({
+                    ...current,
+                    objective: event.target.value,
+                  }))
                 }
-                placeholder="Describe the audience, business outcome, offer, timing, and constraints."
+                placeholder={uiText('describe_the_audience_business_outcome_offer__42d4c7e')}
                 rows={4}
                 maxLength={4_000}
                 required
@@ -174,27 +186,27 @@ export function CreateCampaignGoalDialog({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="campaign-goal-criteria">Definition of done</Label>
+              <Label htmlFor="campaign-goal-criteria">{uiText('definition_of_done_04a987b')}</Label>
               <Textarea
                 id="campaign-goal-criteria"
                 value={draft.successCriteria}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, successCriteria: event.target.value }))
+                  setDraft((current) => ({
+                    ...current,
+                    successCriteria: event.target.value,
+                  }))
                 }
-                placeholder={
-                  'One measurable criterion per line\nLaunch approval received before flight date'
-                }
+                placeholder={uiText('one_measurable_criterion_per_line_launch_appr_5b1e5ad')}
                 rows={4}
                 required
               />
               <p className="text-xs leading-5 text-muted-foreground">
-                Enter one measurable success criterion per line. These govern Goal completion in
-                addition to the campaign artifact checklist.
+                {uiText('enter_one_measurable_success_criterion_per_li_8ef6b08')}
               </p>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="campaign-goal-visibility">Access</Label>
+              <Label htmlFor="campaign-goal-visibility">{uiText('access_ec5ba0a')}</Label>
               <select
                 id="campaign-goal-visibility"
                 value={draft.visibility}
@@ -206,16 +218,17 @@ export function CreateCampaignGoalDialog({
                 }
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                <option value="brand">Brand team</option>
-                <option value="private">Only me</option>
+                <option value="brand">{uiText('brand_team_04d3e5e')}</option>
+                <option value="private">{uiText('only_me_bdc0857')}</option>
               </select>
             </div>
 
             <fieldset className="grid gap-3">
-              <legend className="text-sm font-medium">Additional campaign artifacts</legend>
+              <legend className="text-sm font-medium">
+                {uiText('additional_campaign_artifacts_d92e634')}
+              </legend>
               <p className="text-xs leading-5 text-muted-foreground">
-                Activate the documents this campaign actually needs. Once activated, they become
-                part of the completion checklist.
+                {uiText('activate_the_documents_this_campaign_actually_54a99f7')}
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {selectableArtifacts.map((artifact) => (
@@ -249,11 +262,12 @@ export function CreateCampaignGoalDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              Create Goal
+              {uiText.rich('sentence_4b50e0819257', {
+                v0: () => (isSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : null),
+              })}
             </Button>
           </DialogFooter>
         </form>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The design-system editor: one card per section.
 //
@@ -82,6 +83,8 @@ function ConflictBar({
   snapshot: DesignSystemSnapshot;
   onResolved: () => Promise<void>;
 }) {
+  const tUi = useTranslations('settings');
+
   const unresolved = useMemo(
     () =>
       snapshot.conflicts
@@ -115,7 +118,7 @@ function ConflictBar({
               await onResolved();
             }}
           >
-            Got it
+            {tUi('m_5b8027fa0e')}
           </Button>
         </div>
       ))}
@@ -124,7 +127,11 @@ function ConflictBar({
 }
 
 const TIERS = ['strict', 'guided', 'loose'] as const;
-const TIER_LABELS = { strict: 'Lock', guided: 'Guide', loose: 'Explore' } as const;
+const TIER_LABELS = {
+  strict: 'Lock',
+  guided: 'Guide',
+  loose: 'Explore',
+} as const;
 
 /**
  * The rigor control.
@@ -143,6 +150,8 @@ function RigorControl({
   snapshot: DesignSystemSnapshot;
   onChanged: () => Promise<void>;
 }) {
+  const tUi = useTranslations('settings');
+
   const [saving, setSaving] = useState(false);
   const active = snapshot.rigor.override ?? snapshot.rigor.tier;
   const evidence = snapshot.rigor.evidence;
@@ -151,13 +160,18 @@ function RigorControl({
     <div className="rounded-lg border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-foreground">How should Continuum apply this?</p>
+          <p className="text-sm font-medium text-foreground">{tUi('m_c1b9470f5f')}</p>
           <p className="mt-0.5 text-xs text-secondary">
-            We recommend <span className="font-medium">{TIER_LABELS[snapshot.rigor.tier]}</span>{' '}
-            from {evidence.tokenCount} tokens
-            {evidence.hasAdherenceConfig ? ', an adherence config' : ''}
+            {tUi('m_c9667eaa05')}
+            <span className="font-medium">{TIER_LABELS[snapshot.rigor.tier]}</span>{' '}
+            {tUi('m_585af9b232')}
+            {evidence.tokenCount}
+            {tUi('m_db835814b2')}
+            {evidence.hasAdherenceConfig ? tUi('m_15f0eab647') : ''}
             {evidence.imperativeRuleCount > 0
-              ? `, and ${evidence.imperativeRuleCount} explicit rules`
+              ? tUi('m_9908afb590', {
+                  v0: String(evidence.imperativeRuleCount),
+                })
               : ''}
             .
           </p>
@@ -202,6 +216,8 @@ function SectionCard({
   section: SectionData;
   onSaved: () => Promise<void>;
 }) {
+  const tUi = useTranslations('settings');
+
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => section.rules.map((rule) => rule.statement).join('\n'));
   const [saving, setSaving] = useState(false);
@@ -241,14 +257,15 @@ function SectionCard({
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Badge variant={section.provenance === 'declared' ? 'default' : 'secondary'}>
               {section.provenance === 'declared'
-                ? 'From your files'
+                ? tUi('m_1bc3af8497')
                 : section.provenance === 'edited'
-                  ? 'Edited by you'
-                  : 'Read from prose'}
+                  ? tUi('m_fcf046611b')
+                  : tUi('m_cd3297b914')}
             </Badge>
             {section.provenance === 'inferred' ? (
               <span className="text-xs text-secondary">
-                {Math.round(section.confidence * 100)}% confidence
+                {Math.round(section.confidence * 100)}
+                {tUi('m_a89b4754f3')}
               </span>
             ) : null}
           </div>
@@ -256,7 +273,7 @@ function SectionCard({
         <div className="flex items-center gap-2">
           <Switch
             checked={section.enabled}
-            aria-label={`Apply ${section.title} when generating`}
+            aria-label={tUi('m_dbc7474bc6', { v0: String(section.title) })}
             onCheckedChange={async (checked) => {
               await saveDesignSection({
                 brandId,
@@ -269,7 +286,9 @@ function SectionCard({
           <Button
             variant="ghost"
             size="icon"
-            aria-label={editing ? 'Cancel editing' : `Edit ${section.title}`}
+            aria-label={
+              editing ? tUi('m_26bbc04fc4') : tUi('m_a9abc6a7cc', { v0: String(section.title) })
+            }
             onClick={() => setEditing((current) => !current)}
           >
             {editing ? <X className="size-4" /> : <Pencil className="size-4" />}
@@ -285,15 +304,15 @@ function SectionCard({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             rows={6}
-            aria-label={`${section.title} rules, one per line`}
+            aria-label={tUi('m_b599f0f79b', { v0: String(section.title) })}
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
-              Cancel
+              {tUi('m_77dfd2135f')}
             </Button>
             <Button size="sm" disabled={saving} onClick={() => void save()}>
               <Check className="size-4" />
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? tUi('m_56a2285c5b') : tUi('m_efc007a393')}
             </Button>
           </div>
         </div>
@@ -308,32 +327,34 @@ function SectionCard({
                     : 'shrink-0 text-secondary'
                 }
               >
-                {rule.strength === 'hard' ? 'Must' : 'Prefer'}
+                {rule.strength === 'hard' ? tUi('m_ea641fd719') : tUi('m_13f66243ef')}
               </span>
               <span className="text-secondary">{rule.statement}</span>
             </li>
           ))}
           {section.rules.length > 6 ? (
-            <li className="text-xs text-secondary">+{section.rules.length - 6} more</li>
+            <li className="text-xs text-secondary">
+              +{section.rules.length - 6}
+              {tUi('m_84b30f4ef3')}
+            </li>
           ) : null}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-secondary">No rules recorded for this section.</p>
+        <p className="mt-3 text-sm text-secondary">{tUi('m_d029541693')}</p>
       )}
     </div>
   );
 }
 
 function ExportRow({ snapshot }: { snapshot: DesignSystemSnapshot }) {
+  const tUi = useTranslations('settings');
+
   const [busy, setBusy] = useState(false);
   return (
     <div className="flex items-center justify-between rounded-lg border border-border p-4">
       <div>
-        <p className="text-sm font-medium text-foreground">Export</p>
-        <p className="mt-0.5 text-xs text-secondary">
-          A portable bundle — DTCG tokens, the adherence config, and every section as markdown.
-          Re-importable here, and readable by Figma or Style Dictionary.
-        </p>
+        <p className="text-sm font-medium text-foreground">{tUi('m_f3e4fadb9e')}</p>
+        <p className="mt-0.5 text-xs text-secondary">{tUi('m_a14cd6f916')}</p>
       </div>
       <Button
         variant="outline"
@@ -349,7 +370,7 @@ function ExportRow({ snapshot }: { snapshot: DesignSystemSnapshot }) {
         }}
       >
         <Download className="size-4" />
-        {busy ? 'Preparing…' : 'Download'}
+        {busy ? tUi('m_0b1d6c0b1a') : tUi('m_a479c9c34e')}
       </Button>
     </div>
   );

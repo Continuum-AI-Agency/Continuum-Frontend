@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, within } from '@testing-library/react';
+import { cleanup, fireEvent, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import {
   buildMetrics,
   EASY_FIT_MP1,
@@ -137,7 +138,14 @@ describe('AllPlatformsTiles', () => {
 
   it('adds a platforms tile when fewer than four would show', () => {
     const empty = buildMetrics(
-      [{ ...META_TOTALS, share_of_spend: 1, results_by_kind: [], unclassified_spend: 23911 }],
+      [
+        {
+          ...META_TOTALS,
+          share_of_spend: 1,
+          results_by_kind: [],
+          unclassified_spend: 23911,
+        },
+      ],
       { decisions_waiting: 0, autopilot: { on: 0, total: 0 } },
     );
     const { container } = render(
@@ -304,7 +312,12 @@ describe('PlatformMetricsSection — currency', () => {
   it("says the live figures below are the platform's own read when the Optimizer has not read it", () => {
     const frame = buildMetrics([
       META_TOTALS,
-      { ...GOOGLE_TOTALS, spend: null, share_of_spend: null, results_by_kind: [] },
+      {
+        ...GOOGLE_TOTALS,
+        spend: null,
+        share_of_spend: null,
+        results_by_kind: [],
+      },
     ]);
     const { getByTestId, queryByTestId } = render(
       <PlatformMetricsSection liveBelow metrics={frame} platform="google_ads" />,

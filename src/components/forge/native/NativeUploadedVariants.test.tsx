@@ -1,5 +1,6 @@
 /** Mounted upload lifecycle + real authenticated metadata transport. Storage,
  * SQL publication and worker leases are exercised by their separate benches. */
+
 import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import {
   type HyperframesSceneView,
@@ -8,7 +9,15 @@ import {
   templateRevisionVariantSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import { markFetchFailure } from '@/lib/api/errors';
 
 const uuid = () => crypto.randomUUID();
 const BRAND = uuid(),
@@ -34,7 +43,11 @@ const view: HyperframesSceneView = {
   },
   viewport: { width: 32, height: 24 },
   clock: { numerator: 30, denominator: 1, frameCount: 3 },
-  edits: { schema: 'hyperframes.edits/1', sourceSha256: 'd'.repeat(64), operations: [] },
+  edits: {
+    schema: 'hyperframes.edits/1',
+    sourceSha256: 'd'.repeat(64),
+    operations: [],
+  },
   capabilities: [],
   renderer: null,
 };
@@ -191,7 +204,9 @@ async function choose() {
   });
   await act(async () => {
     fireEvent.change(input, {
-      target: { files: [new File(['<html></html>'], 'source.html', { type: 'text/html' })] },
+      target: {
+        files: [new File(['<html></html>'], 'source.html', { type: 'text/html' })],
+      },
     });
   });
 }
@@ -235,7 +250,9 @@ test('a registered upload freezes its real parent, shows failures, and never inv
   await act(async () => {
     await client.invalidateQueries();
   });
-  await screen.findByText('The uploaded source has a missing dependency.');
+  await screen.findByText(
+    'This uploaded source could not be processed. Check the upload job and try again.',
+  );
   expect(saved).toEqual([]);
   expect(screen.getByRole('link', { name: 'Upload job' }).getAttribute('href')).toContain(
     `uploadJobId=${JOB}`,
@@ -244,11 +261,11 @@ test('a registered upload freezes its real parent, shows failures, and never inv
 test('lost upload acknowledgement refreshes durable history and preserves the retry diagnosis', async () => {
   upload = async () => {
     history = { ...history, items: [pending] };
-    throw Error('Upload acknowledgement was interrupted.');
+    throw markFetchFailure(new TypeError('Failed to fetch'));
   };
   mount();
   await choose();
-  await screen.findByText(/Upload acknowledgement was interrupted/);
+  await screen.findByText('Check your connection and try again.');
   await screen.findByText('Fresh source · Parsing pending');
   expect(saved).toEqual([]);
   expect(busy).toEqual([true, false]);
@@ -270,7 +287,11 @@ test('only a matching compiled child selects its real saved revision', async () 
     ...pending,
     parseState: 'parsed' as const,
     revisionId: CHILD_REVISION,
-    ingest: { ...pending.ingest, state: 'compiled' as const, sceneSha256: '9'.repeat(64) },
+    ingest: {
+      ...pending.ingest,
+      state: 'compiled' as const,
+      sceneSha256: '9'.repeat(64),
+    },
   };
   focused = { ...focused, items: [{ ...compiled, uploadedVersionId: uuid() }] };
   await act(async () => {
@@ -285,7 +306,11 @@ test('only a matching compiled child selects its real saved revision', async () 
   await waitFor(() => expect(saved).toEqual([CHILD_REVISION]));
 });
 test('dirty or superseded revisions cannot upload, while a durable job link still reads status', async () => {
-  mount({ view: { ...view, sourceSceneSha256: null }, dirty: true, initialJobId: JOB });
+  mount({
+    view: { ...view, sourceSceneSha256: null },
+    dirty: true,
+    initialJobId: JOB,
+  });
   await screen.findByText('Fresh source · Parsing pending');
   expect((screen.getByLabelText('Upload native variant') as HTMLInputElement).disabled).toBe(true);
   expect(screen.queryByRole('link', { name: 'Open saved variant' })).toBeNull();

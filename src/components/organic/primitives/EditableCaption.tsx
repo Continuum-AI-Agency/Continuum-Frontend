@@ -6,6 +6,7 @@ import {
   platformCaptionLength,
   toPublishPlatform,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -78,6 +79,7 @@ export function CaptionCharCount({
   platform: string;
   hashtags?: HashtagTiers | string[] | null;
 }) {
+  const uiLocale = useLocale();
   const publishPlatform = toPublishPlatform(platform) ?? 'instagram';
   const limit = captionLimits(publishPlatform).maxLength;
   const len = platformCaptionLength(publishPlatform, caption, hashtags);
@@ -93,7 +95,7 @@ export function CaptionCharCount({
               : 'text-muted-foreground/50',
         )}
       >
-        {len.toLocaleString()} / {limit.toLocaleString()}
+        {len.toLocaleString(uiLocale)} / {limit.toLocaleString(uiLocale)}
       </span>
     </div>
   );
@@ -120,10 +122,10 @@ export function EditableCaption({
   value,
   onChange,
   platform,
-  placeholder = 'Write a caption…',
+  placeholder: providedPlaceholder,
   className,
   editClassName,
-  ariaLabel = 'Caption',
+  ariaLabel: providedAriaLabel,
   editable = true,
   editing: controlledEditing,
   onEditingChange,
@@ -157,6 +159,10 @@ export function EditableCaption({
   // inline box, so a clamp on its parent cannot reach the text inside it.
   readoutClassName?: string;
 }) {
+  const uiText = useTranslations('organic');
+  const fieldLabel = providedAriaLabel ?? uiText('captionField');
+  const inputLabel = providedAriaLabel ?? uiText('caption_87d296e');
+  const placeholder = providedPlaceholder ?? uiText('captionPlaceholder');
   const [uncontrolledEditing, setUncontrolledEditing] = React.useState(false);
   const editing = controlledEditing ?? uncontrolledEditing;
   const setEditing = (next: boolean) => {
@@ -199,8 +205,8 @@ export function EditableCaption({
         aria-label={
           // Platform names keep their case ("Edit TikTok caption"); only the bare default lowers.
           hasText
-            ? `Edit ${ariaLabel === 'Caption' ? 'caption' : ariaLabel}`
-            : `Add a ${ariaLabel === 'Caption' ? 'caption' : ariaLabel}`
+            ? uiText('editCaptionField', { field: fieldLabel })
+            : uiText('addCaptionField', { field: fieldLabel })
         }
         className={cn(
           'block w-full rounded-md px-2 py-1.5 text-left text-foreground transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50',
@@ -233,7 +239,7 @@ export function EditableCaption({
           }
         }}
         autoFocus
-        aria-label={ariaLabel}
+        aria-label={inputLabel}
         placeholder={placeholder}
         className={cn(
           'min-h-[6rem] border-0 bg-transparent p-0 text-sm leading-relaxed focus-visible:ring-0',

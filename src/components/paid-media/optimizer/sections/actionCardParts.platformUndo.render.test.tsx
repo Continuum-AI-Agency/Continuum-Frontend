@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // Activity's Undo on a Google write (G4): it goes through optimizer-apply-action-revert — the
 // platform's own check first, the write only on confirm — because the Meta revert edge answers
@@ -53,7 +54,9 @@ const row = (over: Record<string, unknown>) =>
   }) as never;
 
 function mount(value: unknown) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const ui = (next: unknown) => (
     <QueryClientProvider client={client}>
       <ActionRevertControl
@@ -65,7 +68,9 @@ function mount(value: unknown) {
   );
   const view = render(ui(value));
   /** The feed's refetch landing: the same row, re-read. */
-  return Object.assign(view, { reread: (next: unknown) => view.rerender(ui(next)) });
+  return Object.assign(view, {
+    reread: (next: unknown) => view.rerender(ui(next)),
+  });
 }
 
 afterEach(() => {
@@ -78,14 +83,22 @@ describe("ActionRevertControl — a Google write's Undo in Activity", () => {
     const view = mount(row({ receipt: { platform: 'google_ads', requestId: 'req-1' } }));
     fireEvent.click(view.getByTestId('activity-platform-undo'));
     await waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0]).toEqual({ portfolio_id: PORTFOLIO, audit_id: AUDIT, dryRun: true });
+    expect(sent[0]).toEqual({
+      portfolio_id: PORTFOLIO,
+      audit_id: AUDIT,
+      dryRun: true,
+    });
     expect((await view.findByText(/validate_only ok/)).textContent).toContain(
       'Google checked the undo',
     );
     expect(view.getByText(/Back to/).textContent).toContain('800');
     fireEvent.click(view.getByTestId('activity-platform-undo-confirm'));
     await waitFor(() => expect(sent).toHaveLength(2));
-    expect(sent[1]).toEqual({ portfolio_id: PORTFOLIO, audit_id: AUDIT, dryRun: false });
+    expect(sent[1]).toEqual({
+      portfolio_id: PORTFOLIO,
+      audit_id: AUDIT,
+      dryRun: false,
+    });
     expect((await view.findByText(/Undone\./)).textContent).toContain('recorded in Activity');
   });
 
@@ -93,13 +106,18 @@ describe("ActionRevertControl — a Google write's Undo in Activity", () => {
     // Live, the revert landed in 13 s, the feed's refetch marked the row reverted, and the row
     // swapped its Undo for the "Reverted" badge — unmounting the open dialog before a person
     // (or the bench) ever saw "Undone.".
-    const google = row({ receipt: { platform: 'google_ads', requestId: 'req-1' } });
+    const google = row({
+      receipt: { platform: 'google_ads', requestId: 'req-1' },
+    });
     const view = mount(google);
     fireEvent.click(view.getByTestId('activity-platform-undo'));
     await view.findByText(/validate_only ok/);
     fireEvent.click(view.getByTestId('activity-platform-undo-confirm'));
     await waitFor(() => expect(sent).toHaveLength(2));
-    view.reread({ ...google, reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' });
+    view.reread({
+      ...google,
+      reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    });
     expect((await view.findByTestId('platform-card-undo-result')).textContent).toContain('Undone.');
     fireEvent.click(view.getByText('Close'));
     await waitFor(() => expect(view.queryByTestId('activity-platform-undo')).toBeNull());

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Guards the automations webhook surface after `action.outbound_webhook` moved
 // to the `production` lifecycle. Every assertion here failed (or would have
 // silently passed on a broken UI) while the coming-soon gates were still in
@@ -9,7 +10,7 @@ import type {
   AutomationWebhookDestination,
   AutomationWebhookEndpoint,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   automationDestinationUrlError,
@@ -89,8 +90,14 @@ const webhookTriggerNode = () =>
   });
 
 const stubClient = (overrides: Partial<WebhookManagerClient> = {}): WebhookManagerClient => ({
-  createEndpoint: mock(async () => ({ endpoint, signingSecret: SIGNING_SECRET })),
-  createDestination: mock(async () => ({ destination, signingSecret: SIGNING_SECRET })),
+  createEndpoint: mock(async () => ({
+    endpoint,
+    signingSecret: SIGNING_SECRET,
+  })),
+  createDestination: mock(async () => ({
+    destination,
+    signingSecret: SIGNING_SECRET,
+  })),
   rotateSecret: mock(async () => ({ signingSecret: SIGNING_SECRET })),
   ...overrides,
 });
@@ -125,7 +132,9 @@ describe('webhooks trigger', () => {
   test('is not disabled — the coming-soon gate is gone', () => {
     renderWebhookManager();
 
-    const trigger = screen.getByRole('button', { name: /Webhooks/ }) as HTMLButtonElement;
+    const trigger = screen.getByRole('button', {
+      name: /Webhooks/,
+    }) as HTMLButtonElement;
     expect(trigger.disabled).toBe(false);
     expect(trigger.getAttribute('aria-disabled')).not.toBe('true');
     expect(screen.queryByText('Coming soon')).toBeNull();
@@ -171,7 +180,9 @@ describe('outbound webhook node configuration', () => {
     renderInspector(node);
 
     // The destination picker is the editor surface the coming-soon gate hid.
-    const picker = screen.getByRole('combobox', { name: /Managed destination/ });
+    const picker = screen.getByRole('combobox', {
+      name: /Managed destination/,
+    });
     expect(picker.getAttribute('data-disabled')).toBeNull();
     expect(picker.getAttribute('disabled')).toBeNull();
 
@@ -232,7 +243,10 @@ describe('inbound endpoint creation gating', () => {
     })) as HTMLButtonElement;
     expect(create.disabled).toBe(false);
     expect(
-      automationEndpointCreationBlockReason({ versionState: 'draft', saveState: 'saved' }),
+      automationEndpointCreationBlockReason({
+        versionState: 'draft',
+        saveState: 'saved',
+      }),
     ).toBe(null);
   });
 
@@ -241,7 +255,9 @@ describe('inbound endpoint creation gating', () => {
     expect(automationEndpointCreationError(new Error('webhook_trigger_not_found'))).toContain(
       'not in the saved draft yet',
     );
-    expect(automationEndpointCreationError(new Error('boom'))).toBe('boom');
+    expect(automationEndpointCreationError(new Error('boom'))).toBe(
+      'Could not create this endpoint.',
+    );
   });
 });
 
@@ -263,7 +279,12 @@ describe('reveal-once signing secret', () => {
     fireEvent.click(acknowledge);
 
     await waitFor(() =>
-      expect(canDismissRevealedSecret({ secret: SIGNING_SECRET, acknowledged: true })).toBe(true),
+      expect(
+        canDismissRevealedSecret({
+          secret: SIGNING_SECRET,
+          acknowledged: true,
+        }),
+      ).toBe(true),
     );
   });
 
@@ -280,7 +301,9 @@ describe('outbound destination URL validation', () => {
     openWebhookDialog();
 
     const urlField = await screen.findByLabelText('Destination URL');
-    fireEvent.change(urlField, { target: { value: 'http://hooks.example.com/continuum' } });
+    fireEvent.change(urlField, {
+      target: { value: 'http://hooks.example.com/continuum' },
+    });
 
     const create = screen.getByRole('button', {
       name: 'Create signed destination',
@@ -295,7 +318,9 @@ describe('outbound destination URL validation', () => {
     openWebhookDialog();
 
     const urlField = await screen.findByLabelText('Destination URL');
-    fireEvent.change(urlField, { target: { value: 'https://hooks.example.com/continuum' } });
+    fireEvent.change(urlField, {
+      target: { value: 'https://hooks.example.com/continuum' },
+    });
 
     const create = screen.getByRole('button', {
       name: 'Create signed destination',
@@ -319,7 +344,9 @@ describe('signing secret rotation', () => {
     openWebhookDialog();
 
     fireEvent.click(
-      await screen.findByRole('button', { name: `Rotate ${endpoint.name} signing secret` }),
+      await screen.findByRole('button', {
+        name: `Rotate ${endpoint.name} signing secret`,
+      }),
     );
 
     expect(await screen.findByText(/stops working immediately/)).toBeTruthy();

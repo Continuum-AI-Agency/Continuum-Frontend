@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { BrandBookResponse } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -21,7 +22,11 @@ function readyBook(): BrandBookResponse {
     status: 'ready',
     present: true,
     refreshed_at: '2026-07-01T00:00:00.000Z',
-    assembled: { report: { readiness: { overall_score: 80, findings: [], dimensions: {} } } },
+    assembled: {
+      report: {
+        readiness: { overall_score: 80, findings: [], dimensions: {} },
+      },
+    },
   } as unknown as BrandBookResponse;
 }
 
@@ -56,7 +61,9 @@ describe('HomeBaseDashboard', () => {
   it('grows each view button to a 24px target invisibly — the h-6 segment stays as drawn', () => {
     // PP-L1V tap-target: the segments paint at h-6 (21.75px on the 14.5px root ladder).
     render(<HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />);
-    const nav = screen.getByRole('navigation', { name: 'Dashboard view options' });
+    const nav = screen.getByRole('navigation', {
+      name: 'Dashboard view options',
+    });
     const buttons = Array.from(nav.querySelectorAll('button'));
     expect(buttons.length).toBeGreaterThan(1);
     for (const button of buttons) {

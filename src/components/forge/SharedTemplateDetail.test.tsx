@@ -38,7 +38,13 @@ const CONTRACT = apiRenderTemplateContractSchema.parse({
       options: ['Bronze', 'Gold'],
       description: 'Which league badge shows',
     },
-    { key: 'watermark_logo', label: 'Brand logo', kind: 'image', required: true, reserved: true },
+    {
+      key: 'watermark_logo',
+      label: 'Brand logo',
+      kind: 'image',
+      required: true,
+      reserved: true,
+    },
   ],
 });
 
@@ -60,7 +66,13 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { SharedTemplateDetail } from './SharedTemplateDetail';
 import type { SharedTemplate } from './TemplateCard';
 
@@ -84,7 +96,9 @@ function renderDetail() {
   const onBack = mock(() => undefined);
   const onToggle = mock(() => undefined);
   const onOpenRender = mock((_intent: { templateKey: string }) => undefined);
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
     <QueryClientProvider client={client}>
       <SharedTemplateDetail
@@ -118,7 +132,10 @@ describe('SharedTemplateDetail', () => {
     expect(getContract).toHaveBeenCalledWith(BRAND, '100', BINDING);
     // The heading is the display name, never the draft marker the catalog stores.
     expect(
-      screen.getByRole('heading', { level: 2, name: 'StarCraft API Render Proof' }),
+      screen.getByRole('heading', {
+        level: 2,
+        name: 'StarCraft API Render Proof',
+      }),
     ).toBeTruthy();
   });
 
@@ -143,7 +160,9 @@ describe('SharedTemplateDetail', () => {
     expect(onOpenRender).toHaveBeenCalledWith({ templateKey: '100' });
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Remove StarCraft API Render Proof from StarCraft' }),
+      screen.getByRole('button', {
+        name: 'Remove StarCraft API Render Proof from StarCraft',
+      }),
     );
     expect(onToggle).toHaveBeenCalledTimes(1);
   });

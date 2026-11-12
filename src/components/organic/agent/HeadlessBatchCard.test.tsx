@@ -15,8 +15,9 @@ import {
   QueryClientProvider,
   timeoutManager,
 } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import type { ReadHeadlessBatchStatus } from '@/lib/organic-agent/headlessBatch';
 
@@ -109,7 +110,11 @@ function item(index: number, overrides: Partial<HeadlessBatchItem> = {}): Headle
 
 function batch(
   items: HeadlessBatchItem[],
-  cast: HeadlessBatchStatus['cast'] = { needed: false, drafts: [], approved: true },
+  cast: HeadlessBatchStatus['cast'] = {
+    needed: false,
+    drafts: [],
+    approved: true,
+  },
 ): HeadlessBatchStatus {
   const count = (state: HeadlessBatchItem['state']) =>
     items.filter((entry) => entry.state === state).length;
@@ -160,7 +165,10 @@ const requestMock = mock(async (args: { path: string; method?: string; body?: un
   }
   throw new Error(`unexpected request ${args.path}`);
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 const { HeadlessBatchCard } = await import('./HeadlessBatchCard');
 const { headlessBatchQueryKey } = await import('@/lib/organic-agent/headlessBatch');
@@ -210,8 +218,18 @@ function renderCards(statuses: ReadHeadlessBatchStatus[], onOpenDraft = mock(() 
 }
 
 const castDrafts = [
-  { elementId: PERSON, revision: 1, kind: 'character', summary: 'A barista in her 30s' },
-  { elementId: PLACE, revision: 1, kind: 'scene', summary: 'A sunlit cafe counter' },
+  {
+    elementId: PERSON,
+    revision: 1,
+    kind: 'character',
+    summary: 'A barista in her 30s',
+  },
+  {
+    elementId: PLACE,
+    revision: 1,
+    kind: 'scene',
+    summary: 'A sunlit cafe counter',
+  },
 ];
 const waitingOnCast = () =>
   batch([item(0, { state: 'needs_cast_approval' }), item(1, { state: 'needs_cast_approval' })], {
@@ -249,7 +267,10 @@ describe('HeadlessBatchCard', () => {
       }),
       item(2, { state: 'running' }),
       item(3, { format: 'still_set', state: 'ready', outputCount: 4 }),
-      item(4, { state: 'needs_cast_approval', reason: `waiting on the cast approval ${BATCH}` }),
+      item(4, {
+        state: 'needs_cast_approval',
+        reason: `waiting on the cast approval ${BATCH}`,
+      }),
       item(5, { state: 'queued', reason: "waiting on the first piece's cast" }),
     ]);
     answer = () => frame;
@@ -466,7 +487,11 @@ describe('HeadlessBatchCard', () => {
       {
         path: HEADLESS_CAST_APPROVE_ROUTE,
         method: 'POST',
-        body: { brandId: BRAND, batchId: BATCH, draftElementIds: [PERSON, PLACE] },
+        body: {
+          brandId: BRAND,
+          batchId: BATCH,
+          draftElementIds: [PERSON, PLACE],
+        },
         schema: expect.anything(),
       },
     ]);
@@ -540,7 +565,14 @@ describe('HeadlessBatchCard', () => {
       batch([item(0, { state: 'needs_cast_approval' }), item(1, { state: 'queued' })], {
         needed: true,
         approved: true,
-        drafts: [{ elementId: rider, revision: 1, kind: 'character', summary: 'A delivery rider' }],
+        drafts: [
+          {
+            elementId: rider,
+            revision: 1,
+            kind: 'character',
+            summary: 'A delivery rider',
+          },
+        ],
       });
     await refresh();
     expect(slot(container, 'headless-batch-cast')?.textContent).toContain('A delivery rider');
@@ -606,7 +638,9 @@ describe('HeadlessBatchCard', () => {
     setOnScreen(false);
     const key = headlessBatchQueryKey(BRAND, BATCH);
     act(() => {
-      client.setQueryData(key, client.getQueryData(key), { updatedAt: Date.now() - 11_000 });
+      client.setQueryData(key, client.getQueryData(key), {
+        updatedAt: Date.now() - 11_000,
+      });
     });
     setOnScreen(true);
     await waitFor(() => expect(statusCalls()).toHaveLength(2));

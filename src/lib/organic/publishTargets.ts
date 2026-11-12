@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 // The brand's posting accounts, every platform — the one list the account pickers read.
 //
 // Source: GET /api/organic/publish-accounts?brandId= (`publishAccountsResponseSchema`), already
@@ -78,6 +79,7 @@ export function accountName(account: PublishAccount): string {
 
 /** Sets the brand's default account for NEW drafts on a platform (never re-stamps a draft). */
 export function useSaveDefaultAccount(): (platform: PublishPlatform, accountId: string) => void {
+  const uiText = useTranslations('organic');
   const queryClient = useQueryClient();
   const selectAccount = useCalendarStore((state) => state.selectAccount);
   const brandId = useCalendarStore((state) => state.accountContext.brandId);
@@ -107,10 +109,12 @@ export function useSaveDefaultAccount(): (platform: PublishPlatform, accountId: 
         .then((response) => queryClient.setQueryData(publishAccountsKey(brandId), response))
         .catch((error: unknown) => {
           console.error('[publishTargets] could not save the default account', error);
-          toast.error('Could not save the default account', {
-            description: 'New posts may still go to the previous default. Try again.',
+          toast.error(uiText('defaultAccountSaveError'), {
+            description: uiText('new_posts_may_still_go_to_the_previous_defaul_5c08c0d'),
           });
-          void queryClient.invalidateQueries({ queryKey: publishAccountsKey(brandId) });
+          void queryClient.invalidateQueries({
+            queryKey: publishAccountsKey(brandId),
+          });
         });
     },
     [brandId, queryClient, selectAccount],

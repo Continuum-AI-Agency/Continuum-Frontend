@@ -2,35 +2,55 @@
 // under the product's money rule (M1, `@/lib/money/display`): "$30.5K MXN", "$966 USD"; when
 // the currency is unknown the figure goes out bare rather than with a guessed "$".
 
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import { joinMoney, moneyParts } from '@/lib/money/display';
 
-const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
-const whole = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+let formatters: Map<string, Intl.NumberFormat> | undefined;
 
-export function formatCount(value: number): string {
-  return Math.abs(value) >= 10_000 ? compact.format(value) : whole.format(value);
+function formatter(locale: UiLocale, style: 'compact' | 'whole' | 'money'): Intl.NumberFormat {
+  const key = `${locale}:${style}`;
+  let value = formatters?.get(key);
+  if (!value) {
+    value = new Intl.NumberFormat(
+      locale,
+      style === 'compact'
+        ? { notation: 'compact', maximumFractionDigits: 1 }
+        : style === 'whole'
+          ? { maximumFractionDigits: 0 }
+          : { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+    );
+    (formatters ??= new Map()).set(key, value);
+  }
+  return value;
 }
 
-export function formatMoney(value: number, currency: string | null): string {
+export function formatCount(value: number, locale: UiLocale = 'en'): string {
+  return formatter(locale, Math.abs(value) >= 10_000 ? 'compact' : 'whole').format(value);
+}
+
+export function formatMoney(
+  value: number,
+  currency: string | null,
+  locale: UiLocale = 'en',
+): string {
   const magnitude = Math.abs(value);
   const body =
     magnitude >= 10_000
-      ? compact.format(magnitude)
-      : new Intl.NumberFormat('en-US', {
-          minimumFractionDigits: magnitude >= 100 ? 0 : 2,
-          maximumFractionDigits: magnitude >= 100 ? 0 : 2,
-        }).format(magnitude);
+      ? formatter(locale, 'compact').format(magnitude)
+      : formatter(locale, magnitude >= 100 ? 'whole' : 'money').format(magnitude);
   return joinMoney(moneyParts(value < 0, body, currency));
 }
 
-export function formatRatio(value: number): string {
-  return `${value.toFixed(2)}x`;
+export function formatRatio(value: number, locale: UiLocale = 'en'): string {
+  return `${formatDecimal(value, 2, locale)}x`;
 }
 
 export function formatFigure(
   value: number,
   unit: 'count' | 'currency',
   currency: string | null,
+  locale: UiLocale = 'en',
 ): string {
-  return unit === 'currency' ? formatMoney(value, currency) : formatCount(value);
+  return unit === 'currency' ? formatMoney(value, currency, locale) : formatCount(value, locale);
 }

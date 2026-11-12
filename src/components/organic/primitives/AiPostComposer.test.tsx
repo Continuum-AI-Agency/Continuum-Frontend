@@ -1,15 +1,9 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  cleanup,
-  fireEvent,
-  render as renderInDom,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import * as http from '@/lib/api/http';
 import * as oneShotPost from '@/lib/organic/oneShotPost';
 import { publishAccountsKey } from '@/lib/organic/publishTargets';
@@ -23,7 +17,12 @@ global.MutationObserver = window.MutationObserver;
 // Leaf network hooks only — never mock the calendar store or shared UI modules
 // (bun mock.module is process-wide).
 mock.module('./useOneShotEvidence', () => ({
-  useOneShotEvidence: () => ({ metrics: [], insights: [], angles: [], loading: false }),
+  useOneShotEvidence: () => ({
+    metrics: [],
+    insights: [],
+    angles: [],
+    loading: false,
+  }),
 }));
 mock.module('@/lib/creative-assets/useStudioLibraryBrowser', () => ({
   useStudioLibraryBrowser: () => ({
@@ -47,7 +46,9 @@ const candidate = (id: string, platform: string, handle: string) => ({
 });
 
 // The brand's posting accounts, already cached: the composer names them, never their ids.
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
 queryClient.setQueryData(publishAccountsKey('brand-1'), {
   accounts: [
     candidate('acct-ig', 'instagram', 'acme_a'),
@@ -105,13 +106,17 @@ describe('AiPostComposer trend seeding', () => {
 
   it('pre-selects a seeded uuid trend chip', () => {
     renderComposer([SEED_UUID]);
-    const chip = screen.getByRole('button', { name: 'Durable Trend With Real Id' });
+    const chip = screen.getByRole('button', {
+      name: 'Durable Trend With Real Id',
+    });
     expect(chip.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('filters non-uuid seeds and leaves other chips unselected', () => {
     renderComposer(['trend-slug-seeded']);
-    const chip = screen.getByRole('button', { name: 'Durable Trend With Real Id' });
+    const chip = screen.getByRole('button', {
+      name: 'Durable Trend With Real Id',
+    });
     expect(chip.getAttribute('aria-pressed')).toBe('false');
     // The slug trend is not taggable at all, so it renders no chip to select.
     expect(screen.queryByRole('button', { name: 'Seeded Slug Trend' })).toBeNull();
@@ -119,7 +124,9 @@ describe('AiPostComposer trend seeding', () => {
 
   it('starts with no selected trends when unseeded', () => {
     renderComposer();
-    const chip = screen.getByRole('button', { name: 'Durable Trend With Real Id' });
+    const chip = screen.getByRole('button', {
+      name: 'Durable Trend With Real Id',
+    });
     expect(chip.getAttribute('aria-pressed')).toBe('false');
   });
 });
@@ -159,7 +166,9 @@ describe('AiPostComposer platforms', () => {
   it('names the account each selected platform posts to, by handle', () => {
     renderComposer();
     expect(
-      screen.getByRole('button', { name: 'Change platforms — Instagram selected' }),
+      screen.getByRole('button', {
+        name: 'Change platforms — Instagram selected',
+      }),
     ).toBeTruthy();
     const target = document.querySelector('[data-composer-target="instagram"]');
     expect(target?.textContent).toBe('Instagram: @acme_a');
@@ -188,12 +197,16 @@ describe('AiPostComposer platforms', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Change platforms/ }));
     fireEvent.click(
-      within(screen.getByRole('menu')).getByRole('menuitemcheckbox', { name: 'TikTok' }),
+      within(screen.getByRole('menu')).getByRole('menuitemcheckbox', {
+        name: 'TikTok',
+      }),
     );
     expect(document.querySelector('[data-composer-target="tiktok"]')?.textContent).toBe(
       'TikTok: @acme_tt',
     );
-    fireEvent.change(screen.getByLabelText('Direction'), { target: { value: 'Launch day' } });
+    fireEvent.change(screen.getByLabelText('Direction'), {
+      target: { value: 'Launch day' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create post' }));
 
     await waitFor(() => expect(fanOut).toHaveBeenCalledTimes(1));

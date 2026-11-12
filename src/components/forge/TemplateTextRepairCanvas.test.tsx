@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import type { TemplatePreview } from '@continuum/contracts';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TEXT_REPAIR_FONT_MIME, TemplateTextRepairCanvas } from './TemplateTextRepairCanvas';
 
 test('drag distance is converted from preview pixels to the measured AEP comp', () => {
@@ -34,12 +34,26 @@ test('drag distance is converted from preview pixels to the measured AEP comp', 
   fireEvent.pointerDown(box, { pointerId: 1, clientX: 100, clientY: 100 });
   fireEvent.pointerMove(box, { pointerId: 1, clientX: 110, clientY: 105 });
   fireEvent.pointerUp(box, { pointerId: 1 });
-  expect(onMove).toHaveBeenLastCalledWith({ compId: 4, layerId: 12, dx: 20, dy: 10, dw: 0, dh: 0 });
+  expect(onMove).toHaveBeenLastCalledWith({
+    compId: 4,
+    layerId: 12,
+    dx: 20,
+    dy: 10,
+    dw: 0,
+    dh: 0,
+  });
   const handle = screen.getByRole('button', { name: 'Resize Headline' });
   fireEvent.pointerDown(handle, { pointerId: 2, clientX: 200, clientY: 200 });
   fireEvent.pointerMove(handle, { pointerId: 2, clientX: 215, clientY: 210 });
   fireEvent.pointerUp(handle, { pointerId: 2 });
-  expect(onMove).toHaveBeenLastCalledWith({ compId: 4, layerId: 12, dx: 0, dy: 0, dw: 30, dh: 20 });
+  expect(onMove).toHaveBeenLastCalledWith({
+    compId: 4,
+    layerId: 12,
+    dx: 0,
+    dy: 0,
+    dw: 30,
+    dh: 20,
+  });
 });
 
 test('dropping an available font on a measured layer keeps its pending position and size', () => {
@@ -69,7 +83,9 @@ test('dropping an available font on a measured layer keeps its pending position 
       parse={parse}
       ratio="1:1"
       comp="Main"
-      moves={{ '4:12': { compId: 4, layerId: 12, dx: 15, dy: 10, dw: 20, dh: 5 } }}
+      moves={{
+        '4:12': { compId: 4, layerId: 12, dx: 15, dy: 10, dw: 20, dh: 5 },
+      }}
       availableFonts={['Geneva']}
       onMove={onMove}
     />,
@@ -92,6 +108,8 @@ test('dropping an available font on a measured layer keeps its pending position 
     font: 'Geneva',
   });
   onMove.mockClear();
-  fireEvent.drop(box, { dataTransfer: { ...dataTransfer, getData: () => 'Unknown' } });
+  fireEvent.drop(box, {
+    dataTransfer: { ...dataTransfer, getData: () => 'Unknown' },
+  });
   expect(onMove).not.toHaveBeenCalled();
 });

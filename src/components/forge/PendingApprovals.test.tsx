@@ -14,7 +14,15 @@ import type {
   RenderApprovalDecisionResponse,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import { ApiError } from '@/lib/api/errors';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const PACKAGE = '99999999-9999-4999-8999-999999999991';
@@ -33,7 +41,12 @@ const row = (id: string, fields: Partial<RenderApproval> = {}): RenderApproval =
   adsetId: 'adset-1',
   adId: null,
   files: [
-    { url: 'https://example.com/render.png', adCopy: null, adStatus: null, landingUrl: null },
+    {
+      url: 'https://example.com/render.png',
+      adCopy: null,
+      adStatus: null,
+      landingUrl: null,
+    },
   ],
   status: 'pending',
   decidedBy: null,
@@ -114,7 +127,10 @@ const decideApprovals = mock(
       }
       approvals = approvals.map((item) =>
         item.id === id
-          ? { ...item, status: input.decision === 'approve' ? 'approved' : 'rejected' }
+          ? {
+              ...item,
+              status: input.decision === 'approve' ? 'approved' : 'rejected',
+            }
           : item,
       );
       return { id, outcome: 'decided' as const };
@@ -200,8 +216,12 @@ test('an initial approvals failure stays unknown until Retry succeeds', async ()
 });
 
 test('a failed approval refresh keeps cached decisions visible and marks them stale', async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(forgeQueryKeys.approvals(BRAND), [pending], { updatedAt: 0 });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.setQueryData(forgeQueryKeys.approvals(BRAND), [pending], {
+    updatedAt: 0,
+  });
   fetchRenderApprovals.mockImplementationOnce(async () => {
     throw new Error('approvals offline');
   });
@@ -214,7 +234,9 @@ test('a failed approval refresh keeps cached decisions visible and marks them st
 
 test('a folded list opens itself when something new waits', async () => {
   approvals = [row(ID, { status: 'rejected', decidedAt: '2026-09-15T00:05:00.000Z' })];
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   renderApprovals(client);
   await screen.findByText('Pending approvals');
   expect(sectionToggle().getAttribute('aria-expanded')).toBe('false');
@@ -225,7 +247,9 @@ test('a folded list opens itself when something new waits', async () => {
 });
 
 test('reuses a fresh approval list and invalidates it after a decision', async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const first = renderApprovals(client);
   await screen.findByText('Waiting on you');
   first.unmount();
@@ -242,7 +266,10 @@ test('reuses a fresh approval list and invalidates it after a decision', async (
 
 test('a package’s variations sit under one header with its expiry; a batch with no package stands alone', async () => {
   approvals = [
-    row('11111111-1111-4111-8111-111111111112', { packageId: PACKAGE, expiresAt: EXPIRES }),
+    row('11111111-1111-4111-8111-111111111112', {
+      packageId: PACKAGE,
+      expiresAt: EXPIRES,
+    }),
     pending,
     row('11111111-1111-4111-8111-111111111113', {
       packageId: PACKAGE,
@@ -254,7 +281,9 @@ test('a package’s variations sit under one header with its expiry; a batch wit
     }),
   ];
   renderApprovals();
-  const pack = await screen.findByRole('region', { name: 'Approval package, 2 variations' });
+  const pack = await screen.findByRole('region', {
+    name: 'Approval package, 2 variations',
+  });
   expect(within(pack).getByText('Package · 2 variations')).toBeTruthy();
   expect(within(pack).getByText('1 waiting')).toBeTruthy();
   expect(within(pack).getByText(/^Expires /)).toBeTruthy();
@@ -335,14 +364,18 @@ test('an approve answers "publishing", and the list keeps re-reading until the o
   expect(fetchRenderApprovals.mock.calls.length).toBeGreaterThanOrEqual(3);
 }, 20_000);
 
-test('a refused decision shows the backend’s reason and leaves the buttons in place', async () => {
+test('a forbidden decision shows localized permission guidance and leaves the buttons in place', async () => {
   decideRenderApproval.mockImplementationOnce(async () => {
-    throw new Error('Only an active approver in one of this package’s rooms can decide it.');
+    throw new ApiError(
+      'Only an active approver in one of this package’s rooms can decide it.',
+      403,
+      'FORBIDDEN',
+    );
   });
   renderApprovals();
   fireEvent.click(await screen.findByRole('button', { name: 'Approve and publish paused' }));
   await waitFor(() => expect(toasts).toHaveLength(1));
-  expect(toasts).toEqual(['Only an active approver in one of this package’s rooms can decide it.']);
+  expect(toasts).toEqual(['You do not have permission to perform this action.']);
   expect(screen.getAllByRole('button', { name: 'Approve and publish paused' })).toHaveLength(1);
 });
 
@@ -371,7 +404,9 @@ test('Approve all decides exactly the variations shown waiting, in one call', as
     }),
   ];
   renderApprovals();
-  const pack = await screen.findByRole('region', { name: 'Approval package, 4 variations' });
+  const pack = await screen.findByRole('region', {
+    name: 'Approval package, 4 variations',
+  });
   fireEvent.click(within(pack).getByRole('button', { name: 'Approve all 3' }));
   await waitFor(() => expect(toasts).toHaveLength(1));
   expect(decideApprovals.mock.calls).toEqual([
@@ -388,7 +423,9 @@ test('Approve all decides exactly the variations shown waiting, in one call', as
 test('Reject all says how many it could not decide, and why', async () => {
   approvals = PACKAGED.slice(0, 2).map((id) => row(id, { packageId: PACKAGE, expiresAt: EXPIRES }));
   renderApprovals();
-  const pack = await screen.findByRole('region', { name: 'Approval package, 2 variations' });
+  const pack = await screen.findByRole('region', {
+    name: 'Approval package, 2 variations',
+  });
   // Someone else approves one between the read and the click.
   approvals = approvals.map((item, index) =>
     index === 0 ? { ...item, status: 'approved' } : item,
@@ -396,7 +433,7 @@ test('Reject all says how many it could not decide, and why', async () => {
   fireEvent.click(within(pack).getByRole('button', { name: 'Reject all' }));
   await waitFor(() => expect(toasts).toHaveLength(1));
   expect(toasts).toEqual([
-    'Rejected 1. Nothing was published. 1 not decided: This batch is already approved.',
+    'Rejected 1. Nothing was published. 1 not decided. This item already has a decision.',
   ]);
 });
 
@@ -420,7 +457,13 @@ test('a card links to its render’s thread in the Library, found by the task it
   ledgerJobs = [
     {
       taskUid: 'task-2',
-      outputs: [{ ...output, assetId: '77777777-7777-4777-8777-777777777779', versionId: null }],
+      outputs: [
+        {
+          ...output,
+          assetId: '77777777-7777-4777-8777-777777777779',
+          versionId: null,
+        },
+      ],
     },
     {
       taskUid: pending.taskUid,
@@ -444,6 +487,8 @@ test('a card whose render is not on the ledger’s page has no Library link', as
   renderApprovals();
   await screen.findByText('Waiting on you');
   expect(
-    within(card('Waiting on you')).queryByRole('link', { name: /Open in Library/ }),
+    within(card('Waiting on you')).queryByRole('link', {
+      name: /Open in Library/,
+    }),
   ).toBeNull();
 });

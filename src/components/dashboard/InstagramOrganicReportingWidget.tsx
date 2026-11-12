@@ -2,6 +2,7 @@
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
 import { Flag } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import React from 'react';
 import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -30,6 +31,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   fetchOrganicAnalytics,
   isOrganicAnalyticsCancellation,
@@ -107,19 +110,36 @@ const METRIC_LABELS: Record<string, string> = {
   impressions: 'Impressions',
 };
 
-function formatCompact(value: number) {
-  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(
-    value,
-  );
+function formatCompact(value: number, locale = 'en') {
+  return new Intl.NumberFormat(locale, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
-function rangeLabel(preset: OrganicDateRangePreset) {
-  return preset.replaceAll('_', ' ');
+function rangeLabel(
+  preset: OrganicDateRangePreset,
+  translate: ReturnType<typeof useTranslations<'dashboard'>>,
+) {
+  const labels: Record<OrganicDateRangePreset, string> = {
+    today: 'Today',
+    yesterday: 'Yesterday',
+    previous_day: 'Previous day',
+    last_7d: 'Last 7 days',
+    last_14d: 'Last 14 days',
+    last_30d: 'Last 30 days',
+    last_month: 'Last month',
+    custom: 'Custom',
+  };
+  return localizeDashboardCopy(labels[preset], translate);
 }
 
-function formatPercent(value?: number) {
+function formatPercent(value?: number, locale = 'en') {
   if (value === undefined) return null;
-  const rounded = Math.abs(value).toFixed(1);
+  const rounded = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(Math.abs(value));
   return `${value >= 0 ? '+' : '-'}${rounded}%`;
 }
 
@@ -146,18 +166,24 @@ function InteractionBreakdownCharts({
 }: {
   breakdowns: Record<string, Record<string, number>>;
 }) {
+  const uiText = useTranslations('dashboard');
   const interactionMetrics = ['likes', 'comments', 'shares', 'saved'];
 
   return (
     <div className="pt-4">
-      <h3 className="mb-3 text-lg font-semibold">Interaction Breakdown by Content Type</h3>
+      <h3 className="mb-3 text-lg font-semibold">
+        {uiText('interaction_breakdown_by_content_type_0a8e1c7')}
+      </h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {interactionMetrics.map((metric) => {
           const metricData = breakdowns[metric];
           if (!metricData || Object.keys(metricData).length === 0) return null;
 
           const chartData = Object.entries(metricData).map(([type, value]) => ({
-            name: type,
+            name: localizeDashboardCopy(
+              type.charAt(0).toUpperCase() + type.slice(1).toLowerCase(),
+              uiText,
+            ),
             value,
             fill: getColorForType(type),
           }));
@@ -166,7 +192,7 @@ function InteractionBreakdownCharts({
             <div className="border border-border bg-surface" key={metric}>
               <div className="p-3">
                 <span className="mb-2 block text-sm text-muted-foreground">
-                  {METRIC_LABELS[metric]}
+                  {localizeDashboardCopy(METRIC_LABELS[metric], uiText)}
                 </span>
                 <ChartContainer config={{}} className="aspect-square h-[120px] w-full">
                   <PieChart>
@@ -214,6 +240,9 @@ export function InstagramOrganicReportingWidget({
   initialPlatform = 'instagram',
   className,
 }: Props) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('dashboard');
   const [platform, setPlatform] = React.useState<OrganicPlatform>(initialPlatform);
   const { setSelection } = useAccountSelectionStore();
   // Memoized because the account list drives a reset effect. Deriving it inline
@@ -282,12 +311,17 @@ export function InstagramOrganicReportingWidget({
         setState({ status: 'success', data });
       } catch (error) {
         if (cancelled || isOrganicAnalyticsCancellation(error)) return;
-        const message =
-          error instanceof Error ? error.message : `Unable to load ${platformLabel} metrics.`;
+        const message = getUiErrorMessage(error);
         const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
         const retryAfter = (error as { retryAfter?: number }).retryAfter;
         const errorPlatform = (error as { errorPlatform?: string }).errorPlatform;
-        setState({ status: 'error', message, errorCode, retryAfter, errorPlatform });
+        setState({
+          status: 'error',
+          message,
+          errorCode,
+          retryAfter,
+          errorPlatform,
+        });
       }
     }
 
@@ -296,7 +330,7 @@ export function InstagramOrganicReportingWidget({
       cancelled = true;
       controller.abort();
     };
-  }, [brandId, isSupportedPlatform, platform, platformLabel, selectedAccountId]);
+  }, [brandId, isSupportedPlatform, platform, platformLabel, selectedAccountId, getUiErrorMessage]);
 
   // Post-activity markers: fetched in parallel and off the critical path so the
   // KPI/trend chart renders immediately and markers fill in a moment later.
@@ -358,7 +392,7 @@ export function InstagramOrganicReportingWidget({
               <SelectItem value="instagram">
                 <span className="flex items-center gap-2">
                   <PlatformIcon platform="instagram" />
-                  <span>Instagram</span>
+                  <span>{uiText('instagram_bad57ef')}</span>
                 </span>
               </SelectItem>
               <SelectItem value="youtube">
@@ -381,9 +415,11 @@ export function InstagramOrganicReportingWidget({
               </SelectItem>
             </SelectContent>
           </Select>
-          <h3 className="truncate text-xs font-semibold sm:text-sm">{platformLabel} reporting</h3>
+          <h3 className="truncate text-xs font-semibold sm:text-sm">
+            {uiText.rich('sentence_645e2f0bd9f4', { v0: () => platformLabel })}
+          </h3>
           <span className="hidden whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground sm:inline-block">
-            {rangeLabel(DEFAULT_RANGE_PRESET)}
+            {rangeLabel(DEFAULT_RANGE_PRESET, uiText)}
           </span>
         </div>
 
@@ -394,12 +430,12 @@ export function InstagramOrganicReportingWidget({
               className="flex cursor-pointer select-none items-center gap-1 rounded-md border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground"
             >
               <Flag size={11} className="text-primary" />
-              <span className="hidden sm:inline">Posts</span>
+              <span className="hidden sm:inline">{uiText('posts_a80811c')}</span>
               <Switch
                 id="organic-reporting-post-flags"
                 checked={showFlags}
                 onCheckedChange={setShowFlags}
-                aria-label="Toggle post activity markers"
+                aria-label={uiText('toggle_post_activity_markers_fd2274b')}
               />
             </label>
           ) : null}
@@ -413,12 +449,19 @@ export function InstagramOrganicReportingWidget({
             >
               <SelectTrigger size="sm" className="h-7 text-xs">
                 <SelectValue
-                  placeholder={`Choose ${articleFor(platformLabel)} ${platformLabel} account`}
+                  placeholder={uiText('m_69ab3832ee', {
+                    v0: String(articleFor(platformLabel)),
+                    v1: String(platformLabel),
+                  })}
                 />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectLabel>{platformLabel} accounts</SelectLabel>
+                  <SelectLabel>
+                    {uiText.rich('sentence_db930774beed', {
+                      v0: () => platformLabel,
+                    })}
+                  </SelectLabel>
                   {platformAccounts.map((account) => (
                     <SelectItem
                       key={account.integrationAccountId}
@@ -445,16 +488,22 @@ export function InstagramOrganicReportingWidget({
                   className="opacity-20"
                 />
                 <h3 className="text-lg font-semibold text-foreground">
-                  {platformLabel} support coming soon
+                  {uiText.rich('sentence_0df900193b6e', {
+                    v0: () => platformLabel,
+                  })}
                 </h3>
                 <span className="block max-w-[300px] text-center text-sm text-foreground">
-                  We&apos;re still building {platformLabel} organic reporting into your dashboard.
+                  {uiText.rich('sentence_06ec09b0bef1', {
+                    v0: () => platformLabel,
+                  })}
                 </span>
               </div>
             </div>
           ) : platformAccounts.length === 0 ? (
             <span className="text-sm text-foreground">
-              No {platformLabel} accounts are linked to this brand profile.
+              {uiText.rich('sentence_e04baca356c4', {
+                v0: () => platformLabel,
+              })}
             </span>
           ) : viewState === 'error' && state.status === 'error' ? (
             <IntegrationErrorBanner
@@ -473,7 +522,9 @@ export function InstagramOrganicReportingWidget({
             />
           ) : viewState === 'chooseAccount' ? (
             <span className="text-sm text-foreground">
-              Choose {articleFor(platformLabel)} {platformLabel} account to see your report.
+              {uiText.rich('sentence_2cd81d22f844', {
+                platform: platformLabel,
+              })}
             </span>
           ) : (
             <OrganicMetricsWidgetSkeleton />
@@ -521,6 +572,9 @@ function MetricsPanel({
   expandedMetric: MetricKey | null;
   onMetricSelect: (key: MetricKey | null) => void;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('dashboard');
   const { metrics, comparison: rawComparison, range, interactionBreakdowns: rawBreakdowns } = data;
   const comparison = rawComparison as Record<string, MetricComparison> | null | undefined;
   const interactionBreakdowns = rawBreakdowns as Record<string, Record<string, number>> | undefined;
@@ -528,9 +582,17 @@ function MetricsPanel({
   const metricCards: MetricCard[] = [];
 
   if (metrics.views !== undefined)
-    metricCards.push({ key: 'views', label: METRIC_LABELS.views, value: metrics.views });
+    metricCards.push({
+      key: 'views',
+      label: METRIC_LABELS.views,
+      value: metrics.views,
+    });
   if (metrics.reach !== undefined)
-    metricCards.push({ key: 'reach', label: METRIC_LABELS.reach, value: metrics.reach });
+    metricCards.push({
+      key: 'reach',
+      label: METRIC_LABELS.reach,
+      value: metrics.reach,
+    });
   if (metrics.newFollowers !== undefined)
     metricCards.push({
       key: 'newFollowers',
@@ -557,7 +619,9 @@ function MetricsPanel({
     });
 
   const expandedKey = expandedMetric ?? 'views';
-  const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : '';
+  const expandedLabel = expandedKey
+    ? localizeDashboardCopy(METRIC_LABELS[expandedKey], uiText)
+    : '';
 
   const chartData = React.useMemo(
     () => buildDailySeries(data.trends, expandedKey),
@@ -588,7 +652,7 @@ function MetricsPanel({
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-7">
             {metricCards.map((item) => {
               const delta = comparison?.[item.key]?.percentageChange;
-              const formattedDelta = formatPercent(delta ?? undefined);
+              const formattedDelta = formatPercent(delta ?? undefined, uiLocale);
               const isActive = expandedKey === item.key;
               const deltaClass =
                 delta === undefined || delta === 0
@@ -614,11 +678,11 @@ function MetricsPanel({
                   )}
                 >
                   <span className="truncate font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-                    {item.label}
+                    {localizeDashboardCopy(item.label, uiText)}
                   </span>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-xl font-semibold leading-none tabular-nums text-foreground">
-                      {formatCompact(item.value)}
+                      {formatCompact(item.value, uiLocale)}
                     </span>
                     {formattedDelta ? (
                       <span className={cn('font-mono text-2xs tabular-nums', deltaClass)}>
@@ -638,9 +702,13 @@ function MetricsPanel({
             <div className="flex min-h-0 flex-1 flex-col p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-base font-semibold">{expandedLabel} Trend</h3>
+                  <h3 className="text-base font-semibold">
+                    {uiText.rich('sentence_55344c4eea78', {
+                      v0: () => expandedLabel,
+                    })}
+                  </h3>
                   <span className="text-xs text-muted-foreground">
-                    {range.since} → {range.until} ({rangeLabel(range.preset)})
+                    {range.since} → {range.until} ({rangeLabel(range.preset, uiText)})
                   </span>
                 </div>
               </div>
@@ -655,7 +723,7 @@ function MetricsPanel({
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={(value) =>
-                          new Date(value).toLocaleDateString('en-US', {
+                          new Date(value).toLocaleDateString(uiLocale, {
                             month: 'short',
                             day: 'numeric',
                           })
@@ -669,14 +737,22 @@ function MetricsPanel({
                         width={40}
                         tickFormatter={(value) => {
                           if (typeof value !== 'number') return String(value);
-                          return value >= 1000 ? (value / 1000).toFixed(1) + 'k' : String(value);
+                          return new Intl.NumberFormat(
+                            uiLocale,
+                            value >= 1000
+                              ? {
+                                  notation: 'compact',
+                                  maximumFractionDigits: 1,
+                                }
+                              : { maximumFractionDigits: 20 },
+                          ).format(value);
                         }}
                       />
                       <ChartTooltip
                         content={
                           <ChartTooltipContent
                             labelFormatter={(label) =>
-                              new Date(label).toLocaleDateString('en-US', {
+                              new Date(label).toLocaleDateString(uiLocale, {
                                 month: 'long',
                                 day: 'numeric',
                               })
@@ -699,7 +775,9 @@ function MetricsPanel({
                 ) : (
                   <div className="flex h-[250px] items-center justify-center">
                     <span className="text-center text-sm text-muted-foreground">
-                      Daily breakdown unavailable for {expandedLabel}.
+                      {uiText.rich('sentence_c48de4ef7d2a', {
+                        v0: () => expandedLabel,
+                      })}
                     </span>
                   </div>
                 )}

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { render } from '@/i18n/__tests__/render';
 import { PublishOptionsPanel } from './PublishOptionsPanel';
 import { formatOffset, publishesGeneratedVideo, withPlatformOptions } from './publishOptionsMap';
 
@@ -60,7 +61,12 @@ describe('publishesGeneratedVideo', () => {
         draft({
           ...generatedReel,
           publishingAssets: [
-            { role: 'primary', kind: 'video', storagePath: 'a.mp4', storageUrl: 'https://x/a.mp4' },
+            {
+              role: 'primary',
+              kind: 'video',
+              storagePath: 'a.mp4',
+              storageUrl: 'https://x/a.mp4',
+            },
           ],
         }),
       ),
@@ -92,7 +98,10 @@ describe('PublishOptionsPanel', () => {
       target: { value: '  Link in bio ' },
     });
     expect(onChange).toHaveBeenLastCalledWith(
-      { tiktok: { aiGenerated: true }, instagram: { firstComment: 'Link in bio' } },
+      {
+        tiktok: { aiGenerated: true },
+        instagram: { firstComment: 'Link in bio' },
+      },
       'typing',
     );
   });
@@ -154,7 +163,9 @@ describe('PublishOptionsPanel', () => {
     render(
       <PublishOptionsPanel
         draft={draft(generatedReel)}
-        publishOptions={{ instagram: { firstComment: 'hi', thumbnail: { offsetMs: 1500 } } }}
+        publishOptions={{
+          instagram: { firstComment: 'hi', thumbnail: { offsetMs: 1500 } },
+        }}
         platform="instagram"
         format="REEL"
         onChange={onChange}
@@ -170,7 +181,12 @@ describe('PublishOptionsPanel', () => {
     render(
       <PublishOptionsPanel
         draft={draft({ ...generatedReel, publishOptions: undefined })}
-        publishOptions={{ instagram: { firstComment: 'just saved', thumbnail: { offsetMs: 900 } } }}
+        publishOptions={{
+          instagram: {
+            firstComment: 'just saved',
+            thumbnail: { offsetMs: 900 },
+          },
+        }}
         platform="instagram"
         format="REEL"
         onChange={onChange}
@@ -199,11 +215,17 @@ describe('PublishOptionsPanel', () => {
     expect(screen.queryByText('Use this frame')).toBeNull();
 
     const video = container.querySelector('video') as HTMLVideoElement;
-    Object.defineProperty(video, 'duration', { configurable: true, value: Number.NaN });
+    Object.defineProperty(video, 'duration', {
+      configurable: true,
+      value: Number.NaN,
+    });
     fireEvent.durationChange(video);
     expect(screen.queryByLabelText('Cover frame')).toBeNull();
 
-    Object.defineProperty(video, 'duration', { configurable: true, value: 6.2 });
+    Object.defineProperty(video, 'duration', {
+      configurable: true,
+      value: 6.2,
+    });
     fireEvent.loadedMetadata(video);
     expect(frames?.getAttribute('data-cover-frames')).toBe('ready');
     expect(screen.getByLabelText('Cover frame').getAttribute('max')).toBe('6200');
@@ -293,7 +315,9 @@ describe('PublishOptionsPanel', () => {
     const onChange = mock();
     render(
       <PublishOptionsPanel
-        publishOptions={{ instagram: { trial: { graduationStrategy: 'MANUAL' } } }}
+        publishOptions={{
+          instagram: { trial: { graduationStrategy: 'MANUAL' } },
+        }}
         draft={draft()}
         platform="instagram"
         format="REEL"

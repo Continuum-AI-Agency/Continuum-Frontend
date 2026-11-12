@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 import type * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -24,11 +25,13 @@ export function PlacementNotificationCard({
   timestamp,
   onSelect,
 }: PlacementNotificationCardProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const platform = placement.platform.name;
   const content = placement.content;
-  const titleTopic = content?.titleTopic || 'New placement';
-  const format = content?.format || 'Post';
-  const timeLabel = formatRelativeTime(timestamp);
+  const titleTopic = content?.titleTopic || uiText('newPlacementDefault');
+  const format = content?.format || uiText('publishFormatPOST');
+  const timeLabel = formatRelativeTime(timestamp, undefined, uiLocale);
 
   return (
     <button

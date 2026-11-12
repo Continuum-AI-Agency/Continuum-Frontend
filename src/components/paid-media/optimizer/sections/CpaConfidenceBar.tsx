@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // One ad-set row in the "CPA per ad set" list. Two mutually-exclusive states:
 //  1. HELD — the item carries a freezeReason (budget left unchanged on purpose).
 //     We render a labeled HeldPill, NOT a $0.00 change or a CI bar, because a
@@ -12,8 +16,8 @@
 import type { CycleItemRow } from '@continuum/contracts';
 
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
-import { entityOf } from '../entityNoun';
 import { pct } from '../charts/chartScale';
+import { entityOf } from '../entityNoun';
 import { formatCpa } from '../format';
 import { HeldPill } from '../HeldPill';
 import { measuredCpa, upperBoundNote } from '../reportModel';
@@ -33,6 +37,9 @@ export function CpaConfidenceBar({
   denominatorMultiplier = 1,
   name,
 }: CpaConfidenceBarProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const freezeReason = item.diagnostics?.freezeReason;
 
   if (freezeReason) {
@@ -43,7 +50,7 @@ export function CpaConfidenceBar({
           <HeldPill reason={freezeReason} entity={entityOf(item)} />
         </div>
         <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
-          budget unchanged
+          {uiText('budget_unchanged_154afd7')}
         </span>
       </div>
     );
@@ -53,7 +60,7 @@ export function CpaConfidenceBar({
   const measured = measuredCpa(ci);
   const cpa = measured != null ? measured * denominatorMultiplier : null;
   // Zero conversions: no estimate and no upper bound — say so instead of "$0.00 · 0ev".
-  const unboundedNote = upperBoundNote(ci);
+  const unboundedNote = upperBoundNote(ci, optimizerText);
   const lo = ci?.lo != null ? ci.lo * denominatorMultiplier : null;
   const hi = ci?.hi != null ? ci.hi * denominatorMultiplier : null;
   const events = ci?.events ?? null;
@@ -85,8 +92,10 @@ export function CpaConfidenceBar({
       <span className="w-44 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {unboundedNote ?? (
           <>
-            {formatCpa(cpa, currency)}
-            {hasInterval ? ` (${formatCpa(lo, currency)}–${formatCpa(hi, currency)})` : ''}
+            {formatCpa(cpa, currency, uiLocale)}
+            {hasInterval
+              ? ` (${formatCpa(lo, currency, uiLocale)}–${formatCpa(hi, currency, uiLocale)})`
+              : ''}
             {events != null ? ` · ${events}ev` : ''}
           </>
         )}

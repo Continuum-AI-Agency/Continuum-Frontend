@@ -5,6 +5,7 @@ import {
   DOCUMENT_CATEGORY_VALUES,
   type DocumentCategory,
 } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import {
   Select,
   SelectContent,
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { categoryLabel } from './types';
 
 // Compact 5-option category picker, reused by the document row (re-tag) and the
 // upload bar (default for new uploads). For the list-level filter (which adds an
@@ -21,7 +23,7 @@ export function DocumentCategorySelect({
   value,
   onChange,
   disabled,
-  ariaLabel = 'Document category',
+  ariaLabel: providedAriaLabel,
   className,
 }: {
   value: DocumentCategory;
@@ -30,6 +32,8 @@ export function DocumentCategorySelect({
   ariaLabel?: string;
   className?: string;
 }) {
+  const tUi = useTranslations('common');
+  const ariaLabel = providedAriaLabel ?? tUi('m_582dae82d3');
   return (
     <Select
       value={value}
@@ -46,7 +50,7 @@ export function DocumentCategorySelect({
       <SelectContent>
         {DOCUMENT_CATEGORY_VALUES.map((category) => (
           <SelectItem key={category} value={category} className="text-xs">
-            {DOCUMENT_CATEGORY_LABELS[category]}
+            {categoryLabel(category, tUi)}
           </SelectItem>
         ))}
       </SelectContent>

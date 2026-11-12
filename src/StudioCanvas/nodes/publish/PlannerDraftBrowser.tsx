@@ -6,10 +6,12 @@ import type {
   OrganicCanvasTargetSearchResponse,
 } from '@continuum/contracts';
 import { AlertTriangle, ImageOff, Loader2 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { cn } from '@/lib/utils';
 import { draftWindowRange, groupDraftTargets } from './groupDraftTargets';
 import { publishingApi } from './publishingApi';
@@ -55,6 +57,11 @@ export function PlannerDraftBrowser({
   onSelect: (target: OrganicCanvasTarget) => void;
   onSwitchFormat: (format: CanvasPublishingFormat) => void;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+  const displayLocale = useUiLocale();
+
   const [query, setQuery] = useState('');
   const [statuses, setStatuses] = useState<StatusFilter[]>([]);
   const [range, setRange] = useState<RangeFilter>('any');
@@ -90,7 +97,7 @@ export function PlannerDraftBrowser({
         setCursor(result.nextCursor);
       } catch (cause) {
         if (cancelled) return;
-        setError(cause instanceof Error ? cause.message : 'Could not load drafts.');
+        setError(uiErrorText(cause));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -99,7 +106,7 @@ export function PlannerDraftBrowser({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [brandId, search]);
+  }, [brandId, search, uiErrorText]);
 
   const loadMore = useCallback(async () => {
     if (!cursor) return;
@@ -109,11 +116,11 @@ export function PlannerDraftBrowser({
       setItems((previous) => [...previous, ...result.items]);
       setCursor(result.nextCursor);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load more drafts.');
+      setError(uiErrorText(cause));
     } finally {
       setLoadingMore(false);
     }
-  }, [cursor, search]);
+  }, [cursor, search, uiErrorText]);
 
   const toggleStatus = (status: StatusFilter) =>
     setStatuses((previous) =>
@@ -122,13 +129,16 @@ export function PlannerDraftBrowser({
         : [...previous, status],
     );
 
-  const groups = useMemo(() => groupDraftTargets(items), [items]);
+  const groups = useMemo(
+    () => groupDraftTargets(items, displayLocale, translateUi('draftUnscheduled')),
+    [items, displayLocale, translateUi],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <Input
         className="nodrag h-8 text-xs"
-        placeholder="Search drafts by title or caption"
+        placeholder={translateUi('search_drafts_by_title_or_caption_9c753822')}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
@@ -154,7 +164,7 @@ export function PlannerDraftBrowser({
           className="nodrag ml-auto h-6 rounded-md border border-border bg-background px-1 text-2xs"
           value={range}
           onChange={(event) => setRange(event.target.value as RangeFilter)}
-          aria-label="Scheduled window"
+          aria-label={translateUi('scheduled_window_7c82ecfe')}
         >
           {RANGE_FILTERS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -167,14 +177,15 @@ export function PlannerDraftBrowser({
       <div className="nodrag nowheel min-h-0 flex-1 overflow-y-auto rounded-md border border-border/60">
         {loading ? (
           <p className="flex items-center gap-1.5 p-2 text-2xs text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" aria-hidden />
-            Searching…
+            <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+            {translateUi('searching_c31723ab')}{' '}
           </p>
         ) : null}
         {error ? <p className="p-2 text-2xs text-destructive">{error}</p> : null}
         {!loading && !error && items.length === 0 ? (
           <p className="p-2 text-2xs text-muted-foreground">
-            No drafts yet. Switch to New draft to create one.
+            {' '}
+            {translateUi('no_drafts_yet_switch_to_new_draft_t_e0bd8f00')}{' '}
           </p>
         ) : null}
 
@@ -204,7 +215,7 @@ export function PlannerDraftBrowser({
             disabled={loadingMore}
             onClick={loadMore}
           >
-            {loadingMore ? 'Loading…' : 'Load more'}
+            {loadingMore ? translateUi('loading_ba3bbbe1') : translateUi('load_more_ac8991ef')}
           </Button>
         ) : null}
       </div>
@@ -225,12 +236,19 @@ function DraftRow({
   onSelect: () => void;
   onSwitchFormat: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const displayLocale = useUiLocale();
+
   const formatMatches = target.format === nodeFormat;
   const scheduled = target.scheduledAt ? new Date(target.scheduledAt) : null;
   const dateLabel =
     scheduled && !Number.isNaN(scheduled.getTime())
-      ? scheduled.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-      : 'Unscheduled';
+      ? scheduled.toLocaleDateString(displayLocale, {
+          month: 'short',
+          day: 'numeric',
+        })
+      : translateUi('draftUnscheduled');
 
   return (
     <div
@@ -274,18 +292,21 @@ function DraftRow({
           <span className="mt-1 flex flex-wrap items-center gap-1">
             {target.empty ? (
               <Pill variant="outline" className="text-2xs">
-                Empty slot
+                {' '}
+                {translateUi('empty_slot_f8b4d62d')}{' '}
               </Pill>
             ) : null}
             {target.mediaCount > 0 ? (
               <Pill variant="outline" className="text-2xs">
-                {target.mediaCount} attached
+                {target.mediaCount} {translateUi('attached_55d9067e')}{' '}
               </Pill>
             ) : null}
             {target.blockers.map((blocker) => (
               <Pill key={blocker} variant="destructive" className="text-2xs">
                 <AlertTriangle className="size-2.5" aria-hidden />
-                {blocker === 'account_orphaned' ? 'Account not connected' : blocker}
+                {blocker === 'account_orphaned'
+                  ? translateUi('account_not_connected_d7087db9')
+                  : blocker}
               </Pill>
             ))}
           </span>
@@ -297,7 +318,8 @@ function DraftRow({
           className="nodrag self-start whitespace-nowrap text-2xs text-brand-primary underline"
           onClick={onSwitchFormat}
         >
-          Needs {FORMAT_LABELS[target.format]}
+          {' '}
+          {translateUi('needs_5f9bbdd1')} {FORMAT_LABELS[target.format]}
         </button>
       )}
     </div>

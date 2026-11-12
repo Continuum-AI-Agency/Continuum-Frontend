@@ -1,4 +1,10 @@
 'use client';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // Idea 8, a portfolio's Google campaigns on its detail page, under "By platform": each campaign's
 // budget before → after (G03's proposal), what it paid against the portfolio CPA goal, and
@@ -45,6 +51,7 @@ import {
   ACTION_KIND_COPY,
   type ActionKind,
   type PlatformActionsState,
+  platformActionCopy,
   usePortfolioPlatformActions,
 } from '../../platformActions/usePortfolioPlatformActions';
 import { PlatformCardBody } from '../../platformCards/PlatformCardBody';
@@ -66,7 +73,7 @@ const PORTFOLIO_CARD_VARIANTS = new Set(['google_budget_limited', 'google_bid_ta
 const WINDOW_DAYS = 14;
 
 /** "Recommend · every change waits for a person · on Google: change budgets, pause or enable". */
-export function autopilotLine(
+function autopilotLineEnglish(
   portfolio: Pick<PortfolioListItem, 'apply_mode' | 'autopilot_paused'>,
   actions: PlatformActionsState,
 ): string {
@@ -126,28 +133,37 @@ export function GooglePortfolioCampaignsView({
   actions: ReadonlyMap<string, PlatformCardAction>;
   autopilot: string;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const spend = rows.reduce((sum, row) => sum + (row.spend.value ?? 0), 0);
   const conversions = rows.some((row) => row.conversions == null && row.spend.value != null)
     ? null
     : rows.reduce((sum, row) => sum + (row.conversions ?? 0), 0);
-  const band = goalBand(costOf(spend, conversions), conversions, goal, currency);
+  const band = goalBand(costOf(spend, conversions), conversions, goal, currency, uiText);
   const code = currencyColumnSuffix(currency);
   const summary =
     rows.length === 0
-      ? 'No Google campaign in this portfolio.'
-      : `${rows.length} ${rows.length === 1 ? 'campaign' : 'campaigns'}, ${formatCurrency(spend, currency)} spent over ${windowRangeLabel(window.since, window.until)}${
-          conversions == null
-            ? ''
-            : conversions > 0
-              ? `, ${formatCurrency(spend / conversions, currency)} per conversion`
-              : ', no conversion yet'
-        }${goal.goal != null ? ` against the ${formatCurrency(goal.goal, currency)} goal` : ''}${band.label !== '—' ? ` (${band.label})` : ''}.`;
+      ? uiText('portfolioGoogleNoCampaign')
+      : uiText('portfolioGoogleSummary', {
+          count: rows.length,
+          spend: formatCurrency(spend, currency, uiLocale),
+          range: windowRangeLabel(window.since, window.until, uiLocale),
+          conversionState: conversions == null ? 'unknown' : conversions > 0 ? 'positive' : 'zero',
+          cost:
+            conversions != null && conversions > 0
+              ? formatCurrency(spend / conversions, currency, uiLocale)
+              : '',
+          hasGoal: goal.goal != null ? 'yes' : 'no',
+          goal: goal.goal != null ? formatCurrency(goal.goal, currency, uiLocale) : '',
+          hasBand: band.label !== '—' ? 'yes' : 'no',
+          band: band.label,
+        });
   return (
     <GoogleSection
       open
       summary={summary}
       testId="google-portfolio-campaigns"
-      title="Google campaigns"
+      title={uiText('google_campaigns_e332da3')}
     >
       <p className="text-muted-foreground text-xs" data-testid="google-portfolio-autopilot">
         {autopilot}
@@ -158,22 +174,22 @@ export function GooglePortfolioCampaignsView({
             <thead>
               <tr>
                 <th className={TH} scope="col">
-                  Campaign
+                  {uiText('campaign_268286d')}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Budget / day{code}
+                  {uiText.rich('sentence_d314840f042f', { v0: code })}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Spend{code}
+                  {uiText('helper_ffca96014e32', { v0: code })}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Cost / conv.{code}
+                  {uiText.rich('sentence_1376b7fc3ded', { v0: code })}
                 </th>
                 <th className={TH} scope="col">
-                  vs goal
+                  {uiText('vs_goal_597a6ce')}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Google target
+                  {uiText('google_target_5c3ee99')}
                 </th>
               </tr>
             </thead>
@@ -195,13 +211,13 @@ export function GooglePortfolioCampaignsView({
                     <Before
                       after={
                         row.budgetAfter != null
-                          ? formatCurrencyInColumn(row.budgetAfter, currency)
+                          ? formatCurrencyInColumn(row.budgetAfter, currency, uiLocale)
                           : null
                       }
                       before={
                         <FigureText
                           figure={row.budgetBefore}
-                          format={(value) => formatCurrencyInColumn(value, currency)}
+                          format={(value) => formatCurrencyInColumn(value, currency, uiLocale)}
                         />
                       }
                     />
@@ -209,12 +225,12 @@ export function GooglePortfolioCampaignsView({
                   <td className={TD_NUM}>
                     <FigureText
                       figure={row.spend}
-                      format={(value) => formatCurrencyInColumn(value, currency)}
+                      format={(value) => formatCurrencyInColumn(value, currency, uiLocale)}
                     />
                   </td>
                   <td className={TD_NUM}>
                     {row.cost != null ? (
-                      formatCurrencyInColumn(row.cost, currency)
+                      formatCurrencyInColumn(row.cost, currency, uiLocale)
                     ) : (
                       <Missing
                         reason={
@@ -234,12 +250,12 @@ export function GooglePortfolioCampaignsView({
                     <Before
                       after={
                         row.targetAfter != null
-                          ? targetLabel(row.targetAfter, row.targetKind, currency)
+                          ? targetLabel(row.targetAfter, row.targetKind, currency, uiLocale)
                           : null
                       }
                       before={
                         row.target.value != null ? (
-                          targetLabel(row.target.value, row.targetKind, currency)
+                          targetLabel(row.target.value, row.targetKind, currency, uiLocale)
                         ) : (
                           <Missing reason={row.target.reason} />
                         )
@@ -262,7 +278,7 @@ export function GooglePortfolioCampaignsView({
       {cards.length > 0 ? (
         <details className="group" data-testid="google-portfolio-cards">
           <summary className={TEXT_DISCLOSURE}>
-            {cards.length} {cards.length === 1 ? 'proposal' : 'proposals'} to approve or reject
+            {uiText.rich('sentence_958dc89dac00', { count: cards.length })}
           </summary>
           <div className="mt-2 space-y-4">
             {cards.map((candidate) => {
@@ -304,6 +320,9 @@ export function GooglePortfolioCampaigns(props: Props) {
 }
 
 function GooglePortfolioCampaignsRead({ brandId, portfolio, lastCompleteDay = null }: Props) {
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const membersState = usePortfolioMembers(portfolio.id);
   const members = googleMembers(membersState);
   const accounts = useOptimizerAdAccounts(brandId).data;
@@ -320,8 +339,9 @@ function GooglePortfolioCampaignsRead({ brandId, portfolio, lastCompleteDay = nu
         data-testid="google-portfolio-error"
         role="status"
       >
-        This portfolio's Google campaigns could not be read:{' '}
-        {campaigns.error instanceof Error ? campaigns.error.message : 'unknown error'}
+        {uiText.rich('sentence_f3379fa59ef6', {
+          v0: formatUiError(campaigns.error),
+        })}
       </p>
     );
   }
@@ -352,18 +372,64 @@ function GooglePortfolioCampaignsRead({ brandId, portfolio, lastCompleteDay = nu
   return (
     <GooglePortfolioCampaignsView
       actions={cardActionsOf(cards)}
-      autopilot={autopilotLine(portfolio, actionsState)}
+      autopilot={autopilotLine(portfolio, actionsState, uiText, uiLocale)}
       cards={cards}
       currency={currency}
       goal={goal}
-      rows={portfolioCampaignViews({
-        members,
-        read: campaigns.data,
-        goal,
-        cards,
-        currency,
-      })}
+      rows={portfolioCampaignViews(
+        {
+          members,
+          read: campaigns.data,
+          goal,
+          cards,
+          currency,
+        },
+        uiText,
+      )}
       window={campaigns.data.range}
     />
   );
+}
+
+export function autopilotLine(
+  portfolio: Pick<PortfolioListItem, 'apply_mode' | 'autopilot_paused'>,
+  actions: PlatformActionsState,
+  t?: ScaleCopy,
+  locale: UiLocale = 'en',
+): string {
+  if (!t) return autopilotLineEnglish(portfolio, actions);
+  const mode = t('portfolioGoogleAutopilotMode', {
+    mode: portfolio.apply_mode,
+    paused: portfolio.autopilot_paused ? 'yes' : 'no',
+  });
+  const allowed =
+    actions.status === 'ready'
+      ? actions.platforms.find((row) => row.platform === 'google_ads')?.allowed
+      : null;
+  const state =
+    actions.status === 'loading'
+      ? 'loading'
+      : actions.status !== 'ready'
+        ? 'unavailable'
+        : allowed == null
+          ? 'mixed'
+          : allowed.length === 0
+            ? 'none'
+            : 'ready';
+  const labels = (allowed ?? []).map((kind) =>
+    Object.hasOwn(ACTION_KIND_COPY, kind)
+      ? platformActionCopy(kind as ActionKind, t).label.toLocaleLowerCase(locale)
+      : t('platformUnknownAction'),
+  );
+  return t('portfolioGoogleAutopilotAllowed', {
+    mode,
+    state,
+    actions:
+      locale === 'en'
+        ? labels.join(', ')
+        : new Intl.ListFormat(locale, {
+            style: 'long',
+            type: 'conjunction',
+          }).format(labels),
+  });
 }

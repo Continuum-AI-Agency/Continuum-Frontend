@@ -8,6 +8,7 @@
 //   - drafts: GET /api/organic/calendar/drafts?brandId (Backend), every draft of the brand, as
 //     the calendar loads them; the week is sliced locally.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocale } from 'next-intl';
 import { useCallback, useMemo } from 'react';
 import { z } from 'zod';
 import { useCalendarPostedContent } from '@/components/organic/hooks/useCalendarPostedContent';
@@ -54,6 +55,7 @@ export type OrganicWeekLoad = {
 };
 
 export function useOrganicWeek(brandId: string, accounts: SnapshotAccountRef[]): OrganicWeekLoad {
+  const uiLocale = useLocale();
   const queryClient = useQueryClient();
   const enabled = accounts.length > 0;
   // Today's Monday, fixed for the life of the mount so the cache key does not move.
@@ -83,15 +85,22 @@ export function useOrganicWeek(brandId: string, accounts: SnapshotAccountRef[]):
   const week = useMemo(
     () =>
       drafts.data && !posts.isLoading
-        ? buildOrganicWeek({ now: new Date(), posts: posts.posts, drafts: drafts.data.drafts })
+        ? buildOrganicWeek({
+            now: new Date(),
+            posts: posts.posts,
+            drafts: drafts.data.drafts,
+            locale: uiLocale,
+          })
         : null,
-    [drafts.data, posts.isLoading, posts.posts],
+    [drafts.data, posts.isLoading, posts.posts, uiLocale],
   );
 
   const { retry: retryPosts } = posts;
   const retry = useCallback(() => {
     retryPosts();
-    void queryClient.invalidateQueries({ queryKey: homeOrganicDraftsKey(brandId) });
+    void queryClient.invalidateQueries({
+      queryKey: homeOrganicDraftsKey(brandId),
+    });
   }, [brandId, queryClient, retryPosts]);
 
   return {

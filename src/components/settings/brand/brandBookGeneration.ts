@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type GenerationTranslator = ReturnType<typeof useTranslations<'settings'>>;
+
 import type {
   AgentRequestPayload,
   OnboardingPreviewEvent,
@@ -24,23 +28,48 @@ const SECTION_LABELS: Record<PreviewSection, string> = {
   first_impression: 'first impression',
 };
 
-export function brandBookSectionLabel(section: PreviewSection): string {
-  return SECTION_LABELS[section] ?? section;
+export function brandBookSectionLabel(
+  section: PreviewSection,
+  translate?: GenerationTranslator,
+): string {
+  const keys = {
+    brand_profile: 'generationBrandProfile',
+    voice: 'generationVoice',
+    audience: 'generationAudience',
+    website: 'generationWebsite',
+    business: 'generationBusiness',
+    strategy: 'generationStrategy',
+    guidelines: 'generationGuidelines',
+    readiness: 'generationReadiness',
+    first_impression: 'generationFirstImpression',
+  } as const;
+  return translate ? translate(keys[section]) : (SECTION_LABELS[section] ?? section);
 }
 
 // Maps a preview stream event to a short, human progress line for the panel.
 // Returns null for events that don't warrant a visible status change (deltas,
 // pings, per-section payloads, errors surfaced via toast instead).
-export function brandBookGenerationStatus(event: OnboardingPreviewEvent): string | null {
+export function brandBookGenerationStatus(
+  event: OnboardingPreviewEvent,
+  translate?: GenerationTranslator,
+): string | null {
   switch (event.type) {
     case 'run':
-      return 'Starting analysis…';
+      return translate ? translate('generationStarting') : 'Starting analysis…';
     case 'status':
       return event.status === 'running'
-        ? `Analyzing ${brandBookSectionLabel(event.section)}…`
+        ? translate
+          ? translate('generationAnalyzing', {
+              section: brandBookSectionLabel(event.section, translate),
+            })
+          : `Analyzing ${brandBookSectionLabel(event.section)}…`
         : null;
     case 'complete':
-      return event.status === 'error' ? null : 'Finalizing your Brand Book…';
+      return event.status === 'error'
+        ? null
+        : translate
+          ? translate('generationFinalizing')
+          : 'Finalizing your Brand Book…';
     default:
       return null;
   }

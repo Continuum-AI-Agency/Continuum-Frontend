@@ -65,7 +65,12 @@ export const DECISION_TIER_LABEL: Record<DecisionTier, string> = {
 };
 
 /** How many cards each size shows before "Show more". One is the top card. */
-export const STACK_LIMIT: Record<BoardModuleSize, number> = { s: 1, m: 3, l: 5, w: 4 };
+export const STACK_LIMIT: Record<BoardModuleSize, number> = {
+  s: 1,
+  m: 3,
+  l: 5,
+  w: 4,
+};
 
 export type DecisionStep = {
   label: string;
@@ -254,7 +259,7 @@ export function figureOf(candidate: AccountCandidate, card: PlatformCard | null)
       card.budget_per_day != null
         ? ` Budget ${formatCurrency(card.budget_per_day, card.currency)}/day.`
         : '';
-    return `Google says: ${card.reasons.map(googleReasonInWords).join('; ')}.${budget}`;
+    return `Google says: ${card.reasons.map((code) => googleReasonInWords(code)).join('; ')}.${budget}`;
   }
   const basis = candidate.impact_basis.trim();
   return basis.length > 0 ? basis : null;
@@ -365,7 +370,12 @@ export function decisionCardsOf(input: DecisionCardsInput): DecisionCard[] {
 }
 
 export function decisionCounts(cards: readonly DecisionCard[]): Record<DecisionFilter, number> {
-  const counts: Record<DecisionFilter, number> = { all: cards.length, fix: 0, grow: 0, clean: 0 };
+  const counts: Record<DecisionFilter, number> = {
+    all: cards.length,
+    fix: 0,
+    grow: 0,
+    clean: 0,
+  };
   for (const card of cards) counts[card.group] += 1;
   return counts;
 }
@@ -387,7 +397,10 @@ export function cardsInFilter(
 // What the module reads
 // ---------------------------------------------------------------------------
 
-export type ApprovalMaps = { families: Record<string, string>; insights: Record<string, string> };
+export type ApprovalMaps = {
+  families: Record<string, string>;
+  insights: Record<string, string>;
+};
 
 type ApprovableFamily = (typeof APPROVABLE_FAMILIES)[number];
 

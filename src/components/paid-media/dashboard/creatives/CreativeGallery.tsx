@@ -2,7 +2,9 @@
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
 import { RotateCw, Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
@@ -55,20 +57,6 @@ type CreativeGalleryProps = {
   onOpenDetail: (detail: OpenCreativeDetail) => void;
 };
 
-const SORT_OPTIONS: ReadonlyArray<{ key: CreativeSortKey; label: string }> = [
-  { key: 'spend', label: 'Spend' },
-  { key: 'roas', label: 'ROAS' },
-  { key: 'ctr', label: 'CTR' },
-  { key: 'clicks', label: 'Clicks' },
-  { key: 'name', label: 'Name' },
-];
-
-const STATUS_OPTIONS: ReadonlyArray<{ key: CreativeStatusFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'paused', label: 'Paused' },
-];
-
 const GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5';
 
 export function CreativeGallery({
@@ -93,14 +81,48 @@ export function CreativeGallery({
   logs,
   onOpenDetail,
 }: CreativeGalleryProps) {
+  const uiText = useTranslations('scale');
+  const SORT_OPTIONS: ReadonlyArray<{ key: CreativeSortKey; label: string }> = useMemo(
+    () => [
+      { key: 'spend', label: uiText('spend_85f3d55') },
+      { key: 'roas', label: uiText('roas_b81bd97') },
+      { key: 'ctr', label: uiText('ctr_07fce34') },
+      { key: 'clicks', label: uiText('clicks_921fc98') },
+      { key: 'name', label: uiText('name_dcd1d52') },
+    ],
+    [uiText],
+  );
+
+  const STATUS_OPTIONS: ReadonlyArray<{
+    key: CreativeStatusFilter;
+    label: string;
+  }> = useMemo(
+    () => [
+      { key: 'all', label: uiText('all_a52ace4') },
+      { key: 'active', label: uiText('active_9234069') },
+      { key: 'paused', label: uiText('paused_e159b06') },
+    ],
+    [uiText],
+  );
+
   const [query, setQuery] = React.useState('');
   const [sortKey, setSortKey] = React.useState<CreativeSortKey>('spend');
   const [statusFilter, setStatusFilter] = React.useState<CreativeStatusFilter>('all');
   const [selectedOnly, setSelectedOnly] = React.useState(false);
-  const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId: accountId });
+  const { freshUrlById, recover } = usePaidCreativeRecovery({
+    brandId,
+    adAccountId: accountId,
+  });
 
   const visible = React.useMemo(
-    () => filterAndSortCreatives(ads, { query, sortKey, statusFilter, selectedOnly, selectedIds }),
+    () =>
+      filterAndSortCreatives(ads, {
+        query,
+        sortKey,
+        statusFilter,
+        selectedOnly,
+        selectedIds,
+      }),
     [ads, query, sortKey, statusFilter, selectedOnly, selectedIds],
   );
 
@@ -119,20 +141,29 @@ export function CreativeGallery({
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">
-            Creatives{focusedAdSetName ? ` · ${focusedAdSetName}` : ''}
+            {uiText.rich('sentence_8fd835228bfd', {
+              hasName: focusedAdSetName ? 'yes' : 'no',
+              name: focusedAdSetName ?? '',
+            })}
           </h3>
           <p className="text-xs text-muted-foreground">
-            Select up to {selectionLimit} creatives to overlay KPI trends.
+            {uiText.rich('sentence_39d3c820cfb5', { v0: selectionLimit })}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {loadState === 'success' ? (
             <span>
-              {visible.length} of {ads.length}
+              {uiText.rich('sentence_e900eefa5ce5', {
+                v0: visible.length,
+                v1: ads.length,
+              })}
             </span>
           ) : null}
           <span className="rounded border border-border/70 bg-muted/20 px-2 py-0.5">
-            {selectionCount}/{selectionLimit} selected
+            {uiText.rich('sentence_db2858861c75', {
+              v0: selectionCount,
+              v1: selectionLimit,
+            })}
           </span>
         </div>
       </header>
@@ -143,15 +174,19 @@ export function CreativeGallery({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search creatives..."
-            aria-label="Search creatives"
+            placeholder={uiText('search_creatives_017075c')}
+            aria-label={uiText('search_creatives_75be15e')}
             className="h-8 pl-7 text-xs"
           />
         </div>
 
         <Select value={sortKey} onValueChange={(value) => setSortKey(value as CreativeSortKey)}>
-          <SelectTrigger size="sm" className="w-[140px] text-xs" aria-label="Sort creatives">
-            <span className="text-muted-foreground">Sort:</span>
+          <SelectTrigger
+            size="sm"
+            className="w-[140px] text-xs"
+            aria-label={uiText('sort_creatives_c1e8dbf')}
+          >
+            <span className="text-muted-foreground">{uiText('sort_8f3e7ea')}</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -163,7 +198,7 @@ export function CreativeGallery({
           </SelectContent>
         </Select>
 
-        <ButtonGroup aria-label="Filter by status">
+        <ButtonGroup aria-label={uiText('filter_by_status_94d5a77')}>
           {STATUS_OPTIONS.map((option) => (
             <Button
               key={option.key}
@@ -187,7 +222,7 @@ export function CreativeGallery({
           onClick={() => setSelectedOnly((value) => !value)}
           className="text-xs"
         >
-          Selected only
+          {uiText('selected_only_e624c53')}
         </Button>
       </div>
 
@@ -201,7 +236,7 @@ export function CreativeGallery({
           />
           <Button variant="outline" size="xs" onClick={onRetry}>
             <RotateCw className="mr-1 h-3 w-3" />
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </div>
       ) : isBusy ? (
@@ -214,12 +249,16 @@ export function CreativeGallery({
           ))}
         </div>
       ) : ads.length === 0 ? (
-        <EmptyState message={`No creatives returned for this ${segmentLabelSingular}.`} />
+        <EmptyState
+          message={uiText('creativeGalleryEmpty', {
+            segment: segmentLabelSingular,
+          })}
+        />
       ) : visible.length === 0 ? (
-        <EmptyState message="No creatives match your filters.">
+        <EmptyState message={uiText('no_creatives_match_your_filters_61a433a')}>
           {hasFilters ? (
             <Button variant="outline" size="xs" onClick={resetFilters}>
-              Clear filters
+              {uiText('clear_filters_7179ea0')}
             </Button>
           ) : null}
         </EmptyState>

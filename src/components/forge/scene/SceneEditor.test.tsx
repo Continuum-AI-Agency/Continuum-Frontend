@@ -96,10 +96,20 @@ mock.module('@/lib/library/templateSources', () => ({
   ...realSources,
   fetchTemplateSources: async () => [{ assetId: ASSET, displayName: 'Summer Scene', parse: null }],
 }));
-mock.module('@/lib/ai-studio/elements', () => ({ ...realElements, signLibraryAsset }));
+mock.module('@/lib/ai-studio/elements', () => ({
+  ...realElements,
+  signLibraryAsset,
+}));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { SceneEditor } from './SceneEditor';
 import { PREVIEW_DEBOUNCE_MS } from './useScenePreview';
 
@@ -120,7 +130,9 @@ afterAll(() => {
 });
 
 function mount() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <SceneEditor brandId={BRAND} assetId={ASSET} />
@@ -180,7 +192,9 @@ describe('SceneEditor', () => {
 
   test('Render final posts the changes, polls the job and shows the finished file', async () => {
     mount();
-    const box = await screen.findByRole('textbox', { name: 'Title text default' });
+    const box = await screen.findByRole('textbox', {
+      name: 'Title text default',
+    });
     fireEvent.change(box, { target: { value: 'Black Friday' } });
     fireEvent.click(screen.getByRole('button', { name: 'Render final' }));
 
@@ -213,10 +227,14 @@ describe('SceneEditor', () => {
     await screen.findByRole('heading', { level: 1, name: 'Summer Scene' });
     expect(screen.queryByRole('radiogroup', { name: 'Render as' })).toBeNull();
 
-    const motion = screen.getByRole('button', { name: 'Motion · CamWide · 320×180' });
+    const motion = screen.getByRole('button', {
+      name: 'Motion · CamWide · 320×180',
+    });
     fireEvent.click(motion);
     const still = await screen.findByRole('radio', { name: 'Still · frame 1' });
-    const animation = screen.getByRole('radio', { name: 'Animation · 12 frames' });
+    const animation = screen.getByRole('radio', {
+      name: 'Animation · 12 frames',
+    });
     expect(animation.getAttribute('aria-checked')).toBe('true');
     expect(still.getAttribute('aria-checked')).toBe('false');
 
@@ -249,7 +267,9 @@ describe('SceneEditor', () => {
     mount();
     fireEvent.click(await screen.findByRole('button', { name: 'Motion · CamWide · 320×180' }));
     const still = await screen.findByRole('radio', { name: 'Still · frame 1' });
-    const animation = screen.getByRole('radio', { name: 'Animation · 1000 frames' });
+    const animation = screen.getByRole('radio', {
+      name: 'Animation · 1000 frames',
+    });
     expect(still.getAttribute('aria-checked')).toBe('true');
     expect(animation.hasAttribute('data-disabled')).toBe(true);
     expect(
@@ -257,6 +277,8 @@ describe('SceneEditor', () => {
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Render final' }));
     await waitFor(() => expect(requestSceneRender).toHaveBeenCalledTimes(1));
-    expect(requestSceneRender.mock.calls[0]?.[1]?.overrides).toEqual({ mediaType: 'image' });
+    expect(requestSceneRender.mock.calls[0]?.[1]?.overrides).toEqual({
+      mediaType: 'image',
+    });
   });
 });

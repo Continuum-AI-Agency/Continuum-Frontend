@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { useMediaQuery } from './useMediaQuery';
 

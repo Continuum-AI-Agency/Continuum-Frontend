@@ -6,8 +6,18 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ApiRenderOutput } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
 import { useState } from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import commonEs from '../../../messages/common/es.json';
+import commonPt from '../../../messages/common/pt-BR.json';
+import forgeEs from '../../../messages/forge/es.json';
+import forgePt from '../../../messages/forge/pt-BR.json';
 import {
   FormatPreview,
   fileForFormat,
@@ -20,9 +30,27 @@ afterEach(cleanup);
 
 const COMP = 'Producto individual con descuento';
 const FORMATS: PreviewFormat[] = [
-  { id: 'wide', label: `${COMP} 16:9`, ratio: '16:9', width: 1920, height: 1080 },
-  { id: 'square', label: `${COMP} 1:1`, ratio: '1:1', width: 1080, height: 1080 },
-  { id: 'story', label: `${COMP} 9:16`, ratio: '9:16', width: null, height: null },
+  {
+    id: 'wide',
+    label: `${COMP} 16:9`,
+    ratio: '16:9',
+    width: 1920,
+    height: 1080,
+  },
+  {
+    id: 'square',
+    label: `${COMP} 1:1`,
+    ratio: '1:1',
+    width: 1080,
+    height: 1080,
+  },
+  {
+    id: 'story',
+    label: `${COMP} 9:16`,
+    ratio: '9:16',
+    width: null,
+    height: null,
+  },
 ];
 
 function Harness({
@@ -77,8 +105,20 @@ describe('FormatPreview', () => {
       <FormatPreview
         label="Preview"
         formats={[
-          { id: 'fijo', label: 'Fijo 9:16', ratio: '9:16', width: 1080, height: 1920 },
-          { id: 'animado', label: 'Animado 9:16', ratio: '9:16', width: 1080, height: 1920 },
+          {
+            id: 'fijo',
+            label: 'Fijo 9:16',
+            ratio: '9:16',
+            width: 1080,
+            height: 1920,
+          },
+          {
+            id: 'animado',
+            label: 'Animado 9:16',
+            ratio: '9:16',
+            width: 1080,
+            height: 1920,
+          },
         ]}
         value="fijo"
         onValueChange={() => undefined}
@@ -106,7 +146,14 @@ describe('FormatPreview', () => {
     expect(badge()).toBe('Rendered · 2h ago');
 
     rerender(
-      <Harness frame={() => ({ mode: 'rendered', at, stale: true, node: <img alt="file" /> })} />,
+      <Harness
+        frame={() => ({
+          mode: 'rendered',
+          at,
+          stale: true,
+          node: <img alt="file" />,
+        })}
+      />,
     );
     expect(badge()).toBe('Rendered · before latest edits');
 
@@ -234,7 +281,9 @@ describe('previewFormats', () => {
             comp: { name: 'Square', width: 1080, height: 1080 },
           },
         ],
-        parse: { ratios: [{ ratio: '9:16', width: 1080, height: 1920, comps: ['Story'] }] },
+        parse: {
+          ratios: [{ ratio: '9:16', width: 1080, height: 1920, comps: ['Story'] }],
+        },
         ratios: ['16:9'],
       }).map(({ id, width }) => [id, width]),
     ).toEqual([['square', 1080]]);
@@ -242,7 +291,9 @@ describe('previewFormats', () => {
     expect(
       previewFormats({
         outputs: [],
-        parse: { ratios: [{ ratio: '9:16', width: 1080, height: 1920, comps: ['Story'] }] },
+        parse: {
+          ratios: [{ ratio: '9:16', width: 1080, height: 1920, comps: ['Story'] }],
+        },
         ratios: ['16:9'],
       }).map(({ id, label, height }) => [id, label, height]),
     ).toEqual([['Story', 'Story', 1920]]);
@@ -251,4 +302,40 @@ describe('previewFormats', () => {
       { id: '16:9', label: '16:9', ratio: '16:9', width: null, height: null },
     ]);
   });
+});
+
+describe('FormatPreview locale-independent frame states', () => {
+  for (const entry of [
+    {
+      locale: 'pt-BR' as const,
+      messages: { common: commonPt, forge: forgePt },
+      none: 'Sem layout medido para este formato',
+      estimate: 'Estimativa · estrutura',
+    },
+    {
+      locale: 'es' as const,
+      messages: { common: commonEs, forge: forgeEs },
+      none: 'Sin diseño medido para este formato',
+      estimate: 'Estimación · estructura',
+    },
+  ]) {
+    test(`${entry.locale}: localizes chrome while keeping canonical modes and source names`, () => {
+      const wrap = (frame: (format: PreviewFormat) => PreviewFrame) => (
+        <NextIntlClientProvider locale={entry.locale} timeZone="UTC" messages={entry.messages}>
+          <Harness frame={frame} />
+        </NextIntlClientProvider>
+      );
+      const view = render(wrap(() => ({ mode: 'none' })));
+      expect(screen.getByText(entry.none)).toBeTruthy();
+      expect(screen.getByRole('button', { name: `${COMP} 16:9` })).toBeTruthy();
+      view.rerender(
+        wrap(() => ({
+          mode: 'estimate',
+          node: <svg aria-label="source geometry" />,
+        })),
+      );
+      expect(screen.getByText(entry.estimate)).toBeTruthy();
+      expect(screen.getByLabelText('source geometry')).toBeTruthy();
+    });
+  }
 });

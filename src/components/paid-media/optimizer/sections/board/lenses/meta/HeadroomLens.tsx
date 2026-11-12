@@ -1,4 +1,10 @@
 'use client';
+import {
+  useLocale as useAuditLocale,
+  useTranslations as useBetaTranslations,
+  useLocale as useNumberLocale,
+} from 'next-intl';
+import { resultWordsUi } from './metaLensModel';
 
 // Delivery headroom (Meta twin of G06): CPM against cost per result, one point per branch (or
 // campaign), each as large as its spend and colored by its cost against the goal, with the goal
@@ -47,6 +53,8 @@ import { useMetaRanking } from './metaReads';
 const TEST_ID = 'board-module-headroom';
 
 export default function HeadroomLens({ ctx, slot }: BoardModuleProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const campaigns = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_campaigns');
   const mix = useMemo(
     () =>
@@ -59,7 +67,7 @@ export default function HeadroomLens({ ctx, slot }: BoardModuleProps) {
       slot={slot}
       state={frameStateOf(campaigns.status, Boolean(model && model.points.length > 0))}
       testId={TEST_ID}
-      title="Delivery headroom"
+      title={betaUiText('beta_f24c4a7d1889')}
     >
       {campaigns.status !== 'ready' ? (
         <ReadNote size={slot.size} state={campaigns} testId={TEST_ID} what="campaigns" />
@@ -68,8 +76,13 @@ export default function HeadroomLens({ ctx, slot }: BoardModuleProps) {
       ) : (
         <LensNote testId={`${TEST_ID}-empty`}>
           {mix
-            ? `No ${mix.result?.en.many ?? 'results'} in the last 30 days to place against CPM.`
-            : 'No campaign spent in the last 30 days.'}
+            ? betaUiText('beta_d9e7643b37e7', {
+                value0: String(
+                  (mix.result ? resultWordsUi(mix.result.kind, betaUiText).many : undefined) ??
+                    'results',
+                ),
+              })
+            : betaUiText('beta_57b869c75f73')}
         </LensNote>
       )}
     </MetaFrame>
@@ -91,8 +104,8 @@ const PLOTS: Record<'small' | 'full', Omit<Plot, 'width'>> = {
 };
 
 /** An axis tick: the symbol and the round figure; the axis title names the code. */
-function tickText(value: number, currency: string | null): string {
-  return `${currencySymbol(currency)}${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+function tickText(value: number, currency: string | null, locale: string = 'en-US'): string {
+  return `${currencySymbol(currency)}${value.toLocaleString(locale, { maximumFractionDigits: 2 })}`;
 }
 
 export function HeadroomView({
@@ -106,6 +119,12 @@ export function HeadroomView({
   size: BoardModuleSize;
   currency: string | null;
 }) {
+  const auditLocale = useAuditLocale();
+
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const small = size === 's';
   const host = useRef<HTMLDivElement>(null);
   const width = useMeasuredWidth(host, small ? 260 : 560);
@@ -130,8 +149,13 @@ export function HeadroomView({
     r: (small ? 3 : 5) + (small ? 3 : 5) * Math.sqrt(point.spend / maxSpend),
     text: point.label,
   }));
-  const words = mix.result?.en;
-  const goalText = goal != null ? `goal ${tickText(goal, currency)}` : '';
+  const words = mix.result ? resultWordsUi(mix.result.kind, betaUiText) : null;
+  const goalText =
+    goal != null
+      ? betaUiText('beta_f4da73c83194', {
+          value0: String(tickText(goal, currency, auditLocale)),
+        })
+      : '';
   const labels = small
     ? null
     : placeScatterLabels({
@@ -148,11 +172,14 @@ export function HeadroomView({
   const tipOf = (point: HeadroomPoint) => (
     <span className="flex flex-col gap-0.5">
       <span className="font-medium">{point.label}</span>
-      <span>CPM {formatCurrency(point.cpm, currency)}</span>
+      <span>CPM {formatCurrency(point.cpm, currency, numberLocale)}</span>
       <span>
-        {formatCurrency(point.costPerResult, currency)} per {words?.one ?? 'result'}
+        {formatCurrency(point.costPerResult, currency, numberLocale)}{' '}
+        {betaUiText('beta_b427c3dec904')} {words?.one ?? betaUiText('beta_f6a214f7a5fc')}
       </span>
-      <span>{formatCurrency(point.spend, currency)} spend</span>
+      <span>
+        {formatCurrency(point.spend, currency, numberLocale)} {betaUiText('beta_f64a33ff88c3')}
+      </span>
     </span>
   );
 
@@ -175,7 +202,10 @@ export function HeadroomView({
       />
       <div className="relative w-full" ref={host}>
         <svg
-          aria-label={`CPM against cost per ${words?.one ?? 'result'}, one point per ${mix.by}`}
+          aria-label={betaUiText('beta_0c9ad31f06b9', {
+            value0: String(words?.one ?? betaUiText('metaResultSingle')),
+            value1: String(mix.by),
+          })}
           className="block w-full overflow-visible"
           height={plot.height}
           role="img"
@@ -199,7 +229,7 @@ export function HeadroomView({
                     x={plot.left - 6}
                     y={Y(tick) + 4}
                   >
-                    {tickText(tick, currency)}
+                    {tickText(tick, currency, auditLocale)}
                   </text>
                 </g>
               ))}
@@ -214,7 +244,7 @@ export function HeadroomView({
                   x={X(tick)}
                   y={plot.height - plot.bottom + 18}
                 >
-                  {tickText(tick, currency)}
+                  {tickText(tick, currency, auditLocale)}
                 </text>
               ))}
           {small ? null : (
@@ -229,7 +259,7 @@ export function HeadroomView({
                 CPM{unit}
               </text>
               <text className="fill-muted-foreground" fontSize={12} x={4} y={14}>
-                Cost per {words?.one ?? 'result'}
+                {betaUiText('beta_9221bd5cd9df')} {words?.one ?? betaUiText('beta_f6a214f7a5fc')}
                 {unit}
               </text>
             </>
@@ -286,7 +316,11 @@ export function HeadroomView({
                 initial={reduce ? false : { r: 0, opacity: 0 }}
                 stroke="var(--card)"
                 strokeWidth={2}
-                transition={{ duration: 0.45, delay: index * 0.06, ease: ENTER_EASE }}
+                transition={{
+                  duration: 0.45,
+                  delay: index * 0.06,
+                  ease: ENTER_EASE,
+                }}
               />
             </g>
           ))}
@@ -310,30 +344,58 @@ export function HeadroomView({
       </div>
       {small ? null : (
         <>
-          <Callouts currency={currency} model={model} unitOne={words?.one ?? 'result'} />
+          <Callouts
+            currency={currency}
+            model={model}
+            unitOne={words?.one ?? betaUiText('metaResultSingle')}
+          />
           <LegendRow>
-            <LegendItem color={BOARD_COLOR.below} label={`Under ${referenceName}`} variant="dot" />
+            <LegendItem
+              color={BOARD_COLOR.below}
+              label={betaUiText('beta_d1d4fc8b319e', {
+                value0: String(referenceName),
+              })}
+              variant="dot"
+            />
             {model.points.some((point) => point.tone === 'mid') ? (
-              <LegendItem color={BOARD_COLOR.mid} label={`On ${referenceName}`} variant="dot" />
+              <LegendItem
+                color={BOARD_COLOR.mid}
+                label={betaUiText('beta_b10e9eb28dc0', {
+                  value0: String(referenceName),
+                })}
+                variant="dot"
+              />
             ) : null}
-            <LegendItem color={BOARD_COLOR.above} label={`Over ${referenceName}`} variant="dot" />
+            <LegendItem
+              color={BOARD_COLOR.above}
+              label={betaUiText('beta_fad31ed8fa01', {
+                value0: String(referenceName),
+              })}
+              variant="dot"
+            />
             {goal != null ? (
               <LegendItem
-                label={`Goal ${formatCurrency(goal, currency)} per ${words?.one ?? 'result'}`}
+                label={betaUiText('beta_966faaa3d319', {
+                  value0: String(formatCurrency(goal, currency, numberLocale)),
+                  value1: String(words?.one ?? betaUiText('metaResultSingle')),
+                })}
                 variant="dashed"
               />
             ) : null}
           </LegendRow>
           {model.unplaced.length > 0 ? (
             <LensNote testId={`${TEST_ID}-unplaced`}>
-              No {words?.many ?? 'results'} to place:{' '}
-              {model.unplaced.map((row) => row.label).join(', ')}.
+              {betaUiText('beta_1ea442a134b2')} {words?.many ?? betaUiText('beta_c099142bc318')}{' '}
+              {betaUiText('beta_b9a4b8e1228b')} {model.unplaced.map((row) => row.label).join(', ')}.
             </LensNote>
           ) : null}
           {model.smallCount > 0 ? (
             <LensNote>
-              {model.smallCount} smaller {mix.by === 'branch' ? 'groups' : 'campaigns'} left off the
-              chart.
+              {model.smallCount} {betaUiText('beta_e823da61abfb')}{' '}
+              {mix.by === 'branch'
+                ? betaUiText('beta_4ed379d418bb')
+                : betaUiText('beta_7a4c3d21f9c6')}{' '}
+              {betaUiText('beta_5c4c8c0b6008')}
             </LensNote>
           ) : null}
           <Takeaway testId={`${TEST_ID}-takeaway`} text={model.takeaway} />
@@ -352,27 +414,31 @@ function Callouts({
   currency: string | null;
   unitOne: string;
 }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const { cheapest, best } = model;
   if (!cheapest || !best) return null;
   return (
     <dl className="grid gap-1 text-xs sm:grid-cols-2" data-testid={`${TEST_ID}-callouts`}>
       <div className="flex min-w-0 items-baseline gap-1.5">
-        <dt className="shrink-0 text-muted-foreground">Cheapest to reach</dt>
+        <dt className="shrink-0 text-muted-foreground">{betaUiText('beta_1ed837d9a1a7')}</dt>
         <dd className="min-w-0 truncate">
-          <span className="font-medium">{cheapest.label}</span> · CPM{' '}
+          <span className="font-medium">{cheapest.label}</span> {betaUiText('beta_44edc01a0114')}{' '}
           <span {...figureProps('board.headroom.cheapest.cpm', cheapest.cpm, currency, 'd30')}>
-            {formatCurrency(cheapest.cpm, currency)}
+            {formatCurrency(cheapest.cpm, currency, numberLocale)}
           </span>
         </dd>
       </div>
       <div className="flex min-w-0 items-baseline gap-1.5">
-        <dt className="shrink-0 text-muted-foreground">Converts best</dt>
+        <dt className="shrink-0 text-muted-foreground">{betaUiText('beta_fcc5df5a7763')}</dt>
         <dd className="min-w-0 truncate">
           <span className="font-medium">{best.label}</span> ·{' '}
           <span {...figureProps('board.headroom.best.cost', best.costPerResult, currency, 'd30')}>
-            {formatCurrency(best.costPerResult, currency)}
+            {formatCurrency(best.costPerResult, currency, numberLocale)}
           </span>{' '}
-          per {unitOne}
+          {betaUiText('beta_b427c3dec904')} {unitOne}
         </dd>
       </div>
     </dl>

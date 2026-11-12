@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import type { HomeOrganicPublishedPost, HomeOrganicWeekData } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import esOrganic from '../../../../../../messages/organic/es.json';
+import ptOrganic from '../../../../../../messages/organic/pt-BR.json';
 import { organicWeekQuery, organicWeekReadFor, reachRowsOf, topPostLine } from './organicWeekRead';
 
 const post = (over: Partial<HomeOrganicPublishedPost> = {}): HomeOrganicPublishedPost => ({
@@ -36,8 +39,17 @@ const data = (
   posts: HomeOrganicPublishedPost[],
   over: Partial<HomeOrganicWeekData> = {},
 ): HomeOrganicWeekData => ({
-  week: { since: '2026-11-02', until: '2026-11-08', timeZone: 'America/Mexico_City' },
-  baseline: { since: '2026-10-05', until: '2026-11-01', days: 28, statistic: 'median' },
+  week: {
+    since: '2026-11-02',
+    until: '2026-11-08',
+    timeZone: 'America/Mexico_City',
+  },
+  baseline: {
+    since: '2026-10-05',
+    until: '2026-11-01',
+    days: 28,
+    statistic: 'median',
+  },
   days: weekDays(posts),
   accounts: [],
   totals: { published: posts.length, scheduled: 0, drafts: 0, withReach: 1 },
@@ -125,4 +137,29 @@ describe('organicWeekQuery', () => {
       timeZone: 'America/Mexico_City',
     });
   });
+});
+
+describe('localized organic read chrome', () => {
+  for (const [locale, organic] of [
+    ['pt-BR', ptOrganic],
+    ['es', esOrganic],
+  ] as const) {
+    it(`localizes reach labels in ${locale} without changing stored post data`, () => {
+      const t = createTranslator({
+        locale,
+        namespace: 'organic',
+        messages: { organic },
+      });
+      const stored = data([
+        post({ isTrial: true }),
+        post({ postId: 'missing', reach: null, reachLift: null }),
+      ]);
+      const before = JSON.stringify(stored);
+      const rows = reachRowsOf(stored, t, locale);
+      expect(rows[0]?.note).toContain(locale === 'pt-BR' ? 'Reel de teste' : 'Reel de prueba');
+      expect(rows[1]?.reach).toBe(locale === 'pt-BR' ? 'Ainda não medido' : 'Aún no medido');
+      expect(rows[0]?.post.permalink).toBe('https://instagram.com/p/1');
+      expect(JSON.stringify(stored)).toBe(before);
+    });
+  }
 });

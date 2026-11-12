@@ -1,4 +1,5 @@
 import { mock } from 'bun:test';
+import { render } from '@/i18n/__tests__/render';
 
 // Same mocks as ActiveBrandProvider.test.tsx (the provider reads the session and the toast
 // context). Full-module mocks only: a partial one would strip exports for later files.
@@ -7,7 +8,7 @@ mock.module('@/hooks/useSession', () => ({
 }));
 
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import { ActiveBrandProvider } from '@/components/providers/ActiveBrandProvider';
 import { BrandBillingPanel, brandToOffer } from './BrandBillingPanel';
 

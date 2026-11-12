@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { HomeCreativeSpotlightData, OrganicWinners } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { PaidCreativeReadState } from '@/hooks/usePaidCreativeReport';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { TWO_WINNERS } from '../flywheel/__fixtures__/organicWinners';
 import {
@@ -15,7 +16,10 @@ import { creativeTile, homeContext } from './__fixtures__/homeContext';
 
 // `mock.module` replaces a module for the whole process, so this file runs on its own; every mock
 // spreads the real module.
-type ReportRead = PaidCreativeReadState & { isLoading: boolean; isError: boolean };
+type ReportRead = PaidCreativeReadState & {
+  isLoading: boolean;
+  isError: boolean;
+};
 let reportRead: ReportRead = {
   status: 'ready',
   report: EASY_FIT_REPORT,
@@ -27,16 +31,34 @@ const refetchReport = mock(() => Promise.resolve());
 const realReport = await import('@/hooks/usePaidCreativeReport');
 mock.module('@/hooks/usePaidCreativeReport', () => ({
   ...realReport,
-  usePaidCreativeReport: () => ({ ...reportRead, error: null, refetch: refetchReport }),
+  usePaidCreativeReport: () => ({
+    ...reportRead,
+    error: null,
+    refetch: refetchReport,
+  }),
 }));
 
 let winners: OrganicWinners | undefined = TWO_WINNERS;
 const realWinners = await import('@/hooks/useOrganicWinners');
 mock.module('@/hooks/useOrganicWinners', () => ({
   ...realWinners,
-  useOrganicWinners: () => ({ data: winners, isLoading: false, isError: false, refetch: () => {} }),
-  usePromotionAdsets: () => ({ data: undefined, isLoading: true, isError: false }),
-  usePromoteWinner: () => ({ mutate: () => {}, isPending: false, isError: false, data: undefined }),
+  useOrganicWinners: () => ({
+    data: winners,
+    isLoading: false,
+    isError: false,
+    refetch: () => {},
+  }),
+  usePromotionAdsets: () => ({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+  }),
+  usePromoteWinner: () => ({
+    mutate: () => {},
+    isPending: false,
+    isError: false,
+    data: undefined,
+  }),
 }));
 
 // The per-ad live Graph preview is forbidden on the Home: if anything reached for it, this spy
@@ -49,9 +71,14 @@ mock.module('@/lib/api/jainaCreativePreview.client', () => ({
 }));
 
 // The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
-let spotlightLoad: HomeReadLoad<HomeCreativeSpotlightData> = { status: 'unavailable' };
+let spotlightLoad: HomeReadLoad<HomeCreativeSpotlightData> = {
+  status: 'unavailable',
+};
 const realHomeRead = await import('../../useHomeRead');
-mock.module('../../useHomeRead', () => ({ ...realHomeRead, useHomeRead: () => spotlightLoad }));
+mock.module('../../useHomeRead', () => ({
+  ...realHomeRead,
+  useHomeRead: () => spotlightLoad,
+}));
 
 const { default: CreativeTile } = await import('./Tile');
 const { default: CreativeModule } = await import('./Module');
@@ -185,7 +212,9 @@ describe('Creative module', () => {
   it('never prints a money figure when the Meta accounts hold two currencies', () => {
     render(
       <CreativeModule
-        ctx={homeContext({ adAccounts: [EASY_FIT_ACCOUNT, SECOND_USD_ACCOUNT] })}
+        ctx={homeContext({
+          adAccounts: [EASY_FIT_ACCOUNT, SECOND_USD_ACCOUNT],
+        })}
         spotlight={readySpotlight([EASY_FIT_ACCOUNT, SECOND_USD_ACCOUNT])}
       />,
     );
@@ -274,7 +303,12 @@ describe('Creative tile with the Spotlight read', () => {
         spend: 400,
         spendShare: 0.4,
         impressions: 1000,
-        costPerResult: { value: 20, results: 20, kpi: 'leads', label: 'cost per lead' },
+        costPerResult: {
+          value: 20,
+          results: 20,
+          kpi: 'leads',
+          label: 'cost per lead',
+        },
         hookRate: 0.25,
         hookRateUnavailable: null,
         frequency: 1.5,
@@ -295,7 +329,12 @@ describe('Creative tile with the Spotlight read', () => {
         spend: 100,
         spendShare: 0.1,
         impressions: 500,
-        costPerResult: { value: null, results: 0, kpi: 'leads', label: 'cost per lead' },
+        costPerResult: {
+          value: null,
+          results: 0,
+          kpi: 'leads',
+          label: 'cost per lead',
+        },
         hookRate: null,
         hookRateUnavailable: 'not_video',
         frequency: null,

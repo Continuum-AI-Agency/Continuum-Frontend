@@ -6,6 +6,11 @@
 // A pacing row reads its OWN latest run — the same `pacingVerdict` the portfolio page
 // reads — and names the result ITS metric buys. No verdict, no line.
 
+import type { useTranslations } from 'next-intl';
+import { accountDetectorLabel } from '@/lib/paid-media/accountPresentation';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 import type { CycleRunPacing, PortfolioListItem } from '@continuum/contracts';
 import { ACCOUNT_DETECTOR_META, getOptimizationMetricDefinition } from '@continuum/contracts';
 import { resultWords } from './account/overviewModel';
@@ -24,6 +29,7 @@ export type PortfolioPacingLine = {
 export function portfolioPacingLine(
   portfolio: Pick<PortfolioListItem, 'objective' | 'target_metric'>,
   pacing: CycleRunPacing | null | undefined,
+  uiTranslate?: ScaleCopy,
 ): PortfolioPacingLine | null {
   const verdict = pacingVerdict(pacing);
   if (!verdict.status || verdict.ratio == null) return null;
@@ -31,14 +37,21 @@ export function portfolioPacingLine(
   const drift = Math.round((verdict.ratio - 1) * 100);
   return {
     label:
-      verdict.status === 'on_track' ? 'On plan' : ACCOUNT_DETECTOR_META.account_pacing.label,
+      verdict.status === 'on_track'
+        ? uiTranslate
+          ? uiTranslate('portfolioPacingOnPlan')
+          : 'On plan'
+        : uiTranslate
+          ? accountDetectorLabel('account_pacing', uiTranslate)
+          : ACCOUNT_DETECTOR_META.account_pacing.label,
     pct: Math.abs(drift),
     side: drift > 0 ? 'over' : drift < 0 ? 'under' : 'on',
-    noun: resultWords(metric.kpiField, metric.resultLabel).many,
+    noun: resultWords(metric.kpiField, metric.resultLabel, uiTranslate).many,
   };
 }
 
 /** "20% over plan" / "10% under plan" / "on plan" — the words after the figure. */
-export function pacingSideLabel(line: PortfolioPacingLine): string {
+export function pacingSideLabel(line: PortfolioPacingLine, uiTranslate?: ScaleCopy): string {
+  if (uiTranslate) return uiTranslate('portfolioPacingSide', { side: line.side });
   return line.side === 'on' ? 'on plan' : `${line.side} plan`;
 }

@@ -21,6 +21,7 @@ import {
   useNodeId,
 } from '@xyflow/react';
 import { ChevronDown, Clock, Copy, Download, Play, Trash2, Video } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { Fragment, useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -114,6 +115,8 @@ export function VideoGenBlock({
   type,
   selected,
 }: NodeProps<ReactFlowNode<VideoGenNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const updateNode = useStudioStore((state) => state.updateNode);
   const setEdges = useStudioStore((state) => state.setEdges);
   const triggerSave = useStudioStore((state) => state.triggerSave);
@@ -181,9 +184,9 @@ export function VideoGenBlock({
     hasReferenceInput,
   );
   const durationNote = lockedByResolution
-    ? `${resolution} renders at 8 seconds only — switch to 720p for 4s or 6s.`
+    ? translateUi('videoResolutionDurationNote', { resolution })
     : lockedByReference
-      ? 'Veo renders 8 seconds only when a reference image or frame is attached — detach it for 4s or 6s.'
+      ? translateUi('veo_renders_8_seconds_only_when_a_r_7ec91003')
       : VIDEO_GENERATOR_DURATION_NOTE;
 
   const [isHovered, setIsHovered] = useState(false);
@@ -220,12 +223,14 @@ export function VideoGenBlock({
       if (dropped > 0) {
         show({
           title,
-          description: `${dropped} incompatible connection${dropped === 1 ? '' : 's'} removed. Undo to restore.`,
+          description: translateUi('value0_incompatible_connection_valu_b8120d23', {
+            count: Number(dropped),
+          }),
           variant: 'warning',
         });
       }
     },
-    [id, setEdges, show, takeSnapshot, triggerSave, updateNode],
+    [id, setEdges, show, takeSnapshot, triggerSave, updateNode, translateUi],
   );
 
   const handleModelChange = useCallback(
@@ -298,7 +303,10 @@ export function VideoGenBlock({
           patch as Record<string, unknown>,
           current as unknown as Record<string, unknown>,
         );
-        return { ...node, data: { ...current, ...coerced } as VideoGenNodeData };
+        return {
+          ...node,
+          data: { ...current, ...coerced } as VideoGenNodeData,
+        };
       });
       triggerSave();
     },
@@ -375,7 +383,11 @@ export function VideoGenBlock({
 
   const handleRun = useCallback(async () => {
     console.info('[studio] run video node', { nodeId: id, model });
-    await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
+    await executeWorkflow(executionControls, {
+      targetNodeId: id,
+      clearDownstream: false,
+      brandId,
+    });
   }, [executionControls, id, brandId, model]);
 
   const fileBaseName = `video-${id}`;
@@ -385,10 +397,15 @@ export function VideoGenBlock({
   // The model can hand back a ratio other than the one requested (and legacy nodes
   // were all born 16:9), so the box re-snaps to what actually came back. Box only —
   // `data.aspectRatio` is the request and a generationSignature field.
-  useSnapToVideoAspect({ nodeId: id, src: displayVideo, bounds: VIDEO_GENERATOR_NODE_BOUNDS });
+  useSnapToVideoAspect({
+    nodeId: id,
+    src: displayVideo,
+    bounds: VIDEO_GENERATOR_NODE_BOUNDS,
+  });
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
+      translate: translateUi,
       data: displayVideo as string | Blob | undefined,
       baseName: fileBaseName,
       fallbackExtension: 'mp4',
@@ -396,12 +413,12 @@ export function VideoGenBlock({
 
     if (!success) {
       show({
-        title: 'Download unavailable',
-        description: 'Run the node to generate a video before downloading.',
+        title: translateUi('download_unavailable_2f180e49'),
+        description: translateUi('run_the_node_to_generate_a_video_be_b9d88bf3'),
         variant: 'warning',
       });
     }
-  }, [displayVideo, fileBaseName, show]);
+  }, [displayVideo, fileBaseName, show, translateUi]);
 
   return (
     <TooltipProvider>
@@ -414,7 +431,11 @@ export function VideoGenBlock({
                 'relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow',
                 isSelectedByOther && 'selected-by-other',
               )}
-              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              style={
+                {
+                  '--other-user-color': selectingUser?.color,
+                } as React.CSSProperties
+              }
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
             >
@@ -448,7 +469,7 @@ export function VideoGenBlock({
                         <div className="nodrag nopan relative flex h-6 items-center gap-1 rounded-full border border-border/70 bg-background/90 pl-2 pr-1 text-[0.65rem] font-medium text-foreground shadow-sm backdrop-blur-sm">
                           <Clock className="h-3 w-3 shrink-0 opacity-70" />
                           <select
-                            aria-label="Clip duration in seconds"
+                            aria-label={translateUi('clip_duration_in_seconds_40aeba88')}
                             data-testid="studio-video-duration-select"
                             value={durationSeconds}
                             title={durationNote}
@@ -471,8 +492,8 @@ export function VideoGenBlock({
                                 {seconds}s
                                 {lockedToEightSeconds && seconds !== 8
                                   ? lockedByResolution
-                                    ? ' — 720p only'
-                                    : ' — no references'
+                                    ? translateUi('720p_only_520f8ede')
+                                    : translateUi('no_references_15dfe09a')
                                   : ''}
                               </option>
                             ))}
@@ -512,7 +533,7 @@ export function VideoGenBlock({
                   size="icon"
                   className="h-7 w-7"
                   onClick={handleRun}
-                  title="Run Node"
+                  title={translateUi('run_node_79567976')}
                 >
                   <Play className="h-4 w-4" />
                 </Button>
@@ -548,8 +569,8 @@ export function VideoGenBlock({
                             event.stopPropagation();
                             handleDownload();
                           }}
-                          title="Download Output"
-                          aria-label="Download generated video"
+                          title={translateUi('download_output_b86e2324')}
+                          aria-label={translateUi('download_generated_video_d30b5aa4')}
                         >
                           <Download className="h-4 w-4" />
                         </Button>
@@ -561,8 +582,10 @@ export function VideoGenBlock({
                             <EmptyMedia variant="icon" className="bg-default text-secondary">
                               <Video />
                             </EmptyMedia>
-                            <EmptyTitle>No Video</EmptyTitle>
-                            <EmptyDescription>Generated video will appear here</EmptyDescription>
+                            <EmptyTitle>{translateUi('no_video_4c649d9f')}</EmptyTitle>
+                            <EmptyDescription>
+                              {translateUi('generated_video_will_appear_here_3acbc223')}
+                            </EmptyDescription>
                           </EmptyHeader>
                         </Empty>
                       </div>
@@ -573,7 +596,9 @@ export function VideoGenBlock({
 
               <div
                 className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
-                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                style={{
+                  ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                }}
               >
                 <Tooltip>
                   <TooltipTrigger
@@ -587,7 +612,7 @@ export function VideoGenBlock({
                     }
                   />
                   <TooltipContent>
-                    <p>Generated Video Output</p>
+                    <p>{translateUi('generated_video_output_a3e31423')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -610,13 +635,16 @@ export function VideoGenBlock({
                           className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                          Prompt
+                          {' '}
+                          {translateUi('prompt_5c391238')}{' '}
                         </span>
                       </div>
                     }
                   />
                   <TooltipContent>
-                    <p>Prompt: {promptConnections}/1</p>
+                    <p>
+                      {translateUi('prompt_35261535')} {promptConnections}/1
+                    </p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -637,13 +665,16 @@ export function VideoGenBlock({
                           className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                         />
                         <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                          Negative Prompt
+                          {' '}
+                          {translateUi('negative_prompt_e2203ddc')}{' '}
                         </span>
                       </div>
                     }
                   />
                   <TooltipContent>
-                    <p>Negative Prompt: {negativeConnections}/1</p>
+                    <p>
+                      {translateUi('negative_prompt_23440c89')} {negativeConnections}/1
+                    </p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -666,13 +697,16 @@ export function VideoGenBlock({
                               className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                             />
                             <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                              First Frame
+                              {' '}
+                              {translateUi('first_frame_c5cf3d9e')}{' '}
                             </span>
                           </div>
                         }
                       />
                       <TooltipContent>
-                        <p>First Frame: {firstFrameConnections}/1</p>
+                        <p>
+                          {translateUi('first_frame_bcdde107')} {firstFrameConnections}/1
+                        </p>
                       </TooltipContent>
                     </Tooltip>
 
@@ -693,13 +727,16 @@ export function VideoGenBlock({
                               className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                             />
                             <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                              Last Frame
+                              {' '}
+                              {translateUi('last_frame_1f3800e3')}{' '}
                             </span>
                           </div>
                         }
                       />
                       <TooltipContent>
-                        <p>Last Frame: {lastFrameConnections}/1</p>
+                        <p>
+                          {translateUi('last_frame_34f01c9e')} {lastFrameConnections}/1
+                        </p>
                       </TooltipContent>
                     </Tooltip>
                   </>
@@ -723,7 +760,13 @@ export function VideoGenBlock({
                             className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                           />
                           <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                            Ref Images{imageLimit ? ` (Max ${imageLimit})` : ''}
+                            {' '}
+                            {translateUi('ref_images_b23274eb')}
+                            {imageLimit
+                              ? translateUi('max_value0_ae063e23', {
+                                  value0: String(imageLimit),
+                                })
+                              : ''}
                           </span>
                           {refImageCount > 0 && (
                             <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-3xs px-1 rounded-full font-bold shadow-sm pointer-events-none">
@@ -735,7 +778,9 @@ export function VideoGenBlock({
                     />
                     <TooltipContent>
                       <p>
-                        Reference Images: {refImageCount}/{imageLimit ?? '∞'}
+                        {' '}
+                        {translateUi('reference_images_34e9d320')} {refImageCount}/
+                        {imageLimit ?? '∞'}
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -759,13 +804,16 @@ export function VideoGenBlock({
                             className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                           />
                           <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                            Ref Video (Max 1)
+                            {' '}
+                            {translateUi('ref_video_max_1_353289d0')}{' '}
                           </span>
                         </div>
                       }
                     />
                     <TooltipContent>
-                      <p>Reference Video: {referenceVideoConnections}/1</p>
+                      <p>
+                        {translateUi('reference_video_fc7e2734')} {referenceVideoConnections}/1
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -783,13 +831,13 @@ export function VideoGenBlock({
           }
         />
         <ContextMenuContent className="w-56">
-          <ContextMenuLabel>Video Generator</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('video_generator_a67b2a8e')}</ContextMenuLabel>
           {/* Provider is a HEADING here, not another hover level. Six models behind
               Model → Google → Veo 3.1 was three hover-throughs to change one setting
               (#260), and it left this picker shaped differently from the image node's,
               which has always been flat. */}
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{translateUi('model_5e2c614c')}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-52">
               {MODEL_GROUPS.map((group) => (
                 <Fragment key={group.provider}>
@@ -818,7 +866,7 @@ export function VideoGenBlock({
             </ContextMenuSubContent>
           </ContextMenuSub>
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Reference Mode</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{translateUi('reference_mode_ecff97a1')}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {availableReferenceModes.map((option) => (
                 <ContextMenuCheckboxItem
@@ -833,7 +881,7 @@ export function VideoGenBlock({
             </ContextMenuSubContent>
           </ContextMenuSub>
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Aspect Ratio</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{translateUi('aspect_ratio_556f85ef')}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
               {['16:9', '9:16'].map((value) => (
                 <ContextMenuCheckboxItem
@@ -847,7 +895,7 @@ export function VideoGenBlock({
             </ContextMenuSubContent>
           </ContextMenuSub>
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Resolution</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{translateUi('resolution_d4055faf')}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
               {getVideoGeneratorResolutions(model).map((value) => (
                 <ContextMenuCheckboxItem
@@ -862,26 +910,22 @@ export function VideoGenBlock({
           </ContextMenuSub>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
-            <Play className="mr-2 h-4 w-4" />
-            Run Node
+            <Play className="mr-2 h-4 w-4" /> {translateUi('run_node_79567976')}{' '}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" />
-            Download Output
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

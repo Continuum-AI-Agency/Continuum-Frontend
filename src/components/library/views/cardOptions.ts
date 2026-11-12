@@ -1,3 +1,6 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import type libraryMessages from '../../../../messages/library/en.json';
 // Grid card presentation a user picks once and keeps (media.library_view_preferences
 // → config.card): how big a card is, what shape its media box takes, and which facts
 // sit under it. Built-in field keys are fixed words; any other key is a custom field id.
@@ -17,29 +20,41 @@ export type CardViewOptions = NonNullable<CollectionViewConfig['card']>;
 export type CardSize = NonNullable<CardViewOptions['size']>;
 export type CardAspect = NonNullable<CardViewOptions['aspect']>;
 
-export const CARD_SIZES: readonly { value: CardSize; label: string; minWidthPx: number }[] = [
-  { value: 'sm', label: 'Small', minWidthPx: 150 },
-  { value: 'md', label: 'Medium', minWidthPx: 210 },
-  { value: 'lg', label: 'Large', minWidthPx: 300 },
+export const CARD_SIZES: readonly {
+  value: CardSize;
+  labelKey: keyof typeof libraryMessages;
+  minWidthPx: number;
+}[] = [
+  { value: 'sm', labelKey: 'small_5263293f', minWidthPx: 150 },
+  { value: 'md', labelKey: 'medium_8e588cd1', minWidthPx: 210 },
+  { value: 'lg', labelKey: 'large_ab80540d', minWidthPx: 300 },
 ];
 
 export const CARD_ASPECTS: readonly {
   value: CardAspect;
-  label: string;
+  labelKey: keyof typeof libraryMessages;
   className: string | null;
 }[] = [
   // null = the asset's own ratio, which is what the grid did before card options.
-  { value: 'original', label: 'Original', className: null },
-  { value: 'square', label: 'Square', className: 'aspect-square' },
-  { value: 'portrait', label: 'Portrait', className: 'aspect-[4/5]' },
-  { value: 'landscape', label: 'Landscape', className: 'aspect-video' },
+  { value: 'original', labelKey: 'original_88d759ea', className: null },
+  { value: 'square', labelKey: 'square_c11092bc', className: 'aspect-square' },
+  {
+    value: 'portrait',
+    labelKey: 'portrait_f71094c3',
+    className: 'aspect-[4/5]',
+  },
+  {
+    value: 'landscape',
+    labelKey: 'landscape_e658d3ae',
+    className: 'aspect-video',
+  },
 ];
 
 export type LibraryFieldGroup = 'file' | 'video' | 'audio' | 'document' | 'workflow';
 
 type BuiltInField = {
   key: string;
-  label: string;
+  labelKey: keyof typeof libraryMessages;
   group: LibraryFieldGroup;
   /** The info panel lists the field for these kinds even while it is empty. */
   kinds?: readonly MediaKind[];
@@ -52,39 +67,119 @@ const VISUAL: readonly MediaKind[] = ['image', 'video'];
 // Every built-in fact a card, a List column or the info panel can show — Frame.io's
 // built-in fields as far as we hold them (Rating and Assignee are custom fields here).
 export const BUILT_IN_CARD_FIELDS = [
-  { key: 'title', label: 'Title', group: 'file' },
-  { key: 'fileName', label: 'Source filename', group: 'file' },
-  { key: 'kind', label: 'File type', group: 'file' },
-  { key: 'format', label: 'Format', group: 'file' },
-  { key: 'size', label: 'File size', group: 'file' },
-  { key: 'dimensions', label: 'Resolution', group: 'file', kinds: VISUAL },
-  { key: 'duration', label: 'Duration', group: 'file', kinds: AV },
-  { key: 'pageCount', label: 'Page count', group: 'document' },
-  { key: 'source', label: 'Source', group: 'file' },
-  { key: 'uploader', label: 'Uploader', group: 'file' },
-  { key: 'created', label: 'Date uploaded', group: 'file' },
-  { key: 'updated', label: 'Updated', group: 'file' },
-  { key: 'videoCodec', label: 'Video codec', group: 'video', kinds: VIDEO },
-  { key: 'frameRate', label: 'Frame rate', group: 'video', kinds: VIDEO },
-  { key: 'bitRate', label: 'Bit rate', group: 'video', kinds: AV },
-  { key: 'videoBitRate', label: 'Video bit rate', group: 'video', kinds: VIDEO },
-  { key: 'colorSpace', label: 'Color space', group: 'video', kinds: VISUAL },
-  { key: 'dynamicRange', label: 'Dynamic range', group: 'video', kinds: VIDEO },
-  { key: 'bitDepth', label: 'Bit depth', group: 'video', kinds: VISUAL },
-  { key: 'hasAlpha', label: 'Alpha channel', group: 'video', kinds: VISUAL },
-  { key: 'startTimecode', label: 'Start time', group: 'video', kinds: VIDEO },
-  { key: 'endTimecode', label: 'End time', group: 'video', kinds: VIDEO },
-  { key: 'audioCodec', label: 'Audio codec', group: 'audio', kinds: AV },
-  { key: 'audioBitRate', label: 'Audio bit rate', group: 'audio', kinds: AV },
-  { key: 'audioChannels', label: 'Channels', group: 'audio', kinds: AV },
-  { key: 'audioSampleRate', label: 'Sample rate', group: 'audio', kinds: AV },
-  { key: 'audioBitDepth', label: 'Audio bit depth', group: 'audio', kinds: AV },
-  { key: 'review', label: 'Status', group: 'workflow' },
-  { key: 'tags', label: 'Keywords', group: 'workflow' },
-  { key: 'comments', label: 'Comment count', group: 'workflow' },
-  { key: 'notes', label: 'Notes', group: 'workflow' },
-  { key: 'transcript', label: 'Transcript', group: 'workflow', kinds: AV },
-  { key: 'hasLocation', label: 'Location (GPS)', group: 'file' },
+  { key: 'title', labelKey: 'title_7e8cd205', group: 'file' },
+  { key: 'fileName', labelKey: 'source_filename_3fc6620c', group: 'file' },
+  { key: 'kind', labelKey: 'file_type_ea1df052', group: 'file' },
+  { key: 'format', labelKey: 'format_2f343666', group: 'file' },
+  { key: 'size', labelKey: 'file_size_ff044294', group: 'file' },
+  {
+    key: 'dimensions',
+    labelKey: 'resolution_d4055faf',
+    group: 'file',
+    kinds: VISUAL,
+  },
+  { key: 'duration', labelKey: 'duration_4fc52a3c', group: 'file', kinds: AV },
+  { key: 'pageCount', labelKey: 'page_count_2905c1b8', group: 'document' },
+  { key: 'source', labelKey: 'source_0e570ca6', group: 'file' },
+  { key: 'uploader', labelKey: 'uploader_29ca9741', group: 'file' },
+  { key: 'created', labelKey: 'date_uploaded_f58bc77b', group: 'file' },
+  { key: 'updated', labelKey: 'updated_3a5ecca1', group: 'file' },
+  {
+    key: 'videoCodec',
+    labelKey: 'video_codec_8f405ca2',
+    group: 'video',
+    kinds: VIDEO,
+  },
+  {
+    key: 'frameRate',
+    labelKey: 'frame_rate_68e19e4c',
+    group: 'video',
+    kinds: VIDEO,
+  },
+  { key: 'bitRate', labelKey: 'bit_rate_0087fbde', group: 'video', kinds: AV },
+  {
+    key: 'videoBitRate',
+    labelKey: 'video_bit_rate_f728abc7',
+    group: 'video',
+    kinds: VIDEO,
+  },
+  {
+    key: 'colorSpace',
+    labelKey: 'color_space_e7a97086',
+    group: 'video',
+    kinds: VISUAL,
+  },
+  {
+    key: 'dynamicRange',
+    labelKey: 'dynamic_range_9a6fcfdb',
+    group: 'video',
+    kinds: VIDEO,
+  },
+  {
+    key: 'bitDepth',
+    labelKey: 'bit_depth_cc62f2e8',
+    group: 'video',
+    kinds: VISUAL,
+  },
+  {
+    key: 'hasAlpha',
+    labelKey: 'alpha_channel_eb7c327a',
+    group: 'video',
+    kinds: VISUAL,
+  },
+  {
+    key: 'startTimecode',
+    labelKey: 'start_time_babe9dda',
+    group: 'video',
+    kinds: VIDEO,
+  },
+  {
+    key: 'endTimecode',
+    labelKey: 'end_time_2e46006a',
+    group: 'video',
+    kinds: VIDEO,
+  },
+  {
+    key: 'audioCodec',
+    labelKey: 'audio_codec_4fd00b75',
+    group: 'audio',
+    kinds: AV,
+  },
+  {
+    key: 'audioBitRate',
+    labelKey: 'audio_bit_rate_7235e78c',
+    group: 'audio',
+    kinds: AV,
+  },
+  {
+    key: 'audioChannels',
+    labelKey: 'channels_4c8906cf',
+    group: 'audio',
+    kinds: AV,
+  },
+  {
+    key: 'audioSampleRate',
+    labelKey: 'sample_rate_218e0d43',
+    group: 'audio',
+    kinds: AV,
+  },
+  {
+    key: 'audioBitDepth',
+    labelKey: 'audio_bit_depth_497dd2c6',
+    group: 'audio',
+    kinds: AV,
+  },
+  { key: 'review', labelKey: 'status_920e413c', group: 'workflow' },
+  { key: 'tags', labelKey: 'keywords_8bfdb93c', group: 'workflow' },
+  { key: 'comments', labelKey: 'comment_count_6b60df4f', group: 'workflow' },
+  { key: 'notes', labelKey: 'notes_8a7525b1', group: 'workflow' },
+  {
+    key: 'transcript',
+    labelKey: 'transcript_721164f0',
+    group: 'workflow',
+    kinds: AV,
+  },
+  { key: 'hasLocation', labelKey: 'location_gps_44fbedd8', group: 'file' },
 ] as const satisfies readonly BuiltInField[];
 
 export type BuiltInCardField = (typeof BUILT_IN_CARD_FIELDS)[number]['key'];
@@ -106,6 +201,8 @@ export const CARD_DRAWN_FIELDS: ReadonlySet<string> = new Set([
 
 /** Facts that live outside the asset row, looked up by the surface that shows them. */
 export type CardFieldLookups = {
+  locale?: UiLocale;
+  translate?: ReturnType<typeof useTranslations<'library'>>;
   commentCount?: (assetId: string) => number | undefined;
   memberName?: (userId: string) => string | undefined;
   reviewLabel?: (asset: MediaAsset) => string;
@@ -139,17 +236,41 @@ const KIND_LABEL: Record<MediaKind, string> = {
   file: 'Project file',
 };
 
-const CHANNEL_LABEL: Record<number, string> = { 1: 'Mono', 2: 'Stereo', 6: '5.1', 8: '7.1' };
+const CHANNEL_LABEL: Record<number, string> = {
+  1: 'Mono',
+  2: 'Stereo',
+  6: '5.1',
+  8: '7.1',
+};
 
-const DATE_FORMAT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
 
-export function formatBitRate(bitsPerSecond: number): string {
-  return bitsPerSecond >= 1_000_000
-    ? `${Number((bitsPerSecond / 1_000_000).toFixed(1))} Mb/s`
-    : `${Math.round(bitsPerSecond / 1000)} kb/s`;
+const numberFormats = new Map<string, Intl.NumberFormat>();
+function displayNumber(value: number, digits: number, locale: UiLocale = 'en'): string {
+  const key = `${locale}:${digits}`;
+  let formatter = numberFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      maximumFractionDigits: digits,
+      useGrouping: false,
+    });
+    numberFormats.set(key, formatter);
+  }
+  return formatter.format(Number(value.toFixed(digits)));
 }
 
-const present = <T>(value: T | null | undefined): value is T => value !== null && value !== undefined;
+export function formatBitRate(bitsPerSecond: number, locale: UiLocale = 'en'): string {
+  return bitsPerSecond >= 1_000_000
+    ? `${displayNumber(bitsPerSecond / 1_000_000, 1, locale)} Mb/s`
+    : `${displayNumber(Math.round(bitsPerSecond / 1000), 0, locale)} kb/s`;
+}
+
+const present = <T>(value: T | null | undefined): value is T =>
+  value !== null && value !== undefined;
 
 /** The display string for a built-in field, or null when the asset holds nothing for it. */
 export function cardFieldValue(
@@ -157,49 +278,89 @@ export function cardFieldValue(
   key: string,
   lookups: CardFieldLookups = {},
 ): string | null {
+  const locale = lookups.locale ?? 'en';
+  const t = (message: keyof typeof libraryMessages, fallback: string) =>
+    lookups.translate?.(message) ?? fallback;
   switch (key) {
     case 'title':
       return asset.title ?? asset.fileName;
     case 'fileName':
       return asset.fileName;
     case 'kind':
-      return KIND_LABEL[asset.kind];
+      return t(
+        (
+          {
+            image: 'fieldKindImage',
+            video: 'fieldKindVideo',
+            audio: 'fieldKindAudio',
+            file: 'fieldKindFile',
+          } as const
+        )[asset.kind],
+        KIND_LABEL[asset.kind],
+      );
     case 'format':
       return fileExtension(asset.fileName) ?? asset.mimeType.split('/')[1]?.toUpperCase() ?? null;
     case 'size':
-      return asset.sizeBytes ? formatBytes(asset.sizeBytes) : null;
+      return asset.sizeBytes ? formatBytes(asset.sizeBytes, locale) : null;
     case 'dimensions':
       return asset.width && asset.height ? `${asset.width} × ${asset.height}` : null;
     case 'duration':
       return formatDurationMs(asset.durationMs);
     case 'pageCount':
-      return present(asset.pageCount) ? String(asset.pageCount) : null;
+      return present(asset.pageCount) ? displayNumber(asset.pageCount, 0, locale) : null;
     case 'source':
-      return SOURCE_LABEL[asset.source] ?? asset.source;
+      return t(
+        (
+          {
+            upload: 'sourceUpload',
+            ai_generated: 'sourceAiGenerated',
+            canvas: 'sourceCanvas',
+            inspiration: 'sourceInspiration',
+            meta_ad: 'sourceMetaAd',
+            hyperframe: 'sourceHyperframe',
+            chat_upload: 'sourceChatUpload',
+            clip: 'sourceClip',
+            reel: 'sourceReel',
+            backfill: 'sourceBackfill',
+            figma: 'sourceFigma',
+            forge: 'sourceForge',
+            goal_artifact: 'sourceGoalArtifact',
+          } as const
+        )[asset.source],
+        SOURCE_LABEL[asset.source] ?? asset.source,
+      );
     case 'uploader':
       // No lookup yet = the member list is still loading: unknown, not "Former member".
       if (!asset.createdBy || !lookups.memberName) return null;
-      return lookups.memberName(asset.createdBy) ?? 'Former member';
+      return lookups.memberName(asset.createdBy) ?? t('fieldFormerMember', 'Former member');
     case 'created':
-      return new Date(asset.createdAt).toLocaleDateString(undefined, DATE_FORMAT);
+      return new Date(asset.createdAt).toLocaleDateString(locale, DATE_FORMAT);
     case 'updated':
-      return new Date(asset.updatedAt).toLocaleDateString(undefined, DATE_FORMAT);
+      return new Date(asset.updatedAt).toLocaleDateString(locale, DATE_FORMAT);
     case 'videoCodec':
       return asset.videoCodec ?? null;
     case 'frameRate':
-      return present(asset.frameRate) ? `${Number(asset.frameRate.toFixed(3))} fps` : null;
+      return present(asset.frameRate) ? `${displayNumber(asset.frameRate, 3, locale)} fps` : null;
     case 'bitRate':
-      return present(asset.bitRate) ? formatBitRate(asset.bitRate) : null;
+      return present(asset.bitRate) ? formatBitRate(asset.bitRate, locale) : null;
     case 'videoBitRate':
-      return present(asset.videoBitRate) ? formatBitRate(asset.videoBitRate) : null;
+      return present(asset.videoBitRate) ? formatBitRate(asset.videoBitRate, locale) : null;
     case 'colorSpace':
       return asset.colorSpace ?? null;
     case 'dynamicRange':
-      return asset.dynamicRange ? DYNAMIC_RANGE_LABEL[asset.dynamicRange] : null;
+      return asset.dynamicRange
+        ? asset.dynamicRange === 'unknown'
+          ? t('fieldUnknown', 'Unknown')
+          : DYNAMIC_RANGE_LABEL[asset.dynamicRange]
+        : null;
     case 'bitDepth':
       return present(asset.bitDepth) ? `${asset.bitDepth}-bit` : null;
     case 'hasAlpha':
-      return present(asset.hasAlpha) ? (asset.hasAlpha ? 'Yes' : 'No') : null;
+      return present(asset.hasAlpha)
+        ? asset.hasAlpha
+          ? t('fieldYes', 'Yes')
+          : t('fieldNo', 'No')
+        : null;
     case 'startTimecode':
       return asset.startTimecode ?? null;
     case 'endTimecode':
@@ -207,14 +368,22 @@ export function cardFieldValue(
     case 'audioCodec':
       return asset.audioCodec ?? null;
     case 'audioBitRate':
-      return present(asset.audioBitRate) ? formatBitRate(asset.audioBitRate) : null;
+      return present(asset.audioBitRate) ? formatBitRate(asset.audioBitRate, locale) : null;
     case 'audioChannels':
       return present(asset.audioChannels)
-        ? (CHANNEL_LABEL[asset.audioChannels] ?? `${asset.audioChannels} channels`)
+        ? asset.audioChannels === 1
+          ? t('fieldMono', 'Mono')
+          : asset.audioChannels === 2
+            ? t('fieldStereo', 'Stereo')
+            : (CHANNEL_LABEL[asset.audioChannels] ??
+              lookups.translate?.('fieldChannels', {
+                count: asset.audioChannels,
+              }) ??
+              `${asset.audioChannels} channels`)
         : null;
     case 'audioSampleRate':
       return present(asset.audioSampleRate)
-        ? `${Number((asset.audioSampleRate / 1000).toFixed(1))} kHz`
+        ? `${displayNumber(asset.audioSampleRate / 1000, 1, locale)} kHz`
         : null;
     case 'audioBitDepth':
       return present(asset.audioBitDepth) ? `${asset.audioBitDepth}-bit` : null;
@@ -224,14 +393,22 @@ export function cardFieldValue(
       return asset.tags.length > 0 ? asset.tags.join(', ') : null;
     case 'comments': {
       const count = lookups.commentCount?.(asset.id);
-      return present(count) ? String(count) : null;
+      return present(count) ? displayNumber(count, 0, locale) : null;
     }
     case 'notes':
       return asset.notes?.trim() || null;
     case 'transcript':
-      return present(asset.transcript) ? (asset.transcript ? 'Available' : 'No speech') : null;
+      return present(asset.transcript)
+        ? asset.transcript
+          ? t('fieldAvailable', 'Available')
+          : t('fieldNoSpeech', 'No speech')
+        : null;
     case 'hasLocation':
-      return present(asset.hasLocation) ? (asset.hasLocation ? 'Has GPS' : 'None') : null;
+      return present(asset.hasLocation)
+        ? asset.hasLocation
+          ? t('fieldGps', 'Has GPS')
+          : t('fieldNone', 'None')
+        : null;
     default:
       return null;
   }
@@ -257,7 +434,7 @@ export function cardFieldSortValue(
     case 'comments':
       return lookups.commentCount?.(asset.id) ?? null;
     default:
-      return cardFieldValue(asset, key, lookups)?.toLocaleLowerCase() ?? null;
+      return cardFieldValue(asset, key, lookups)?.toLocaleLowerCase(lookups.locale) ?? null;
   }
 }
 

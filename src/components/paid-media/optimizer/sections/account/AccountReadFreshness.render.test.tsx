@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import type { AccountReadRefresh } from '../../useOptimizerData';
 import { AccountReadFreshness, agoLabel, refreshCopy, takenLine } from './AccountReadFreshness';
@@ -143,7 +144,11 @@ describe('while a re-read is queued', () => {
         now={NOW}
         onRequest={() => {}}
         readyAt="2026-09-21T00:03:30.000Z"
-        refresh={refresh({ can_request: false, reason: 'already_running', state: 'queued' })}
+        refresh={refresh({
+          can_request: false,
+          reason: 'already_running',
+          state: 'queued',
+        })}
         utcDay="2026-09-21"
       />,
     );

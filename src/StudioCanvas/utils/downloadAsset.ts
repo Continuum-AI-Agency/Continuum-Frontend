@@ -4,6 +4,7 @@ import {
   type CanvasMediaCoordinate,
   type CanvasMediaSignResponse,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import { toast } from '@/components/ui/toast-imperative';
 import { request } from '@/lib/api/http';
 import { withForcedDownload } from '@/lib/media/downloadUrl';
@@ -111,8 +112,9 @@ export const downloadAsset = (options: {
   data?: string | Blob | null;
   baseName: string;
   fallbackExtension?: string;
+  translate: ReturnType<typeof useTranslations<'studio'>>;
 }) => {
-  const { data, baseName, fallbackExtension } = options;
+  const { data, baseName, fallbackExtension, translate } = options;
   if (!data) return false;
 
   let url: string | null = null;
@@ -143,8 +145,8 @@ export const downloadAsset = (options: {
         clickDownload(resolved, fileName);
         return;
       }
-      toast.error('Download failed', {
-        description: 'The file link could not be refreshed. Try again in a moment.',
+      toast.error(translate('downloadFailed'), {
+        description: translate('downloadLinkExpired'),
       });
     });
     return true;
@@ -157,3 +159,12 @@ export const downloadAsset = (options: {
 
   return true;
 };
+
+/** Blob exports have no signing or asynchronous failure notification. */
+export function downloadBlobAsset(options: { data: Blob; baseName: string }): boolean {
+  const extension = getExtensionFromMime(options.data.type);
+  const url = URL.createObjectURL(options.data);
+  clickDownload(url, buildDownloadName(options.baseName, extension));
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  return true;
+}

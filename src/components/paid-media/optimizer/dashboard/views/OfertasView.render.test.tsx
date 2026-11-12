@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { configFixture, payloadFixture } from '../__fixtures__/easyfitPayload';
 import { chipThresholds } from '../dashboardModel';
 import { OfertasView } from './OfertasView';
@@ -45,7 +46,9 @@ describe('OfertasView', () => {
         thresholds={chipThresholds(configFixture)}
       />,
     );
-    const ads = screen.getByRole('table', { name: 'Anuncios con inversión en el mes' });
+    const ads = screen.getByRole('table', {
+      name: 'Anuncios con inversión en el mes',
+    });
 
     expect(within(ads).getAllByRole('row')).toHaveLength(21);
     expect(screen.queryByRole('table', { name: 'Promociones del mes' })).toBeNull();

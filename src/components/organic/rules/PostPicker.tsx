@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Choosing which posts a rule watches, by looking at them.
 //
 // The field this replaces asked for platform post ids pasted by hand — strings
@@ -58,6 +60,7 @@ function RefreshButton({
   isRefreshing: boolean;
   onRefresh: () => void;
 }) {
+  const uiText = useTranslations('organic');
   return (
     <Button
       type="button"
@@ -68,7 +71,7 @@ function RefreshButton({
       onClick={onRefresh}
     >
       <RefreshCw className={cn('h-3 w-3', isRefreshing && 'animate-spin')} />
-      {isRefreshing ? 'Reading…' : 'Refresh'}
+      {isRefreshing ? uiText('reading_874bfa5') : uiText('refresh_0e91610')}
     </Button>
   );
 }
@@ -82,6 +85,7 @@ function PostTile({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const uiText = useTranslations('organic');
   const thumbnail = post.thumbnailUrl ?? post.mediaUrl ?? null;
   const kind = postKind(post);
   const day = postDay(post);
@@ -127,7 +131,7 @@ function PostTile({
         {day === '' ? null : <span className="text-2xs text-muted-foreground">{day}</span>}
         <span className="line-clamp-2 text-2xs leading-snug">
           {post.caption?.trim() === '' || post.caption === undefined ? (
-            <span className="text-muted-foreground italic">No caption</span>
+            <span className="text-muted-foreground italic">{uiText('no_caption_b7e50ba')}</span>
           ) : (
             post.caption
           )}
@@ -162,6 +166,7 @@ export function PostPicker({
   onLoadMore?: () => void;
   onChange: (next: string[]) => void;
 }) {
+  const uiText = useTranslations('organic');
   // Null shows every loaded post. An array narrows the grid to the posts that were
   // chosen at the moment the view was opened — a snapshot, not the live
   // selection, so a post unchosen by a stray click stays on screen, unticked, and
@@ -187,7 +192,7 @@ export function PostPicker({
   if (!hasAccount) {
     return (
       <p className="rounded-md border bg-muted/30 px-2.5 py-2 text-2xs text-muted-foreground">
-        No Instagram account is connected to this brand, so there are no posts to choose from.
+        {uiText('no_instagram_account_is_connected_to_this_bra_b293ead')}
       </p>
     );
   }
@@ -205,7 +210,7 @@ export function PostPicker({
   if (error) {
     return (
       <p className="rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-2 text-2xs text-destructive">
-        Could not load your posts. The rule keeps whichever posts it already had.
+        {uiText('could_not_load_your_posts_the_rule_keeps_whic_2e5df7f')}
       </p>
     );
   }
@@ -215,8 +220,8 @@ export function PostPicker({
       <div className="flex flex-col gap-2 rounded-md border bg-muted/30 px-2.5 py-2">
         <p className="text-2xs text-muted-foreground">
           {hasMore
-            ? 'No posts in this stretch of history.'
-            : 'No published posts found on this account.'}
+            ? uiText('no_posts_in_this_stretch_of_history_fc30f68')
+            : uiText('no_published_posts_found_on_this_account_7ccd024')}
         </p>
         <div className="flex items-center gap-1.5">
           {hasMore && onLoadMore !== undefined ? (
@@ -228,7 +233,7 @@ export function PostPicker({
               disabled={isLoadingMore}
               onClick={onLoadMore}
             >
-              {isLoadingMore ? 'Loading…' : 'Look further back'}
+              {isLoadingMore ? uiText('loading_ba3bbbe') : uiText('look_further_back_55decdb')}
             </Button>
           ) : null}
           {onRefresh === undefined ? null : (
@@ -244,8 +249,11 @@ export function PostPicker({
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-2xs text-muted-foreground">
           {selectedIds.length === 0
-            ? 'None chosen yet'
-            : `${selectedIds.length} chosen of ${posts.length}`}
+            ? uiText('none_chosen_yet_ac66660')
+            : uiText('postsChosenOf', {
+                chosen: selectedIds.length,
+                total: posts.length,
+              })}
         </span>
         <div className="flex items-center gap-1">
           {onRefresh === undefined ? null : (
@@ -259,7 +267,9 @@ export function PostPicker({
               className="h-5 px-1.5 text-2xs"
               onClick={() => setChosenView(chosenView === null ? [...selectedIds] : null)}
             >
-              {chosenView === null ? `Show chosen (${selectedIds.length})` : 'Show all'}
+              {chosenView === null
+                ? uiText('showChosenCount', { count: selectedIds.length })
+                : uiText('show_all_2150d8d')}
             </Button>
           )}
           {selectedIds.length === 0 ? null : (
@@ -270,7 +280,7 @@ export function PostPicker({
               className="h-5 px-1.5 text-2xs"
               onClick={() => onChange([])}
             >
-              Clear
+              {uiText('clear_83b12c2')}
             </Button>
           )}
         </div>
@@ -305,15 +315,14 @@ export function PostPicker({
           disabled={isLoadingMore}
           onClick={onLoadMore}
         >
-          {isLoadingMore ? 'Loading…' : 'Load older posts'}
+          {isLoadingMore ? uiText('loading_ba3bbbe') : uiText('load_older_posts_cddb751')}
         </Button>
       ) : null}
 
       {missing.length === 0 ? null : (
         <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5">
           <span className="text-2xs text-muted-foreground">
-            {missing.length} chosen post{missing.length === 1 ? '' : 's'} outside this list. Still
-            watched.
+            {uiText.rich('sentence_a1b26652ef2c', { count: missing.length })}
           </span>
           <Button
             type="button"
@@ -322,7 +331,7 @@ export function PostPicker({
             className="h-5 shrink-0 px-1.5 text-2xs"
             onClick={() => onChange(selectedIds.filter((id) => shown.has(id)))}
           >
-            Remove
+            {uiText('remove_c3812fc')}
           </Button>
         </div>
       )}

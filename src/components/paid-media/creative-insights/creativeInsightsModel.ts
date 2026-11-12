@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Creative Insights, the pure half: which communication angles this ad account runs, how
 // they do inside their own ad sets, and what to run next.
 //
@@ -118,10 +122,14 @@ export function angleIdByAd(
 export function buildNextAngleRows(
   scopedRows: readonly AdsetCreativeWinRateRow[],
   nameById?: ReadonlyMap<string, string>,
+  uiTranslate?: ScaleCopy,
 ): AdsetAngleRow[] {
   const adsetIds = [...new Set(scopedRows.map((row) => row.adsetId))];
   return sortAngleRows(
-    buildAdsetAngleStanding({ winrateRows: scopedRows, enrolledIds: adsetIds, nameById }),
+    buildAdsetAngleStanding(
+      { winrateRows: scopedRows, enrolledIds: adsetIds, nameById },
+      uiTranslate,
+    ),
   );
 }
 
@@ -261,18 +269,57 @@ export type AngleReadPart =
   | { kind: 'figure'; text: string };
 
 /** `finding`: what wins and where the spend sits, and how it does. `next`: what to do. */
-export type AngleReadLine = { kind: 'finding' | 'next'; parts: AngleReadPart[] };
+export type AngleReadLine = {
+  kind: 'finding' | 'next';
+  parts: AngleReadPart[];
+};
 
 const text = (value: string, tone?: 'better' | 'worse'): AngleReadPart =>
   tone ? { kind: 'text', text: value, tone } : { kind: 'text', text: value };
-const angle = (value: string): AngleReadPart => ({ kind: 'angle', text: value });
-const figure = (value: number | string): AngleReadPart => ({ kind: 'figure', text: String(value) });
+const angle = (value: string): AngleReadPart => ({
+  kind: 'angle',
+  text: value,
+});
+const figure = (value: number | string): AngleReadPart => ({
+  kind: 'figure',
+  text: String(value),
+});
 
 /** The plain sentence, for an aria label or a test. */
 export const angleReadText = (line: AngleReadLine): string =>
   line.parts.map((part) => part.text).join('');
 
-function findingParts(rows: readonly AccountAngleRow[]): AngleReadPart[] {
+type AngleTags = {
+  angle: (value: string) => string;
+  figure: (value: string) => string;
+  better: (value: string) => string;
+  worse: (value: string) => string;
+};
+/** Keep styled figure/angle slots while ICU controls sentence order and plural grammar. */
+function localizedAngleParts(render: (tags: AngleTags) => string): AngleReadPart[] {
+  const slots: AngleReadPart[] = [];
+  // The formatter can deliver an array of text chunks even through its string-only markup API.
+  const chunksText = (value: unknown): string =>
+    Array.isArray(value) ? value.map(chunksText).join('') : String(value);
+  const slot = (part: AngleReadPart) => {
+    const index = slots.push(part) - 1;
+    return `\uE000${index}\uE001`;
+  };
+  const formatted = render({
+    angle: (value) => slot(angle(chunksText(value))),
+    figure: (value) => slot(figure(chunksText(value))),
+    better: (value) => slot(text(chunksText(value), 'better')),
+    worse: (value) => slot(text(chunksText(value), 'worse')),
+  });
+  return formatted
+    .split(/(\uE000\d+\uE001)/g)
+    .filter(Boolean)
+    .map((value) =>
+      /^\uE000\d+\uE001$/.test(value) ? slots[Number(value.slice(1, -1))] : text(value),
+    );
+}
+
+function findingParts(rows: readonly AccountAngleRow[], uiTranslate?: ScaleCopy): AngleReadPart[] {
   const best =
     rows
       .filter(
@@ -290,24 +337,73 @@ function findingParts(rows: readonly AccountAngleRow[]): AngleReadPart[] {
 
   const parts: AngleReadPart[] = [];
   if (best) {
-    parts.push(
-      angle(best.label),
-      text(' '),
-      text('wins most often', 'better'),
-      text(': '),
-      figure(best.winners),
-      text(' of '),
-      figure(best.comparedAds),
-      text(" ads beat their ad set's median cost, across "),
-      figure(best.adsetsCompared),
-      text(` ${adSetWord(best.adsetsCompared)}.`),
-    );
+    if (uiTranslate)
+      parts.push(
+        ...localizedAngleParts((tags) =>
+          uiTranslate.markup('angleReadBest', {
+            ...tags,
+            label: best.label,
+            winners: best.winners,
+            compared: best.comparedAds,
+            sets: best.adsetsCompared,
+          }),
+        ),
+      );
+    else
+      parts.push(
+        angle(best.label),
+        text(' '),
+        text('wins most often', 'better'),
+        text(': '),
+        figure(best.winners),
+        text(' of '),
+        figure(best.comparedAds),
+        text(" ads beat their ad set's median cost, across "),
+        figure(best.adsetsCompared),
+        text(` ${adSetWord(best.adsetsCompared)}.`),
+      );
   }
   if (topSpend?.spendShare != null) {
     const share = figure(pct(topSpend.spendShare));
     if (parts.length > 0) parts.push(text(' '));
     if (best && topSpend.angleId === best.angleId) {
-      parts.push(text('It also carries '), share, text(' of the spend.'));
+      parts.push(
+        ...(uiTranslate
+          ? localizedAngleParts((tags) =>
+              uiTranslate.markup('angleReadSameSpend', {
+                ...tags,
+                share: Math.round(topSpend.spendShare! * 100) / 100,
+              }),
+            )
+          : [text('It also carries '), share, text(' of the spend.')]),
+      );
+    } else if (uiTranslate) {
+      const share = Math.round(topSpend.spendShare * 100) / 100;
+      parts.push(
+        ...localizedAngleParts((tags) =>
+          topSpend.adsetsCompared > 0
+            ? topSpend.adsetsLosing === 0
+              ? uiTranslate.markup('angleReadAllWin', {
+                  ...tags,
+                  label: topSpend.label,
+                  share,
+                  sets: topSpend.adsetsCompared,
+                })
+              : uiTranslate.markup('angleReadLosing', {
+                  ...tags,
+                  label: topSpend.label,
+                  share,
+                  sets: topSpend.adsetsCompared,
+                  losing: topSpend.adsetsLosing,
+                })
+            : uiTranslate.markup('angleReadSpendOnly', {
+                ...tags,
+                label: topSpend.label,
+                share,
+                ads: topSpend.ads,
+              }),
+        ),
+      );
     } else if (topSpend.adsetsCompared > 0) {
       parts.push(angle(topSpend.label), text(' carries '), share, text(' of the spend and '));
       if (topSpend.adsetsLosing === 0) {
@@ -342,7 +438,10 @@ function findingParts(rows: readonly AccountAngleRow[]): AngleReadPart[] {
 }
 
 /** The angle most of these ad sets are told to run, and how many of them. */
-function commonRecommendation(rows: readonly AdsetAngleRow[]): { label: string; count: number } {
+function commonRecommendation(rows: readonly AdsetAngleRow[]): {
+  label: string;
+  count: number;
+} {
   const byAngle = new Map<string, number>();
   for (const row of rows) {
     const label = angleLabel(row.recommendedAngle?.value);
@@ -354,12 +453,20 @@ function commonRecommendation(rows: readonly AdsetAngleRow[]): { label: string; 
 
 /** What to do next, from angleStanding's own per-ad-set verdicts: the strongest call that some
  *  ad set carries, said once for every ad set that carries it. */
-function nextParts(standing: readonly AdsetAngleRow[]): AngleReadPart[] {
+function nextParts(standing: readonly AdsetAngleRow[], uiTranslate?: ScaleCopy): AngleReadPart[] {
   const withVerdict = (verdict: AdsetAngleRow['verdict']) =>
     standing.filter((row) => row.verdict === verdict);
 
   const doubleDown = commonRecommendation(withVerdict('double_down'));
   if (doubleDown.count > 0) {
+    if (uiTranslate)
+      return localizedAngleParts((tags) =>
+        uiTranslate.markup('angleReadDoubleDown', {
+          ...tags,
+          label: doubleDown.label,
+          sets: doubleDown.count,
+        }),
+      );
     return [
       text('Next: build the next ads around '),
       angle(doubleDown.label),
@@ -370,6 +477,14 @@ function nextParts(standing: readonly AdsetAngleRow[]): AngleReadPart[] {
   }
   const rebuild = commonRecommendation(withVerdict('rebuild_craft'));
   if (rebuild.count > 0) {
+    if (uiTranslate)
+      return localizedAngleParts((tags) =>
+        uiTranslate.markup('angleReadRebuild', {
+          ...tags,
+          label: rebuild.label,
+          sets: rebuild.count,
+        }),
+      );
     return [
       text('Next: keep '),
       angle(rebuild.label),
@@ -380,6 +495,14 @@ function nextParts(standing: readonly AdsetAngleRow[]): AngleReadPart[] {
   }
   const introduce = commonRecommendation(withVerdict('introduce'));
   if (introduce.count > 0) {
+    if (uiTranslate)
+      return localizedAngleParts((tags) =>
+        uiTranslate.markup('angleReadIntroduce', {
+          ...tags,
+          label: introduce.label,
+          sets: introduce.count,
+        }),
+      );
     return [
       text('Next: try '),
       angle(introduce.label),
@@ -390,6 +513,10 @@ function nextParts(standing: readonly AdsetAngleRow[]): AngleReadPart[] {
   }
   const thin = withVerdict('insufficient').length;
   if (thin > 0) {
+    if (uiTranslate)
+      return localizedAngleParts((tags) =>
+        uiTranslate.markup('angleReadMoreData', { ...tags, sets: thin }),
+      );
     return [
       text('Next: ship a second variant in '),
       figure(thin),
@@ -411,10 +538,11 @@ function nextParts(standing: readonly AdsetAngleRow[]): AngleReadPart[] {
 export function composeAngleRead(
   rows: readonly AccountAngleRow[],
   standing: readonly AdsetAngleRow[] = [],
+  uiTranslate?: ScaleCopy,
 ): AngleReadLine[] {
-  const finding = findingParts(rows);
+  const finding = findingParts(rows, uiTranslate);
   if (finding.length === 0) return [];
-  const next = nextParts(standing);
+  const next = nextParts(standing, uiTranslate);
   return next.length > 0
     ? [
         { kind: 'finding', parts: finding },

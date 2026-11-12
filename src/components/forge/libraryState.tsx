@@ -7,9 +7,10 @@ import {
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, MessageSquare } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
+import { Link } from '@/i18n/navigation';
 import { librarySearchPath } from '@/lib/library/libraryHref';
 import { REVIEW_STATUS_META, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
 import { cn } from '@/lib/utils';
@@ -35,7 +36,10 @@ export function useLibraryState(brandId: string, assetIds: ReadonlyArray<string 
     retry: false,
   });
   return useMemo(
-    () => new Map<string, ForgeOutputLibraryState>(data?.items.map((item) => [item.assetId, item] as const)),
+    () =>
+      new Map<string, ForgeOutputLibraryState>(
+        data?.items.map((item) => [item.assetId, item] as const),
+      ),
     [data],
   );
 }
@@ -61,9 +65,17 @@ export function reviewSummary(
 }
 
 export function ReviewStatusPill({ status, label }: { status: MediaReviewStatus; label?: string }) {
+  const translateUi = useUiTranslations('library');
+
   const meta = REVIEW_STATUS_META[status];
   return (
-    <Pill variant="outline" className="gap-1.5 text-2xs" title={`Library review: ${meta.label}`}>
+    <Pill
+      variant="outline"
+      className="gap-1.5 text-2xs"
+      title={translateUi('library_review_value0_33a19841', {
+        value0: String(meta.label),
+      })}
+    >
       <span aria-hidden className={cn('size-1.5 rounded-full', meta.dotClass)} />
       {label ?? meta.label}
     </Pill>
@@ -71,25 +83,29 @@ export function ReviewStatusPill({ status, label }: { status: MediaReviewStatus;
 }
 
 export function CommentCount({ count }: { count: number }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <span
       className="inline-flex items-center gap-1 tabular-nums text-muted-foreground"
-      title="Comments in the Library"
+      title={translateUi('comments_in_the_library_3650e1b1')}
     >
       <MessageSquare className="size-3" aria-hidden />
-      {count}
-      <span className="sr-only"> {count === 1 ? 'comment' : 'comments'}</span>
+      <span aria-hidden>{count}</span>
+      <span className="sr-only">{translateUi('accessibleComments', { count })}</span>
     </span>
   );
 }
 
 export function OpenInLibrary({ brandId, assetId }: { brandId: string; assetId: string }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <Link
       href={libraryAssetHref(brandId, assetId)}
       className="inline-flex items-center gap-1 text-primary hover:underline"
     >
-      <ExternalLink className="size-3" aria-hidden /> Open in Library
+      <ExternalLink className="size-3" aria-hidden /> {translateUi('open_in_library_c0a66bb6')}{' '}
     </Link>
   );
 }
@@ -104,6 +120,8 @@ export function LibraryStateLine({
   assetId: string;
   state: ForgeOutputLibraryState | undefined;
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <span className="inline-flex flex-wrap items-center gap-2 text-xs">
       {state ? (
@@ -113,7 +131,10 @@ export function LibraryStateLine({
           {state.versionCount > 1 ? (
             <span
               className="font-mono tabular-nums text-muted-foreground"
-              title={`Version ${state.versionNumber} of ${state.versionCount}`}
+              title={translateUi('version_value0_of_value1_90ea6df4', {
+                value0: String(state.versionNumber),
+                value1: String(state.versionCount),
+              })}
             >
               v{state.versionNumber}
             </span>

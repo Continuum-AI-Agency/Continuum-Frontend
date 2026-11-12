@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 import recorded from '../platforms/__fixtures__/google-vivo47-paid-media-metrics.json';
 
 // The edge is the boundary: what each hook sends to paid-media-metrics and what it makes of the
@@ -42,7 +43,9 @@ const E1 = {
 };
 
 function wrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -56,7 +59,10 @@ afterEach(() => {
 describe('useGoogleCampaigns', () => {
   it("reads top_campaigns by spend on the window and keeps each row's E1 block", async () => {
     const [first, ...rest] = recorded.top_campaigns.rows;
-    answer = () => ({ ...recorded.top_campaigns, rows: [{ ...first, google: E1 }, ...rest] });
+    answer = () => ({
+      ...recorded.top_campaigns,
+      rows: [{ ...first, google: E1 }, ...rest],
+    });
     const { result } = renderHook(() => useGoogleCampaigns({ ...TARGET, window: WINDOW }), {
       wrapper: wrapper(),
     });
@@ -121,11 +127,17 @@ describe('useGoogleSignals', () => {
   it('asks google_signals for the sorted blocks only, and names a shape it does not know', async () => {
     answer = () => ({ scope: 'google_signals', signals: 'nope' });
     const { result } = renderHook(
-      () => useGoogleSignals({ ...TARGET, blocks: ['search_terms', 'asset_groups'] }),
+      () =>
+        useGoogleSignals({
+          ...TARGET,
+          blocks: ['search_terms', 'asset_groups'],
+        }),
       { wrapper: wrapper() },
     );
     // The hook retries once (about a second) before it gives up.
-    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 4000 });
+    await waitFor(() => expect(result.current.isError).toBe(true), {
+      timeout: 4000,
+    });
     expect(sent).toHaveLength(2);
     expect(sent[0]).toEqual({
       platform: 'google-ads',
@@ -150,7 +162,10 @@ describe('campaignField', () => {
   });
 
   it('returns what Google reported, and a reason for each kind of "—"', () => {
-    expect(campaignField(row('SEARCH'), 'budget_per_day')).toEqual({ value: 500, reason: null });
+    expect(campaignField(row('SEARCH'), 'budget_per_day')).toEqual({
+      value: 500,
+      reason: null,
+    });
     expect(
       campaignField(
         row('PERFORMANCE_MAX', { ...E1, search_impression_share: null }),
@@ -191,7 +206,10 @@ describe('parseGoogleKeywordQuality', () => {
     };
     expect(parseGoogleKeywordQuality(read).keywords[0]?.quality_score).toBe(3);
     expect(() =>
-      parseGoogleKeywordQuality({ ...read, keywords: [{ ...keyword, quality_score: 0 }] }),
+      parseGoogleKeywordQuality({
+        ...read,
+        keywords: [{ ...keyword, quality_score: 0 }],
+      }),
     ).toThrow('shape this page does not know');
   });
 });

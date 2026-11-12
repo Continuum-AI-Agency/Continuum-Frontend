@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoGenNodeData } from '../types';
@@ -146,7 +151,9 @@ describe('#293 VideoGenBlock model picker', () => {
     expect(modelItem('Veo 3.1 Fast').getAttribute('aria-checked')).toBe('false');
 
     cleanup();
-    await openModelPicker({ prompt: 'a bottle on a counter' } as VideoGenNodeData);
+    await openModelPicker({
+      prompt: 'a bottle on a counter',
+    } as VideoGenNodeData);
     expect(modelItem('Veo 3.1 Fast').getAttribute('aria-checked')).toBe('true');
   });
 });

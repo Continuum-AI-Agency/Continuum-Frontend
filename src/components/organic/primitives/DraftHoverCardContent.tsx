@@ -1,11 +1,16 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import { postPlatformLabel } from '@/lib/organic/postPlatforms';
+import { organicPublishFormatLabel } from '@/lib/organic/publishPresentation';
+import { formatWallClockLabel } from './calendar-utils';
 import { DraftCardMedia, resolveDraftMedia } from './DraftCardMedia';
 import { draftStatusPresentation } from './draft-card-styles';
 import type { OrganicCalendarDraft } from './types';
 
 export function DraftHoverCardContent({ draft }: { draft: OrganicCalendarDraft }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const hasCaption = (draft.captionPreview ?? '').trim().length > 0;
   const title = draft.creativeIdea || draft.title;
   const hasMedia =
@@ -20,9 +25,11 @@ export function DraftHoverCardContent({ draft }: { draft: OrganicCalendarDraft }
       className="w-[208px] overflow-hidden rounded-lg border border-border/80 bg-card shadow-lg shadow-black/15"
     >
       <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-2xs font-medium">
-        <span className="text-foreground">{draftStatusPresentation(draft.status).label}</span>
+        <span className="text-foreground">
+          {draftStatusPresentation(draft.status, uiText).label}
+        </span>
         <span className="truncate text-muted-foreground">
-          {draft.platforms.map(postPlatformLabel).join(', ') || 'Unassigned'}
+          {draft.platforms.map(postPlatformLabel).join(', ') || uiText('unassigned_14d33bd')}
         </span>
       </div>
       {hasMedia && (
@@ -39,13 +46,14 @@ export function DraftHoverCardContent({ draft }: { draft: OrganicCalendarDraft }
       <div className="flex flex-col gap-1.5 px-2.5 py-2">
         <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">{title}</p>
         <p className="line-clamp-3 text-2xs leading-snug text-muted-foreground">
-          {hasCaption ? draft.captionPreview : 'No caption yet'}
+          {hasCaption ? draft.captionPreview : uiText('no_caption_yet_498a486')}
         </p>
         <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground/70">
-          {draft.format} · {draft.dateLabel} · {draft.timeLabel}
+          {organicPublishFormatLabel(draft.format, uiText)} · {draft.dateLabel} ·{' '}
+          {formatWallClockLabel(draft.timeLabel, uiLocale)}
         </p>
         <p className="border-t border-border/60 pt-1 text-3xs text-muted-foreground">
-          Click to review
+          {uiText('click_to_review_1342c84')}
         </p>
       </div>
     </div>

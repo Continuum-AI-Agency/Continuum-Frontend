@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioSuggestion } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
 const createMutateAsync = mock(async () => ({ portfolio_id: 'p-new' }));
 const enrollMutateAsync = mock(async () => ({}));
-const createPlatformMutateAsync = mock(async () => ({ portfolio_id: 'p-google' }));
+const createPlatformMutateAsync = mock(async () => ({
+  portfolio_id: 'p-google',
+}));
 const addMembersMutateAsync = mock(async () => ({ enrolled: 2, already: 0 }));
 const runMutate = mock(() => {});
 
@@ -16,8 +19,16 @@ const runMutate = mock(() => {});
 const realOptimizerData = await import('../../useOptimizerData');
 mock.module('../../useOptimizerData', () => ({
   ...realOptimizerData,
-  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false, isError: false }),
-  useOptimizerAccountEnrollments: () => ({ data: [], isLoading: false, isError: false }),
+  useOptimizerAccountSnapshots: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
+  useOptimizerAccountEnrollments: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
   useOptimizerAdsetInventory: () => ({
     data: [],
     fetchedAt: null,
@@ -31,14 +42,26 @@ mock.module('../../useOptimizerData', () => ({
   }),
   useOptimizerInsight: () => ({ data: null, isLoading: false }),
   useOptimizerMutations: () => ({
-    create: { mutate: mock(() => {}), mutateAsync: createMutateAsync, isPending: false },
-    enroll: { mutate: mock(() => {}), mutateAsync: enrollMutateAsync, isPending: false },
+    create: {
+      mutate: mock(() => {}),
+      mutateAsync: createMutateAsync,
+      isPending: false,
+    },
+    enroll: {
+      mutate: mock(() => {}),
+      mutateAsync: enrollMutateAsync,
+      isPending: false,
+    },
     createPlatform: {
       mutate: mock(() => {}),
       mutateAsync: createPlatformMutateAsync,
       isPending: false,
     },
-    addMembers: { mutate: mock(() => {}), mutateAsync: addMembersMutateAsync, isPending: false },
+    addMembers: {
+      mutate: mock(() => {}),
+      mutateAsync: addMembersMutateAsync,
+      isPending: false,
+    },
     run: { mutate: runMutate, isPending: false },
   }),
 }));
@@ -133,7 +156,10 @@ const typed: PortfolioSuggestion = {
   name: 'Leads // Typed',
   members: (allPlatforms.members ?? []).map((member) =>
     member.platform === 'google_ads'
-      ? { ...member, channel_type: member.entity_id === 'g-1' ? 'SEARCH' : 'PERFORMANCE_MAX' }
+      ? {
+          ...member,
+          channel_type: member.entity_id === 'g-1' ? 'SEARCH' : 'PERFORMANCE_MAX',
+        }
       : member,
   ),
 };
@@ -263,9 +289,13 @@ describe('Create — the Google campaigns are enrolled', () => {
       'Google · 2 campaigns · budget recommendations',
     ]);
     // The stubbed picker carries no live budgets, so the daily total is typed.
-    fireEvent.change(screen.getByLabelText(/^Daily budget/), { target: { value: '2100' } });
+    fireEvent.change(screen.getByLabelText(/^Daily budget/), {
+      target: { value: '2100' },
+    });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Create & enroll 2 ad sets + 2 Google campaigns' }),
+      screen.getByRole('button', {
+        name: 'Create & enroll 2 ad sets + 2 Google campaigns',
+      }),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(createMutateAsync).toHaveBeenCalledTimes(1);
@@ -294,7 +324,9 @@ describe('Create — the Google campaigns are enrolled', () => {
       'Google · 1 campaign · budget recommendations',
     ]);
     // No Meta selection, so no live budget to match: the person types one.
-    fireEvent.change(screen.getByLabelText(/^Daily budget/), { target: { value: '500' } });
+    fireEvent.change(screen.getByLabelText(/^Daily budget/), {
+      target: { value: '500' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Create & enroll 1 Google campaign' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(createMutateAsync).not.toHaveBeenCalled();
@@ -324,12 +356,16 @@ describe('Create — the Google campaigns are enrolled', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Untick every Meta ad set' }));
     next();
     next();
-    fireEvent.change(screen.getByLabelText(/^Daily budget/), { target: { value: '500' } });
+    fireEvent.change(screen.getByLabelText(/^Daily budget/), {
+      target: { value: '500' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /^Autopilot/ }));
     expect(screen.getByRole('status').textContent).toBe(
       'Autopilot writes only to Meta: a portfolio with no Meta ad set runs on recommendations.',
     );
-    const create = screen.getByRole('button', { name: /Create & enroll/ }) as HTMLButtonElement;
+    const create = screen.getByRole('button', {
+      name: /Create & enroll/,
+    }) as HTMLButtonElement;
     expect(create.disabled).toBe(true);
   });
 

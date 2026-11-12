@@ -39,6 +39,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -117,6 +118,8 @@ type Reacting = {
 };
 
 function ReactionBar({ commentId, reacting }: { commentId: string; reacting: Reacting }) {
+  const translateUi = useUiTranslations('library');
+
   const { reactions, onReact } = reacting;
   if (!onReact) return null;
   const summaries = reactions?.get(commentId) ?? [];
@@ -130,7 +133,7 @@ function ReactionBar({ commentId, reacting }: { commentId: string; reacting: Rea
           data-emoji={summary.emoji}
           data-count={summary.count}
           aria-pressed={summary.mine}
-          aria-label={`${summary.emoji} ${summary.count}${summary.mine ? ', including you' : ''}`}
+          aria-label={`${summary.emoji} ${summary.count}${summary.mine ? translateUi('including_you_1277b434') : ''}`}
           onClick={() => onReact(commentId, summary.emoji)}
           className={cn(
             'flex h-6 items-center gap-1 rounded-full border px-1.5 text-xs tabular-nums transition-colors',
@@ -148,7 +151,7 @@ function ReactionBar({ commentId, reacting }: { commentId: string; reacting: Rea
           render={
             <button
               type="button"
-              aria-label="Add a reaction"
+              aria-label={translateUi('add_a_reaction_4ae871eb')}
               data-testid="reaction-add"
               className="flex h-6 items-center rounded-full px-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
             >
@@ -241,11 +244,13 @@ function CommentBodyText({ body }: { body: string }) {
 }
 
 function VisibilityMark({ visibility }: { visibility: CommentVisibility }) {
+  const translateUi = useUiTranslations('library');
+
   if (visibility === 'internal') {
     return (
       <Lock
         data-testid="comment-internal-lock"
-        aria-label="Internal — hidden from share links"
+        aria-label={translateUi('internal_hidden_from_share_links_c8306b7d')}
         className="size-3 shrink-0 text-muted-foreground"
       />
     );
@@ -253,7 +258,11 @@ function VisibilityMark({ visibility }: { visibility: CommentVisibility }) {
   return (
     <Globe
       data-testid="comment-shared-mark"
-      aria-label={visibility === 'external' ? 'From a share-link reviewer' : 'Shown on share links'}
+      aria-label={
+        visibility === 'external'
+          ? translateUi('from_a_share_link_reviewer_14747617')
+          : translateUi('shown_on_share_links_03ff017a')
+      }
       className="size-3 shrink-0 text-primary"
     />
   );
@@ -311,6 +320,8 @@ function CommentBody({
   pinLabel?: string;
   pending: boolean;
 }) {
+  const currentUiLocale = useUiLocale();
+
   const name = authorLabel(comment);
   return (
     <div
@@ -326,7 +337,7 @@ function CommentBody({
           <span className="truncate text-xs font-medium">{name}</span>
           <VisibilityMark visibility={comment.visibility ?? 'internal'} />
           <span className="shrink-0 text-2xs text-muted-foreground/70">
-            {formatRelativeTime(comment.createdAt)}
+            {formatRelativeTime(comment.createdAt, undefined, currentUiLocale)}
           </span>
           {pinLabel && (
             <span className="ml-auto shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-primary">
@@ -379,6 +390,8 @@ function ThreadCard({
   onDelete: (commentId: string) => void;
   href?: string;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [replying, setReplying] = useState(false);
   const [copied, setCopied] = useState(false);
   // Held until realtime echoes the row back, so the lock flips on click.
@@ -398,12 +411,18 @@ function ThreadCard({
     if (!brandId || rootVisibility === 'external') return;
     const next = rootVisibility === 'internal' ? 'shared' : 'internal';
     setVisibilityOverride(next);
-    patchCommentMetadata({ brandId, commentId: thread.root.id, visibility: next }).catch(
-      (error: unknown) => {
-        setVisibilityOverride(null);
-        toast.error(`Could not change who sees this comment · ${(error as Error).message}`);
-      },
-    );
+    patchCommentMetadata({
+      brandId,
+      commentId: thread.root.id,
+      visibility: next,
+    }).catch((error: unknown) => {
+      setVisibilityOverride(null);
+      toast.error(
+        translateUi('could_not_change_who_sees_this_comm_3ac9eda5', {
+          value0: String((error as Error).message),
+        }),
+      );
+    });
   };
 
   useEffect(() => {
@@ -432,7 +451,8 @@ function ThreadCard({
               onClick={onViewVersion}
               className="text-2xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
             >
-              View {versionLabel}
+              {' '}
+              {translateUi('view_dcc839a4')} {versionLabel}
             </button>
           ) : null}
         </div>
@@ -459,8 +479,8 @@ function ThreadCard({
               {currentUserId && reply.createdBy === currentUserId && (
                 <button
                   type="button"
-                  aria-label="Delete reply"
-                  title="Delete reply"
+                  aria-label={translateUi('delete_reply_311c9f3d')}
+                  title={translateUi('delete_reply_311c9f3d')}
                   onClick={() => onDelete(reply.id)}
                   className="shrink-0 p-1 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                 >
@@ -481,7 +501,8 @@ function ThreadCard({
             className="h-6 px-1.5 text-2xs text-muted-foreground"
             onClick={() => setReplying((v) => !v)}
           >
-            Reply
+            {' '}
+            {translateUi('reply_c253f451')}{' '}
           </Button>
         )}
         {href ? (
@@ -498,7 +519,7 @@ function ThreadCard({
             }}
           >
             {copied ? <Check className="size-3" /> : <Link2 className="size-3" />}
-            {copied ? 'Copied' : 'Copy link'}
+            {copied ? translateUi('copied_8d525e5f') : translateUi('copy_link_dbf362d4')}
           </Button>
         ) : null}
         {brandId && rootVisibility !== 'external' ? (
@@ -512,8 +533,8 @@ function ThreadCard({
             onClick={toggleVisibility}
             title={
               rootVisibility === 'internal'
-                ? 'Show this comment to share-link reviewers'
-                : 'Hide this comment from share links'
+                ? translateUi('show_this_comment_to_share_link_rev_11eb9f63')
+                : translateUi('hide_this_comment_from_share_links_b4e1cbf1')
             }
           >
             {rootVisibility === 'internal' ? (
@@ -521,7 +542,9 @@ function ThreadCard({
             ) : (
               <Lock className="size-3" />
             )}
-            {rootVisibility === 'internal' ? 'Share' : 'Make internal'}
+            {rootVisibility === 'internal'
+              ? translateUi('share_29887a5f')
+              : translateUi('make_internal_6872c95f')}
           </Button>
         ) : null}
         <Button
@@ -532,7 +555,7 @@ function ThreadCard({
           onClick={() => onResolve(!resolved)}
         >
           {resolved ? <RotateCcw className="size-3" /> : <CheckCircle2 className="size-3" />}
-          {resolved ? 'Reopen' : 'Resolve'}
+          {resolved ? translateUi('reopen_a886d1dc') : translateUi('resolve_c8f193b3')}
         </Button>
         {currentUserId && thread.root.createdBy === currentUserId && (
           <Button
@@ -542,8 +565,7 @@ function ThreadCard({
             className="ml-auto h-6 px-1.5 text-2xs text-muted-foreground hover:text-destructive"
             onClick={() => onDelete(thread.root.id)}
           >
-            <Trash2 className="size-3" />
-            Delete
+            <Trash2 className="size-3" /> {translateUi('delete_e2d0a549')}{' '}
           </Button>
         )}
       </div>
@@ -551,8 +573,8 @@ function ThreadCard({
       {replying && !resolved && (
         <div className="mt-1.5">
           <CommentComposer
-            placeholder="Reply..."
-            submitLabel="Reply"
+            placeholder={translateUi('reply_772fa553')}
+            submitLabel={translateUi('reply_c253f451')}
             busy={posting}
             autoFocus
             brandId={brandId}
@@ -613,6 +635,8 @@ export function CommentThreads({
   reactions,
   onReact,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const reacting: Reacting = { reactions, onReact };
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
@@ -629,7 +653,11 @@ export function CommentThreads({
   const timecodeMode = useTimecodeDisplay();
   const timing = useAssetTiming(
     timecodeMode !== 'clock' && brandId && timedRoot
-      ? { brandId, assetId: timedRoot.assetId, versionId: timedRoot.versionId ?? null }
+      ? {
+          brandId,
+          assetId: timedRoot.assetId,
+          versionId: timedRoot.versionId ?? null,
+        }
       : null,
   );
   const labelFor = (root: MediaComment): string | undefined => {
@@ -672,22 +700,26 @@ export function CommentThreads({
   if (currentCount === 0 && otherVersionThreads.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-1 p-6 text-center">
-        <p className="text-sm text-muted-foreground">No comments yet.</p>
+        <p className="text-sm text-muted-foreground">{translateUi('no_comments_yet_b7cba957')}</p>
         <p className="text-xs text-muted-foreground/60">
-          Drag on the image or pin a moment in the video to leave feedback in context.
+          {' '}
+          {translateUi('drag_on_the_image_or_pin_a_moment_i_6602d891')}{' '}
         </p>
       </div>
     );
   }
 
-  const otherVersionsLabel = `${otherVersionCommentCount} ${
-    otherVersionCommentCount === 1 ? 'comment' : 'comments'
-  } on ${viewingHead ? 'earlier versions' : 'other versions'}`;
+  const otherVersionsLabel = translateUi('otherVersionComments', {
+    count: otherVersionCommentCount,
+    viewingHead: viewingHead ? 'yes' : 'no',
+  });
 
   return (
     <div className="flex flex-col gap-2 p-3">
       {currentCount === 0 && (
-        <p className="px-1 py-2 text-xs text-muted-foreground">No comments on this version yet.</p>
+        <p className="px-1 py-2 text-xs text-muted-foreground">
+          {translateUi('no_comments_on_this_version_yet_75f2b19f')}
+        </p>
       )}
 
       {brandId && timedRoot ? (
@@ -701,11 +733,10 @@ export function CommentThreads({
             target="continuum-editor-view"
             rel="noreferrer"
             data-testid="editor-view-link"
-            title="Open a compact comment list to keep beside your editor"
+            title={translateUi('open_a_compact_comment_list_to_keep_8e9350db')}
             className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-2xs text-muted-foreground hover:bg-accent hover:text-foreground"
           >
-            <PanelRight className="size-3" />
-            Editor view
+            <PanelRight className="size-3" /> {translateUi('editor_view_1d183389')}{' '}
           </a>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -715,16 +746,15 @@ export function CommentThreads({
                   variant="ghost"
                   size="sm"
                   className="h-6 px-1.5 text-2xs text-muted-foreground"
-                  aria-label="Export comments as markers"
+                  aria-label={translateUi('export_comments_as_markers_364ffdbf')}
                 >
-                  <Download className="size-3" />
-                  Export markers
+                  <Download className="size-3" /> {translateUi('export_markers_87f171d6')}{' '}
                 </Button>
               }
             />
             <DropdownMenuContent align="end">
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Timeline starts at</DropdownMenuLabel>
+                <DropdownMenuLabel>{translateUi('timeline_starts_at_3579fbaa')}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={timeline}
                   onValueChange={(value) => setTimeline(value as TimelineStart)}
@@ -757,7 +787,11 @@ export function CommentThreads({
                         timeline,
                       }),
                     ).catch((error: unknown) =>
-                      toast.error(`Export failed · ${(error as Error).message}`),
+                      toast.error(
+                        translateUi('export_failed_value0_7abcae8b', {
+                          value0: String((error as Error).message),
+                        }),
+                      ),
                     );
                   }}
                 >
@@ -815,7 +849,9 @@ export function CommentThreads({
       {resolvedShown.length > 0 && (
         <>
           <SectionToggle open={showResolved} onToggle={() => setShowResolved((v) => !v)}>
-            Resolved ({resolvedShown.length})
+            {' '}
+            {translateUi('resolved_cb78a242')}
+            {resolvedShown.length})
           </SectionToggle>
           {showResolved &&
             resolvedShown.map((thread) => (
@@ -858,7 +894,7 @@ export function CommentThreads({
                   thread={thread}
                   // No pinLabel and no pin: this thread's geometry addresses
                   // bytes that are not on the stage.
-                  versionLabel={versionLabel ?? 'Other version'}
+                  versionLabel={versionLabel ?? translateUi('other_version_7dbd7448')}
                   onViewVersion={
                     versionId && versionLabel ? () => onViewVersion(versionId) : undefined
                   }

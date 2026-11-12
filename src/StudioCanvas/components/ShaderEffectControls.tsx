@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useMemo as useUiConfigMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
@@ -11,14 +13,23 @@ const CHROMA_KEY_DEFAULT: NonNullable<ClipEffectSpec['chromaKey']> = {
   softness: 0.1,
 };
 const TINT_DEFAULT_COLOR = '#ff8a3d';
-const AMOUNT_EFFECTS = [
-  { field: 'vignette', label: 'Vignette' },
-  { field: 'filmGrain', label: 'Film grain' },
-  { field: 'dust', label: 'Dust' },
-  { field: 'lightLeaks', label: 'Light leaks' },
-  { field: 'chromaticAberration', label: 'Chromatic aberration' },
-  { field: 'vhs', label: 'VHS' },
-] as const;
+function useLocalAmountEffectsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value = [
+      { field: 'vignette', label: translateConfig('vignette_f841c208') },
+      { field: 'filmGrain', label: translateConfig('film_grain_3dea292f') },
+      { field: 'dust', label: translateConfig('dust_75372bcd') },
+      { field: 'lightLeaks', label: translateConfig('light_leaks_9e9dd88b') },
+      {
+        field: 'chromaticAberration',
+        label: translateConfig('chromatic_aberration_07002d54'),
+      },
+      { field: 'vhs', label: 'VHS' },
+    ] as const;
+    return value;
+  }, [translateConfig]);
+}
 
 function ColorRow({
   id,
@@ -56,13 +67,18 @@ export function ShaderEffectControls({
   effects: ClipEffectSpec;
   onChange: (patch: Partial<ClipEffectSpec>) => void;
 }) {
+  const AMOUNT_EFFECTS = useLocalAmountEffectsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const chromaKey = effects.chromaKey;
   const tint = effects.tint;
   return (
     <div className="flex flex-col gap-3" data-testid={`${idPrefix}-shader-effects`}>
       <div className="flex items-center justify-between">
         <Label htmlFor={`${idPrefix}-chroma`} className="text-2xs">
-          Chroma key
+          {' '}
+          {translateUi('chroma_key_34faa6ec')}{' '}
         </Label>
         <Switch
           id={`${idPrefix}-chroma`}
@@ -76,12 +92,12 @@ export function ShaderEffectControls({
         <>
           <ColorRow
             id={`${idPrefix}-chroma-color`}
-            label="Key colour"
+            label={translateUi('key_colour_a6371002')}
             value={chromaKey.color}
             onChange={(color) => onChange({ chromaKey: { ...chromaKey, color } })}
           />
           <SliderField
-            label="Tolerance"
+            label={translateUi('tolerance_f71041bb')}
             value={chromaKey.tolerance}
             min={0}
             max={1}
@@ -89,7 +105,7 @@ export function ShaderEffectControls({
             onChange={(tolerance) => onChange({ chromaKey: { ...chromaKey, tolerance } })}
           />
           <SliderField
-            label="Softness"
+            label={translateUi('softness_64a30875')}
             value={chromaKey.softness}
             min={0}
             max={1}
@@ -100,12 +116,12 @@ export function ShaderEffectControls({
       ) : null}
       <ColorRow
         id={`${idPrefix}-tint-color`}
-        label="Tint colour"
+        label={translateUi('tint_colour_1dd899e8')}
         value={tint?.color ?? TINT_DEFAULT_COLOR}
         onChange={(color) => onChange({ tint: { color, amount: tint?.amount ?? 0.5 } })}
       />
       <SliderField
-        label="Tint"
+        label={translateUi('tint_6a822da0')}
         value={tint?.amount ?? 0}
         min={0}
         max={1}
@@ -128,7 +144,7 @@ export function ShaderEffectControls({
         />
       ))}
       <SliderField
-        label="Pixelate"
+        label={translateUi('pixelate_f4982f86')}
         value={effects.pixelate?.blockPx ?? 0}
         min={0}
         max={64}

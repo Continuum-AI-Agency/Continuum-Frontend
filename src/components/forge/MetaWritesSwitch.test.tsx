@@ -6,7 +6,13 @@
  */
 
 import { afterEach, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const BRAND = '33333333-3333-4333-8333-333333333333';
 
@@ -16,15 +22,21 @@ const show = mock((_options: unknown) => {});
 
 // Spread the real modules: a PARTIAL mock.module deletes a module's other
 // exports for every file that loads afterwards, in this whole process.
-const actions = await import('@/app/(post-auth)/settings/actions');
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+const actions = await import('@/app/[locale]/(post-auth)/settings/actions');
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   ...actions,
   updateBrandMetaWritesAllowedAction,
 }));
 const nav = await import('next/navigation');
-mock.module('next/navigation', () => ({ ...nav, useRouter: () => ({ refresh }) }));
+mock.module('next/navigation', () => ({
+  ...nav,
+  useRouter: () => ({ refresh }),
+}));
 const toast = await import('@/components/ui/ToastProvider');
-mock.module('@/components/ui/ToastProvider', () => ({ ...toast, useToast: () => ({ show }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  ...toast,
+  useToast: () => ({ show }),
+}));
 
 const { MetaWritesSwitch } = await import('@/components/forge/MetaWritesSwitch');
 
@@ -71,7 +83,10 @@ test('a refused write is shown, never swallowed', async () => {
   fireEvent.click(control());
 
   await waitFor(() => expect(show).toHaveBeenCalledTimes(1));
-  const options = show.mock.calls[0]?.[0] as { variant?: string; description?: string };
+  const options = show.mock.calls[0]?.[0] as {
+    variant?: string;
+    description?: string;
+  };
   expect(options.variant).toBe('error');
   expect(options.description).toContain('row-level security');
   expect(refresh).toHaveBeenCalledTimes(0);

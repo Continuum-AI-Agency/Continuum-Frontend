@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The rules tab: the list on the left, the rule being edited on the right.
 //
@@ -38,6 +39,7 @@ export function CommentRulesWorkspace({
   brandId: string | null;
   instagramAccountId?: string | null;
 }) {
+  const uiText = useTranslations('organic');
   const { data, isLoading, error } = useCommentRules(brandId);
   const save = useSaveCommentRule(brandId);
   const remove = useDeleteCommentRule(brandId);
@@ -77,13 +79,15 @@ export function CommentRulesWorkspace({
 
   const handleDelete = React.useCallback(() => {
     if (editing.kind !== 'existing') return;
-    remove.mutate(editing.rule.id, { onSuccess: () => setEditing({ kind: 'none' }) });
+    remove.mutate(editing.rule.id, {
+      onSuccess: () => setEditing({ kind: 'none' }),
+    });
   }, [editing, remove]);
 
   if (brandId === null) {
     return (
       <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-        Pick a brand to manage its comment rules.
+        {uiText('pick_a_brand_to_manage_its_comment_rules_5dcb0dc')}
       </p>
     );
   }
@@ -93,7 +97,7 @@ export function CommentRulesWorkspace({
       <div className="flex min-h-0 flex-col gap-2">
         {error ? (
           <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-            Could not load the rules. Refresh to try again.
+            {uiText('could_not_load_the_rules_refresh_to_try_again_57485ad')}
           </p>
         ) : null}
         <CommentRulesList
@@ -124,7 +128,7 @@ export function CommentRulesWorkspace({
           />
         ) : (
           <p className="flex h-full items-center justify-center px-4 py-8 text-center text-xs text-muted-foreground">
-            Pick a rule to edit it, or create a new one.
+            {uiText('pick_a_rule_to_edit_it_or_create_a_new_one_bf10d56')}
           </p>
         )}
       </div>

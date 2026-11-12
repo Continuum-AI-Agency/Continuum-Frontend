@@ -2,23 +2,14 @@
 
 import type { HeadlessBatchQuote } from '@continuum/contracts';
 import { Check, TriangleAlert, X } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useId } from 'react';
 import { AgentButton, AgentDecisionCard } from '@/components/shared/agent-cards/agentCardKit';
 import { CardContent, CardFooter } from '@/components/ui/card';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 
-const usd = (value: number) => `$${value.toFixed(2)}`;
-const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
-
-// The FE's own words, never the Backend's refusal text (it names request fields).
-function refusalWords(quote: HeadlessBatchQuote): string {
-  if (quote.boundUsd > quote.maxUsd) {
-    return `Worst case ${usd(quote.boundUsd)} is over this batch's ${usd(quote.maxUsd)} ceiling. Nothing was spent.`;
-  }
-  if (quote.windowRemainingUsd !== null && quote.boundUsd > quote.windowRemainingUsd) {
-    return `Only ${usd(quote.windowRemainingUsd)} is left in the brand's 24 h window. Nothing was spent.`;
-  }
-  return "This batch can't be approved as asked. Nothing was spent.";
-}
+const usd = (value: number, locale: UiLocale) => `$${formatDecimal(value, 2, locale)}`;
 
 /**
  * The one approval a headless batch asks for, read from the Backend's quote: what it makes, the
@@ -37,10 +28,12 @@ export function HeadlessBatchApprovalCard({
   onDenyAction: () => void;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const titleId = useId();
   const batchWords = quote
-    ? ` batch of ${quote.items} ${plural(quote.items, 'piece', 'pieces')}`
-    : ' batch';
+    ? uiText('batchDescription', { count: quote.items })
+    : uiText('batchDescriptionUnknown');
   return (
     <AgentDecisionCard
       data-slot="headless-batch-approval"
@@ -58,9 +51,7 @@ export function HeadlessBatchApprovalCard({
             className="flex gap-1.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300"
           >
             <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            <span>
-              The cost of this batch could not be read, so it can&apos;t be approved here.
-            </span>
+            <span>{uiText('the_cost_of_this_batch_could_not_be_read_so_i_54169db')}</span>
           </p>
         )}
       </CardContent>
@@ -72,7 +63,7 @@ export function HeadlessBatchApprovalCard({
           className="h-7 min-h-0 gap-1 px-2.5 text-xs"
         >
           <X className="h-3 w-3" />
-          Deny
+          {uiText('batchDeny')}
           <span className="sr-only">{batchWords}</span>
         </AgentButton>
         {quote ? (
@@ -83,9 +74,12 @@ export function HeadlessBatchApprovalCard({
             className="h-7 min-h-0 gap-1 px-2.5 text-xs"
           >
             <Check className="h-3 w-3" />
-            Approve
+            {uiText('batchApprove')}
             <span className="sr-only">
-              {`${batchWords}, first pass up to ${usd(quote.boundUsd)}`}
+              {uiText('batchApprovalDescription', {
+                count: quote.items,
+                amount: usd(quote.boundUsd, uiLocale),
+              })}
             </span>
           </AgentButton>
         ) : null}
@@ -95,74 +89,106 @@ export function HeadlessBatchApprovalCard({
 }
 
 function QuoteBody({ quote, titleId }: { quote: HeadlessBatchQuote; titleId: string }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   return (
     <>
       <div>
         <p id={titleId} className="text-sm font-medium text-foreground">
-          Make <span data-field="items">{quote.items}</span>{' '}
-          {plural(quote.items, 'piece', 'pieces')}
+          {uiText.rich('batchMake', {
+            count: quote.items,
+            items: (chunks) => <span data-field="items">{chunks}</span>,
+          })}
         </p>
         <p className="text-xs text-muted-foreground">
           {quote.reels > 0 ? (
             <span>
-              <span data-field="reels">{quote.reels}</span> {plural(quote.reels, 'reel', 'reels')}
+              {uiText.rich('batchReels', {
+                count: quote.reels,
+                items: (chunks) => <span data-field="reels">{chunks}</span>,
+              })}
             </span>
           ) : null}
           {quote.reels > 0 && quote.stillSets > 0 ? ' · ' : null}
           {quote.stillSets > 0 ? (
             <span>
-              <span data-field="still-sets">{quote.stillSets}</span>{' '}
-              {plural(quote.stillSets, 'still set', 'still sets')}
+              {uiText.rich('batchStillSets', {
+                count: quote.stillSets,
+                items: (chunks) => <span data-field="still-sets">{chunks}</span>,
+              })}
             </span>
           ) : null}
         </p>
       </div>
       <div>
         <p className="text-sm text-foreground">
-          First pass up to <span data-field="bound-usd">{usd(quote.boundUsd)}</span>
+          {uiText.rich('batchFirstPass', {
+            amount: () => <span data-field="bound-usd">{usd(quote.boundUsd, uiLocale)}</span>,
+          })}
         </p>
         <p className="text-2xs leading-relaxed text-muted-foreground">
-          pieces <span data-field="cap-usd">{usd(quote.capUsd)}</span>
+          {uiText.rich('batchPiecesCost', {
+            amount: () => <span data-field="cap-usd">{usd(quote.capUsd, uiLocale)}</span>,
+          })}
           {quote.copyUsd > 0 ? (
             <>
-              {' · copy '}
-              <span data-field="copy-usd">{usd(quote.copyUsd)}</span>
+              {uiText.rich('batchCopyCost', {
+                amount: () => <span data-field="copy-usd">{usd(quote.copyUsd, uiLocale)}</span>,
+              })}
             </>
           ) : null}
           {quote.castPackUsd > 0 ? (
             <>
-              {' · character packs up to '}
-              <span data-field="cast-pack-usd">{usd(quote.castPackUsd)}</span>
+              {uiText.rich('batchCastCost', {
+                amount: () => (
+                  <span data-field="cast-pack-usd">{usd(quote.castPackUsd, uiLocale)}</span>
+                ),
+              })}
             </>
           ) : null}
         </p>
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-        <dt className="text-muted-foreground">Typically</dt>
+        <dt className="text-muted-foreground">{uiText('typically_2063443')}</dt>
         <dd data-field="expected-usd" className="text-right text-foreground">
-          {usd(quote.expectedUsd)}
+          {usd(quote.expectedUsd, uiLocale)}
         </dd>
-        <dt className="text-muted-foreground">With re-directs, up to</dt>
+        <dt className="text-muted-foreground">{uiText('with_re_directs_up_to_d1088f4')}</dt>
         <dd data-field="max-usd" className="text-right text-foreground">
-          {usd(quote.maxUsd)}
+          {usd(quote.maxUsd, uiLocale)}
         </dd>
       </dl>
       {quote.windowRemainingUsd !== null ? (
         <p className="text-xs text-muted-foreground">
-          <span data-field="window-remaining-usd">{usd(quote.windowRemainingUsd)}</span> left in the
-          brand&apos;s 24 h window
+          {uiText.rich('batchRemainingWindow', {
+            amount: () => (
+              <span data-field="window-remaining-usd">
+                {quote.windowRemainingUsd === null ? '' : usd(quote.windowRemainingUsd, uiLocale)}
+              </span>
+            ),
+          })}
         </p>
       ) : null}
       {quote.castApprovalNeeded ? (
         <p data-field="cast-step" className="text-xs leading-relaxed text-foreground/80">
-          No approved cast yet: the first piece drafts the people and places, you approve them once
-          on the batch card, and the rest wait for it.
+          {uiText('no_approved_cast_yet_the_first_piece_drafts_t_df1f187')}
         </p>
       ) : null}
       {quote.refusal ? (
         <p className="flex gap-1.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
           <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span data-field="refusal">{refusalWords(quote)}</span>
+          <span data-field="refusal">
+            {quote.boundUsd > quote.maxUsd
+              ? uiText('batchOverCeiling', {
+                  bound: usd(quote.boundUsd, uiLocale),
+                  ceiling: usd(quote.maxUsd, uiLocale),
+                })
+              : quote.windowRemainingUsd !== null && quote.boundUsd > quote.windowRemainingUsd
+                ? uiText('batchOverWindow', {
+                    remaining: usd(quote.windowRemainingUsd, uiLocale),
+                  })
+                : uiText('batchRefused')}
+          </span>
         </p>
       ) : null}
     </>

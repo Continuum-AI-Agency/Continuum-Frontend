@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import type { ActionRevertResponse } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import enCopy from '../../../../../../messages/scale/en.json';
+import esCopy from '../../../../../../messages/scale/es.json';
+import ptCopy from '../../../../../../messages/scale/pt-BR.json';
 import type { ApplyActionsResponse } from '../../useOptimizerData';
 import {
   ADD_GOOGLE_KEYWORD,
@@ -42,7 +46,12 @@ const target = (action: CardWrite) => ({ portfolioId: PORTFOLIO_ID, action });
 const answer = (result: Record<string, unknown>, dryRun = true): ApplyActionsResponse => ({
   ok: result.status !== 'refused',
   dryRun,
-  results: [{ kind: 'set_budget', ...result } as ApplyActionsResponse['results'][number]],
+  results: [
+    {
+      kind: 'set_budget',
+      ...result,
+    } as ApplyActionsResponse['results'][number],
+  ],
 });
 
 describe('cardActionAvailability', () => {
@@ -61,10 +70,16 @@ describe('cardActionAvailability', () => {
   it("disables a Google write when the portfolio's write switch is off, and only then", () => {
     const action = write(RAISE_GOOGLE_BUDGET);
     expect(
-      cardActionAvailability(GOOGLE_BUDGET_LIMITED, { ...target(action), applyEnabled: false }),
+      cardActionAvailability(GOOGLE_BUDGET_LIMITED, {
+        ...target(action),
+        applyEnabled: false,
+      }),
     ).toBe('apply_disabled');
     expect(
-      cardActionAvailability(GOOGLE_BUDGET_LIMITED, { ...target(action), applyEnabled: true }),
+      cardActionAvailability(GOOGLE_BUDGET_LIMITED, {
+        ...target(action),
+        applyEnabled: true,
+      }),
     ).toBe('ready');
     // An older server sends no switch: today's behaviour holds.
     expect(cardActionAvailability(GOOGLE_BUDGET_LIMITED, target(action))).toBe('ready');
@@ -330,7 +345,13 @@ describe('undoAuditIdOf', () => {
   const applied = (legs: unknown[], status = 'applied'): ApplyActionsResponse => ({
     ok: true,
     dryRun: false,
-    results: [{ status, kind: 'set_budget', legs } as ApplyActionsResponse['results'][number]],
+    results: [
+      {
+        status,
+        kind: 'set_budget',
+        legs,
+      } as ApplyActionsResponse['results'][number],
+    ],
   });
 
   it("names the first leg's audit row of an applied write", () => {
@@ -458,7 +479,11 @@ describe('undoResultVerdict', () => {
     expect(
       undoResultVerdict(
         undoAnswer(
-          { status: 'failed', reason: 'write_failed', detail: 'google:INTERNAL_ERROR' },
+          {
+            status: 'failed',
+            reason: 'write_failed',
+            detail: 'google:INTERNAL_ERROR',
+          },
           false,
         ),
       ),
@@ -475,7 +500,10 @@ describe('undoResultVerdict', () => {
   it('carries conflicts and refusals through', () => {
     expect(
       undoResultVerdict(undoAnswer({ status: 'conflict', reason: 'conflict' }, false)),
-    ).toEqual({ tone: 'refused', text: 'Changed in Google Ads since — not undone.' });
+    ).toEqual({
+      tone: 'refused',
+      text: 'Changed in Google Ads since — not undone.',
+    });
     expect(
       undoResultVerdict(undoAnswer({ status: 'refused', reason: 'already_reverted' }, false)).text,
     ).toBe('This change was already undone. Nothing was written.');
@@ -491,7 +519,10 @@ describe('the Meta cost cap (bid setting)', () => {
     expect(cardActionAvailability(META_COST_CAP, target(costCap))).toBe('ready');
     expect(cardActionAvailability(META_COST_CAP, target(write(RAISE_META_BUDGET)))).toBe('none');
     expect(
-      cardActionAvailability(META_COST_CAP, { ...target(costCap), applyEnabled: false }),
+      cardActionAvailability(META_COST_CAP, {
+        ...target(costCap),
+        applyEnabled: false,
+      }),
     ).toBe('apply_disabled');
   });
 

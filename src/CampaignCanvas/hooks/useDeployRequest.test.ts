@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useDeployRequest } from './useDeployRequest';
 
-const DEPLOY = { versionId: 'v2', contentHash: 'a'.repeat(64), name: 'Summer', version: 2 };
+const DEPLOY = {
+  versionId: 'v2',
+  contentHash: 'a'.repeat(64),
+  name: 'Summer',
+  version: 2,
+};
 
 describe('useDeployRequest', () => {
   it('opens ONE request per version while it is in flight — a double-click is ignored', () => {
@@ -28,7 +34,12 @@ describe('useDeployRequest', () => {
     act(() => result.current.consumed());
     expect(result.current.request).toBeNull();
     expect(result.current.inFlight).toBe(true);
-    act(() => result.current.settled(id, { ok: false, reason: 'Deploy is blocked: no Page' }));
+    act(() =>
+      result.current.settled(id, {
+        ok: false,
+        reason: 'Deploy is blocked: no Page',
+      }),
+    );
     expect(result.current.inFlight).toBe(false);
     expect(result.current.refusal).toBe('Deploy is blocked: no Page');
 

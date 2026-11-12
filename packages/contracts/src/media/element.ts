@@ -331,6 +331,22 @@ export const elementErrorCodeSchema = z.enum([
 ]);
 export type ElementErrorCode = z.infer<typeof elementErrorCodeSchema>;
 
+/** Source style identities remain separate from diagnostic prose so clients can localize guidance. */
+export const elementErrorContextSchema = z
+  .object({
+    styleSlugs: elementStyleSlugsSchema.optional(),
+  })
+  .strict();
+export type ElementErrorContext = z.infer<typeof elementErrorContextSchema>;
+
+export const elementErrorResponseSchema = elementErrorContextSchema
+  .extend({
+    error: elementErrorCodeSchema,
+    message: z.string(),
+  })
+  .strict();
+export type ElementErrorResponse = z.infer<typeof elementErrorResponseSchema>;
+
 // --- Wire envelopes ----------------------------------------------------------
 
 const memberIdsSchema = z
@@ -610,7 +626,10 @@ const readRowName = (raw: unknown): string | null => {
  */
 export const partitionElementCatalog = (
   rows: readonly unknown[],
-): { accepted: ElementCatalogAccepted[]; rejected: ElementCatalogRejected[] } => {
+): {
+  accepted: ElementCatalogAccepted[];
+  rejected: ElementCatalogRejected[];
+} => {
   const accepted: ElementCatalogAccepted[] = [];
   const rejected: ElementCatalogRejected[] = [];
   const seenSlugs = new Set<string>();

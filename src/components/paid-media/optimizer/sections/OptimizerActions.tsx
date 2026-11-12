@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Actions sub-view — the account-wide approvals queue. Each portfolio with pending work
 // renders its own unified queue (budget moves + recommendations) that approves AND executes
@@ -62,6 +63,7 @@ export function OptimizerActions({
   renewals,
   onBrowsePortfolios,
 }: OptimizerActionsProps) {
+  const uiText = useTranslations('scale');
   const googleCards = useOptimizerPlatformCards(brandId, 'google_ads');
   const tiktokCards = useOptimizerPlatformCards(brandId, 'tiktok_ads');
   const platformCards = useMemo(
@@ -78,24 +80,27 @@ export function OptimizerActions({
     // This state used to be a dead end: headline + description, no buttons, no schedule. A user
     // with nothing to approve had no move except to leave the tab. The schedule is already on the
     // portfolio row, and the portfolios view is one click away, so both belong here.
-    const nextCycle = nextCycleLabel(soonestNextCycle(portfolios));
+    const nextCycle = nextCycleLabel(soonestNextCycle(portfolios), undefined, uiText);
 
     return (
       <div className="space-y-4">
         <EmptyState
           action={
             <Button onClick={onBrowsePortfolios} size="sm" type="button">
-              See portfolios
+              {uiText('see_portfolios_06ede1e')}
             </Button>
           }
           description={
             portfolios.length === 0
-              ? 'No portfolios on this ad account yet. Create one and the optimizer starts scoring it nightly.'
+              ? uiText('no_portfolios_on_this_ad_account_yet_create_o_0f59ac0')
               : nextCycle
-                ? `Every ad set in your ${portfolios.length === 1 ? 'portfolio is' : 'portfolios are'} where the optimizer wants it. The next cycle scores ${nextCycle} — anything it wants to change lands here for approval.`
-                : `Every ad set in your ${portfolios.length === 1 ? 'portfolio is' : 'portfolios are'} where the optimizer wants it. Anything a future cycle wants to change lands here for approval.`
+                ? uiText('template_103ec6b8f098', {
+                    count: portfolios.length,
+                    next: nextCycle,
+                  })
+                : uiText('template_f0a073f61bcf', { count: portfolios.length })
           }
-          headline="Nothing needs your decision"
+          headline={uiText('activityNoDecisions')}
           media={<CheckCircle2Icon aria-hidden="true" />}
         />
       </div>
@@ -120,8 +125,9 @@ export function OptimizerActions({
       {renewals.length > 0 ? (
         <section>
           <h3 className={`${typeScale.label} mb-1 font-semibold text-muted-foreground`}>
-            Approved renewals · tasks{' '}
-            <span className="font-mono tabular-nums">{renewals.length}</span>
+            {uiText.rich('sentence_e23e2193b9ee', {
+              v0: () => <span className="font-mono tabular-nums">{renewals.length}</span>,
+            })}
           </h3>
           <ul className="divide-y divide-border/60 border-border/60 border-y">
             {renewals.map((task) => (
@@ -129,8 +135,7 @@ export function OptimizerActions({
             ))}
           </ul>
           <p className="mt-2 text-xs text-muted-foreground">
-            Approving a fatigue renewal opens a tracked task — the engine never auto-refreshes a
-            creative. It leaves the pending feed and lands here until the team actions it.
+            {uiText('approving_a_fatigue_renewal_opens_a_tracked_t_936f1c9')}
           </p>
         </section>
       ) : null}

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Publishing locks the graph and activates the schedule, so this dialog is the
 // last honest read on what a live run would do. Everything here is driven
 // through props — no `mock.module` — so nothing leaks into sibling spec files.
@@ -9,7 +10,7 @@ import type {
   AutomationWorkflowNode,
   TestAutomationWorkflowResponse,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { createAutomationWorkflowNode } from './automationNodeCatalog';
 import { PublishReadinessDialog } from './PublishReadinessDialog';
 
@@ -58,7 +59,10 @@ const capabilities = (
 const configuredPublishNode = (id = 'publish'): AutomationWorkflowNode => {
   const publish = node('action.organic_publish', id);
   return publish.type === 'action.organic_publish'
-    ? { ...publish, config: { ...publish.config, accountId: '17841400000000000' } }
+    ? {
+        ...publish,
+        config: { ...publish.config, accountId: '17841400000000000' },
+      }
     : publish;
 };
 
@@ -164,7 +168,12 @@ describe('PublishReadinessDialog', () => {
     });
 
     expect(screen.getByText('1 step would fail on a live run')).toBeTruthy();
-    expect(screen.getByText('Instagram publishing is not enabled for this brand.')).toBeTruthy();
+    expect(screen.queryByText('Instagram publishing is not enabled for this brand.')).toBeNull();
+    expect(
+      screen.getByText(
+        'This capability is unavailable in this environment. Choose another step or disable it.',
+      ),
+    ).toBeTruthy();
     expect((publishButton() as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: /Unavailable/ }));
@@ -209,7 +218,7 @@ describe('PublishReadinessDialog', () => {
 
     // One node, two placeholders — counted as one failing step, listed twice.
     expect(screen.getByText('1 step would fail on a live run')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: /Not configured/ })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /Configuration required/ })).toHaveLength(2);
 
     rerender(
       <PublishReadinessDialog
@@ -247,7 +256,10 @@ describe('PublishReadinessDialog', () => {
     });
 
     expect(screen.getByText('1 step will run without a connection')).toBeTruthy();
-    expect(screen.getByText('Reconnect Instagram to publish.')).toBeTruthy();
+    expect(screen.queryByText('Reconnect Instagram to publish.')).toBeNull();
+    expect(
+      screen.getByText('Connect the platform this step reads from before running it.'),
+    ).toBeTruthy();
     expect((publishButton() as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole('button', { name: /^Disable/ })).toBeNull();
 

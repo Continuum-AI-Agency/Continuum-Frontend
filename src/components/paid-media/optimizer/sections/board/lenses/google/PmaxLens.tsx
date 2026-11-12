@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale as useFormatLocale } from 'next-intl';
 
 // G09 Performance Max on the adaptive board: each Performance Max campaign's cost per conversion
 // against its goal as a bullet, the share of its impressions lost to rank, its asset groups by
@@ -84,12 +85,19 @@ const STRENGTH_COLOR: Record<AdStrength, string> = {
 const costColor = (multiple: number | null) =>
   multiple !== null && multiple > 1 ? BOARD_COLOR.above : BOARD_COLOR.below;
 
-export type PmaxLensInputs = { read: GoogleSignalsRead; cards: PlatformCard[] | null };
+export type PmaxLensInputs = {
+  read: GoogleSignalsRead;
+  cards: PlatformCard[] | null;
+};
 
 export default function PmaxLens({ ctx, slot }: BoardModuleProps) {
   const customer = useGoogleCustomer(ctx.brandId, ctx.adAccountId);
   const customerId = customer.status === 'ready' ? customer.data.customerId : '';
-  const query = useGoogleSignals({ brandId: ctx.brandId, customerId, blocks: PMAX_BLOCKS });
+  const query = useGoogleSignals({
+    brandId: ctx.brandId,
+    customerId,
+    blocks: PMAX_BLOCKS,
+  });
   const cards = useGoogleCardsLens(ctx.brandId);
   // The top campaign's channels: a second read, made once the first names the campaign, and only
   // where the lens draws the full chart (at s it draws the one figure).
@@ -107,7 +115,10 @@ export default function PmaxLens({ ctx, slot }: BoardModuleProps) {
     customer.status !== 'ready'
       ? customer
       : reads.status === 'ready'
-        ? { status: 'ready', data: { read: reads.data[0], cards: reads.data[1] } }
+        ? {
+            status: 'ready',
+            data: { read: reads.data[0], cards: reads.data[1] },
+          }
         : reads;
   const currency = ctx.currency ?? (customer.status === 'ready' ? customer.data.currency : null);
   return (
@@ -136,6 +147,8 @@ export function PmaxLensView({
   /** The top campaign's spend by channel; null where the lens does not read it. */
   channels: LensState<GoogleBreakdownRead> | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = state.status === 'ready' ? state.data.read : null;
   const cards = state.status === 'ready' ? state.data.cards : null;
   const model = useMemo(
@@ -161,7 +174,7 @@ export function PmaxLensView({
         model?.kind === 'pmax' && channels?.status === 'loading',
       )}
       testId={TEST_ID}
-      title={BOARD_MODULE_TITLES.pmax}
+      title={betaUiText('boardModuleTitle', { id: 'pmax' })}
     >
       <LensBody size={slot.size} state={state} testId={TEST_ID}>
         {() =>
@@ -196,21 +209,19 @@ function PmaxBody({
   /** The top campaign's spend by channel, drawn under the campaigns. */
   channels: ReactNode;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (model.kind === 'unread')
     return <LensNote testId="pmax-lens-unread">— {model.reason}</LensNote>;
   if (model.kind === 'empty') {
-    return (
-      <LensNote testId="pmax-lens-empty">
-        No campaign spent in Google's last 30 complete days.
-      </LensNote>
-    );
+    return <LensNote testId="pmax-lens-empty">{betaUiText('beta_1886b4beedbc')}</LensNote>;
   }
   if (model.kind === 'search_only') {
     if (!model.winner) {
       return (
         <LensNote testId="pmax-lens-no-pair">
-          No Performance Max spend, and no ad pair to compare yet:{' '}
-          {cardsUnread ? CARDS_UNREAD : "the Optimizer's winning-ad card (G10) hasn't fired"}.
+          {betaUiText('beta_26edb2a8b298')}{' '}
+          {cardsUnread ? CARDS_UNREAD : betaUiText('beta_b8b618119797')}.
         </LensNote>
       );
     }
@@ -234,13 +245,16 @@ function PmaxBody({
       </div>
       {model.campaigns.length > shown.length ? (
         <LensNote>
-          {model.campaigns.length - shown.length} more Performance Max{' '}
-          {model.campaigns.length - shown.length === 1 ? 'campaign' : 'campaigns'} spent less.
+          {model.campaigns.length - shown.length} {betaUiText('beta_ae1299d3f251')}{' '}
+          {model.campaigns.length - shown.length === 1
+            ? betaUiText('beta_3dc260b24720')
+            : betaUiText('beta_7a4c3d21f9c6')}{' '}
+          {betaUiText('beta_6ab2884e5aae')}
         </LensNote>
       ) : null}
       {model.assetGroupsUnread ? (
         <LensNote testId="pmax-lens-groups-unread">
-          Ad strength — {model.assetGroupsUnread}.
+          {betaUiText('beta_b39d0cee8904')} {model.assetGroupsUnread}.
         </LensNote>
       ) : null}
       {channels}
@@ -250,9 +264,8 @@ function PmaxBody({
         </LensTakeaway>
       ) : null}
       <LensNote testId="pmax-lens-scope">
-        {windowRangeLabel(model.window.since, model.window.until)} · Google's last 30 complete days
-        · Performance Max is {pct(model.share)} of the account's spend · conversions as Google
-        reports them
+        {windowRangeLabel(model.window.since, model.window.until)} {betaUiText('beta_93cf62df725c')}{' '}
+        {pct(model.share)} {betaUiText('beta_4664848bbd2f')}
       </LensNote>
     </div>
   );
@@ -279,19 +292,22 @@ function takeawayOf(campaign: PmaxCampaign, model: PmaxRead, money: Money): Pmax
   };
 }
 
-const GOAL_SOURCE: Record<NonNullable<PmaxCampaign['goal']>['source'], string> = {
-  target_cpa: 'target CPA',
-  portfolio: 'goal',
-};
-
 function PmaxTile({ model, money }: { model: PmaxRead; money: Money }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const lead = model.campaigns[0];
   if (!lead) return null;
   if (!lead.goal) {
     return (
       <div className="space-y-2.5">
         <LensFigure
-          caption={`of Google spend in Performance Max${lead.costPerConversion === null ? '' : ` · ${money(lead.costPerConversion)} per conversion`} · no goal`}
+          caption={betaUiText('beta_d3d19d52a94d', {
+            value0: String(
+              lead.costPerConversion === null
+                ? ''
+                : ` · ${betaUiText('pmaxCostConversion', { cost: money(lead.costPerConversion) })}`,
+            ),
+          })}
           testId="pmax-lens-headline"
           value={pct(model.share)}
         />
@@ -304,8 +320,19 @@ function PmaxTile({ model, money }: { model: PmaxRead; money: Money }) {
       <LensFigure
         caption={
           lead.costPerConversion === null
-            ? `spent without a conversion · ${GOAL_SOURCE[lead.goal.source]} ${money(lead.goal.value)}`
-            : `per conversion · ${GOAL_SOURCE[lead.goal.source]} ${money(lead.goal.value)}${lead.multiple !== null && positionOf(lead.multiple) === 'over' ? ` · ${multipleText(lead.multiple)}` : ''}`
+            ? betaUiText('beta_1293a5162608', {
+                value0: String(betaUiText('googleGoalSource', { source: lead.goal.source })),
+                value1: String(money(lead.goal.value)),
+              })
+            : betaUiText('beta_54211ffe7e76', {
+                value0: String(betaUiText('googleGoalSource', { source: lead.goal.source })),
+                value1: String(money(lead.goal.value)),
+                value2: String(
+                  lead.multiple !== null && positionOf(lead.multiple) === 'over'
+                    ? ` · ${multipleText(lead.multiple)}`
+                    : '',
+                ),
+              })
         }
         testId="pmax-lens-headline"
         value={money(lead.costPerConversion ?? lead.spend)}
@@ -317,10 +344,14 @@ function PmaxTile({ model, money }: { model: PmaxRead; money: Money }) {
 
 /** Performance Max's share of the account's spend as one thin bar. */
 function ShareBar({ share }: { share: number }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   return (
     <div
-      aria-label={`Performance Max: ${pct(share)} of the account's spend`}
+      aria-label={betaUiText('beta_73a805c33161', {
+        value0: String(pct(share)),
+      })}
       className="relative h-2 w-full rounded-full bg-muted"
       role="img"
     >
@@ -353,6 +384,8 @@ function Bullet({
   money: Money;
   compact?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const cost = campaign.costPerConversion;
   const goal = campaign.goal;
@@ -360,11 +393,15 @@ function Bullet({
   const max = Math.max(cost, goal.value) * 1.12;
   const at = (cost / max) * 100;
   const mark = (goal.value / max) * 100;
-  const readout = `${GOAL_SOURCE[goal.source]} ${money(goal.value)}${campaign.multiple === null ? '' : ` · ${positionOf(campaign.multiple) === 'over' ? `${multipleText(campaign.multiple)} the goal` : positionOf(campaign.multiple) === 'under' ? `${pct(1 - campaign.multiple)} under it` : 'on it'}`}`;
+  const readout = `${betaUiText('googleGoalSource', { source: goal.source })} ${money(goal.value)}${campaign.multiple === null ? '' : ` · ${positionOf(campaign.multiple) === 'over' ? `${multipleText(campaign.multiple)} the goal` : positionOf(campaign.multiple) === 'under' ? `${pct(1 - campaign.multiple)} under it` : 'on it'}`}`;
   return (
     <div className="space-y-0.5">
       <figure
-        aria-label={`Cost per conversion ${money(cost)} against a ${GOAL_SOURCE[goal.source]} of ${money(goal.value)}`}
+        aria-label={betaUiText('beta_cac0afb6515c', {
+          value0: String(money(cost)),
+          value1: String(betaUiText('googleGoalSource', { source: goal.source })),
+          value2: String(money(goal.value)),
+        })}
         className="relative m-0 h-6 w-full"
         data-testid="pmax-lens-bullet"
       >
@@ -386,7 +423,10 @@ function Bullet({
           mark={
             <motion.button
               animate={{ left: `${at}%` }}
-              aria-label={`${money(cost)} per conversion: ${readout}`}
+              aria-label={betaUiText('beta_7564c7e24f74', {
+                value0: String(money(cost)),
+                value1: String(readout),
+              })}
               className="-ml-3 group absolute top-0 grid size-6 place-items-center rounded-full focus-visible:outline-none"
               data-testid="pmax-lens-dot"
               initial={reduce ? false : { left: '0%' }}
@@ -400,7 +440,7 @@ function Bullet({
               />
             </motion.button>
           }
-          value={`${money(cost)} per conversion`}
+          value={betaUiText('pmaxCostConversion', { cost: money(cost) })}
         />
       </figure>
       {compact ? null : (
@@ -409,7 +449,7 @@ function Bullet({
             className={cn('absolute top-0 whitespace-nowrap', anchorAt(mark))}
             style={{ left: `${mark}%` }}
           >
-            {GOAL_SOURCE[goal.source]} {money(goal.value)}
+            {betaUiText('googleGoalSource', { source: goal.source })} {money(goal.value)}
           </span>
         </div>
       )}
@@ -418,27 +458,34 @@ function Bullet({
 }
 
 function RankMeter({ share }: { share: number | null }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (share === null) {
     return (
       <p className="text-muted-foreground text-xs" data-testid="pmax-lens-rank">
-        Impressions lost to rank — not reported by Google for this campaign
+        {betaUiText('beta_4339b933ddd2')}
       </p>
     );
   }
   return (
     <div className="space-y-1" data-testid="pmax-lens-rank">
       <p className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">Impressions lost to rank</span>
+        <span className="text-muted-foreground">{betaUiText('beta_ed6e67ac9fa1')}</span>
         <span className="font-medium text-foreground tabular-nums">{pct(share)}</span>
       </p>
       <span
-        aria-label={`${pct(share)} of its impressions lost to rank`}
+        aria-label={betaUiText('beta_09d5a84af7fa', {
+          value0: String(pct(share)),
+        })}
         className="relative block h-1.5 w-full rounded-full bg-muted"
         role="img"
       >
         <span
           className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${share * 100}%`, backgroundColor: BOARD_COLOR.pmax }}
+          style={{
+            width: `${share * 100}%`,
+            backgroundColor: BOARD_COLOR.pmax,
+          }}
         />
       </span>
     </div>
@@ -446,23 +493,37 @@ function RankMeter({ share }: { share: number | null }) {
 }
 
 function StrengthLadder({ campaign }: { campaign: PmaxCampaign }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const rated = AD_STRENGTHS.reduce((sum, strength) => sum + campaign.strengths[strength], 0);
   if (campaign.groups.length === 0) {
     return (
       <p className="text-muted-foreground text-xs" data-testid="pmax-lens-strength">
-        Ad strength — no asset group read for this campaign
+        {betaUiText('beta_ae8d2f1697e8')}
       </p>
     );
   }
   return (
     <div className="space-y-1" data-testid="pmax-lens-strength">
       <p className="text-muted-foreground text-xs">
-        Ad strength · {campaign.groups.length} asset{' '}
-        {campaign.groups.length === 1 ? 'group' : 'groups'}
-        {campaign.unrated > 0 ? ` · ${campaign.unrated} not rated yet` : ''}
+        {betaUiText('beta_0d8c9dfa5f7f')} {campaign.groups.length} {betaUiText('beta_d59386e0ae43')}{' '}
+        {campaign.groups.length === 1
+          ? betaUiText('beta_ad936fcbed63')
+          : betaUiText('beta_4ed379d418bb')}
+        {campaign.unrated > 0
+          ? betaUiText('beta_3c768ff6077e', {
+              value0: String(campaign.unrated),
+            })
+          : ''}
       </p>
       <div
-        aria-label={`Asset groups by Ad Strength: ${AD_STRENGTHS.map((strength) => `${AD_STRENGTH_LABEL[strength]} ${campaign.strengths[strength]}`).join(', ')}`}
+        aria-label={betaUiText('beta_b80ce57698f7', {
+          value0: String(
+            AD_STRENGTHS.map(
+              (strength) => `${AD_STRENGTH_LABEL[strength]} ${campaign.strengths[strength]}`,
+            ).join(', '),
+          ),
+        })}
         className="grid grid-cols-4 gap-0.5"
         role="img"
       >
@@ -487,7 +548,9 @@ function StrengthLadder({ campaign }: { campaign: PmaxCampaign }) {
                   'block h-1.5 rounded-full',
                   count === 0 && 'border border-border border-dashed',
                 )}
-                style={{ backgroundColor: count > 0 ? STRENGTH_COLOR[strength] : 'transparent' }}
+                style={{
+                  backgroundColor: count > 0 ? STRENGTH_COLOR[strength] : 'transparent',
+                }}
               />
               <span
                 className={cn(
@@ -503,9 +566,7 @@ function StrengthLadder({ campaign }: { campaign: PmaxCampaign }) {
         })}
       </div>
       {rated === 0 ? (
-        <p className="text-muted-foreground text-xs">
-          Google has not rated these asset groups yet.
-        </p>
+        <p className="text-muted-foreground text-xs">{betaUiText('beta_07b408cd8b01')}</p>
       ) : null}
     </div>
   );
@@ -523,12 +584,18 @@ function CampaignBlock({
   /** False when the account's asset groups were not read: the lens says so once, below. */
   groupsRead: boolean;
 }) {
+  const formatLocale = useFormatLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const weakGroup = campaign.groups.find(
     (group) => group.missing.length > 0 && group.strength !== 'EXCELLENT',
   );
   return (
     <section
-      aria-label={`Performance Max: ${campaign.name}`}
+      aria-label={betaUiText('beta_7fcc70209d54', {
+        value0: String(campaign.name),
+      })}
       className="min-w-0 space-y-2"
       data-testid="pmax-lens-campaign"
     >
@@ -536,18 +603,23 @@ function CampaignBlock({
         <p className="min-w-0 truncate font-medium text-foreground text-sm" title={campaign.name}>
           {campaign.name}
           {campaign.status === 'PAUSED' ? (
-            <span className="font-normal text-muted-foreground text-xs"> · paused</span>
+            <span className="font-normal text-muted-foreground text-xs">
+              {' '}
+              {betaUiText('beta_cfaba14736c2')}
+            </span>
           ) : null}
         </p>
         <p className="shrink-0 text-right text-xs">
           {campaign.costPerConversion === null ? (
-            <span className="text-muted-foreground">{money(campaign.spend)} · no conversion</span>
+            <span className="text-muted-foreground">
+              {money(campaign.spend)} {betaUiText('beta_d21e2c8bfbcb')}
+            </span>
           ) : (
             <>
               <span className="font-semibold text-foreground text-sm tabular-nums">
                 {money(campaign.costPerConversion)}
               </span>{' '}
-              <span className="text-muted-foreground">per conversion</span>
+              <span className="text-muted-foreground">{betaUiText('beta_a8816373fc2b')}</span>
             </>
           )}
         </p>
@@ -557,20 +629,34 @@ function CampaignBlock({
       ) : (
         <LensNote testId="pmax-lens-no-goal">
           {campaign.goal
-            ? `${GOAL_SOURCE[campaign.goal.source]} ${money(campaign.goal.value)}: nothing to place against it without a conversion`
-            : 'No goal to read it against: no target CPA on the campaign and no single portfolio goal'}
+            ? betaUiText('beta_3763e1cae84a', {
+                value0: String(
+                  betaUiText('googleGoalSource', {
+                    source: campaign.goal.source,
+                  }),
+                ),
+                value1: String(money(campaign.goal.value)),
+              })
+            : betaUiText('beta_61716317084c')}
         </LensNote>
       )}
       <p className="text-muted-foreground text-xs tabular-nums">
-        {money(campaign.spend)} spent ·{' '}
-        {campaign.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conversions
-        {campaign.budgetPerDay === null ? '' : ` · ${money(campaign.budgetPerDay)}/day budget`}
+        {money(campaign.spend)} {betaUiText('beta_f6aea408a041')}{' '}
+        {campaign.conversions.toLocaleString(formatLocale, {
+          maximumFractionDigits: 1,
+        })}{' '}
+        {betaUiText('beta_4f2aad5d11f2')}
+        {campaign.budgetPerDay === null
+          ? ''
+          : betaUiText('beta_914a2c4afaa1', {
+              value0: String(money(campaign.budgetPerDay)),
+            })}
       </p>
       <RankMeter share={campaign.lostToRank} />
       {groupsRead ? <StrengthLadder campaign={campaign} /> : null}
       {detail && weakGroup ? (
         <LensNote testId="pmax-lens-missing">
-          Google asks for {weakGroup.name}: {weakGroup.missing.join(' · ')}
+          {betaUiText('beta_8da4e61d6158')} {weakGroup.name}: {weakGroup.missing.join(' · ')}
         </LensNote>
       ) : null}
       {campaign.finding ? <Finding card={campaign.finding} /> : null}
@@ -580,12 +666,14 @@ function CampaignBlock({
 
 /** The Optimizer's rescue-or-pause card, as its producer worded it. */
 function Finding({ card }: { card: NonNullable<PmaxCampaign['finding']> }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <div
       className="space-y-1 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-2 text-xs"
       data-testid="pmax-lens-finding"
     >
-      <p className="text-muted-foreground">Optimizer card</p>
+      <p className="text-muted-foreground">{betaUiText('beta_aa393c6ba16b')}</p>
       <p className="font-medium text-foreground">{card.headline}</p>
       <ul className="space-y-0.5 text-muted-foreground">
         {card.checklist.map((item) => (
@@ -607,29 +695,35 @@ export function ChannelSplitView({
   read: LensState<GoogleBreakdownRead>;
   currency: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   if (read.status === 'loading') {
-    return <LensNote testId="pmax-lens-channels-loading">Reading the spend by channel…</LensNote>;
+    return (
+      <LensNote testId="pmax-lens-channels-loading">{betaUiText('beta_4ae04903e398')}</LensNote>
+    );
   }
   if (read.status !== 'ready') {
     return (
       <LensNote testId="pmax-lens-channels-unread">
-        Spend by channel — {read.status === 'error' ? read.message : read.reason}
+        {betaUiText('beta_8af92e4a9742')} {read.status === 'error' ? read.message : read.reason}
       </LensNote>
     );
   }
   const slices = networkSplit(read.data, read.data.currency ?? currency);
   if (slices.length === 0) {
     return (
-      <LensNote testId="pmax-lens-channels-unread">
-        Spend by channel — Google reported no channel for this campaign in the window
-      </LensNote>
+      <LensNote testId="pmax-lens-channels-unread">{betaUiText('beta_b47c2d24bb83')}</LensNote>
     );
   }
   const money = (value: number) => formatCurrency(value, read.data.currency ?? currency);
   return (
-    <section aria-label="Spend by channel" className="space-y-1" data-testid="pmax-lens-channels">
-      <p className="font-medium text-muted-foreground text-xs">Spend by channel</p>
+    <section
+      aria-label={betaUiText('beta_739301a6a6a2')}
+      className="space-y-1"
+      data-testid="pmax-lens-channels"
+    >
+      <p className="font-medium text-muted-foreground text-xs">{betaUiText('beta_739301a6a6a2')}</p>
       <ul className="space-y-1">
         {slices.slice(0, 5).map((slice) => (
           <li
@@ -675,11 +769,19 @@ function AdPair({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const formatLocale = useFormatLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const cardMoney: Money = card.currency ? (value) => formatCurrency(value, card.currency) : money;
   const ratio = card.comparator.cost_per_result / card.winner.cost_per_result;
   const ads = [
-    { role: 'winner' as const, label: card.winner.label, cost: card.winner.cost_per_result },
+    {
+      role: 'winner' as const,
+      label: card.winner.label,
+      cost: card.winner.cost_per_result,
+    },
     {
       role: 'comparator' as const,
       label: card.comparator.label,
@@ -691,7 +793,9 @@ function AdPair({
     return (
       <div className="space-y-2.5">
         <LensFigure
-          caption={`per conversion, the best ad · the dearer one ${cardMoney(card.comparator.cost_per_result)}`}
+          caption={betaUiText('beta_710738e4fd08', {
+            value0: String(cardMoney(card.comparator.cost_per_result)),
+          })}
           testId="pmax-lens-headline"
           value={cardMoney(card.winner.cost_per_result)}
         />
@@ -702,8 +806,8 @@ function AdPair({
   return (
     <div className="space-y-3" data-testid="pmax-lens-ad-pair">
       <LensNote>
-        Search only, so the lens reads the best ad of {card.ad_group_name} ({card.campaign_name})
-        against the dearer one.
+        {betaUiText('beta_746c34f503f9')} {card.ad_group_name} ({card.campaign_name}
+        {betaUiText('beta_a7e2c1547429')}
       </LensNote>
       <div className="grid @md/module:grid-cols-2 grid-cols-1 gap-2">
         {ads.map((ad) => (
@@ -714,7 +818,9 @@ function AdPair({
             key={ad.role}
           >
             <p className="text-muted-foreground text-xs">
-              {ad.role === 'winner' ? 'Best ad' : 'The dearer one'}
+              {ad.role === 'winner'
+                ? betaUiText('beta_335dd51a3af2')
+                : betaUiText('beta_0537d08e8e40')}
             </p>
             <p className="break-words font-medium text-foreground text-sm">{ad.label}</p>
             <p className="text-xs">
@@ -722,9 +828,15 @@ function AdPair({
                 {cardMoney(ad.cost)}
               </span>{' '}
               <span className="text-muted-foreground">
-                per conversion
+                {betaUiText('beta_a8816373fc2b')}
                 {ad.role === 'winner'
-                  ? ` · ${card.winner.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conversions`
+                  ? betaUiText('beta_ca344a520c82', {
+                      value0: String(
+                        card.winner.conversions.toLocaleString(formatLocale, {
+                          maximumFractionDigits: 1,
+                        }),
+                      ),
+                    })
                   : ''}
               </span>
             </p>
@@ -733,7 +845,9 @@ function AdPair({
       </div>
       <PairBars ads={ads} max={max} money={cardMoney} reduce={reduce} />
       {card.best_assets.length > 0 ? (
-        <LensNote>Google rates these texts best in it: {card.best_assets.join(' · ')}</LensNote>
+        <LensNote>
+          {betaUiText('beta_3695b60c217f')} {card.best_assets.join(' · ')}
+        </LensNote>
       ) : null}
       <LensTakeaway testId="pmax-lens-takeaway">
         {pmaxLensTakeaway({
@@ -746,7 +860,7 @@ function AdPair({
         })}
       </LensTakeaway>
       <LensNote testId="pmax-lens-scope">
-        The Optimizer's G10 card · {card.window_days} days · conversions as Google reports them
+        {betaUiText('beta_cfa82909a443')} {card.window_days} {betaUiText('beta_061da913ced7')}
       </LensNote>
     </div>
   );
@@ -763,6 +877,8 @@ function PairBars({
   money: Money;
   reduce: boolean | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <div className="space-y-1">
       <ul className="space-y-0.5" data-testid="pmax-lens-pair-bars">
@@ -772,7 +888,10 @@ function PairBars({
               label={ad.label}
               mark={
                 <button
-                  aria-label={`${money(ad.cost)} per conversion: ${ad.label}`}
+                  aria-label={betaUiText('beta_7564c7e24f74', {
+                    value0: String(money(ad.cost)),
+                    value1: String(ad.label),
+                  })}
                   className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   type="button"
                 >
@@ -792,14 +911,14 @@ function PairBars({
                   <span className="text-muted-foreground tabular-nums">{money(ad.cost)}</span>
                 </button>
               }
-              value={`${money(ad.cost)} per conversion`}
+              value={betaUiText('pmaxCostConversion', { cost: money(ad.cost) })}
             />
           </li>
         ))}
       </ul>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs">
-        <LegendKey color={BOARD_COLOR.below}>Best ad</LegendKey>
-        <LegendKey color={BOARD_COLOR.above}>The dearer one</LegendKey>
+        <LegendKey color={BOARD_COLOR.below}>{betaUiText('beta_335dd51a3af2')}</LegendKey>
+        <LegendKey color={BOARD_COLOR.above}>{betaUiText('beta_0537d08e8e40')}</LegendKey>
       </div>
     </div>
   );

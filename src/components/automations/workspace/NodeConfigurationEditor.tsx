@@ -22,6 +22,7 @@ import {
   resolveAutomationPlannerUpsertConfig,
 } from '@continuum/contracts';
 import { Copy, Expand, Lightbulb, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,9 +62,12 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
+import { automationCapabilityDescription } from '@/i18n/automationCapability';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
 import { getApiUrl } from '@/lib/api/config';
 import { buildAutomationSourceOptions } from '@/lib/automations/source-options';
 import { cn } from '@/lib/utils';
+import { automationControlLabel } from './automationControlLabels';
 import { AiStudioRoomPicker } from './pickers/AiStudioRoomPicker';
 import { LibraryCollectionPicker } from './pickers/LibraryCollectionPicker';
 import { OrganicPublishTargetPicker } from './pickers/OrganicPublishTargetPicker';
@@ -76,13 +80,17 @@ type WorkflowConfig = AutomationWorkflowNode['config'];
 export const automationWebhookDeliveryUrl = (publicId: string): string =>
   getApiUrl(`/api/automations/hooks/${publicId}`);
 
-export async function copyAutomationValue(value: string, label: string): Promise<void> {
+export async function copyAutomationValue(
+  value: string,
+  label: string,
+  translate: ReturnType<typeof useTranslations<'automations'>>,
+): Promise<void> {
   try {
     await navigator.clipboard.writeText(value);
-    toast.success(`${label} copied`);
+    toast.success(translate('copiedValue', { label }));
   } catch {
-    toast.error(`Could not copy the ${label.toLowerCase()}`, {
-      description: 'Your browser blocked clipboard access — select the text and copy it manually.',
+    toast.error(translate('copyFailed', { label }), {
+      description: translate('clipboardBlocked'),
     });
   }
 }
@@ -180,7 +188,10 @@ export function boundedPercent(raw: string): number | null {
 export const paidOptimizerOperationOptions = [
   { value: 'run_cycle', label: 'Run an optimization cycle' },
   { value: 'apply_approved', label: 'Apply human-approved recommendations' },
-] as const satisfies ReadonlyArray<{ value: AutomationPaidOptimizerOperation; label: string }>;
+] as const satisfies ReadonlyArray<{
+  value: AutomationPaidOptimizerOperation;
+  label: string;
+}>;
 
 /** Surfaces what the backend says about an action before a run proves it. The
  *  capabilities response carries `actions` optionally, so an older backend
@@ -192,6 +203,7 @@ function ActionCapabilityNotice({
   type: AutomationActionNodeType;
   capabilities: AutomationCapabilitiesResponse | null;
 }) {
+  const uiText = useTranslations('automations');
   const capability = capabilities?.actions?.find((action) => action.type === type);
   if (!capability) return null;
   if (capability.availability === 'ready' && capability.lifecycle === 'production') return null;
@@ -199,11 +211,12 @@ function ActionCapabilityNotice({
   return (
     <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
       <Badge variant="warning">
-        {capability.availability === 'needs_connection' ? 'Needs connection' : 'Limited'}
+        {capability.availability === 'needs_connection'
+          ? uiText('needs_connection_d919fde')
+          : uiText('limited_e5125d9')}
       </Badge>
       <p className="mt-2 text-xs leading-4 text-muted-foreground">
-        {capability.reason ??
-          'This action is not fully available in this environment yet. A run may fail preflight.'}
+        {automationCapabilityDescription(capability, uiText)}
       </p>
     </div>
   );
@@ -228,6 +241,7 @@ function PromptField({
   starters?: PromptStarter[];
   rows?: number;
 }) {
+  const uiText = useTranslations('automations');
   const id = useId();
   const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
   const appendStarter = (text: string) => onChange(appendPromptStarter(value, text));
@@ -250,19 +264,19 @@ function PromptField({
       />
       <InputGroupAddon align="block-end" className="justify-between border-t">
         <InputGroupText className="font-mono text-2xs">
-          {wordCount} {wordCount === 1 ? 'word' : 'words'}
+          {uiText('m_64ad09e102', { count: wordCount })}
         </InputGroupText>
         <div className="flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <InputGroupButton
-                  aria-label="Add prompt starter"
-                  title="Add prompt starter"
+                  aria-label={uiText('add_prompt_starter_44c1033')}
+                  title={uiText('add_prompt_starter_44c1033')}
                   disabled={disabled}
                 >
                   <Sparkles aria-hidden="true" />
-                  Quick start
+                  {uiText('quick_start_0eb95fb')}
                 </InputGroupButton>
               }
             />
@@ -270,7 +284,7 @@ function PromptField({
               align="end"
               className="automation-workflow-popover w-72 rounded-lg p-1.5"
             >
-              <DropdownMenuLabel>Prompt starters</DropdownMenuLabel>
+              <DropdownMenuLabel>{uiText('prompt_starters_b59058b')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {starters.map((starter) => (
                 <DropdownMenuItem
@@ -280,7 +294,9 @@ function PromptField({
                 >
                   <Lightbulb aria-hidden="true" />
                   <span>
-                    <span className="block text-xs font-medium">{starter.label}</span>
+                    <span className="block text-xs font-medium">
+                      {localizeAutomationsCopy(starter.label, uiText)}
+                    </span>
                     <span className="mt-0.5 line-clamp-2 block text-xs leading-4 text-muted-foreground">
                       {starter.text}
                     </span>
@@ -292,8 +308,8 @@ function PromptField({
           {value ? (
             <InputGroupButton
               size="icon-xs"
-              aria-label="Clear prompt"
-              title="Clear prompt"
+              aria-label={uiText('clear_prompt_e327c46')}
+              title={uiText('clear_prompt_e327c46')}
               disabled={disabled}
               onClick={() => onChange('')}
             >
@@ -306,8 +322,8 @@ function PromptField({
                 render={
                   <InputGroupButton
                     size="icon-xs"
-                    aria-label="Open large prompt editor"
-                    title="Open large prompt editor"
+                    aria-label={uiText('open_large_prompt_editor_984bf31')}
+                    title={uiText('open_large_prompt_editor_984bf31')}
                     disabled={disabled}
                   >
                     <Expand aria-hidden="true" />
@@ -318,7 +334,7 @@ function PromptField({
                 <DialogHeader>
                   <DialogTitle>{label}</DialogTitle>
                   <DialogDescription>
-                    Write the operating context this step should follow on every run.
+                    {uiText('write_the_operating_context_this_step_should__2497c96')}
                   </DialogDescription>
                 </DialogHeader>
                 {editor(true)}
@@ -352,6 +368,8 @@ function JsonObjectField({
   onChange: (value: Record<string, unknown>) => void;
   disabled: boolean;
 }) {
+  const uiText = useTranslations('automations');
+  const id = useId();
   const serialized = JSON.stringify(value, null, 2);
   const [draft, setDraft] = useState(serialized);
   const [error, setError] = useState<string | null>(null);
@@ -360,8 +378,10 @@ function JsonObjectField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Textarea
+        id={id}
+        aria-describedby={error ? `${id}-error` : undefined}
         rows={6}
         className="font-mono text-xs"
         value={draft}
@@ -373,16 +393,21 @@ function JsonObjectField({
           try {
             const parsed: unknown = JSON.parse(next);
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-              throw new Error('Enter a JSON object.');
+              setError(uiText('m_9879fa8463'));
+              return;
             }
             setError(null);
             onChange(parsed as Record<string, unknown>);
-          } catch (parseError) {
-            setError(parseError instanceof Error ? parseError.message : 'Invalid JSON object.');
+          } catch {
+            setError(uiText('m_9cc456f76c'));
           }
         }}
       />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? (
+        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -436,6 +461,7 @@ function Choice({
   onChange: (value: string) => void;
   disabled: boolean;
 }) {
+  const uiText = useTranslations('automations');
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
@@ -449,7 +475,7 @@ function Choice({
             <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
               <span className="flex items-center gap-2">
                 {option.label}
-                {option.preview ? <Badge variant="muted">Preview</Badge> : null}
+                {option.preview ? <Badge variant="muted">{uiText('preview_324b134')}</Badge> : null}
               </span>
             </SelectItem>
           ))}
@@ -494,6 +520,7 @@ function SourceEditor({
   onChange: (config: WorkflowConfig) => void;
   sourceCapabilities: AutomationCapabilitiesResponse | null;
 }) {
+  const uiText = useTranslations('automations');
   const { config } = node;
   const query = parseAutomationSourceQuery(config.source, config.query);
   const libraryQuery =
@@ -528,6 +555,7 @@ function SourceEditor({
   const sourceOptions = buildAutomationSourceOptions({
     capabilities: sourceCapabilities,
     selected: config.source,
+    translate: uiText,
   });
   const patchQuery = (patch: Record<string, unknown>) =>
     onChange({ ...config, query: { ...query, ...patch } });
@@ -535,7 +563,7 @@ function SourceEditor({
   return (
     <>
       <Choice
-        label="Source"
+        label={uiText('source_0e570ca')}
         value={config.source}
         options={sourceOptions}
         disabled={disabled}
@@ -552,25 +580,29 @@ function SourceEditor({
         <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
           <div className="flex items-center gap-2">
             <Badge variant={capability.lifecycle === 'preview' ? 'muted' : 'warning'}>
-              {capability.availability.replace('_', ' ')}
+              {capability.availability === 'needs_connection'
+                ? uiText('needs_connection_d919fde')
+                : uiText('unavailable_ca18449')}
             </Badge>
           </div>
-          <p className="mt-2 text-xs leading-4 text-muted-foreground">{capability.reason}</p>
+          <p className="mt-2 text-xs leading-4 text-muted-foreground">
+            {automationCapabilityDescription(capability, uiText)}
+          </p>
         </div>
       ) : null}
       <Choice
-        label="Read mode"
+        label={uiText('read_mode_76e4a96')}
         value={config.mode}
         options={[
-          { value: 'live', label: 'Live at run time' },
-          { value: 'pinned', label: 'Pinned records' },
+          { value: 'live', label: uiText('live_at_run_time_9c913c2') },
+          { value: 'pinned', label: uiText('pinned_records_de0378b') },
         ]}
         disabled={disabled}
         onChange={(mode) => onChange({ ...config, mode: mode as 'live' | 'pinned' })}
       />
       {config.mode === 'pinned' ? (
         <Field
-          label="Pinned record IDs"
+          label={uiText('pinned_record_ids_7132054')}
           value={config.pinnedIds.join(', ')}
           disabled={disabled}
           onChange={(value) => onChange({ ...config, pinnedIds: textList(value) })}
@@ -579,16 +611,16 @@ function SourceEditor({
       ) : null}
       {'search' in query ? (
         <Field
-          label="Search"
+          label={uiText('search_49c266b')}
           value={String(query.search)}
           disabled={disabled}
           onChange={(search) => patchQuery({ search })}
-          placeholder="Optional filters"
+          placeholder={uiText('optional_filters_e94edc8')}
         />
       ) : null}
       {'limit' in query ? (
         <Field
-          label="Result limit"
+          label={uiText('result_limit_989d839')}
           type="number"
           value={Number(query.limit)}
           disabled={disabled}
@@ -598,25 +630,30 @@ function SourceEditor({
       {libraryQuery ? (
         <>
           <Field
-            label="Tags"
+            label={uiText('tags_1331275')}
             value={libraryQuery.tags.join(', ')}
             disabled={disabled}
             onChange={(tags) => patchQuery({ tags: textList(tags) })}
-            placeholder="approved, campaign"
+            placeholder={uiText('m_d19e359c18')}
           />
           <Choice
-            label="Review status"
+            label={uiText('review_status_a410d70')}
             value={libraryQuery.reviewStatus ?? 'any'}
             disabled={disabled}
             options={[
-              { value: 'any', label: 'Any' },
-              { value: 'draft', label: 'Draft' },
-              { value: 'in_review', label: 'In review' },
-              { value: 'needs_changes', label: 'Needs changes' },
-              { value: 'approved', label: 'Approved' },
+              { value: 'any', label: uiText('any_2b50559') },
+              { value: 'draft', label: uiText('draft_ebf12ef') },
+              { value: 'in_review', label: uiText('in_review_c390591') },
+              {
+                value: 'needs_changes',
+                label: uiText('needs_changes_17fa92a'),
+              },
+              { value: 'approved', label: uiText('approved_87b42e4') },
             ]}
             onChange={(reviewStatus) =>
-              patchQuery({ reviewStatus: reviewStatus === 'any' ? undefined : reviewStatus })
+              patchQuery({
+                reviewStatus: reviewStatus === 'any' ? undefined : reviewStatus,
+              })
             }
           />
         </>
@@ -624,49 +661,49 @@ function SourceEditor({
       {paidAnalyticsQuery ? (
         <>
           <Field
-            label="Meta ad account"
+            label={uiText('meta_ad_account_015c9a5')}
             value={paidAnalyticsQuery.adAccountId}
             disabled={disabled}
             onChange={(adAccountId) => patchQuery({ adAccountId })}
-            placeholder="auto or act_…"
+            placeholder={uiText('m_c33e8472e2')}
           />
           <Choice
-            label="Date window"
+            label={uiText('date_window_3fbabec')}
             value={paidAnalyticsQuery.datePreset}
             disabled={disabled}
             options={[
-              { value: 'last_7d', label: 'Last 7 days' },
-              { value: 'last_14d', label: 'Last 14 days' },
-              { value: 'last_30d', label: 'Last 30 days' },
+              { value: 'last_7d', label: uiText('last_7_days_0603dec') },
+              { value: 'last_14d', label: uiText('last_14_days_d9f1e16') },
+              { value: 'last_30d', label: uiText('last_30_days_f8f03fb') },
             ]}
             onChange={(datePreset) => patchQuery({ datePreset })}
           />
           <Choice
-            label="Level"
+            label={uiText('level_1709305')}
             value={paidAnalyticsQuery.level}
             disabled={disabled}
             options={['account', 'campaign', 'adset', 'ad'].map((value) => ({
               value,
-              label: value,
+              label: automationControlLabel(value, uiText),
             }))}
             onChange={(level) => patchQuery({ level })}
           />
           <Field
-            label="Object ID"
+            label={uiText('object_id_f79ceb0')}
             value={paidAnalyticsQuery.objectId}
             disabled={disabled}
             onChange={(objectId) => patchQuery({ objectId })}
-            placeholder="auto or campaign/ad set ID"
+            placeholder={uiText('m_7414d45e7a')}
           />
           <Field
-            label="Metrics"
+            label={uiText('metrics_a58da79')}
             value={paidAnalyticsQuery.metrics.join(', ')}
             disabled={disabled}
             onChange={(metrics) => patchQuery({ metrics: textList(metrics) })}
             placeholder="spend, impressions, clicks"
           />
           <Toggle
-            label="Include top ads"
+            label={uiText('include_top_ads_8dc161d')}
             checked={paidAnalyticsQuery.includeTopAds}
             disabled={disabled}
             onCheckedChange={(includeTopAds) => patchQuery({ includeTopAds })}
@@ -676,14 +713,17 @@ function SourceEditor({
       {organicAnalyticsQuery ? (
         <>
           <Choice
-            label="Date window"
+            label={uiText('date_window_3fbabec')}
             value={organicAnalyticsQuery.dateRange}
             disabled={disabled}
-            options={['7d', '14d', '30d', '90d'].map((value) => ({ value, label: value }))}
+            options={['7d', '14d', '30d', '90d'].map((value) => ({
+              value,
+              label: automationControlLabel(value, uiText),
+            }))}
             onChange={(dateRange) => patchQuery({ dateRange })}
           />
           <Toggle
-            label="Include insights"
+            label={uiText('include_insights_c3a4420')}
             checked={organicAnalyticsQuery.includeInsights}
             disabled={disabled}
             onCheckedChange={(includeInsights) => patchQuery({ includeInsights })}
@@ -692,29 +732,32 @@ function SourceEditor({
       ) : null}
       {savedPromptQuery || savedSkillQuery ? (
         <Field
-          label="Selected IDs"
+          label={uiText('selected_ids_bc7be1d')}
           value={(savedPromptQuery ?? savedSkillQuery)?.ids.join(', ') ?? ''}
           disabled={disabled}
           onChange={(ids) => patchQuery({ ids: textList(ids) })}
-          placeholder="Leave empty to search all"
+          placeholder={uiText('leave_empty_to_search_all_6242ae0')}
         />
       ) : null}
       {previousRunQuery ? (
         <>
           <Field
-            label="Automation ID"
+            label={uiText('automation_id_f1c42f9')}
             value={previousRunQuery.automationId ?? ''}
             disabled={disabled}
             onChange={(automationId) => patchQuery({ automationId: automationId || undefined })}
-            placeholder="Current brand, any automation"
+            placeholder={uiText('current_brand_any_automation_5e9c33d')}
           />
           <Choice
-            label="Selection"
+            label={uiText('selection_ca40670')}
             value={previousRunQuery.selection}
             disabled={disabled}
             options={[
-              { value: 'last_successful', label: 'Last successful' },
-              { value: 'latest', label: 'Latest' },
+              {
+                value: 'last_successful',
+                label: uiText('last_successful_c4fdea6'),
+              },
+              { value: 'latest', label: uiText('latest_8730d3c') },
             ]}
             onChange={(selection) => patchQuery({ selection })}
           />
@@ -723,13 +766,13 @@ function SourceEditor({
       {connectedPlatformQuery ? (
         <>
           <Field
-            label="Provider"
+            label={uiText('provider_472590a')}
             value={connectedPlatformQuery.provider}
             disabled={disabled}
             onChange={(provider) => patchQuery({ provider })}
           />
           <Field
-            label="Resource"
+            label={uiText('resource_eb7a842')}
             value={connectedPlatformQuery.resource}
             disabled={disabled}
             onChange={(resource) => patchQuery({ resource })}
@@ -749,6 +792,7 @@ function AgentEditor({
   disabled: boolean;
   onChange: (config: WorkflowConfig) => void;
 }) {
+  const uiText = useTranslations('automations');
   const { config } = node;
   const patchPolicy = (patch: Partial<typeof config.policy>) =>
     onChange({ ...config, policy: { ...config.policy, ...patch } });
@@ -758,34 +802,40 @@ function AgentEditor({
   return (
     <>
       <Choice
-        label="Agent"
+        label={uiText('agent_11b39c9')}
         value={config.agent}
         options={[
-          { value: 'jaina', label: 'Jaina · paid intelligence' },
-          { value: 'organic', label: 'Organic agent' },
+          { value: 'jaina', label: uiText('jaina_paid_intelligence_f4c6707') },
+          { value: 'organic', label: uiText('organic_agent_8baef17') },
         ]}
         disabled={disabled}
         onChange={(agent) => onChange({ ...config, agent: agent as 'jaina' | 'organic' })}
       />
       <PromptField
-        label="Agent instructions"
+        label={uiText('agent_instructions_dc390e1')}
         value={config.instructions}
         disabled={disabled}
         starters={agentStarters}
-        placeholder="Tell the agent what to investigate, how to reason, and what a useful answer includes."
-        description="Connected inputs are added as context automatically."
+        placeholder={uiText('tell_the_agent_what_to_investigate_how_to_rea_1ef6a2d')}
+        description={uiText('connected_inputs_are_added_as_context_automat_5cf4305')}
         onChange={(instructions) => onChange({ ...config, instructions })}
       />
       <Choice
-        label="Output contract"
+        label={uiText('output_contract_42a53c9')}
         value={config.outputFormat}
-        options={['text', 'records', 'report'].map((value) => ({ value, label: value }))}
+        options={['text', 'records', 'report'].map((value) => ({
+          value,
+          label: automationControlLabel(value, uiText),
+        }))}
         disabled={disabled}
         onChange={(outputFormat) =>
-          onChange({ ...config, outputFormat: outputFormat as 'text' | 'records' | 'report' })
+          onChange({
+            ...config,
+            outputFormat: outputFormat as 'text' | 'records' | 'report',
+          })
         }
       />
-      <Label>Stable capabilities</Label>
+      <Label>{uiText('stable_capabilities_5c8e506')}</Label>
       <div className="grid gap-2 rounded-md border p-3">
         {automationAgentCapabilitySchema.options.map((capability) => {
           const checked = config.policy.capabilities.includes(capability);
@@ -803,24 +853,32 @@ function AgentEditor({
                   })
                 }
               />
-              <Label htmlFor={`capability-${capability}`}>{capability}</Label>
+              <Label htmlFor={`capability-${capability}`}>
+                {automationControlLabel(capability, uiText)}
+              </Label>
             </div>
           );
         })}
       </div>
       <Choice
-        label="Tool selection"
+        label={uiText('tool_selection_b304cd5')}
         value={config.policy.toolMode}
         options={[
-          { value: 'auto', label: 'Agent chooses within capabilities' },
-          { value: 'required', label: 'Require exact tools · Advanced' },
+          {
+            value: 'auto',
+            label: uiText('agent_chooses_within_capabilities_e329575'),
+          },
+          {
+            value: 'required',
+            label: uiText('require_exact_tools_advanced_60b7295'),
+          },
         ]}
         disabled={disabled}
         onChange={(toolMode) => patchPolicy({ toolMode: toolMode as 'auto' | 'required' })}
       />
       {config.policy.toolMode === 'required' ? (
         <Field
-          label="Required tool names"
+          label={uiText('required_tool_names_cefad0d')}
           value={config.policy.requiredTools.join(', ')}
           disabled={disabled}
           onChange={(requiredTools) => patchPolicy({ requiredTools: textList(requiredTools) })}
@@ -828,14 +886,14 @@ function AgentEditor({
         />
       ) : null}
       <Field
-        label="Maximum agent steps"
+        label={uiText('maximum_agent_steps_b338088')}
         type="number"
         value={config.policy.maxSteps}
         disabled={disabled}
         onChange={(maxSteps) => patchPolicy({ maxSteps: Number(maxSteps) })}
       />
       <Field
-        label="Minimum evidence events"
+        label={uiText('minimum_evidence_events_81e38e4')}
         type="number"
         value={config.validation.minimumEvidence}
         disabled={disabled}
@@ -844,21 +902,23 @@ function AgentEditor({
         }
       />
       <Field
-        label="Required report sections"
+        label={uiText('required_report_sections_b8097f9')}
         value={config.validation.requiredReportSections.join(', ')}
         disabled={disabled}
         onChange={(requiredReportSections) =>
-          patchValidation({ requiredReportSections: textList(requiredReportSections) })
+          patchValidation({
+            requiredReportSections: textList(requiredReportSections),
+          })
         }
       />
       <Toggle
-        label="Require output schema"
+        label={uiText('require_output_schema_858661f')}
         checked={config.validation.requireSchema}
         disabled={disabled}
         onCheckedChange={(requireSchema) => patchValidation({ requireSchema })}
       />
       <Toggle
-        label="Require downstream action receipt"
+        label={uiText('require_downstream_action_receipt_bf1e62e')}
         checked={config.validation.requireActionReceipt}
         disabled={disabled}
         onCheckedChange={(requireActionReceipt) => patchValidation({ requireActionReceipt })}
@@ -879,17 +939,17 @@ function ManagedEndpointSummary({
   endpointId: string | undefined;
   endpoints: AutomationWebhookEndpoint[];
 }) {
+  const uiText = useTranslations('automations');
   const endpoint = endpointId ? endpoints.find((candidate) => candidate.id === endpointId) : null;
 
   if (!endpointId) {
     return (
       <div className="flex flex-col gap-1.5">
-        <Label>Managed endpoint</Label>
+        <Label>{uiText('managed_endpoint_108138a')}</Label>
         <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
-          <Badge variant="warning">Not attached</Badge>
+          <Badge variant="warning">{uiText('not_attached_8d54763')}</Badge>
           <p className="mt-2 text-xs leading-4 text-muted-foreground">
-            Open Webhooks in the workspace header and create an endpoint for this node. Publishing
-            is blocked until one is attached.
+            {uiText('open_webhooks_in_the_workspace_header_and_cre_b395960')}
           </p>
         </div>
       </div>
@@ -900,10 +960,10 @@ function ManagedEndpointSummary({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>Managed endpoint</Label>
+      <Label>{uiText('managed_endpoint_108138a')}</Label>
       <div className="rounded-md border p-3">
         <div className="flex items-center gap-2">
-          <Badge variant="success">Attached</Badge>
+          <Badge variant="success">{uiText('attached_ac6d9b7')}</Badge>
           <span className="truncate text-xs text-muted-foreground">
             {endpoint?.name ?? endpointId}
           </span>
@@ -917,15 +977,15 @@ function ManagedEndpointSummary({
               type="button"
               size="icon-xs"
               variant="ghost"
-              aria-label="Copy delivery URL"
-              onClick={() => void copyAutomationValue(deliveryUrl, 'Delivery URL')}
+              aria-label={uiText('copy_delivery_url_b0b0c85')}
+              onClick={() => void copyAutomationValue(deliveryUrl, uiText('deliveryUrl'), uiText)}
             >
               <Copy aria-hidden="true" />
             </Button>
           </div>
         ) : (
           <p className="mt-2 text-xs leading-4 text-muted-foreground">
-            This endpoint belongs to another brand or was deleted. Create a new one from Webhooks.
+            {uiText('this_endpoint_belongs_to_another_brand_or_was_ccce06e')}
           </p>
         )}
       </div>
@@ -952,6 +1012,7 @@ export function NodeConfigurationEditor({
    *  raw-id field rather than offering a list it cannot scope. */
   brandId?: string;
 }) {
+  const uiText = useTranslations('automations');
   switch (node.type) {
     case 'source':
       return (
@@ -966,12 +1027,12 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Choice
-            label="Provider"
+            label={uiText('provider_472590a')}
             value={node.config.provider}
             disabled={disabled}
             options={['meta', 'google', 'linkedin', 'tiktok', 'youtube'].map((value) => ({
               value,
-              label: value,
+              label: automationControlLabel(value, uiText),
             }))}
             onChange={(provider) =>
               onChange({
@@ -981,25 +1042,25 @@ export function NodeConfigurationEditor({
             }
           />
           <Field
-            label="Operation"
+            label={uiText('operation_0f044fe')}
             value={node.config.operation}
             disabled={disabled}
             onChange={(operation) => onChange({ ...node.config, operation })}
           />
           <Field
-            label="Connection ID"
+            label={uiText('connection_id_f8ca8ad')}
             value={node.config.connectionId}
             disabled={disabled}
             onChange={(connectionId) => onChange({ ...node.config, connectionId })}
           />
           <JsonObjectField
-            label="Parameters"
+            label={uiText('parameters_e68b36b')}
             value={node.config.parameters}
             disabled={disabled}
             onChange={(parameters) => onChange({ ...node.config, parameters })}
           />
           <Field
-            label="Input schema hash"
+            label={uiText('input_schema_hash_742a4c3')}
             value={node.config.schemaHash}
             disabled={disabled}
             onChange={(schemaHash) => onChange({ ...node.config, schemaHash })}
@@ -1011,12 +1072,12 @@ export function NodeConfigurationEditor({
         <>
           {sourceCapabilities?.mcpReadTools.length ? (
             <Choice
-              label="Read-only MCP tool"
+              label={uiText('read_only_mcp_tool_f59da23')}
               value={node.config.toolName}
               disabled={disabled}
               options={sourceCapabilities.mcpReadTools.map((tool) => ({
                 value: tool.name,
-                label: tool.name.replaceAll('_', ' '),
+                label: tool.name,
               }))}
               onChange={(toolName) => {
                 const tool = sourceCapabilities.mcpReadTools.find(
@@ -1033,17 +1094,19 @@ export function NodeConfigurationEditor({
             />
           ) : (
             <p className="text-xs text-muted-foreground">
-              No approved read-only MCP tools are available from this environment.
+              {uiText('no_approved_read_only_mcp_tools_are_available_c059c74')}
             </p>
           )}
           <JsonObjectField
-            label="Arguments"
+            label={uiText('arguments_7f81607')}
             value={node.config.arguments}
             disabled={disabled}
             onChange={(argumentsValue) => onChange({ ...node.config, arguments: argumentsValue })}
           />
           <p className="font-mono text-xs text-muted-foreground">
-            Schema {node.config.schemaHash.slice(0, 12)}
+            {uiText.rich('sentence_c080f81ef552', {
+              v0: () => node.config.schemaHash.slice(0, 12),
+            })}
           </p>
         </>
       );
@@ -1053,12 +1116,18 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Choice
-            label="Output contract"
+            label={uiText('output_contract_42a53c9')}
             value={
               node.config.contract.kind === 'native' ? node.config.contract.contractId : 'custom'
             }
             disabled={disabled}
-            options={[...NATIVE_CONTRACT_OPTIONS, { value: 'custom', label: 'Custom JSON schema' }]}
+            options={[
+              ...NATIVE_CONTRACT_OPTIONS.map((option) => ({
+                ...option,
+                label: localizeAutomationsCopy(option.label, uiText),
+              })),
+              { value: 'custom', label: uiText('custom_json_schema_ea95841') },
+            ]}
             onChange={(contractId) => {
               if (isRegisteredNativeOutputContractId(contractId)) {
                 onChange({
@@ -1090,7 +1159,7 @@ export function NodeConfigurationEditor({
           {node.config.contract.kind === 'custom' ? (
             <>
               <Field
-                label="Contract ID"
+                label={uiText('contract_id_0b6d2e4')}
                 value={node.config.contract.contractId}
                 disabled={disabled}
                 onChange={(contractId) => {
@@ -1104,7 +1173,7 @@ export function NodeConfigurationEditor({
                 placeholder="custom.workflow_output"
               />
               <Field
-                label="Contract name"
+                label={uiText('contract_name_974ed1d')}
                 value={node.config.contract.name}
                 disabled={disabled}
                 onChange={(name) => {
@@ -1117,7 +1186,7 @@ export function NodeConfigurationEditor({
                 }}
               />
               <JsonObjectField
-                label="JSON Schema"
+                label={uiText('json_schema_13a8f29')}
                 value={node.config.contract.schema}
                 disabled={disabled}
                 onChange={(schema) => {
@@ -1130,34 +1199,32 @@ export function NodeConfigurationEditor({
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Custom schemas require explicit types, closed objects, required properties, bounded
-                arrays, and no recursive references.
+                {uiText('custom_schemas_require_explicit_types_closed__b6c1fd0')}
               </p>
             </>
           ) : null}
           <PromptField
-            label="Formatting instructions"
+            label={uiText('formatting_instructions_2fa2413')}
             value={node.config.instructions}
             disabled={disabled}
             starters={formatterStarters}
-            placeholder="Describe how upstream artifacts should be fitted into the output contract."
+            placeholder={uiText('describe_how_upstream_artifacts_should_be_fit_93fd3a5')}
             onChange={(instructions) => onChange({ ...node.config, instructions })}
           />
           <p className="text-xs text-muted-foreground">
-            The formatter has no tools. It can only fit labeled upstream artifacts into this
-            validated contract.
+            {uiText('the_formatter_has_no_tools_it_can_only_fit_la_09a7c17')}
           </p>
         </>
       );
     case 'instruction':
       return (
         <PromptField
-          label="Prompt and operating rules"
+          label={uiText('prompt_and_operating_rules_6a18a2a')}
           value={node.config.text}
           disabled={disabled}
           rows={10}
-          placeholder="Add durable context, constraints, tone, and evidence rules for downstream agents."
-          description="This text becomes reusable context for connected steps."
+          placeholder={uiText('add_durable_context_constraints_tone_and_evid_a6deab9')}
+          description={uiText('this_text_becomes_reusable_context_for_connec_f6a4ca9')}
           onChange={(text) => onChange({ text })}
         />
       );
@@ -1165,32 +1232,30 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Field
-            label="Title"
+            label={uiText('title_7e8cd20')}
             value={node.config.title}
             disabled={disabled}
             onChange={(title) => onChange({ ...node.config, title })}
           />
           <p className="text-xs leading-4 text-muted-foreground">
-            The title heads the rendered report. Objective, audience and sections describe the
-            report you want written — they shape the upstream formatter&rsquo;s target rather than
-            this step. A formatter that returns complete markdown is passed through as authored.
+            {uiText('the_title_heads_the_rendered_report_objective_8c28007')}
           </p>
           <PromptField
-            label="Objective"
+            label={uiText('objective_3b20adc')}
             value={node.config.objective}
             disabled={disabled}
             rows={4}
             starters={agentStarters}
-            placeholder="What decision should this report help its audience make?"
+            placeholder={uiText('what_decision_should_this_report_help_its_aud_8e09f63')}
             onChange={(objective) => onChange({ ...node.config, objective })}
           />
           <Field
-            label="Audience"
+            label={uiText('audience_545c023')}
             value={node.config.audience}
             disabled={disabled}
             onChange={(audience) => onChange({ ...node.config, audience })}
           />
-          <Label>Required sections</Label>
+          <Label>{uiText('required_sections_6edb1ad')}</Label>
           {node.config.sections.map((section, index) => (
             <div key={section.id} className="space-y-2 rounded-md border p-3">
               <div className="flex gap-2">
@@ -1199,7 +1264,10 @@ export function NodeConfigurationEditor({
                   disabled={disabled}
                   onChange={(event) => {
                     const sections = [...node.config.sections];
-                    sections[index] = { ...section, heading: event.target.value };
+                    sections[index] = {
+                      ...section,
+                      heading: event.target.value,
+                    };
                     onChange({ ...node.config, sections });
                   }}
                 />
@@ -1223,7 +1291,10 @@ export function NodeConfigurationEditor({
                 disabled={disabled}
                 onChange={(event) => {
                   const sections = [...node.config.sections];
-                  sections[index] = { ...section, guidance: event.target.value };
+                  sections[index] = {
+                    ...section,
+                    guidance: event.target.value,
+                  };
                   onChange({ ...node.config, sections });
                 }}
               />
@@ -1248,7 +1319,8 @@ export function NodeConfigurationEditor({
               })
             }
           >
-            <Plus data-icon="inline-start" /> Add section
+            <Plus data-icon="inline-start" />
+            {uiText('add_section_7c36909')}
           </Button>
         </>
       );
@@ -1257,12 +1329,12 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Choice
-            label="Cadence"
+            label={uiText('cadence_316d43c')}
             value={schedule.kind}
             disabled={disabled}
             options={['daily', 'weekly', 'monthly', 'cron'].map((value) => ({
               value,
-              label: value,
+              label: automationControlLabel(value, uiText),
             }))}
             onChange={(kind) => {
               const timezone = schedule.timezone;
@@ -1270,23 +1342,33 @@ export function NodeConfigurationEditor({
                 kind === 'daily'
                   ? { kind: 'daily' as const, time: '09:00', timezone }
                   : kind === 'weekly'
-                    ? { kind: 'weekly' as const, dayOfWeek: 1, time: '09:00', timezone }
+                    ? {
+                        kind: 'weekly' as const,
+                        dayOfWeek: 1,
+                        time: '09:00',
+                        timezone,
+                      }
                     : kind === 'monthly'
-                      ? { kind: 'monthly' as const, dayOfMonth: 1, time: '09:00', timezone }
+                      ? {
+                          kind: 'monthly' as const,
+                          dayOfMonth: 1,
+                          time: '09:00',
+                          timezone,
+                        }
                       : { kind: 'cron' as const, expr: '0 9 * * 1', timezone };
               onChange({ schedule: next });
             }}
           />
           {schedule.kind === 'cron' ? (
             <Field
-              label="Cron expression"
+              label={uiText('cron_expression_9e6e7de')}
               value={schedule.expr}
               disabled={disabled}
               onChange={(expr) => onChange({ schedule: { ...schedule, expr } })}
             />
           ) : (
             <Field
-              label="Time"
+              label={uiText('time_33b9347')}
               type="time"
               value={schedule.time}
               disabled={disabled}
@@ -1295,28 +1377,32 @@ export function NodeConfigurationEditor({
           )}
           {schedule.kind === 'weekly' ? (
             <Field
-              label="Day of week · 0–6"
+              label={uiText('day_of_week_0_6_0f8e4b1')}
               type="number"
               value={schedule.dayOfWeek}
               disabled={disabled}
               onChange={(dayOfWeek) =>
-                onChange({ schedule: { ...schedule, dayOfWeek: Number(dayOfWeek) } })
+                onChange({
+                  schedule: { ...schedule, dayOfWeek: Number(dayOfWeek) },
+                })
               }
             />
           ) : null}
           {schedule.kind === 'monthly' ? (
             <Field
-              label="Day of month · 1–28"
+              label={uiText('day_of_month_1_28_ff3ae1d')}
               type="number"
               value={schedule.dayOfMonth}
               disabled={disabled}
               onChange={(dayOfMonth) =>
-                onChange({ schedule: { ...schedule, dayOfMonth: Number(dayOfMonth) } })
+                onChange({
+                  schedule: { ...schedule, dayOfMonth: Number(dayOfMonth) },
+                })
               }
             />
           ) : null}
           <Field
-            label="Timezone"
+            label={uiText('timezone_4ceca1d')}
             value={schedule.timezone}
             disabled={disabled}
             onChange={(timezone) => onChange({ schedule: { ...schedule, timezone } })}
@@ -1327,16 +1413,21 @@ export function NodeConfigurationEditor({
     case 'trigger.manual':
     case 'logic.parallel':
       return (
-        <p className="text-xs text-muted-foreground">This node has no additional configuration.</p>
+        <p className="text-xs text-muted-foreground">
+          {uiText('this_node_has_no_additional_configuration_16e05c5')}
+        </p>
       );
     case 'trigger.event':
       return (
         <Field
-          label="Event type"
+          label={uiText('event_type_70d8170')}
           value={node.config.eventType}
           disabled={disabled}
           onChange={(eventType) =>
-            onChange({ ...node.config, eventType: eventType as typeof node.config.eventType })
+            onChange({
+              ...node.config,
+              eventType: eventType as typeof node.config.eventType,
+            })
           }
         />
       );
@@ -1344,37 +1435,43 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Field
-            label="Metric"
+            label={uiText('metric_2d275a7')}
             value={node.config.metric}
             disabled={disabled}
             onChange={(metric) => onChange({ ...node.config, metric })}
           />
           <Choice
-            label="Operator"
+            label={uiText('operator_291101a')}
             value={node.config.operator}
             disabled={disabled}
             options={['gt', 'gte', 'lt', 'lte', 'eq', 'changed_by'].map((value) => ({
               value,
-              label: value,
+              label: automationControlLabel(value, uiText),
             }))}
             onChange={(operator) =>
-              onChange({ ...node.config, operator: operator as typeof node.config.operator })
+              onChange({
+                ...node.config,
+                operator: operator as typeof node.config.operator,
+              })
             }
           />
           <Field
-            label="Value"
+            label={uiText('value_8e37953')}
             type="number"
             value={node.config.value}
             disabled={disabled}
             onChange={(value) => onChange({ ...node.config, value: Number(value) })}
           />
           <Field
-            label="Cooldown minutes"
+            label={uiText('cooldown_minutes_67e905a')}
             type="number"
             value={node.config.cooldownMinutes}
             disabled={disabled}
             onChange={(cooldownMinutes) =>
-              onChange({ ...node.config, cooldownMinutes: Number(cooldownMinutes) })
+              onChange({
+                ...node.config,
+                cooldownMinutes: Number(cooldownMinutes),
+              })
             }
           />
         </>
@@ -1387,7 +1484,7 @@ export function NodeConfigurationEditor({
             endpoints={webhookEndpoints ?? []}
           />
           <JsonObjectField
-            label="Payload schema"
+            label={uiText('payload_schema_ec9433e')}
             value={node.config.payloadSchema}
             disabled={disabled}
             onChange={(payloadSchema) => onChange({ ...node.config, payloadSchema })}
@@ -1399,28 +1496,31 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Field
-            label="Value path"
+            label={uiText('value_path_b42c4bb')}
             value={condition.path}
             disabled={disabled}
             onChange={(path) => onChange({ ...node.config, condition: { ...condition, path } })}
           />
           <Choice
-            label="Operator"
+            label={uiText('operator_291101a')}
             value={condition.operator}
             disabled={disabled}
             options={['exists', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains'].map((value) => ({
               value,
-              label: value,
+              label: automationControlLabel(value, uiText),
             }))}
             onChange={(operator) =>
               onChange({
                 ...node.config,
-                condition: { ...condition, operator: operator as typeof condition.operator },
+                condition: {
+                  ...condition,
+                  operator: operator as typeof condition.operator,
+                },
               })
             }
           />
           <Field
-            label="Compare value"
+            label={uiText('compare_value_c074571')}
             value={condition.value == null ? '' : String(condition.value)}
             disabled={disabled}
             onChange={(value) => onChange({ ...node.config, condition: { ...condition, value } })}
@@ -1431,7 +1531,7 @@ export function NodeConfigurationEditor({
     case 'logic.repeat_until':
       return (
         <Field
-          label="Iterations"
+          label={uiText('iterations_4740b57')}
           type="number"
           value={node.config.iterations}
           disabled={disabled}
@@ -1442,13 +1542,13 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Field
-            label="Value path"
+            label={uiText('value_path_b42c4bb')}
             value={node.config.path}
             disabled={disabled}
             onChange={(path) => onChange({ ...node.config, path })}
           />
           <Field
-            label="Cases · label=value"
+            label={uiText('cases_label_value_1b2d2ab')}
             value={node.config.cases.map((item) => `${item.label}=${item.value}`).join(', ')}
             disabled={disabled}
             onChange={(value) =>
@@ -1466,12 +1566,12 @@ export function NodeConfigurationEditor({
     case 'logic.join':
       return (
         <Choice
-          label="Wait mode"
+          label={uiText('wait_mode_a623a5d')}
           value={node.config.mode}
           disabled={disabled}
           options={[
-            { value: 'all', label: 'All branches' },
-            { value: 'any', label: 'Any branch' },
+            { value: 'all', label: uiText('all_branches_fe69615') },
+            { value: 'any', label: uiText('any_branch_db79b07') },
           ]}
           onChange={(mode) => onChange({ mode: mode as 'all' | 'any' })}
         />
@@ -1480,31 +1580,37 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Field
-            label="Subject"
+            label={uiText('subject_6897128')}
             value={node.config.subject}
             disabled={disabled}
             onChange={(subject) => onChange({ ...node.config, subject })}
           />
           <Field
-            label="External recipients"
+            label={uiText('external_recipients_195426f')}
             value={node.config.recipients.externalEmails.join(', ')}
             disabled={disabled}
             onChange={(value) =>
               onChange({
                 ...node.config,
-                recipients: { ...node.config.recipients, externalEmails: textList(value) },
+                recipients: {
+                  ...node.config.recipients,
+                  externalEmails: textList(value),
+                },
               })
             }
             placeholder="name@example.com"
           />
           <Field
-            label="Member user IDs"
+            label={uiText('member_user_ids_857af97')}
             value={node.config.recipients.memberUserIds.join(', ')}
             disabled={disabled}
             onChange={(value) =>
               onChange({
                 ...node.config,
-                recipients: { ...node.config.recipients, memberUserIds: textList(value) },
+                recipients: {
+                  ...node.config.recipients,
+                  memberUserIds: textList(value),
+                },
               })
             }
           />
@@ -1514,13 +1620,13 @@ export function NodeConfigurationEditor({
       return (
         <>
           <Choice
-            label="Managed destination"
+            label={uiText('managed_destination_36aa05f')}
             value={node.config.destinationId ?? 'select-destination'}
             disabled={disabled}
             options={[
               {
                 value: 'select-destination',
-                label: 'Select a destination',
+                label: uiText('select_a_destination_ba615e8'),
                 disabled: true,
               },
               ...(webhookDestinations ?? []).map((destination) => ({
@@ -1544,16 +1650,16 @@ export function NodeConfigurationEditor({
           />
           {node.config.destinationId ? null : (
             <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
-              <Badge variant="warning">Needs setup</Badge>
+              <Badge variant="warning">{uiText('needs_setup_b6df244')}</Badge>
               <p className="mt-2 text-xs leading-4 text-muted-foreground">
                 {(webhookDestinations ?? []).length === 0
-                  ? 'No signed destinations exist yet. Open Webhooks in the workspace header to create one.'
-                  : 'Select a signed destination. This step cannot run or publish until one is chosen.'}
+                  ? uiText('no_signed_destinations_exist_yet_open_webhook_92d74d0')
+                  : uiText('select_a_signed_destination_this_step_cannot__31d4ded')}
               </p>
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            The destination owns its URL, method, signing secret, and retry ledger.
+            {uiText('the_destination_owns_its_url_method_signing_s_1b0200a')}
           </p>
         </>
       );
@@ -1571,7 +1677,7 @@ export function NodeConfigurationEditor({
             onChange={(collectionId) => onChange({ ...target, collectionId })}
           />
           <Field
-            label="Title template"
+            label={uiText('title_template_9ef05ea')}
             value={target.titleTemplate}
             disabled={disabled}
             onChange={(titleTemplate) => onChange({ ...target, titleTemplate })}
@@ -1591,14 +1697,14 @@ export function NodeConfigurationEditor({
             onChange={(next) => onChange({ ...target, ...next })}
           />
           <Field
-            label="Drafts path"
+            label={uiText('drafts_path_a561450')}
             value={target.itemsPath}
             disabled={disabled}
             placeholder={AUTOMATION_PLANNER_UPSERT_DEFAULTS.itemsPath}
             onChange={(itemsPath) => onChange({ ...target, itemsPath })}
           />
           <Field
-            label="Maximum drafts per run"
+            label={uiText('maximum_drafts_per_run_7910dad')}
             type="number"
             value={target.maxDrafts}
             disabled={disabled}
@@ -1619,12 +1725,15 @@ export function NodeConfigurationEditor({
           <ActionCapabilityNotice type={node.type} capabilities={sourceCapabilities} />
           <OrganicPublishTargetPicker
             brandId={brandId}
-            value={{ platform: selector.platform, accountId: selector.accountId }}
+            value={{
+              platform: selector.platform,
+              accountId: selector.accountId,
+            }}
             disabled={disabled}
             onChange={(next) => onChange({ ...selector, ...next })}
           />
           <Field
-            label="Schedule lookahead (hours)"
+            label={uiText('schedule_lookahead_hours_1ed9a28')}
             type="number"
             value={selector.lookaheadHours}
             disabled={disabled}
@@ -1636,7 +1745,7 @@ export function NodeConfigurationEditor({
             }
           />
           <Field
-            label="Maximum posts per run"
+            label={uiText('maximum_posts_per_run_11af33e')}
             type="number"
             value={selector.maxPosts}
             disabled={disabled}
@@ -1648,8 +1757,7 @@ export function NodeConfigurationEditor({
             }
           />
           <p className="text-xs leading-4 text-muted-foreground">
-            Approved drafts scheduled within the lookahead are published. A past-due draft is caught
-            up, which is why there is no lower bound.
+            {uiText('approved_drafts_scheduled_within_the_lookahea_037606b')}
           </p>
         </>
       );
@@ -1679,12 +1787,12 @@ export function NodeConfigurationEditor({
           />
           {onPipeline ? null : (
             <Choice
-              label="Generator"
+              label={uiText('generator_1ade60a')}
               value={request.generator}
               disabled={disabled}
               options={automationAiStudioGeneratorSchema.options.map((generator) => ({
                 value: generator,
-                label: generator === 'image' ? 'Image' : 'Video',
+                label: automationControlLabel(generator, uiText),
               }))}
               onChange={(generator) =>
                 onChange({
@@ -1696,16 +1804,18 @@ export function NodeConfigurationEditor({
           )}
           <PromptField
             label={
-              onPipeline ? "Text sent to the pipeline's input ports" : 'Generation instructions'
+              onPipeline
+                ? uiText('text_sent_to_the_pipeline_s_input_ports_c93310c')
+                : uiText('generation_instructions_4d296f5')
             }
             value={request.instructions}
             disabled={disabled}
-            placeholder="Describe the asset to create, including format, composition, and constraints."
+            placeholder={uiText('describe_the_asset_to_create_including_format_9d9cc4c')}
             onChange={(instructions) => onChange({ ...request, instructions })}
           />
           {onPipeline ? null : (
             <Field
-              label="Outputs per run"
+              label={uiText('outputs_per_run_fc5df04')}
               type="number"
               value={request.maxOutputs}
               disabled={disabled}
@@ -1727,8 +1837,8 @@ export function NodeConfigurationEditor({
           )}
           <p className="text-xs leading-4 text-muted-foreground">
             {onPipeline
-              ? 'This text is written to every text input port the pipeline declares. The pipeline runs in a workspace created for the run and deleted after it, and it decides what it generates.'
-              : 'An automation runs headless, so it can only reach the image and video generators. A saved Studio workflow is replayed by the canvas in a browser and cannot be scheduled — publish it as a pipeline to run it here.'}
+              ? uiText('this_text_is_written_to_every_text_input_port_ecc0ce5')
+              : uiText('an_automation_runs_headless_so_it_can_only_re_ab0f362')}
           </p>
         </>
       );
@@ -1745,10 +1855,13 @@ export function NodeConfigurationEditor({
             onChange={(portfolioId) => onChange({ ...target, portfolioId })}
           />
           <Choice
-            label="Operation"
+            label={uiText('operation_0f044fe')}
             value={target.operation}
             disabled={disabled}
-            options={paidOptimizerOperationOptions}
+            options={paidOptimizerOperationOptions.map((option) => ({
+              ...option,
+              label: localizeAutomationsCopy(option.label, uiText),
+            }))}
             onChange={(operation) =>
               onChange({
                 ...target,
@@ -1757,16 +1870,15 @@ export function NodeConfigurationEditor({
             }
           />
           <Field
-            label="Maximum budget change per apply (%)"
+            label={uiText('maximum_budget_change_per_apply_27465c6')}
             type="number"
             value={target.maxBudgetDeltaPct ?? ''}
             disabled={disabled}
-            placeholder="No cap"
+            placeholder={uiText('no_cap_59db211')}
             onChange={(raw) => onChange({ ...target, maxBudgetDeltaPct: boundedPercent(raw) })}
           />
           <p className="text-xs leading-4 text-muted-foreground">
-            Pausing an ad is human-only and there is no entity-addressed budget write, so an
-            automation either runs a cycle or applies what a human already approved.
+            {uiText('pausing_an_ad_is_human_only_and_there_is_no_e_1e347c2')}
           </p>
         </>
       );

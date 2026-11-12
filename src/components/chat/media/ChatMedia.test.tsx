@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ChatMediaCarousel, ChatMediaThumb } from './ChatMedia';
 import type { ChatMedia } from './media';
 
@@ -98,7 +99,12 @@ describe('ChatMediaThumb error fallback', () => {
   });
 
   it('remounts the video element when the URL changes', () => {
-    const clip = (url: string): ChatMedia => ({ id: 'v1', url, kind: 'video', name: 'Reel' });
+    const clip = (url: string): ChatMedia => ({
+      id: 'v1',
+      url,
+      kind: 'video',
+      name: 'Reel',
+    });
     const { container, rerender } = render(<ChatMediaThumb media={clip('https://cdn/a.mp4')} />);
     const first = container.querySelector('video');
 
@@ -208,7 +214,12 @@ describe('ChatMediaThumb recovery', () => {
 
   it('asks for a fresh URL once when a video fails, and retries when one arrives', () => {
     const onRecover = mock();
-    const clip = (url: string): ChatMedia => ({ id: 'v1', url, kind: 'video', name: 'Reel' });
+    const clip = (url: string): ChatMedia => ({
+      id: 'v1',
+      url,
+      kind: 'video',
+      name: 'Reel',
+    });
     const { container, rerender } = render(
       <ChatMediaThumb media={clip('https://cdn/expired.mp4')} onRecover={onRecover} />,
     );

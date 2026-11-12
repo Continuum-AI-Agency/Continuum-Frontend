@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Pause / Unpause one campaign, ad set or ad — through Jaina's approval gate and nothing else.
 //
 // The sheet opens on a review step: the entity, the status change and a reason. Only "Request
@@ -92,7 +95,11 @@ export function EntityStatusSheet({
   );
 }
 
-type Request = { nonce: number; sessionId: string; action: JainaOperatorAction };
+type Request = {
+  nonce: number;
+  sessionId: string;
+  action: JainaOperatorAction;
+};
 
 function EntityStatusFlow({
   target,
@@ -101,6 +108,8 @@ function EntityStatusFlow({
   onClose,
   onSettled,
 }: Omit<SheetProps, 'target'> & { target: EntityStatusTarget }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const { row, level } = target;
   const noun = levelNoun(level);
   const isPause = row.status === 'ACTIVE';
@@ -120,9 +129,13 @@ function EntityStatusFlow({
     setSessionError(null);
     try {
       const sessionId = await ensureSession();
-      setRequest((previous) => ({ nonce: (previous?.nonce ?? 0) + 1, sessionId, action }));
+      setRequest((previous) => ({
+        nonce: (previous?.nonce ?? 0) + 1,
+        sessionId,
+        action,
+      }));
     } catch (error) {
-      setSessionError(error instanceof Error ? error.message : 'Could not reach Jaina.');
+      setSessionError(formatUiError(error));
     } finally {
       setOpening(false);
     }
@@ -140,10 +153,10 @@ function EntityStatusFlow({
     <>
       <SheetHeader className="gap-1 border-border/70 border-b px-5 pt-5 pr-12 pb-4">
         <SheetTitle>
-          {isPause ? 'Pause' : 'Unpause'} {noun}
+          {isPause ? uiText('pause_858e4ba') : uiText('unpause_ccf1af7')} {noun}
         </SheetTitle>
         <SheetDescription>
-          Jaina opens an approval for this change. Nothing changes in Meta until you approve it.
+          {uiText('jaina_opens_an_approval_for_this_change_nothi_26ccc2d')}
         </SheetDescription>
       </SheetHeader>
 
@@ -153,17 +166,20 @@ function EntityStatusFlow({
           <dd className="font-medium break-words">{row.name}</dd>
           <dt className="text-muted-foreground">ID</dt>
           <dd className="font-mono text-muted-foreground text-xs">{row.id}</dd>
-          <dt className="text-muted-foreground">Status</dt>
+          <dt className="text-muted-foreground">{uiText('status_920e413')}</dt>
           <dd className="flex items-center gap-2">
             <EntityStatusPill status={row.status} />
-            <ArrowRight aria-label="to" className="size-3.5 text-muted-foreground" />
+            <ArrowRight
+              aria-label={uiText('to_663ea1b')}
+              className="size-3.5 text-muted-foreground"
+            />
             <EntityStatusPill status={nextStatus} />
           </dd>
         </dl>
 
         {!isPause ? (
           <p className="text-muted-foreground text-sm">
-            Unpausing lets this {noun} deliver and spend against its budget again.
+            {uiText.rich('sentence_731ea216c57e', { level: level })}
           </p>
         ) : null}
 
@@ -174,13 +190,13 @@ function EntityStatusFlow({
             request={request}
             displayText={describeEntityStatusAction(request.action, row, level)}
             nextStatus={nextStatus}
-            noun={noun}
+            level={level}
             onSettled={handleSettled}
             onRetry={requestApproval}
           />
         ) : (
           <div className="space-y-2">
-            <Label htmlFor="scale-status-reason">Reason</Label>
+            <Label htmlFor="scale-status-reason">{uiText('reason_f81ab83')}</Label>
             <Textarea
               id="scale-status-reason"
               value={reason}
@@ -189,7 +205,9 @@ function EntityStatusFlow({
               onChange={(event) => setReason(event.target.value)}
               disabled={opening}
             />
-            <p className="text-muted-foreground text-xs">Recorded with the change.</p>
+            <p className="text-muted-foreground text-xs">
+              {uiText('recorded_with_the_change_2a45327')}
+            </p>
             {opening ? <PreparingCard /> : null}
             {sessionError ? (
               <p role="alert" className="text-destructive text-sm">
@@ -202,7 +220,7 @@ function EntityStatusFlow({
 
       <SheetFooter className="flex-row justify-end gap-2 border-border/70 border-t px-5 py-3">
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          {settled ? 'Done' : 'Close'}
+          {settled ? uiText('done_11a6767') : uiText('close_7d9eb7a')}
         </Button>
         {request ? null : (
           <Button
@@ -213,7 +231,7 @@ function EntityStatusFlow({
             disabled={opening}
           >
             {opening ? <Spinner className="size-3.5" /> : null}
-            {sessionError ? 'Try again' : 'Request approval'}
+            {sessionError ? uiText('try_again_d8b8392') : uiText('request_approval_e013d99')}
           </Button>
         )}
       </SheetFooter>
@@ -226,7 +244,7 @@ function OperatorRun({
   request,
   displayText,
   nextStatus,
-  noun,
+  level,
   onSettled,
   onRetry,
 }: {
@@ -234,10 +252,11 @@ function OperatorRun({
   request: Request;
   displayText: string;
   nextStatus: string;
-  noun: string;
+  level: EntityLevel;
   onSettled: (settlement: EntityStatusSettlement) => void;
   onRetry: () => void;
 }) {
+  const uiText = useTranslations('scale');
   const { state, isStreaming, run, decide } = useJainaOperatorAction({
     brandId: scope.brandId,
     adAccountId: scope.adAccountId,
@@ -278,10 +297,10 @@ function OperatorRun({
       <div role="alert" className="space-y-3 rounded-lg border border-destructive/30 p-4">
         <p className="flex items-start gap-2 text-sm">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
-          {state.error ?? 'Jaina could not open this approval.'}
+          {state.error ?? uiText('jaina_could_not_open_this_approval_c932bfa')}
         </p>
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          Retry
+          {uiText('retry_942087c')}
         </Button>
       </div>
     );
@@ -299,16 +318,19 @@ function OperatorRun({
       />
       {denied ? (
         <OutcomeLine testId="scale-status-denied" icon="neutral">
-          Nothing changed. The {noun} is still {nextStatus === 'PAUSED' ? 'active' : 'paused'}.
+          {uiText.rich('sentence_7a1efe2d32d5', {
+            level: level,
+            status: nextStatus === 'PAUSED' ? 'active' : 'paused',
+          })}
         </OutcomeLine>
       ) : null}
       {state.decision === 'approve' && !outcome ? (
         <p role="status" className="flex items-center gap-2 text-muted-foreground text-sm">
           <Spinner className="size-3.5" />
-          Applying the change in Meta…
+          {uiText('applying_the_change_in_meta_17065a5')}
         </p>
       ) : null}
-      {outcome ? <OutcomeReport outcome={outcome} nextStatus={nextStatus} noun={noun} /> : null}
+      {outcome ? <OutcomeReport outcome={outcome} nextStatus={nextStatus} level={level} /> : null}
     </div>
   );
 }
@@ -316,39 +338,41 @@ function OperatorRun({
 function OutcomeReport({
   outcome,
   nextStatus,
-  noun,
+  level,
 }: {
   outcome: EntityStatusOutcome;
   nextStatus: string;
-  noun: string;
+  level: EntityLevel;
 }) {
+  const uiText = useTranslations('scale');
   if (outcome.kind === 'read_back') {
     const { status, effective_status: effective } = outcome.readBack;
     const applied = status.toUpperCase() === nextStatus;
     return (
       <OutcomeLine testId="scale-status-readback" icon={applied ? 'success' : 'warning'}>
-        Meta now reports this {noun} as{' '}
-        <span className="font-medium">{humanizeStatus(status.toUpperCase())}</span>
-        {effective && effective.toUpperCase() !== status.toUpperCase()
-          ? ` (delivery: ${humanizeStatus(effective.toUpperCase()).toLowerCase()})`
-          : ''}
-        .{applied ? '' : ' The change may not have applied.'}
+        {uiText.rich('sentence_0698d51e566c', {
+          level: level,
+          status: () => (
+            <span className="font-medium">{humanizeStatus(status.toUpperCase(), uiText)}</span>
+          ),
+          hasDelivery: effective && effective.toUpperCase() !== status.toUpperCase() ? 'yes' : 'no',
+          delivery: effective ? humanizeStatus(effective.toUpperCase(), uiText).toLowerCase() : '',
+          applied: applied ? 'yes' : 'no',
+        })}
       </OutcomeLine>
     );
   }
   if (outcome.kind === 'refused') {
     return (
       <OutcomeLine testId="scale-status-refused" icon="warning">
-        {outcome.code === 'status_drifted'
-          ? `This ${noun} changed in Meta since the table was read, so nothing was written. The row has been refreshed. `
-          : null}
+        {outcome.code === 'status_drifted' ? uiText('entity_status_drifted', { level }) : null}
         {outcome.message}
       </OutcomeLine>
     );
   }
   return (
     <OutcomeLine testId="scale-status-unreported" icon="warning">
-      Jaina ran the change but did not report Meta's status. The row has been refreshed from Meta.
+      {uiText('jaina_ran_the_change_but_did_not_report_meta__e51e189')}
     </OutcomeLine>
   );
 }
@@ -381,11 +405,12 @@ function OutcomeLine({
 }
 
 function PreparingCard() {
+  const uiText = useTranslations('scale');
   return (
     <div role="status" className="space-y-3 rounded-lg border border-border/70 p-4">
       <p className="flex items-center gap-2 text-muted-foreground text-sm">
         <Spinner className="size-3.5" />
-        Jaina is preparing the approval…
+        {uiText('jaina_is_preparing_the_approval_3fb8213')}
       </p>
       <Skeleton className="h-4 w-2/3 rounded-md" />
       <Skeleton className="h-14 rounded-md" />

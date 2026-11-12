@@ -12,6 +12,7 @@
 
 import type { CustomField, CustomFieldFilter, CustomFieldOption } from '@continuum/contracts';
 import { ChevronDown } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -36,6 +37,7 @@ import {
 } from '@/lib/library/customFieldFilters';
 import { cn } from '@/lib/utils';
 import { useMentionTargets } from '../detail/useMentionTargets';
+import { useCardFieldDisplay } from '../views/useLibraryFieldOptions';
 import { StatusDot } from './CustomFieldValueEditor';
 
 export type FieldFilterChipsProps = {
@@ -65,6 +67,9 @@ export function FieldFilterChips({
   onChange,
   variant = 'page',
 }: FieldFilterChipsProps) {
+  const translateUi = useUiTranslations('library');
+  const fieldDisplay = useCardFieldDisplay();
+
   const brandId = fields[0]?.brandId ?? null;
   const hasUserField = fields.some((field) => field.type === 'user');
   const memberTargets = useMentionTargets(hasUserField ? brandId : null);
@@ -74,7 +79,7 @@ export function FieldFilterChips({
 
   return (
     <fieldset
-      aria-label="Filter by custom field"
+      aria-label={translateUi('filter_by_custom_field_5c98ded6')}
       className={cn(
         'flex flex-wrap items-center gap-1 rounded-2xl p-0.5',
         compact ? 'bg-white/5' : 'bg-muted/60',
@@ -82,8 +87,8 @@ export function FieldFilterChips({
     >
       {fields.map((field) => {
         const filter = activeFilterFor(filters, field.id);
-        const summary = fieldFilterSummary(field, filter, members);
-        const choices = filterChoices(field, members);
+        const summary = fieldFilterSummary(field, filter, members, fieldDisplay);
+        const choices = filterChoices(field, members, translateUi);
         return choices ? (
           <SelectFieldChip
             key={field.id}
@@ -139,6 +144,8 @@ function SelectFieldChip({
   filters,
   onChange,
 }: ChipProps & { choices: CustomFieldOption[] }) {
+  const translateUi = useUiTranslations('library');
+
   const selected = filter?.operator === 'any_of' ? filter.values : [];
   return (
     <DropdownMenu>
@@ -178,7 +185,8 @@ function SelectFieldChip({
           }}
           className="text-xs text-muted-foreground"
         >
-          Is empty
+          {' '}
+          {translateUi('is_empty_f92b4770')}{' '}
         </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -192,6 +200,8 @@ function toIsoDay(date: Date): string {
 }
 
 function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }: ChipProps) {
+  const translateUi = useUiTranslations('library');
+
   const [open, setOpen] = useState(false);
   const literal = filter?.operator === 'is' ? (filter.values[0] ?? '') : '';
   const [draft, setDraft] = useState(literal);
@@ -233,8 +243,12 @@ function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }
             value={draft}
             type={field.type === 'number' ? 'number' : 'text'}
             autoFocus
-            placeholder={`${field.name} is…`}
-            aria-label={`Filter ${field.name}`}
+            placeholder={translateUi('value0_is_6cdb846a', {
+              value0: String(field.name),
+            })}
+            aria-label={translateUi('filter_value0_e72458dd', {
+              value0: String(field.name),
+            })}
             className="h-8 w-56 text-xs"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -257,7 +271,8 @@ function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }
               setOpen(false);
             }}
           >
-            Is empty
+            {' '}
+            {translateUi('is_empty_f92b4770')}{' '}
           </Button>
           {filter ? (
             <Button
@@ -270,7 +285,8 @@ function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }
                 setOpen(false);
               }}
             >
-              Clear
+              {' '}
+              {translateUi('clear_83b12c22')}{' '}
             </Button>
           ) : null}
         </div>

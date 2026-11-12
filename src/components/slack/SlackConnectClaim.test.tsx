@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { SLACK_CONNECT_ERROR_CODES } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 
 // The real slackWorkspaces client and contract schemas run; only the HTTP transport, the
@@ -81,7 +82,9 @@ describe('SlackConnectClaim', () => {
     );
 
     expect((await findByRole('alert')).textContent).toContain('different browser');
-    const retry = getByRole('link', { name: 'Install Continuum in Slack again' });
+    const retry = getByRole('link', {
+      name: 'Install Continuum in Slack again',
+    });
     const href = new URL(retry.getAttribute('href') ?? '');
     expect(href.pathname).toBe('/api/chat/slack/install/start');
     expect(href.searchParams.get('brandId')).toBeNull();
@@ -122,7 +125,9 @@ describe('SlackConnectClaim', () => {
     expect(requestMock.mock.calls[0]?.[0].path).toBe('/api/chat/slack/claim?claim=signed.claim');
     // The single-use token leaves the address bar as soon as it has been read.
     expect(window.location.search).toBe('');
-    const select = getByRole('combobox', { name: 'Brand' }) as HTMLSelectElement;
+    const select = getByRole('combobox', {
+      name: 'Brand',
+    }) as HTMLSelectElement;
     expect(select.value).toBe(BRAND_B);
 
     fireEvent.change(select, { target: { value: BRAND_A } });

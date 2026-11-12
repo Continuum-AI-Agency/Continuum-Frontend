@@ -1,3 +1,4 @@
+import type { UiLocale } from '@/i18n/config';
 import { parseTimeLabel } from '@/lib/organic/scheduling';
 import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 
@@ -25,19 +26,28 @@ export function formatDayId(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function formatWeekRange(weekStart: Date): string {
+export function formatWeekRange(weekStart: Date, locale: UiLocale = 'en'): string {
   const end = new Date(weekStart);
   end.setDate(weekStart.getDate() + 6);
-  const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+  const formatter = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+  });
   return `${formatter.format(weekStart)} – ${formatter.format(end)}`;
 }
 
-export function formatWeekHeading(weekStart: Date): string {
+export function formatWeekHeading(weekStart: Date, locale: UiLocale = 'en'): string {
   const end = new Date(weekStart);
   end.setDate(weekStart.getDate() + 6);
 
-  const startMonth = weekStart.toLocaleString('en-US', { month: 'long' });
-  const endMonth = end.toLocaleString('en-US', { month: 'long' });
+  if (locale !== 'en')
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).formatRange(weekStart, end);
+  const startMonth = weekStart.toLocaleString(locale, { month: 'long' });
+  const endMonth = end.toLocaleString(locale, { month: 'long' });
   const year = weekStart.getFullYear();
 
   if (startMonth === endMonth) {
@@ -57,12 +67,15 @@ function parseDayId(dayId: string): Date | null {
   );
 }
 
-function dayFromDate(date: Date): OrganicCalendarDay {
-  const monthName = date.toLocaleString('en-US', { month: 'short' });
+function dayFromDate(date: Date, locale: UiLocale = 'en'): OrganicCalendarDay {
+  const monthName = date.toLocaleString(locale, { month: 'short' });
   return {
     id: formatDayId(date),
-    label: date.toLocaleString('en-US', { weekday: 'short' }),
-    dateLabel: `${monthName} ${date.getDate()}`,
+    label: date.toLocaleString(locale, { weekday: 'short' }),
+    dateLabel:
+      locale === 'en'
+        ? `${monthName} ${date.getDate()}`
+        : date.toLocaleDateString(locale, { month: 'short', day: 'numeric' }),
     suggestedTimes: [...DEFAULT_SUGGESTED_TIMES],
     slots: [],
   };
@@ -70,7 +83,7 @@ function dayFromDate(date: Date): OrganicCalendarDay {
 
 // Build an empty calendar day for a single YYYY-MM-DD id. Used to materialize a
 // day on demand (manual create / drag onto a day that isn't in the loaded set).
-export function makeCalendarDay(dayId: string): OrganicCalendarDay {
+export function makeCalendarDay(dayId: string, locale: UiLocale = 'en'): OrganicCalendarDay {
   const date = parseDayId(dayId);
   if (!date) {
     return {
@@ -81,7 +94,7 @@ export function makeCalendarDay(dayId: string): OrganicCalendarDay {
       slots: [],
     };
   }
-  return dayFromDate(date);
+  return dayFromDate(date, locale);
 }
 
 // The list-view sentinel for undated drafts.
@@ -96,31 +109,39 @@ export function buildUnscheduledDay(): OrganicCalendarDay {
 }
 
 // Build empty calendar days for every date in [start, end] (inclusive).
-export function buildDayRange(start: Date, end: Date): OrganicCalendarDay[] {
+export function buildDayRange(
+  start: Date,
+  end: Date,
+  locale: UiLocale = 'en',
+): OrganicCalendarDay[] {
   const days: OrganicCalendarDay[] = [];
   const cursor = new Date(start);
   cursor.setHours(0, 0, 0, 0);
   const last = new Date(end);
   last.setHours(0, 0, 0, 0);
   while (cursor.getTime() <= last.getTime()) {
-    days.push(dayFromDate(new Date(cursor)));
+    days.push(dayFromDate(new Date(cursor), locale));
     cursor.setDate(cursor.getDate() + 1);
   }
   return days;
 }
 
-export function buildWeekDays(weekStart: Date): OrganicCalendarDay[] {
+export function buildWeekDays(weekStart: Date, locale: UiLocale = 'en'): OrganicCalendarDay[] {
   const base = startOfWeek(weekStart);
   const end = new Date(base);
   end.setDate(base.getDate() + 6);
-  return buildDayRange(base, end);
+  return buildDayRange(base, end, locale);
 }
 
 // View model for the week grid: exactly the 7 Mon..Sun days for `weekStart`,
 // pulled from `days` when present so loaded drafts show, synthesizing empty days
 // for any of the seven missing from the loaded set. This keeps the grid at 7
 // columns no matter how many days are loaded into the canonical day array.
-export function sliceWeekDays(days: OrganicCalendarDay[], weekStart: Date): OrganicCalendarDay[] {
+export function sliceWeekDays(
+  days: OrganicCalendarDay[],
+  weekStart: Date,
+  locale: UiLocale = 'en',
+): OrganicCalendarDay[] {
   const base = startOfWeek(weekStart);
   const byId = new Map(days.map((day) => [day.id, day]));
   const result: OrganicCalendarDay[] = [];
@@ -128,7 +149,7 @@ export function sliceWeekDays(days: OrganicCalendarDay[], weekStart: Date): Orga
     const current = new Date(base);
     current.setDate(base.getDate() + i);
     const id = formatDayId(current);
-    result.push(byId.get(id) ?? dayFromDate(current));
+    result.push(byId.get(id) ?? dayFromDate(current, locale));
   }
   return result;
 }
@@ -256,4 +277,40 @@ export function formatDayIdFromIso(isoString: string): string | null {
   if (!isoString) return null;
   const match = isoString.match(/^(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : null;
+}
+
+/** Relabels the view without changing schedule IDs, wall clocks, suggested values, or authored draft content. */
+export function localizeCalendarDay(
+  day: OrganicCalendarDay,
+  locale: UiLocale,
+  unscheduled: string,
+): OrganicCalendarDay {
+  if (day.id === UNSCHEDULED_DAY_ID) return { ...day, label: unscheduled };
+  const date = parseDayId(day.id);
+  if (!date) return day;
+  const localized = dayFromDate(date, locale);
+  const draftDateLabel = `${localized.label}, ${localized.dateLabel}`;
+  const slots = day.slots.some((draft) => draft.dateLabel !== draftDateLabel)
+    ? day.slots.map((draft) =>
+        draft.dateLabel === draftDateLabel ? draft : { ...draft, dateLabel: draftDateLabel },
+      )
+    : day.slots;
+  return {
+    ...day,
+    label: localized.label,
+    dateLabel: localized.dateLabel,
+    slots,
+  };
+}
+
+/** A wall-clock display only: anchoring in UTC preserves the brand's original hour in any browser zone. */
+export function formatWallClockLabel(value: string | undefined, locale: UiLocale): string {
+  if (!value || locale === 'en') return value ?? '';
+  const parsed = parseTimeLabel(value);
+  if (!parsed) return value;
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(2026, 0, 1, parsed.hour24, parsed.minute)));
 }

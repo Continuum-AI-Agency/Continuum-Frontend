@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -20,7 +21,12 @@ describe('StepFunnel', () => {
     const { container } = render(
       <StepFunnel
         objective="purchase"
-        window={{ impressions: 10_000, clicks: 500, addToCarts: 100, purchases: 25 }}
+        window={{
+          impressions: 10_000,
+          clicks: 500,
+          addToCarts: 100,
+          purchases: 25,
+        }}
       />,
     );
     for (const label of ['Impressions', 'Clicks', 'Add to cart', 'Purchases']) {

@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type DeliveryCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // G06 Auction, the figures. For each campaign that serves on Search: the impression share it won
 // and what it lost to budget and to rank — Google's own figures over the window, kept apart
 // because they call for opposite fixes (moneyLeftModel says why) — with the V3 case marked (half
@@ -150,7 +155,13 @@ export function buildAuctionShares(
       ];
     })
     .sort((a, b) => b.spend - a.spend);
-  return { kind: 'share', rows, locked, since: read.range.since, until: read.range.until };
+  return {
+    kind: 'share',
+    rows,
+    locked,
+    since: read.range.since,
+    until: read.range.until,
+  };
 }
 
 /** The row the small lens leads with: the most lost to budget, else the most lost to rank. */
@@ -186,7 +197,11 @@ export function auctionTakeaway(model: AuctionShares): string | null {
   );
   return auctionSharesSentence(
     budget?.budgetLost != null
-      ? { campaign: budget.name, share: shareText(budget.budgetLost), locked: budget.locked }
+      ? {
+          campaign: budget.name,
+          share: shareText(budget.budgetLost),
+          locked: budget.locked,
+        }
       : null,
     rank?.rankLost != null ? { campaign: rank.name, share: shareText(rank.rankLost) } : null,
   );
@@ -266,6 +281,8 @@ export function buildAuctionDark(
   cards: readonly PlatformCard[],
   window: { since: string; until: string },
   today: string,
+  t?: DeliveryCopy,
+  locale: UiLocale = 'en',
 ): AuctionDark | null {
   const delivery = accountDeliveryCardOf(candidates);
   const continuity = findingsOf(cards, 'continuity_calendar')[0] ?? null;
@@ -279,7 +296,11 @@ export function buildAuctionDark(
   );
   bars.forEach((bar, index) => {
     const day = dates[index];
-    if (day) known.set(day, { state: bar.flagged ? 'dark' : 'served', spend: bar.value });
+    if (day)
+      known.set(day, {
+        state: bar.flagged ? 'dark' : 'served',
+        spend: bar.value,
+      });
   });
   if (delivery?.dark_since) {
     for (let offset = 0; offset < delivery.dark_days; offset += 1) {
@@ -304,7 +325,7 @@ export function buildAuctionDark(
     darkDays: dark.length > 0 ? dark.length : (delivery?.dark_days ?? 0),
     runs: runsOf(dark),
     maxSpend: spends.length > 0 ? Math.max(...spends) : 0,
-    status: googleDeliveryStatusOf(candidates),
+    status: googleDeliveryStatusOf(candidates, t, locale),
     suspended: delivery?.reasons.includes(SUSPENDED) ?? false,
     darkSince: delivery?.dark_since ?? null,
     budgetPerDay: delivery?.budget_per_day ?? null,

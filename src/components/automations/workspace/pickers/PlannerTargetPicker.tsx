@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Which platform an "Add to Planner" step files drafts under, and which
 // connected account owns them.
@@ -45,6 +46,7 @@ export function PlannerTargetPicker({
   onChange: (next: PlannerTarget) => void;
   useSource?: PickerSource<OrganicPlatformAccounts>;
 }) {
+  const uiText = useTranslations('automations');
   const platformFieldId = useId();
   const accountFieldId = useId();
   const { items, isLoading, isError } = useSource(brandId);
@@ -55,16 +57,19 @@ export function PlannerTargetPicker({
   return (
     <>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor={platformFieldId}>Planner platform</Label>
+        <Label htmlFor={platformFieldId}>{uiText('planner_platform_9fc99b2')}</Label>
         <Select
           value={value.platform}
           disabled={disabled}
           // An account belongs to one platform, so switching platforms clears it.
           onValueChange={(platform) =>
-            onChange({ platform: platform as AutomationSocialPlatform, accountId: null })
+            onChange({
+              platform: platform as AutomationSocialPlatform,
+              accountId: null,
+            })
           }
         >
-          <SelectTrigger id={platformFieldId} aria-label="Planner platform">
+          <SelectTrigger id={platformFieldId} aria-label={uiText('planner_platform_9fc99b2')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -79,27 +84,34 @@ export function PlannerTargetPicker({
 
       {degraded ? (
         <RawIdFallbackField
-          label="Connected account ID"
+          label={uiText('connected_account_id_032e336')}
           value={accountId}
           disabled={disabled}
-          placeholder="Connected account id"
-          reason={
-            brandId
-              ? 'Connected accounts could not be loaded. The stored account stays editable here.'
-              : 'No brand is in scope, so connected accounts cannot be listed.'
+          placeholder={uiText('connected_account_id_45a838d')}
+          reason={brandId ? uiText('m_7b84bafbdd') : uiText('m_498bd9fe65')}
+          onChange={(raw) =>
+            onChange({
+              platform: value.platform,
+              accountId: raw.trim() || null,
+            })
           }
-          onChange={(raw) => onChange({ platform: value.platform, accountId: raw.trim() || null })}
         />
       ) : (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={accountFieldId}>Connected account</Label>
+          <Label htmlFor={accountFieldId}>{uiText('connected_account_3903f0e')}</Label>
           <Select
             value={accountId ?? ''}
             disabled={disabled || isLoading || accountOptions.length === 0}
             onValueChange={(next) => onChange({ platform: value.platform, accountId: next })}
           >
-            <SelectTrigger id={accountFieldId} aria-label="Connected account">
-              <SelectValue placeholder={isLoading ? 'Loading accounts…' : 'Select an account'} />
+            <SelectTrigger id={accountFieldId} aria-label={uiText('connected_account_3903f0e')}>
+              <SelectValue
+                placeholder={
+                  isLoading
+                    ? uiText('loading_accounts_2494bdb')
+                    : uiText('select_an_account_ba89783')
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               {accountOptions.map((option) => (
@@ -111,12 +123,12 @@ export function PlannerTargetPicker({
           </Select>
           {!isLoading && accountOptions.length === 0 ? (
             <p className="text-xs leading-4 text-muted-foreground">
-              No connected accounts for this platform. Connect one in Settings first.
+              {uiText('no_connected_accounts_for_this_platform_conne_5e840d5')}
             </p>
           ) : null}
           {accountId === null ? (
             <p className="text-xs leading-4 text-muted-foreground">
-              This step cannot run or publish until an account is chosen.
+              {uiText('this_step_cannot_run_or_publish_until_an_acco_70189c0')}
             </p>
           ) : null}
         </div>

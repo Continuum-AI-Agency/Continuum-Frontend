@@ -1,4 +1,7 @@
 'use client';
+import { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
 
 import {
   Ban,
@@ -16,8 +19,8 @@ import { Task, TaskContent, type TaskStatus, TaskTrigger } from '@/components/ai
 import type { JainaObjective, JainaObjectiveStatus } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import {
-  OBJECTIVE_STATUS_LABEL,
   objectiveReasonText,
+  objectiveStatusLabel,
   summarizeObjectiveProgress,
 } from '../objectiveStatus';
 
@@ -26,7 +29,11 @@ type ObjectivesQueueProps = {
   isStreaming: boolean;
 };
 
-type StatusLook = { icon: LucideIcon; iconClassName: string; titleClassName?: string };
+type StatusLook = {
+  icon: LucideIcon;
+  iconClassName: string;
+  titleClassName?: string;
+};
 
 const STATUS_LOOK: Readonly<Record<JainaObjectiveStatus, StatusLook>> = {
   completed: {
@@ -42,7 +49,11 @@ const STATUS_LOOK: Readonly<Record<JainaObjectiveStatus, StatusLook>> = {
   partial: { icon: CircleDashed, iconClassName: 'text-amber-500' },
   deferred: { icon: Clock3, iconClassName: 'text-muted-foreground/70' },
   blocked: { icon: Ban, iconClassName: 'text-amber-600' },
-  failed: { icon: CircleX, iconClassName: 'text-destructive', titleClassName: 'text-destructive' },
+  failed: {
+    icon: CircleX,
+    iconClassName: 'text-destructive',
+    titleClassName: 'text-destructive',
+  },
   cancelled: {
     icon: CircleMinus,
     iconClassName: 'text-muted-foreground/50',
@@ -55,18 +66,23 @@ const STATUS_LOOK: Readonly<Record<JainaObjectiveStatus, StatusLook>> = {
  * Once the turn is over nothing is still being worked on: an objective the backend left
  * `in_progress` would otherwise spin forever and read as "Jaina is stuck".
  */
-const displayedObjective = (objective: JainaObjective, isStreaming: boolean) =>
+const displayedObjective = (
+  objective: JainaObjective,
+  isStreaming: boolean,
+  uiTranslate?: ScaleCopy,
+) =>
   objective.status === 'in_progress' && !isStreaming
     ? {
         status: 'deferred' as const,
-        reason: objectiveReasonText('turn_ended_in_progress', null),
+        reason: objectiveReasonText('turn_ended_in_progress', null, uiTranslate),
       }
     : {
         status: objective.status,
-        reason: objectiveReasonText(objective.reason_code, objective.details),
+        reason: objectiveReasonText(objective.reason_code, objective.details, uiTranslate),
       };
 
 export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProps) {
+  const uiText = useTranslations('scale');
   if (objectives.length === 0) return null;
 
   const { completed, partial, total } = summarizeObjectiveProgress(objectives);
@@ -80,12 +96,7 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
         : isStreaming || hasInProgress
           ? 'in_progress'
           : 'pending';
-  const title = [
-    `${total} objective${total !== 1 ? 's' : ''}`,
-    partial > 0 ? `${partial} partial` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const title = uiText('jainaObjectiveCount', { count: total, partial });
 
   return (
     <motion.div
@@ -98,7 +109,7 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
         <TaskTrigger title={title} status={taskStatus} progress={{ current: completed, total }} />
         <TaskContent className="text-xs">
           {objectives.map((objective) => {
-            const { status, reason } = displayedObjective(objective, isStreaming);
+            const { status, reason } = displayedObjective(objective, isStreaming, uiText);
             const look = STATUS_LOOK[status];
             const Icon = look.icon;
             return (
@@ -120,7 +131,7 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
                       {objective.title}
                     </p>
                     <span className="shrink-0 text-xs text-muted-foreground/70">
-                      {OBJECTIVE_STATUS_LABEL[status]}
+                      {objectiveStatusLabel(status, uiText)}
                     </span>
                   </div>
                   {reason ? (

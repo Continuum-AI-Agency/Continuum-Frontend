@@ -1,3 +1,18 @@
+import {
+  heroMinImpact,
+  MATERIAL_OVER_TARGET,
+  readBriefStanding,
+  STANDING_EVENT_FLOOR,
+} from '@continuum/contracts';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+import { formatCurrency } from '../../../format';
+import { freezeLabel } from '../../../reportModel';
+import { resultNoun, resultWords } from './cardVisual';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The portfolio's news: the lead card and the insights beside it, composed from what the
 // cycle already persisted, and handed back in ONE order — highest impact first — as `cards`.
 // Pure — no React, no fetch — so every state below is pinned by a test.
@@ -75,25 +90,49 @@ export type NewsCardModel = {
 };
 
 /** What kind of finding the evidence says this is: "sustained cost", "fatigue", "raise". */
-function kindOf(module: string, visual: CardVisual, resultLabel: string): string | null {
+function kindOf(
+  module: string,
+  visual: CardVisual,
+  resultLabel: string,
+  uiTranslate?: ScaleCopy,
+): string | null {
   switch (visual.kind) {
     case 'cost_vs_reference':
-      return 'sustained cost';
+      return uiTranslate
+        ? uiTranslate('newsKind', { kind: 'cost_vs_reference' })
+        : 'sustained cost';
     case 'spend_blocks':
-      return `zero ${resultLabel.toLowerCase()}`;
+      return uiTranslate
+        ? uiTranslate('helper_0af3742937c3', { v0: resultLabel.toLowerCase() })
+        : `zero ${resultLabel.toLowerCase()}`;
     case 'ctr_step':
-      return 'fatigue';
+      return uiTranslate ? uiTranslate('newsKind', { kind: 'ctr_step' }) : 'fatigue';
     case 'budget_move':
-      return module === 'budget' ? (visual.to > visual.from ? 'raise' : 'cut') : null;
+      return module === 'budget'
+        ? uiTranslate
+          ? uiTranslate('newsKind', {
+              kind: visual.to > visual.from ? 'budget_raise' : 'budget_cut',
+            })
+          : visual.to > visual.from
+            ? 'raise'
+            : 'cut'
+        : null;
     default:
       return null;
   }
 }
 
 /** The finding named by its evidence, so a reader knows the kind before reading a word. */
-function eyebrowFor(module: string, visual: CardVisual, resultLabel: string): string {
-  const base = MODULE_LABEL[module] ?? module;
-  const kind = kindOf(module, visual, resultLabel);
+function eyebrowFor(
+  module: string,
+  visual: CardVisual,
+  resultLabel: string,
+  uiTranslate?: ScaleCopy,
+): string {
+  const base = uiTranslate
+    ? uiTranslate('newsModule', { module })
+    : (MODULE_LABEL[module] ?? module);
+  const kind = kindOf(module, visual, resultLabel, uiTranslate);
   return kind ? `${base} · ${kind}` : base;
 }
 
@@ -102,21 +141,52 @@ function eyebrowFor(module: string, visual: CardVisual, resultLabel: string): st
  * other module keeps its own name. Colour carries the direction only — scale green, pause red,
  * creative amber — so a list of findings reads as a list of verbs before a word of it.
  */
-function tagFor(module: string, visual: CardVisual, resultLabel: string): FindingTag {
-  const detail = kindOf(module, visual, resultLabel);
+function tagFor(
+  module: string,
+  visual: CardVisual,
+  resultLabel: string,
+  uiTranslate?: ScaleCopy,
+): FindingTag {
+  const detail = kindOf(module, visual, resultLabel, uiTranslate);
   switch (module) {
     case 'pause':
-      return { label: MODULE_LABEL.pause, tone: 'bad', detail };
+      return {
+        label: uiTranslate ? uiTranslate('newsModule', { module: 'pause' }) : MODULE_LABEL.pause,
+        tone: 'bad',
+        detail,
+      };
     case 'creative':
-      return { label: MODULE_LABEL.creative, tone: 'warn', detail };
+      return {
+        label: uiTranslate
+          ? uiTranslate('newsModule', { module: 'creative' })
+          : MODULE_LABEL.creative,
+        tone: 'warn',
+        detail,
+      };
     case 'budget':
       return visual.kind === 'budget_move' && visual.to > visual.from
         ? { label: 'Scale', tone: 'good', detail: null }
-        : { label: MODULE_LABEL.budget, tone: 'muted', detail };
+        : {
+            label: uiTranslate
+              ? uiTranslate('newsModule', { module: 'budget' })
+              : MODULE_LABEL.budget,
+            tone: 'muted',
+            detail,
+          };
     case 'none':
-      return { label: 'Today', tone: 'muted', detail: 'nothing to change' };
+      return {
+        label: 'Today',
+        tone: 'muted',
+        detail: uiTranslate ? uiTranslate('newsKind', { kind: 'none' }) : 'nothing to change',
+      };
     default:
-      return { label: MODULE_LABEL[module] ?? module, tone: 'muted', detail };
+      return {
+        label: uiTranslate
+          ? uiTranslate('newsModule', { module })
+          : (MODULE_LABEL[module] ?? module),
+        tone: 'muted',
+        detail,
+      };
   }
 }
 
@@ -127,10 +197,17 @@ function subjectFor(name: string | null, claim: string): string | null {
 }
 
 /** A secondary candidate's sentence: its own persisted reason, else what it is and where. */
-function claimFor(candidate: BriefCandidate): string {
-  const where = candidate.adset_name ?? candidate.adset_id ?? 'the portfolio';
-  const module = MODULE_LABEL[candidate.module] ?? candidate.module;
-  return `${module} on ${where}`;
+function claimFor(candidate: BriefCandidate, uiTranslate?: ScaleCopy): string {
+  const where =
+    candidate.adset_name ??
+    candidate.adset_id ??
+    (uiTranslate ? uiTranslate('newsPortfolio') : 'the portfolio');
+  const module = uiTranslate
+    ? uiTranslate('newsModule', { module: candidate.module })
+    : (MODULE_LABEL[candidate.module] ?? candidate.module);
+  return uiTranslate
+    ? uiTranslate('helper_fd32956785c1', { v0: module, v1: where })
+    : `${module} on ${where}`;
 }
 
 export type PortfolioNews = {
@@ -165,12 +242,17 @@ function rankCards(
  * recommendations — together, the only places the evidence lives. Pass neither and every card
  * still renders: its band falls to the neutral strip of what the cycle knows.
  */
-export function buildPortfolioNews(args: {
-  view: HeroView;
-  items: readonly CycleItemRow[];
-  /** The portfolio's target cost per result, the line a cost is read against. */
-  target: number | null;
-}): PortfolioNews {
+export function buildPortfolioNews(
+  args: {
+    view: HeroView;
+    items: readonly CycleItemRow[];
+    /** The portfolio's target cost per result, the line a cost is read against. */
+    target: number | null;
+    dailyTotal?: number | null;
+  },
+  uiTranslate?: ScaleCopy,
+  locale: UiLocale = 'en',
+): PortfolioNews {
   const { view, items, target } = args;
   const brief = view.brief;
   const hero = brief.hero;
@@ -190,26 +272,37 @@ export function buildPortfolioNews(args: {
   const heroCandidate = brief.candidates.find((c) => c.id === hero.candidate_id) ?? null;
   const heroVisual = visualForCard({ ...shared, candidate: heroCandidate });
   const calm = hero.module === 'none';
+  const displayHero =
+    uiTranslate && view.source === 'fallback' && brief.model === 'deterministic'
+      ? deterministicHeroCopy(args, uiTranslate, locale)
+      : { headline: hero.headline, why: hero.why };
   const lead: NewsCardModel = {
     id: hero.candidate_id ?? 'hero',
-    eyebrow: calm ? 'Today · nothing to change' : eyebrowFor(hero.module, heroVisual, resultLabel),
-    tag: tagFor(hero.module, heroVisual, resultLabel),
+    eyebrow: calm
+      ? 'Today · nothing to change'
+      : eyebrowFor(hero.module, heroVisual, resultLabel, uiTranslate),
+    tag: tagFor(hero.module, heroVisual, resultLabel, uiTranslate),
     subject: calm
       ? items.length > 0
-        ? `${items.length} ad set${items.length === 1 ? '' : 's'}`
+        ? uiTranslate
+          ? uiTranslate('newsAdSetCount', { count: items.length })
+          : `${items.length} ad set${items.length === 1 ? '' : 's'}`
         : null
-      : subjectFor(heroCandidate?.adset_name ?? null, hero.headline),
-    claim: hero.headline,
-    reason: hero.why || null,
+      : subjectFor(heroCandidate?.adset_name ?? null, displayHero.headline),
+    claim: displayHero.headline,
+    reason: displayHero.why || null,
     impactPerDay: hero.impact_per_day,
     chosenOver: hero.justification,
     visual: heroVisual,
-    figure: figureForCard({
-      candidate: heroCandidate,
-      impactPerDay: hero.impact_per_day,
-      visual: heroVisual,
-      resultLabel,
-    }),
+    figure: figureForCard(
+      {
+        candidate: heroCandidate,
+        impactPerDay: hero.impact_per_day,
+        visual: heroVisual,
+        resultLabel,
+      },
+      uiTranslate,
+    ),
     tone: toneForVisual(heroVisual),
     cta: view.cta,
   };
@@ -219,26 +312,119 @@ export function buildPortfolioNews(args: {
     const candidate = brief.candidates.find((c) => c.id === id);
     if (!candidate || candidate.id === hero.candidate_id) continue;
     const visual = visualForCard({ ...shared, candidate });
-    const claim = claimFor(candidate);
+    const claim = claimFor(candidate, uiTranslate);
     insights.push({
       id: candidate.id,
-      eyebrow: eyebrowFor(candidate.module, visual, resultLabel),
-      tag: tagFor(candidate.module, visual, resultLabel),
+      eyebrow: eyebrowFor(candidate.module, visual, resultLabel, uiTranslate),
+      tag: tagFor(candidate.module, visual, resultLabel, uiTranslate),
       subject: subjectFor(candidate.adset_name ?? null, claim),
       claim,
       reason: candidate.reason,
       impactPerDay: candidate.impact_per_day,
       chosenOver: null,
       visual,
-      figure: figureForCard({
-        candidate,
-        impactPerDay: candidate.impact_per_day,
-        visual,
-        resultLabel,
-      }),
+      figure: figureForCard(
+        {
+          candidate,
+          impactPerDay: candidate.impact_per_day,
+          visual,
+          resultLabel,
+        },
+        uiTranslate,
+      ),
       tone: toneForVisual(visual),
       cta: ctaForCandidate(candidate, view.observe),
     });
   }
   return { lead, insights, cards: rankCards(lead, insights, brief.candidates) };
+}
+
+/** Only canonical deterministic briefs receive app-owned prose; model-written candidates and report text remain source content. */
+function deterministicHeroCopy(
+  args: Parameters<typeof buildPortfolioNews>[0],
+  t: ScaleCopy,
+  locale: UiLocale,
+): { headline: string; why: string } {
+  const { view, items } = args,
+    brief = view.brief,
+    g = brief.growth,
+    h = brief.hero;
+  const candidate = brief.candidates.find((c) => c.id === h.candidate_id);
+  const money = (n: number) => formatCurrency(n, g.currency, locale);
+  const words = resultWords(g.result_label, t),
+    result = words.one,
+    results = words.many;
+  if (h.module !== 'none' && candidate)
+    return {
+      headline: t('newsCandidateHeadline', {
+        module: h.module,
+        amount: money(candidate.impact_per_day),
+        name: candidate.adset_name ?? candidate.adset_id ?? t('newsAnAdSet'),
+        results,
+      }),
+      why: h.why,
+    };
+  const days = Number(g.window.slice(1)),
+    standing = view.standing ?? readBriefStanding(null, items),
+    held = standing.adsets_total > 0 && standing.adsets_held === standing.adsets_total;
+  const top = brief.candidates[0],
+    floorNote = top
+      ? t('newsUnderFloorReason', {
+          amount: money(top.impact_per_day),
+          floor: money(heroMinImpact(args.dailyTotal)),
+        })
+      : t('newsNoRecommendationsReason');
+  const guidance =
+    freezeLabel(standing.held_reason, null, createOptimizerDisplayTranslate(t))?.hint ?? '';
+  const heldNote = t('newsHeldReason', {
+    count: standing.adsets_total,
+    guidance,
+  });
+  let headline = t('newsCalmHeadline'),
+    why = top ? t('newsBelowImpactFloor') : t('newsNoOpenRecommendations');
+  if (g.results === 0) {
+    headline =
+      g.spend <= 0
+        ? t('newsNoSpendHeadline', { results, days })
+        : held
+          ? t('newsNoResultsHeldHeadline', {
+              results,
+              days,
+              count: standing.adsets_total,
+            })
+          : t('newsNoResultsHeadline', {
+              results,
+              days,
+              amount: money(g.spend),
+            });
+    why = held
+      ? (g.spend <= 0 ? t('newsNothingDelivered') + ' ' : '') + heldNote
+      : g.spend <= 0
+        ? t('newsNothingDelivered')
+        : t('newsNoResultsReason', { amount: money(g.spend), days, results });
+  } else if (held) {
+    headline = t('newsAllHeldHeadline', { count: standing.adsets_total });
+    why = heldNote;
+  } else if (
+    g.cost_per_result != null &&
+    g.target != null &&
+    g.target > 0 &&
+    g.cost_per_result / g.target - 1 > MATERIAL_OVER_TARGET
+  ) {
+    const confident =
+      standing.confidence != null
+        ? standing.confidence !== 'low'
+        : g.results >= STANDING_EVENT_FLOOR;
+    headline = t('newsOverTargetHeadline', {
+      result,
+      cost: money(g.cost_per_result),
+      target: money(g.target),
+      confident: confident ? 'yes' : 'no',
+      percent: Math.round((g.cost_per_result / g.target - 1) * 100),
+    });
+    why = confident
+      ? t('newsCostGapReason', { floorNote, count: g.results, results })
+      : t('newsLowConfidenceReason', { floorNote });
+  }
+  return { headline, why };
 }

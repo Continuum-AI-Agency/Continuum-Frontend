@@ -7,6 +7,7 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { Loader2Icon, Trash2Icon } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -30,6 +32,10 @@ export type DeleteAssetButtonProps = {
 };
 
 export function DeleteAssetButton({ brandId, asset, onDeleted }: DeleteAssetButtonProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -44,16 +50,20 @@ export function DeleteAssetButton({ brandId, asset, onDeleted }: DeleteAssetButt
       });
       setOpen(false);
       toast.show({
-        title: 'Deleted from your library',
+        title: translateUi('deleted_from_your_library_9ae0cf0b'),
         description:
-          removed.length > 1 ? `${removed.length} slides removed with the carousel.` : undefined,
+          removed.length > 1
+            ? translateUi('value0_slides_removed_with_the_caro_53bea217', {
+                count: Number(removed.length),
+              })
+            : undefined,
         variant: 'success',
       });
       onDeleted();
     } catch (error) {
       toast.show({
-        title: 'Delete failed',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        title: translateUi('delete_failed_8727e2ba'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     } finally {
@@ -69,27 +79,30 @@ export function DeleteAssetButton({ brandId, asset, onDeleted }: DeleteAssetButt
         className="gap-1.5 text-destructive hover:text-destructive"
         onClick={() => setOpen(true)}
       >
-        <Trash2Icon className="size-3.5" />
-        Delete
+        <Trash2Icon className="size-3.5" /> {translateUi('delete_e2d0a549')}{' '}
       </Button>
       <AlertDialog open={open} onOpenChange={(next) => (deleting ? undefined : setOpen(next))}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              Delete “{asset.title ?? asset.fileName}”?
+              {' '}
+              {translateUi('delete_fdd77e66')}
+              {asset.title ?? asset.fileName}”?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
               {asset.carousel
-                ? 'It leaves your library with every slide of the carousel. '
-                : 'It leaves your library. '}
-              Comments, versions and approvals are kept, and support can still bring it back.
+                ? translateUi('it_leaves_your_library_with_every_s_8ef9834a')
+                : translateUi('it_leaves_your_library_ce86464a')}{' '}
+              {translateUi('comments_versions_and_approvals_are_3b590c33')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>
+              {translateUi('cancel_19766ed6')}
+            </AlertDialogCancel>
             <AlertDialogAction disabled={deleting} onClick={() => void handleDelete()}>
               {deleting && <Loader2Icon className="size-3.5 animate-spin" />}
-              {deleting ? 'Deleting…' : 'Delete'}
+              {deleting ? translateUi('deleting_43b5894c') : translateUi('delete_e2d0a549')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

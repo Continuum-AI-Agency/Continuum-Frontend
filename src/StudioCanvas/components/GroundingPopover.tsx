@@ -24,7 +24,7 @@
 import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { isShortcutSkill } from '@continuum/contracts';
 import { Check, Wand2 } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import {
   BrandBookPiecePreview,
@@ -49,6 +49,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Link } from '@/i18n/navigation';
 import {
   BRAND_BOOK_PIECE_LABELS,
   describeSkillForGeneration,
@@ -91,13 +92,6 @@ const DIRECTION_PIECE_LABELS: Record<BrandDirectionPiece, string> = {
   prohibition: 'Refusals',
   'unclassified-direction': 'Unclassified direction',
 };
-
-const STYLE_CAPTION =
-  'What this generation is allowed to draw on. Switch on only what this piece needs.';
-const DIRECTION_CAPTION =
-  'What the compiler is allowed to say. Only pieces this brand has authored appear.';
-const BRAND_CAPTION =
-  'New nodes start Light (colors, type, logo); nodes an agent builds use the full book. Type /brand or /nobrand in a prompt to override one generation.';
 
 /** How many skill rows the inspector shows before "Show all". */
 const SKILL_PREVIEW_ROWS = 8;
@@ -183,6 +177,8 @@ function useGroundingModel({
   onToggleDesignSection,
   contextual,
 }: GroundingEditorProps) {
+  const translateUi = useUiTranslations('studio');
+
   const direction = useBrandDirectionPieces(brandId);
   // Read here rather than passed down: the rows describe the BRAND's system, not this
   // node's selection, so every chip on the canvas would otherwise thread the same list
@@ -224,7 +220,7 @@ function useGroundingModel({
     // has no book to enforce.
     disabled: !availability.full && !brandEnforced,
     onToggle: () => onTogglePiece('full'),
-    label: 'Enforce brand book',
+    label: translateUi('enforce_brand_book_69cade25'),
     description: fullBook?.description,
     ...(fullBook ? { preview: <BrandBookPiecePreview presentation={fullBook} /> } : {}),
   };
@@ -256,10 +252,10 @@ function useGroundingModel({
           label: DIRECTION_PIECE_LABELS[entry.piece],
           description:
             entry.approvedCount === 0
-              ? 'Written but not approved — switching it on changes nothing yet.'
+              ? translateUi('written_but_not_approved_switching__e772c3f5')
               : entry.gates
-                ? 'Approved, and hard enough to reject a candidate.'
-                : 'Approved. Shapes the prompt; does not reject.',
+                ? translateUi('approved_and_hard_enough_to_reject__00327315')
+                : translateUi('approved_shapes_the_prompt_does_not_4bb6cdae'),
           ...(entry.approvedCount === 0 ? { hint: 'not approved' } : {}),
         }))
       : null;
@@ -283,12 +279,16 @@ function useGroundingModel({
             onToggle: () => onToggleDesignSection(entry.section),
             label: entry.title,
             description: wired
-              ? 'Supplied by a connected Design Reference, which outranks this list.'
+              ? translateUi('supplied_by_a_connected_design_refe_f2a1bfe9')
               : entry.ruleCount === 0
-                ? 'No rules recorded — switching it on changes nothing yet.'
+                ? translateUi('no_rules_recorded_switching_it_on_c_9afe660f')
                 : entry.gates
-                  ? `${entry.ruleCount} rules, hard enough to reject a candidate.`
-                  : `${entry.ruleCount} rules. Shapes the prompt; does not reject.`,
+                  ? translateUi('value0_rules_hard_enough_to_reject__f14a1669', {
+                      count: Number(entry.ruleCount),
+                    })
+                  : translateUi('value0_rules_shapes_the_prompt_does_ac9cd774', {
+                      count: Number(entry.ruleCount),
+                    }),
             ...(wired ? { hint: 'wired' } : entry.ruleCount === 0 ? { hint: 'empty' } : {}),
           };
         })
@@ -309,7 +309,7 @@ function useGroundingModel({
     key: skill.id,
     checked: skillIds.includes(skill.id),
     onToggle: () => onToggleSkill(skill.id),
-    label: `${skill.name}${skill.isTemplate ? ' · Library' : ''}`,
+    label: `${skill.name}${skill.isTemplate ? translateUi('library_85496fe5') : ''}`,
     description: describeSkillForGeneration(skill),
     preview: <SkillConfigPreview skill={skill} />,
   }));
@@ -393,6 +393,8 @@ function SectionSubTrigger({ title, count }: { title: string; count?: string | n
  * the chip's DropdownMenuContent (GroundingChip owns the Root and the trigger).
  */
 export function GroundingMenuSections(props: GroundingEditorProps) {
+  const translateUi = useUiTranslations('studio');
+
   const model = useGroundingModel(props);
 
   return (
@@ -404,12 +406,17 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
         three unrelated switches that happen to share a menu.
       */}
       <DropdownMenuGroup>
-        <DropdownMenuLabel className="text-foreground">Style</DropdownMenuLabel>
-        <SubCaption>{STYLE_CAPTION}</SubCaption>
+        <DropdownMenuLabel className="text-foreground">
+          {translateUi('style_7e744141')}
+        </DropdownMenuLabel>
+        <SubCaption>{translateUi('groundingStyleCaption')}</SubCaption>
         <DropdownMenuSub>
-          <SectionSubTrigger title="Brand book" count={model.brandModeLabel} />
+          <SectionSubTrigger
+            title={translateUi('brand_book_11141eb1')}
+            count={model.brandModeLabel}
+          />
           <DropdownMenuSubContent className={SUB_CONTENT_CLASS}>
-            <SubCaption>{BRAND_CAPTION}</SubCaption>
+            <SubCaption>{translateUi('groundingBrandCaption')}</SubCaption>
             <DropdownMenuGroup>
               <GroundingCheckboxRow row={model.enforceRow} />
               <DropdownMenuSeparator />
@@ -417,7 +424,8 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
                 model.bookRows.map((row) => <GroundingCheckboxRow key={row.key} row={row} />)
               ) : (
                 <DropdownMenuItem render={<Link href="/settings?section=brand" />}>
-                  No brand book yet — finish it in Settings
+                  {' '}
+                  {translateUi('no_brand_book_yet_finish_it_in_sett_4502a9bc')}{' '}
                 </DropdownMenuItem>
               )}
             </DropdownMenuGroup>
@@ -426,9 +434,12 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
 
         {model.directionRows ? (
           <DropdownMenuSub>
-            <SectionSubTrigger title="Creative direction" count={model.directionCount} />
+            <SectionSubTrigger
+              title={translateUi('creative_direction_955fe28d')}
+              count={model.directionCount}
+            />
             <DropdownMenuSubContent className={SUB_CONTENT_CLASS}>
-              <SubCaption>{DIRECTION_CAPTION}</SubCaption>
+              <SubCaption>{translateUi('groundingDirectionCaption')}</SubCaption>
               <DropdownMenuGroup>
                 {model.directionRows.map((row) => (
                   <GroundingCheckboxRow key={row.key} row={row} />
@@ -440,7 +451,10 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
 
         {model.designRows ? (
           <DropdownMenuSub>
-            <SectionSubTrigger title="Design system" count={model.designCount} />
+            <SectionSubTrigger
+              title={translateUi('design_system_4a866105')}
+              count={model.designCount}
+            />
             <DropdownMenuSubContent className={SUB_CONTENT_CLASS}>
               <SubCaption>{model.designCaption}</SubCaption>
               <DropdownMenuGroup>
@@ -454,21 +468,21 @@ export function GroundingMenuSections(props: GroundingEditorProps) {
 
         <DropdownMenuSub>
           <SectionSubTrigger
-            title="Creative skills"
+            title={translateUi('creative_skills_49562c60')}
             count={model.skillCount > 0 ? `${model.skillCount} on` : null}
           />
           <DropdownMenuSubContent className={SUB_CONTENT_CLASS}>
             <DropdownMenuGroup>
               <DropdownMenuItem render={<Link href="/settings?section=skills" />}>
-                <Wand2 />
-                Manage skills
+                <Wand2 /> {translateUi('manage_skills_f3600715')}{' '}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {model.skillsLoading ? (
-                <DropdownMenuItem disabled>Loading…</DropdownMenuItem>
+                <DropdownMenuItem disabled>{translateUi('loading_ba3bbbe1')}</DropdownMenuItem>
               ) : model.skillRows.length === 0 ? (
                 <DropdownMenuItem disabled>
-                  No creative skills yet — create one from Manage.
+                  {' '}
+                  {translateUi('no_creative_skills_yet_create_one_f_fc7ce707')}{' '}
                 </DropdownMenuItem>
               ) : (
                 model.skillRows.map((row) => <GroundingCheckboxRow key={row.key} row={row} />)
@@ -560,6 +574,8 @@ function SkillRows({
   loading: boolean;
   shortcutHint: string | null;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [query, setQuery] = React.useState('');
   const [showAll, setShowAll] = React.useState(false);
   const needle = query.trim().toLowerCase();
@@ -571,17 +587,19 @@ function SkillRows({
   return (
     <>
       {loading ? (
-        <InspectorCaption>Loading…</InspectorCaption>
+        <InspectorCaption>{translateUi('loading_ba3bbbe1')}</InspectorCaption>
       ) : rows.length === 0 ? (
-        <InspectorCaption>No creative skills yet — create one from Manage.</InspectorCaption>
+        <InspectorCaption>
+          {translateUi('no_creative_skills_yet_create_one_f_fc7ce707')}
+        </InspectorCaption>
       ) : (
         <>
           {rows.length > SKILL_PREVIEW_ROWS ? (
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search skills"
-              aria-label="Search skills"
+              placeholder={translateUi('search_skills_76c02b7e')}
+              aria-label={translateUi('search_skills_76c02b7e')}
               className="mb-1 h-7 text-xs"
             />
           ) : null}
@@ -589,7 +607,10 @@ function SkillRows({
             <ToggleRow key={row.key} row={row} />
           ))}
           {needle && matches.length === 0 ? (
-            <InspectorCaption>No skills match “{query.trim()}”.</InspectorCaption>
+            <InspectorCaption>
+              {translateUi('no_skills_match_1a1d05d7')}
+              {query.trim()}”.
+            </InspectorCaption>
           ) : null}
           {visible.length < matches.length ? (
             <button
@@ -597,7 +618,9 @@ function SkillRows({
               onClick={() => setShowAll(true)}
               className="w-full rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
             >
-              Show all ({matches.length})
+              {' '}
+              {translateUi('show_all_4b19e737')}
+              {matches.length})
             </button>
           ) : null}
         </>
@@ -608,8 +631,7 @@ function SkillRows({
           href="/settings?section=skills"
           className="inline-flex shrink-0 items-center gap-1 text-[0.65rem] text-muted-foreground no-underline! transition-colors hover:text-foreground"
         >
-          <Wand2 className="h-3 w-3" />
-          Manage
+          <Wand2 className="h-3 w-3" /> {translateUi('manage_5a234448')}{' '}
         </Link>
       </div>
     </>
@@ -621,6 +643,8 @@ function SkillRows({
  * collapsed sections, where a menu-in-a-panel would be a popover on a popover.
  */
 export function GroundingPopover(props: GroundingEditorProps) {
+  const translateUi = useUiTranslations('studio');
+
   const model = useGroundingModel(props);
 
   return (
@@ -629,26 +653,35 @@ export function GroundingPopover(props: GroundingEditorProps) {
           scrollport (Airtable #281). The sections are collapsed by default and the
           skill list is capped, so the pane stays short without a second scroller. */}
       <div className="p-2">
-        <p className="px-1.5 pt-0.5 font-medium text-foreground text-xs">Style</p>
-        <p className="mt-1 px-1.5 text-[0.65rem] text-muted-foreground">{STYLE_CAPTION}</p>
+        <p className="px-1.5 pt-0.5 font-medium text-foreground text-xs">
+          {translateUi('style_7e744141')}
+        </p>
+        <p className="mt-1 px-1.5 text-[0.65rem] text-muted-foreground">
+          {translateUi('groundingStyleCaption')}
+        </p>
 
         <Accordion type="multiple" className="mt-2">
           <AccordionItem value="brand">
-            <SectionTrigger title="Brand book" summary={model.brandSummary} />
+            <SectionTrigger
+              title={translateUi('brand_book_11141eb1')}
+              summary={model.brandSummary}
+            />
             <AccordionContent className={PANEL_CLASS}>
-              <InspectorCaption>{BRAND_CAPTION}</InspectorCaption>
+              <InspectorCaption>{translateUi('groundingBrandCaption')}</InspectorCaption>
               <ToggleRow row={model.enforceRow} />
               <Separator className="my-1" />
               {model.bookRows ? (
                 model.bookRows.map((row) => <ToggleRow key={row.key} row={row} />)
               ) : (
                 <p className="px-1.5 py-1 text-xs text-muted-foreground">
-                  No brand book yet —{' '}
+                  {' '}
+                  {translateUi('no_brand_book_yet_edee2223')}{' '}
                   <Link
                     href="/settings?section=brand"
                     className="underline underline-offset-2 transition-colors hover:text-foreground"
                   >
-                    finish it in Settings
+                    {' '}
+                    {translateUi('finish_it_in_settings_b83e61a0')}{' '}
                   </Link>
                   .
                 </p>
@@ -658,9 +691,12 @@ export function GroundingPopover(props: GroundingEditorProps) {
 
           {model.directionRows ? (
             <AccordionItem value="direction">
-              <SectionTrigger title="Creative direction" summary={model.directionCount} />
+              <SectionTrigger
+                title={translateUi('creative_direction_955fe28d')}
+                summary={model.directionCount}
+              />
               <AccordionContent className={PANEL_CLASS}>
-                <InspectorCaption>{DIRECTION_CAPTION}</InspectorCaption>
+                <InspectorCaption>{translateUi('groundingDirectionCaption')}</InspectorCaption>
                 {model.directionRows.map((row) => (
                   <ToggleRow key={row.key} row={row} />
                 ))}
@@ -670,7 +706,10 @@ export function GroundingPopover(props: GroundingEditorProps) {
 
           {model.designRows ? (
             <AccordionItem value="design">
-              <SectionTrigger title="Design system" summary={model.designCount} />
+              <SectionTrigger
+                title={translateUi('design_system_4a866105')}
+                summary={model.designCount}
+              />
               <AccordionContent className={PANEL_CLASS}>
                 <InspectorCaption>{model.designCaption}</InspectorCaption>
                 {model.designRows.map((row) => (
@@ -682,8 +721,10 @@ export function GroundingPopover(props: GroundingEditorProps) {
 
           <AccordionItem value="skills">
             <SectionTrigger
-              title="Skills"
-              summary={model.skillCount > 0 ? `${model.skillCount} on` : 'none on'}
+              title={translateUi('skills_66d0f523')}
+              summary={translateUi('groundingEnabledSummary', {
+                count: model.skillCount,
+              })}
             />
             <AccordionContent className={PANEL_CLASS}>
               <SkillRows

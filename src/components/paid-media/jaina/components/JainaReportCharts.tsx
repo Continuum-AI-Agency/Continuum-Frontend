@@ -1,5 +1,5 @@
 'use client';
-
+import { useTranslations } from 'next-intl';
 import {
   Area,
   AreaChart,
@@ -18,6 +18,9 @@ import {
   YAxis,
 } from 'recharts';
 import type { GraphSpec } from '@/lib/jaina/schemas';
+import type { AnswerLanguage } from '../answerLanguage';
+import { useAnswerLanguage } from '../answerLanguageContext';
+import { reportSeriesLabel } from '../reportChrome';
 
 type ChartPoint = {
   label: string;
@@ -55,17 +58,21 @@ export function isJainaChartInput(value: unknown): value is JainaChartInput {
 }
 
 export function JainaReportCharts({ charts, showHeading = true }: JainaReportChartsProps) {
+  const uiText = useTranslations('scale');
+  const reportLocale = useAnswerLanguage();
   if (!charts || charts.length === 0) return null;
 
   const normalizedCharts = charts
-    .map(normalizeJainaChart)
+    .map((chart) => normalizeJainaChart(chart, reportLocale))
     .filter((chart): chart is NormalizedChart => Boolean(chart));
 
   if (normalizedCharts.length === 0) return null;
 
   return (
     <div className="space-y-4">
-      {showHeading ? <h3 className="text-lg font-semibold text-primary/80">Key Trends</h3> : null}
+      {showHeading ? (
+        <h3 className="text-lg font-semibold text-primary/80">{uiText('key_trends_fe524ca')}</h3>
+      ) : null}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {normalizedCharts.map((chart, index) => (
           <ChartCard key={`${chart.title || 'chart'}-${index}`} chart={chart} />
@@ -141,7 +148,10 @@ function parseWideSeriesFromDataRows(rows: Record<string, unknown>[]): ChartSeri
   }));
 }
 
-export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart | null {
+export function normalizeJainaChart(
+  rawChart: JainaChartInput,
+  reportLocale: AnswerLanguage = 'en',
+): NormalizedChart | null {
   if (!rawChart || typeof rawChart !== 'object') return null;
 
   const chart = rawChart as Record<string, unknown>;
@@ -161,7 +171,10 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
         const record = item as Record<string, unknown>;
         const data = Array.isArray(record.data) ? record.data : [];
         return {
-          name: typeof record.name === 'string' ? record.name : `Series ${seriesIndex + 1}`,
+          name:
+            typeof record.name === 'string'
+              ? record.name
+              : reportSeriesLabel(seriesIndex + 1, reportLocale),
           data: data.map((point, pointIndex) => {
             if (!point || typeof point !== 'object') {
               return { x: pointIndex + 1, y: 0 };
@@ -206,7 +219,10 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
         const record = dataset as Record<string, unknown>;
         const values = Array.isArray(record.data) ? record.data : [];
         return {
-          name: typeof record.label === 'string' ? record.label : `Series ${datasetIndex + 1}`,
+          name:
+            typeof record.label === 'string'
+              ? record.label
+              : reportSeriesLabel(datasetIndex + 1, reportLocale),
           data: labels.map((label, index) => ({
             x: label,
             y: Number(values[index] ?? 0),
@@ -244,7 +260,10 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
         const record = dataset as Record<string, unknown>;
         const values = Array.isArray(record.data) ? record.data : [];
         return {
-          name: typeof record.label === 'string' ? record.label : `Series ${datasetIndex + 1}`,
+          name:
+            typeof record.label === 'string'
+              ? record.label
+              : reportSeriesLabel(datasetIndex + 1, reportLocale),
           data: labels.map((label, index) => ({
             x: label,
             y: Number(values[index] ?? 0),
@@ -267,7 +286,10 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
         const record = item as Record<string, unknown>;
         const values = Array.isArray(record.values) ? record.values : [];
         return {
-          name: typeof record.name === 'string' ? record.name : `Series ${index + 1}`,
+          name:
+            typeof record.name === 'string'
+              ? record.name
+              : reportSeriesLabel(index + 1, reportLocale),
           data: labels.map((label, labelIndex) => ({
             x: label,
             y: Number(values[labelIndex] ?? 0),
@@ -289,7 +311,10 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
         const record = item as Record<string, unknown>;
         const data = Array.isArray(record.data) ? record.data : [];
         return {
-          name: typeof record.name === 'string' ? record.name : `Series ${seriesIndex + 1}`,
+          name:
+            typeof record.name === 'string'
+              ? record.name
+              : reportSeriesLabel(seriesIndex + 1, reportLocale),
           data: data.map((point, pointIndex) => {
             if (!point || typeof point !== 'object') {
               return { x: pointIndex + 1, y: 0 };
@@ -405,7 +430,11 @@ function ChartRenderer({ chart }: { chart: NormalizedChart }) {
             ))}
           </Pie>
           <Tooltip
-            contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }}
+            contentStyle={{
+              backgroundColor: '#111',
+              borderColor: '#333',
+              color: '#fff',
+            }}
             itemStyle={{ color: '#fff' }}
           />
         </PieChart>
@@ -435,7 +464,11 @@ function ChartRenderer({ chart }: { chart: NormalizedChart }) {
           <YAxis tickLine={false} axisLine={false} tick={{ fill: '#888', fontSize: 12 }} />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-            contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }}
+            contentStyle={{
+              backgroundColor: '#111',
+              borderColor: '#333',
+              color: '#fff',
+            }}
           />
           <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} barSize={36}>
             {data.map((entry, index) => (
@@ -460,7 +493,13 @@ function ChartRenderer({ chart }: { chart: NormalizedChart }) {
             dy={10}
           />
           <YAxis tickLine={false} axisLine={false} tick={{ fill: '#888', fontSize: 12 }} />
-          <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }} />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: '#111',
+              borderColor: '#333',
+              color: '#fff',
+            }}
+          />
           <Area
             type="monotone"
             dataKey="value"
@@ -486,7 +525,13 @@ function ChartRenderer({ chart }: { chart: NormalizedChart }) {
           dy={10}
         />
         <YAxis tickLine={false} axisLine={false} tick={{ fill: '#888', fontSize: 12 }} />
-        <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }} />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#111',
+            borderColor: '#333',
+            color: '#fff',
+          }}
+        />
         <Line
           type="monotone"
           dataKey="value"
@@ -532,7 +577,14 @@ function SeriesChartRenderer({ chart, colors }: { chart: NormalizedChart; colors
             tick={{ fill: '#888', fontSize: 12 }}
             dy={10}
             label={
-              xLabel ? { value: xLabel, position: 'insideBottom', dy: 25, fill: '#888' } : undefined
+              xLabel
+                ? {
+                    value: xLabel,
+                    position: 'insideBottom',
+                    dy: 25,
+                    fill: '#888',
+                  }
+                : undefined
             }
           />
           <YAxis
@@ -541,13 +593,22 @@ function SeriesChartRenderer({ chart, colors }: { chart: NormalizedChart; colors
             tick={{ fill: '#888', fontSize: 12 }}
             label={
               yLabel
-                ? { value: yLabel, angle: -90, position: 'insideLeft', fill: '#888' }
+                ? {
+                    value: yLabel,
+                    angle: -90,
+                    position: 'insideLeft',
+                    fill: '#888',
+                  }
                 : undefined
             }
           />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-            contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }}
+            contentStyle={{
+              backgroundColor: '#111',
+              borderColor: '#333',
+              color: '#fff',
+            }}
           />
           <Legend wrapperStyle={{ color: '#fff' }} />
           {series.map((entry, index) => (
@@ -576,7 +637,14 @@ function SeriesChartRenderer({ chart, colors }: { chart: NormalizedChart; colors
           tick={{ fill: '#888', fontSize: 12 }}
           dy={10}
           label={
-            xLabel ? { value: xLabel, position: 'insideBottom', dy: 25, fill: '#888' } : undefined
+            xLabel
+              ? {
+                  value: xLabel,
+                  position: 'insideBottom',
+                  dy: 25,
+                  fill: '#888',
+                }
+              : undefined
           }
         />
         <YAxis
@@ -584,10 +652,23 @@ function SeriesChartRenderer({ chart, colors }: { chart: NormalizedChart; colors
           axisLine={false}
           tick={{ fill: '#888', fontSize: 12 }}
           label={
-            yLabel ? { value: yLabel, angle: -90, position: 'insideLeft', fill: '#888' } : undefined
+            yLabel
+              ? {
+                  value: yLabel,
+                  angle: -90,
+                  position: 'insideLeft',
+                  fill: '#888',
+                }
+              : undefined
           }
         />
-        <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', color: '#fff' }} />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#111',
+            borderColor: '#333',
+            color: '#fff',
+          }}
+        />
         <Legend wrapperStyle={{ color: '#fff' }} />
         {series.map((entry, index) => (
           <Line

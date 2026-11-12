@@ -10,35 +10,47 @@ import {
 import { z } from 'zod';
 import { validateCron } from '@/lib/automations/schedule';
 
-export const builderFormSchema = z
-  .object({
-    name: z.string().min(1, 'Name is required').max(120),
-    prompt: z.string().min(1, 'Prompt is required').max(20000),
-    scheduleKind: z.enum(['daily', 'weekly', 'monthly', 'cron']),
-    time: automationTimeSchema,
-    dayOfWeek: z.number().int().min(0).max(6),
-    dayOfMonth: z.number().int().min(1).max(28),
-    timezone: z.string().min(1, 'Pick a timezone'),
-    cronExpr: z.string(),
-    memberUserIds: z.array(z.string()),
-    externalEmails: z.array(z.string().email()),
-    enabled: z.boolean(),
-  })
-  .superRefine((values, ctx) => {
-    if (values.scheduleKind === 'cron') {
-      const result = validateCron(values.cronExpr);
-      if (!result.ok) {
-        ctx.addIssue({ code: 'custom', path: ['cronExpr'], message: result.reason });
+export const createBuilderFormSchema = (copy: (source: string) => string = (source) => source) =>
+  z
+    .object({
+      name: z.string().min(1, copy('Name is required')).max(120),
+      prompt: z.string().min(1, copy('Prompt is required')).max(20000),
+      scheduleKind: z.enum(['daily', 'weekly', 'monthly', 'cron']),
+      time: z
+        .string()
+        .refine(
+          (value) => automationTimeSchema.safeParse(value).success,
+          copy('Enter a time in HH:MM format (24-hour clock).'),
+        ),
+      dayOfWeek: z.number().int().min(0).max(6),
+      dayOfMonth: z.number().int().min(1).max(28),
+      timezone: z.string().min(1, copy('Pick a timezone')),
+      cronExpr: z.string(),
+      memberUserIds: z.array(z.string()),
+      externalEmails: z.array(z.string().email()),
+      enabled: z.boolean(),
+    })
+    .superRefine((values, ctx) => {
+      if (values.scheduleKind === 'cron') {
+        const result = validateCron(values.cronExpr);
+        if (!result.ok) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['cronExpr'],
+            message: copy('Invalid cron expression'),
+          });
+        }
       }
-    }
-    if (values.memberUserIds.length + values.externalEmails.length === 0) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['externalEmails'],
-        message: 'Add at least one recipient',
-      });
-    }
-  });
+      if (values.memberUserIds.length + values.externalEmails.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['externalEmails'],
+          message: copy('Add at least one recipient'),
+        });
+      }
+    });
+
+export const builderFormSchema = createBuilderFormSchema();
 
 export type AutomationBuilderFormValues = z.infer<typeof builderFormSchema>;
 
@@ -61,12 +73,19 @@ export function toSchedule(values: AutomationBuilderFormValues): AutomationSched
         timezone: values.timezone,
       };
     case 'cron':
-      return { kind: 'cron', expr: values.cronExpr.trim(), timezone: values.timezone };
+      return {
+        kind: 'cron',
+        expr: values.cronExpr.trim(),
+        timezone: values.timezone,
+      };
   }
 }
 
 export function toRecipients(values: AutomationBuilderFormValues): AutomationRecipients {
-  return { memberUserIds: values.memberUserIds, externalEmails: values.externalEmails };
+  return {
+    memberUserIds: values.memberUserIds,
+    externalEmails: values.externalEmails,
+  };
 }
 
 export function scheduleToFormFields(

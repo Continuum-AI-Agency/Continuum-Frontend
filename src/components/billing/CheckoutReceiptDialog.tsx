@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // The moment after a Stripe Checkout return: a receipt printer whose status pill follows the
 // real purchase (Stripe paid, our webhook granted it, Stripe's invoice exists), then feeds the
 // receipt out in short thermal-printer pulls. The receipt offers Stripe's own invoice PDF.
@@ -8,11 +10,11 @@ import type { BillingCheckoutReceipt } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { CircleCheck, Download, Loader2, TriangleAlert, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ContinuumWordmark } from '@/components/shared/ContinuumWordmark';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { useRouter } from '@/i18n/navigation';
 import { fetchCheckoutReceipt } from '@/lib/billing/billingApi';
 import {
   CHANGE_POLL_INTERVAL_MS,
@@ -23,25 +25,30 @@ import {
 import type { CheckoutReceiptState } from '@/lib/billing/useBilling';
 import { cn } from '@/lib/utils';
 
-const STATUS: Record<ReceiptPhase, { label: string; icon: ReactNode }> = {
+const getSTATUS = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): Record<ReceiptPhase, { label: string; icon: ReactNode }> => ({
   processing: {
-    label: 'Processing your order',
+    label: tUi('m_e2ada0127b'),
     icon: <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />,
   },
   printing: {
-    label: 'Printing your receipt',
+    label: tUi('m_fe8fd87bd2'),
     icon: <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />,
   },
-  complete: { label: 'Order complete', icon: <CircleCheck className="size-4 text-success" /> },
+  complete: {
+    label: tUi('m_cd00866a63'),
+    icon: <CircleCheck className="size-4 text-success" />,
+  },
   delayed: {
-    label: 'Payment received. Still activating',
+    label: tUi('m_e2429dc53e'),
     icon: <TriangleAlert className="size-4 text-warning" />,
   },
   unavailable: {
-    label: 'Receipt unavailable',
+    label: tUi('m_daa315a645'),
     icon: <TriangleAlert className="size-4 text-warning" />,
   },
-};
+});
 
 // Four pulls with a beat between each, the way a thermal printer advances paper.
 const FEED = {
@@ -49,14 +56,15 @@ const FEED = {
   times: [0, 0.18, 0.26, 0.44, 0.52, 0.7, 0.78, 1],
 };
 
-const dateFormat = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
+const makeDateFormat = (locale: string) =>
+  new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 
-function money(minor: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', {
+function money(minor: number, currency: string, locale: string): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: currency.toUpperCase(),
   }).format(minor / 100);
@@ -71,7 +79,12 @@ export function CheckoutReceiptDialog({
   receipt: CheckoutReceiptState;
   onClose: () => void;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('common');
+  const STATUS = getSTATUS(uiText);
   const router = useRouter();
+  const dateFormat = makeDateFormat(uiLocale);
   const reduceMotion = useReducedMotion();
   const [windowElapsed, setWindowElapsed] = useState(false);
   const [fed, setFed] = useState(false);
@@ -125,10 +138,12 @@ export function CheckoutReceiptDialog({
       >
         <div className="relative z-10 rounded-[1.75rem] bg-muted p-3 pb-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.7),0_20px_40px_-16px_rgb(15_23_42/0.45)] ring-1 ring-foreground/10 dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_20px_40px_-16px_rgb(0_0_0/0.7)]">
           <div className="flex items-center justify-between px-1.5 pb-2.5">
-            <DialogTitle className="text-xs font-medium text-muted-foreground">Receipt</DialogTitle>
+            <DialogTitle className="text-xs font-medium text-muted-foreground">
+              {uiText('m_f6ce3b6fcf')}
+            </DialogTitle>
             <DialogClose
               render={<Button variant="ghost" size="icon-sm" className="rounded-full" />}
-              aria-label="Close"
+              aria-label={uiText('close_7d9eb7a')}
             >
               <X />
             </DialogClose>
@@ -172,7 +187,7 @@ export function CheckoutReceiptDialog({
 
         {phase === 'unavailable' ? (
           <p className="px-3 pt-4 text-center text-sm text-muted-foreground">
-            Find your invoice later in Billing, under Invoices.
+            {uiText('m_a8b784236e')}
           </p>
         ) : null}
 
@@ -191,11 +206,11 @@ export function CheckoutReceiptDialog({
               className={cn(buttonVariants({ variant: 'outline' }), 'flex-1')}
             >
               <Download />
-              Download invoice
+              {uiText('m_992261388e')}
             </a>
           ) : null}
           <Button ref={doneRef} className="flex-1" onClick={close}>
-            {state.from ? 'Back to where you were' : 'Done'}
+            {state.from ? uiText('m_d68f0b00e5') : uiText('done_11a6767')}
           </Button>
         </motion.div>
       </DialogContent>
@@ -204,15 +219,19 @@ export function CheckoutReceiptDialog({
 }
 
 function ReceiptPaper({ receipt }: { receipt: BillingCheckoutReceipt }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('common');
   const { currency } = receipt;
-  const date = dateFormat.format(new Date(receipt.createdAt));
+  const date = makeDateFormat(uiLocale).format(new Date(receipt.createdAt));
   return (
     <div className="receipt-edge bg-[#fafafa] px-6 pt-6 pb-10 font-mono text-[13px] leading-relaxed text-[#18181b]">
       <ContinuumWordmark height={20} />
       <p className="mt-3 text-[#52525b]">
         {receipt.invoiceNumber ? (
           <>
-            Order {receipt.invoiceNumber}
+            {uiText('m_b3aca2ab28')}
+            {receipt.invoiceNumber}
             <br />
           </>
         ) : null}
@@ -223,19 +242,31 @@ function ReceiptPaper({ receipt }: { receipt: BillingCheckoutReceipt }) {
           <ReceiptRow
             key={`${index}:${line.description}`}
             label={line.quantity > 1 ? `${line.description} × ${line.quantity}` : line.description}
-            value={money(line.amount, currency)}
+            value={money(line.amount, currency, uiLocale)}
           />
         ))}
         {receipt.discount > 0 ? (
-          <ReceiptRow label="Discount" value={`-${money(receipt.discount, currency)}`} />
+          <ReceiptRow
+            label={uiText('m_b524936d7a')}
+            value={`-${money(receipt.discount, currency, uiLocale)}`}
+          />
         ) : null}
-        {receipt.tax > 0 ? <ReceiptRow label="Tax" value={money(receipt.tax, currency)} /> : null}
+        {receipt.tax > 0 ? (
+          <ReceiptRow
+            label={uiText('m_9be70f66f8')}
+            value={money(receipt.tax, currency, uiLocale)}
+          />
+        ) : null}
       </dl>
       <div className="my-4 border-t border-dashed border-[#d4d4d8]" />
       <dl>
-        <ReceiptRow label="Total" value={money(receipt.total, currency)} strong />
+        <ReceiptRow
+          label={uiText('total_c9b3c38')}
+          value={money(receipt.total, currency, uiLocale)}
+          strong
+        />
       </dl>
-      <p className="mt-6 text-center text-[#52525b]">Thank you for your order.</p>
+      <p className="mt-6 text-center text-[#52525b]">{uiText('m_562004c6b7')}</p>
     </div>
   );
 }

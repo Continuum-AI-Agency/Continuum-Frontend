@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // A creative recommendation, read left to right: what is wearing out (the argument, drawn to
 // scale, with the creative and its communication angle) and what to make instead (the
 // instruction, the angle to keep, and the flash creatives Creative+ makes from it — or the
@@ -128,7 +133,13 @@ function flashSlots(jobs: readonly CreativeSwapJobRow[]): FlashSlot[] {
       continue;
     }
     if (result.assetIds.length === 0) {
-      slots.push({ key: job.id, job, assetId: null, roomId: result.roomId, manifest: null });
+      slots.push({
+        key: job.id,
+        job,
+        assetId: null,
+        roomId: result.roomId,
+        manifest: null,
+      });
       continue;
     }
     for (const assetId of result.assetIds) {
@@ -144,9 +155,13 @@ function flashSlots(jobs: readonly CreativeSwapJobRow[]): FlashSlot[] {
   return slots;
 }
 
-function failureText(job: CreativeSwapJobRow): string | null {
+function failureText(
+  job: CreativeSwapJobRow,
+  formatError?: (error: unknown) => string,
+): string | null {
   const error = job.error ?? null;
   if (!error) return null;
+  if (formatError) return formatError(error);
   const message = error.message ?? error.error ?? error.reason;
   return typeof message === 'string' && message ? message : null;
 }
@@ -173,40 +188,49 @@ function ImplementMenu({
   ) => void;
   busy: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const creativeReviewControlId = React.useId();
   const [open, setOpen] = React.useState(false);
   const [reviewed, setReviewed] = React.useState(false);
   const groups = (['here', 'same_audience', 'other'] as const)
-    .map((relation) => ({ relation, items: targets.filter((t) => t.relation === relation) }))
+    .map((relation) => ({
+      relation,
+      items: targets.filter((t) => t.relation === relation),
+    }))
     .filter((group) => group.items.length > 0);
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
         render={
           <Button className={SLOT_BUTTON} disabled={busy} size="sm" variant="default">
-            {busy ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <UploadIcon className="size-3.5" />
-            )}
-            Approve creative
+            {uiText.rich('sentence_b9499c243b21', {
+              v0: () =>
+                busy ? (
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                ) : (
+                  <UploadIcon className="size-3.5" />
+                ),
+            })}
           </Button>
         }
       />
       <PopoverContent align="end" className="w-72 p-3 text-xs">
         <p className="mb-2 text-muted-foreground">
-          The new ad is created paused, beside the ad set's current ad. Nothing existing changes.
+          {uiText('the_new_ad_is_created_paused_beside_the_ad_se_122b2b0')}
         </p>
-        <label className="mb-2 flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={reviewed}
-            onChange={(event) => setReviewed(event.target.checked)}
-          />{' '}
-          I reviewed{' '}
-          {slot.manifest.format === 'carousel'
-            ? `all ${slot.manifest.assets.length} cards`
-            : 'the full creative'}
-          .
+        <label htmlFor={creativeReviewControlId} className="mb-2 flex items-center gap-2">
+          {uiText.rich('sentence_9a57de38bd51', {
+            checkbox: () => (
+              <input
+                id={creativeReviewControlId}
+                type="checkbox"
+                checked={reviewed}
+                onChange={(event) => setReviewed(event.target.checked)}
+              />
+            ),
+            carousel: slot.manifest.format === 'carousel' ? 'yes' : 'no',
+            count: slot.manifest.assets.length,
+          })}
         </label>
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {groups.map((group) => (
@@ -288,7 +312,9 @@ const LEANING_NOTE =
   'Below the classifier’s confidence bar, so this angle is a leaning and not confirmed.';
 
 function AngleChip({ angle }: { angle: ResolvedAngle }) {
-  const aria = angleAriaLabel(angle);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const aria = angleAriaLabel(angle, uiText, uiLocale);
   if (angle.status === 'none') {
     return (
       <span
@@ -299,7 +325,7 @@ function AngleChip({ angle }: { angle: ResolvedAngle }) {
         role="note"
         title={aria}
       >
-        {angleChipText(angle)}
+        {angleChipText(angle, uiText, uiLocale)}
       </span>
     );
   }
@@ -315,24 +341,31 @@ function AngleChip({ angle }: { angle: ResolvedAngle }) {
       data-angle-status={angle.status}
       data-testid="angle-chip"
       role="note"
-      title={angle.status === 'leaning' ? `${aria}. ${LEANING_NOTE}` : aria}
+      title={angle.status === 'leaning' ? `${aria}. ${uiText('creativeLeaningHint')}` : aria}
     >
-      {angleChipText(angle)}
+      {angleChipText(angle, uiText, uiLocale)}
     </span>
   );
 }
 
 function WearOutBars({ chart, currency }: { chart: WearOut; currency: string | null }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const flagged = chart.rows.find((row) => row.flagged) ?? null;
   return (
     <figure className="space-y-1.5" data-testid="wear-out-bars">
       <figcaption
         className={`${typeScale.label} flex flex-wrap items-baseline justify-between gap-2 text-muted-foreground`}
       >
-        <span>{wearOutMetricTitle(chart.metric)}</span>
+        <span>{wearOutMetricTitle(chart.metric, uiText)}</span>
         {flagged?.changePct != null ? (
           <span className="text-destructive normal-case tracking-normal">
-            {flagged.label} {signedPercent(flagged.changePct)} vs 14 days
+            {uiText.rich('sentence_1e609cb04c5e', {
+              v0: flagged.label,
+              v1: signedPercent(flagged.changePct, uiLocale),
+            })}
           </span>
         ) : null}
       </figcaption>
@@ -359,7 +392,7 @@ function WearOutBars({ chart, currency }: { chart: WearOut; currency: string | n
                   className="absolute -inset-y-0.5 w-0.5 -translate-x-1/2 bg-foreground"
                   data-testid="wear-out-baseline"
                   style={{ left: `${chart.baselineShare * 100}%` }}
-                  title="14-day level"
+                  title={uiText('14_day_level_5939e29')}
                 />
               ) : null}
             </span>
@@ -369,7 +402,7 @@ function WearOutBars({ chart, currency }: { chart: WearOut; currency: string | n
                 row.flagged ? 'text-destructive' : 'text-foreground',
               )}
             >
-              {formatEvidenceValue(chart.unit, row.value, currency)}
+              {formatEvidenceValue(chart.unit, row.value, currency, uiLocale)}
             </span>
           </li>
         ))}
@@ -385,7 +418,9 @@ function WearOutBars({ chart, currency }: { chart: WearOut; currency: string | n
             )}
             data-testid="cost-change-chip"
           >
-            cost per result {signedPercent(chart.costChangePct)}
+            {uiText.rich('sentence_0b266ebaa2e7', {
+              v0: signedPercent(chart.costChangePct, uiLocale),
+            })}
           </span>
         </p>
       ) : null}
@@ -415,19 +450,28 @@ export function CreativeRecommendationCard({
   implementingKey,
   onRetry,
 }: CreativeRecommendationCardProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const [reviewElementId, setReviewElementId] = React.useState<string | null>(null);
-  const copy = creativeCardCopy(rec);
+  const copy = creativeCardCopy(rec, uiText);
   const fatigueCard = metaFatigueCardOf(rec);
   const subjects = subjectAds(rec, ads);
   const anglesQuery = useAdAngles(brandId, rec.adset_id);
-  const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId });
+  const { freshUrlById, recover } = usePaidCreativeRecovery({
+    brandId,
+    adAccountId,
+  });
   const angles = cardAngles(rec, subjects, anglesQuery.data);
   const audience = audienceWords(rec, audienceType);
   const reason =
-    queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency) ?? rec.reason;
-  const money = impactLabel(rec, currency);
+    queueHeadlineLine(rec, currency, uiLocale) ??
+    evidenceLine(rec.evidence, currency, optimizerText, uiLocale) ??
+    rec.reason;
+  const money = impactLabel(rec, currency, optimizerText, uiLocale);
   const wearOut = wearOutComparison(
-    evidenceSeries(rec.evidence, snapshot, kpiField),
+    evidenceSeries(rec.evidence, snapshot, kpiField, optimizerText),
     snapshot,
     kpiField,
   );
@@ -459,7 +503,9 @@ export function CreativeRecommendationCard({
         {/* Left — what is wearing out */}
         <section className="min-w-0 space-y-3 text-xs" data-testid="creative-card-problem">
           <p className={`${typeScale.label} text-muted-foreground`}>
-            {copy.because === 'winner' ? 'What’s working' : 'What’s wearing out'}
+            {copy.because === 'winner'
+              ? uiText('what_s_working_9f395dc')
+              : uiText('what_s_wearing_out_0b62fee')}
           </p>
           {fatigueCard ? (
             <>
@@ -478,7 +524,8 @@ export function CreativeRecommendationCard({
             <Skeleton className="size-20 rounded-lg" />
           ) : subjects.length === 0 ? (
             <p className="flex items-center gap-2 text-muted-foreground text-xs">
-              <ImageOffIcon className="size-4" /> No creative could be loaded for this ad set.
+              <ImageOffIcon className="size-4" />
+              {uiText('no_creative_could_be_loaded_for_this_ad_set_6821129')}
             </p>
           ) : (
             <ul className="flex flex-wrap gap-3">
@@ -502,32 +549,44 @@ export function CreativeRecommendationCard({
           )}
           {subjectBar?.costPerEvent != null ? (
             <p className="text-muted-foreground text-xs">
-              <span className="font-semibold text-base text-foreground tabular-nums">
-                {formatCpa(subjectBar.costPerEvent, currency)}
-              </span>{' '}
-              per {resultWord.replace(/s$/, '')} · {subjectBar.events} {resultWord}
+              {uiText.rich('sentence_d7506866b0ee', {
+                v0: () => (
+                  <span className="font-semibold text-base text-foreground tabular-nums">
+                    {formatCpa(subjectBar.costPerEvent, currency, uiLocale)}
+                  </span>
+                ),
+                v1: resultWord.replace(/s$/, ''),
+                v2: subjectBar.events,
+                v3: resultWord,
+              })}
             </p>
           ) : null}
           <dl className="space-y-1.5">
             <div className="flex items-center gap-2" data-testid="angle-row">
-              <dt className="w-20 shrink-0 text-muted-foreground text-xs">Angle</dt>
+              <dt className="w-20 shrink-0 text-muted-foreground text-xs">
+                {uiText('angle_1968034')}
+              </dt>
               <dd className="min-w-0">
                 <AngleChip angle={angles.dominant} />
               </dd>
             </div>
             {angles.hook ? (
               <div className="flex items-baseline gap-2">
-                <dt className="w-20 shrink-0 text-muted-foreground text-xs">Hook</dt>
+                <dt className="w-20 shrink-0 text-muted-foreground text-xs">
+                  {uiText('hook_536ff50')}
+                </dt>
                 <dd className="min-w-0 text-foreground italic" data-testid="angle-hook">
                   “{angles.hook}”
                 </dd>
               </div>
             ) : null}
             <div className="flex items-baseline gap-2">
-              <dt className="w-20 shrink-0 text-muted-foreground text-xs">Audience</dt>
+              <dt className="w-20 shrink-0 text-muted-foreground text-xs">
+                {uiText('audience_545c023')}
+              </dt>
               <dd className="min-w-0 text-foreground">
                 {audience ?? adsetName ?? (
-                  <span className="text-muted-foreground">this ad set</span>
+                  <span className="text-muted-foreground">{uiText('this_ad_set_75e5434')}</span>
                 )}
               </dd>
             </div>
@@ -542,17 +601,22 @@ export function CreativeRecommendationCard({
           className="min-w-0 space-y-3 border-border/60 border-t pt-4 text-xs @2xl:border-t-0 @2xl:border-l @2xl:pt-0 @2xl:pl-4"
           data-testid="creative-card-prescription"
         >
-          <p className={`${typeScale.label} text-muted-foreground`}>What to make</p>
+          <p className={`${typeScale.label} text-muted-foreground`}>
+            {uiText('what_to_make_c505c0c')}
+          </p>
           <p className="font-semibold text-foreground text-sm">
             {copy.instruction ?? copy.headline}
           </p>
           {keepAngle ? (
             <p className="flex flex-wrap items-center gap-1.5 text-foreground">
-              Keep the angle: <AngleChip angle={keepAngle} />
+              {uiText.rich('sentence_56ab879809fd', {
+                v0: () => <AngleChip angle={keepAngle} />,
+              })}
             </p>
           ) : null}
           <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
-            <SparklesIcon className="size-3.5" /> Flash creatives
+            <SparklesIcon className="size-3.5" />
+            {uiText('flash_creatives_a8dddbb')}
           </p>
           <ul className="grid grid-cols-3 gap-2">
             {slots.map((slot) => {
@@ -575,7 +639,10 @@ export function CreativeRecommendationCard({
                           <div key={ref.versionId}>
                             {slot.manifest!.format === 'carousel' ? (
                               <p>
-                                Card {index + 1} of {slot.manifest!.assets.length}
+                                {uiText.rich('sentence_24231db33b8b', {
+                                  v0: index + 1,
+                                  v1: slot.manifest!.assets.length,
+                                })}
                               </p>
                             ) : null}
                             {url ? (
@@ -586,17 +653,19 @@ export function CreativeRecommendationCard({
                                   preload="metadata"
                                   src={url}
                                   className="w-full rounded"
-                                  aria-label="Full creative preview"
+                                  aria-label={uiText('full_creative_preview_2668756')}
                                 />
                               ) : (
                                 <img
-                                  alt={`Creative card ${index + 1}`}
+                                  alt={uiText('template_4f72f5286fc2', {
+                                    v0: index + 1,
+                                  })}
                                   src={url}
                                   className="max-h-96 w-full rounded object-contain"
                                 />
                               )
                             ) : (
-                              <p>Loading exact creative version…</p>
+                              <p>{uiText('loading_exact_creative_version_ab1a687')}</p>
                             )}
                           </div>
                         );
@@ -605,7 +674,7 @@ export function CreativeRecommendationCard({
                   ) : src ? (
                     // biome-ignore lint/performance/noImgElement: signed, expiring storage URL; next/image cannot proxy it.
                     <img
-                      alt="Flash creative"
+                      alt={uiText('flash_creative_d38f7c6')}
                       className="aspect-square w-full rounded object-cover"
                       loading="lazy"
                       src={src}
@@ -629,21 +698,23 @@ export function CreativeRecommendationCard({
                           : 'secondary'
                     }
                   >
-                    {SWAP_STATUS_LABEL[status] ?? status}
+                    {uiText('creativeSwapState', { status })}
                   </Badge>
                   {slot.job.enqueued_via === 'autopilot' ? (
-                    <span className="text-muted-foreground text-xs">by autopilot</span>
+                    <span className="text-muted-foreground text-xs">
+                      {uiText('by_autopilot_7024e50')}
+                    </span>
                   ) : null}
-                  {status === 'failed' && failureText(slot.job) ? (
+                  {status === 'failed' && failureText(slot.job, formatUiError) ? (
                     <p
                       className="line-clamp-2 text-destructive"
-                      title={failureText(slot.job) ?? ''}
+                      title={failureText(slot.job, formatUiError) ?? ''}
                     >
-                      {failureText(slot.job)}
+                      {failureText(slot.job, formatUiError)}
                     </p>
                   ) : null}
                   {status === 'generated' && !slot.manifest ? (
-                    <p>Regenerate this creative to review its exact version before approval.</p>
+                    <p>{uiText('regenerate_this_creative_to_review_its_exact__1386977')}</p>
                   ) : null}
                   {status === 'failed' &&
                   ['elements_need_approval', 'headless_pending'].includes(
@@ -663,13 +734,13 @@ export function CreativeRecommendationCard({
                             size="sm"
                             onClick={() => setReviewElementId(review.data.elementIds[0]!)}
                           >
-                            Review Elements
+                            {uiText('review_elements_d7e0162')}
                           </Button>
                         ) : null;
                       })()}
                       {onRetry ? (
                         <Button size="sm" variant="outline" onClick={() => onRetry(slot.job)}>
-                          Resume generation
+                          {uiText('resume_generation_7b5f01c')}
                         </Button>
                       ) : null}
                     </div>
@@ -685,7 +756,8 @@ export function CreativeRecommendationCard({
                         rel="noreferrer"
                         target="_blank"
                       >
-                        <PencilIcon className="size-3.5" /> Edit
+                        <PencilIcon className="size-3.5" />
+                        {uiText('edit_464c4ff')}
                       </a>
                     ) : null}
                     {ready &&
@@ -697,7 +769,10 @@ export function CreativeRecommendationCard({
                         busy={busy}
                         onImplement={onImplement}
                         slot={
-                          slot as FlashSlot & { assetId: string; manifest: CreativeOutputManifest }
+                          slot as FlashSlot & {
+                            assetId: string;
+                            manifest: CreativeOutputManifest;
+                          }
                         }
                         targets={targets}
                       />
@@ -712,7 +787,7 @@ export function CreativeRecommendationCard({
                   className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-xs"
                   key={`slot-${slotNumber}`}
                 >
-                  slot {slotNumber}
+                  {uiText.rich('sentence_7ace866baa90', { v0: slotNumber })}
                 </li>
               ),
             )}
@@ -726,7 +801,7 @@ export function CreativeRecommendationCard({
               type="button"
               variant="secondary"
             >
-              {generating ? 'Requesting…' : 'Generate with Creative+'}
+              {generating ? uiText('requesting_1db9285') : uiText('generate_with_creative_dadb6f7')}
             </Button>
           ) : null}
           {generateNote ? <p className="text-muted-foreground text-xs">{generateNote}</p> : null}

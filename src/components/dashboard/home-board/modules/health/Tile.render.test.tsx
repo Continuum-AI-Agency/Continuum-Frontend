@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeAccountHygieneData, HomeBoardTile } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { deriveDashboardSetup } from '@/components/dashboard/first-run/setupState';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { EASY_FIT_GOOGLE, EASY_FIT_META, homeCtx } from '../pacing/__fixtures__/ctx';
 import {
@@ -34,11 +35,20 @@ mock.module('./useDoctorReads', () => ({
 // The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
 let hygiene: HomeReadLoad<HomeAccountHygieneData> = { status: 'unavailable' };
 const realHomeRead = await import('../../useHomeRead');
-mock.module('../../useHomeRead', () => ({ ...realHomeRead, useHomeRead: () => hygiene }));
+mock.module('../../useHomeRead', () => ({
+  ...realHomeRead,
+  useHomeRead: () => hygiene,
+}));
 
 const { default: HealthTile } = await import('./Tile');
 
-const tile: HomeBoardTile = { id: 'health', size: 'm', urgency: 3, score: 90, why: null };
+const tile: HomeBoardTile = {
+  id: 'health',
+  size: 'm',
+  urgency: 3,
+  score: 90,
+  why: null,
+};
 const ctx = homeCtx({
   adAccounts: [EASY_FIT_META, EASY_FIT_GOOGLE],
   setup: deriveDashboardSetup({
@@ -65,7 +75,11 @@ const SUSPENDED: Omit<DoctorReads, 'retry'> = {
 
 afterEach(() => {
   cleanup();
-  reads = { portfolios: { status: 'pending' }, accountReads: [], googleCards: null };
+  reads = {
+    portfolios: { status: 'pending' },
+    accountReads: [],
+    googleCards: null,
+  };
   retries = 0;
 });
 
@@ -83,7 +97,9 @@ describe('HealthTile', () => {
     const failing = screen.getByTestId('home-health-failing');
     expect(failing.className).toContain('hit-area-column');
     expect(failing.textContent).toContain('Google suspended this account’s campaigns');
-    const fix = within(failing).getByRole('link', { name: 'Open in Google Ads' });
+    const fix = within(failing).getByRole('link', {
+      name: 'Open in Google Ads',
+    });
     expect(fix.className).toContain('hit-area');
     expect(fix.getAttribute('href')).toBe('https://ads.google.com/aw/campaigns');
     expect(screen.getByTestId('home-tile-health').textContent).not.toMatch(/\/ 100|score/i);
@@ -107,7 +123,11 @@ describe('HealthTile', () => {
   });
 
   it('is missing, in one sentence, when nothing can be checked', () => {
-    reads = { portfolios: { status: 'ready', rows: [] }, accountReads: [], googleCards: null };
+    reads = {
+      portfolios: { status: 'ready', rows: [] },
+      accountReads: [],
+      googleCards: null,
+    };
     render(<HealthTile ctx={homeCtx({ adAccounts: [], setup: null })} tile={tile} />);
     expect(screen.getByTestId('home-tile-health').getAttribute('data-module-state')).toBe(
       'missing',
@@ -152,7 +172,12 @@ describe('Account doctor with the hygiene read', () => {
       generatedAt: '2026-11-04T12:00:00Z',
       data: {
         asOf: '2026-11-04T05:05:36Z',
-        namingSchema: { delimiter: '|', fields: ['a', 'b'], version: 1, adopted: false },
+        namingSchema: {
+          delimiter: '|',
+          fields: ['a', 'b'],
+          version: 1,
+          adopted: false,
+        },
         checks: [
           {
             id: 'naming',

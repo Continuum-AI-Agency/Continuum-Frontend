@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -39,7 +40,12 @@ const scheduledGroup = {
   platforms: ['instagram', 'tiktok', 'youtube'],
   groupId: 'group-1',
   groupMembers: [
-    { backendDraftId: 'draft-1', platform: 'instagram', status: 'scheduled', accountId: null },
+    {
+      backendDraftId: 'draft-1',
+      platform: 'instagram',
+      status: 'scheduled',
+      accountId: null,
+    },
     {
       backendDraftId: 'draft-2',
       platform: 'tiktok',
@@ -124,7 +130,10 @@ describe('useUnscheduleDraft', () => {
     expect(outcome).toBe(false);
     expect(updateDraftMock).not.toHaveBeenCalled();
     expect(showMock).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Could not move back to draft', variant: 'error' }),
+      expect.objectContaining({
+        title: 'Could not move back to draft',
+        variant: 'error',
+      }),
     );
   });
 

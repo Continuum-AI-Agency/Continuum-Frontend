@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { Skill } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PromptInput } from '@/components/chat/prompt-input';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { createCanvasComposerMentionProvider } from './canvasContextProvider';
 
@@ -179,7 +185,11 @@ describe('canvas PromptInput context grabber', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0]?.[2]).toEqual([
-      expect.objectContaining({ id: 'skill-1', type: 'skill', source: 'canvas' }),
+      expect.objectContaining({
+        id: 'skill-1',
+        type: 'skill',
+        source: 'canvas',
+      }),
     ]);
   });
 
@@ -207,7 +217,11 @@ describe('canvas PromptInput context grabber', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0]?.[2]).toEqual([
-      expect.objectContaining({ id: 'asset-1', type: 'media_asset', source: 'canvas' }),
+      expect.objectContaining({
+        id: 'asset-1',
+        type: 'media_asset',
+        source: 'canvas',
+      }),
     ]);
   });
 });

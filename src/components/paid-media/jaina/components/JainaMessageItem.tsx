@@ -8,6 +8,7 @@ import type {
 } from '@continuum/contracts';
 import { isImplementProposalTurn } from '@continuum/contracts';
 import { motion } from 'motion/react';
+import { useTranslations as useBetaTranslations, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { LiveChangeChatCard } from '@/CampaignCanvas/lectura/LiveChangeChatCard';
 import { PortfolioChatCard } from '@/CampaignCanvas/portfolio/PortfolioBand';
@@ -183,6 +184,9 @@ function JainaMessageItemImpl({
   onOpenAccountRead,
   scaffoldSupersededByVersion,
 }: JainaMessageItemProps) {
+  const betaUiText = useBetaTranslations('scale');
+
+  const uiText = useTranslations('scale');
   const isStreaming = message.status === 'streaming';
 
   const reasoning = message.reasoning;
@@ -316,7 +320,7 @@ function JainaMessageItemImpl({
             {isImplementProposalTurn(message.content) ? (
               // The canvas's button sends a machine-written order; the reader sees what it does.
               <span className="text-sm font-medium text-muted-foreground">
-                Implementing the proposed changes…
+                {betaUiText('beta_df794e63c208')}
               </span>
             ) : (
               <span className="text-sm font-medium whitespace-pre-wrap">
@@ -328,7 +332,7 @@ function JainaMessageItemImpl({
             )}
             <ChatMediaGrid
               items={mediaFromPersistedAttachments(message.id, message.metadata?.attachments)}
-              lightboxTitle="Attachment"
+              lightboxTitle={uiText('jainaAttachment')}
             />
             <SentDocumentAttachments documents={message.metadata?.documents} />
           </>
@@ -347,7 +351,11 @@ function JainaMessageItemImpl({
                     aria-hidden="true"
                     className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] rounded-sm bg-primary"
                     animate={{ opacity: [1, 0, 1] }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }}
                   />
                 ) : null}
               </div>
@@ -356,8 +364,8 @@ function JainaMessageItemImpl({
             {showStaticFallback ? (
               <span className="text-sm text-muted-foreground">
                 {message.status === 'error'
-                  ? 'Jaina could not finish this response.'
-                  : 'Response complete.'}
+                  ? uiText('jaina_could_not_finish_this_response_ac4a6c9')
+                  : uiText('response_complete_8107ce7')}
               </span>
             ) : null}
 

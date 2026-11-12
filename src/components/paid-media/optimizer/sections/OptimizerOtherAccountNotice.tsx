@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Shown when the selected ad account has no portfolios but the brand DOES have them on
 // another ad account. That state used to fall into "Set up the Optimizer" onboarding,
 // which told the user their work did not exist. It exists — it is one account switch
@@ -35,7 +37,8 @@ export function OptimizerOtherAccountNotice({
   onBrowseAll,
   onCreate,
 }: OptimizerOtherAccountNoticeProps) {
-  const portfolioLabel = hiddenCount === 1 ? '1 portfolio' : `${hiddenCount} portfolios`;
+  const uiText = useTranslations('scale');
+  const portfolioLabel = uiText('portfolioCount', { count: hiddenCount });
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 p-6 text-center">
@@ -43,12 +46,14 @@ export function OptimizerOtherAccountNotice({
         <FolderSearchIcon className="size-4" aria-hidden="true" />
       </span>
       <div className="space-y-1.5">
-        <h2 className="font-semibold text-sm tracking-tight">No portfolios on this ad account</h2>
+        <h2 className="font-semibold text-sm tracking-tight">
+          {uiText('no_portfolios_on_this_ad_account_a73f65b')}
+        </h2>
         <p className="text-muted-foreground text-xs">
-          This brand has {portfolioLabel} on{' '}
-          {accounts.length === 1 ? 'another ad account' : `${accounts.length} other ad accounts`}.
-          Switch accounts to see {accounts.length === 1 ? 'it' : 'them'}, or create a portfolio for
-          this account.
+          {uiText.rich('sentence_53617f693ed0', {
+            portfolios: portfolioLabel,
+            count: accounts.length,
+          })}
         </p>
       </div>
 
@@ -67,7 +72,7 @@ export function OptimizerOtherAccountNotice({
                 onClick={() => onSwitchAccount(account.accountId)}
               >
                 <ArrowRightLeftIcon className="size-3.5" aria-hidden="true" />
-                Switch
+                {uiText('switch_39921a7')}
               </Button>
             ) : null}
           </li>
@@ -78,13 +83,15 @@ export function OptimizerOtherAccountNotice({
         {onCreate ? (
           <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={onCreate} type="button">
             <PlusIcon className="size-3.5" aria-hidden="true" />
-            New portfolio
+            {uiText('new_portfolio_2ea4a33')}
           </Button>
         ) : null}
         {onBrowseAll ? (
           <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs" onClick={onBrowseAll}>
-            <LibraryIcon className="size-3.5" aria-hidden="true" />
-            Browse all {hiddenCount} portfolios
+            {uiText.rich('sentence_4f47d89be4cd', {
+              v0: () => <LibraryIcon className="size-3.5" aria-hidden="true" />,
+              v1: hiddenCount,
+            })}
           </Button>
         ) : null}
       </div>

@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { createEditorProjectV2, type VideoEditorOpName } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { VideoStudioContext } from '../types';
 
 // Export all variants against a faked ops client: A is this project (edited through the
@@ -34,7 +40,11 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
     if (op === 'export_status') {
       if (label === 'B' && bFailures > 0) {
         bFailures -= 1;
-        return { jobId: input.jobId, state: 'failed', error: 'Render timed out.' };
+        return {
+          jobId: input.jobId,
+          state: 'failed',
+          error: 'Render timed out.',
+        };
       }
       return {
         jobId: input.jobId,
@@ -60,7 +70,12 @@ const TIMEOUT_MS = 15_000;
 function renderDialog() {
   const workspaceCalls: string[] = [];
   const project = {
-    ...createEditorProjectV2({ projectId: A, title: 'Cut A', width: 1080, height: 1920 }),
+    ...createEditorProjectV2({
+      projectId: A,
+      title: 'Cut A',
+      width: 1080,
+      height: 1920,
+    }),
     brief: {
       briefId: 'brief-1',
       text: 'Three hooks',
@@ -103,7 +118,9 @@ describe('ExportDialog — all variants', () => {
       await waitFor(() => expect(start.textContent).toContain('Export 3 variants for TikTok'));
       fireEvent.click(start);
 
-      await waitFor(() => expect(downloads()).toHaveLength(2), { timeout: TIMEOUT_MS });
+      await waitFor(() => expect(downloads()).toHaveLength(2), {
+        timeout: TIMEOUT_MS,
+      });
       expect(downloads()).toEqual([
         'Download A https://storage.test/A.mp4?download=',
         'Download C https://storage.test/C.mp4?download=',
@@ -125,7 +142,9 @@ describe('ExportDialog — all variants', () => {
 
       clientCalls.length = 0;
       fireEvent.click(screen.getByRole('button', { name: 'Retry B' }));
-      await waitFor(() => expect(downloads()).toHaveLength(3), { timeout: TIMEOUT_MS });
+      await waitFor(() => expect(downloads()).toHaveLength(3), {
+        timeout: TIMEOUT_MS,
+      });
       expect(clientCalls.filter((call) => call.endsWith(':export'))).toEqual(['B:export']);
       expect(workspaceCalls).toEqual(['A:set_format', 'A:export']);
     },

@@ -11,6 +11,7 @@
 // the same spot, and lets go of it when the reviewer unlinks them.
 
 import { Minus, Plus, ScanSearch } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
@@ -33,7 +34,10 @@ import {
   zoomToBox,
 } from './zoomMath';
 
-export type ZoomGeometry = { contentRect: CssRect | null; containerSize: Size | null };
+export type ZoomGeometry = {
+  contentRect: CssRect | null;
+  containerSize: Size | null;
+};
 
 type Props = {
   src: string;
@@ -158,6 +162,8 @@ export function ZoomStage({
   controlsExtra,
   children,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState<Size | null>(null);
   const [natural, setNatural] = useState<Size | null>(null);
@@ -194,7 +200,10 @@ export function ZoomStage({
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
       if (entry)
-        setContainerSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+        setContainerSize({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -225,7 +234,10 @@ export function ZoomStage({
       setView: apply,
     } = latest.current;
     if (!fitted || !size || !bytes) return;
-    const anchor = pointerRef.current ?? { x: size.width / 2, y: size.height / 2 };
+    const anchor = pointerRef.current ?? {
+      x: size.width / 2,
+      y: size.height / 2,
+    };
     apply(zoomAround(current, actualSizeScale(fitted, bytes), anchor, fitted, size));
   }, []);
 
@@ -238,7 +250,10 @@ export function ZoomStage({
       const { view: current, fit: fitted, containerSize: size, setView: apply } = latest.current;
       if (!fitted || !size) return;
       const bounds = element.getBoundingClientRect();
-      const anchor = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+      const anchor = {
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      };
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
         const factor = Math.min(2, Math.max(0.5, Math.exp(-event.deltaY * 0.01)));
@@ -317,7 +332,10 @@ export function ZoomStage({
 
   // Pan and marquee drag from where they started, so a move that lands between
   // renders never compounds a stale view.
-  const drag = useRef<{ start: { x: number; y: number }; view: ZoomView } | null>(null);
+  const drag = useRef<{
+    start: { x: number; y: number };
+    view: ZoomView;
+  } | null>(null);
   const onGestureDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const start = localPoint(event);
     if (!start || event.button !== 0) return;
@@ -409,7 +427,10 @@ export function ZoomStage({
         }
         onLoad={(event) => {
           const element = event.currentTarget;
-          setNatural({ width: element.naturalWidth, height: element.naturalHeight });
+          setNatural({
+            width: element.naturalWidth,
+            height: element.naturalHeight,
+          });
           onLoad?.();
         }}
         onError={onError}
@@ -469,20 +490,32 @@ export function ZoomStage({
       ) : null}
 
       <div className="absolute right-3 top-3 z-20 flex items-center gap-0.5 rounded-full border border-border bg-background/85 p-0.5 text-foreground shadow-sm backdrop-blur">
-        <ZoomButton label="Zoom out (−)" testId="zoom-out" onClick={() => stepZoom(0.5)}>
+        <ZoomButton
+          label={translateUi('zoom_out_0b9aa910')}
+          testId="zoom-out"
+          onClick={() => stepZoom(0.5)}
+        >
           <Minus className="size-3.5" />
         </ZoomButton>
-        <ZoomButton label="Fit (0)" testId="zoom-fit" onClick={toFit}>
+        <ZoomButton label={translateUi('fit_0_513c52dd')} testId="zoom-fit" onClick={toFit}>
           {percent === null ? '—' : `${percent}%`}
         </ZoomButton>
-        <ZoomButton label="Zoom in (+)" testId="zoom-in" onClick={() => stepZoom(2)}>
+        <ZoomButton
+          label={translateUi('zoom_in_4949ad25')}
+          testId="zoom-in"
+          onClick={() => stepZoom(2)}
+        >
           <Plus className="size-3.5" />
         </ZoomButton>
-        <ZoomButton label="Actual size (100%)" testId="zoom-actual" onClick={toActualSize}>
+        <ZoomButton
+          label={translateUi('actual_size_100_3322819f')}
+          testId="zoom-actual"
+          onClick={toActualSize}
+        >
           1:1
         </ZoomButton>
         <ZoomButton
-          label="Marquee zoom (Z + drag)"
+          label={translateUi('marquee_zoom_z_drag_6e2690dd')}
           testId="zoom-marquee"
           pressed={marqueeArmed}
           onClick={() => setMarqueeArmed((armed) => !armed)}

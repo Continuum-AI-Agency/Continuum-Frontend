@@ -2,11 +2,17 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import type { UiLocale } from '@/i18n/config';
 import { getGoalEvents, getGoalSnapshot } from '@/lib/api/goals.client';
+import type { GoalDisplayTranslator } from '@/lib/goals/displayCopy';
 import { projectGoalWorkspace } from '@/lib/goals/projection';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
-export function useGoalWorkspace(goalId: string) {
+export function useGoalWorkspace(
+  goalId: string,
+  t?: GoalDisplayTranslator,
+  locale: UiLocale = 'en',
+) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -18,7 +24,9 @@ export function useGoalWorkspace(goalId: string) {
         {
           event: 'INSERT',
           onRow: () => {
-            void queryClient.invalidateQueries({ queryKey: ['goal-workspace', goalId] });
+            void queryClient.invalidateQueries({
+              queryKey: ['goal-workspace', goalId],
+            });
           },
         },
       ],
@@ -36,7 +44,7 @@ export function useGoalWorkspace(goalId: string) {
     },
     select: ({ snapshot, events }) => ({
       snapshot,
-      view: projectGoalWorkspace(snapshot, events),
+      view: projectGoalWorkspace(snapshot, events, t, locale),
     }),
     staleTime: 5_000,
     refetchInterval: 15_000,

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FigmaImportedAsset } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import * as figmaClient from '@/lib/library/figma';
 
 // The client's own HTTP shape is pinned in lib/library/figma.test.ts; here only the two calls the
@@ -12,8 +13,16 @@ const importFigmaFrames = mock(
     nodeIds: string[];
   }): Promise<FigmaImportedAsset[]> => [],
 );
-const listFigmaFrames = mock(async () => ({ fileName: 'Launch', modifiedAt: null, frames: [] }));
-mock.module('@/lib/library/figma', () => ({ ...figmaClient, importFigmaFrames, listFigmaFrames }));
+const listFigmaFrames = mock(async () => ({
+  fileName: 'Launch',
+  modifiedAt: null,
+  frames: [],
+}));
+mock.module('@/lib/library/figma', () => ({
+  ...figmaClient,
+  importFigmaFrames,
+  listFigmaFrames,
+}));
 
 const { FigmaImportDialog } = await import('./FigmaImportDialog');
 
@@ -35,11 +44,18 @@ afterEach(cleanup);
 describe('FigmaImportDialog', () => {
   test('a link to a frame imports that frame without spending a Figma read on a listing', async () => {
     importFigmaFrames.mockResolvedValue([
-      { assetId: ASSET, versionId: ASSET, figmaNodeId: '12:34', status: 'created' },
+      {
+        assetId: ASSET,
+        versionId: ASSET,
+        figmaNodeId: '12:34',
+        status: 'created',
+      },
     ]);
     const onImported = mock((_assets: FigmaImportedAsset[]) => undefined);
     openWithLink(onImported);
-    fireEvent.change(await screen.findByLabelText('Figma link'), { target: { value: LINK } });
+    fireEvent.change(await screen.findByLabelText('Figma link'), {
+      target: { value: LINK },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     await screen.findByText('The linked frame is ready to import.');
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
@@ -58,7 +74,9 @@ describe('FigmaImportDialog', () => {
       new figmaClient.FigmaApiError('figma_fonts_missing', ['Avenir 800']),
     );
     openWithLink();
-    fireEvent.change(await screen.findByLabelText('Figma link'), { target: { value: LINK } });
+    fireEvent.change(await screen.findByLabelText('Figma link'), {
+      target: { value: LINK },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Import' }));
 
@@ -71,12 +89,21 @@ describe('FigmaImportDialog', () => {
       fileName: 'Launch',
       modifiedAt: null,
       frames: [
-        { id: '5:6', name: 'Hero', type: 'FRAME', pageName: 'Ads', width: 1080, height: 1080 },
+        {
+          id: '5:6',
+          name: 'Hero',
+          type: 'FRAME',
+          pageName: 'Ads',
+          width: 1080,
+          height: 1080,
+        },
       ],
     } as never);
     openWithLink();
     fireEvent.change(await screen.findByLabelText('Figma link'), {
-      target: { value: 'https://www.figma.com/design/AbC123/Launch?node-id=0-1' },
+      target: {
+        value: 'https://www.figma.com/design/AbC123/Launch?node-id=0-1',
+      },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Import' }));

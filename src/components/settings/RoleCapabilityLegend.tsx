@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Plain-English explanation of what each brand role can and cannot do (IMP-019
 // copy). Sits under the members list so admins can see exactly who can view data
@@ -16,43 +17,49 @@ type RoleCapability = {
   boundary: string;
 };
 
-const ROLE_CAPABILITIES: readonly RoleCapability[] = [
-  {
-    role: 'Owner',
-    summary: 'Full control of the brand, including billing and deletion.',
-    boundary: 'Owners cannot be removed, and at least one owner must always remain.',
-  },
-  {
-    role: 'Admin',
-    summary: 'Manage members, edit settings, connect integrations, and run everything.',
-    boundary: 'Can perform destructive actions such as removing members or deleting the brand.',
-  },
-  {
-    role: 'Operator',
-    summary: 'Do the day-to-day work — generate content and set the ad naming convention.',
-    boundary: 'Cannot manage members, change roles, or delete the brand.',
-  },
-  {
-    role: 'Viewer',
-    summary: 'See brand data, insights, and reports.',
-    boundary: 'Read-only — cannot change settings, members, or content.',
-  },
-];
+function getRoleCapabilities(tUi: ReturnType<typeof useTranslations<'settings'>>) {
+  return [
+    {
+      role: tUi('m_89ff31225c'),
+      summary: tUi('m_92bc5196d3'),
+      boundary: tUi('m_ba9783c2f7'),
+    },
+    {
+      role: tUi('m_4e7afebcfb'),
+      summary: tUi('m_7ec35a9c9c'),
+      boundary: tUi('m_5a307b01c2'),
+    },
+    {
+      role: tUi('m_d0e687b079'),
+      summary: tUi('m_77143beeab'),
+      boundary: tUi('m_25fee65905'),
+    },
+    {
+      role: tUi('m_dbad9f126b'),
+      summary: tUi('m_8b8955c1ab'),
+      boundary: tUi('m_32c5d82314'),
+    },
+  ];
+}
 
 export function RoleCapabilityLegend() {
+  const tUi = useTranslations('settings');
+
+  const ROLE_CAPABILITIES = getRoleCapabilities(tUi);
+
   return (
     <TooltipProvider delay={150}>
       <div className="rounded-lg border border-border/60 bg-card/20 p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            What each role can do
+            {tUi('m_679a25426e')}
           </h3>
           <Link
             href="/settings?section=activity"
             className="inline-flex items-center gap-1 text-2xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ScrollText className="size-3" aria-hidden />
-            Review activity log
+            {tUi('m_a5b388965c')}
           </Link>
         </div>
         <dl className="space-y-2">
@@ -66,7 +73,9 @@ export function RoleCapabilityLegend() {
                     render={
                       <button
                         type="button"
-                        aria-label={`${capability.role} permission boundary`}
+                        aria-label={tUi('m_e7c4f3db23', {
+                          v0: String(capability.role),
+                        })}
                         className="mt-0.5 shrink-0 text-muted-foreground/70 transition-colors hover:text-foreground"
                       >
                         <Info className="size-3" aria-hidden />

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const fitView = mock(() => {});
 const show = mock(() => {});
@@ -120,7 +121,12 @@ describe('useApplyWorkflow', () => {
           name: 'Palette smash-up',
           nodes: [
             { id: 'a', type: 'string', position: { x: 100, y: 200 }, data: {} },
-            { id: 'b', type: 'nanoGen', position: { x: 340, y: 260 }, data: {} },
+            {
+              id: 'b',
+              type: 'nanoGen',
+              position: { x: 340, y: 260 },
+              data: {},
+            },
           ],
           edges: [],
           createdAt: '2026-08-24T00:00:00.000Z',

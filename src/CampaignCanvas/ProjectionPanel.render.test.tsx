@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { ChangeProjection } from '@continuum/contracts';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { ProjectionPanel } from './ProjectionPanel';
 
 const figures = (spend: number, results: number | null, share: number) => ({
@@ -13,7 +14,11 @@ const figures = (spend: number, results: number | null, share: number) => ({
 });
 
 const PROJECTION: ChangeProjection = {
-  method: { id: 'observed_efficiency_capped_v1', label: 'Observed efficiency, capped', summary: 'Spend moves, results follow observed efficiency.' },
+  method: {
+    id: 'observed_efficiency_capped_v1',
+    label: 'Observed efficiency, capped',
+    summary: 'Spend moves, results follow observed efficiency.',
+  },
   platform: 'meta',
   window: { since: '2026-10-18', until: '2026-10-31', days: 14, label: null },
   currency: 'MXN',
@@ -44,7 +49,11 @@ const PROJECTION: ChangeProjection = {
       note: null,
     },
   ],
-  totals: { before: figures(2800, 84, 1), after: figures(2800, 105, 1), afterRange: { resultsLow: 98, resultsHigh: 112 } },
+  totals: {
+    before: figures(2800, 84, 1),
+    after: figures(2800, 105, 1),
+    afterRange: { resultsLow: 98, resultsHigh: 112 },
+  },
   assumptions: ['Window: 2026-10-18 to 2026-10-31 (14 days).'],
   gaps: [{ entity: '777', reason: 'Not in the data read for this window.' }],
   datasetId: 'ds_1',

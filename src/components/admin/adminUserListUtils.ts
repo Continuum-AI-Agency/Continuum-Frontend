@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+import { localizeAdminCopy } from '@/i18n/adminCopy';
+
+type Translator = ReturnType<typeof useTranslations<'admin'>>;
+
 import type {
   AdminAccessRefusal,
   AdminBrandAccess,
@@ -12,13 +17,15 @@ import type {
   PermissionRow,
 } from '@/components/admin/adminUserTypes';
 
-export function membershipLabel(count: number) {
-  return `${count} ${count === 1 ? 'membership' : 'memberships'}`;
+export function membershipLabel(count: number, t?: Translator) {
+  return t
+    ? t('m_191ab0cef9', { count })
+    : `${count} ${count === 1 ? 'membership' : 'memberships'}`;
 }
 
-export function formatDate(value: string | null | undefined) {
-  if (!value) return 'Unknown';
-  return new Intl.DateTimeFormat('en', {
+export function formatDate(value: string | null | undefined, locale = 'en', t?: Translator) {
+  if (!value) return t ? t('m_bc7819b34f') : 'Unknown';
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -48,10 +55,12 @@ export function formatBrandDisambiguationLabel(brand: AdminBrandOption): string 
   return `${name} — ${detail}`;
 }
 
-export function describeWorkflowNames(names: string[], maxNames = 5): string {
+export function describeWorkflowNames(names: string[], maxNames = 5, t?: Translator): string {
   if (names.length <= maxNames) return names.join(', ');
   const shown = names.slice(0, maxNames).join(', ');
-  return `${shown}, and ${names.length - maxNames} more`;
+  return t
+    ? t('m_e4aa002d09', { names: shown, count: names.length - maxNames })
+    : `${shown}, and ${names.length - maxNames} more`;
 }
 
 export type BulkTransferEligibility = {
@@ -59,17 +68,24 @@ export type BulkTransferEligibility = {
   reason?: string;
 };
 
-export function canBulkTransfer(workflows: AdminWorkflowLibraryRow[]): BulkTransferEligibility {
+export function canBulkTransfer(
+  workflows: AdminWorkflowLibraryRow[],
+  t?: Translator,
+): BulkTransferEligibility {
   if (workflows.length === 0) {
-    return { allowed: false, reason: 'Select at least one workflow.' };
+    return {
+      allowed: false,
+      reason: t ? t('m_e047bc0a34') : 'Select at least one workflow.',
+    };
   }
 
   const visibilities = new Set(workflows.map((workflow) => workflow.visibility));
   if (visibilities.size > 1) {
     return {
       allowed: false,
-      reason:
-        'Select workflows of a single scope (all brand or all global) to transfer them together.',
+      reason: t
+        ? t('m_8e42264601')
+        : 'Select workflows of a single scope (all brand or all global) to transfer them together.',
     };
   }
 
@@ -217,7 +233,23 @@ export type AdminAuditAction = (typeof ADMIN_AUDIT_ACTIONS)[number];
 // 'User · Set admin', 'admin.workflow.promote_to_global' becomes
 // 'Workflow · Promote to global'. Falls back to the raw key so an unknown or
 // newly added action still renders legibly.
-export function formatAuditActionLabel(action: string): string {
+export function formatAuditActionLabel(action: string, t?: Translator): string {
+  const keys = {
+    'admin.user.set_admin': 'm_df1e9148be',
+    'admin.user.impersonation_link': 'm_0a09cc086a',
+    'admin.member.remove': 'm_04a557e1e0',
+    'admin.brand.update_tier': 'm_5cfbdb842b',
+    'admin.brand.set_product': 'm_13abe444a7',
+    'admin.brand.set_contract': 'm_d7e545de99',
+    'admin.brand.set_addon': 'm_1ef9af1445',
+    'admin.brand.set_client': 'm_e2435b93d9',
+    'admin.brand.grant_credits': 'm_962601f298',
+    'admin.workflow.migrate_global_to_brand': 'm_bed34eb84b',
+    'admin.workflow.duplicate_to_brand': 'm_0767c9388d',
+    'admin.workflow.promote_to_global': 'm_a5a4ad4861',
+    'admin.workflow.move_to_brand': 'm_f5e49c5416',
+  } as const;
+  if (t && Object.hasOwn(keys, action)) return t(keys[action as keyof typeof keys]);
   if (!action) return action;
   const withoutPrefix = action.startsWith('admin.') ? action.slice('admin.'.length) : action;
   const [domain, ...rest] = withoutPrefix.split('.');
@@ -270,8 +302,13 @@ type AuditActor = Pick<AdminAuditLogEntry, 'actor_name' | 'actor_email' | 'actor
 // the Users directory. Falls back to the raw actor UUID when the actor isn't in
 // the directory (e.g. a since-deleted user), and to 'System' for actor-less
 // automated actions. Whitespace-only names/emails are treated as absent.
-export function auditActorLabel(actor: AuditActor): string {
-  return actor.actor_name?.trim() || actor.actor_email?.trim() || actor.actor_user_id || 'System';
+export function auditActorLabel(actor: AuditActor, t?: Translator): string {
+  return (
+    actor.actor_name?.trim() ||
+    actor.actor_email?.trim() ||
+    actor.actor_user_id ||
+    (t ? localizeAdminCopy('System', t) : 'System')
+  );
 }
 
 // Workflow transfer ---------------------------------------------------------
@@ -290,7 +327,10 @@ export function brandsWithWorkflows(brands: AdminBrandOption[]): AdminBrandOptio
 // Brand access grid ----------------------------------------------------------
 
 // The admin grid's columns, in display order, with the names customers see.
-export const ACCESS_PRODUCTS: ReadonlyArray<{ product: ProductCode; label: string }> = [
+export const ACCESS_PRODUCTS: ReadonlyArray<{
+  product: ProductCode;
+  label: string;
+}> = [
   { product: 'studio', label: 'Canvas' },
   { product: 'organic_agent', label: 'Organic' },
   { product: 'paid_media', label: 'Performance' },
@@ -318,13 +358,22 @@ export function isStripeManaged(access: AdminBrandAccess | null, product: Produc
 }
 
 // The read-only billing line under a brand: 'Contract', 'Organic Plus · active', 'No plan'.
-export function describeBillingPlan(access: AdminBrandAccess | null): string {
-  if (access?.billingModel === 'contract') return 'Contract';
+export function describeBillingPlan(access: AdminBrandAccess | null, t?: Translator): string {
+  if (access?.billingModel === 'contract') return t ? localizeAdminCopy('Contract', t) : 'Contract';
   if (access?.billingModel === 'stripe') {
     const plans = access.plans.map((plan) => PLAN_LABELS[plan]).join(' + ') || 'Stripe';
-    return `${plans} · ${access.status.replace('_', ' ')}`;
+    const statusLabels: Record<string, string> = {
+      active: 'Active',
+      trialing: 'Trialing',
+      past_due: 'Past due',
+      canceled: 'Canceled',
+      unpaid: 'Unpaid',
+      incomplete: 'Incomplete',
+      incomplete_expired: 'Incomplete expired',
+    };
+    return `${plans} · ${t ? localizeAdminCopy(statusLabels[access.status] ?? access.status, t) : access.status.replace('_', ' ')}`;
   }
-  return 'No plan';
+  return t ? localizeAdminCopy('No plan', t) : 'No plan';
 }
 
 const ACCESS_REFUSALS: Record<AdminAccessRefusal['error'], string> = {
@@ -335,6 +384,13 @@ const ACCESS_REFUSALS: Record<AdminAccessRefusal['error'], string> = {
 };
 
 // readEdgeErrorMessage surfaces the body's `error` code; turn the refusals into sentences.
-export function describeAccessError(message: string): string {
+export function describeAccessError(message: string, t?: Translator): string {
+  const keys = {
+    stripe_managed: 'm_d363d3a553',
+    billing_not_live: 'product_access_activates_at_billing_go_live_ce6af68',
+    not_staff_brand: 'm_9a2d289c78',
+  } as const;
+  if (t)
+    return Object.hasOwn(keys, message) ? t(keys[message as keyof typeof keys]) : t('m_0bc3015f0c');
   return ACCESS_REFUSALS[message as AdminAccessRefusal['error']] ?? message;
 }

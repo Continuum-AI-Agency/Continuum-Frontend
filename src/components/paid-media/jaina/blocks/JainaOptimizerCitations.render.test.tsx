@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * The wiring, not the card: does a citation reach `OptimizerCardBlock` with figures resolved
  * from the read it NAMES, and does it reach the fallbacks when it cannot.
@@ -9,13 +10,14 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { type AccountCandidate, accountCandidateSchema } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 
 import { type CitedRead, resolutionFrom } from '@/lib/jaina/optimizerCitedRead';
 
 // Spread into the module mocks below: `mock.module` replaces a module for the whole process,
 // so a partial replacement would reach the next file in the run.
 const realCitedRead = await import('@/lib/jaina/optimizerCitedRead');
+
 import { OptimizerCardBlock } from './OptimizerCardBlock';
 
 afterEach(cleanup);
@@ -62,7 +64,10 @@ describe('a citation resolves against the read it names', () => {
       read: {
         candidates: [],
         guards: [
-          candidate({ id: 'measurement_integrity:acct', detector: 'measurement_integrity' }),
+          candidate({
+            id: 'measurement_integrity:acct',
+            detector: 'measurement_integrity',
+          }),
         ],
         currency: 'USD',
       },
@@ -145,7 +150,6 @@ describe('what the block draws with that resolver', () => {
     expect(getByTestId('optimizer-cleared').textContent).toContain('cleared');
   });
 
-
   it('picks the strip renderer for three', () => {
     const read = storedRead({
       read: {
@@ -174,7 +178,6 @@ describe('what the block draws with that resolver', () => {
   });
 });
 
-
 // The header of this file promises "the render pass proves the resolver is actually handed
 // to the block — a correct resolver nobody passes is exactly the shape of the bug this task
 // existed to fix". It did not: every case above builds the resolver here and hands it to
@@ -195,7 +198,13 @@ describe('the host, which is what actually wires the resolver', () => {
 
     const { getByTestId } = render(
       <JainaOptimizerCitations
-        citations={[{ read_id: 'read-abc', candidate_ids: ['dead_tail:acct'], size: 'card' }]}
+        citations={[
+          {
+            read_id: 'read-abc',
+            candidate_ids: ['dead_tail:acct'],
+            size: 'card',
+          },
+        ]}
       />,
     );
     // Resolved through the host: the figure is on screen, which only happens if the host
@@ -215,7 +224,11 @@ describe('the host, which is what actually wires the resolver', () => {
     const { getByTestId } = render(
       <JainaOptimizerCitations
         citations={[
-          { read_id: 'read-from-tuesday', candidate_ids: ['dead_tail:acct'], size: 'card' },
+          {
+            read_id: 'read-from-tuesday',
+            candidate_ids: ['dead_tail:acct'],
+            size: 'card',
+          },
         ]}
       />,
     );
@@ -227,11 +240,21 @@ describe('the host, which is what actually wires the resolver', () => {
 // wearing the same sentence — so a citation still LOADING, and one whose RPC refused, both
 // told the reader their figures came from an earlier read. Two of those three were false.
 describe('the three ways a citation can fail to resolve', () => {
-  const card = { read_id: 'read-abc', candidate_ids: ['dead_tail:acct'], size: 'card' as const };
+  const card = {
+    read_id: 'read-abc',
+    candidate_ids: ['dead_tail:acct'],
+    size: 'card' as const,
+  };
 
   it('says nothing about the finding while the read is still in flight', () => {
     const { getByTestId, queryByTestId } = render(
-      <OptimizerCardBlock card={card} currency={null} readDate={null} resolve={() => null} status="loading" />,
+      <OptimizerCardBlock
+        card={card}
+        currency={null}
+        readDate={null}
+        resolve={() => null}
+        status="loading"
+      />,
     );
     expect(getByTestId('optimizer-pending').textContent).toContain('resolving');
     expect(queryByTestId('optimizer-cleared')).toBeNull();
@@ -239,7 +262,13 @@ describe('the three ways a citation can fail to resolve', () => {
 
   it('says it could not reach the read when the RPC refused', () => {
     const { getByTestId } = render(
-      <OptimizerCardBlock card={card} currency={null} readDate={null} resolve={() => null} status="unavailable" />,
+      <OptimizerCardBlock
+        card={card}
+        currency={null}
+        readDate={null}
+        resolve={() => null}
+        status="unavailable"
+      />,
     );
     const note = getByTestId('optimizer-cleared').textContent ?? '';
     expect(note).toContain('Could not reach');
@@ -249,7 +278,13 @@ describe('the three ways a citation can fail to resolve', () => {
 
   it('keeps the earlier-read sentence for a read that answered and is simply not the one cited', () => {
     const { getByTestId } = render(
-      <OptimizerCardBlock card={card} currency={null} readDate={null} resolve={() => null} status="ready" />,
+      <OptimizerCardBlock
+        card={card}
+        currency={null}
+        readDate={null}
+        resolve={() => null}
+        status="ready"
+      />,
     );
     expect(getByTestId('optimizer-cleared').textContent).toContain('From an earlier read');
   });
@@ -278,6 +313,8 @@ describe('what the resolver reports in each query state', () => {
 
   it('resolves nothing in a non-ready state even when the read is already in hand', () => {
     // A cached read from a previous citation must not answer for one that is still loading.
-    expect(resolutionFrom(storedRead(), 'read-abc', 'loading').resolve('dead_tail:acct')).toBeNull();
+    expect(
+      resolutionFrom(storedRead(), 'read-abc', 'loading').resolve('dead_tail:acct'),
+    ).toBeNull();
   });
 });

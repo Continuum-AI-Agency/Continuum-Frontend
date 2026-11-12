@@ -1,7 +1,8 @@
 'use client';
-import { ArrowLeft, Component, FileText, SlidersHorizontal, User } from 'lucide-react';
 
+import { ArrowLeft, Component, FileText, SlidersHorizontal, User } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { type ReactElement, useEffect, useMemo, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -23,41 +24,6 @@ type PrimitiveCardConfig = {
   accent: string;
 };
 
-const primitiveCards: PrimitiveCardConfig[] = [
-  {
-    id: 'audience',
-    title: 'Audience Builder',
-    status: 'under-construction',
-    summary: 'Reusable, dual-layer audience presets that stay compatible with Meta and Google.',
-    icon: <SlidersHorizontal />,
-    accent: 'linear-gradient(135deg, rgba(139,92,246,0.42), rgba(59,130,246,0.34))',
-  },
-  {
-    id: 'guidelines',
-    title: 'Brand Guidelines',
-    status: 'under-construction',
-    summary: 'Purpose-driven brand books with approvals, tags, and reusable context.',
-    icon: <FileText />,
-    accent: 'linear-gradient(135deg, rgba(34,197,94,0.32), rgba(59,130,246,0.28))',
-  },
-  {
-    id: 'catalogs',
-    title: 'Product Catalog Manager',
-    status: 'under-construction',
-    summary: 'Catalog CRUD for DCO feeds, ad-object mapping, and product-tagging metric integrity.',
-    icon: <Component />,
-    accent: 'linear-gradient(135deg, rgba(99,102,241,0.40), rgba(16,185,129,0.34))',
-  },
-  {
-    id: 'personas',
-    title: 'Brand Personas',
-    status: 'coming-soon',
-    summary: 'Living personas that align creative tone, targeting, and narrative arcs.',
-    icon: <User />,
-    accent: 'linear-gradient(135deg, rgba(244,114,182,0.32), rgba(59,130,246,0.28))',
-  },
-];
-
 function GlassCardButton({
   config,
   onSelect,
@@ -67,12 +33,17 @@ function GlassCardButton({
   onSelect: (id: PrimitiveId) => void;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="glass-panel relative h-full overflow-hidden rounded-lg shadow-brand-glow transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl">
-      {!disabled && <span className="sr-only">{config.title} card</span>}
+      {!disabled && (
+        <span className="sr-only">
+          {uiText.rich('sentence_7fef8a6d414b', { v0: config.title })}
+        </span>
+      )}
       {config.status === 'coming-soon' && (
         <div className="pointer-events-none absolute -right-7 -top-1 rotate-6 bg-red-500 text-white text-xs font-semibold px-12 py-1.5 shadow-lg">
-          Coming soon
+          {uiText('coming_soon_4f7d640')}
         </div>
       )}
       <button
@@ -85,14 +56,19 @@ function GlassCardButton({
           <div className="flex items-center gap-2">
             <div
               className="flex h-12 w-12 items-center justify-center rounded-full text-lg"
-              style={{ backgroundImage: config.accent, color: 'var(--foreground)' }}
+              style={{
+                backgroundImage: config.accent,
+                color: 'var(--foreground)',
+              }}
             >
               {config.icon}
             </div>
             <h4 className="text-lg font-semibold text-white">{config.title}</h4>
           </div>
           <Pill variant={config.status === 'under-construction' ? 'warning' : 'muted'}>
-            {config.status === 'under-construction' ? 'Under construction' : 'Coming soon'}
+            {config.status === 'under-construction'
+              ? uiText('under_construction_ac549c2')
+              : uiText('coming_soon_4f7d640')}
           </Pill>
         </div>
         <span className="text-muted-foreground">{config.summary}</span>
@@ -147,6 +123,46 @@ export function PrimitivesHub({
   questionsByNiche,
   questionsError,
 }: PrimitivesHubProps) {
+  const uiText = useTranslations('scale');
+  const primitiveCards: PrimitiveCardConfig[] = useMemo(
+    () => [
+      {
+        id: 'audience',
+        title: uiText('audience_builder_be951e7'),
+        status: 'under-construction',
+        summary: 'Reusable, dual-layer audience presets that stay compatible with Meta and Google.',
+        icon: <SlidersHorizontal />,
+        accent: 'linear-gradient(135deg, rgba(139,92,246,0.42), rgba(59,130,246,0.34))',
+      },
+      {
+        id: 'guidelines',
+        title: uiText('brand_guidelines_7d8b9dd'),
+        status: 'under-construction',
+        summary: 'Purpose-driven brand books with approvals, tags, and reusable context.',
+        icon: <FileText />,
+        accent: 'linear-gradient(135deg, rgba(34,197,94,0.32), rgba(59,130,246,0.28))',
+      },
+      {
+        id: 'catalogs',
+        title: uiText('product_catalog_manager_2e3eb1a'),
+        status: 'under-construction',
+        summary:
+          'Catalog CRUD for DCO feeds, ad-object mapping, and product-tagging metric integrity.',
+        icon: <Component />,
+        accent: 'linear-gradient(135deg, rgba(99,102,241,0.40), rgba(16,185,129,0.34))',
+      },
+      {
+        id: 'personas',
+        title: uiText('brand_personas_b1903fc'),
+        status: 'coming-soon',
+        summary: 'Living personas that align creative tone, targeting, and narrative arcs.',
+        icon: <User />,
+        accent: 'linear-gradient(135deg, rgba(244,114,182,0.32), rgba(59,130,246,0.28))',
+      },
+    ],
+    [uiText],
+  );
+
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -187,17 +203,23 @@ export function PrimitivesHub({
               onClick={() => setActiveWithUrl(null)}
               className="bg-transparent text-slate-200 hover:bg-white/5"
             >
-              <ArrowLeft /> Back
+              <ArrowLeft />
+              {uiText('back_76900f1')}
             </Button>
             <Pill variant={activeCard?.status === 'under-construction' ? 'warning' : 'muted'}>
-              {activeCard?.status === 'under-construction' ? 'Under construction' : 'Coming soon'}
+              {activeCard?.status === 'under-construction'
+                ? uiText('under_construction_ac549c2')
+                : uiText('coming_soon_4f7d640')}
             </Pill>
           </div>
 
           <div className="flex items-center gap-3">
             <div
               className="flex h-11 w-11 items-center justify-center rounded-full"
-              style={{ backgroundImage: activeCard?.accent, color: 'var(--foreground)' }}
+              style={{
+                backgroundImage: activeCard?.accent,
+                color: 'var(--foreground)',
+              }}
             >
               {activeCard?.icon}
             </div>

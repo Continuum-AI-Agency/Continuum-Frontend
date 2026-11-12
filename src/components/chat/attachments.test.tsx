@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { type Attachment, Attachments, SentDocumentAttachments } from './attachments';
 
 afterEach(cleanup);
@@ -22,11 +23,31 @@ describe('Attachments (composer chips)', () => {
       <Attachments
         files={[
           chip({ id: '1', name: 'up.pdf', status: 'uploading' }),
-          chip({ id: '2', name: 'shot.png', kind: 'media', status: 'uploading' }),
+          chip({
+            id: '2',
+            name: 'shot.png',
+            kind: 'media',
+            status: 'uploading',
+          }),
           chip({ id: '3', name: 'idx.pdf', status: 'indexing' }),
-          chip({ id: '4', name: 'tmp.pdf', status: 'ready', retention: 'ephemeral' }),
-          chip({ id: '5', name: 'paste.txt', kind: 'inline-text', status: 'ready' }),
-          chip({ id: '6', name: 'bad.pdf', status: 'error', error: 'Too large' }),
+          chip({
+            id: '4',
+            name: 'tmp.pdf',
+            status: 'ready',
+            retention: 'ephemeral',
+          }),
+          chip({
+            id: '5',
+            name: 'paste.txt',
+            kind: 'inline-text',
+            status: 'ready',
+          }),
+          chip({
+            id: '6',
+            name: 'bad.pdf',
+            status: 'error',
+            error: 'Too large',
+          }),
           chip({ id: '7', name: 'lib.pdf' }),
         ]}
       />,

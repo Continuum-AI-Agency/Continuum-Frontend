@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, within } from '@testing-library/react';
+import { cleanup, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import {
   BEFORE_E1,
   BID_CARD,
@@ -18,18 +19,30 @@ import { autopilotLine, GooglePortfolioCampaignsView } from './GooglePortfolioCa
 afterEach(cleanup);
 
 const MEMBERS = [
-  { platform: 'google_ads', entityId: EKATAR, name: 'VIVO 47-EKATAR', channelType: 'SEARCH' },
+  {
+    platform: 'google_ads',
+    entityId: EKATAR,
+    name: 'VIVO 47-EKATAR',
+    channelType: 'SEARCH',
+  },
   {
     platform: 'google_ads',
     entityId: VALLE_REAL,
     name: 'Valle Real-Search',
     channelType: 'SEARCH',
   },
-  { platform: 'google_ads', entityId: '999', name: 'Brand (paused)', channelType: 'SEARCH' },
+  {
+    platform: 'google_ads',
+    entityId: '999',
+    name: 'Brand (paused)',
+    channelType: 'SEARCH',
+  },
 ];
 
 function mount(read: typeof WITH_E1, members = MEMBERS, cards = [BID_CARD, BUDGET_CARD]) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <GooglePortfolioCampaignsView
@@ -38,7 +51,13 @@ function mount(read: typeof WITH_E1, members = MEMBERS, cards = [BID_CARD, BUDGE
         cards={cards}
         currency="MXN"
         goal={SEARCH_GOAL}
-        rows={portfolioCampaignViews({ members, read, goal: SEARCH_GOAL, cards, currency: 'MXN' })}
+        rows={portfolioCampaignViews({
+          members,
+          read,
+          goal: SEARCH_GOAL,
+          cards,
+          currency: 'MXN',
+        })}
         window={{ since: '2026-09-01', until: '2026-09-30' }}
       />
     </QueryClientProvider>,
@@ -108,7 +127,10 @@ describe('GooglePortfolioCampaignsView', () => {
 
 describe('autopilotLine', () => {
   const ready = (allowed: string[] | null) =>
-    ({ status: 'ready', platforms: [{ platform: 'google_ads', allowed, accounts: 1 }] }) as const;
+    ({
+      status: 'ready',
+      platforms: [{ platform: 'google_ads', allowed, accounts: 1 }],
+    }) as const;
 
   it('says the mode and what it may write on Google, read-only', () => {
     expect(

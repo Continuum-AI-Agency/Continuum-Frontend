@@ -1,9 +1,10 @@
 'use client';
 
 import { AlertTriangleIcon, SparklesIcon, TargetIcon, ZapIcon } from 'lucide-react';
-
+import { useLocale, useTranslations } from 'next-intl';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { formatMetric, getMetric } from '@/lib/paid-media/heatmap';
+import { formatDecimal } from '@/lib/format/decimal';
+import { formatMetric, getMetric, localizeHeatmapLabel } from '@/lib/paid-media/heatmap';
 import type { GeneratedCampaignInsight } from '@/lib/paid-media/insight-data-points';
 import type { CampaignPerformanceMetricKey } from '@/lib/paid-media/performance-types';
 import { cn } from '@/lib/utils';
@@ -28,12 +29,12 @@ const SEVERITY_TEXT: Record<Severity, string> = {
   info: 'text-sky-700 dark:text-sky-300',
 };
 
-const SEVERITY_LABEL: Record<Severity, string> = {
-  opportunity: 'Opportunity',
-  critical: 'Risk',
-  warning: 'Watch',
-  info: 'Note',
-};
+const severityKeys = {
+  opportunity: 'heatmapOpportunity',
+  critical: 'heatmapRisk',
+  warning: 'heatmapWatch',
+  info: 'heatmapNote',
+} as const satisfies Record<Severity, string>;
 
 function severityIcon(severity: Severity) {
   if (severity === 'opportunity') return <SparklesIcon className="h-3.5 w-3.5" aria-hidden />;
@@ -43,18 +44,20 @@ function severityIcon(severity: Severity) {
 }
 
 export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEvidencePanelProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   return (
     <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
       <header className="border-b border-border/70 bg-muted/15 px-3 py-2">
-        <h3 className="text-sm font-semibold tracking-tight">Insights</h3>
+        <h3 className="text-sm font-semibold tracking-tight">{uiText('insights_2a932f9')}</h3>
         <p className="text-xs text-muted-foreground">
-          Generated from normalized matrix and pacing data.
+          {uiText('generated_from_normalized_matrix_and_pacing_d_aaf6f98')}
         </p>
       </header>
 
       {insights.length === 0 ? (
         <div className="grid min-h-[18rem] place-items-center p-6 text-center text-xs text-muted-foreground">
-          Evidence will appear once campaigns have enough comparable metrics.
+          {uiText('evidence_will_appear_once_campaigns_have_enou_c6047cf')}
         </div>
       ) : (
         <ScrollArea className="h-[min(58svh,620px)]">
@@ -79,7 +82,7 @@ export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEviden
                           SEVERITY_TEXT[insight.severity],
                         )}
                       >
-                        {SEVERITY_LABEL[insight.severity]}
+                        {uiText(severityKeys[insight.severity])}
                       </span>
                       <span className="h-px flex-1 bg-border/60" aria-hidden />
                     </div>
@@ -96,15 +99,18 @@ export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEviden
                       const metricMeta =
                         point.metric === 'pace'
                           ? null
-                          : getMetric(point.metric as CampaignPerformanceMetricKey);
+                          : getMetric(point.metric as CampaignPerformanceMetricKey, (source) =>
+                              localizeHeatmapLabel(source, uiText),
+                            );
                       const displayValue =
                         metricMeta && typeof point.currentValue === 'number'
                           ? formatMetric(
                               point.metric as CampaignPerformanceMetricKey,
                               point.currentValue,
+                              uiLocale,
                             )
                           : point.metric === 'pace'
-                            ? `${point.currentValue.toFixed(0)}%`
+                            ? `${formatDecimal(point.currentValue, 0, uiLocale)}%`
                             : '—';
 
                       return (
@@ -118,7 +124,9 @@ export function CampaignInsightEvidencePanel({ insights }: CampaignInsightEviden
                           <span className="flex items-baseline gap-1.5 font-mono text-xs tabular-nums">
                             <span className="font-medium text-foreground">{displayValue}</span>
                             <span className="text-muted-foreground">
-                              · {Math.round(point.percentileRank * 100)}th
+                              {uiText.rich('sentence_577374b549b6', {
+                                percentile: Math.round(point.percentileRank * 100),
+                              })}
                             </span>
                           </span>
                         </li>

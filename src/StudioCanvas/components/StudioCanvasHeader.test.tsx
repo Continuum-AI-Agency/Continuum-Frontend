@@ -8,8 +8,8 @@
 // SaveWorkflowDialog.test.tsx as well — that file's five tests failed in any multi-file run
 // while passing alone. A stub that only isolates one file is not worth blinding another's.
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import type React from 'react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The real SaveWorkflowDialog calls useToast, so the header needs a provider stand-in now
 // that the dialog is no longer stubbed.

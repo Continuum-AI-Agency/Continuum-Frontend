@@ -1,9 +1,9 @@
 'use client';
-
-import { usePathname, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useCallback } from 'react';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useToast } from '@/components/ui/ToastProvider';
+import { usePathname, useRouter } from '@/i18n/navigation';
 import { purgeAllForBrand } from '@/lib/storage/brandScopedStorage';
 import * as storeRegistry from '@/lib/storage/storeRegistry';
 
@@ -14,6 +14,7 @@ export type SwitchBrandOutcome = {
 };
 
 export function useSwitchBrand() {
+  const uiText = useTranslations('common');
   const { selectBrand, brandSummaries } = useActiveBrandContext();
   const { show } = useToast();
   const router = useRouter();
@@ -24,7 +25,11 @@ export function useSwitchBrand() {
       const result = await selectBrand(brandId);
 
       if (!result.switched) {
-        return { switched: false, prevBrandId: result.prevBrandId, redirected: false };
+        return {
+          switched: false,
+          prevBrandId: result.prevBrandId,
+          redirected: false,
+        };
       }
 
       const event = {
@@ -60,14 +65,18 @@ export function useSwitchBrand() {
       const next = brandSummaries.find((b) => b.id === brandId);
       if (next) {
         show({
-          title: 'Switched brand',
-          description: `Now viewing ${next.name}.`,
+          title: uiText('switched_brand_18c8220'),
+          description: uiText('nowViewingBrand', { name: next.name }),
           variant: 'success',
         });
       }
 
-      return { switched: true, prevBrandId: result.prevBrandId, redirected: onboarding };
+      return {
+        switched: true,
+        prevBrandId: result.prevBrandId,
+        redirected: onboarding,
+      };
     },
-    [selectBrand, router, pathname, show, brandSummaries],
+    [selectBrand, router, pathname, show, brandSummaries, uiText],
   );
 }

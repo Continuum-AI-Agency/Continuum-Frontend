@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The expanded client checklist: each portfolio's open recommendations, read from its queue
 // (optimizer-status, the read the Optimizer's Actions page makes), with two actions and no new
@@ -59,6 +60,8 @@ function PortfolioItems({
   accountCurrency: string | null;
   onAnswer: (portfolioId: string, answer: Answer) => void;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const performance = useOptimizerPerformance(entry.id);
   const answered = performance.isSuccess;
   const failed = performance.isError && !answered;
@@ -84,12 +87,12 @@ function PortfolioItems({
       <h4 className="font-medium text-sm">{entry.name}</h4>
       {failed ? (
         <p className="text-muted-foreground text-xs" role="alert">
-          This portfolio's recommendations could not be read.
+          {betaUiText('beta_4a2a84019177')}
         </p>
       ) : items == null ? (
         <Skeleton className="h-16 w-full" />
       ) : items.length === 0 ? (
-        <p className="text-muted-foreground text-xs">Nothing is open for the client right now.</p>
+        <p className="text-muted-foreground text-xs">{betaUiText('beta_1924fc9ca576')}</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {items.map((item) => (
@@ -122,6 +125,8 @@ export default function ChecklistModule({
   portfolios: ChecklistPortfolio[];
   adAccounts: HomeAdAccount[];
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [emailOpen, setEmailOpen] = useState(false);
   const onAnswer = useCallback((portfolioId: string, answer: Answer) => {
@@ -153,11 +158,11 @@ export default function ChecklistModule({
           variant="outline"
         >
           <DownloadIcon aria-hidden="true" />
-          Export checklist
+          {betaUiText('beta_09e21c4a6c20')}
         </Button>
         <Button onClick={() => setEmailOpen(true)} size="sm" type="button" variant="ghost">
           <SendIcon aria-hidden="true" />
-          Send by email
+          {betaUiText('beta_436a04aeb728')}
         </Button>
       </div>
       <p className="text-muted-foreground text-xs leading-snug">{EMAIL_NOTE}</p>

@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The Overview's figures, composed from typed fields and nothing else.
 //
 // Performance+ redesign, stage 1b (docs/performance-plus-redesign/overview.html, proposal O1).
@@ -182,9 +187,20 @@ export type ResultKind = {
 };
 
 /** The words for a result kind — the catalogue's own label when the sentence has none. */
-export function resultWords(kind: string, fallbackLabel: string): { one: string; many: string } {
+export function resultWords(
+  kind: string,
+  fallbackLabel: string,
+  uiTranslate?: ScaleCopy,
+): { one: string; many: string } {
   const known = RESULT_WORDS[kind];
-  if (known) return known;
+  if (known)
+    return uiTranslate
+      ? {
+          one: uiTranslate('overviewResultWord', { kind, many: 'no' }),
+          many: uiTranslate('overviewResultWord', { kind, many: 'yes' }),
+        }
+      : known;
+  if (uiTranslate) return { one: fallbackLabel, many: fallbackLabel };
   const label = fallbackLabel.toLowerCase();
   return { one: label, many: label };
 }
@@ -199,6 +215,7 @@ export function resultWords(kind: string, fallbackLabel: string): { one: string;
 export function resultKinds(
   portfolios: readonly PortfolioListItem[],
   windows: ReadonlyMap<string, PortfolioWindow>,
+  uiTranslate?: ScaleCopy,
 ): ResultKind[] {
   const byKind = new Map<
     string,
@@ -210,7 +227,7 @@ export function resultKinds(
     const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
     const row = byKind.get(window.kind) ?? {
       kind: window.kind,
-      words: resultWords(window.kind, metric.resultLabel),
+      words: resultWords(window.kind, metric.resultLabel, uiTranslate),
       results: 0,
       spend: 0,
       priorResults: 0,
@@ -321,8 +338,12 @@ export function latestCycle(windows: ReadonlyMap<string, PortfolioWindow>): stri
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** `Mon d`, en-US, from a UTC date: "Sep 27". */
-function monthDay(date: Date): string {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+function monthDay(date: Date, uiLocale: UiLocale = 'en'): string {
+  return date.toLocaleDateString(uiLocale, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 /**
@@ -331,15 +352,19 @@ function monthDay(date: Date): string {
  * A cycle measures the seven full days before the day it runs, so the window ends the day
  * before the cycle's UTC date. Null when no cycle has run.
  */
-export function windowLabel(cycleTs: string | null, days: number = WINDOW_DAYS): string | null {
+export function windowLabel(
+  cycleTs: string | null,
+  days: number = WINDOW_DAYS,
+  uiLocale: UiLocale = 'en',
+): string | null {
   if (!cycleTs) return null;
   const cycle = Date.parse(cycleTs);
   if (Number.isNaN(cycle)) return null;
   const end = new Date(Math.floor(cycle / DAY_MS) * DAY_MS - DAY_MS);
   const start = new Date(end.getTime() - (days - 1) * DAY_MS);
   const sameMonth = start.getUTCMonth() === end.getUTCMonth();
-  if (sameMonth) return `${monthDay(start)}–${end.getUTCDate()}`;
-  return `${monthDay(start)} – ${monthDay(end)}`;
+  if (sameMonth) return `${monthDay(start, uiLocale)}–${end.getUTCDate()}`;
+  return `${monthDay(start, uiLocale)} – ${monthDay(end, uiLocale)}`;
 }
 
 /** Which side of its target a cost sits on. `none` is "no cost or no target to judge by". */
@@ -353,11 +378,16 @@ export function targetSide(vsTargetPct: number | null): TargetSide {
 }
 
 /** Whole-percent distance to target as words: "33% over target", "12% under target". */
-export function vsTargetLabel(vsTargetPct: number | null): string {
+export function vsTargetLabel(vsTargetPct: number | null, uiTranslate?: ScaleCopy): string {
   const side = targetSide(vsTargetPct);
-  if (side === 'none') return 'no target';
-  if (side === 'on') return 'on target';
-  return `${Math.abs(vsTargetPct ?? 0)}% ${side} target`;
+  if (side === 'none') return uiTranslate ? uiTranslate('no_target_8581bd7') : 'no target';
+  if (side === 'on') return uiTranslate ? uiTranslate('optimizer_onTarget') : 'on target';
+  return uiTranslate
+    ? uiTranslate('helper_464b8dcf8214', {
+        v0: Math.abs(vsTargetPct ?? 0),
+        v1: side,
+      })
+    : `${Math.abs(vsTargetPct ?? 0)}% ${side} target`;
 }
 
 /**
@@ -381,36 +411,88 @@ export type HeadlineSegment =
 
 export type HeadlineSpend = { text: string; figure: FigureProps };
 
-export function accountHeadlineSegments({
-  spends,
-  span,
-  decisions,
-}: {
-  /** The account's spend, one figure per currency — never one sum across two. */
-  spends: readonly HeadlineSpend[];
-  /** What follows the spend: "in 7 days", "in 7 days across two platforms". */
-  span: string;
-  decisions: number;
-}): HeadlineSegment[] {
+export function accountHeadlineSegments(
+  {
+    spends,
+    span,
+    decisions,
+  }: {
+    /** The account's spend, one figure per currency — never one sum across two. */
+    spends: readonly HeadlineSpend[];
+    /** What follows the spend: "in 7 days", "in 7 days across two platforms". */
+    span: string;
+    decisions: number;
+  },
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): HeadlineSegment[] {
+  if (uiTranslate) {
+    const slots = new Map<string, HeadlineSegment>();
+    const markers = spends.map((spend, index) => {
+      const marker = `\uFFF0spend${index}\uFFF1`;
+      slots.set(marker, {
+        kind: 'figure',
+        text: spend.text,
+        figure: spend.figure,
+      });
+      return marker;
+    });
+    const decisionsMarker = '\uFFF0decisions\uFFF1';
+    slots.set(decisionsMarker, decisionsSegment(decisions, uiLocale, uiTranslate));
+    const value = uiTranslate('overviewHeadline', {
+      spends: new Intl.ListFormat(uiLocale, {
+        style: 'long',
+        type: 'conjunction',
+      }).format(markers),
+      span,
+      decisions: decisionsMarker,
+    });
+    return value
+      .split(/(\uFFF0(?:spend\d+|decisions)\uFFF1)/g)
+      .filter(Boolean)
+      .map((part) => slots.get(part) ?? { kind: 'text', text: part });
+  }
   const segments: HeadlineSegment[] = [{ kind: 'text', text: 'The account spent ' }];
   spends.forEach((spend, index) => {
     if (index > 0)
-      segments.push({ kind: 'text', text: index === spends.length - 1 ? ' and ' : ', ' });
+      segments.push({
+        kind: 'text',
+        text: index === spends.length - 1 ? ' and ' : ', ',
+      });
     segments.push({ kind: 'figure', text: spend.text, figure: spend.figure });
   });
   segments.push({ kind: 'text', text: ` ${span}. ` });
-  segments.push(decisionsSegment(decisions));
+  segments.push(decisionsSegment(decisions, uiLocale));
   return segments;
 }
 
 /** "16 decisions waiting." split into its count and its words; "No decisions waiting." whole. */
-export function decisionsSegment(count: number): HeadlineSegment {
+export function decisionsSegment(
+  count: number,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): HeadlineSegment {
+  if (uiTranslate) {
+    const text = uiTranslate('overviewDecisions', { count });
+    const figure = count === 0 ? null : new Intl.NumberFormat(uiLocale).format(count);
+    return {
+      kind: 'decisions',
+      count,
+      figure,
+      words: figure ? text.slice(figure.length) : text,
+    };
+  }
   if (count === 0)
-    return { kind: 'decisions', count, figure: null, words: 'No decisions waiting.' };
+    return {
+      kind: 'decisions',
+      count,
+      figure: null,
+      words: 'No decisions waiting.',
+    };
   return {
     kind: 'decisions',
     count,
-    figure: count.toLocaleString('en-US'),
+    figure: count.toLocaleString(uiLocale),
     words: count === 1 ? ' decision waiting.' : ' decisions waiting.',
   };
 }
@@ -425,7 +507,8 @@ export function headlineText(segments: readonly HeadlineSegment[]): string {
 }
 
 /** "4 decisions waiting" / "1 decision waiting" / "no decisions waiting". */
-export function decisionsLabel(count: number): string {
+export function decisionsLabel(count: number, uiTranslate?: ScaleCopy): string {
+  if (uiTranslate) return uiTranslate('overviewDecisionLabel', { count });
   if (count === 0) return 'no decisions waiting';
   return count === 1 ? '1 decision waiting' : `${count} decisions waiting`;
 }

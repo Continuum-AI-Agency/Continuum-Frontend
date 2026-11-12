@@ -118,7 +118,11 @@ describe('buildAdminAuditRequestBody', () => {
 
   it('includes the action filter when set', () => {
     expect(
-      buildAdminAuditRequestBody({ page: 1, pageSize: 50, action: 'admin.user.set_admin' }),
+      buildAdminAuditRequestBody({
+        page: 1,
+        pageSize: 50,
+        action: 'admin.user.set_admin',
+      }),
     ).toEqual({ page: 1, pageSize: 50, action: 'admin.user.set_admin' });
   });
 });
@@ -127,9 +131,13 @@ describe('auditActorLabel', () => {
   const base = { actor_name: null, actor_email: null, actor_user_id: null };
 
   it('prefers name, then email, matching the Users tab convention', () => {
-    expect(auditActorLabel({ ...base, actor_name: 'Jane Doe', actor_email: 'jane@x.co' })).toBe(
-      'Jane Doe',
-    );
+    expect(
+      auditActorLabel({
+        ...base,
+        actor_name: 'Jane Doe',
+        actor_email: 'jane@x.co',
+      }),
+    ).toBe('Jane Doe');
     expect(auditActorLabel({ ...base, actor_email: 'jane@x.co' })).toBe('jane@x.co');
   });
 
@@ -186,7 +194,10 @@ describe('formatBrandDisambiguationLines', () => {
   it('splits into a name line and a detail line the single-line label re-joins', () => {
     const brand = buildBrand({ ownerEmail: 'mkt@easyfit.mx' });
     const lines = formatBrandDisambiguationLines(brand);
-    expect(lines).toEqual({ name: 'easyfit', detail: 'mkt@easyfit.mx — …5b80344e' });
+    expect(lines).toEqual({
+      name: 'easyfit',
+      detail: 'mkt@easyfit.mx — …5b80344e',
+    });
     expect(`${lines.name} — ${lines.detail}`).toBe(formatBrandDisambiguationLabel(brand));
   });
 
@@ -281,7 +292,11 @@ describe('#277 brandsWithWorkflows', () => {
 
   it('keeps the order it was handed, so the list stays alphabetical', () => {
     const brands = [
-      brand({ id: 'a', brand_name: 'ALA Applied Technologies', workflowCount: 2 }),
+      brand({
+        id: 'a',
+        brand_name: 'ALA Applied Technologies',
+        workflowCount: 2,
+      }),
       brand({ id: 'b', brand_name: 'Bellweather', workflowCount: 0 }),
       brand({ id: 'c', brand_name: 'Cortado', workflowCount: 1 }),
     ];
@@ -320,7 +335,10 @@ describe('brand access grid helpers', () => {
         { product: 'studio', source: 'admin' },
       ],
     });
-    expect(productGrant(grid, 'studio')).toEqual({ product: 'studio', source: 'admin' });
+    expect(productGrant(grid, 'studio')).toEqual({
+      product: 'studio',
+      source: 'admin',
+    });
     expect(productGrant(grid, 'mcp')).toBeNull();
     expect(productGrant(null, 'studio')).toBeNull();
     expect(isStripeManaged(grid, 'paid_media')).toBe(true);
@@ -336,7 +354,11 @@ describe('brand access grid helpers', () => {
     );
     expect(
       describeBillingPlan(
-        access({ billingModel: 'stripe', plans: ['organic_studio', 'paid_media'], status: 'past_due' }),
+        access({
+          billingModel: 'stripe',
+          plans: ['organic_studio', 'paid_media'],
+          status: 'past_due',
+        }),
       ),
     ).toBe('Organic Plus + Performance Plus · past due');
     expect(describeBillingPlan(access({ billingModel: 'stripe', status: 'canceled' }))).toBe(

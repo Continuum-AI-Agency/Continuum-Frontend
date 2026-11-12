@@ -2,6 +2,7 @@
 
 import type { AgentSessionListFilters } from '@continuum/contracts';
 import { Loader2Icon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { AgentInitiatorPill } from '@/components/chat/AgentInitiatorPill';
 import { ChatHistoryFilterBar } from '@/components/chat/ChatHistoryFilterBar';
@@ -15,6 +16,7 @@ import { useSessionSearch } from '@/components/chat/useSessionSearch';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { UiLocale } from '@/i18n/config';
 import { collectSessionTags } from '@/lib/agents/session-filters';
 import type { OrganicSession } from '@/lib/organic/agent-sessions';
 import { cn } from '@/lib/utils';
@@ -50,11 +52,11 @@ const AGENT_OPTIONS = [
 const SIDEBAR_BASE_CLASS =
   '@container/agent-sidebar flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:border-b-0 md:border-r';
 
-function formatSessionTime(value: string | null): string {
-  if (!value) return 'No activity';
+function formatSessionTime(value: string | null, locale: UiLocale, empty: string): string {
+  if (!value) return empty;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'No activity';
-  return new Intl.DateTimeFormat(undefined, {
+  if (Number.isNaN(date.getTime())) return empty;
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -76,6 +78,8 @@ export function OrganicSessionSidebar({
   onSearchSessions,
   onUpdateSessionTags,
 }: OrganicSessionSidebarProps) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const [tagOverrides, setTagOverrides] = useState<Record<string, string[]>>({});
 
   const noSearch = useCallback(async () => [] as OrganicSession[], []);
@@ -121,7 +125,7 @@ export function OrganicSessionSidebar({
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
         <div className="flex items-center gap-1">
           {onToggleCollapsed ? <CollapseConversationsButton onToggle={onToggleCollapsed} /> : null}
-          <span className="px-2 text-xs font-medium">Chats</span>
+          <span className="px-2 text-xs font-medium">{uiText('chats_ef5b404')}</span>
         </div>
         <Button
           type="button"
@@ -132,7 +136,7 @@ export function OrganicSessionSidebar({
           className="h-6 gap-1 px-2 text-xs"
         >
           <PlusIcon className="size-3" />
-          New
+          {uiText('new_18fdd54')}
         </Button>
       </div>
 
@@ -148,7 +152,9 @@ export function OrganicSessionSidebar({
       <ScrollArea className="max-h-44 md:max-h-none md:flex-1 md:min-h-0">
         <div className="flex gap-2 p-2 md:flex-col">
           {isLoading && visibleSessions.length === 0 && !search.isActive ? (
-            <p className="px-2 py-3 text-xs text-muted-foreground">Loading conversations…</p>
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              {uiText('loading_conversations_1eec1df')}
+            </p>
           ) : null}
 
           {search.isActive && !search.isSearching && search.failure ? (
@@ -160,13 +166,13 @@ export function OrganicSessionSidebar({
           !search.failure &&
           visibleSessions.length === 0 ? (
             <p className="px-2 py-3 text-xs text-muted-foreground">
-              No conversations match these filters.
+              {uiText('no_conversations_match_these_filters_80b056d')}
             </p>
           ) : null}
 
           {!isLoading && !search.isActive && sessions.length === 0 ? (
             <p className="px-2 py-3 text-xs text-muted-foreground">
-              Start a chat to create your first conversation.
+              {uiText('start_a_chat_to_create_your_first_conversatio_d32940c')}
             </p>
           ) : null}
 
@@ -198,7 +204,7 @@ export function OrganicSessionSidebar({
                   )}
                 >
                   <span className="line-clamp-2 w-full text-xs font-medium text-foreground">
-                    {sessionTitles.get(session.sessionId) ?? 'New conversation'}
+                    {sessionTitles.get(session.sessionId) ?? uiText('new_conversation_396c946')}
                   </span>
                   <div className="flex w-full flex-wrap items-center gap-1">
                     <AgentInitiatorPill
@@ -215,15 +221,21 @@ export function OrganicSessionSidebar({
                     {isWorking ? (
                       <span className="inline-flex items-center gap-1 text-2xs uppercase tracking-wide text-primary">
                         <Loader2Icon className="size-3 animate-spin" />
-                        Working
+                        {uiText('working_a92f044')}
                       </span>
                     ) : (
                       <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                        {session.lastMessageRole ?? 'session'}
+                        {uiText('sessionMessageRole', {
+                          role: session.lastMessageRole ?? 'session',
+                        })}
                       </span>
                     )}
                     <span className="text-2xs text-muted-foreground">
-                      {formatSessionTime(session.lastMessageAt ?? session.createdAt)}
+                      {formatSessionTime(
+                        session.lastMessageAt ?? session.createdAt,
+                        uiLocale,
+                        uiText('sessionNoActivity'),
+                      )}
                     </span>
                   </div>
                 </button>
@@ -243,8 +255,8 @@ export function OrganicSessionSidebar({
                   ) : null}
                   <button
                     type="button"
-                    aria-label="Delete conversation"
-                    title="Delete conversation"
+                    aria-label={uiText('delete_conversation_f60b953')}
+                    title={uiText('delete_conversation_f60b953')}
                     onClick={() => onDeleteSession(session.sessionId)}
                     disabled={isInteractionDisabled}
                     className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // G08 Quality Score on the adaptive board: where the keyword spend sits on Google's 1–10 scale,
 // the share at Quality Score ≤ 3 marked over its bars, and how Google rates that spend on its
@@ -77,7 +78,11 @@ export default function QualityLens({ ctx, slot }: BoardModuleProps) {
   const customer = useGoogleCustomer(ctx.brandId, ctx.adAccountId);
   const customerId = customer.status === 'ready' ? customer.data.customerId : '';
   const window = completeDaysWindow(LENS_WINDOW_DAYS);
-  const query = useGoogleKeywordQuality({ brandId: ctx.brandId, customerId, window });
+  const query = useGoogleKeywordQuality({
+    brandId: ctx.brandId,
+    customerId,
+    window,
+  });
   const read = googleLensRead(query);
   const state: LensState<GoogleKeywordQualityRead> = customer.status !== 'ready' ? customer : read;
   const currency = ctx.currency ?? (customer.status === 'ready' ? customer.data.currency : null);
@@ -93,6 +98,8 @@ export function QualityLensView({
   state: LensState<GoogleKeywordQualityRead>;
   currency: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = state.status === 'ready' ? state.data : null;
   const model = useMemo(() => (read ? buildQualityLens(read) : null), [read]);
   const accountCurrency = read?.currency ?? currency;
@@ -103,7 +110,7 @@ export function QualityLensView({
       size={slot.size}
       state={frameStateOf(state, model?.kind === 'read')}
       testId={TEST_ID}
-      title={BOARD_MODULE_TITLES.quality}
+      title={betaUiText('boardModuleTitle', { id: 'quality' })}
     >
       <LensBody size={slot.size} state={state} testId={TEST_ID}>
         {() =>
@@ -129,17 +136,17 @@ function QualityBody({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (model.kind === 'empty') {
-    return (
-      <LensNote testId="quality-empty">
-        No keyword spent in this window. Performance Max, Display and Video campaigns have no
-        keywords.
-      </LensNote>
-    );
+    return <LensNote testId="quality-empty">{betaUiText('beta_3eaae4c575c9')}</LensNote>;
   }
   const headline = (
     <LensFigure
-      caption={`of keyword spend at Quality Score ≤ ${LOW_QS_MAX} · ${money(model.low.spend)}`}
+      caption={betaUiText('beta_af5cebef475f', {
+        value0: String(LOW_QS_MAX),
+        value1: String(money(model.low.spend)),
+      })}
       testId="quality-headline"
       value={pct(model.low.share)}
     />
@@ -158,12 +165,21 @@ function QualityBody({
         {headline}
         <Histogram height={size === 'l' ? 150 : 124} model={model} money={money} />
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs">
-          <LegendKey color={BAR_COLOR.low}>QS 1–{LOW_QS_MAX}: every click costs more</LegendKey>
-          <LegendKey color={BAR_COLOR.rest}>QS {LOW_QS_MAX + 1}–10</LegendKey>
+          <LegendKey color={BAR_COLOR.low}>
+            {betaUiText('beta_c4fea61fef04')}
+            {LOW_QS_MAX}
+            {betaUiText('beta_85b24b6df3cf')}
+          </LegendKey>
+          <LegendKey color={BAR_COLOR.rest}>
+            {betaUiText('beta_02d0c9ca5b01')} {LOW_QS_MAX + 1}–10
+          </LegendKey>
           {model.unscored.keywords > 0 ? (
             <span data-testid="quality-unscored">
-              Unscored: {money(model.unscored.spend)} on {model.unscored.keywords}{' '}
-              {model.unscored.keywords === 1 ? 'keyword' : 'keywords'}
+              {betaUiText('beta_0fb58218bee0')} {money(model.unscored.spend)}{' '}
+              {betaUiText('beta_b8d31e852725')} {model.unscored.keywords}{' '}
+              {model.unscored.keywords === 1
+                ? betaUiText('beta_d6d198dd68bb')
+                : betaUiText('beta_67de0d1080d6')}
             </span>
           ) : null}
         </div>
@@ -177,14 +193,22 @@ function QualityBody({
             money: money(model.low.spend),
             keywords: model.low.keywords,
             weakest: model.weakest
-              ? { component: model.weakest.component, share: pct(model.weakest.share) }
+              ? {
+                  component: model.weakest.component,
+                  share: pct(model.weakest.share),
+                }
               : null,
           })}
         </LensTakeaway>
         <LensNote testId="quality-scope">
           {windowRangeLabel(model.window.since, model.window.until)} · {daysIn(model.window)}{' '}
-          complete days · the {model.total} keywords that spent most · {model.scored} scored
-          {model.average === null ? '' : ` · average Quality Score ${model.average.toFixed(1)}`}
+          {betaUiText('beta_5ae3fc6a3405')} {model.total} {betaUiText('beta_a90db116a619')}{' '}
+          {model.scored} {betaUiText('beta_59f2163089b8')}
+          {model.average === null
+            ? ''
+            : betaUiText('beta_e5106bf791e2', {
+                value0: String(model.average.toFixed(1)),
+              })}
         </LensNote>
       </div>
     </div>
@@ -203,6 +227,8 @@ function Histogram({
   height: number;
   tile?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const top = Math.max(...model.histogram.map((bucket) => bucket.spend), 1);
   const bracket = tile ? 0 : 20;
@@ -213,7 +239,7 @@ function Histogram({
   return (
     <div className="space-y-1">
       <figure
-        aria-label={`Keyword spend by Quality Score. ${label}`}
+        aria-label={betaUiText('beta_7de7d517af25', { value0: String(label) })}
         className="relative m-0 w-full"
         data-testid="quality-histogram"
         style={{ height }}
@@ -225,7 +251,7 @@ function Histogram({
             style={{ width: `${(LOW_QS_MAX / 10) * 100}%` }}
           >
             <span className="whitespace-nowrap font-medium text-foreground text-xs leading-none">
-              QS ≤ {LOW_QS_MAX} · {pct(model.low.share)}
+              {betaUiText('beta_1cb38e26a0c0')} {LOW_QS_MAX} · {pct(model.low.share)}
             </span>
             <span
               aria-hidden="true"
@@ -240,7 +266,11 @@ function Histogram({
           {model.histogram.map((bucket, index) => {
             const low = bucket.score <= LOW_QS_MAX;
             const share = bucket.spend / model.keywordSpend;
-            const readout = `Quality Score ${bucket.score} · ${bucket.keywords} ${bucket.keywords === 1 ? 'keyword' : 'keywords'} · ${pct(share)} of keyword spend`;
+            const readout = betaUiText('beta_41d10d6ed966', {
+              value0: bucket.score,
+              value1: bucket.keywords,
+              value3: String(pct(share)),
+            });
             if (bucket.spend <= 0) {
               return (
                 <div
@@ -299,13 +329,15 @@ function Histogram({
 }
 
 function ComponentRow({ split }: { split: ComponentSplit }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const label = QS_COMPONENT_LABEL[split.component];
   if (split.rated <= 0) {
     return (
       <li className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-2 text-xs">
         <span className="text-foreground">{label}</span>
-        <span className="text-muted-foreground">Not rated by Google yet</span>
+        <span className="text-muted-foreground">{betaUiText('beta_28dd542b0673')}</span>
       </li>
     );
   }
@@ -329,14 +361,18 @@ function ComponentRow({ split }: { split: ComponentSplit }) {
             className="block h-full origin-left rounded-full"
             initial={reduce ? false : { scaleX: 0 }}
             key={rating}
-            style={{ backgroundColor: RATING_COLOR[rating], flexGrow: split.spend[rating] }}
+            style={{
+              backgroundColor: RATING_COLOR[rating],
+              flexGrow: split.spend[rating],
+            }}
             title={`${RATING_LABEL[rating]} · ${pct(split.spend[rating] / split.rated)}`}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           />
         ))}
       </span>
       <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">
-        <span className="font-medium text-foreground">{pct(below)}</span> below
+        <span className="font-medium text-foreground">{pct(below)}</span>{' '}
+        {betaUiText('beta_8ada24bf6bf3')}
       </span>
     </li>
   );
@@ -344,18 +380,20 @@ function ComponentRow({ split }: { split: ComponentSplit }) {
 
 /** How Google rates the low-score spend on its three components; all keywords when none is low. */
 function Components({ model }: { model: ReadModel }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const low = model.low.keywords > 0;
   const splits = low ? model.lowComponents : model.components;
   return (
     <section
-      aria-label="Quality Score components"
+      aria-label={betaUiText('beta_f9c5f776ef3c')}
       className="space-y-1.5"
       data-testid="quality-components"
     >
       <p className="font-medium text-muted-foreground text-xs">
         {low
-          ? `The QS ≤ ${LOW_QS_MAX} spend, as Google rates each component`
-          : 'The keyword spend, as Google rates each component'}
+          ? betaUiText('beta_5c54e3cc8340', { value0: String(LOW_QS_MAX) })
+          : betaUiText('beta_5a96220fb1e8')}
       </p>
       <ul className="space-y-1.5">
         {splits.map((split) => (
@@ -391,7 +429,9 @@ function RatingChips({ keyword }: { keyword: LowKeyword }) {
             className="inline-grid size-5 place-items-center rounded font-medium font-mono text-foreground text-xs"
             key={component}
             role="img"
-            style={{ backgroundColor: rating ? CHIP_TONE[rating] : 'transparent' }}
+            style={{
+              backgroundColor: rating ? CHIP_TONE[rating] : 'transparent',
+            }}
             title={text}
           >
             {RATING_LETTER[component]}
@@ -403,12 +443,17 @@ function RatingChips({ keyword }: { keyword: LowKeyword }) {
 }
 
 function LowestKeywords({ model, money }: { model: ReadModel; money: Money }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (model.lowest.length === 0) return null;
   return (
-    <section aria-label="Low-score keywords" className="space-y-1" data-testid="quality-lowest">
+    <section
+      aria-label={betaUiText('beta_2c44aa399efa')}
+      className="space-y-1"
+      data-testid="quality-lowest"
+    >
       <p className="font-medium text-muted-foreground text-xs">
-        The QS ≤ {LOW_QS_MAX} keywords that spent most · C R L = expected CTR, ad relevance, landing
-        page
+        {betaUiText('beta_ec23951fdda4')} {LOW_QS_MAX} {betaUiText('beta_4e5757d8cc3f')}
       </p>
       <ul className="divide-y divide-border/60">
         {model.lowest.map((keyword) => (
@@ -420,8 +465,10 @@ function LowestKeywords({ model, money }: { model: ReadModel; money: Money }) {
             <span className="min-w-0 break-words text-foreground">{keyword.keyword}</span>
             <RatingChips keyword={keyword} />
             <span className="text-right text-muted-foreground tabular-nums">
-              <span className="font-medium text-foreground">QS {keyword.score}</span> ·{' '}
-              {money(keyword.spend)}
+              <span className="font-medium text-foreground">
+                {betaUiText('beta_02d0c9ca5b01')} {keyword.score}
+              </span>{' '}
+              · {money(keyword.spend)}
             </span>
           </li>
         ))}

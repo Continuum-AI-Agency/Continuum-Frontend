@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The `/` typeahead, shared by every prompt surface: canvas text boxes, the Omni prompt,
 // the canvas composer, the Organic agent chat and the Video Studio agent. The surface decides
 // what is offered (`useSkillSlashOptions` for a brand's skills). Focus never leaves the host input, so
@@ -34,7 +36,8 @@ export type SlashMenuProps = {
 export function useSkillSlashOptions(
   skills: readonly Skill[] | undefined,
 ): readonly SlashOption[] | undefined {
-  return useMemo(() => (skills ? buildSlashOptions(skills) : undefined), [skills]);
+  const t = useTranslations('common');
+  return useMemo(() => (skills ? buildSlashOptions(skills, t) : undefined), [skills, t]);
 }
 
 /**
@@ -157,6 +160,7 @@ export function SlashMenu({
   onSelect,
   className,
 }: SlashMenuProps) {
+  const uiText = useTranslations('common');
   const rootRef = useRef<HTMLDivElement>(null);
 
   // cmdk only scrolls on its own key handling; the keys arrive at the host input here.
@@ -166,7 +170,10 @@ export function SlashMenu({
       ?.scrollIntoView?.({ block: 'nearest' });
   }, [highlight]);
 
-  const groups: { label: string; items: { option: SlashOption; index: number }[] }[] = [];
+  const groups: {
+    label: string;
+    items: { option: SlashOption; index: number }[];
+  }[] = [];
   options.forEach((option, index) => {
     const last = groups[groups.length - 1];
     if (last?.label === option.group) last.items.push({ option, index });
@@ -191,12 +198,12 @@ export function SlashMenu({
           if (index >= 0) onHighlight(index);
         }}
         className="bg-transparent"
-        label="Shortcuts"
+        label={uiText('shortcuts_46e978d')}
         // Keep focus (and the caret) in the host input while the pointer picks a row.
         onMouseDown={(event) => event.preventDefault()}
       >
         <div className="flex items-center justify-between gap-2 border-b border-border/60 px-2.5 py-1.5 text-2xs text-muted-foreground">
-          <span className="font-medium text-foreground">Shortcuts</span>
+          <span className="font-medium text-foreground">{uiText('shortcuts_46e978d')}</span>
           <span className="truncate font-mono">/{query}</span>
         </div>
         <CommandList className="max-h-64">
@@ -220,7 +227,7 @@ export function SlashMenu({
           ))}
         </CommandList>
         <div className="border-t border-border/60 px-2.5 py-1 text-2xs text-muted-foreground">
-          ↑↓ navigate · ↵ or tab insert · esc close
+          {uiText('m_a2b06b5e75')}
         </div>
       </Command>
     </div>

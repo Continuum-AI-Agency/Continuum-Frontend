@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { LiveChangePreviewPayload } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { LiveChangeConfirmBar } from './LiveChangeConfirmBar';
 
 afterEach(cleanup);
@@ -25,7 +26,10 @@ const Host = (props: {
   preview: LiveChangePreviewPayload;
   decision: 'pending' | 'proposal' | 'approved';
   pendingDecision?: 'approve' | 'deny' | null;
-  variants?: Array<{ variant: 'apply' | 'pause_for_review'; label: string }> | null;
+  variants?: Array<{
+    variant: 'apply' | 'pause_for_review';
+    label: string;
+  }> | null;
   onDecide?: (d: 'approve' | 'deny', v?: 'apply' | 'pause_for_review') => void;
   onImplement?: () => void;
   implementBlocked?: boolean;
@@ -73,7 +77,10 @@ describe('LiveChangeConfirmBar', () => {
 
   describe('Implement these changes while Jaina is busy', () => {
     const proposal = () =>
-      preview('change-projection:p1', { origin: 'proposal', approvalId: 'proposal:p1' });
+      preview('change-projection:p1', {
+        origin: 'proposal',
+        approvalId: 'proposal:p1',
+      });
     const button = () => screen.getByTestId('live-change-implement') as HTMLButtonElement;
 
     it('is disabled while a run holds the conversation, and a click then sends nothing', () => {
@@ -186,12 +193,17 @@ describe('LiveChangeConfirmBar', () => {
     const decide = mock(() => {});
     render(
       <Host
-        preview={preview('live-change:a', { toolName: 'change_meta_budget_bid' })}
+        preview={preview('live-change:a', {
+          toolName: 'change_meta_budget_bid',
+        })}
         decision="pending"
         onDecide={decide}
         variants={[
           { variant: 'apply', label: 'Apply changes' },
-          { variant: 'pause_for_review', label: 'Pause these ad sets for review' },
+          {
+            variant: 'pause_for_review',
+            label: 'Pause these ad sets for review',
+          },
         ]}
       />,
     );
@@ -202,7 +214,10 @@ describe('LiveChangeConfirmBar', () => {
   it('says a Google proposal cannot be applied from the canvas', () => {
     render(
       <Host
-        preview={preview('change-projection:g', { origin: 'proposal', platform: 'google' })}
+        preview={preview('change-projection:g', {
+          origin: 'proposal',
+          platform: 'google',
+        })}
         decision="proposal"
         onImplement={() => {}}
       />,

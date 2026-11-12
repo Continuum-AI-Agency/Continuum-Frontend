@@ -1,9 +1,11 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { InspirationBrowser } from '@/components/competitors/InspirationBrowser';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 import { useShortcut } from '@/lib/keyboard/useShortcut';
 import { BoardsPanel } from './BoardsPanel';
 import { CompetitorSearchPalette } from './CompetitorSearchPalette';
@@ -40,6 +42,7 @@ function tabClass(active: boolean): string {
 }
 
 export function CompetitorSpyClient({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('competitor');
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabId>(() => resolveTab(searchParams.get('tab')));
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -49,7 +52,11 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
 
   useShortcut(
     'competitor-spy-search',
-    { key: '/', description: 'Search competitors', allowInInput: false },
+    {
+      key: '/',
+      description: uiText('search_competitors_102302e'),
+      allowInInput: false,
+    },
     (event) => {
       event.preventDefault();
       setPaletteOpen(true);
@@ -59,15 +66,15 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
   return (
     <div className="flex h-full flex-col gap-4 p-4 md:p-6">
       <PageHeader
-        title="Brand Spy"
-        description="Track competitor Instagram posts and paid ad creatives in one Ad Spy workspace."
+        title={uiText('brand_spy_12a1578')}
+        description={uiText('track_competitor_instagram_posts_and_paid_ad__a7755c7')}
         action={
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
             className="flex shrink-0 items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
           >
-            Search
+            {uiText('m_bce0641417')}
             <kbd className="rounded border border-border bg-muted px-1.5 font-mono text-xs">/</kbd>
           </button>
         }
@@ -75,7 +82,7 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
 
       <div
         role="tablist"
-        aria-label="Competitor spy sections"
+        aria-label={uiText('competitor_spy_sections_4b65a5b')}
         className="flex gap-1 border-b border-border"
       >
         {TABS.map((t) => (
@@ -87,7 +94,7 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
             onClick={() => setTab(t.id)}
             className={tabClass(tab === t.id)}
           >
-            {t.label}
+            {localizeCompetitorCopy(t.label, uiText)}
           </button>
         ))}
       </div>

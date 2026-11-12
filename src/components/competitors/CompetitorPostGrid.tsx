@@ -1,8 +1,10 @@
 'use client';
 
 import { COMPETITOR_POST_FORMAT_LABELS } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 import { cn } from '@/lib/utils';
 import { CompetitorPostHoverTile } from './CompetitorPostHoverTile';
 import {
@@ -26,7 +28,7 @@ export function CompetitorPostGrid({
   isLoading,
   isError,
   emptyText,
-  errorText = 'Competitor posts are unavailable right now.',
+  errorText,
   gridClassName = DEFAULT_GRID_CLASS,
   renderActions,
 }: {
@@ -39,6 +41,7 @@ export function CompetitorPostGrid({
   gridClassName?: string;
   renderActions?: (view: CompetitorPostView) => ReactNode;
 }) {
+  const uiText = useTranslations('competitor');
   if (isLoading) {
     return (
       <div className={gridClassName}>
@@ -50,7 +53,11 @@ export function CompetitorPostGrid({
   }
 
   if (isError) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">{errorText}</p>;
+    return (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        {errorText ?? localizeCompetitorCopy('Competitor posts are unavailable right now.', uiText)}
+      </p>
+    );
   }
 
   if (views.length === 0) {
@@ -83,6 +90,7 @@ export function FilterablePostGrid({
   showFilters = true,
   ...grid
 }: Parameters<typeof CompetitorPostGrid>[0] & { showFilters?: boolean }) {
+  const uiText = useTranslations('competitor');
   const [postType, setPostType] = useState<PostTypeFilter>('all');
   const [format, setFormat] = useState<FormatFilter>('all');
   const { views } = grid;
@@ -101,7 +109,11 @@ export function FilterablePostGrid({
     count,
   }));
   if (format !== 'all' && !formatOptions.some((option) => option.id === format)) {
-    formatOptions.push({ id: format, label: COMPETITOR_POST_FORMAT_LABELS[format], count: 0 });
+    formatOptions.push({
+      id: format,
+      label: COMPETITOR_POST_FORMAT_LABELS[format],
+      count: 0,
+    });
   }
 
   return (
@@ -109,7 +121,7 @@ export function FilterablePostGrid({
       {showFilters && views.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           <FilterChips
-            label="Post type"
+            label={uiText('post_type_e5c31e2')}
             value={postType}
             options={typeOptions}
             total={views.length}
@@ -119,7 +131,7 @@ export function FilterablePostGrid({
               inferring a video's category is off-policy. */}
           {platform === 'youtube' ? null : (
             <FilterChips
-              label="Format"
+              label={uiText('format_2f34366')}
               value={format}
               options={formatOptions}
               total={ofType.length}
@@ -131,7 +143,9 @@ export function FilterablePostGrid({
       <CompetitorPostGrid
         {...grid}
         views={filterViews(views, { postType, format })}
-        emptyText={views.length > 0 ? 'No posts match these filters.' : grid.emptyText}
+        emptyText={
+          views.length > 0 ? uiText('no_posts_match_these_filters_6c9220f') : grid.emptyText
+        }
       />
     </div>
   );

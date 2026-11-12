@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // The hook opens a realtime channel and reads the signed-in user; neither is
 // what this spec is about, so both are stubbed down to the surface it touches.
@@ -9,7 +10,11 @@ const mockChannel = {
 };
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
-    auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1', email: 'jane@test.dev' } } } }) },
+    auth: {
+      getSession: async () => ({
+        data: { session: { user: { id: 'user-1', email: 'jane@test.dev' } } },
+      }),
+    },
     channel: () => mockChannel,
     removeChannel: () => {},
   }),
@@ -45,7 +50,11 @@ mock.module('@/lib/library/creativeOperations', () => ({
 
 import { useAssetComments } from './useAssetComments';
 
-type FetchCall = { url: string; method: string; body: Record<string, unknown> | null };
+type FetchCall = {
+  url: string;
+  method: string;
+  body: Record<string, unknown> | null;
+};
 
 let calls: FetchCall[] = [];
 const originalFetch = globalThis.fetch;
@@ -105,7 +114,10 @@ describe('useAssetComments — posting pins to the version being viewed', () => 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.postComment({ body: 'Logo is cropped', versionId: 'version-1' });
+      await result.current.postComment({
+        body: 'Logo is cropped',
+        versionId: 'version-1',
+      });
     });
 
     expect(lastPost()?.body).toMatchObject({
@@ -122,7 +134,10 @@ describe('useAssetComments — posting pins to the version being viewed', () => 
 
     let inFlight: Promise<unknown> | null = null;
     act(() => {
-      inFlight = result.current.postComment({ body: 'On the old cut', versionId: 'version-1' });
+      inFlight = result.current.postComment({
+        body: 'On the old cut',
+        versionId: 'version-1',
+      });
     });
 
     // Before the server answers, the optimistic comment already carries the pin —
@@ -167,7 +182,9 @@ describe('useAssetComments — the initial list and a comment posted before it l
 
     const { result } = renderHook(() => useAssetComments('brand-1', 'asset-1'));
     await act(async () => {
-      await result.current.postComment({ body: 'Posted before the list arrived' });
+      await result.current.postComment({
+        body: 'Posted before the list arrived',
+      });
     });
     // The list was read before the post: it does not contain the new comment.
     await act(async () => {

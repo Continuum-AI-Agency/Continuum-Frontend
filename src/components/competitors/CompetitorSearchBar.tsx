@@ -1,9 +1,10 @@
 'use client';
 
 import { Search, X } from 'lucide-react';
-
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 import { cn } from '@/lib/utils';
 
 export function CompetitorSearchBar({
@@ -13,7 +14,7 @@ export function CompetitorSearchBar({
   onClear,
   active = false,
   comingSoon = false,
-  placeholder = 'Search a competitor @handle…',
+  placeholder,
   className,
 }: {
   value?: string;
@@ -25,6 +26,7 @@ export function CompetitorSearchBar({
   placeholder?: string;
   className?: string;
 }) {
+  const uiText = useTranslations('competitor');
   return (
     <form
       onSubmit={(event) => {
@@ -38,16 +40,18 @@ export function CompetitorSearchBar({
         <Input
           value={value}
           onChange={(event) => onChange?.(event.target.value)}
-          placeholder={placeholder}
+          placeholder={
+            placeholder ?? localizeCompetitorCopy('Search a competitor @handle…', uiText)
+          }
           disabled={comingSoon}
-          aria-label="Search competitors"
+          aria-label={uiText('search_competitors_102302e')}
           className="h-8 pl-8 pr-8 text-sm"
         />
         {active && onClear ? (
           <button
             type="button"
             onClick={onClear}
-            aria-label="Clear search"
+            aria-label={uiText('clear_search_3b7ea51')}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
@@ -56,7 +60,7 @@ export function CompetitorSearchBar({
       </div>
       {comingSoon ? (
         <Badge variant="secondary" className="shrink-0 text-2xs">
-          Coming soon
+          {uiText('coming_soon_4f7d640')}
         </Badge>
       ) : null}
     </form>

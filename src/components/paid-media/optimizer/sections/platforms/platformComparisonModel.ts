@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The MP3 comparison row (frontend.html §7, feature 23; prototipo MP3): one column per connected
 // platform, the same four figures in the same order — spend, results, cost per result, share of
 // results — for the one result the platforms most often buy together. It is a block of text,
@@ -138,38 +143,87 @@ export function buildPlatformComparison(
       : null;
 
   const shareOf = oneCurrency != null && kindTotal != null ? kind : null;
-  return { kind, shareOf, columns, currencies, currency: oneCurrency, cheapest, totals };
+  return {
+    kind,
+    shareOf,
+    columns,
+    currencies,
+    currency: oneCurrency,
+    cheapest,
+    totals,
+  };
 }
 
-function listed(parts: string[]): string {
+function listed(parts: string[], uiTranslate?: ScaleCopy): string {
   if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  return uiTranslate
+    ? uiTranslate('helper_c6a22df1409d', {
+        v0: parts.slice(0, -1).join(', '),
+        v1: parts[parts.length - 1],
+      })
+    : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 /** The row's one sentence: who buys the result cheapest, in words — or why nobody is named. */
-export function cheapestSentence(row: PlatformComparison): string {
+export function cheapestSentence(
+  row: PlatformComparison,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
   if (row.currency == null) {
     const bills = row.columns.map((column, index) => {
-      const where = column.currency ?? 'several currencies';
+      const where =
+        column.currency ??
+        (uiTranslate ? uiTranslate('several_currencies_084d637') : 'several currencies');
+      if (uiTranslate)
+        return uiTranslate('platformBillingPart', {
+          first: index === 0 ? 'yes' : 'no',
+          platform: PLATFORM_NAMES[column.platform],
+          currency: where,
+        });
       return index === 0
         ? `${PLATFORM_NAMES[column.platform]} bills in ${where}`
         : `${PLATFORM_NAMES[column.platform]} in ${where}`;
     });
-    return `${listed(bills)}, so their costs are not compared and nothing is added up.`;
+    return uiTranslate
+      ? uiTranslate('helper_3ba1c64b76da', { v0: listed(bills, uiTranslate) })
+      : `${listed(bills, uiTranslate)}, so their costs are not compared and nothing is added up.`;
   }
-  if (row.kind == null) return 'No platform bought a result in the window.';
-  const words = kindWords(row.kind);
+  if (row.kind == null)
+    return uiTranslate
+      ? uiTranslate('no_platform_bought_a_result_in_the_window_94fdf3c')
+      : 'No platform bought a result in the window.';
+  const words = kindWords(row.kind, uiTranslate);
   if (row.cheapest) {
     const best = row.cheapest;
     const others = row.columns
       .filter((column) => column.platform !== best.platform && column.costPerResult != null)
-      .map(
-        (column) =>
-          `${formatCurrency(column.costPerResult, row.currency)} on ${PLATFORM_NAMES[column.platform]}`,
+      .map((column) =>
+        uiTranslate
+          ? uiTranslate('helper_fd32956785c1', {
+              v0: formatCurrency(column.costPerResult, row.currency, uiLocale),
+              v1: PLATFORM_NAMES[column.platform],
+            })
+          : `${formatCurrency(column.costPerResult, row.currency, uiLocale)} on ${PLATFORM_NAMES[column.platform]}`,
       );
-    return `${PLATFORM_NAMES[best.platform]} buys ${words.many} cheapest: ${formatCurrency(best.costPerResult, row.currency)} per ${words.one}, against ${listed(others)}.`;
+    return uiTranslate
+      ? uiTranslate('helper_f7ef1d93158a', {
+          v0: PLATFORM_NAMES[best.platform],
+          v1: words.many,
+          v2: formatCurrency(best.costPerResult, row.currency, uiLocale),
+          v3: words.one,
+          v4: listed(others, uiTranslate),
+        })
+      : `${PLATFORM_NAMES[best.platform]} buys ${words.many} cheapest: ${formatCurrency(best.costPerResult, row.currency, uiLocale)} per ${words.one}, against ${listed(others, uiTranslate)}.`;
   }
   const buyer = row.columns.find((column) => column.costPerResult != null);
+  if (uiTranslate)
+    return buyer
+      ? uiTranslate('platformOnlyBuyer', {
+          platform: PLATFORM_NAMES[buyer.platform],
+          kind: words.many,
+        })
+      : uiTranslate('platformNoBuyer', { kind: words.many });
   return buyer
     ? `Only ${PLATFORM_NAMES[buyer.platform]} bought ${words.many} at a cost in the window.`
     : `No platform bought ${words.many} at a cost in the window.`;

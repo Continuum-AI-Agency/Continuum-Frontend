@@ -12,6 +12,7 @@ import {
   Undo2,
   Wand2,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import {
@@ -82,6 +83,7 @@ export function PostCommandMenu({
   onMoveBackToDraft?: () => void;
   onDelete: () => void;
 }) {
+  const uiText = useTranslations('organic');
   const [isDuplicateOpen, setIsDuplicateOpen] = React.useState(false);
 
   return (
@@ -90,7 +92,7 @@ export function PostCommandMenu({
         render={
           <button
             type="button"
-            aria-label="Post actions"
+            aria-label={uiText('post_actions_fd24241')}
             className="relative flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 before:absolute before:-inset-1.5 before:content-['']"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -101,7 +103,7 @@ export function PostCommandMenu({
         {(onOpenInStudio || mediaAction || renderAction) && (
           <>
             <DropdownMenuGroup>
-              <DropdownMenuLabel>Create</DropdownMenuLabel>
+              <DropdownMenuLabel>{uiText('create_4759498')}</DropdownMenuLabel>
               {mediaAction && (
                 <ActionItem action={mediaAction} icon={<Wand2 className={iconClass} />} />
               )}
@@ -117,24 +119,24 @@ export function PostCommandMenu({
         )}
 
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Edit</DropdownMenuLabel>
+          <DropdownMenuLabel>{uiText('edit_464c4ff')}</DropdownMenuLabel>
           <DropdownMenuItem onSelect={onEditHashtags}>
             <Hash className={iconClass} />
-            Hashtags
+            {uiText('hashtags_eb48566')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onEditCreativeDirection}>
             <Sparkles className={iconClass} />
-            Creative direction
+            {uiText('creative_direction_955fe28')}
           </DropdownMenuItem>
           {onPlatformOptions && (
             <DropdownMenuItem onSelect={onPlatformOptions}>
               <SlidersHorizontal className={iconClass} />
-              Platform options
+              {uiText('platform_options_71c8f32')}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onSelect={onShowDetails}>
             <Info className={iconClass} />
-            Details
+            {uiText('details_45989de')}
           </DropdownMenuItem>
         </DropdownMenuGroup>
 
@@ -144,7 +146,7 @@ export function PostCommandMenu({
           <DropdownMenuSub open={isDuplicateOpen} onOpenChange={setIsDuplicateOpen}>
             <DropdownMenuSubTrigger>
               <Copy className={iconClass} />
-              Duplicate…
+              {uiText('duplicate_5d20220')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-auto p-3">
               <DuplicateDayPicker
@@ -160,12 +162,12 @@ export function PostCommandMenu({
         {onMoveBackToDraft && (
           <DropdownMenuItem onSelect={onMoveBackToDraft}>
             <Undo2 className={iconClass} />
-            Move back to draft
+            {uiText('move_back_to_draft_00ade9c')}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-3.5 w-3.5" />
-          Delete draft
+          {uiText('delete_draft_4649537')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

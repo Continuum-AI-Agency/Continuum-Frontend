@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 // Presentation mapping for a reference image's inlining status. Kept pure and
 // separate from the node JSX so the label/tone logic is testable without a DOM.
 
@@ -10,14 +11,18 @@ export interface ReferenceStatusBadge {
 
 export function referenceStatusBadge(
   status: ImageNodeData['referenceStatus'],
+  t?: ReturnType<typeof useTranslations<'studio'>>,
 ): ReferenceStatusBadge | null {
   switch (status) {
     case 'processing':
-      return { label: 'Processing', tone: 'processing' };
+      return {
+        label: t?.('referenceProcessing') ?? 'Processing',
+        tone: 'processing',
+      };
     case 'ready':
-      return { label: 'Ready', tone: 'ready' };
+      return { label: t?.('referenceReady') ?? 'Ready', tone: 'ready' };
     case 'error':
-      return { label: 'Failed', tone: 'error' };
+      return { label: t?.('referenceFailed') ?? 'Failed', tone: 'error' };
     default:
       return null;
   }

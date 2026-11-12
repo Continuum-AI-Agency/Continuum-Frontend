@@ -4,7 +4,7 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { TemplateRunRow } from '@/lib/library/templateSources';
 import { ForgeRunProgress } from './ForgeRunProgress';
 
@@ -25,7 +25,10 @@ const FAILED: TemplateRunRow = {
     },
   ],
   needs: [],
-  error: { code: 'NAMING_NO_TEMPLATE_KEY', message: 'The build has no template name yet' },
+  error: {
+    code: 'NAMING_NO_TEMPLATE_KEY',
+    message: 'The build has no template name yet',
+  },
   root_table: null,
   application: null,
 };

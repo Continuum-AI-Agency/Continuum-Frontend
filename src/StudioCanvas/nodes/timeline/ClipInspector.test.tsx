@@ -2,7 +2,7 @@
 // GPU path visible without exposing arbitrary shader source.
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { TimelineItem } from '../../types';
 import type { ClipEffectSpec } from '../../utils/render/effectSpec';
 import { type ClipBackgroundRemoval, ClipInspector } from './ClipInspector';
@@ -139,8 +139,12 @@ describe('ClipInspector effect controls', () => {
     const { getByLabelText } = renderInspector(item({ tint: { color: '#ff0000', amount: 0.4 } }), {
       onSetEffects,
     });
-    fireEvent.change(getByLabelText('Tint colour'), { target: { value: '#00ff00' } });
-    expect(onSetEffects.mock.calls[0][0]).toEqual({ tint: { color: '#00ff00', amount: 0.4 } });
+    fireEvent.change(getByLabelText('Tint colour'), {
+      target: { value: '#00ff00' },
+    });
+    expect(onSetEffects.mock.calls[0][0]).toEqual({
+      tint: { color: '#00ff00', amount: 0.4 },
+    });
   });
 });
 

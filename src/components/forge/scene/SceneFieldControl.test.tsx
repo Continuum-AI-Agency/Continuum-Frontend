@@ -6,7 +6,12 @@
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type BlendField, blendParseSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import parseExample from '../../../../packages/contracts/src/media/__fixtures__/blend-parse.example.json';
 import { SceneFieldControl, sceneValueFromControl, sceneVariable } from './SceneFieldControl';
 
@@ -68,7 +73,9 @@ describe('SceneFieldControl', () => {
         onChange={onChange}
       />,
     );
-    const box = screen.getByRole('textbox', { name: 'Title text default' }) as HTMLInputElement;
+    const box = screen.getByRole('textbox', {
+      name: 'Title text default',
+    }) as HTMLInputElement;
     expect(box.value).toBe('Summer Sale');
     fireEvent.change(box, { target: { value: 'Black Friday' } });
     expect(onChange).toHaveBeenLastCalledWith('Black Friday');
@@ -102,7 +109,9 @@ describe('SceneFieldControl', () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(screen.getByLabelText('Swatch location X'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Swatch location X'), {
+      target: { value: '0' },
+    });
     expect(onChange).toHaveBeenLastCalledWith([0, 0, -2]);
   });
 

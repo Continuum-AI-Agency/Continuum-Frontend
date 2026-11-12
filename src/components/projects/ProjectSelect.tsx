@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // The project selector.
 //
 // Popover + Command, not DropdownMenu, for the reason BrandSwitcher documents: a menu popup
@@ -9,9 +12,9 @@
 import type { Project } from '@continuum/contracts';
 import { Check, ChevronsUpDown, FolderOpen, Plus } from 'lucide-react';
 import * as React from 'react';
-import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useActiveProject } from '@/components/projects/ActiveProjectProvider';
 import { ProjectChip, projectColor } from '@/components/projects/ProjectChip';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -48,11 +51,16 @@ export function ProjectSelect({
   projects,
   value,
   onChange,
-  noProjectLabel = 'No project',
+  noProjectLabel: uiProvidedNoProjectLabel,
   onCreate,
   disabled,
   className,
 }: ProjectSelectProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+  const noProjectLabel = uiProvidedNoProjectLabel ?? tUi('m_c326b75775');
+
   const [open, setOpen] = React.useState(false);
   // Controlled so the create row can read what was typed. cmdk's own filtering
   // still runs off this same value.
@@ -81,7 +89,7 @@ export function ProjectSelect({
       if (projectId) select(projectId);
       else setStatus('Create failed');
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
+      const message = getUiErrorMessage(error);
       // The route answers 409 on a duplicate active name; saying so beats a
       // generic failure the user cannot act on.
       setStatus(message.includes('409') ? 'A project already has that name' : 'Create failed');
@@ -106,7 +114,7 @@ export function ProjectSelect({
             size="sm"
             role="combobox"
             aria-expanded={open}
-            aria-label="Select project"
+            aria-label={tUi('m_b4b37dd6ce')}
             disabled={disabled}
             className={cn('justify-between gap-2 font-normal', className)}
           >
@@ -127,13 +135,11 @@ export function ProjectSelect({
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder={onCreate ? 'Search or create…' : 'Search projects...'}
+            placeholder={onCreate ? tUi('m_eedd6b28df') : tUi('m_469d78b660')}
             className="h-9"
           />
           <CommandList>
-            <CommandEmpty>
-              {onCreate ? 'Type a name to create a project.' : 'No projects found.'}
-            </CommandEmpty>
+            <CommandEmpty>{onCreate ? tUi('m_7c935cb90e') : tUi('m_ca7870e353')}</CommandEmpty>
             <CommandGroup>
               {/* null is the default brand-level scope and must stay reachable — a selector
                   that can only ever narrow is a scope you cannot get out of. */}
@@ -145,7 +151,7 @@ export function ProjectSelect({
             </CommandGroup>
             {projects.length > 0 && <CommandSeparator />}
             {projects.length > 0 && (
-              <CommandGroup heading="Projects">
+              <CommandGroup heading={tUi('m_53e890d5f0')}>
                 {projects.map((project) => (
                   <CommandItem
                     key={project.id}
@@ -168,14 +174,17 @@ export function ProjectSelect({
             {canCreate && (
               <>
                 <CommandSeparator />
-                <CommandGroup heading="Create">
+                <CommandGroup heading={tUi('m_6e157c5da4')}>
                   <CommandItem
                     value={`create ${trimmed}`}
                     onSelect={() => void createAndSelect(trimmed)}
                     className="gap-2"
                   >
                     <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 truncate">Create “{trimmed}”</span>
+                    <span className="flex-1 truncate">
+                      {tUi('m_15f8f8ddc1')}
+                      {trimmed}”
+                    </span>
                   </CommandItem>
                 </CommandGroup>
               </>
@@ -207,7 +216,11 @@ export function ActiveProjectSelect({ className }: { className?: string }) {
   // the create row stays hidden rather than posting a request that 400s.
   const onCreate = activeBrandId
     ? async (name: string): Promise<string | null> => {
-        const project = await create.mutateAsync({ name, adAccountIds: [], campaignIds: [] });
+        const project = await create.mutateAsync({
+          name,
+          adAccountIds: [],
+          campaignIds: [],
+        });
         return project?.id ?? null;
       }
     : undefined;

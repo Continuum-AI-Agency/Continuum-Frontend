@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,7 @@ export interface PieCenterProps {
  * on top of the SVG slices.
  */
 export function PieCenter({
-  defaultLabel = 'Total',
+  defaultLabel: uiProvidedDefaultLabel,
   formatOptions = defaultChartStatFlowFormat,
   children,
   className = '',
@@ -58,6 +59,9 @@ export function PieCenter({
   prefix,
   suffix,
 }: PieCenterProps) {
+  const defaultUiText = useTranslations('common');
+  const defaultLabel = uiProvidedDefaultLabel ?? defaultUiText('total_c9b3c38');
+
   const { data, totalValue, innerRadius, geometryScrubbing } = usePieStable();
   const { hoveredIndex } = usePieHover();
 

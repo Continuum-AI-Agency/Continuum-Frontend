@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import * as React from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -87,6 +89,7 @@ export function TimeGridCanvas({
   onNativeDrop,
   onSelectPost,
 }: TimeGridCanvasProps) {
+  const uiText = useTranslations('organic');
   const todayId = React.useMemo(() => formatDayId(new Date()), []);
   // Stable so the memoised day headers and cells, which all receive it, skip a selection.
   const handleCreatePost = React.useCallback(
@@ -107,7 +110,7 @@ export function TimeGridCanvas({
 
       {isLoadingPostedContent ? (
         <div className="flex items-center gap-2 px-1" role="status">
-          <span className="sr-only">Loading published posts</span>
+          <span className="sr-only">{uiText('loading_published_posts_b04c505')}</span>
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-4 w-40" />
         </div>
@@ -115,12 +118,12 @@ export function TimeGridCanvas({
 
       {postedContentError ? (
         <Alert variant="destructive" className="px-3 py-2">
-          <AlertTitle>Posted content could not be loaded</AlertTitle>
+          <AlertTitle>{uiText('posted_content_could_not_be_loaded_2a650e5')}</AlertTitle>
           <AlertDescription>
             <span>{postedContentError}</span>
             {onRetryPostedContent ? (
               <Button type="button" size="xs" variant="outline" onClick={onRetryPostedContent}>
-                Try again
+                {uiText('try_again_d8b8392')}
               </Button>
             ) : null}
           </AlertDescription>

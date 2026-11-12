@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 // Error state with an inline retry (mirrors the proven message+retry pattern in
 // organic/primitives/CalendarToolbar.tsx). role="alert" announces the failure;
 // the retry button appears only when a handler is supplied.
@@ -26,12 +27,16 @@ type ErrorRetryStateProps = {
 
 export function ErrorRetryState({
   message,
-  title = 'Something went wrong',
+  title: uiProvidedTitle,
   onRetry,
-  retryLabel = 'Retry',
+  retryLabel: uiProvidedRetryLabel,
   media,
   className,
 }: ErrorRetryStateProps) {
+  const defaultUiText = useTranslations('common');
+  const title = uiProvidedTitle ?? defaultUiText('somethingWentWrong');
+  const retryLabel = uiProvidedRetryLabel ?? defaultUiText('m_9f5cd8a2e8');
+
   return (
     <Empty role="alert" className={cn('gap-3', className)}>
       <EmptyHeader>

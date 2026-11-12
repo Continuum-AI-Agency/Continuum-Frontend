@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type SetupCopy = ReturnType<typeof useTranslations<'dashboard'>>;
+
 // First-run setup model for the dashboard (IMP-001 / IMP-003 / IMP-005).
 //
 // A brand can be *selected* yet not *set up*: it has no connected provider, no
@@ -67,7 +71,10 @@ function stepStatus(done: boolean): DashboardSetupStepStatus {
   return done ? 'done' : 'todo';
 }
 
-export function deriveDashboardSetup(signals: DashboardSetupSignals): DashboardSetupState {
+export function deriveDashboardSetup(
+  signals: DashboardSetupSignals,
+  t?: SetupCopy,
+): DashboardSetupState {
   const { hasConnectedProviders, hasAssignedAccounts, brandBook } = signals;
 
   const brandBookStatus: BrandBookStatus | null = brandBook?.status ?? null;
@@ -77,45 +84,73 @@ export function deriveDashboardSetup(signals: DashboardSetupSignals): DashboardS
   const steps: DashboardSetupStep[] = [
     {
       id: 'connect',
-      label: 'Connect a provider',
-      description: 'Link Meta, Instagram, or YouTube so Continuum can read your accounts.',
-      cta: hasConnectedProviders ? 'Manage providers' : 'Connect Meta',
+      label: t ? t('home_a002b3f35f99') : 'Connect a provider',
+      description: t
+        ? t('home_0fa7cc727f96')
+        : 'Link Meta, Instagram, or YouTube so Continuum can read your accounts.',
+      cta: hasConnectedProviders
+        ? t
+          ? t('home_5ac8352de069')
+          : 'Manage providers'
+        : t
+          ? t('home_3f137863d5cd')
+          : 'Connect Meta',
       href: SETTINGS_INTEGRATIONS_HREF,
       status: stepStatus(hasConnectedProviders),
       tracked: true,
     },
     {
       id: 'assign',
-      label: 'Assign an account to this brand',
-      description: 'Point a connected account at this brand to unlock its metrics and reporting.',
-      cta: hasAssignedAccounts ? 'Manage accounts' : 'Assign account',
+      label: t ? t('home_84c8297ddc9f') : 'Assign an account to this brand',
+      description: t
+        ? t('home_3186579c65e5')
+        : 'Point a connected account at this brand to unlock its metrics and reporting.',
+      cta: hasAssignedAccounts
+        ? t
+          ? t('home_daeaf38abf62')
+          : 'Manage accounts'
+        : t
+          ? t('home_1467ed6d7a94')
+          : 'Assign account',
       href: SETTINGS_INTEGRATIONS_HREF,
       status: stepStatus(hasAssignedAccounts),
       tracked: true,
     },
     {
       id: 'brand_book',
-      label: 'Generate your Brand Book',
-      description: "The foundation for voice, strategy, audience, and every agent's output.",
-      cta: brandBookReady ? 'View Brand Book' : 'Generate Brand Book',
+      label: t ? t('home_08083c402e1b') : 'Generate your Brand Book',
+      description: t
+        ? t('home_50d6f0ae6c07')
+        : "The foundation for voice, strategy, audience, and every agent's output.",
+      cta: brandBookReady
+        ? t
+          ? t('home_4ca933111e47')
+          : 'View Brand Book'
+        : t
+          ? t('home_ccb61699df1f')
+          : 'Generate Brand Book',
       href: SETTINGS_BRAND_BOOK_HREF,
       status: stepStatus(brandBookReady),
       tracked: true,
     },
     {
       id: 'competitors',
-      label: 'Add competitors',
-      description: 'Track rival organic and paid activity to benchmark your signals.',
-      cta: 'Add competitors',
+      label: t ? t('home_ea153a5197dc') : 'Add competitors',
+      description: t
+        ? t('home_64d3eb867660')
+        : 'Track rival organic and paid activity to benchmark your signals.',
+      cta: t ? t('home_ea153a5197dc') : 'Add competitors',
       href: COMPETITOR_HREF,
       status: 'todo',
       tracked: false,
     },
     {
       id: 'first_plan',
-      label: 'Create your first plan',
-      description: 'Turn brand context and signals into a scheduled content plan.',
-      cta: 'Create a plan',
+      label: t ? t('home_8647ce5b3592') : 'Create your first plan',
+      description: t
+        ? t('home_5764ca99a323')
+        : 'Turn brand context and signals into a scheduled content plan.',
+      cta: t ? t('home_7f7eafae4f98') : 'Create a plan',
       href: ORGANIC_HREF,
       status: 'todo',
       tracked: false,

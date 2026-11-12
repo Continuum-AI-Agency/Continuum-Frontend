@@ -3,6 +3,7 @@
 import type { HeadlessBatchFormat, HeadlessBatchItemState } from '@continuum/contracts';
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Check } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Fragment, type RefObject, useEffect, useRef, useState } from 'react';
 import { MediaStrip, mediaStripTileWidth } from '@/components/chat/media/MediaStrip';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
@@ -29,33 +30,25 @@ const FORMAT_MEDIA: Partial<Record<string, FormatMedia>> = {
   reel: { kind: 'video', w: 1080, h: 1920 },
   still_set: STILL_SET_MEDIA,
 } satisfies Record<HeadlessBatchFormat, FormatMedia>;
-const FORMAT_LABEL: Partial<Record<string, string>> = {
-  reel: 'Reel',
-  still_set: 'Still set',
-} satisfies Record<HeadlessBatchFormat, string>;
-// Every row's output column is the still set's width, the widest format, so labels line up.
+// Every row's output column is the still set's width so labels line up.
 const COLUMN_WIDTH = mediaStripTileWidth(STILL_SET_MEDIA, TILE_HEIGHT);
-// A state this build does not know yet reads as in progress; the counts line leaves it out.
-const STATE_LABEL: Partial<Record<string, string>> = {
-  queued: 'Waiting for a slot',
-  running: 'Being made',
-  needs_cast_approval: 'Waiting on the cast',
-  ready: 'Ready',
-  failed: 'Failed',
-} satisfies Record<HeadlessBatchItemState, string>;
-const COUNT_LABEL: ReadonlyArray<readonly [HeadlessBatchItemState, one: string, many: string]> = [
-  ['ready', 'ready', 'ready'],
-  ['failed', 'failed', 'failed'],
-  ['running', 'running', 'running'],
-  ['queued', 'queued', 'queued'],
-  ['needs_cast_approval', 'needs the cast', 'need the cast'],
-];
+const COUNT_LABEL = [
+  ['ready', 'batchCountReady'],
+  ['failed', 'batchCountFailed'],
+  ['running', 'batchCountRunning'],
+  ['queued', 'batchCountQueued'],
+  ['needs_cast_approval', 'batchCountNeedsCast'],
+] as const satisfies ReadonlyArray<readonly [HeadlessBatchItemState, string]>;
 
 /**
  * The status, how many refreshes in a row returned it unchanged, and how many in a row failed,
  * shared by every card.
  */
-type BatchEntry = { status: ReadHeadlessBatchStatus; unchanged: number; failures: number };
+type BatchEntry = {
+  status: ReadHeadlessBatchStatus;
+  unchanged: number;
+  failures: number;
+};
 
 // The route's permanent answers (bad query, not this viewer's brand, no such batch) and a body
 // that no longer parses. Anything else (a timeout, a 5xx, a lapsed token) keeps the last status
@@ -85,15 +78,6 @@ function isAhead(frame: ReadHeadlessBatchStatus, cached: ReadHeadlessBatchStatus
     (frame.cast.approved && !cached.cast.approved) ||
     (frame.done && !cached.done)
   );
-}
-
-const itemLabel = (item: ReadHeadlessBatchItem) =>
-  `${FORMAT_LABEL[item.format] ?? 'Piece'} ${item.index + 1}`;
-
-function castKindLabel(kind: string): string {
-  if (kind === 'character') return 'Person';
-  if (kind === 'scene') return 'Place';
-  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
 }
 
 /**
@@ -130,10 +114,18 @@ function useBatchStatus(
           signal,
         });
         const same = JSON.stringify(status) === JSON.stringify(previous.status);
-        return { status, unchanged: same ? previous.unchanged + 1 : 0, failures: 0 };
+        return {
+          status,
+          unchanged: same ? previous.unchanged + 1 : 0,
+          failures: 0,
+        };
       } catch (error) {
         if (isPermanent(error) || signal.aborted) throw error;
-        return { ...previous, unchanged: previous.unchanged + 1, failures: previous.failures + 1 };
+        return {
+          ...previous,
+          unchanged: previous.unchanged + 1,
+          failures: previous.failures + 1,
+        };
       }
     },
     initialData: { status: frame, unchanged: 0, failures: 0 },
@@ -161,7 +153,11 @@ function useBatchStatus(
     const batchKey = headlessBatchQueryKey(brandId, frame.batchId);
     const current = queryClient.getQueryData<BatchEntry>(batchKey);
     if (current && !isAhead(frame, current.status)) return;
-    queryClient.setQueryData<BatchEntry>(batchKey, { status: frame, unchanged: 0, failures: 0 });
+    queryClient.setQueryData<BatchEntry>(batchKey, {
+      status: frame,
+      unchanged: 0,
+      failures: 0,
+    });
   }, [brandId, frame, queryClient]);
 
   return {
@@ -206,14 +202,12 @@ function useOwnsLiveRegion(batchId: string): boolean {
   return owns;
 }
 
-function castErrorWords(error: unknown): string {
+function castErrorKey(error: unknown): 'batchCastOverWindow' | 'batchCastApproveError' {
   const overWindow =
     error instanceof ApiError &&
     error.status === 422 &&
     [error.message, error.code].some((text) => text?.includes('cast_pack_over_window'));
-  return overWindow
-    ? "The brand's 24 h window can't cover the character packs right now."
-    : 'Could not approve the cast. Try again.';
+  return overWindow ? 'batchCastOverWindow' : 'batchCastApproveError';
 }
 
 /**
@@ -228,6 +222,7 @@ function useApproveCast(
   status: ReadHeadlessBatchStatus,
   focusAfter: RefObject<HTMLElement | null>,
 ) {
+  const uiText = useTranslations('organic');
   const queryClient = useQueryClient();
   const draftIds = status.cast.drafts.map((draft) => draft.elementId);
   const draftSet = [...draftIds].sort().join(',');
@@ -250,7 +245,10 @@ function useApproveCast(
         (entry) =>
           entry && {
             ...entry,
-            status: { ...entry.status, cast: { ...entry.status.cast, approved: true, drafts: [] } },
+            status: {
+              ...entry.status,
+              cast: { ...entry.status.cast, approved: true, drafts: [] },
+            },
             unchanged: 0,
           },
       );
@@ -275,7 +273,7 @@ function useApproveCast(
     },
     disabled: !brandId || pendingAnywhere,
     approved: approve.isSuccess,
-    error: approve.isError && errorIsForThisSet ? castErrorWords(approve.error) : null,
+    error: approve.isError && errorIsForThisSet ? uiText(castErrorKey(approve.error)) : null,
   };
 }
 
@@ -286,20 +284,20 @@ function CastBlock({
   status: ReadHeadlessBatchStatus;
   cast: ReturnType<typeof useApproveCast>;
 }) {
+  const uiText = useTranslations('organic');
   return (
     <div
       data-slot="headless-batch-cast"
       className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
     >
       <p className="text-sm text-foreground">
-        The first piece drafted these people and places. Approve them once and every waiting piece
-        continues with them.
+        {uiText('the_first_piece_drafted_these_people_and_plac_14ed48e')}
       </p>
       <ul className="space-y-1">
         {status.cast.drafts.map((draft) => (
           <li key={draft.elementId} className="flex gap-2 text-xs">
             <span className="w-12 shrink-0 font-medium text-muted-foreground">
-              {castKindLabel(draft.kind)}
+              {uiText('batchCastKind', { kind: draft.kind })}
             </span>
             <span className="min-w-0 text-foreground/90">{draft.summary}</span>
           </li>
@@ -313,7 +311,7 @@ function CastBlock({
           className="h-8 min-h-0 px-3 text-xs focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Check className="size-3.5" aria-hidden="true" />
-          Approve cast
+          {uiText('approve_cast_701205d')}
         </AgentButton>
         {cast.error ? (
           <p role="alert" className="text-xs text-destructive">
@@ -336,9 +334,13 @@ function BatchItemRow({
   item: ReadHeadlessBatchItem;
   onOpenDraft: (draftId: string) => void;
 }) {
-  const label = itemLabel(item);
+  const uiText = useTranslations('organic');
+  const label = uiText('batchItemLabel', {
+    format: item.format,
+    index: item.index + 1,
+  });
   const media = FORMAT_MEDIA[item.format] ?? STILL_SET_MEDIA;
-  const reason = plainBatchReason(item.state, item.reason);
+  const reason = plainBatchReason(item.state, item.reason, uiText);
   const extraSlides = item.outputCount - 1;
   return (
     <li
@@ -378,10 +380,10 @@ function BatchItemRow({
         <p className="truncate text-sm font-medium text-foreground">{label}</p>
         <p className="truncate text-xs text-muted-foreground">
           <span className={cn(item.state === 'failed' && 'text-destructive')}>
-            {STATE_LABEL[item.state] ?? 'In progress'}
+            {uiText('batchItemState', { state: item.state })}
           </span>
-          {item.redirected ? ' · Second pass' : ''}
-          {extraSlides > 0 ? ` · +${extraSlides} slide${extraSlides === 1 ? '' : 's'}` : ''}
+          {item.redirected ? uiText('second_pass_cbe3f62') : ''}
+          {extraSlides > 0 ? uiText('extraSlides', { count: extraSlides }) : ''}
         </p>
         {/* Always present, so the text never re-centres when a reason appears or clears. */}
         <p
@@ -398,8 +400,10 @@ function BatchItemRow({
         onClick={() => onOpenDraft(item.draftId)}
         className="h-7 min-h-0 shrink-0 gap-1 px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring"
       >
-        Open draft
-        <span className="sr-only">{` for ${label}`}</span>
+        {uiText.rich('openBatchDraft', {
+          label,
+          detail: (chunks) => <span className="sr-only">{chunks}</span>,
+        })}
         <ArrowUpRight className="size-3" aria-hidden="true" />
       </AgentButton>
     </li>
@@ -422,6 +426,7 @@ export function HeadlessBatchCard({
   live?: boolean;
   onOpenDraft: (draftId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   const [observe, inView] = useInView();
   const { status, unreadable } = useBatchStatus(brandId, frame, inView, live);
   const ownsLiveRegion = useOwnsLiveRegion(status.batchId);
@@ -439,11 +444,11 @@ export function HeadlessBatchCard({
       data-slot="headless-batch-card"
       data-batch-id={status.batchId}
       data-done={String(status.done)}
-      aria-label={`Batch of ${total} pieces`}
+      aria-label={uiText('batchTitle', { count: total })}
       className="space-y-3 rounded-lg border border-border/50 bg-card/80 p-3 text-sm"
     >
       <div className="space-y-1.5">
-        <p className="font-medium text-foreground">{`Batch of ${total} pieces`}</p>
+        <p className="font-medium text-foreground">{uiText('batchTitle', { count: total })}</p>
         <p
           ref={progressRef}
           tabIndex={-1}
@@ -452,22 +457,20 @@ export function HeadlessBatchCard({
           aria-live={ownsLiveRegion ? 'polite' : undefined}
           className="truncate text-xs tabular-nums text-muted-foreground outline-none"
         >
-          {COUNT_LABEL.map(([state, one, many], i) => (
+          {COUNT_LABEL.map(([state, key], i) => (
             <Fragment key={state}>
               {i > 0 ? ' · ' : null}
-              <span data-count-state={state}>
-                {`${status.counts[state]} ${status.counts[state] === 1 ? one : many}`}
-              </span>
+              <span data-count-state={state}>{uiText(key, { count: status.counts[state] })}</span>
             </Fragment>
           ))}
         </p>
         <div
           role="progressbar"
-          aria-label="Pieces finished"
+          aria-label={uiText('pieces_finished_a116e40')}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={pct}
-          aria-valuetext={`${finished} of ${total} finished`}
+          aria-valuetext={uiText('batchProgress', { finished, total })}
           className="h-1 overflow-hidden rounded-full bg-muted"
         >
           <div
@@ -479,7 +482,7 @@ export function HeadlessBatchCard({
       <ul
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region keyboard users must reach.
         tabIndex={0}
-        aria-label="Pieces"
+        aria-label={uiText('pieces_dd05d0e')}
         // About five and a half rows, so a sixth visibly peeks and says the list scrolls.
         className="max-h-[462px] overflow-y-auto rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -496,16 +499,18 @@ export function HeadlessBatchCard({
       {/* Below the list, so these lines coming and going never move a row. */}
       {unreadable ? (
         <p data-slot="headless-batch-unreadable" className="text-xs text-muted-foreground">
-          This batch can&apos;t be read any more.
+          {uiText('this_batch_can_t_be_read_any_more_46487fd')}
         </p>
       ) : null}
       {castWaiting ? <CastBlock status={status} cast={cast} /> : null}
       {status.cast.needed && !status.cast.approved && status.cast.drafts.length === 0 ? (
-        <p className="text-xs text-muted-foreground">The first piece is drafting the cast.</p>
+        <p className="text-xs text-muted-foreground">
+          {uiText('the_first_piece_is_drafting_the_cast_e4855f3')}
+        </p>
       ) : null}
       {cast.approved && !castWaiting ? (
         <p role="status" className="text-xs text-muted-foreground">
-          Cast approved. The waiting pieces continue.
+          {uiText('cast_approved_the_waiting_pieces_continue_836a74f')}
         </p>
       ) : null}
     </section>

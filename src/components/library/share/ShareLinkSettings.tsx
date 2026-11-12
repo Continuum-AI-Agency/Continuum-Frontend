@@ -25,25 +25,60 @@ import {
   Loader2,
   PlaySquare,
 } from 'lucide-react';
-import { type DragEvent, type ReactNode, useEffect, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import {
+  type DragEvent,
+  type ReactNode,
+  useEffect,
+  useState,
+  useMemo as useUiConfigMemo,
+} from 'react';
 import { Button } from '@/components/ui/button';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { ShareLogoPicker } from './ShareLogoPicker';
 import { updateShareLinkSettings } from './shareLinkClient';
 
-const LAYOUTS: Array<{ value: ShareLinkLayout; label: string; Icon: typeof List }> = [
-  { value: 'grid', label: 'Grid', Icon: LayoutGrid },
-  { value: 'list', label: 'List', Icon: List },
-  { value: 'reel', label: 'Reel', Icon: PlaySquare },
-];
+function useLocalLayoutsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value: Array<{
+      value: ShareLinkLayout;
+      label: string;
+      Icon: typeof List;
+    }> = [
+      {
+        value: 'grid',
+        label: translateConfig('grid_0d7d12ac'),
+        Icon: LayoutGrid,
+      },
+      { value: 'list', label: translateConfig('list_6f202f54'), Icon: List },
+      {
+        value: 'reel',
+        label: translateConfig('reel_9cb145e8'),
+        Icon: PlaySquare,
+      },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
-const POSITIONS: Array<{ value: ShareLinkWatermarkPosition; label: string }> = [
-  { value: 'center', label: 'Center' },
-  { value: 'top_left', label: 'Top left' },
-  { value: 'top_right', label: 'Top right' },
-  { value: 'bottom_left', label: 'Bottom left' },
-  { value: 'bottom_right', label: 'Bottom right' },
-  { value: 'tiled', label: 'Tiled' },
-];
+function useLocalPositionsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value: Array<{ value: ShareLinkWatermarkPosition; label: string }> = [
+      { value: 'center', label: translateConfig('center_d9460674') },
+      { value: 'top_left', label: translateConfig('top_left_a0eda50f') },
+      { value: 'top_right', label: translateConfig('top_right_d83cbef9') },
+      { value: 'bottom_left', label: translateConfig('bottom_left_f5a57b96') },
+      {
+        value: 'bottom_right',
+        label: translateConfig('bottom_right_b4b7cb63'),
+      },
+      { value: 'tiled', label: translateConfig('tiled_381ac933') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 const FIELD =
   'h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground';
@@ -73,6 +108,13 @@ export function ShareLinkSettings({
   detail: ShareLinkDetailResponse;
   onSaved: (detail: ShareLinkDetailResponse) => void;
 }) {
+  const LAYOUTS = useLocalLayoutsMessages();
+  const POSITIONS = useLocalPositionsMessages();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const { link } = detail;
   const [layout, setLayout] = useState<ShareLinkLayout>(link.layout);
   const [order, setOrder] = useState(detail.members);
@@ -142,7 +184,9 @@ export function ShareLinkSettings({
         allowApproval,
         // Untouched, the exact expiry stays; a picked day runs to its end (UTC).
         ...(expiryDate !== savedExpiry
-          ? { expiresAt: expiryDate ? new Date(`${expiryDate}T23:59:59.000Z`).toISOString() : null }
+          ? {
+              expiresAt: expiryDate ? new Date(`${expiryDate}T23:59:59.000Z`).toISOString() : null,
+            }
           : {}),
         ...(newPasscode.trim()
           ? { passcode: newPasscode.trim() }
@@ -156,9 +200,9 @@ export function ShareLinkSettings({
       setSavedExpiry(expiryDate);
       setOrder(saved.members);
       onSaved(saved);
-      setMessage('Saved');
+      setMessage(translateUi('saved_b5c120b3'));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not save');
+      setMessage(uiErrorText(error));
     } finally {
       setSaving(false);
     }
@@ -166,8 +210,12 @@ export function ShareLinkSettings({
 
   return (
     <div className="flex flex-col gap-4" data-share-settings={link.id}>
-      <Section title="Layout">
-        <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label="Layout">
+      <Section title={translateUi('layout_a5119091')}>
+        <div
+          className="grid grid-cols-3 gap-1"
+          role="radiogroup"
+          aria-label={translateUi('layout_a5119091')}
+        >
           {LAYOUTS.map(({ value, label, Icon }) => (
             <Button
               key={value}
@@ -187,7 +235,7 @@ export function ShareLinkSettings({
       </Section>
 
       {order.length > 1 ? (
-        <Section title="Order">
+        <Section title={translateUi('order_6be09082')}>
           <ol className="flex flex-col gap-1" data-share-order>
             {order.map((member, index) => (
               <li
@@ -206,7 +254,9 @@ export function ShareLinkSettings({
                 <span className="min-w-0 flex-1 truncate">{member.title}</span>
                 <button
                   type="button"
-                  aria-label={`Move ${member.title} up`}
+                  aria-label={translateUi('move_value0_up_4f93d150', {
+                    value0: String(member.title),
+                  })}
                   onClick={() => setOrder((items) => move(items, index, index - 1))}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -214,7 +264,9 @@ export function ShareLinkSettings({
                 </button>
                 <button
                   type="button"
-                  aria-label={`Move ${member.title} down`}
+                  aria-label={translateUi('move_value0_down_7c18b9ea', {
+                    value0: String(member.title),
+                  })}
                   onClick={() => setOrder((items) => move(items, index, index + 1))}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -226,12 +278,14 @@ export function ShareLinkSettings({
         </Section>
       ) : null}
 
-      <Section title="Branding">
+      <Section title={translateUi('branding_d417aa16')}>
         <p className="text-2xs text-muted-foreground">
-          Empty fields use the brand kit: its name, logo and first colour.
+          {' '}
+          {translateUi('empty_fields_use_the_brand_kit_its__95cbc096')}{' '}
         </p>
         <div className={LABEL}>
-          Logo
+          {' '}
+          {translateUi('logo_d707dc2f')}{' '}
           <ShareLogoPicker
             brandId={link.brandId}
             value={branding.logoAssetId}
@@ -239,7 +293,8 @@ export function ShareLinkSettings({
           />
         </div>
         <label className={LABEL}>
-          Title
+          {' '}
+          {translateUi('title_7e8cd205')}{' '}
           <input
             name="headerTitle"
             className={FIELD}
@@ -249,7 +304,8 @@ export function ShareLinkSettings({
           />
         </label>
         <label className={LABEL}>
-          Description
+          {' '}
+          {translateUi('description_526e0087')}{' '}
           <textarea
             name="description"
             className={`${FIELD} h-16 py-1`}
@@ -261,11 +317,15 @@ export function ShareLinkSettings({
         <div className="grid grid-cols-3 gap-2">
           {(['accent', 'background'] as const).map((key) => (
             <label key={key} className={LABEL}>
-              {key === 'accent' ? 'Accent' : 'Background'}
+              {key === 'accent'
+                ? translateUi('accent_a5c6fb18')
+                : translateUi('background_ea2b8a87')}
               <span className="flex items-center gap-1">
                 <input
                   type="checkbox"
-                  aria-label={`Custom ${key}`}
+                  aria-label={translateUi('custom_value0_163de06c', {
+                    value0: String(key),
+                  })}
                   checked={Boolean(branding[key])}
                   onChange={(event) =>
                     setBrand({
@@ -289,18 +349,21 @@ export function ShareLinkSettings({
             </label>
           ))}
           <label className={LABEL}>
-            Theme
+            {' '}
+            {translateUi('theme_efb52e71')}{' '}
             <select
               name="theme"
               className={FIELD}
               value={branding.theme ?? 'system'}
               onChange={(event) =>
-                setBrand({ theme: event.target.value as ShareLinkBranding['theme'] })
+                setBrand({
+                  theme: event.target.value as ShareLinkBranding['theme'],
+                })
               }
             >
-              <option value="system">Viewer's</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{translateUi('viewer_s_c0261c67')}</option>
+              <option value="light">{translateUi('light_dbcd5e7b')}</option>
+              <option value="dark">{translateUi('dark_60acc53f')}</option>
             </select>
           </label>
         </div>
@@ -310,12 +373,12 @@ export function ShareLinkSettings({
             name="hideFooter"
             checked={branding.hideFooter === true}
             onChange={(event) => setBrand({ hideFooter: event.target.checked || undefined })}
-          />
-          Hide "Shared via Continuum"
+          />{' '}
+          {translateUi('hide_shared_via_continuum_a83bf4b5')}{' '}
         </label>
       </Section>
 
-      <Section title="Watermark">
+      <Section title={translateUi('watermark_3bebd4c4')}>
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
@@ -333,13 +396,15 @@ export function ShareLinkSettings({
                   : null,
               )
             }
-          />
-          Show each viewer's name, email and time over the media (asks viewers who they are)
+          />{' '}
+          {translateUi('show_each_viewer_s_name_email_and_t_3118daa8')}{' '}
         </label>
         {watermark ? (
           <>
             <label className={LABEL}>
-              Text ({'{name}'} {'{email}'} {'{ip}'} {'{time}'})
+              {' '}
+              {translateUi('text_102e9b76')}
+              {'{name}'} {'{email}'} {'{ip}'} {'{time}'})
               <input
                 name="watermarkTemplate"
                 className={FIELD}
@@ -350,7 +415,8 @@ export function ShareLinkSettings({
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className={LABEL}>
-                Position
+                {' '}
+                {translateUi('position_6d031af1')}{' '}
                 <select
                   name="watermarkPosition"
                   className={FIELD}
@@ -370,7 +436,8 @@ export function ShareLinkSettings({
                 </select>
               </label>
               <label className={LABEL}>
-                Opacity {Math.round(watermark.opacity * 100)}%
+                {' '}
+                {translateUi('opacity_6062652e')} {Math.round(watermark.opacity * 100)}%
                 <input
                   type="range"
                   name="watermarkOpacity"
@@ -379,7 +446,10 @@ export function ShareLinkSettings({
                   step={0.05}
                   value={watermark.opacity}
                   onChange={(event) =>
-                    setWatermark({ ...watermark, opacity: Number(event.target.value) })
+                    setWatermark({
+                      ...watermark,
+                      opacity: Number(event.target.value),
+                    })
                   }
                 />
               </label>
@@ -390,16 +460,19 @@ export function ShareLinkSettings({
                 name="burnDownloads"
                 checked={watermark.burnDownloads}
                 onChange={(event) =>
-                  setWatermark({ ...watermark, burnDownloads: event.target.checked })
+                  setWatermark({
+                    ...watermark,
+                    burnDownloads: event.target.checked,
+                  })
                 }
-              />
-              Burn it into downloaded images and videos
+              />{' '}
+              {translateUi('burn_it_into_downloaded_images_and__c4c5f09d')}{' '}
             </label>
           </>
         ) : null}
       </Section>
 
-      <Section title="Access">
+      <Section title={translateUi('access_ec5ba0ab')}>
         <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
           {(
             [
@@ -421,7 +494,8 @@ export function ShareLinkSettings({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <label className={LABEL}>
-            Expires (blank = never)
+            {' '}
+            {translateUi('expires_blank_never_f79a9791')}{' '}
             <input
               type="date"
               name="expiresOn"
@@ -431,7 +505,9 @@ export function ShareLinkSettings({
             />
           </label>
           <label className={LABEL}>
-            {link.policy.hasPasscode ? 'New passcode' : 'Passcode'}
+            {link.policy.hasPasscode
+              ? translateUi('new_passcode_b3e041e2')
+              : translateUi('passcode_56c37125')}
             <input
               type="password"
               name="newPasscode"
@@ -440,7 +516,11 @@ export function ShareLinkSettings({
               maxLength={128}
               className={FIELD}
               value={newPasscode}
-              placeholder={link.policy.hasPasscode ? 'Set to rotate' : 'Optional'}
+              placeholder={
+                link.policy.hasPasscode
+                  ? translateUi('set_to_rotate_8857c6bc')
+                  : translateUi('optional_59be7133')
+              }
               onChange={(event) => setNewPasscode(event.target.value)}
             />
           </label>
@@ -452,21 +532,21 @@ export function ShareLinkSettings({
               name="removePasscode"
               checked={removePasscode}
               onChange={(event) => setRemovePasscode(event.target.checked)}
-            />
-            Remove the passcode (changing or removing it signs current reviewers out)
+            />{' '}
+            {translateUi('remove_the_passcode_changing_or_rem_34c175a6')}{' '}
           </label>
         ) : null}
       </Section>
 
-      <Section title="Guest-editable field">
+      <Section title={translateUi('guest_editable_field_b0e9b6f7')}>
         <select
           name="featuredField"
-          aria-label="Guest-editable field"
+          aria-label={translateUi('guest_editable_field_b0e9b6f7')}
           className={FIELD}
           value={featuredFieldId ?? ''}
           onChange={(event) => setFeaturedFieldId(event.target.value || null)}
         >
-          <option value="">None</option>
+          <option value="">{translateUi('none_dc937b59')}</option>
           {fields.map((field) => (
             <option key={field.id} value={field.id}>
               {field.name}
@@ -488,8 +568,8 @@ export function ShareLinkSettings({
           disabled={saving}
           data-share-save
         >
-          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-          Save presentation
+          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {translateUi('save_presentation_16a4ddd5')}{' '}
         </Button>
       </div>
     </div>

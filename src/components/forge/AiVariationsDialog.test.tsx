@@ -27,16 +27,26 @@ const draftSourcesStatus = mock(async () => ({ status: 'ready' }));
 const uploadBrandDocument = mock(async () => ({
   documentId: '99999999-9999-4999-8999-999999999999',
 }));
-const uploadMediaAsset = mock(async () => ({ assetId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }));
+const uploadMediaAsset = mock(async () => ({
+  assetId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+}));
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { suggestRows, draftSourcesStatus },
 }));
-mock.module('@/lib/documents/uploadBrandDocument', () => ({ uploadBrandDocument }));
+mock.module('@/lib/documents/uploadBrandDocument', () => ({
+  uploadBrandDocument,
+}));
 mock.module('@/lib/library/uploadMediaAsset', () => ({ uploadMediaAsset }));
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { AiDraftDialog, DraftWithAiButton } from './AiVariationsDialog';
 
 // Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
@@ -154,7 +164,11 @@ describe('AiDraftDialog', () => {
         brandId={BRAND}
         bindingId={null}
         contract={CONTRACT}
-        parent={{ id: PARENT, label: 'Base', values: { headline: 'Hola', price: 10 } }}
+        parent={{
+          id: PARENT,
+          label: 'Base',
+          values: { headline: 'Hola', price: 10 },
+        }}
         initialVaryKeys={['headline']}
         onDrafted={() => undefined}
       />,
@@ -167,7 +181,11 @@ describe('AiDraftDialog', () => {
       autoCount: true,
       forksPerRow: 0,
       varyKeys: ['headline'],
-      parent: { id: PARENT, label: 'Base', values: { headline: 'Hola', price: 10 } },
+      parent: {
+        id: PARENT,
+        label: 'Base',
+        values: { headline: 'Hola', price: 10 },
+      },
     });
   });
 
@@ -186,7 +204,9 @@ describe('AiDraftDialog', () => {
     fireEvent.change(screen.getByLabelText('Choose source files'), {
       target: {
         files: [
-          new File(['name,headline\nA,Hello'], 'offers.csv', { type: 'text/csv' }),
+          new File(['name,headline\nA,Hello'], 'offers.csv', {
+            type: 'text/csv',
+          }),
           new File(['image'], 'hero.png', { type: 'image/png' }),
         ],
       },
@@ -303,8 +323,12 @@ describe('AiDraftDialog', () => {
     );
     const document = new File(['offer'], 'offer.txt', { type: 'text/plain' });
     const image = new File(['image'], 'hero.png', { type: 'image/png' });
-    Object.defineProperty(document, 'webkitRelativePath', { value: 'Campaign/Copy/offer.txt' });
-    Object.defineProperty(image, 'webkitRelativePath', { value: 'Campaign/Photos/hero.png' });
+    Object.defineProperty(document, 'webkitRelativePath', {
+      value: 'Campaign/Copy/offer.txt',
+    });
+    Object.defineProperty(image, 'webkitRelativePath', {
+      value: 'Campaign/Photos/hero.png',
+    });
     fireEvent.change(screen.getByLabelText('Choose source folder'), {
       target: { files: [document, image] },
     });
@@ -313,11 +337,17 @@ describe('AiDraftDialog', () => {
     expect(screen.getByText(/Campaign\/Copy\/offer.txt/)).toBeTruthy();
 
     const excess = Array.from({ length: 40 }, (_, index) => {
-      const file = new File(['offer'], `extra-${index}.txt`, { type: 'text/plain' });
-      Object.defineProperty(file, 'webkitRelativePath', { value: `Campaign/${file.name}` });
+      const file = new File(['offer'], `extra-${index}.txt`, {
+        type: 'text/plain',
+      });
+      Object.defineProperty(file, 'webkitRelativePath', {
+        value: `Campaign/${file.name}`,
+      });
       return file;
     });
-    fireEvent.change(screen.getByLabelText('Choose source folder'), { target: { files: excess } });
+    fireEvent.change(screen.getByLabelText('Choose source folder'), {
+      target: { files: excess },
+    });
     expect((await screen.findByRole('alert')).textContent).toContain('40 documents');
     expect(uploadBrandDocument).toHaveBeenCalledTimes(1);
   });
@@ -371,7 +401,9 @@ describe('AiDraftDialog', () => {
         }),
       }),
     };
-    fireEvent.drop(screen.getByRole('dialog'), { dataTransfer: { files: [], items: [folder] } });
+    fireEvent.drop(screen.getByRole('dialog'), {
+      dataTransfer: { files: [], items: [folder] },
+    });
     await waitFor(() => {
       expect(uploadBrandDocument).toHaveBeenCalledTimes(1);
       expect(uploadMediaAsset).toHaveBeenCalledTimes(1);
@@ -457,7 +489,12 @@ describe('AiDraftDialog — checked rows', () => {
         label: 'Half price',
         overrides: { headline: 'Half price' },
         gate: gate('flagged', [
-          { rule: 'names_offer', subject: null, probability: 0.05, verdict: 'fail' },
+          {
+            rule: 'names_offer',
+            subject: null,
+            probability: 0.05,
+            verdict: 'fail',
+          },
         ]),
       },
       {
@@ -502,7 +539,10 @@ describe('AiDraftDialog — checked rows', () => {
     expect(screen.queryByText(/Not checked|Could not tell|starting up/)).toBeNull();
     // The failed row is unticked, and its variation cannot land without it.
     fireEvent.click(screen.getByRole('button', { name: 'Add 1 row' }));
-    expect(onDrafted).toHaveBeenCalledWith({ ...CHECKED, rows: [CHECKED.rows[0]] });
+    expect(onDrafted).toHaveBeenCalledWith({
+      ...CHECKED,
+      rows: [CHECKED.rows[0]],
+    });
   });
 
   test('ticking a failed row back keeps it and its variation', async () => {
@@ -533,7 +573,12 @@ describe('AiDraftDialog — nothing decided', () => {
       ...ANSWER,
       rows: ANSWER.rows.map((row) => ({
         ...row,
-        gate: { status: 'unsure', regenerated: false, checks: [], reason: null },
+        gate: {
+          status: 'unsure',
+          regenerated: false,
+          checks: [],
+          reason: null,
+        },
       })),
     };
     suggestRows.mockImplementationOnce(async () => undecided);
@@ -562,11 +607,16 @@ describe('DraftWithAiButton', () => {
       <DraftWithAiButton templateKey="133" onOpenRender={onOpenRender} />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Draft rows with AI' }));
-    expect(onOpenRender).toHaveBeenCalledWith({ templateKey: '133', draftWithAi: true });
+    expect(onOpenRender).toHaveBeenCalledWith({
+      templateKey: '133',
+      draftWithAi: true,
+    });
 
     rerender(<DraftWithAiButton templateKey={null} onOpenRender={onOpenRender} />);
     expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Draft rows with AI' }).disabled,
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Draft rows with AI',
+      }).disabled,
     ).toBe(true);
     expect(screen.getByText('Available once this template is published.')).toBeTruthy();
   });
@@ -575,7 +625,9 @@ describe('DraftWithAiButton', () => {
     const onOpenRender = mock((_intent: unknown) => undefined);
     render(<DraftWithAiButton templateKey="133" onOpenRender={onOpenRender} />);
     const button = screen.getByRole('button', { name: 'Draft rows with AI' });
-    fireEvent.drop(button, { dataTransfer: { types: ['text/plain'], files: [], items: [] } });
+    fireEvent.drop(button, {
+      dataTransfer: { types: ['text/plain'], files: [], items: [] },
+    });
     expect(onOpenRender).toHaveBeenCalledTimes(0);
 
     const brief = new File(['offer'], 'brief.pdf', { type: 'application/pdf' });
@@ -586,7 +638,9 @@ describe('DraftWithAiButton', () => {
         items: [{ kind: 'file', webkitGetAsEntry: () => null }],
       },
     });
-    const intent = onOpenRender.mock.calls[0]![0] as { draftDrop: Promise<unknown> };
+    const intent = onOpenRender.mock.calls[0]![0] as {
+      draftDrop: Promise<unknown>;
+    };
     expect(intent).toMatchObject({ templateKey: '133', draftWithAi: true });
     expect(await intent.draftDrop).toEqual([{ file: brief, name: 'brief.pdf' }]);
   });
@@ -627,7 +681,9 @@ describe('AiDraftDialog as the grid assistant', () => {
     setDescription: 'La cuota más alta lleva caja roja.',
   });
   const chooseSheet = (file: File) =>
-    fireEvent.change(screen.getByLabelText('Choose source files'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Choose source files'), {
+      target: { files: [file] },
+    });
 
   test('a sheet is read here, never uploaded, and reaches the assistant with the grid', async () => {
     const onAssist = mock((_response: unknown) => undefined);
@@ -658,7 +714,9 @@ describe('AiDraftDialog as the grid assistant', () => {
       }),
     );
     await screen.findByText(/Hoja1.csv · read here/);
-    fireEvent.change(screen.getByLabelText(/^Ask/), { target: { value: 'Arma las filas' } });
+    fireEvent.change(screen.getByLabelText(/^Ask/), {
+      target: { value: 'Arma las filas' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(onAssist).toHaveBeenCalledTimes(1));
@@ -700,7 +758,9 @@ describe('AiDraftDialog as the grid assistant', () => {
         onSheet={onSheet}
       />,
     );
-    const file = new File(['Partido,Mercado\nA - B,Ambos\n'], 'rows.csv', { type: 'text/csv' });
+    const file = new File(['Partido,Mercado\nA - B,Ambos\n'], 'rows.csv', {
+      type: 'text/csv',
+    });
     chooseSheet(file);
     await screen.findByText(/rows.csv · read here/);
     fireEvent.click(screen.getByRole('button', { name: 'Import sheet' }));

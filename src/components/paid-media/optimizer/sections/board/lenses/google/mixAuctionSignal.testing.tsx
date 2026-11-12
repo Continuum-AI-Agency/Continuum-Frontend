@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // What the G05 / G06 / G10 render tests share: the browser's Supabase client as the boundary (the
 // account list, the portfolios, the Optimizer's cards and the paid-media-metrics reads, served
 // from the real-read fixtures), the board context a lens is mounted with, and the checks that a
@@ -14,7 +15,7 @@ import {
   readAdAccount,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react';
+
 import type { ReactElement } from 'react';
 import type { BoardContext } from '../../types';
 
@@ -128,7 +129,9 @@ export function slotOf(
 }
 
 export function renderWithQueries(ui: ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 

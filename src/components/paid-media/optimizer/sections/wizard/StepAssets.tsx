@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Step 2 — what the portfolio manages. By ad set: the campaign-grouped picker (search by
 // name or ID, eligibility, who already holds each one). By campaign: one row per campaign,
@@ -114,10 +115,12 @@ export function StepAssets({
   candidatesKnown = false,
   warnings,
 }: StepAssetsProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const level: PortfolioLevel = 'adset';
   const sections = useMemo(
-    () => buildCampaignSections(entities, level, objective, claims),
-    [entities, objective, claims],
+    () => buildCampaignSections(entities, level, objective, claims, uiText),
+    [entities, objective, claims, uiText],
   );
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
 
@@ -160,9 +163,9 @@ export function StepAssets({
     return (
       <div className="space-y-3">
         <div>
-          <h3 className={questionHeading}>What should it manage?</h3>
+          <h3 className={questionHeading}>{uiText('what_should_it_manage_994bbf8')}</h3>
           <p className="text-xs text-muted-foreground">
-            This account has no Meta ad sets. Pick the campaigns the portfolio should hold.
+            {uiText('this_account_has_no_meta_ad_sets_pick_the_cam_ee589bd')}
           </p>
         </div>
         {members}
@@ -174,15 +177,15 @@ export function StepAssets({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className={questionHeading}>What should it manage?</h3>
+          <h3 className={questionHeading}>{uiText('what_should_it_manage_994bbf8')}</h3>
           <p className="text-xs text-muted-foreground">
             {assetMode === 'adset'
-              ? 'Pick ad sets one by one, by name or ID. Their budgets move as one pool.'
-              : 'Pick whole campaigns. Every eligible ad set in each one joins the pool.'}
+              ? uiText('pick_ad_sets_one_by_one_by_name_or_id_their_b_63e4882')
+              : uiText('pick_whole_campaigns_every_eligible_ad_set_in_d0b302c')}
           </p>
         </div>
         <ToggleGroup
-          aria-label="Pick by"
+          aria-label={uiText('pick_by_0277697')}
           onValueChange={(next) => {
             if (next) onAssetModeChange(next as AssetMode);
           }}
@@ -192,10 +195,10 @@ export function StepAssets({
           variant="outline"
         >
           <ToggleGroupItem className="h-7 px-2.5 text-xs" value="adset">
-            By ad set
+            {uiText('by_ad_set_6669577')}
           </ToggleGroupItem>
           <ToggleGroupItem className="h-7 px-2.5 text-xs" value="campaign">
-            By campaign
+            {uiText('by_campaign_37ddfe7')}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -225,7 +228,9 @@ export function StepAssets({
         <ul className="divide-y divide-border/60 border-border/60 border-y">
           {sections.length === 0 ? (
             <li className="py-3 text-xs text-muted-foreground">
-              {isLoading ? 'Loading campaigns…' : 'No campaigns with eligible ad sets here yet.'}
+              {isLoading
+                ? uiText('loading_campaigns_0427267')
+                : uiText('no_campaigns_with_eligible_ad_sets_here_yet_621bbf5')}
             </li>
           ) : null}
           {sections.map((section) => {
@@ -235,7 +240,9 @@ export function StepAssets({
             return (
               <li className="flex items-center gap-3 py-2.5" key={section.campaignId}>
                 <Checkbox
-                  aria-label={`Select campaign ${section.campaignName}`}
+                  aria-label={uiText('template_99c1b26f8c66', {
+                    v0: section.campaignName,
+                  })}
                   checked={checked}
                   disabled={disabled || eligible.length === 0}
                   id={id}
@@ -244,12 +251,14 @@ export function StepAssets({
                 <Label className="min-w-0 flex-1 cursor-pointer font-normal" htmlFor={id}>
                   <span className="block truncate font-medium text-xs">{section.campaignName}</span>
                   <span className="block text-xs text-muted-foreground tabular-nums">
-                    {section.eligibleCount} of {section.totalCount} ad sets eligible ·{' '}
-                    {formatCurrency(section.totalBudget, currency)}/day
-                    {section.cpa != null ? ` · ${formatCpa(section.cpa, currency)}` : ''}
-                    {section.mismatchCount > 0
-                      ? ` · ${section.mismatchCount} buy a different result`
-                      : ''}
+                    {uiText.rich('sentence_5ff957bd78f3', {
+                      eligible: section.eligibleCount,
+                      total: section.totalCount,
+                      budget: formatCurrency(section.totalBudget, currency, uiLocale),
+                      hasCpa: section.cpa != null ? 'yes' : 'no',
+                      cpa: section.cpa != null ? formatCpa(section.cpa, currency, uiLocale) : '',
+                      mismatch: section.mismatchCount,
+                    })}
                   </span>
                 </Label>
               </li>
@@ -262,25 +271,30 @@ export function StepAssets({
 
       {warnings.inactiveCount > 0 ? (
         <p className="text-xs text-warning">
-          {warnings.inactiveCount} selected inactive{' '}
-          {warnings.inactiveCount === 1 ? 'ad set is' : 'ad sets are'} held until Meta reports them
-          active.
+          {uiText.rich('sentence_519a1e733035', {
+            count: warnings.inactiveCount,
+          })}
         </p>
       ) : null}
       {warnings.blockedCount > 0 ? (
         <p className="text-xs text-destructive" role="alert">
-          {warnings.blockedCount} selected{' '}
-          {warnings.blockedCount === 1 ? 'ad set is' : 'ad sets are'} held by another brand&rsquo;s
-          portfolio you cannot edit. Deselect {warnings.blockedCount === 1 ? 'it' : 'them'} to
-          continue.
+          {uiText.rich('sentence_5e3a567ceb00', {
+            count: warnings.blockedCount,
+          })}
         </p>
       ) : null}
       {warnings.moves.length > 0 ? (
         <p className="text-xs text-muted-foreground" role="status">
-          {warnings.moves
-            .map((move) => `${move.adsetIds.length} from ${move.portfolioName}`)
-            .join(' · ')}{' '}
-          will move into this portfolio.
+          {uiText.rich('sentence_943f23e59789', {
+            moves: warnings.moves
+              .map((move) =>
+                uiText('portfolio_move_count', {
+                  count: move.adsetIds.length,
+                  name: move.portfolioName,
+                }),
+              )
+              .join(' · '),
+          })}
         </p>
       ) : null}
     </div>
@@ -311,6 +325,8 @@ function OtherPlatformMembers({
   connectedPlatforms: PlatformId[];
   candidatesKnown: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const selected = new Set(selectedKeys);
   const groups = membersByAccount(members);
   const names = [...new Set(groups.map((group) => PLATFORM_NAMES[group.platform]))].join(' and ');
@@ -329,14 +345,14 @@ function OtherPlatformMembers({
 
   return (
     <section
-      aria-label="Members on other platforms"
+      aria-label={uiText('members_on_other_platforms_516899e')}
       className="space-y-3 border-border/60 border-t pt-4"
       data-testid="wizard-other-platform-members"
     >
       <p className="text-xs text-muted-foreground">
         {scratch
-          ? 'Campaigns on the brand\u2019s other platforms. Tick any of them, with or without Meta ad sets: one portfolio holds one currency. The optimizer recommends moves on them and you make the change on that platform: it only applies changes on Meta.'
-          : `The suggestion also proposed these ${names} campaigns, which buy the same result in the same currency. Create adds the ticked ones to the portfolio. The optimizer recommends moves on them and you make the change in ${names}: it only applies changes on Meta.`}{' '}
+          ? uiText('campaigns_on_the_brand_s_other_platforms_tick_f64f2a4')
+          : uiText('template_70d763bfd1f1', { v0: names, v1: names })}{' '}
         {BUDGET_LEVER}
       </p>
       {groups.map((group) => (
@@ -351,7 +367,7 @@ function OtherPlatformMembers({
               const key = memberKey(member);
               const id = `wizard-member-${key}`;
               const label = member.name ?? member.entity_id;
-              const blocked = memberBlockReason(member, draft, currency);
+              const blocked = memberBlockReason(member, draft, currency, uiText);
               const channel = channelTypeLabel(member.channel_type);
               return (
                 <li
@@ -362,7 +378,10 @@ function OtherPlatformMembers({
                   key={key}
                 >
                   <Checkbox
-                    aria-label={`Select ${PLATFORM_NAMES[member.platform]} campaign ${label}`}
+                    aria-label={uiText('template_89f23be0a137', {
+                      v0: PLATFORM_NAMES[member.platform],
+                      v1: label,
+                    })}
                     checked={selected.has(key)}
                     disabled={disabled || blocked != null}
                     id={id}
@@ -380,7 +399,13 @@ function OtherPlatformMembers({
                     {member.daily_budget != null || blocked ? (
                       <span className="block text-xs text-muted-foreground tabular-nums">
                         {member.daily_budget != null
-                          ? `${formatCurrency(member.daily_budget, member.currency ?? null)}/day budget`
+                          ? uiText('template_33143bb65c85', {
+                              v0: formatCurrency(
+                                member.daily_budget,
+                                member.currency ?? null,
+                                uiLocale,
+                              ),
+                            })
                           : ''}
                         {member.daily_budget != null && blocked ? ' · ' : ''}
                         {blocked}
@@ -402,8 +427,12 @@ function OtherPlatformMembers({
         >
           <span className="text-xs text-muted-foreground">
             {connectedPlatforms.includes(platform)
-              ? `No ${PLATFORM_NAMES[platform]} campaign can join a portfolio yet: it needs one that is enabled, with a daily budget.`
-              : `${PLATFORM_NAMES[platform]} isn\u2019t connected to this brand.`}
+              ? uiText('template_3f2bd320cd41', {
+                  v0: PLATFORM_NAMES[platform],
+                })
+              : uiText('template_33bc5efd780b', {
+                  v0: PLATFORM_NAMES[platform],
+                })}
           </span>
           {connectedPlatforms.includes(platform) ? null : (
             <PlatformConnectLink platform={platform} />

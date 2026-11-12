@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import type { ToastOptions } from '@/components/ui/ToastProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const show = mock((_options: ToastOptions) => {});
 mock.module('@/components/ui/ToastProvider', () => ({
@@ -100,19 +101,30 @@ describe('useNodeConfigPatch', () => {
 
     act(() => result.current('v1', 'videoGen', { aspectRatio: '9:16' }));
 
-    const style = useStudioStore.getState().nodes[0].style as { width: number; height: number };
+    const style = useStudioStore.getState().nodes[0].style as {
+      width: number;
+      height: number;
+    };
     expect(nodeData().aspectRatio).toBe('9:16');
     expect(style.height).toBeGreaterThan(style.width);
     expect(Math.abs(style.width / style.height - 9 / 16)).toBeLessThan(0.02);
   });
 
   it('leaves the box alone for a type with no aspect-ratio geometry', () => {
-    seed({ id: 't1', type: 'timelineEditor', data: {}, style: { width: 400, height: 300 } });
+    seed({
+      id: 't1',
+      type: 'timelineEditor',
+      data: {},
+      style: { width: 400, height: 300 },
+    });
     const { result } = renderHook(() => useNodeConfigPatch());
 
     act(() => result.current('t1', 'timelineEditor', { aspectRatio: '9:16' }));
 
-    expect(useStudioStore.getState().nodes[0].style).toEqual({ width: 400, height: 300 });
+    expect(useStudioStore.getState().nodes[0].style).toEqual({
+      width: 400,
+      height: 300,
+    });
   });
 
   it('persists every accepted write', () => {

@@ -23,6 +23,7 @@ import {
   TriangleAlert,
   WandSparkles,
 } from 'lucide-react';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,8 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useStudioMetadata } from '@/StudioCanvas/hooks/useStudioMetadata';
 import { findClip } from '@/StudioCanvas/nodes/timeline/workspace/timelineEdits';
 import { isPermanentError } from '../export/variantExports';
 import type { VideoStudioContext } from '../types';
@@ -65,6 +68,7 @@ import {
   refsFromSelection,
   VOICE_PRESETS,
 } from './quickStarts';
+import { useQuickStartCards } from './useQuickStartCards';
 
 const CARD_ICON: Record<VideoEditorQuickStart, typeof ImagePlus> = {
   create_image: ImagePlus,
@@ -100,6 +104,12 @@ const isActive = (job: Job) => job.state === 'queued' || job.state === 'running'
 
 // StyleFrame-style quick-start generation cards (left dock, Generate tab).
 export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): React.ReactNode {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+  const QUICK_START_CARDS = useQuickStartCards();
+
+  const uiText = useTranslations('common');
   const [active, setActive] = useState<QuickStartCard | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -127,7 +137,10 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
           }
         };
         if (Date.now() - job.startedAt > GIVE_UP_MS) {
-          settle({ state: 'failed', error: 'The generation stopped reporting.' });
+          settle({
+            state: 'failed',
+            error: 'The generation stopped reporting.',
+          });
           continue;
         }
         void runOp
@@ -149,7 +162,7 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
             if (isPermanentError(error))
               settle({
                 state: 'failed',
-                error: error instanceof Error ? error.message : String(error),
+                error: uiErrorText(error),
               });
           });
       }
@@ -158,7 +171,7 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
       window.clearInterval(tick);
       window.clearInterval(poll);
     };
-  }, [polling]);
+  }, [polling, uiErrorText]);
 
   return (
     <div className="flex flex-col gap-3 p-2" data-testid="quick-start-panel">
@@ -200,7 +213,8 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
       {jobs.length > 0 ? (
         <section className="space-y-2">
           <h3 className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-            Results
+            {' '}
+            {translateUi('results_219c4a6c')}{' '}
           </h3>
           {jobs.map((job) => {
             // Where the clip actually sits on this timeline, never where it was asked to go.
@@ -219,15 +233,19 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
                   {job.state === 'failed' ? (
                     <TriangleAlert className="size-3 text-destructive" />
                   ) : null}
-                  <span className="flex-1 truncate font-medium">{job.card.label}</span>
+                  <span className="flex-1 truncate font-medium">
+                    {(QUICK_START_CARDS.find((card) => card.id === job.card.id) ?? job.card).label}
+                  </span>
                   <span className="text-muted-foreground tabular-nums">
                     {isActive(job)
-                      ? `${job.state === 'queued' ? 'Queued' : 'Generating'} · ${formatDuration((now - job.startedAt) / 1_000)}`
+                      ? `${job.state === 'queued' ? translateUi('queued_661ff40a') : translateUi('generating_3607d4f4')} · ${formatDuration((now - job.startedAt) / 1_000)}`
                       : job.state === 'completed'
                         ? placedAtSec !== undefined
-                          ? `Placed at ${formatDuration(placedAtSec)}`
-                          : 'In the pool'
-                        : 'Failed'}
+                          ? translateUi('placed_at_value0_0a2ca388', {
+                              value0: String(formatDuration(placedAtSec)),
+                            })
+                          : translateUi('in_the_pool_d0221260')
+                        : uiText('failed_031a8f0')}
                   </span>
                 </div>
                 {job.asset ? <PoolAssetCard asset={job.asset} studio={studio} /> : null}
@@ -251,7 +269,7 @@ export function QuickStartPanel({ studio }: { studio: VideoStudioContext }): Rea
       {active ? (
         <QuickStartDialog
           key={active.id}
-          card={active}
+          card={QUICK_START_CARDS.find((card) => card.id === active.id) ?? active}
           studio={studio}
           pool={pool.assets ?? []}
           onClose={() => setActive(null)}
@@ -289,6 +307,13 @@ function QuickStartDialog({
     input: Extract<ReturnType<typeof generateRequest>, { ok: true }>['input'],
   ) => Promise<void>;
 }): React.ReactNode {
+  const registryText = useStudioMetadata();
+
+  const translateUi = useUiTranslations('studio');
+
+  const uiErrorText = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const stills = referenceImages(pool);
   const projectPreset = studio.project.exportSettings.presetId;
   const timelineSec = studio.project.durationSec;
@@ -317,27 +342,49 @@ function QuickStartDialog({
 
   const request = useMemo(
     () =>
-      generateRequest(card, {
-        refs,
-        prompt,
-        ...(format === PROJECT_FORMAT ? {} : { preset: format as PlatformExportPresetId }),
-        placeAtSec,
-        voice,
-        ...(length.trim() && length !== timelineLength ? { durationSec: Number(length) } : {}),
-        duck,
-        ...(concept ? { concept } : {}),
-      }),
-    [card, refs, prompt, format, placeAtSec, voice, length, timelineLength, duck, concept],
+      generateRequest(
+        card,
+        {
+          refs,
+          prompt,
+          ...(format === PROJECT_FORMAT ? {} : { preset: format as PlatformExportPresetId }),
+          placeAtSec,
+          voice,
+          ...(length.trim() && length !== timelineLength ? { durationSec: Number(length) } : {}),
+          duck,
+          ...(concept ? { concept } : {}),
+        },
+        translateUi,
+      ),
+    [
+      card,
+      refs,
+      prompt,
+      format,
+      placeAtSec,
+      voice,
+      length,
+      timelineLength,
+      duck,
+      concept,
+      translateUi,
+    ],
   );
   const titles: Record<string, string> = Object.fromEntries([
-    [NONE, 'None'],
+    [NONE, registryText('None')],
     ...stills.map((asset) => [asset.assetId, asset.title]),
   ]);
   const formats: Record<string, string> = Object.fromEntries([
-    [PROJECT_FORMAT, `Project (${studio.project.canvas.width}×${studio.project.canvas.height})`],
+    [
+      PROJECT_FORMAT,
+      translateUi('projectFormatDimensions', {
+        width: studio.project.canvas.width,
+        height: studio.project.canvas.height,
+      }),
+    ],
     ...Object.values(PLATFORM_EXPORT_PRESETS).map((preset) => [
       preset.id,
-      `${preset.label} (${preset.width}×${preset.height})`,
+      `${registryText(preset.label)} (${preset.width}×${preset.height})`,
     ]),
   ]);
   const paid = card.id === 'headless_concept';
@@ -350,7 +397,7 @@ function QuickStartDialog({
     setBusy(true);
     setError(null);
     onStart(request.input).catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : 'Could not start the generation.');
+      setError(uiErrorText(cause));
       setBusy(false);
     });
   };
@@ -368,8 +415,8 @@ function QuickStartDialog({
         <div className="space-y-3">
           {card.slots.length > 0 && stills.length === 0 ? (
             <p className="rounded-md border border-dashed p-2 text-2xs text-muted-foreground">
-              No stills in this edit's pool yet. Wire images into the Video Editor node on the
-              canvas, or make one with Create Image.
+              {' '}
+              {translateUi('no_stills_in_this_edit_s_pool_yet_w_ad6899cf')}{' '}
             </p>
           ) : null}
           {card.slots.map((slot) => (
@@ -393,7 +440,7 @@ function QuickStartDialog({
                 <SelectContent>
                   {slot.required ? null : (
                     <SelectItem value={NONE} className="text-xs">
-                      None
+                      {uiText('none_dc937b5')}
                     </SelectItem>
                   )}
                   {stills.map((asset) => (
@@ -416,7 +463,7 @@ function QuickStartDialog({
           ) : null}
           {card.id === 'music_bed' ? (
             <PresetChips
-              label="Moods"
+              label={translateUi('moods_6bae2b46')}
               presets={MUSIC_MOODS.map((mood) => ({
                 key: mood.id,
                 label: mood.label,
@@ -429,7 +476,7 @@ function QuickStartDialog({
           ) : null}
           <div className="space-y-1">
             <Label htmlFor="quick-start-prompt" className="text-xs">
-              {card.promptLabel ?? 'Prompt'}
+              {card.promptLabel ?? uiText('prompt_5c39123')}
               {card.promptRequired ? <span className="text-destructive"> *</span> : null}
             </Label>
             <Textarea
@@ -444,18 +491,19 @@ function QuickStartDialog({
           {card.id === 'voiceover' ? (
             <div className="space-y-1.5">
               <Label htmlFor="quick-start-voice" className="text-xs">
-                Voice and delivery
+                {' '}
+                {translateUi('voice_and_delivery_28742da1')}{' '}
               </Label>
               <Input
                 id="quick-start-voice"
                 inputSize="sm"
                 value={voice}
-                placeholder="Warm, confident, Mexican Spanish"
+                placeholder={translateUi('warm_confident_mexican_spanish_413323a4')}
                 className="text-xs"
                 onChange={(event) => setVoice(event.target.value)}
               />
               <PresetChips
-                label="Voices"
+                label={translateUi('voices_8ead6df9')}
                 presets={VOICE_PRESETS.map((preset) => ({
                   key: preset,
                   label: preset,
@@ -471,7 +519,8 @@ function QuickStartDialog({
             <>
               <div className="grid grid-cols-[7rem_1fr] items-center gap-2">
                 <Label htmlFor="quick-start-length" className="text-xs">
-                  Length (s)
+                  {' '}
+                  {translateUi('length_s_ce044674')}{' '}
                 </Label>
                 <Input
                   id="quick-start-length"
@@ -481,14 +530,15 @@ function QuickStartDialog({
                   max={600}
                   step={0.5}
                   value={length}
-                  placeholder="Timeline length"
+                  placeholder={translateUi('timeline_length_24af9f9b')}
                   className="text-xs"
                   onChange={(event) => setLength(event.target.value)}
                 />
               </div>
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="quick-start-duck" className="text-xs">
-                  Duck under speech
+                  {' '}
+                  {translateUi('duck_under_speech_ba8ca61b')}{' '}
                 </Label>
                 <Switch id="quick-start-duck" size="sm" checked={duck} onCheckedChange={setDuck} />
               </div>
@@ -496,9 +546,13 @@ function QuickStartDialog({
           ) : null}
           {card.output === 'audio' ? null : (
             <div className="grid grid-cols-[7rem_1fr] items-center gap-2">
-              <Label className="text-xs">Format</Label>
+              <Label className="text-xs">{uiText('format_2f34366')}</Label>
               <Select value={format} onValueChange={setFormat}>
-                <SelectTrigger size="sm" className="w-full text-xs" aria-label="Format">
+                <SelectTrigger
+                  size="sm"
+                  className="w-full text-xs"
+                  aria-label={uiText('format_2f34366')}
+                >
                   <SelectValue items={formats} />
                 </SelectTrigger>
                 <SelectContent>
@@ -514,8 +568,10 @@ function QuickStartDialog({
           <div className="flex items-center justify-between gap-2">
             <Label htmlFor="quick-start-place" className="text-xs">
               {card.placeFrom === 'start'
-                ? 'Lay it under the edit from 0:00'
-                : `Place at playhead (${formatDuration(studio.playheadSec)})`}
+                ? translateUi('lay_it_under_the_edit_from_0_00_4f4698e3')
+                : translateUi('place_at_playhead_value0_551b6f76', {
+                    value0: String(formatDuration(studio.playheadSec)),
+                  })}
             </Label>
             <Switch id="quick-start-place" size="sm" checked={place} onCheckedChange={setPlace} />
           </div>
@@ -526,8 +582,12 @@ function QuickStartDialog({
             >
               <CircleDollarSign className="size-3.5 shrink-0 text-amber-600" />
               {chosenConcept && upperUsd !== null
-                ? `Up to $${upperUsd}: ${chosenConcept.beats.length} generated shots at up to $${upperUsd / chosenConcept.beats.length} each. A music bed or a voiceover costs cents.`
-                : 'A concept reel generates several video shots: dollars, where a music bed or a voiceover costs cents.'}
+                ? translateUi('up_to_value0_value1_generated_shots_977d96bf', {
+                    value0: String(upperUsd),
+                    value1: String(chosenConcept.beats.length),
+                    value2: String(upperUsd / chosenConcept.beats.length),
+                  })
+                : translateUi('a_concept_reel_generates_several_vi_f0fd419f')}
             </p>
           ) : null}
           {error ? <p className="text-2xs text-destructive">{error}</p> : null}
@@ -537,15 +597,17 @@ function QuickStartDialog({
             <p className="mr-auto self-center text-2xs text-muted-foreground">{request.reason}</p>
           )}
           <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
+            {uiText('cancel_19766ed')}
           </Button>
           <Button size="sm" disabled={!request.ok || busy} onClick={start}>
             {busy ? <Spinner className="mr-1 size-3" /> : null}
             {paid
               ? confirming
-                ? `Confirm, spend up to $${upperUsd}`
-                : 'Generate reel'
-              : 'Generate'}
+                ? translateUi('confirm_spend_up_to_value0_aae41634', {
+                    value0: String(upperUsd),
+                  })
+                : translateUi('generate_reel_3a62efd0')
+              : uiText('generate_49e49bb')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -566,6 +628,8 @@ function PresetChips({
   onPick: (value: string) => void;
   dataAttribute: 'data-music-mood' | 'data-voice-preset';
 }): React.ReactNode {
+  const registryText = useStudioMetadata();
+
   return (
     <fieldset className="flex flex-wrap gap-1" aria-label={label}>
       {presets.map((preset) => (
@@ -579,7 +643,7 @@ function PresetChips({
           {...{ [dataAttribute]: preset.key }}
           onClick={() => onPick(preset.value)}
         >
-          {preset.label}
+          {registryText(preset.label)}
         </Button>
       ))}
     </fieldset>
@@ -594,13 +658,17 @@ function ConceptPicker({
   value: HeadlessGrammar | undefined;
   onChange: (value: HeadlessGrammar) => void;
 }): React.ReactNode {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div className="space-y-1">
       <Label className="text-xs">
-        Concept<span className="text-destructive"> *</span>
+        {' '}
+        {translateUi('concept_54287be8')}
+        <span className="text-destructive"> *</span>
       </Label>
       <RadioGroup
-        aria-label="Concept"
+        aria-label={translateUi('concept_54287be8')}
         value={value ?? null}
         onValueChange={(next) => onChange(next as HeadlessGrammar)}
         className="max-h-72 gap-1.5 overflow-y-auto pr-1"
@@ -622,7 +690,7 @@ function ConceptPicker({
               </span>
               <span className="block text-2xs text-muted-foreground">{concept.summary}</span>
               <span className="block text-2xs">
-                <span className="font-medium">When: </span>
+                <span className="font-medium">{translateUi('when_4bff21fc')} </span>
                 {concept.whenToUse}
               </span>
             </span>

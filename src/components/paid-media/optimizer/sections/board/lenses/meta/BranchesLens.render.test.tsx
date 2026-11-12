@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { PORTFOLIOS, TOP_CAMPAIGNS } from './__fixtures__/easyFitMeta';
 import { BranchesView } from './BranchesLens';
 import { buildMix } from './branchesModel';
@@ -60,7 +61,9 @@ describe('BranchesView at s', () => {
     render(<BranchesView currency="MXN" model={mix} size="s" />);
     const headline = screen.getByTestId('board-module-branches-headline');
     expect(headline.textContent).toBe('$305–$485 MXNCost per purchase by branch');
-    const list = screen.getByRole('list', { name: 'Cost per purchase by branch' });
+    const list = screen.getByRole('list', {
+      name: 'Cost per purchase by branch',
+    });
     expect(within(list).getAllByRole('listitem')).toHaveLength(5);
     expect(screen.queryByTestId('board-module-branches-takeaway')).toBeNull();
   });

@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
 // OWNED BY the weekly_report agent — only that agent edits this file. Recipe:
 // Continuum-Backend/App/agents-ts/Jaina/src/agents/templates/README.md.
 //
@@ -33,29 +36,12 @@ import type { TemplateHeroProps, TemplateRenderer } from './types';
 
 type Figures = ReadonlyArray<TemplateFigure>;
 
-const TILE_READ: Record<WeeklyTileRead, { label: string; className: string }> = {
-  mejor: { label: 'Better', className: JUDGEMENT_TEXT.positive },
-  peor: { label: 'Worse', className: JUDGEMENT_TEXT.risk },
-  igual: { label: 'Unchanged', className: JUDGEMENT_TEXT.neutral },
-  sin_comparacion: { label: 'No comparison', className: JUDGEMENT_TEXT.unjudged },
-};
-
-const IMPACT_LABEL: Record<WeeklyReportRecommendation['impact']['level'], string> = {
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-};
-
-const PRIORITY_LABEL: Record<WeeklyReportRecommendation['priority'], string> = {
-  this_week: 'This week',
-  next_2_weeks: 'Next 2 weeks',
-};
-
-const LEVEL_LABEL: Record<WeeklyReportRecommendation['where']['level'], string> = {
-  account: 'Account',
-  campaign: 'Campaign',
-  adset: 'Ad set',
-  ad: 'Ad',
+const PRIORITY_LABEL: Record<
+  WeeklyReportRecommendation['priority'],
+  'weeklyThisWeek' | 'weeklyNextWeeks'
+> = {
+  this_week: 'weeklyThisWeek',
+  next_2_weeks: 'weeklyNextWeeks',
 };
 
 const range = (period: Pick<WeeklyReportPeriod, 'since' | 'until'>): string =>
@@ -66,9 +52,10 @@ const Label = ({ children }: { children: React.ReactNode }) => (
 );
 
 function Header({ header }: { header: WeeklyReportBody['header'] }) {
+  const uiText = useTranslations('scale');
   const periods = [
-    { key: 'a', name: 'Period A', period: header.period_a },
-    { key: 'b', name: 'Period B', period: header.period_b },
+    { key: 'a', name: uiText('weeklyPeriodA'), period: header.period_a },
+    { key: 'b', name: uiText('weeklyPeriodB'), period: header.period_b },
   ] as const;
   return (
     <header data-testid="weekly-report-header" className="space-y-2">
@@ -90,15 +77,15 @@ function Header({ header }: { header: WeeklyReportBody['header'] }) {
         ))}
         <div data-testid="weekly-report-timezone">
           <dt className="inline">
-            <Label>Timezone</Label>{' '}
+            <Label>{uiText('timezone_4ceca1d')}</Label>{' '}
           </dt>
           <dd className="inline text-foreground">{header.timezone}</dd>
         </div>
         <div data-testid="weekly-report-currency">
           <dt className="inline">
-            <Label>Currency</Label>{' '}
+            <Label>{uiText('currency_3ac1a9e')}</Label>{' '}
           </dt>
-          <dd className="inline text-foreground">{header.currency ?? 'Unknown'}</dd>
+          <dd className="inline text-foreground">{header.currency ?? uiText('unknown_b764cdc')}</dd>
         </div>
       </dl>
     </header>
@@ -106,6 +93,26 @@ function Header({ header }: { header: WeeklyReportBody['header'] }) {
 }
 
 function Tile({ tile, figures }: { tile: WeeklyReportTile; figures: Figures }) {
+  const uiText = useTranslations('scale');
+  const TILE_READ: Record<WeeklyTileRead, { label: string; className: string }> = useMemo(
+    () => ({
+      mejor: {
+        label: uiText('better_7bf8c23'),
+        className: JUDGEMENT_TEXT.positive,
+      },
+      peor: { label: uiText('worse_4f01e2d'), className: JUDGEMENT_TEXT.risk },
+      igual: {
+        label: uiText('weeklyUnchanged'),
+        className: JUDGEMENT_TEXT.neutral,
+      },
+      sin_comparacion: {
+        label: uiText('weeklyNoComparison'),
+        className: JUDGEMENT_TEXT.unjudged,
+      },
+    }),
+    [uiText],
+  );
+
   const read = TILE_READ[tile.read];
   return (
     <li
@@ -121,7 +128,7 @@ function Tile({ tile, figures }: { tile: WeeklyReportTile; figures: Figures }) {
         <FigureById figures={figures} id={tile.figure_id} />
       </p>
       <p className={cn('text-muted-foreground', JAINA_TYPE.table)}>
-        {'Prior week '}
+        {uiText('prior_week_804d34f')}
         {tile.prior_figure_id ? (
           <FigureById
             figures={figures}
@@ -139,14 +146,6 @@ function Tile({ tile, figures }: { tile: WeeklyReportTile; figures: Figures }) {
   );
 }
 
-const ROW_METRICS: ReadonlyArray<{ key: keyof WeeklyReportPeriodRow; label: string }> = [
-  { key: 'spend', label: 'Spend' },
-  { key: 'results', label: 'Results' },
-  { key: 'cost_per_result', label: 'Cost per result' },
-  { key: 'target', label: 'Target' },
-  { key: 'delta_vs_target', label: 'Δ vs target' },
-];
-
 /** Period A beside Period B, one metric per row, so it reads at phone width. */
 function PeriodTable({
   a,
@@ -159,25 +158,46 @@ function PeriodTable({
   header: WeeklyReportBody['header'];
   figures: Figures;
 }) {
+  const uiText = useTranslations('scale');
+  const ROW_METRICS: ReadonlyArray<{
+    key: keyof WeeklyReportPeriodRow;
+    label: string;
+  }> = useMemo(
+    () => [
+      { key: 'spend', label: uiText('spend_85f3d55') },
+      { key: 'results', label: uiText('results_219c4a6') },
+      { key: 'cost_per_result', label: uiText('cost_per_result_a664c01') },
+      { key: 'target', label: uiText('target_978354d') },
+      { key: 'delta_vs_target', label: uiText('weeklyDeltaTarget') },
+    ],
+    [uiText],
+  );
+
   return (
     <div className={JAINA_TABLE.wrap}>
       <table className={JAINA_TABLE.table} data-testid="weekly-report-period-table">
         <thead>
           <tr className={JAINA_TABLE.headRow}>
             <th scope="col" className={cn(JAINA_TABLE.th, 'text-left')}>
-              Metric
+              {uiText('metric_2d275a7')}
             </th>
             <th scope="col" className={cn(JAINA_TABLE.th, 'text-right')} data-column="period_a">
-              Period A
-              <span className="block font-normal normal-case tracking-normal">
-                {range(header.period_a)}
-              </span>
+              {uiText.rich('sentence_723af3eee6db', {
+                v0: () => (
+                  <span className="block font-normal normal-case tracking-normal">
+                    {range(header.period_a)}
+                  </span>
+                ),
+              })}
             </th>
             <th scope="col" className={cn(JAINA_TABLE.th, 'text-right')} data-column="period_b">
-              Period B
-              <span className="block font-normal normal-case tracking-normal">
-                {range(header.period_b)}
-              </span>
+              {uiText.rich('sentence_d8b3ba1ca07c', {
+                v0: () => (
+                  <span className="block font-normal normal-case tracking-normal">
+                    {range(header.period_b)}
+                  </span>
+                ),
+              })}
             </th>
           </tr>
         </thead>
@@ -204,9 +224,9 @@ function PeriodTable({
 }
 
 const THREE_PARTS = [
-  { key: 'what', label: 'What' },
-  { key: 'so_what', label: 'So what' },
-  { key: 'now_what', label: 'Now what' },
+  { key: 'what', label: 'weeklyWhat' },
+  { key: 'so_what', label: 'weeklySoWhat' },
+  { key: 'now_what', label: 'weeklyNowWhat' },
 ] as const;
 
 function ObjectiveSection({
@@ -218,6 +238,7 @@ function ObjectiveSection({
   header: WeeklyReportBody['header'];
   figures: Figures;
 }) {
+  const uiText = useTranslations('scale');
   const tone = JUDGEMENT_TEXT[TONE_JUDGEMENT[section.signal.tone]];
   return (
     <section
@@ -231,7 +252,7 @@ function ObjectiveSection({
         data-testid="weekly-report-signal"
         data-tone={section.signal.tone}
       >
-        <span className={cn('mr-1.5', JAINA_TYPE.label, tone)}>Signal</span>
+        <span className={cn('mr-1.5', JAINA_TYPE.label, tone)}>{uiText('signal_1e9806e')}</span>
         <span className="text-foreground">
           <FigureText text={section.signal.text} figures={figures} />
         </span>
@@ -243,13 +264,16 @@ function ObjectiveSection({
           data-testid="weekly-report-no-active"
           className={cn('text-muted-foreground', JAINA_TYPE.body)}
         >
-          <FigureText text={section.no_active_note ?? 'No active campaigns.'} figures={figures} />
+          <FigureText
+            text={section.no_active_note ?? uiText('noActiveCampaignsFallback')}
+            figures={figures}
+          />
         </p>
       )}
       <div className="grid gap-2 md:grid-cols-3">
         {THREE_PARTS.map(({ key, label }) => (
           <div key={key} data-part={key} className="space-y-1">
-            <Label>{label}</Label>
+            <Label>{uiText(label)}</Label>
             <p className={cn('text-foreground', JAINA_TYPE.table)}>
               <FigureText text={section[key]} figures={figures} />
             </p>
@@ -267,6 +291,26 @@ function RecommendationCard({
   card: WeeklyReportRecommendation;
   figures: Figures;
 }) {
+  const uiText = useTranslations('scale');
+  const IMPACT_LABEL: Record<WeeklyReportRecommendation['impact']['level'], string> = useMemo(
+    () => ({
+      high: uiText('high_c4ebc6d'),
+      medium: uiText('medium_8e588cd'),
+      low: uiText('low_f793de2'),
+    }),
+    [uiText],
+  );
+
+  const LEVEL_LABEL: Record<WeeklyReportRecommendation['where']['level'], string> = useMemo(
+    () => ({
+      account: uiText('account_7e1b0d5'),
+      campaign: uiText('campaign_268286d'),
+      adset: uiText('ad_set_639a64f'),
+      ad: uiText('ad_1d97c9f'),
+    }),
+    [uiText],
+  );
+
   return (
     <li
       data-recommendation={card.id}
@@ -287,13 +331,13 @@ function RecommendationCard({
             JAINA_TYPE.table,
           )}
         >
-          {PRIORITY_LABEL[card.priority]}
+          {uiText(PRIORITY_LABEL[card.priority])}
         </span>
       </div>
       <dl className={cn('grid gap-2', JAINA_TYPE.table)}>
         <div data-part="where">
           <dt>
-            <Label>Where</Label>
+            <Label>{uiText('where_1daaa38')}</Label>
           </dt>
           <dd className="text-foreground">
             {card.where.entity_name}
@@ -305,19 +349,22 @@ function RecommendationCard({
         </div>
         <div data-part="why">
           <dt>
-            <Label>Why</Label>
+            <Label>{uiText('why_d3ae14a')}</Label>
           </dt>
           <dd className="text-foreground">
             <FigureText text={card.why.text} figures={figures} />
             <span className="mt-0.5 block text-muted-foreground" data-part="source">
-              Source: {card.why.source.tool} · {card.why.source.window.label} (
-              {range(card.why.source.window)})
+              {uiText.rich('sentence_54f7832e061b', {
+                v0: card.why.source.tool,
+                v1: card.why.source.window.label,
+                v2: range(card.why.source.window),
+              })}
             </span>
           </dd>
         </div>
         <div data-part="impact" data-impact-level={card.impact.level}>
           <dt className="flex items-center gap-2">
-            <Label>Expected impact</Label>
+            <Label>{uiText('expected_impact_0eb8276')}</Label>
             <span
               data-impact-basis={card.impact.basis}
               className={cn(
@@ -325,7 +372,7 @@ function RecommendationCard({
                 JAINA_TYPE.label,
               )}
             >
-              Estimate
+              {uiText('estimate_558ecb0')}
             </span>
           </dt>
           <dd className="text-foreground">
@@ -340,6 +387,7 @@ function RecommendationCard({
 }
 
 export function WeeklyReportHero({ block }: TemplateHeroProps) {
+  const uiText = useTranslations('scale');
   const body = block.weekly_report;
   if (!body) return null;
   const { figures } = block;
@@ -362,7 +410,9 @@ export function WeeklyReportHero({ block }: TemplateHeroProps) {
         ))}
       </div>
       <section className="space-y-2" data-testid="weekly-report-recommendations">
-        <h4 className={cn('text-foreground', JAINA_TYPE.label)}>Recommendations</h4>
+        <h4 className={cn('text-foreground', JAINA_TYPE.label)}>
+          {uiText('recommendations_0738ee0')}
+        </h4>
         {body.recommendations.length > 0 ? (
           <ol className="space-y-2">
             {body.recommendations.map((card) => (
@@ -371,7 +421,7 @@ export function WeeklyReportHero({ block }: TemplateHeroProps) {
           </ol>
         ) : (
           <p className={cn('text-muted-foreground', JAINA_TYPE.body)}>
-            No pending recommendations this week.
+            {uiText('no_pending_recommendations_this_week_21456ef')}
           </p>
         )}
       </section>

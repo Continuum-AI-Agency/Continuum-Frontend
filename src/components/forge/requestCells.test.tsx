@@ -6,7 +6,6 @@ import type {
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CellContext } from '@tanstack/react-table';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { type RequestRow, rowStatusOf, seedRow } from '@/components/forge/renderRequestRows';
 import {
@@ -15,6 +14,12 @@ import {
   StatusCell,
   VariableCell,
 } from '@/components/forge/requestCells';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 installPickerDomGlobals();
 afterEach(cleanup);
@@ -57,7 +62,10 @@ function recordActions() {
 function renderCell(item: ApiRenderVariable, row: RequestRow, actions: RequestRowActions) {
   const meta: RequestGridMeta = {
     brandId: '22222222-2222-4222-8222-222222222222',
-    contract: { variables: [item], layout: null } as unknown as ApiRenderTemplateContract,
+    contract: {
+      variables: [item],
+      layout: null,
+    } as unknown as ApiRenderTemplateContract,
     rows: [row],
     clientErrors: new Map(),
     actions,
@@ -89,13 +97,18 @@ describe('text values beyond the template sample', () => {
     const row = { ...seedRow([field], 'Base'), values: { headline: value } };
     const { actions, calls } = recordActions();
     const { container } = renderCell(field, row, actions);
-    const input = screen.getByRole('textbox', { name: label }) as HTMLInputElement;
+    const input = screen.getByRole('textbox', {
+      name: label,
+    }) as HTMLInputElement;
 
     expect(input.value).toBe(value);
     expect(input.hasAttribute('maxlength')).toBe(false);
     expect(container.textContent).not.toContain(`${value.length}/${charBudget}`);
     fireEvent.change(input, { target: { value: `${value}0` } });
-    expect(calls).toContainEqual({ name: 'setValue', args: [row.id, 'headline', `${value}0`] });
+    expect(calls).toContainEqual({
+      name: 'setValue',
+      args: [row.id, 'headline', `${value}0`],
+    });
   });
 });
 
@@ -120,7 +133,10 @@ describe('defaults read apart from typed input', () => {
   test('a root row resets typed text to the artboard copy, or to nothing over a saved default', () => {
     const headline = variable({});
     const { calls, actions } = recordActions();
-    const typed = { ...seedRow([headline], 'Base'), values: { headline: 'Mío' } };
+    const typed = {
+      ...seedRow([headline], 'Base'),
+      values: { headline: 'Mío' },
+    };
     renderCell(headline, typed, actions);
     fireEvent.click(screen.getByRole('button', { name: 'Reset Headline to default' }));
     expect(calls).toEqual([{ name: 'setValue', args: [typed.id, 'headline', 'TU PRIMER MES'] }]);
@@ -139,10 +155,18 @@ describe('defaults read apart from typed input', () => {
 
   test('an empty media slot with a saved Library default says Default, not Choose', () => {
     const { actions } = recordActions();
-    const hero = variable({ key: 'hero', label: 'Hero', kind: 'image', sample: null });
+    const hero = variable({
+      key: 'hero',
+      label: 'Hero',
+      kind: 'image',
+      sample: null,
+    });
     const row = seedRow([], 'Base');
     renderCell(
-      { ...hero, defaultValue: { assetId: '77777777-7777-4777-8777-777777777777' } },
+      {
+        ...hero,
+        defaultValue: { assetId: '77777777-7777-4777-8777-777777777777' },
+      },
       row,
       actions,
     );
@@ -175,27 +199,44 @@ describe('defaults read apart from typed input', () => {
 // The status reads the Live kit's fit (`useLiveFit`), the row's own errors and any refusal the
 // render confirmation found; nothing is fetched.
 describe('the status column, with no preflight', () => {
-  const hero = variable({ key: 'hero', label: 'Hero', kind: 'image', required: false });
+  const hero = variable({
+    key: 'hero',
+    label: 'Hero',
+    kind: 'image',
+    required: false,
+  });
   const renderStatus = (
     verdicts: Array<Partial<ApiRenderFitVerdict>> | null,
     {
       errors = {},
       refusal,
       fitLoading = false,
-    }: { errors?: Record<string, string>; refusal?: string; fitLoading?: boolean } = {},
+    }: {
+      errors?: Record<string, string>;
+      refusal?: string;
+      fitLoading?: boolean;
+    } = {},
   ) => {
     const row = seedRow([], 'Base');
     const fit = verdicts
       ? new Map(
           verdicts.map((verdict) => [
             'hero',
-            { key: 'hero', subject: 'media', unknownReason: null, ...verdict } as ApiRenderFitVerdict,
+            {
+              key: 'hero',
+              subject: 'media',
+              unknownReason: null,
+              ...verdict,
+            } as ApiRenderFitVerdict,
           ]),
         )
       : undefined;
     const meta = {
       brandId: '22222222-2222-4222-8222-222222222222',
-      contract: { variables: [hero], layout: null } as unknown as ApiRenderTemplateContract,
+      contract: {
+        variables: [hero],
+        layout: null,
+      } as unknown as ApiRenderTemplateContract,
       rows: [row],
       clientErrors: new Map([[row.id, errors]]),
       actions: recordActions().actions,
@@ -236,7 +277,9 @@ describe('the status column, with no preflight', () => {
   });
 
   test('a refusal the confirmation found reads Rejected, with its reason', async () => {
-    renderStatus([{ state: 'ok', why: 'lands' }], { refusal: 'Use a permitted brand color.' });
+    renderStatus([{ state: 'ok', why: 'lands' }], {
+      refusal: 'Use a permitted brand color.',
+    });
     expect(screen.getByText('Rejected')).toBeTruthy();
     await hover('Rejected');
     expect(await screen.findByText('Use a permitted brand color.')).toBeTruthy();

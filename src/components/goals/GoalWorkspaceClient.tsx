@@ -1,9 +1,11 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { ErrorRetryState } from '@/components/shared/state/ErrorRetryState';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useGoalWorkspace } from '@/hooks/useGoalWorkspace';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   registerGoalEvidenceAttachment,
   sendGoalCommand,
@@ -22,7 +24,10 @@ type GoalWorkspaceClientProps = {
 };
 
 export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWorkspaceClientProps) {
-  const query = useGoalWorkspace(goalId);
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('dashboard');
+  const query = useGoalWorkspace(goalId, uiText, useLocale());
   const { show } = useToast();
   const [isSavingArtifact, setIsSavingArtifact] = useState(false);
   const [saveArtifactError, setSaveArtifactError] = useState<string | null>(null);
@@ -33,13 +38,9 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
     return (
       <div className="flex h-[var(--app-content-h)] items-center justify-center">
         <ErrorRetryState
-          title="This Goal case file is unavailable"
-          message={
-            query.error instanceof Error
-              ? query.error.message
-              : 'The Goal may have moved, or you may no longer have access.'
-          }
-          retryLabel="Reload case file"
+          title={uiText('this_goal_case_file_is_unavailable_879294d')}
+          message={getUiErrorMessage(query.error)}
+          retryLabel={uiText('m_b9890d2441')}
           onRetry={() => void query.refetch()}
         />
       </div>
@@ -68,7 +69,12 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
                 kind: 'clarification',
                 prompt,
                 requestedBy: { kind: 'human', userId },
-                targets: [{ kind: 'actor', actor: { kind: 'human', userId: targetUserId } }],
+                targets: [
+                  {
+                    kind: 'actor',
+                    actor: { kind: 'human', userId: targetUserId },
+                  },
+                ],
                 resolutionPolicy: { kind: 'first_response' },
                 expectedResponse: { kind: 'text' },
                 status: 'open',
@@ -81,15 +87,15 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
           });
           await query.refetch();
           show({
-            title: 'Input requested',
-            description: 'The request is now part of the shared Goal record.',
+            title: uiText('input_requested_7a0ad98'),
+            description: uiText('the_request_is_now_part_of_the_shared_goal_re_2fed887'),
             variant: 'success',
           });
           return true;
         } catch (error) {
           show({
-            title: 'Could not request input',
-            description: error instanceof Error ? error.message : 'Please refresh and try again.',
+            title: uiText('could_not_request_input_9e01c2d'),
+            description: getUiErrorMessage(error),
             variant: 'error',
           });
           return false;
@@ -101,8 +107,8 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
           return result.attachment.id;
         } catch (error) {
           show({
-            title: 'Could not secure evidence',
-            description: error instanceof Error ? error.message : 'Please refresh and try again.',
+            title: uiText('could_not_secure_evidence_c0ada24'),
+            description: getUiErrorMessage(error),
             variant: 'error',
           });
           return null;
@@ -135,15 +141,15 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
           });
           await query.refetch();
           show({
-            title: 'Response shared',
-            description: 'Your input is recorded in the Goal evidence trail.',
+            title: uiText('response_shared_da9a6e0'),
+            description: uiText('your_input_is_recorded_in_the_goal_evidence_t_3522696'),
             variant: 'success',
           });
           return true;
         } catch (error) {
           show({
-            title: 'Could not share response',
-            description: error instanceof Error ? error.message : 'Please refresh and try again.',
+            title: uiText('could_not_share_response_c01a924'),
+            description: getUiErrorMessage(error),
             variant: 'error',
           });
           return false;
@@ -164,7 +170,10 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
                     commandId: crypto.randomUUID(),
                     expectedRevision: query.data.snapshot.revision,
                     type: 'artifact.promote' as const,
-                    payload: { artifactId, category: 'campaign_deliverable' as const },
+                    payload: {
+                      artifactId,
+                      category: 'campaign_deliverable' as const,
+                    },
                   }
                 : {
                     commandId: crypto.randomUUID(),
@@ -184,18 +193,18 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
           show({
             title:
               action === 'promote'
-                ? 'Promoted to Brand Knowledge'
+                ? uiText('m_4028a7c930')
                 : action === 'accept'
-                  ? 'Artifact accepted'
+                  ? uiText('m_89c939053e')
                   : action === 'approve'
-                    ? 'Version approved'
-                    : 'Changes requested',
+                    ? uiText('m_2009e81c92')
+                    : uiText('m_9be16685dc'),
             variant: 'success',
           });
         } catch (error) {
           show({
-            title: 'Goal action failed',
-            description: error instanceof Error ? error.message : 'Please refresh and try again.',
+            title: uiText('goal_action_failed_3bfe5bb'),
+            description: getUiErrorMessage(error),
             variant: 'error',
           });
         }
@@ -205,18 +214,15 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
           await upsertGoalCapabilityRoute(goalId, input);
           await query.refetch();
           show({
-            title: 'Stakeholder route saved',
-            description:
-              input.scope === 'brand'
-                ? 'This capability is now the brand default.'
-                : 'This Goal now uses the selected stakeholder route.',
+            title: uiText('stakeholder_route_saved_c450a69'),
+            description: input.scope === 'brand' ? uiText('m_53aad8a27d') : uiText('m_2ea7fd0b21'),
             variant: 'success',
           });
           return true;
         } catch (error) {
           show({
-            title: 'Could not save stakeholder route',
-            description: error instanceof Error ? error.message : 'Please refresh and try again.',
+            title: uiText('could_not_save_stakeholder_route_9279540'),
+            description: getUiErrorMessage(error),
             variant: 'error',
           });
           return false;
@@ -248,14 +254,15 @@ export function GoalWorkspaceClient({ goalId, brandId, userId, focus }: GoalWork
           });
           await query.refetch();
           show({
-            title: 'Draft saved',
-            description: `Library version ${result.versionId} is now the Goal artifact head.`,
+            title: uiText('draft_saved_5ccb8ca'),
+            description: uiText('m_4b4c5bbf01', {
+              v0: String(result.versionId),
+            }),
             variant: 'success',
           });
           return true;
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'The artifact draft could not be saved.';
+          const message = getUiErrorMessage(error);
           setSaveArtifactError(message);
           return false;
         } finally {

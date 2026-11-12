@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import {
   type CheckpointBlockV2,
   type CheckpointReportV2,
@@ -14,7 +15,9 @@ mock.module('@/components/ui/button', () => ({
   ),
   buttonVariants: () => '',
 }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show: mock() }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show: mock() }),
+}));
 mock.module('@/components/ui/SafeMarkdownLazy', () => ({
   SafeMarkdown: ({ content, className }: { content: string; className?: string }) => (
     <p className={className}>{content}</p>
@@ -26,7 +29,9 @@ mock.module('@/components/ai-elements/suggestion', () => ({
     <button type="button">{suggestion}</button>
   ),
 }));
-mock.module('@/lib/api/http', () => ({ http: { request: mock(async () => ({ ok: true })) } }));
+mock.module('@/lib/api/http', () => ({
+  http: { request: mock(async () => ({ ok: true })) },
+}));
 // Every other block is a labelled stub: what is under test is where the template halves land.
 mock.module('../blocks/BlockRenderer', () => ({
   BlockRenderer: ({ block }: { block: { block_id: string; title: string } }) => (

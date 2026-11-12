@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { ChartBlockV2 } from '@/lib/jaina/schemas';
 import { ChartBlock } from './ChartBlock';
 
@@ -52,7 +53,11 @@ describe('ChartBlock', () => {
       provenance: {
         source: 'computed',
         tool: 'get_paid_creative_intel',
-        period: { since: '2026-08-13', until: '2026-09-11', requested_label: 'd30' },
+        period: {
+          since: '2026-08-13',
+          until: '2026-09-11',
+          requested_label: 'd30',
+        },
         entity_label: 'Meta account',
         record_count: 3,
       },
@@ -77,7 +82,9 @@ describe('ChartBlock', () => {
       dataset_id: 'ds_angle_spend',
       data_meta: [
         { angle: 'Family lunch' },
-        { angle: 'Product quality and transparent pricing for growing families' },
+        {
+          angle: 'Product quality and transparent pricing for growing families',
+        },
         { angle: 'Weekend deals' },
       ],
     };

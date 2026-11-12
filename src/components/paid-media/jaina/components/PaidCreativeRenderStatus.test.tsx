@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 const getJobMock = mock(() => Promise.resolve({ job: {} as never }));
 
@@ -49,7 +50,10 @@ describe('PaidCreativeRenderStatus', () => {
 
   it('shows queued while ready and bounded rendering progress while active', async () => {
     getJobMock.mockResolvedValue({
-      job: job('rendering', { progress: 4, phase: `Encoding ${'x'.repeat(200)}` }),
+      job: job('rendering', {
+        progress: 4,
+        phase: `Encoding ${'x'.repeat(200)}`,
+      }),
     });
     render(<PaidCreativeRenderStatus render={renderHandle} />);
 
@@ -141,7 +145,9 @@ describe('PaidCreativeRenderStatus', () => {
   });
 
   it('renders bounded terminal failures accessibly', async () => {
-    getJobMock.mockResolvedValue({ job: job('failed', { errorMessage: 'x'.repeat(500) }) });
+    getJobMock.mockResolvedValue({
+      job: job('failed', { errorMessage: 'x'.repeat(500) }),
+    });
     render(<PaidCreativeRenderStatus render={renderHandle} />);
 
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Failed'));

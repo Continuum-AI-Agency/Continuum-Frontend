@@ -6,6 +6,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CartesianGrid,
@@ -29,6 +30,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTimelineBlocks } from '@/hooks/timeline/useTimelineBlocks';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
 import type { TimelineEvent } from '@/types/timeline';
 import { TimelineGrid } from './TimelineGrid';
@@ -54,26 +57,30 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+function formatCurrency(value: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 2,
   }).format(value);
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
+function formatNumber(value: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale).format(value);
 }
 
-function formatPercent(value: number): string {
-  return `${value.toFixed(2)}%`;
+function formatPercent(value: number, locale: UiLocale = 'en'): string {
+  return `${formatDecimal(value, 2, locale)}%`;
 }
 
-function formatTimestampLabel(timestamp: string, resolution: 'daily' | 'hourly'): string {
+function formatTimestampLabel(
+  timestamp: string,
+  resolution: 'daily' | 'hourly',
+  locale: UiLocale = 'en',
+): string {
   const date = new Date(timestamp);
   if (resolution === 'hourly') {
-    return date.toLocaleString('en-US', {
+    return date.toLocaleString(locale, {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
@@ -81,7 +88,7 @@ function formatTimestampLabel(timestamp: string, resolution: 'daily' | 'hourly')
     });
   }
 
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
   });
@@ -102,6 +109,7 @@ function SteppedMetricChart({
   resolution: 'daily' | 'hourly';
   formatter: (value: number) => string;
 }) {
+  const uiLocale = useLocale();
   return (
     <Card className="border-border/70 bg-card/80">
       <CardHeader className="pb-2">
@@ -114,7 +122,7 @@ function SteppedMetricChart({
               <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
               <XAxis
                 dataKey="timestamp"
-                tickFormatter={(value) => formatTimestampLabel(String(value), resolution)}
+                tickFormatter={(value) => formatTimestampLabel(String(value), resolution, uiLocale)}
                 minTickGap={24}
                 tick={{ fontSize: 11 }}
               />
@@ -124,7 +132,9 @@ function SteppedMetricChart({
                 tick={{ fontSize: 11 }}
               />
               <Tooltip
-                labelFormatter={(value) => formatTimestampLabel(String(value), resolution)}
+                labelFormatter={(value) =>
+                  formatTimestampLabel(String(value), resolution, uiLocale)
+                }
                 formatter={(value) => formatter(Number(value))}
               />
               <Line
@@ -150,6 +160,8 @@ export function TimelineContainer({
   onResolutionChange,
   onDcoManagedCampaignIdsChange,
 }: TimelineContainerProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
@@ -222,24 +234,30 @@ export function TimelineContainer({
   const metricStripItems = useMemo<MetricStripItem[]>(() => {
     return [
       {
-        label: 'Spend',
-        value: formatCurrency(toNumber(summary.total_spend)),
+        label: uiText('spend_85f3d55'),
+        value: formatCurrency(toNumber(summary.total_spend), uiLocale),
         deltaPct: toNumber(deltas.spend_delta_pct),
       },
       {
-        label: 'ROAS',
-        value: formatNumber(toNumber(summary.avg_roas)),
+        label: uiText('roas_b81bd97'),
+        value: formatNumber(toNumber(summary.avg_roas), uiLocale),
         deltaPct: toNumber(deltas.roas_delta_pct),
       },
       {
-        label: 'CTR',
-        value: formatPercent(toNumber(summary.avg_ctr_pct)),
+        label: uiText('ctr_07fce34'),
+        value: formatPercent(toNumber(summary.avg_ctr_pct), uiLocale),
         deltaPct: toNumber(deltas.ctr_delta_pct),
       },
-      { label: 'Conversions', value: formatNumber(toNumber(summary.total_conversions)) },
-      { label: 'Active Campaigns', value: formatNumber(toNumber(summary.active_campaigns)) },
+      {
+        label: uiText('conversions_236c262'),
+        value: formatNumber(toNumber(summary.total_conversions), uiLocale),
+      },
+      {
+        label: uiText('active_campaigns_4bac0c8'),
+        value: formatNumber(toNumber(summary.active_campaigns), uiLocale),
+      },
     ];
-  }, [summary, deltas]);
+  }, [summary, deltas, uiText, uiLocale]);
 
   const handleEventClick = (event: TimelineEvent) => {
     setSelectedEventId(event.id);
@@ -275,7 +293,7 @@ export function TimelineContainer({
                         format(date.from, 'LLL dd, y')
                       )
                     ) : (
-                      <span>Pick a date range</span>
+                      <span>{uiText('pick_a_date_range_fceaa2d')}</span>
                     )}
                   </Button>
                 }
@@ -300,17 +318,17 @@ export function TimelineContainer({
               onValueChange={(value) => onResolutionChange(value as 'daily' | 'hourly')}
             >
               <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Resolution" />
+                <SelectValue placeholder={uiText('resolution_d4055fa')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="hourly">Hourly</SelectItem>
+                <SelectItem value="daily">{uiText('daily_b36c261')}</SelectItem>
+                <SelectItem value="hourly">{uiText('hourly_eab0cd8')}</SelectItem>
               </SelectContent>
             </Select>
 
             {loading ? (
               <span className="ml-2 animate-pulse text-sm text-muted-foreground">
-                Loading blocks...
+                {uiText('loading_blocks_7843d1a')}
               </span>
             ) : null}
             {error ? <span className="ml-2 text-sm text-destructive">{error.message}</span> : null}
@@ -321,7 +339,7 @@ export function TimelineContainer({
               variant="ghost"
               size="sm"
               onClick={() => setShowSidebar(!showSidebar)}
-              title="Toggle Events Sidebar"
+              title={uiText('toggle_events_sidebar_cab0ad8')}
             >
               {showSidebar ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
             </Button>
@@ -329,7 +347,11 @@ export function TimelineContainer({
               variant="ghost"
               size="sm"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              title={
+                isFullscreen
+                  ? uiText('exit_fullscreen_5a164f4')
+                  : uiText('enter_fullscreen_4036e4c')
+              }
             >
               {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </Button>
@@ -345,15 +367,15 @@ export function TimelineContainer({
             <SteppedMetricChart
               data={chartData}
               valueKey="spend"
-              label="Spend"
+              label={uiText('spend_85f3d55')}
               color="#22c55e"
               resolution={resolution}
-              formatter={(value) => formatCurrency(value)}
+              formatter={(value) => formatCurrency(value, uiLocale)}
             />
             <SteppedMetricChart
               data={chartData}
               valueKey="roas"
-              label="ROAS"
+              label={uiText('roas_b81bd97')}
               color="#3b82f6"
               resolution={resolution}
               formatter={(value) => value.toFixed(2)}
@@ -361,7 +383,7 @@ export function TimelineContainer({
             <SteppedMetricChart
               data={chartData}
               valueKey="ctr"
-              label="CTR %"
+              label={uiText('ctr_db9f039')}
               color="#06b6d4"
               resolution={resolution}
               formatter={(value) => `${value.toFixed(2)}%`}
@@ -374,7 +396,7 @@ export function TimelineContainer({
         <div className="relative flex-1 overflow-auto">
           {resolution === 'hourly' && visibleCampaigns.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground">
-              No DCO-managed campaigns available in this hourly range.
+              {uiText('no_dco_managed_campaigns_available_in_this_ho_f1b8176')}
             </div>
           ) : (
             <TimelineGrid
@@ -406,7 +428,7 @@ export function TimelineContainer({
   return (
     <Card className="flex h-[780px] w-full flex-col overflow-hidden">
       <CardHeader className="border-b px-4 py-3">
-        <CardTitle className="text-lg">DCO Timeline</CardTitle>
+        <CardTitle className="text-lg">{uiText('dco_timeline_20742ef')}</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">{content}</CardContent>
     </Card>

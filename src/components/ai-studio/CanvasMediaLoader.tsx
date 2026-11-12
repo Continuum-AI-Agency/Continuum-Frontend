@@ -1,5 +1,6 @@
 'use client';
 import { Image, Video, Wand2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 import React from 'react';
 import { ErrorRetryState } from '@/components/shared/state';
@@ -18,15 +19,14 @@ type CanvasMediaLoaderProps = {
   onRetry?: () => void;
 };
 
-const DEFAULT_ERROR_MESSAGE =
-  "We couldn't finish loading the AI Studio canvas. This is usually a connection issue — retry to reconnect.";
-
 export function CanvasMediaLoader({
   className,
   status = 'loading',
   errorMessage,
   onRetry,
 }: CanvasMediaLoaderProps) {
+  const translateUi = useUiTranslations('studio');
+
   if (status === 'error') {
     return (
       <div
@@ -37,10 +37,10 @@ export function CanvasMediaLoader({
       >
         <div className="relative z-10 w-full max-w-[520px] rounded-lg border border-border/70 bg-background/95 p-[var(--card-pad)] shadow-sm backdrop-blur">
           <ErrorRetryState
-            title="AI Studio canvas didn't load"
-            message={errorMessage ?? DEFAULT_ERROR_MESSAGE}
+            title={translateUi('ai_studio_canvas_didn_t_load_5c7f5edb')}
+            message={errorMessage ?? translateUi('canvasMediaDefaultError')}
             onRetry={onRetry}
-            retryLabel="Retry"
+            retryLabel={translateUi('retry_942087cc')}
           />
         </div>
       </div>
@@ -51,7 +51,7 @@ export function CanvasMediaLoader({
     <div
       role="status"
       aria-live="polite"
-      aria-label="Loading AI Studio canvas"
+      aria-label={translateUi('loading_ai_studio_canvas_a9c90f65')}
       className={cn(
         'relative flex h-full w-full items-center justify-center overflow-hidden bg-muted/20 px-6 py-8',
         className,
@@ -67,26 +67,35 @@ export function CanvasMediaLoader({
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Continuum AI Studio
           </p>
-          <h2 className="mt-1 text-lg font-semibold text-foreground">Preparing media canvas</h2>
+          <h2 className="mt-1 text-lg font-semibold text-foreground">
+            {translateUi('preparing_media_canvas_f4db731b')}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Restoring your workspace, syncing collaborators, and warming generation tools.
+            {' '}
+            {translateUi('restoring_your_workspace_syncing_co_e244f481')}{' '}
           </p>
         </div>
 
         <div className="relative h-52 overflow-hidden rounded-lg border border-border/70 bg-muted/40">
           <div className="absolute left-[10%] top-[22%] flex w-28 items-center gap-2 rounded-lg border border-primary/25 bg-background/90 px-3 py-2 shadow-sm">
             <Image className="h-4 w-4 text-primary" />
-            <span className="text-xs font-medium text-foreground">Image</span>
+            <span className="text-xs font-medium text-foreground">
+              {translateUi('image_1aa4cb0b')}
+            </span>
           </div>
 
           <div className="absolute right-[10%] top-[22%] flex w-28 items-center gap-2 rounded-lg border border-primary/25 bg-background/90 px-3 py-2 shadow-sm">
             <Video className="h-4 w-4 text-primary" />
-            <span className="text-xs font-medium text-foreground">Video</span>
+            <span className="text-xs font-medium text-foreground">
+              {translateUi('video_d534be82')}
+            </span>
           </div>
 
           <div className="absolute bottom-[16%] left-1/2 flex w-32 -translate-x-1/2 items-center gap-2 rounded-lg border border-primary/25 bg-background/90 px-3 py-2 shadow-sm">
             <Wand2 className="h-4 w-4 text-primary" />
-            <span className="text-xs font-medium text-foreground">Prompt</span>
+            <span className="text-xs font-medium text-foreground">
+              {translateUi('prompt_5c391238')}
+            </span>
           </div>
 
           <div className="absolute left-[36%] top-[32%] h-px w-[28%] bg-primary/60" />
@@ -107,7 +116,10 @@ export function CanvasMediaLoader({
             <div className="absolute inset-0 rounded-full border border-primary/40 animate-spin motion-reduce:animate-none" />
             <div
               className="absolute inset-[6px] rounded-full border border-primary/45 animate-spin motion-reduce:animate-none"
-              style={{ animationDirection: 'reverse', animationDuration: '2.8s' }}
+              style={{
+                animationDirection: 'reverse',
+                animationDuration: '2.8s',
+              }}
             />
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-background shadow-sm">
               <Wand2 className="h-4 w-4 text-foreground" />
@@ -117,22 +129,22 @@ export function CanvasMediaLoader({
 
         <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-success animate-pulse motion-reduce:animate-none" />
-            Session
+            <span className="h-2 w-2 rounded-full bg-success animate-pulse motion-reduce:animate-none" />{' '}
+            {translateUi('session_6959b415')}{' '}
           </span>
           <span className="inline-flex items-center gap-2">
             <span
               className="h-2 w-2 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
               style={{ animationDelay: '180ms' }}
-            />
-            Nodes
+            />{' '}
+            {translateUi('nodes_7ac36206')}{' '}
           </span>
           <span className="inline-flex items-center gap-2">
             <span
               className="h-2 w-2 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
               style={{ animationDelay: '360ms' }}
-            />
-            Media Engine
+            />{' '}
+            {translateUi('media_engine_415840c3')}{' '}
           </span>
         </div>
       </div>

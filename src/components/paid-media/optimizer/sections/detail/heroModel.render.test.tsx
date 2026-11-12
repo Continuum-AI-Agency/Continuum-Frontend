@@ -7,7 +7,8 @@ import {
   type RangeSpec,
   resolveRange,
 } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('motion/react', () => {
   const React = require('react');
@@ -142,13 +143,26 @@ describe('F16 — the Google portfolio hero, rendered', () => {
     history: [],
   };
   const base = portfolioMetricsFixture({ platforms: ['google_ads'] });
-  const google = { spend: 4332, results: 176, conversions: 176, cost_per_result: 4332 / 176 };
+  const google = {
+    spend: 4332,
+    results: 176,
+    conversions: 176,
+    cost_per_result: 4332 / 176,
+  };
   const read14 = PortfolioMetricsSchema.parse({
     ...base,
-    window: { since: '2026-10-08', until: '2026-10-21', label: 'd14', ends_yesterday: false },
+    window: {
+      since: '2026-10-08',
+      until: '2026-10-21',
+      label: 'd14',
+      ends_yesterday: false,
+    },
     totals: { ...base.totals, ...google },
     by_platform: base.by_platform.map((row) => ({ ...row, ...google })),
-    conversions_by_source: base.conversions_by_source.map((row) => ({ ...row, conversions: 176 })),
+    conversions_by_source: base.conversions_by_source.map((row) => ({
+      ...row,
+      conversions: 176,
+    })),
   });
 
   /** A pending recommendation the engine sized but gave no evidence the card can draw, on a
@@ -194,7 +208,13 @@ describe('F16 — the Google portfolio hero, rendered', () => {
         : null;
     const view = buildHeroView({
       report,
-      recap: buildRecap({ snapshots: [], enrolledIds: [], range, metric: lead, target: 35 }),
+      recap: buildRecap({
+        snapshots: [],
+        enrolledIds: [],
+        range,
+        metric: lead,
+        target: 35,
+      }),
       flightPacing: null,
       metric: lead,
       currency: 'MXN',

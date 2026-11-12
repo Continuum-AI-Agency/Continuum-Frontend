@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The campaign page's header (G11): what kind of campaign it is, whether it serves, its budget
 // and the portfolio it answers to; its figures as tiles, each written; and, for a campaign that
@@ -48,6 +49,8 @@ export function CampaignHeader({
   campaign: CampaignView;
   currency: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const status = statusWords(campaign.status);
   const serving = campaign.status.value === 'ENABLED';
   return (
@@ -86,7 +89,7 @@ export function CampaignHeader({
             <BandText band={campaign.band} />
           </>
         ) : (
-          <span data-testid="campaign-portfolio">In no portfolio</span>
+          <span data-testid="campaign-portfolio">{betaUiText('beta_9210f29c9f40')}</span>
         )}
       </p>
     </div>
@@ -123,10 +126,12 @@ export function CampaignKpiTiles({ tiles }: { tiles: readonly KpiTile[] }) {
 
 /** Where the Search auctions went, as one bar with each share written in the legend. */
 export function AuctionShareBar({ slices }: { slices: readonly AuctionSlice[] }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   return (
     <section className="space-y-1.5" data-testid="campaign-auction">
-      <h4 className="font-semibold text-foreground text-xs">Search auctions</h4>
+      <h4 className="font-semibold text-foreground text-xs">{betaUiText('beta_994c8bd5c2bd')}</h4>
       <div
         aria-label={slices.map((slice) => `${slice.label} ${shareText(slice.share)}`).join(', ')}
         className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted"
@@ -144,7 +149,11 @@ export function AuctionShareBar({ slices }: { slices: readonly AuctionSlice[] })
               background: slice.color,
               opacity: slice.key === 'unread' ? 0.5 : 1,
             }}
-            transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.1 + index * 0.06 }}
+            transition={{
+              duration: 0.6,
+              ease: EASE_OUT,
+              delay: 0.1 + index * 0.06,
+            }}
           />
         ))}
       </div>

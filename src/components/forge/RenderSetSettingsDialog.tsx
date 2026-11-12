@@ -8,6 +8,7 @@ import {
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Loader2, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useState } from 'react';
 import {
   ApprovalDestinationsField,
@@ -16,7 +17,6 @@ import {
 import {
   AdAccountSelect,
   AdDrillDown,
-  APPROVAL_COPY,
   adSetName,
   type MetaPickerState,
 } from '@/components/forge/DeliveryTargetPicker';
@@ -124,6 +124,8 @@ export function RenderSetSettingsDialog({
   /** Saves the settings onto the set; resolves once saved, throws to keep the dialog open. */
   onSave: (settings: ForgeRenderSetSettings) => Promise<void>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [draft, setDraft] = useState<ForgeRenderSetSettings>(() =>
     forgeRenderSetSettingsSchema.parse(set?.settings ?? {}),
   );
@@ -165,25 +167,29 @@ export function RenderSetSettingsDialog({
     <Dialog open={set !== null} onOpenChange={(open) => (saving ? undefined : onOpenChange(open))}>
       <DialogContent className="flex max-h-[85vh] flex-col gap-4 sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Delivery for “{set?.name}”</DialogTitle>
+          <DialogTitle>
+            {translateUi('delivery_for_f6fa1449')}
+            {set?.name}”
+          </DialogTitle>
           <DialogDescription>
-            Where every render of this set goes unless a row says otherwise. Saved with the set, so
-            the next render — from here or from an agent — goes to the same place.
+            {' '}
+            {translateUi('where_every_render_of_this_set_goes_333394e7')}{' '}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto text-xs">
-          <Section title="Library">
+          <Section title={translateUi('library_dc20b3d5')}>
             <p className="flex items-center gap-1.5 text-muted-foreground">
-              <Check className="size-3.5 text-success" aria-hidden /> Every render is saved to this
-              brand’s Library.
+              <Check className="size-3.5 text-success" aria-hidden />{' '}
+              {translateUi('every_render_is_saved_to_this_brand_ffb52ac1')}{' '}
             </p>
           </Section>
           {web ? null : (
             <>
-              <Section title="Meta ads — default ad set">
+              <Section title={translateUi('meta_ads_default_ad_set_3b2bf12d')}>
                 {!connected ? (
                   <p className="text-muted-foreground">
-                    No Meta ad account is connected to this brand, so renders stay in the Library.
+                    {' '}
+                    {translateUi('no_meta_ad_account_is_connected_to__bc2eeb85')}{' '}
                   </p>
                 ) : (
                   <>
@@ -191,12 +197,16 @@ export function RenderSetSettingsDialog({
                       <span className="min-w-0 flex-1">
                         {draft.metaTarget ? (
                           <>
-                            New <strong>paused</strong> ad per file in{' '}
+                            {' '}
+                            {translateUi('new_18fdd549')}{' '}
+                            <strong>{translateUi('paused_a7a9dc5b')}</strong>{' '}
+                            {translateUi('ad_per_file_in_c44559ce')}{' '}
                             <span className="font-medium">{adSetName(draft.metaTarget)}</span>
                           </>
                         ) : (
                           <span className="text-muted-foreground">
-                            None — rows without an ad of their own go to the Library only.
+                            {' '}
+                            {translateUi('none_rows_without_an_ad_of_their_ow_6f58c08d')}{' '}
                           </span>
                         )}
                       </span>
@@ -206,15 +216,22 @@ export function RenderSetSettingsDialog({
                         variant="outline"
                         onClick={() => setPicking((current) => !current)}
                       >
-                        {draft.metaTarget ? 'Change' : 'Choose ad set'}
+                        {draft.metaTarget
+                          ? translateUi('change_c0bf75bd')
+                          : translateUi('choose_ad_set_bfd9301d')}
                       </Button>
                       {draft.metaTarget ? (
                         <Button
                           type="button"
                           size="xs"
                           variant="ghost"
-                          aria-label="Remove the default ad set"
-                          onClick={() => setDraft((current) => ({ ...current, metaTarget: null }))}
+                          aria-label={translateUi('remove_the_default_ad_set_2e560070')}
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              metaTarget: null,
+                            }))
+                          }
                         >
                           <X aria-hidden />
                         </Button>
@@ -245,63 +262,74 @@ export function RenderSetSettingsDialog({
                       </>
                     ) : null}
                     <p className="text-muted-foreground">
-                      A row can still replace a specific ad, or go somewhere else, from its
-                      Destination cell. {APPROVAL_COPY}
+                      {' '}
+                      {translateUi('a_row_can_still_replace_a_specific__d34d074a')}{' '}
+                      {translateUi('adApprovalExplanation')}
                     </p>
                     {metaWritesAllowed === false ? (
                       <p role="status" className="text-warning">
-                        Meta writes are off for this brand: approved ads are previewed and recorded,
-                        not published.
+                        {' '}
+                        {translateUi('meta_writes_are_off_for_this_brand__791f2ff2')}{' '}
                       </p>
                     ) : null}
                   </>
                 )}
               </Section>
-              <Section title="Slack">
+              <Section title={translateUi('slack_b27fb38b')}>
                 <SlackDestinationPicker
                   brandId={brandId}
                   slack={slack}
                   value={slackRoom}
                   onChange={(room) => {
                     setSlackRoom(room);
-                    setDraft((current) => ({ ...current, slackDestinationId: room?.id ?? null }));
+                    setDraft((current) => ({
+                      ...current,
+                      slackDestinationId: room?.id ?? null,
+                    }));
                   }}
                 />
               </Section>
-              <Section title="Approval">
+              <Section title={translateUi('approval_147fb813')}>
                 <ApprovalDestinationsField
                   brandId={brandId}
                   value={draft.approvalDestinationIds}
                   onChange={(ids) =>
-                    setDraft((current) => ({ ...current, approvalDestinationIds: ids }))
+                    setDraft((current) => ({
+                      ...current,
+                      approvalDestinationIds: ids,
+                    }))
                   }
                 />
               </Section>
             </>
           )}
-          <Section title="Render as">
+          <Section title={translateUi('render_as_b696ffa7')}>
             <RadioGroup
-              aria-label="Render as"
+              aria-label={translateUi('render_as_b696ffa7')}
               value={draft.final ? 'final' : 'proof'}
               onValueChange={(value) =>
-                setDraft((current) => ({ ...current, final: value === 'final' }))
+                setDraft((current) => ({
+                  ...current,
+                  final: value === 'final',
+                }))
               }
               className="flex flex-wrap gap-x-6 gap-y-1.5"
             >
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
-                  <RadioGroupItem value="proof" />
-                  Proof
+                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}{' '}
                 </Label>
-                <span className="pl-6 text-muted-foreground">For review. Recorded as a proof.</span>
+                <span className="pl-6 text-muted-foreground">
+                  {translateUi('for_review_recorded_as_a_proof_be78783b')}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <Label className="text-xs">
-                  <RadioGroupItem value="final" disabled={finalBlocked !== null && !draft.final} />
-                  Final
+                  <RadioGroupItem value="final" disabled={finalBlocked !== null && !draft.final} />{' '}
+                  {translateUi('final_f4ed8fa6')}{' '}
                 </Label>
                 <span className="pl-6 text-muted-foreground">
-                  {finalBlocked ?? 'Ready to go. Recorded as final.'}
+                  {finalBlocked ?? translateUi('ready_to_go_recorded_as_final_b4448611')}
                 </span>
               </div>
             </RadioGroup>
@@ -314,11 +342,12 @@ export function RenderSetSettingsDialog({
             disabled={saving}
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {' '}
+            {translateUi('cancel_19766ed6')}{' '}
           </Button>
           <Button type="button" disabled={saving} onClick={() => void save()}>
-            {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
-            Save
+            {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}{' '}
+            {translateUi('save_1509f561')}{' '}
           </Button>
         </DialogFooter>
       </DialogContent>

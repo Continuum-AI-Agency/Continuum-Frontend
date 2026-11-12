@@ -1,4 +1,5 @@
 'use client';
+
 import { ReactFlowProvider } from '@xyflow/react';
 import {
   ArrowLeft,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -63,6 +65,7 @@ const CampaignFlowCanvasPage = ({
   /** From `?session=`: the Jaina thread that card sits in. */
   requestedSessionId?: string | null;
 }) => {
+  const uiText = useTranslations('scale');
   const [isJainaOpen, setIsJainaOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [creativeRequest, setCreativeRequest] = useState<CampaignCreativeRequest | null>(null);
@@ -153,7 +156,7 @@ const CampaignFlowCanvasPage = ({
               data-testid="canvas-back-to-chat"
             >
               <ArrowLeft className="size-3.5" aria-hidden />
-              Back to chat
+              {uiText('back_to_chat_5978844')}
             </Link>
             <ScaffoldRecordBar
               brandId={activeBrandId}
@@ -177,7 +180,9 @@ const CampaignFlowCanvasPage = ({
               style={
                 barClearance === null
                   ? undefined
-                  : ({ '--canvas-bar-clearance': `${barClearance}px` } as React.CSSProperties)
+                  : ({
+                      '--canvas-bar-clearance': `${barClearance}px`,
+                    } as React.CSSProperties)
               }
             >
               <StoreLectura size="page" />
@@ -227,7 +232,7 @@ const CampaignFlowCanvasPage = ({
                     <div className="flex items-center gap-1.5">
                       <Bot className="h-4 w-4 text-primary" />
                       <span className="text-xs font-bold uppercase tracking-widest opacity-80">
-                        Jaina Analyst
+                        {uiText('jaina_analyst_b8dad55')}
                       </span>
                     </div>
                   </div>
@@ -236,7 +241,11 @@ const CampaignFlowCanvasPage = ({
                       variant="ghost"
                       size="icon"
                       className="h-10 w-10"
-                      aria-label={isMaximized ? 'Minimize chat' : 'Maximize chat'}
+                      aria-label={
+                        isMaximized
+                          ? uiText('minimize_chat_bdddf85')
+                          : uiText('maximize_chat_50027c9')
+                      }
                       onClick={() => setIsMaximized(!isMaximized)}
                     >
                       {isMaximized ? (
@@ -249,7 +258,7 @@ const CampaignFlowCanvasPage = ({
                       variant="ghost"
                       size="icon"
                       className="h-10 w-10 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      aria-label="Close chat"
+                      aria-label={uiText('close_chat_3b14c5d')}
                       onClick={() => setIsJainaOpen(false)}
                     >
                       <X className="h-4 w-4" />
@@ -280,7 +289,7 @@ const CampaignFlowCanvasPage = ({
               size="lg"
               variant={isJainaOpen ? 'outline' : 'default'}
               className={`relative h-14 w-14 rounded-full shadow-2xl transition-transform transition-shadow duration-200 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${!isJainaOpen ? 'hover:scale-105' : ''}`}
-              aria-label={isJainaOpen ? 'Hide Jaina' : 'Open Jaina'}
+              aria-label={isJainaOpen ? uiText('hide_jaina_fb1746c') : uiText('open_jaina_c8a1f3b')}
               onClick={() => setIsJainaOpen(!isJainaOpen)}
             >
               <MessageSquareText

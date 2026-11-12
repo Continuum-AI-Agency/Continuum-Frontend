@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
 let subscription: RowBroadcastSubscription;
 const fetchRun = mock(async (_brandId: string, _assetId: string): Promise<unknown> => null);
-mock.module('@/lib/library/templateSources', () => ({ fetchTemplateRun: fetchRun }));
+mock.module('@/lib/library/templateSources', () => ({
+  fetchTemplateRun: fetchRun,
+}));
 mock.module('@/lib/supabase/realtime', () => ({
   subscribeToRowBroadcasts: (options: RowBroadcastSubscription) => {
     subscription = options;
@@ -34,8 +41,13 @@ test('late reads and notifications cannot replace another brand or current sourc
         release = resolve;
       }),
   );
-  fetchRun.mockImplementation(async () => ({ run_id: 'current', state: 'rendering' }));
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  fetchRun.mockImplementation(async () => ({
+    run_id: 'current',
+    state: 'rendering',
+  }));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const hook = renderHook(({ brand }) => useForgeRun(brand, 'asset'), {
     initialProps: { brand: 'first' },
     wrapper: withClient(client),
@@ -54,7 +66,12 @@ test('late reads and notifications cannot replace another brand or current sourc
   expect(fetchRun.mock.calls.length).toBe(before);
   act(() =>
     subscription.bindings[0]!.onRow(
-      { asset_id: 'asset', brand_id: 'second', run_id: 'old-source', state: 'failed' },
+      {
+        asset_id: 'asset',
+        brand_id: 'second',
+        run_id: 'old-source',
+        state: 'failed',
+      },
       { eventType: 'UPDATE', old: {} },
     ),
   );
@@ -63,8 +80,13 @@ test('late reads and notifications cannot replace another brand or current sourc
 });
 
 test('reuses a fresh run after its detail view remounts', async () => {
-  fetchRun.mockImplementation(async () => ({ run_id: 'current', state: 'rendering' }));
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  fetchRun.mockImplementation(async () => ({
+    run_id: 'current',
+    state: 'rendering',
+  }));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const wrapper = withClient(client);
   const first = renderHook(() => useForgeRun('brand', 'asset'), { wrapper });
   await waitFor(() => expect(first.result.current.run?.run_id).toBe('current'));

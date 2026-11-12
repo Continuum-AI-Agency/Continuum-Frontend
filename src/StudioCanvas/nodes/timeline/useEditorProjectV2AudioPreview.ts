@@ -1,8 +1,10 @@
 'use client';
 
 import { type EditorProjectV2, type EditorTrack, editorClipIsRetimed } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { headFadeFor, tailFadeFor } from '../../utils/render/transitions';
 import {
   editorAudioTracks,
@@ -185,6 +187,10 @@ export function useEditorProjectV2AudioPreview(input: {
   layout: TimelineLayout;
   exactUrls: ReadonlyMap<string, string>;
 }): TimelineAudioPreviewController {
+  const translateUi = useUiTranslations('studio');
+
+  const uiErrorText = useUiErrorMessage();
+
   const { project, layout, exactUrls } = input;
   const { show } = useToast();
   const engineRef = useRef<TimelineWebAudioPreviewEngine | null>(null);
@@ -223,18 +229,20 @@ export function useEditorProjectV2AudioPreview(input: {
         return started;
       } catch (cause) {
         if (request !== requestRef.current) return false;
-        const message = cause instanceof Error ? cause.message : 'Timeline audio could not start.';
+        const message = uiErrorText(cause);
         setStatus('failed');
         setError(message);
         show({
-          title: 'Audio preview unavailable',
-          description: `${message} Video playback will continue with its source audio.`,
+          title: translateUi('audio_preview_unavailable_50b16803'),
+          description: translateUi('value0_video_playback_will_continue_3323155e', {
+            value0: String(message),
+          }),
           variant: 'warning',
         });
         return false;
       }
     },
-    [ensureEngine, exactUrls, layout, project, show],
+    [ensureEngine, exactUrls, layout, project, show, uiErrorText, translateUi],
   );
   const pause = useCallback(() => {
     requestRef.current += 1;

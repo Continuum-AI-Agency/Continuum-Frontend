@@ -1,3 +1,8 @@
+import {
+  type WorkflowUiFailure,
+  workflowFailure,
+  workflowUiText,
+} from '../../utils/workflowUiFailure';
 // The node that turns one wired graph into N runs.
 //
 // Five affordances feed it — upload, CSV paste, a Library drag, a connected upstream
@@ -21,6 +26,7 @@ import {
 } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
 import { Layers, Table, Upload, X } from 'lucide-react';
+import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -39,7 +45,7 @@ import { STUDIO_ASSET_DROP_MIME } from '@/lib/creative-assets/studioAssetDrop';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { BatchNodeData, StudioNode } from '../../types';
 import { splitText } from '../../utils/actions/textOps';
-import { addBatchItems, BATCH_KIND_LABEL, batchItemLabel } from '../../utils/batch/addItems';
+import { addBatchItems, batchItemLabel } from '../../utils/batch/addItems';
 import { csvFirstColumn } from '../../utils/batch/csvFirstColumn';
 import { resolveCreativeAssetDrop } from '../../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile } from '../../utils/uploadReferenceFile';
@@ -138,13 +144,17 @@ function itemsFromSource(
 }
 
 export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchNodeData>>) {
+  const dropUiLocale = useDropLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const nodes = useStudioStore((state) => state.nodes);
   const edges = useStudioStore((state) => state.edges);
   const brandId = useStudioStore((state) => state.brandId);
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
 
-  const [refusals, setRefusals] = useState<string[]>([]);
+  const [refusals, setRefusals] = useState<Array<string | WorkflowUiFailure>>([]);
   const [csvOpen, setCsvOpen] = useState(false);
   const [csvText, setCsvText] = useState('');
   const [pasteMode, setPasteMode] = useState<BatchPasteMode>('newline');
@@ -185,14 +195,18 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
   /** Everything that writes items goes through here, so the lock, the cap and the refusal
    *  surface stay one decision instead of six. */
   const commit = useCallback(
-    (incomingItems: BatchItem[], base: BatchItem[], extraRefusals: string[] = []) => {
+    (
+      incomingItems: BatchItem[],
+      base: BatchItem[],
+      extraRefusals: Array<string | WorkflowUiFailure> = [],
+    ) => {
       const result = addBatchItems(
         { items: base, itemType: lockFor(base, itemType) },
         incomingItems,
       );
       updateNodeData(id, { items: result.items, itemType: result.itemType });
       triggerSave();
-      setRefusals([...extraRefusals, ...result.refused]);
+      setRefusals([...extraRefusals, ...result.uiRefusals]);
       return result;
     },
     [id, itemType, triggerSave, updateNodeData],
@@ -218,7 +232,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
     updateNodeData(id, { items: result.items, itemType: result.itemType });
     triggerSave();
     // A background sync must not wipe a refusal the user is still reading.
-    if (result.refused.length > 0) setRefusals(result.refused);
+    if (result.refused.length > 0) setRefusals(result.uiRefusals);
   }, [data.items, data.itemType, desired, id, triggerSave, updateNodeData]);
 
   const removeItem = useCallback(
@@ -236,12 +250,12 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
       event.target.value = '';
       if (files.length === 0) return;
       if (!brandId) {
-        setRefusals(['Select a brand before uploading — an upload needs somewhere to land.']);
+        setRefusals([workflowFailure('batchSelectBrand')]);
         return;
       }
 
       const uploaded: BatchItem[] = [];
-      const failures: string[] = [];
+      const failures: WorkflowUiFailure[] = [];
       for (const file of files) {
         // The upload's node writes are captured rather than applied: a batch holds N items,
         // so the node itself must never take on one file's image/assetId fields.
@@ -261,7 +275,8 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
           },
         );
         if (!result) {
-          failures.push(`${file.name} did not upload${reason ? ` — ${reason}` : ''}.`);
+          failures.push(workflowFailure('batchUploadFailed', { file: file.name }));
+          if (reason) console.warn('[studio] batch upload diagnostic', reason);
           continue;
         }
         uploaded.push({
@@ -292,11 +307,13 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
             }),
             truncated: false,
           };
-    const extra = truncated
-      ? [`Only the first ${MAX_BATCH_ITEMS} rows were read — the rest of the paste was left out.`]
-      : [];
+    const extra = truncated ? [workflowFailure('batchPasteCap', { count: MAX_BATCH_ITEMS })] : [];
     commit(
-      values.map((value) => ({ id: crypto.randomUUID(), kind: 'text' as const, value })),
+      values.map((value) => ({
+        id: crypto.randomUUID(),
+        kind: 'text' as const,
+        value,
+      })),
       items,
       extra,
     );
@@ -319,7 +336,10 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
       const raw = event.dataTransfer.getData(STUDIO_ASSET_DROP_MIME);
       if (!raw) return;
 
-      const resolved = await resolveCreativeAssetDrop(raw, resolveDroppedBase64);
+      const resolved = await resolveCreativeAssetDrop(raw, resolveDroppedBase64, undefined, {
+        t: translateUi,
+        locale: dropUiLocale,
+      });
       if (resolved.status === 'error') {
         setRefusals([
           `${resolved.title}${resolved.description ? ` — ${resolved.description}` : ''}`,
@@ -344,7 +364,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
         items,
       );
     },
-    [commit, items],
+    [commit, items, dropUiLocale, translateUi],
   );
 
   const partnerItems = useMemo(
@@ -361,23 +381,39 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
       const total = items.length * partnerItems.length;
       return {
         text: combined.truncated
-          ? `${items.length} × ${partnerItems.length} = ${total} → only ${MAX_BATCH_ITEMS} will run`
-          : `${items.length} × ${partnerItems.length} = ${pairs} pairs`,
+          ? translateUi('batchCrossCap', {
+              left: items.length,
+              right: partnerItems.length,
+              total,
+              max: MAX_BATCH_ITEMS,
+            })
+          : translateUi('batchCrossPairs', {
+              left: items.length,
+              right: partnerItems.length,
+              count: pairs,
+            }),
         over: combined.truncated,
       };
     }
 
     const longest = Math.max(items.length, partnerItems.length);
-    if (longest === pairs) return { text: `zip pairs ${pairs}`, over: false };
+    if (longest === pairs)
+      return {
+        text: translateUi('batchZipPairs', { count: pairs }),
+        over: false,
+      };
     const orphan = longest - pairs;
-    const where = items.length > partnerItems.length ? 'this batch' : 'the other batch';
+    const side = items.length > partnerItems.length ? 'own' : 'other';
     return {
-      text:
-        `zip pairs ${pairs} of ${longest} — ${orphan} item${orphan === 1 ? '' : 's'} in ${where} ` +
-        'have no partner. Switch to cross to use them all.',
+      text: translateUi('batchZipUnpaired', {
+        count: pairs,
+        total: longest,
+        orphan,
+        side,
+      }),
       over: true,
     };
-  }, [combine, items, partner, partnerItems]);
+  }, [combine, items, partner, partnerItems, translateUi]);
 
   // The partner only reaches the render through a node BOTH batches feed. Wired to
   // nothing shared, it pairs on paper and changes no output.
@@ -406,9 +442,11 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        <NodeTitleBar icon={Layers} label="Batch">
+        <NodeTitleBar icon={Layers} label={translateUi('batch_320b5d80')}>
           <NodeBadge data-testid="batch-node-kind">
-            {itemType ? BATCH_KIND_LABEL[itemType] : 'Empty'}
+            {itemType
+              ? translateUi('batchKinds', { kind: itemType })
+              : translateUi('empty_c6c094bc')}
           </NodeBadge>
           <NodeBadge data-testid="batch-node-count" className="tabular-nums">
             {items.length}/{MAX_BATCH_ITEMS}
@@ -422,7 +460,9 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               className="shrink-0 rounded border border-destructive/40 bg-destructive/5 p-1.5 text-2xs leading-snug text-destructive"
             >
               {refusals.map((reason) => (
-                <p key={reason}>{reason}</p>
+                <p key={typeof reason === 'string' ? reason : reason.code}>
+                  {typeof reason === 'string' ? reason : workflowUiText(reason, translateUi)}
+                </p>
               ))}
             </div>
           ) : null}
@@ -430,7 +470,8 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
           <div className="nodrag -mx-1 min-h-0 flex-1 overflow-y-auto border-y border-border/60 bg-muted/20">
             {items.length === 0 ? (
               <p className="p-2 text-center text-xs leading-snug text-muted-foreground">
-                Add items to fan every node downstream out over them.
+                {' '}
+                {translateUi('add_items_to_fan_every_node_downstr_bf7024f2')}{' '}
               </p>
             ) : (
               <ul className="divide-y divide-border/60">
@@ -444,7 +485,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                       <img
                         loading="lazy"
                         src={item.url}
-                        alt={batchItemLabel(item, index)}
+                        alt={batchItemLabel(item, index, translateUi)}
                         className="size-12 shrink-0 rounded object-cover"
                       />
                     ) : null}
@@ -461,11 +502,13 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                       </video>
                     ) : null}
                     <span className="min-w-0 flex-1 truncate font-mono text-2xs text-foreground">
-                      {batchItemLabel(item, index)}
+                      {batchItemLabel(item, index, translateUi)}
                     </span>
                     <button
                       type="button"
-                      aria-label={`Remove ${batchItemLabel(item, index)}`}
+                      aria-label={translateUi('remove_value0_3028bf7d', {
+                        value0: String(batchItemLabel(item, index, translateUi)),
+                      })}
                       className="nodrag shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
                       onMouseDown={stopDrag}
                       onClick={(event) => {
@@ -488,7 +531,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 value={csvText}
                 onChange={(event) => setCsvText(event.target.value)}
                 onMouseDown={stopDrag}
-                placeholder="Paste your prompts — one per line"
+                placeholder={translateUi('paste_your_prompts_one_per_line_5ba21350')}
                 className="nodrag h-14 resize-none text-2xs"
               />
               {/* Native on purpose: three options inside a node this small, and the
@@ -516,7 +559,8 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                   handleAddCsv();
                 }}
               >
-                Add items
+                {' '}
+                {translateUi('add_items_13583d03')}{' '}
               </Button>
             </div>
           ) : null}
@@ -532,8 +576,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 fileInputRef.current?.click();
               }}
             >
-              <Upload className="size-3" />
-              Upload
+              <Upload className="size-3" /> {translateUi('upload_865e89de')}{' '}
             </Button>
             <Button
               variant="outline"
@@ -545,8 +588,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 setCsvOpen((open) => !open);
               }}
             >
-              <Table className="size-3" />
-              Paste text
+              <Table className="size-3" /> {translateUi('paste_text_9328724b')}{' '}
             </Button>
             <input
               ref={fileInputRef}
@@ -584,7 +626,7 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               </Select>
               {splitMode === 'custom' ? (
                 <input
-                  aria-label="Split separator"
+                  aria-label={translateUi('split_separator_ac8a2d11')}
                   value={splitSeparator}
                   onMouseDown={stopDrag}
                   onChange={(event) => {
@@ -616,10 +658,12 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="zip" className="text-xs">
-                    zip
+                    {' '}
+                    {translateUi('zip_4a70fe9a')}{' '}
                   </SelectItem>
                   <SelectItem value="cross" className="text-xs">
-                    cross
+                    {' '}
+                    {translateUi('cross_b3986952')}{' '}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -633,8 +677,8 @@ export function BatchNode({ id, data, selected }: NodeProps<ReactFlowNode<BatchN
               ) : null}
               {partnerDetached ? (
                 <p className="text-2xs leading-snug text-muted-foreground">
-                  The other batch feeds the pairing — wire it downstream too for it to appear in the
-                  render.
+                  {' '}
+                  {translateUi('the_other_batch_feeds_the_pairing_w_b6882cda')}{' '}
                 </p>
               ) : null}
             </div>

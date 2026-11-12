@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { type EarlierPage, prependUnseen, useEarlierHistory } from './useEarlierHistory';
 
 type Item = { id: string };
@@ -33,7 +34,10 @@ describe('useEarlierHistory', () => {
 
   it('applies a page and advances to the next cursor', async () => {
     const applied: Item[][] = [];
-    const fetchPage = mock(async () => ({ items: [{ id: 'a' }], nextCursor: 'older' }));
+    const fetchPage = mock(async () => ({
+      items: [{ id: 'a' }],
+      nextCursor: 'older',
+    }));
     const { result } = renderEarlier(fetchPage, applied);
 
     act(() => result.current.setEarlierCursor('first'));
@@ -49,7 +53,10 @@ describe('useEarlierHistory', () => {
   });
 
   it('stops offering more once the transcript is fully loaded', async () => {
-    const fetchPage = mock(async () => ({ items: [{ id: 'a' }], nextCursor: null }));
+    const fetchPage = mock(async () => ({
+      items: [{ id: 'a' }],
+      nextCursor: null,
+    }));
     const { result } = renderEarlier(fetchPage);
 
     act(() => result.current.setEarlierCursor('first'));

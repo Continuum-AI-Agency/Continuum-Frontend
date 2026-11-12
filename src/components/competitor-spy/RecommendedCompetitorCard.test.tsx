@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { RecommendedCompetitor } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { RecommendedCompetitorCard } from './RecommendedCompetitorCard';
 
 const base: RecommendedCompetitor = {
@@ -71,7 +72,9 @@ describe('RecommendedCompetitorCard', () => {
         isTracking={true}
       />,
     );
-    const button = getByRole('button', { name: /tracking/i }) as HTMLButtonElement;
+    const button = getByRole('button', {
+      name: /tracking/i,
+    }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
   });
 });

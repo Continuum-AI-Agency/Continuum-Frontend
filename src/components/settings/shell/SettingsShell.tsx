@@ -3,6 +3,7 @@
 import { Tabs } from '@base-ui/react/tabs';
 import { Menu } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -24,6 +25,8 @@ export function SettingsShell({
   accountPill,
   activeSectionSlot,
 }: SettingsShellProps) {
+  const tUi = useTranslations('settings');
+
   const router = useRouter();
   const params = useSearchParams();
   const [section, setSection] = useState<SectionKey>(activeSection);
@@ -46,7 +49,9 @@ export function SettingsShell({
         search.set('section', next);
       }
       const qs = search.toString();
-      router.replace(qs ? `?${qs}` : window.location.pathname, { scroll: false });
+      router.replace(qs ? `?${qs}` : window.location.pathname, {
+        scroll: false,
+      });
     },
     [params, router, section],
   );
@@ -66,7 +71,7 @@ export function SettingsShell({
               render={
                 <Button variant="outline" size="sm" className="gap-2">
                   <Menu className="h-4 w-4" />
-                  Sections
+                  {tUi('m_7ff5a6dafd')}
                 </Button>
               }
             />
@@ -74,7 +79,7 @@ export function SettingsShell({
               side="left"
               className="w-[min(var(--shell-secondary-w),calc(100vw-1rem))] px-3 py-6"
             >
-              <SheetTitle className="sr-only">Settings sections</SheetTitle>
+              <SheetTitle className="sr-only">{tUi('m_2e7109bda2')}</SheetTitle>
               <SettingsNav brandPill={brandPill} accountPill={accountPill} />
             </SheetContent>
           </Sheet>

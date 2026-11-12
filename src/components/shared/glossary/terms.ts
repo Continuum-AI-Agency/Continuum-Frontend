@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 // Static glossary — the single source of truth for plain-English definitions of
 // the advanced concepts surfaced across Scale, Library, and Settings (IMP-018).
 // Customer-language names + one-line definitions so terms like DCO, ROAS,
@@ -40,6 +41,22 @@ export const GLOSSARY_TERMS: Record<GlossaryTermKey, GlossaryEntry> = {
   },
 };
 
-export function glossaryEntry(key: GlossaryTermKey): GlossaryEntry {
-  return GLOSSARY_TERMS[key];
+export function glossaryEntry(
+  key: GlossaryTermKey,
+  t?: ReturnType<typeof useTranslations<'common'>>,
+): GlossaryEntry {
+  const keys = {
+    dco: 'm_ca1eb2a6e1',
+    roas: 'm_2521f653f1',
+    hyperframes: 'm_8cf3bfbab3',
+    mcp: 'm_45ceb167aa',
+    'percentile-heatmap': 'm_aead2c1a0c',
+  } as const;
+  const entry = GLOSSARY_TERMS[key];
+  return t
+    ? {
+        term: key === 'percentile-heatmap' ? t('m_e22e69541d') : entry.term,
+        short: t(keys[key]),
+      }
+    : entry;
 }

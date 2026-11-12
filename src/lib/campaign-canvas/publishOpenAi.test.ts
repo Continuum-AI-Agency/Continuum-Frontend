@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
 import type { CampaignCanvasEdge, CampaignCanvasNode } from '@/CampaignCanvas/types';
+import en from '../../../messages/scale/en.json';
+import es from '../../../messages/scale/es.json';
+import pt from '../../../messages/scale/pt-BR.json';
 import { executeOpenAiPublish, seedExistingIds } from './executeOpenAiPublish';
 import { buildHydratedOpenAiGraph } from './hydrateOpenAi';
-import { captureOpenAiBaseline, planOpenAiPublish } from './publishOpenAi';
+import {
+  captureOpenAiBaseline,
+  describeOpenAiPublishStep,
+  planOpenAiPublish,
+} from './publishOpenAi';
 
 const campaignNode = (data: Record<string, unknown> = {}): CampaignCanvasNode =>
   ({
@@ -112,7 +120,10 @@ describe('planOpenAiPublish — a fresh draft', () => {
 
   it('refuses two campaigns on one canvas', () => {
     const second = { ...campaignNode(), id: 'c2' } as CampaignCanvasNode;
-    const plan = planOpenAiPublish({ nodes: [campaignNode(), second], edges: [] });
+    const plan = planOpenAiPublish({
+      nodes: [campaignNode(), second],
+      edges: [],
+    });
     expect(plan.issues.join(' ')).toContain('one campaign at a time');
   });
 });
@@ -134,7 +145,10 @@ describe('planOpenAiPublish — an edited record', () => {
               id: 'adgrp_301',
               name: 'US English',
               status: 'paused',
-              bidding_config: { billing_event_type: 'impression', max_bid_micros: 60_000 },
+              bidding_config: {
+                billing_event_type: 'impression',
+                max_bid_micros: 60_000,
+              },
             },
             ads: [
               {
@@ -172,10 +186,17 @@ describe('planOpenAiPublish — an edited record', () => {
     const baseline = captureOpenAiBaseline(graph.nodes);
     const edited = graph.nodes.map((node) =>
       node.id === 'cmpn_101'
-        ? { ...node, data: { ...node.data, lifetimeSpendLimitMicros: 30_000_000 } }
+        ? {
+            ...node,
+            data: { ...node.data, lifetimeSpendLimitMicros: 30_000_000 },
+          }
         : node,
     );
-    const plan = planOpenAiPublish({ nodes: edited, edges: graph.edges, baseline });
+    const plan = planOpenAiPublish({
+      nodes: edited,
+      edges: graph.edges,
+      baseline,
+    });
     expect(plan.steps).toHaveLength(1);
     const step = plan.steps[0];
     expect(step.kind).toBe('update-campaign');
@@ -186,7 +207,10 @@ describe('planOpenAiPublish — an edited record', () => {
     const graph = hydrated();
     const edited = graph.nodes.map((node) => ({
       ...node,
-      data: { ...node.data, label: `${(node.data as { label: string }).label} v2` },
+      data: {
+        ...node.data,
+        label: `${(node.data as { label: string }).label} v2`,
+      },
     }));
     const plan = planOpenAiPublish({
       nodes: edited,
@@ -204,7 +228,11 @@ describe('planOpenAiPublish — an edited record', () => {
     const graph = hydrated();
     const baseline = captureOpenAiBaseline(graph.nodes);
     const withoutAd = graph.nodes.filter((node) => node.id !== 'ad_501');
-    const plan = planOpenAiPublish({ nodes: withoutAd, edges: graph.edges, baseline });
+    const plan = planOpenAiPublish({
+      nodes: withoutAd,
+      edges: graph.edges,
+      baseline,
+    });
     const archive = plan.steps.find((step) => step.kind === 'archive');
     expect(archive).toBeDefined();
     expect(archive?.kind === 'archive' && archive.entity).toBe('ad');
@@ -220,7 +248,11 @@ describe('planOpenAiPublish — an edited record', () => {
       ...node,
       data: { ...node.data, status: 'active' },
     }));
-    const plan = planOpenAiPublish({ nodes: edited, edges: graph.edges, baseline });
+    const plan = planOpenAiPublish({
+      nodes: edited,
+      edges: graph.edges,
+      baseline,
+    });
     expect(plan.steps).toEqual([]);
   });
 });
@@ -260,7 +292,11 @@ describe('executeOpenAiPublish', () => {
     expect(outcome.failure).toBeUndefined();
     expect((calls[1].args[0] as { campaign_id: string }).campaign_id).toBe('cmpn_new');
     expect((calls[2].args[0] as { ad_group_id: string }).ad_group_id).toBe('adgrp_new');
-    expect(outcome.idsByNodeId).toEqual({ c1: 'cmpn_new', g1: 'adgrp_new', a1: 'ad_new' });
+    expect(outcome.idsByNodeId).toEqual({
+      c1: 'cmpn_new',
+      g1: 'adgrp_new',
+      a1: 'ad_new',
+    });
   });
 
   it('resolves a parent that already existed and was not part of the plan', async () => {
@@ -273,7 +309,9 @@ describe('executeOpenAiPublish', () => {
       baseline: captureOpenAiBaseline([nodes[0]]),
     });
     const { api: fake, calls } = api();
-    const outcome = await executeOpenAiPublish(plan, fake, { seed: seedExistingIds(nodes) });
+    const outcome = await executeOpenAiPublish(plan, fake, {
+      seed: seedExistingIds(nodes),
+    });
 
     expect(outcome.failure).toBeUndefined();
     expect((calls[0].args[0] as { campaign_id: string }).campaign_id).toBe('cmpn_101');
@@ -299,3 +337,45 @@ describe('executeOpenAiPublish', () => {
     expect(outcome.idsByNodeId.c1).toBe('cmpn_new');
   });
 });
+
+for (const locale of ['en', 'pt-BR', 'es'] as const) {
+  it(`localizes OpenAI publish guidance without changing the published plan (${locale})`, () => {
+    const translate = createTranslator({
+      locale,
+      namespace: 'scale',
+      messages: { scale: { en, 'pt-BR': pt, es }[locale] },
+    });
+    const input = {
+      nodes: [campaignNode(), adGroupNode(), adNode()],
+      edges: [edge('c1', 'g1'), edge('g1', 'a1')],
+    };
+    const original = planOpenAiPublish(input);
+    const localized = planOpenAiPublish({
+      ...input,
+      translateIssue: (code, label) =>
+        translate('openai_publish_issue', { code, label: label ?? '' }),
+    });
+    expect(localized.steps).toEqual(original.steps);
+    const source = JSON.stringify(localized.steps);
+    const text = describeOpenAiPublishStep(localized.steps[0], (kind, values) =>
+      translate('openai_publish_step', {
+        ...values,
+        kind: kind.replaceAll('-', '_'),
+      }),
+    );
+    expect(text).toContain('Spring launch');
+    expect(JSON.stringify(localized.steps)).toBe(source);
+    const blocked = planOpenAiPublish({
+      nodes: [campaignNode({ lifetimeSpendLimitMicros: 0 })],
+      edges: [],
+      translateIssue: (code, label) =>
+        translate('openai_publish_issue', { code, label: label ?? '' }),
+    });
+    expect(blocked.issues).toContain(
+      translate('openai_publish_issue', {
+        code: 'lifetimeBudget',
+        label: 'Spring launch',
+      }),
+    );
+  });
+}

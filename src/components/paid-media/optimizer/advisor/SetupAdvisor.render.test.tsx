@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -19,7 +20,9 @@ const { adviseSetup } = await import('@continuum/contracts');
 const { BudgetHint, SetupAdvisor, TargetHint } = await import('./SetupAdvisor');
 
 function wrap(children: ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(<QueryClientProvider client={client}>{children}</QueryClientProvider>);
 }
 
@@ -140,7 +143,9 @@ describe('the hints under the money fields', () => {
 
   it('offers no target at all when the selection has no tracked results', () => {
     const advice = advise([
-      adset('a', { windows: { d3: win(0, 0), d7: win(0, 0), d14: win(90, 0) } }),
+      adset('a', {
+        windows: { d3: win(0, 0), d7: win(0, 0), d14: win(90, 0) },
+      }),
     ]);
     const { container } = wrap(<TargetHint advice={advice} currency="USD" onUse={() => {}} />);
     expect(container.innerHTML).toBe('');

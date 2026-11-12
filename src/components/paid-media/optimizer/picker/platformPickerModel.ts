@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The portfolio picker beyond Meta (frontend.html §7, feature 07): Platform → Campaign →
 // Ad set / Ad group / Asset group. Google moves money at the campaign budget, so a campaign is
 // the unit; its ad groups (or a Performance Max campaign's asset groups) show what it holds.
@@ -11,11 +15,50 @@ import { type AdPlatform, PLATFORM_NAMES } from '../sections/platforms/platformT
 
 export type PickerChildKind = 'adset' | 'ad_group' | 'asset_group';
 
-export const CHILD_KIND_LABELS: Record<PickerChildKind, { one: string; many: string }> = {
+export const CHILD_KIND_LABELS: Readonly<
+  Record<PickerChildKind, { readonly one: string; readonly many: string }>
+> = {
   adset: { one: 'ad set', many: 'Ad sets' },
   ad_group: { one: 'ad group', many: 'Ad groups' },
   asset_group: { one: 'asset group', many: 'Asset groups' },
 };
+
+/** Display-only words; callers keep child-kind enum values unchanged. */
+export function pickerChildKindLabels(
+  kind: PickerChildKind,
+  translate: ScaleCopy,
+): { one: string; many: string } {
+  return {
+    one: translate('pickerChildOne', { kind }),
+    many: translate('pickerChildMany', { kind }),
+  };
+}
+const PROVIDER_STATUS_KEYS = {
+  ACTIVE: 'entityActive',
+  PAUSED: 'entityPaused',
+  ARCHIVED: 'entityArchived',
+  DELETED: 'entityDeleted',
+  ADSET_PAUSED: 'entityAdSetPaused',
+  CAMPAIGN_PAUSED: 'entityCampaignPaused',
+  DISAPPROVED: 'entityDisapproved',
+  IN_PROCESS: 'entityProcessing',
+  PENDING_REVIEW: 'entityPendingReview',
+  WITH_ISSUES: 'entityWithIssues',
+  PENDING_BILLING_INFO: 'entityPendingBilling',
+  PREAPPROVED: 'entityPreapproved',
+  INACTIVE: 'entityInactive',
+} as const satisfies Readonly<Record<string, Parameters<ScaleCopy>[0]>>;
+export function pickerProviderStatusLabel(
+  status: string | null | undefined,
+  translate: ScaleCopy,
+): string {
+  const code = status?.toUpperCase() ?? '';
+  return translate(
+    Object.hasOwn(PROVIDER_STATUS_KEYS, code)
+      ? PROVIDER_STATUS_KEYS[code as keyof typeof PROVIDER_STATUS_KEYS]
+      : 'entityUnknown',
+  );
+}
 
 export type GoogleCampaignRow = {
   id: string;
@@ -35,12 +78,23 @@ const VIDEO_REASON =
   'Google does not let the API pause or change budgets on Video campaigns. Change it in Google Ads.';
 
 /** What the optimizer can do with a Google campaign of this channel type. */
-export function googleCampaignEligibility(channelType: string | null): Eligibility {
+export function googleCampaignEligibility(
+  channelType: string | null,
+  uiTranslate?: ScaleCopy,
+): Eligibility {
   switch (channelType) {
     case 'SEARCH':
-      return { eligible: true, typeLabel: 'Search', childKind: 'ad_group' };
+      return {
+        eligible: true,
+        typeLabel: uiTranslate ? uiTranslate('googleCopy_49c266baaa') : 'Search',
+        childKind: 'ad_group',
+      };
     case 'PERFORMANCE_MAX':
-      return { eligible: true, typeLabel: 'Performance Max', childKind: 'asset_group' };
+      return {
+        eligible: true,
+        typeLabel: 'Performance Max',
+        childKind: 'asset_group',
+      };
     case 'DEMAND_GEN':
       return { eligible: true, typeLabel: 'Demand Gen', childKind: 'ad_group' };
     // The three types above are the ones the engine admits (mapSnapshot ADMITTED_GOOGLE_CHANNELS)
@@ -49,35 +103,49 @@ export function googleCampaignEligibility(channelType: string | null): Eligibili
       return {
         eligible: false,
         typeLabel: 'Shopping',
-        reason: 'Shopping campaigns are outside this version.',
+        reason: uiTranslate
+          ? uiTranslate('pickerUnsupportedReason', { type: 'shopping' })
+          : 'Shopping campaigns are outside this version.',
       };
     case 'SMART':
       return {
         eligible: false,
         typeLabel: 'Smart',
-        reason:
-          'Smart campaigns are outside this version: Google sets their bidding and targeting itself.',
+        reason: uiTranslate
+          ? uiTranslate('pickerUnsupportedReason', { type: 'smart' })
+          : 'Smart campaigns are outside this version: Google sets their bidding and targeting itself.',
       };
     case 'DISPLAY':
       return {
         eligible: false,
         typeLabel: 'Display',
-        reason:
-          'Display campaigns are outside this version: they buy reach, not the results a portfolio is judged on.',
+        reason: uiTranslate
+          ? uiTranslate('pickerUnsupportedReason', { type: 'display' })
+          : 'Display campaigns are outside this version: they buy reach, not the results a portfolio is judged on.',
       };
     case 'VIDEO':
-      return { eligible: false, typeLabel: 'Video', reason: VIDEO_REASON };
+      return {
+        eligible: false,
+        typeLabel: uiTranslate ? uiTranslate('video_d534be8') : 'Video',
+        reason: uiTranslate
+          ? uiTranslate('pickerUnsupportedReason', { type: 'video' })
+          : VIDEO_REASON,
+      };
     case null:
       return {
         eligible: false,
-        typeLabel: 'Unknown type',
-        reason: "The read did not say this campaign's type, so it can't be added.",
+        typeLabel: uiTranslate ? uiTranslate('pickerUnknownType') : 'Unknown type',
+        reason: uiTranslate
+          ? uiTranslate('pickerUnsupportedReason', { type: 'unknown' })
+          : "The read did not say this campaign's type, so it can't be added.",
       };
     default:
       return {
         eligible: false,
         typeLabel: channelType.charAt(0) + channelType.slice(1).toLowerCase().replace(/_/g, ' '),
-        reason: 'This campaign type is outside this version.',
+        reason: uiTranslate
+          ? uiTranslate('pickerUnsupportedReason', { type: 'other' })
+          : 'This campaign type is outside this version.',
       };
   }
 }
@@ -87,22 +155,37 @@ export function platformCurrencyRefusal(
   platform: AdPlatform,
   portfolioCurrency: string | null,
   accountCurrency: string | null,
+  uiTranslate?: ScaleCopy,
 ): string | null {
   const name = PLATFORM_NAMES[platform];
   if (!portfolioCurrency) {
-    return `This portfolio's currency isn't confirmed, so ${name} can't be added to it yet.`;
+    return uiTranslate
+      ? uiTranslate('helper_341704c525af', { v0: name })
+      : `This portfolio's currency isn't confirmed, so ${name} can't be added to it yet.`;
   }
   if (!accountCurrency) {
-    return `This ${name} account doesn't report its currency, so it can't join a portfolio in ${portfolioCurrency}.`;
+    return uiTranslate
+      ? uiTranslate('helper_ef2f88b92eb4', { v0: name, v1: portfolioCurrency })
+      : `This ${name} account doesn't report its currency, so it can't join a portfolio in ${portfolioCurrency}.`;
   }
   if (accountCurrency.toUpperCase() !== portfolioCurrency.toUpperCase()) {
-    return `This ${name} account bills in ${accountCurrency.toUpperCase()} and the portfolio in ${portfolioCurrency.toUpperCase()}. Mixed currencies aren't supported yet.`;
+    return uiTranslate
+      ? uiTranslate('helper_fd887daae828', {
+          v0: name,
+          v1: accountCurrency.toUpperCase(),
+          v2: portfolioCurrency.toUpperCase(),
+        })
+      : `This ${name} account bills in ${accountCurrency.toUpperCase()} and the portfolio in ${portfolioCurrency.toUpperCase()}. Mixed currencies aren't supported yet.`;
   }
   return null;
 }
 
 /** A Google campaign known from the members read: its id, name and catalog channel type. */
-export type PickerMember = { id: string; name: string | null; channelType: string | null };
+export type PickerMember = {
+  id: string;
+  name: string | null;
+  channelType: string | null;
+};
 
 export type PickerCampaignNode = {
   id: string;
@@ -126,18 +209,25 @@ export type PlatformPickerGroup = {
   campaigns: PickerCampaignNode[];
 };
 
-export function buildGooglePickerGroup(input: {
-  account: { account_id: string; name: string | null; currency: string | null };
-  portfolioCurrency: string | null;
-  campaigns: readonly GoogleCampaignRow[];
-  adGroups: readonly GoogleAdGroupRow[];
-  /** The campaigns the portfolio holds. One the spend ranking does not list (paused, no spend
-   *  in its window) is still shown, from the member's own name and catalog type. */
-  held?: readonly PickerMember[];
-  /** Campaigns this view showed as held earlier: one just let go stays listed, unticked, so it
-   *  can be taken back without a reload even when the ranking does not list it. */
-  known?: readonly PickerMember[];
-}): PlatformPickerGroup {
+export function buildGooglePickerGroup(
+  input: {
+    account: {
+      account_id: string;
+      name: string | null;
+      currency: string | null;
+    };
+    portfolioCurrency: string | null;
+    campaigns: readonly GoogleCampaignRow[];
+    adGroups: readonly GoogleAdGroupRow[];
+    /** The campaigns the portfolio holds. One the spend ranking does not list (paused, no spend
+     *  in its window) is still shown, from the member's own name and catalog type. */
+    held?: readonly PickerMember[];
+    /** Campaigns this view showed as held earlier: one just let go stays listed, unticked, so it
+     *  can be taken back without a reload even when the ranking does not list it. */
+    known?: readonly PickerMember[];
+  },
+  uiTranslate?: ScaleCopy,
+): PlatformPickerGroup {
   const heldIds = new Set((input.held ?? []).map((member) => member.id));
   const listed = new Set(input.campaigns.map((campaign) => campaign.id));
   const unlisted = new Map<string, PickerMember>();
@@ -161,7 +251,7 @@ export function buildGooglePickerGroup(input: {
   }
   const campaigns = rows
     .map((campaign): PickerCampaignNode & { spend: number } => {
-      const eligibility = googleCampaignEligibility(campaign.channelType);
+      const eligibility = googleCampaignEligibility(campaign.channelType, uiTranslate);
       const childKind = eligibility.eligible ? eligibility.childKind : 'ad_group';
       return {
         id: campaign.id,
@@ -188,7 +278,12 @@ export function buildGooglePickerGroup(input: {
     accountId: input.account.account_id,
     accountName: input.account.name,
     currency: input.account.currency,
-    refusal: platformCurrencyRefusal('google_ads', input.portfolioCurrency, input.account.currency),
+    refusal: platformCurrencyRefusal(
+      'google_ads',
+      input.portfolioCurrency,
+      input.account.currency,
+      uiTranslate,
+    ),
     campaigns,
   };
 }

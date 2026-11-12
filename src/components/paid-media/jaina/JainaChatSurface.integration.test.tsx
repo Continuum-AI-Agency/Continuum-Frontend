@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * The surface against the AI SDK transcript.
  *
@@ -21,7 +22,7 @@ import {
   type JainaUIMessage,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import * as React from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
@@ -476,10 +477,18 @@ const uiMessage = (
   parts: Part[],
   metadata?: Record<string, unknown>,
 ): JainaUIMessage =>
-  ({ id, role, parts, ...(metadata ? { metadata } : {}) }) as unknown as JainaUIMessage;
+  ({
+    id,
+    role,
+    parts,
+    ...(metadata ? { metadata } : {}),
+  }) as unknown as JainaUIMessage;
 
 const textPart = (value: string): Part => ({ type: 'text', text: value });
-const reasoningPart = (value: string): Part => ({ type: 'reasoning', text: value });
+const reasoningPart = (value: string): Part => ({
+  type: 'reasoning',
+  text: value,
+});
 
 /** A gated tool as the SDK models it mid-pause: the native state IS the pending approval. */
 const approvalRequestedPart = (fields: {
@@ -563,7 +572,9 @@ describe('JainaChatSurface integration', () => {
       { wrapper: withQueryClient },
     );
     await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
-    expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({ query: request.query });
+    expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
+      query: request.query,
+    });
     view.rerender(
       React.cloneElement(surface, {
         requestedCreative: request,
@@ -769,7 +780,9 @@ describe('JainaChatSurface integration', () => {
     ]);
 
     fireEvent.click(
-      await screen.findByTestId('open-read-assistant-1', undefined, { timeout: 2000 }),
+      await screen.findByTestId('open-read-assistant-1', undefined, {
+        timeout: 2000,
+      }),
     );
 
     expect(opened).toEqual(['read-abc']);
@@ -800,7 +813,9 @@ describe('JainaChatSurface integration', () => {
       ]);
 
       fireEvent.click(
-        await screen.findByTestId(`approve-${approval.approvalId}`, undefined, { timeout: 2000 }),
+        await screen.findByTestId(`approve-${approval.approvalId}`, undefined, {
+          timeout: 2000,
+        }),
       );
       await waitFor(() => {
         expect(sendTurnMock).toHaveBeenCalledTimes(1);
@@ -953,7 +968,9 @@ describe('JainaChatSurface integration', () => {
       uiMessage('user-2', 'user', [textPart('What should we cut?')]),
     ];
     const streaming = (text: string) =>
-      uiMessage('assistant-2', 'assistant', [textPart(text)], { runId: 'run-2' });
+      uiMessage('assistant-2', 'assistant', [textPart(text)], {
+        runId: 'run-2',
+      });
 
     await showMessages([...earlier, streaming('Cut the')]);
     await waitFor(() => {
@@ -1141,7 +1158,10 @@ describe('JainaChatSurface integration', () => {
       ) {
         const picked = new URL(url, 'http://localhost').searchParams.get('sessionId');
         return Promise.resolve(
-          jsonResponse({ sessions, uiMessages: picked ? historyFor(picked) : [] }),
+          jsonResponse({
+            sessions,
+            uiMessages: picked ? historyFor(picked) : [],
+          }),
         );
       }
       return Promise.resolve({
@@ -1187,7 +1207,10 @@ describe('JainaChatSurface integration', () => {
       chatStatus = 'streaming';
       const consumed = mock(() => {});
       const withTurn = () =>
-        React.cloneElement(surface, { autoSendPrompt: turn, onAutoSendConsumed: consumed });
+        React.cloneElement(surface, {
+          autoSendPrompt: turn,
+          onAutoSendConsumed: consumed,
+        });
       const view = render(withTurn(), { wrapper: withQueryClient });
       await screen.findByTestId('jaina-empty-state', undefined, { timeout: 2000 }).catch(() => {});
       expect(sendTurnMock).not.toHaveBeenCalled();
@@ -1196,7 +1219,9 @@ describe('JainaChatSurface integration', () => {
       chatStatus = 'ready';
       view.rerender(withTurn());
       await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
-      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({ query: turn.text });
+      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
+        query: turn.text,
+      });
 
       view.rerender(withTurn());
       view.rerender(withTurn());
@@ -1229,7 +1254,9 @@ describe('JainaChatSurface integration', () => {
         useAgentRunStore.getState().upsertRun({ ...runningRun('session-x'), status: 'completed' });
       });
       await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
-      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({ query: turn.text });
+      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
+        query: turn.text,
+      });
     });
 
     it('tells the host when a run holds the conversation, so its button can stay disabled', async () => {
@@ -1267,7 +1294,10 @@ describe('JainaChatSurface integration', () => {
     global.fetch = mock(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (!url.includes('/api/agents/jaina/chat/conversations?')) {
-        return { ok: false, text: () => Promise.resolve('Unhandled') } as MockFetchResponse;
+        return {
+          ok: false,
+          text: () => Promise.resolve('Unhandled'),
+        } as MockFetchResponse;
       }
       if (!new URL(url, 'http://localhost').searchParams.get('sessionId')) {
         return jsonResponse({ sessions: [session], uiMessages: [] });

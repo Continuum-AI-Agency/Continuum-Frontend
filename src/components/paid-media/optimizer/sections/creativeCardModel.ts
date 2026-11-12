@@ -1,3 +1,10 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+import { creativeAngleLabel } from '@/lib/paid-media/creativeDisplayLabels';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // The creative recommendation card's pure reads: which ad it is about, what to say about
 // the angle and the audience, why the engine raised it, and which flash creatives belong
 // to it. No React, no fetch.
@@ -30,7 +37,11 @@ type Seed = {
   angleId?: string | null;
   labels?: Record<string, unknown> | null;
   rebuildCraft?: boolean;
-  audience?: { branch?: string | null; strategy?: string | null; offerText?: string | null } | null;
+  audience?: {
+    branch?: string | null;
+    strategy?: string | null;
+    offerText?: string | null;
+  } | null;
 };
 
 const seedOf = (rec: Pick<RecommendationRow, 'seed'>): Seed =>
@@ -125,7 +136,7 @@ const copyOf = (
   headline = instruction ? `${problem} — ${instruction.toLowerCase()}` : problem,
 ): CreativeCardCopy => ({ headline, problem, instruction, because });
 
-export function creativeCardCopy(
+function creativeCardCopyEnglish(
   rec: Pick<RecommendationRow, 'kind' | 'trigger' | 'seed'>,
 ): CreativeCardCopy {
   const rebuild = Boolean(seedOf(rec).rebuildCraft);
@@ -290,8 +301,13 @@ export function parseCardAdAngles(data: unknown): CardAdAngle[] {
 }
 
 export type ResolvedAngle =
-  | { status: 'confirmed'; label: string }
-  | { status: 'leaning'; label: string; share: number | null }
+  | { status: 'confirmed'; label: string; id?: GlobalAngleId }
+  | {
+      status: 'leaning';
+      label: string;
+      share: number | null;
+      id?: GlobalAngleId;
+    }
   | { status: 'none' };
 
 const NO_ANGLE: ResolvedAngle = { status: 'none' };
@@ -303,7 +319,12 @@ const vocabularyLabel = (id: string | null | undefined): string | null =>
 
 function seedAngle(rec: Pick<RecommendationRow, 'seed'>): ResolvedAngle {
   const confirmed = vocabularyLabel(seedOf(rec).angleId);
-  if (confirmed) return { status: 'confirmed', label: confirmed };
+  if (confirmed)
+    return {
+      status: 'confirmed',
+      label: confirmed,
+      id: seedOf(rec).angleId as GlobalAngleId,
+    };
   const words = angleWords(rec);
   return words ? { status: 'leaning', label: words, share: null } : NO_ANGLE;
 }
@@ -316,17 +337,55 @@ export function resolveAdAngle(
 ): ResolvedAngle {
   if (row) {
     const confirmed = vocabularyLabel(row.angle_id);
-    if (confirmed) return { status: 'confirmed', label: confirmed };
+    if (confirmed)
+      return {
+        status: 'confirmed',
+        label: confirmed,
+        id: row.angle_id as GlobalAngleId,
+      };
     const leaning = vocabularyLabel(row.angle_leaning);
     if (leaning)
-      return { status: 'leaning', label: leaning, share: row.angle_leaning_share ?? null };
+      return {
+        status: 'leaning',
+        label: leaning,
+        share: row.angle_leaning_share ?? null,
+        id: row.angle_leaning as GlobalAngleId,
+      };
     const coarse = vocabularyLabel(row.angle);
-    if (coarse) return { status: 'leaning', label: coarse, share: null };
+    if (coarse)
+      return {
+        status: 'leaning',
+        label: coarse,
+        share: null,
+        id: row.angle as GlobalAngleId,
+      };
   }
   return rec ? seedAngle(rec) : NO_ANGLE;
 }
 
-export function angleChipText(angle: ResolvedAngle): string {
+export function angleChipText(
+  angle: ResolvedAngle,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
+  if (uiTranslate)
+    return uiTranslate('creativeAngleChip', {
+      status: angle.status,
+      label:
+        angle.status === 'none'
+          ? ''
+          : angle.id
+            ? creativeAngleLabel(angle.id, uiTranslate)
+            : angle.label,
+      hasShare: angle.status === 'leaning' && angle.share != null ? 'yes' : 'no',
+      share:
+        angle.status === 'leaning' && angle.share != null
+          ? new Intl.NumberFormat(uiLocale, {
+              style: 'percent',
+              maximumFractionDigits: 0,
+            }).format(Math.round(angle.share * 100) / 100)
+          : '',
+    });
   switch (angle.status) {
     case 'confirmed':
       return angle.label;
@@ -339,8 +398,16 @@ export function angleChipText(angle: ResolvedAngle): string {
   }
 }
 
-export const angleAriaLabel = (angle: ResolvedAngle): string =>
-  `Communication angle: ${angleChipText(angle)}`;
+export const angleAriaLabel = (
+  angle: ResolvedAngle,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string =>
+  uiTranslate
+    ? uiTranslate('creativeAngleAria', {
+        label: angleChipText(angle, uiTranslate, uiLocale),
+      })
+    : `Communication angle: ${angleChipText(angle)}`;
 
 export type CardAngles = {
   /** Each shown ad's own angle, in the order the card shows the ads. */
@@ -502,10 +569,82 @@ const METRIC_TITLE: Record<string, string> = {
   cpp: 'Cost per result',
 };
 
-export const wearOutMetricTitle = (metric: string): string => METRIC_TITLE[metric] ?? metric;
+export const wearOutMetricTitle = (metric: string, uiTranslate?: ScaleCopy): string =>
+  uiTranslate && (metric === 'cpa' || metric === 'cpp')
+    ? uiTranslate('creativeCostPerResult')
+    : (METRIC_TITLE[metric] ?? metric);
 
 /** "+31%" / "−29%", rounded to whole percent. */
-export function signedPercent(pct: number): string {
+export function signedPercent(pct: number, uiLocale: UiLocale = 'en'): string {
   const rounded = Math.round(pct);
-  return rounded > 0 ? `+${rounded}%` : rounded < 0 ? `−${Math.abs(rounded)}%` : '0%';
+  const body = new Intl.NumberFormat(uiLocale, {
+    style: 'percent',
+    maximumFractionDigits: 0,
+  }).format(Math.abs(rounded) / 100);
+  return rounded > 0 ? `+${body}` : rounded < 0 ? `−${body}` : body;
+}
+
+const CREATIVE_COPY_KEYS = {
+  rebuild: {
+    problem: 'creativeProblem_rebuild',
+    instruction: 'creativeInstruction_rebuild',
+    headline: 'creativeHeadline_rebuild',
+  },
+  winner: {
+    problem: 'creativeProblem_winner',
+    instruction: 'creativeInstruction_winner',
+    headline: 'creativeHeadline_winner',
+  },
+  experiment: {
+    problem: 'creativeProblem_experiment',
+    instruction: 'creativeInstruction_experiment',
+    headline: 'creativeHeadline_experiment',
+  },
+  history: {
+    problem: 'creativeProblem_history',
+    instruction: 'creativeInstruction_history',
+    headline: 'creativeHeadline_history',
+  },
+  refresh: {
+    problem: 'creativeProblem_refresh',
+    instruction: 'creativeInstruction_refresh',
+    headline: 'creativeHeadline_refresh',
+  },
+  pause: {
+    problem: 'creativeProblem_pause',
+    instruction: 'creativeInstruction_pause',
+    headline: 'creativeHeadline_pause',
+  },
+} as const;
+export function creativeCardCopy(
+  rec: Pick<RecommendationRow, 'kind' | 'trigger' | 'seed'>,
+  t?: ScaleCopy,
+): CreativeCardCopy {
+  const original = creativeCardCopyEnglish(rec);
+  if (!t) return original;
+  const kind =
+    rec.kind === 'variate_creative'
+      ? seedOf(rec).rebuildCraft
+        ? 'rebuild'
+        : 'winner'
+      : rec.kind === 'seed_experiment'
+        ? 'experiment'
+        : rec.kind === 'creative_refresh'
+          ? rec.trigger.startsWith('C4')
+            ? 'history'
+            : 'refresh'
+          : rec.kind === 'pause_ad'
+            ? 'pause'
+            : null;
+  if (!kind) {
+    const label = t('creativeProblem_other');
+    return { ...original, headline: label, problem: label };
+  }
+  const keys = CREATIVE_COPY_KEYS[kind];
+  return {
+    ...original,
+    headline: t(keys.headline),
+    problem: t(keys.problem),
+    instruction: t(keys.instruction),
+  };
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { Competitor } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -72,7 +73,11 @@ describe('CompetitorQuickSelectChips', () => {
     const { getAllByRole } = render(
       <CompetitorQuickSelectChips
         competitors={[
-          competitor({ id: 'small', name: 'Small', instagramFollowersCount: 100 }),
+          competitor({
+            id: 'small',
+            name: 'Small',
+            instagramFollowersCount: 100,
+          }),
           competitor({ id: 'big', name: 'Big', instagramFollowersCount: 9000 }),
         ]}
         onSelect={() => {}}
@@ -86,7 +91,11 @@ describe('CompetitorQuickSelectChips', () => {
 
   it('caps the number of chips at max', () => {
     const competitors = Array.from({ length: 12 }, (_, i) =>
-      competitor({ id: `c${i}`, name: `C${i}`, instagramFollowersCount: 1000 - i }),
+      competitor({
+        id: `c${i}`,
+        name: `C${i}`,
+        instagramFollowersCount: 1000 - i,
+      }),
     );
     const { getAllByRole } = render(
       <CompetitorQuickSelectChips competitors={competitors} onSelect={() => {}} max={3} />,

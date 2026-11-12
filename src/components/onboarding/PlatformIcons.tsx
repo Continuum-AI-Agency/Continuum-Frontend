@@ -217,7 +217,7 @@ export function PlatformIcon({
       return <XIcon size={size} className={className} />;
     case 'amazonAds':
       return (
-        <SvgRenderer svgContent={amazon.svg} size={size} className={className} title="Amazon" />
+        <SvgRenderer svgContent={amazon.svg} size={size} className={className} title="Amazon Ads" />
       );
     default:
       return (

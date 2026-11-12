@@ -10,6 +10,7 @@ import {
 } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { ElementCard } from '@/components/ai-studio/elements/ElementCard';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,10 @@ export function StarterKitResults({
   run: OnboardingStarterRun;
   onRetry: (slots: StarterSlotKey[]) => Promise<void>;
 }) {
+  const tUi = useTranslations('onboarding');
+  const tCommon = useTranslations('common');
+  const uiLocale = useLocale();
+
   const [selected, setSelected] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +41,9 @@ export function StarterKitResults({
     run.slots[role].status === 'ready' ? run.slots[role].elementId : '',
   ).join(',');
   useEffect(() => {
-    void queryClient.invalidateQueries({ queryKey: elementsQueryKey(run.brandId) });
+    void queryClient.invalidateQueries({
+      queryKey: elementsQueryKey(run.brandId),
+    });
   }, [queryClient, run.brandId, readyElements]);
   const ids = Object.values(run.slots).flatMap((slot) =>
     slot.status === 'ready' && slot.assetId ? [slot.assetId] : [],
@@ -49,7 +56,7 @@ export function StarterKitResults({
     try {
       await onRetry([key]);
     } catch {
-      setError('Could not retry this item. Please try again.');
+      setError(tUi('m_d5a1bd0aee'));
     } finally {
       setRetrying(false);
     }
@@ -59,12 +66,12 @@ export function StarterKitResults({
     return (
       <div className="mt-2 text-xs text-muted-foreground">
         {slot.status === 'ready'
-          ? 'Saved to your library'
+          ? tUi('m_dfa1a003bb')
           : slot.status === 'running'
-            ? 'Creating…'
+            ? tUi('m_94d7d8ee47')
             : slot.status === 'failed'
               ? slot.error
-              : 'Waiting to start'}
+              : tUi('m_0bc8a5b243')}
         {slot.status === 'failed' && slot.attempts < STARTER_ATTEMPT_LIMIT ? (
           <Button
             variant="ghost"
@@ -72,31 +79,30 @@ export function StarterKitResults({
             disabled={retrying || progress.active}
             onClick={() => void retry(key)}
           >
-            Retry {STARTER_LABELS[key].toLowerCase()}
+            {tUi('m_49618ff971')}
+            {STARTER_LABELS[key].toLowerCase()}
           </Button>
         ) : null}
         {slot.status === 'failed' && slot.attempts >= STARTER_ATTEMPT_LIMIT ? (
-          <p>Retry limit reached. You can still use your saved items.</p>
+          <p>{tUi('m_ccac7a3a82')}</p>
         ) : null}
       </div>
     );
   };
   return (
-    <section className="space-y-5" aria-label="Your starter kit">
+    <section className="space-y-5" aria-label={tUi('m_6f7f2ab27b')}>
       <div>
         <p role="status" aria-live="polite" className="mb-2 text-sm">
-          {starterStateLine(run)}
+          {starterStateLine(run, tCommon, uiLocale)}
         </p>
         <progress
           className="h-2 w-full accent-primary"
           max={progress.total}
           value={progress.ready}
-          aria-label="Starter kit items ready"
+          aria-label={tUi('m_2fd306f75b')}
         />
         {progress.active ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            You can continue. We’ll keep saving your kit and show progress in notifications.
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{tUi('m_2819adf0d1')}</p>
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -117,13 +123,13 @@ export function StarterKitResults({
                 />
               ) : (
                 <div className="flex aspect-video items-center justify-center bg-muted/50 text-xs text-muted-foreground">
-                  {slot.status === 'failed' ? 'Needs attention' : 'Preparing…'}
+                  {slot.status === 'failed' ? tUi('m_a126722ec0') : tUi('m_0b1d6c0b1a')}
                 </div>
               )}
               {slot.source === 'concept' ? (
-                <p className="mt-1 text-xs">Concept · not a catalog product</p>
+                <p className="mt-1 text-xs">{tUi('m_dd6709ec09')}</p>
               ) : role === 'character' && element ? (
-                <p className="mt-1 text-xs">Fictional audience character</p>
+                <p className="mt-1 text-xs">{tUi('m_fd3f46bce1')}</p>
               ) : null}
               {status(role)}
             </div>
@@ -144,15 +150,13 @@ export function StarterKitResults({
                 />
               ) : (
                 <div className="flex aspect-square items-center justify-center bg-muted/50 text-xs text-muted-foreground">
-                  {slot.status === 'failed'
-                    ? 'Needs attention'
-                    : 'Your kit will guide this creative'}
+                  {slot.status === 'failed' ? tUi('m_a126722ec0') : tUi('m_9f453847e2')}
                 </div>
               )}
               <h2 className="mt-2 text-xs font-medium">{STARTER_LABELS[key]}</h2>
               {slot.missingRoles.length ? (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Made without{' '}
+                  {tUi('m_834cd40855')}{' '}
                   {slot.missingRoles.map((role) => STARTER_LABELS[role].toLowerCase()).join(', ')}.
                 </p>
               ) : null}

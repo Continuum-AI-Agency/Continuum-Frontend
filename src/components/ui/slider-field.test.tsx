@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { SliderField } from './slider-field';
 
@@ -38,7 +39,12 @@ describe('SliderField', () => {
   });
 
   it('derives the readout decimals from the step when no format is given', () => {
-    const { container } = renderField({ max: 360, min: -360, step: 1, value: 90 });
+    const { container } = renderField({
+      max: 360,
+      min: -360,
+      step: 1,
+      value: 90,
+    });
 
     expect(container.querySelector('[data-slot="number-flow-value"]')?.textContent).toBe('90');
   });

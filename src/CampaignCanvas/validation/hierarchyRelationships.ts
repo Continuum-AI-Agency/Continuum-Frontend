@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import type { Connection } from '@xyflow/react';
 import type { CampaignCanvasEdge, CampaignCanvasNode, CampaignNodeType } from '../types';
 
@@ -64,11 +68,19 @@ export function isSingleParentRelationship(
 export function getSingleParentConstraintMessage(
   childType: CampaignNodeType,
   parentType: CampaignNodeType,
+  uiTranslate?: ScaleCopy,
 ): string {
   if (childType === 'ad-set' && parentType === 'audience') {
-    return `${hierarchyErrorPrefix}: an ad set takes one audience. Meta has one targeting per ad set, so disconnect the current audience first.`;
+    return uiTranslate
+      ? uiTranslate('canvasHierarchyAudience')
+      : `${hierarchyErrorPrefix}: an ad set takes one audience. Meta has one targeting per ad set, so disconnect the current audience first.`;
   }
-  return `${hierarchyErrorPrefix}: ${NODE_DISPLAY_NAMES[childType]} can only be attached to one ${NODE_DISPLAY_NAMES[parentType]} at a time.`;
+  return uiTranslate
+    ? uiTranslate('canvasHierarchySingle', {
+        child: childType.replaceAll('-', '_'),
+        parent: parentType.replaceAll('-', '_'),
+      })
+    : `${hierarchyErrorPrefix}: ${NODE_DISPLAY_NAMES[childType]} can only be attached to one ${NODE_DISPLAY_NAMES[parentType]} at a time.`;
 }
 
 export function hasExistingSingleParentAttachment(
@@ -88,8 +100,8 @@ export function hasExistingSingleParentAttachment(
   });
 }
 
-function getHierarchyErrorMessage(issue: SingleParentIssue): string {
-  return getSingleParentConstraintMessage(issue.childType, issue.parentType);
+function getHierarchyErrorMessage(issue: SingleParentIssue, uiTranslate?: ScaleCopy): string {
+  return getSingleParentConstraintMessage(issue.childType, issue.parentType, uiTranslate);
 }
 
 function getHierarchyErrorsForNode(
@@ -99,7 +111,7 @@ function getHierarchyErrorsForNode(
   const retainedErrors = (existingErrors ?? []).filter(
     (error) => !error.startsWith(hierarchyErrorPrefix),
   );
-  const hierarchyErrors = issues.map(getHierarchyErrorMessage);
+  const hierarchyErrors = issues.map((issue) => getHierarchyErrorMessage(issue));
   return [...retainedErrors, ...hierarchyErrors];
 }
 
@@ -107,6 +119,7 @@ export function getSingleParentConnectionViolationMessage(
   connection: Connection,
   nodes: CampaignCanvasNode[],
   edges: CampaignCanvasEdge[],
+  uiTranslate?: ScaleCopy,
 ): string | null {
   const sourceNode = nodes.find((node) => node.id === connection.source);
   const targetNode = nodes.find((node) => node.id === connection.target);
@@ -130,11 +143,14 @@ export function getSingleParentConnectionViolationMessage(
     return null;
   }
 
-  return getHierarchyErrorMessage({
-    childId: targetNode.id,
-    childType: targetNode.type,
-    parentType: sourceNode.type,
-  });
+  return getHierarchyErrorMessage(
+    {
+      childId: targetNode.id,
+      childType: targetNode.type,
+      parentType: sourceNode.type,
+    },
+    uiTranslate,
+  );
 }
 
 export function collectSingleParentRelationshipIssues(
@@ -155,7 +171,11 @@ export function collectSingleParentRelationshipIssues(
       );
 
       if (incomingParentEdges.length > 1) {
-        issues.push({ childId: childNode.id, childType: childNode.type, parentType });
+        issues.push({
+          childId: childNode.id,
+          childType: childNode.type,
+          parentType,
+        });
       }
     }
   }

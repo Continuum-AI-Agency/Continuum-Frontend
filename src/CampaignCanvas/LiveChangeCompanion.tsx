@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The companion pane for a pending Jaina edit to a live campaign: one header (what changes,
 // where the approval stands, Map / Read), then the Mapa (LiveChangeCanvas) or the Lectura.
@@ -43,6 +44,8 @@ export function LiveChangeCompanion({
   /** A run holds the conversation, or the implement turn is still waiting to be sent. */
   implementBlocked?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const model = React.useMemo(() => lecturaFromLiveChange(preview), [preview]);
   const versionLine = useVersionLine(versions, preview.partId);
@@ -53,7 +56,10 @@ export function LiveChangeCompanion({
         <span className="flex min-w-[12rem] flex-1 items-baseline gap-2 text-[13px] text-muted-foreground">
           <PlatformChip platform={model.platform} />
           <span className="min-w-0">
-            {preview.subject ?? (decision === 'proposal' ? 'Proposed change' : 'Pending change')}
+            {preview.subject ??
+              (decision === 'proposal'
+                ? betaUiText('beta_28b00af7cb71')
+                : betaUiText('beta_64b979c02d33'))}
           </span>
         </span>
         <div className="flex shrink-0 items-center gap-2">

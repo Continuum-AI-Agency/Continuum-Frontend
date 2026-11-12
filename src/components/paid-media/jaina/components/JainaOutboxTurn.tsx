@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,8 @@ export function JainaOutboxTurn({
   onRetry,
   onDiscard,
 }: JainaOutboxTurnProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const failed = status === 'failed';
   return (
     <div
@@ -42,7 +45,9 @@ export function JainaOutboxTurn({
       </Bubble>
       {failed ? (
         <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs">
-          <span className="text-destructive-ink">Not sent — {reason}</span>
+          <span className="text-destructive-ink">
+            {betaUiText('beta_f71db533280e')} {reason}
+          </span>
           <Button
             type="button"
             size="xs"
@@ -50,14 +55,14 @@ export function JainaOutboxTurn({
             disabled={!canRetry}
             onClick={onRetry}
           >
-            Retry
+            {betaUiText('beta_942087cc2d41')}
           </Button>
           <Button type="button" size="xs" variant="ghost" onClick={onDiscard}>
-            Discard
+            {betaUiText('beta_eb1a70e39274')}
           </Button>
         </div>
       ) : (
-        <span className="text-muted-foreground text-xs">Sending…</span>
+        <span className="text-muted-foreground text-xs">{betaUiText('beta_b8ed5279e897')}</span>
       )}
     </div>
   );

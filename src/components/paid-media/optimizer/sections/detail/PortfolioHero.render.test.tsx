@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('motion/react', () => {
   const React = require('react');
@@ -268,7 +269,11 @@ describe('the day’s news is one row, highest impact on the left', () => {
         ],
         secondary: ['rec:iteso', 'budget:portfolio'],
       },
-      cta: { kind: 'queue_row', rowKey: 'rec:aleira', label: 'Review the pause' },
+      cta: {
+        kind: 'queue_row',
+        rowKey: 'rec:aleira',
+        label: 'Review the pause',
+      },
     });
 
   const mount = (v: HeroView) =>
@@ -432,7 +437,11 @@ function wholeHero(
   const headline = buildPortfolioHeadline({
     view: v,
     report,
-    portfolio: { name: portfolio.name, daily_total: dailyTotal, apply_mode: portfolio.apply_mode },
+    portfolio: {
+      name: portfolio.name,
+      daily_total: dailyTotal,
+      apply_mode: portfolio.apply_mode,
+    },
     metric,
     currency: null,
     mismatch: header.mismatch,
@@ -473,7 +482,11 @@ function wholeHero(
         headline={headline}
         items={report.latest_items}
         jaina={{
-          portfolio: { id: portfolio.id, name: portfolio.name, objective: portfolio.objective },
+          portfolio: {
+            id: portfolio.id,
+            name: portfolio.name,
+            objective: portfolio.objective,
+          },
           read: headline.read,
           onAsk: (href) => handlers.asks?.push(href),
         }}
@@ -799,7 +812,10 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
   it('before the first cycle the name line and the Jaina field still stand, the read does not', () => {
     const { report, view: v } = readBody('formularios');
     const { container } = wholeHero('formularios', {
-      over: { view: { ...v, state: 'first_cycle' }, items: report.latest_items },
+      over: {
+        view: { ...v, state: 'first_cycle' },
+        items: report.latest_items,
+      },
     });
     const hero = container.querySelector('[data-testid="portfolio-hero"]');
     expect(container.querySelector('[data-testid="portfolio-header"]')).toBeTruthy();

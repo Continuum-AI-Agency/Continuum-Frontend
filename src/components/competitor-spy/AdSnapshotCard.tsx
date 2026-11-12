@@ -1,6 +1,7 @@
 'use client';
 
 import type { TimelineEntry } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromCompetitorAdSnapshot } from '@/components/chat/media/media';
@@ -15,15 +16,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { competitorStateLabel, localizeCompetitorCopy } from '@/i18n/competitorCopy';
 import { useCreativeUrl } from '@/lib/api/competitorSpy';
 import { cn } from '@/lib/utils';
+import { competitorLanguageLabel } from './brandVisuals';
 import { SaveToBoardButton } from './SaveToBoardButton';
 
-function formatDate(iso: string | null): string {
+function formatDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString(locale, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function formatCompactList(values: string[]): string {
@@ -56,6 +63,8 @@ export function AdSnapshotCard({
   inspiration?: boolean;
   brandId?: string;
 }) {
+  const uiText = useTranslations('competitor');
+  const uiLocale = useLocale();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const hasMedia = entry.hasCreativeMedia ?? false;
   const { data: creativeUrl, refetch: refetchCreativeUrl } = useCreativeUrl(
@@ -68,7 +77,9 @@ export function AdSnapshotCard({
   const analysis = entry.analysis ?? null;
   const metadata = entry.publicMetadata;
   const platformLabel = formatCompactList(metadata?.platforms ?? entry.platforms);
-  const languageLabel = formatCompactList(metadata?.languages ?? []);
+  const languageLabel = formatCompactList(
+    (metadata?.languages ?? []).map((code) => competitorLanguageLabel(code, uiLocale)),
+  );
 
   return (
     <Card className="gap-0 overflow-hidden rounded-lg border-border py-0 shadow-sm">
@@ -82,12 +93,12 @@ export function AdSnapshotCard({
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            {hasMedia ? 'Loading…' : 'No creative'}
+            {hasMedia ? uiText('loading_ba3bbbe') : uiText('no_creative_34a6e07')}
           </div>
         )}
         <button
           type="button"
-          aria-label={`View full ad details for ${entry.competitorName}`}
+          aria-label={uiText('m_b90ec015f4', { name: entry.competitorName })}
           onClick={() => setDetailsOpen(true)}
           className="absolute inset-0 rounded-t-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         />
@@ -95,11 +106,11 @@ export function AdSnapshotCard({
           variant={entry.status === 'active' ? 'success' : 'secondary'}
           className="absolute left-2 top-2 text-2xs capitalize shadow-sm"
         >
-          {entry.status}
+          {localizeCompetitorCopy(entry.status === 'active' ? 'Active' : 'Paused', uiText)}
         </Badge>
         {inspiration ? (
           <Badge className="absolute right-2 top-2 bg-black/55 text-2xs text-white backdrop-blur-sm">
-            Inspiration
+            {uiText('inspiration_de74ac7')}
           </Badge>
         ) : null}
       </div>
@@ -108,7 +119,9 @@ export function AdSnapshotCard({
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm font-medium">{entry.competitorName}</span>
           <span className="shrink-0 text-xs text-muted-foreground">
-            {daysActive(entry.firstSeenAt, entry.lastSeenAt)}d
+            {uiText('sentence_7dfb8b37fac2', {
+              count: daysActive(entry.firstSeenAt, entry.lastSeenAt),
+            })}
           </span>
         </div>
 
@@ -117,16 +130,41 @@ export function AdSnapshotCard({
         ) : null}
 
         <div className="grid gap-1 border-t border-border/70 pt-2 text-2xs text-muted-foreground">
-          {metadata?.creationTime ? <span>Created {formatDate(metadata.creationTime)}</span> : null}
-          <span>First seen {formatDate(entry.firstSeenAt)}</span>
-          {metadata?.deliveryStart ? (
+          {metadata?.creationTime ? (
             <span>
-              Delivery {formatDate(metadata.deliveryStart)}
-              {metadata.deliveryStop ? ` to ${formatDate(metadata.deliveryStop)}` : ''}
+              {uiText.rich('sentence_26f8d4972219', {
+                v0: () => formatDate(metadata.creationTime, uiLocale),
+              })}
             </span>
           ) : null}
-          {platformLabel ? <span>Platforms {platformLabel}</span> : null}
-          {languageLabel ? <span>Languages {languageLabel}</span> : null}
+          <span>
+            {uiText.rich('sentence_cb995aca56db', {
+              v0: () => formatDate(entry.firstSeenAt, uiLocale),
+            })}
+          </span>
+          {metadata?.deliveryStart ? (
+            <span>
+              {uiText('m_0ef8c3f0a6', {
+                start: formatDate(metadata.deliveryStart, uiLocale),
+                range: metadata.deliveryStop ? 'closed' : 'open',
+                end: formatDate(metadata.deliveryStop, uiLocale),
+              })}
+            </span>
+          ) : null}
+          {platformLabel ? (
+            <span>
+              {uiText.rich('sentence_54143f34062c', {
+                v0: () => platformLabel,
+              })}
+            </span>
+          ) : null}
+          {languageLabel ? (
+            <span>
+              {uiText.rich('sentence_c668a8e4e879', {
+                v0: () => languageLabel,
+              })}
+            </span>
+          ) : null}
         </div>
 
         {analysis ? (
@@ -138,7 +176,11 @@ export function AdSnapshotCard({
             {analysis.primaryTheme ? <Pill>{analysis.primaryTheme}</Pill> : null}
           </div>
         ) : entry.analysisStatus && entry.analysisStatus !== 'done' ? (
-          <span className="text-2xs text-muted-foreground">analysis {entry.analysisStatus}</span>
+          <span className="text-2xs text-muted-foreground">
+            {uiText.rich('sentence_4749b20add5d', {
+              v0: () => competitorStateLabel(entry.analysisStatus ?? 'unknown', uiText),
+            })}
+          </span>
         ) : null}
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
@@ -160,7 +202,7 @@ export function AdSnapshotCard({
                   'h-auto p-0 text-xs',
                 )}
               >
-                View on Meta
+                {uiText('view_on_meta_8ad9797')}
               </a>
             ) : null}
           </div>
@@ -171,8 +213,10 @@ export function AdSnapshotCard({
           <DialogHeader>
             <DialogTitle>{metadata?.pageName ?? entry.competitorName}</DialogTitle>
             <DialogDescription>
-              {platformLabel ? `Platforms: ${platformLabel}` : 'Competitor ad'}
-              {entry.cta ? ` · Call to action: ${entry.cta}` : ''}
+              {platformLabel
+                ? uiText('m_becdc9ec34', { platforms: platformLabel })
+                : uiText('competitor_ad_3bbf525')}
+              {entry.cta ? uiText('m_4a8f5e5adb', { action: entry.cta }) : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
@@ -184,7 +228,9 @@ export function AdSnapshotCard({
                   controls
                   playsInline
                   preload="metadata"
-                  aria-label={`${entry.competitorName} ad video`}
+                  aria-label={uiText('m_ed32498101', {
+                    name: entry.competitorName,
+                  })}
                   className="max-h-[65vh] w-full object-contain"
                 >
                   <track kind="captions" />
@@ -193,32 +239,53 @@ export function AdSnapshotCard({
                 // eslint-disable-next-line @next/next/no-img-element -- signed competitor creative URL
                 <img
                   src={media.url}
-                  alt={`${entry.competitorName} ad creative`}
+                  alt={uiText('m_a4347d2395', { name: entry.competitorName })}
                   className="max-h-[65vh] w-full object-contain"
                 />
               ) : (
-                <p className="p-6 text-sm text-muted-foreground">No creative media available.</p>
+                <p className="p-6 text-sm text-muted-foreground">
+                  {uiText('no_creative_media_available_50d0550')}
+                </p>
               )}
             </div>
             <div className="flex flex-col gap-4 overflow-y-auto">
               {entry.body ? (
                 <section aria-labelledby={`ad-copy-${entry.snapshotId}`}>
                   <h3 id={`ad-copy-${entry.snapshotId}`} className="mb-1 text-xs font-semibold">
-                    Full ad copy
+                    {uiText('full_ad_copy_d9840c2')}
                   </h3>
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{entry.body}</p>
                 </section>
               ) : (
-                <p className="text-sm text-muted-foreground">No ad copy was captured.</p>
+                <p className="text-sm text-muted-foreground">
+                  {uiText('no_ad_copy_was_captured_3fc6c16')}
+                </p>
               )}
               <dl className="grid gap-1 border-t border-border/70 pt-3 text-xs text-muted-foreground">
-                <div>First seen {formatDate(entry.firstSeenAt)}</div>
-                <div>Last seen {formatDate(entry.lastSeenAt)}</div>
-                {languageLabel ? <div>Languages {languageLabel}</div> : null}
+                <div>
+                  {uiText.rich('sentence_cb995aca56db', {
+                    v0: () => formatDate(entry.firstSeenAt, uiLocale),
+                  })}
+                </div>
+                <div>
+                  {uiText.rich('sentence_051241de960f', {
+                    v0: () => formatDate(entry.lastSeenAt, uiLocale),
+                  })}
+                </div>
+                {languageLabel ? (
+                  <div>
+                    {uiText.rich('sentence_c668a8e4e879', {
+                      v0: () => languageLabel,
+                    })}
+                  </div>
+                ) : null}
                 {metadata?.deliveryStart ? (
                   <div>
-                    Delivery {formatDate(metadata.deliveryStart)}
-                    {metadata.deliveryStop ? ` to ${formatDate(metadata.deliveryStop)}` : ''}
+                    {uiText('m_0ef8c3f0a6', {
+                      start: formatDate(metadata.deliveryStart, uiLocale),
+                      range: metadata.deliveryStop ? 'closed' : 'open',
+                      end: formatDate(metadata.deliveryStop, uiLocale),
+                    })}
                   </div>
                 ) : null}
               </dl>
@@ -238,7 +305,7 @@ export function AdSnapshotCard({
                 rel="noreferrer"
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
-                View on Meta
+                {uiText('view_on_meta_8ad9797')}
               </a>
             ) : null}
           </DialogFooter>

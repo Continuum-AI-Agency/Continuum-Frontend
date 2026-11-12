@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { OptimizerLogRow } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
@@ -55,7 +56,9 @@ beforeEach(() => {
   actions = [];
   actionsLoading = false;
   logs = [];
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
 });
 
 afterEach(cleanup);
@@ -100,7 +103,11 @@ describe('OptimizerActivity rows name the platform their receipt names', () => {
   it('a TikTok scheduled receipt: TikTok chip and the TikTok request id', () => {
     actions = [
       action({
-        receipt: { platform: 'tiktok_ads', requestId: 'tt-5d7', scheduled: 'next_day' },
+        receipt: {
+          platform: 'tiktok_ads',
+          requestId: 'tt-5d7',
+          scheduled: 'next_day',
+        },
       }),
     ];
     renderActivity(<OptimizerActivity brandId="brand-1" />);
@@ -293,7 +300,11 @@ describe('OptimizerActivity — the timeline (G13)', () => {
       {
         currency: 'MXN',
         metrics: { spend: 7000, roas: 0, ctr: 0 },
-        trends: complete.map((day) => ({ date: day.key, spend: 1000, impressions: 900 })),
+        trends: complete.map((day) => ({
+          date: day.key,
+          spend: 1000,
+          impressions: 900,
+        })),
       },
     );
     const range = changeHistoryWindow();

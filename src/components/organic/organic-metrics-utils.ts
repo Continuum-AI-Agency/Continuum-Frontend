@@ -1,4 +1,5 @@
 import { compareTrials, type PostTrial } from '@continuum/contracts';
+import type { UiLocale } from '@/i18n/config';
 import type {
   MetricComparison,
   OrganicPost,
@@ -8,7 +9,10 @@ import { NO_DATA, percentChangeFrom } from './organic-format';
 
 export type DrilldownWindow = '7d' | '30d';
 
-export const DRILLDOWN_WINDOW_DAYS: Record<DrilldownWindow, number> = { '7d': 7, '30d': 30 };
+export const DRILLDOWN_WINDOW_DAYS: Record<DrilldownWindow, number> = {
+  '7d': 7,
+  '30d': 30,
+};
 export type PostMetricKey = 'reach' | 'views' | 'engagement' | 'comments';
 export type PostSortKey = 'recent' | 'hookRate' | 'views' | 'reach' | 'engagement';
 
@@ -21,18 +25,46 @@ export function calculateHookRate(post: OrganicPost): number | undefined {
 }
 
 // Reels watch time arrives from Meta in milliseconds; render it human-readable.
-export function formatWatchTime(ms: number | undefined): string {
+const watchUnitFormatters = new Map<string, Intl.NumberFormat>();
+function formatWatchUnit(
+  value: number,
+  unit: 'second' | 'minute' | 'hour',
+  digits: number,
+  locale: UiLocale,
+): string {
+  const key = `${locale}:${unit}:${digits}`;
+  let formatter = watchUnitFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'unit',
+      unit,
+      unitDisplay: 'narrow',
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    watchUnitFormatters.set(key, formatter);
+  }
+  return formatter.format(value);
+}
+export function formatWatchTime(ms: number | undefined, locale: UiLocale = 'en'): string {
   if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return NO_DATA;
   const totalSeconds = ms / 1000;
-  if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
+  if (totalSeconds < 60)
+    return locale === 'en'
+      ? `${totalSeconds.toFixed(1)}s`
+      : formatWatchUnit(Number(totalSeconds.toFixed(1)), 'second', 1, locale);
   const totalMinutes = Math.floor(totalSeconds / 60);
   if (totalSeconds < 3600) {
     const seconds = Math.round(totalSeconds % 60);
-    return `${totalMinutes}m ${seconds}s`;
+    return locale === 'en'
+      ? `${totalMinutes}m ${seconds}s`
+      : `${formatWatchUnit(totalMinutes, 'minute', 0, locale)} ${formatWatchUnit(seconds, 'second', 0, locale)}`;
   }
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return `${hours}h ${minutes}m`;
+  return locale === 'en'
+    ? `${hours}h ${minutes}m`
+    : `${formatWatchUnit(hours, 'hour', 0, locale)} ${formatWatchUnit(minutes, 'minute', 0, locale)}`;
 }
 
 export function sortPosts(posts: OrganicPost[], key: PostSortKey): OrganicPost[] {
@@ -155,7 +187,10 @@ export function isTrendKeyGraphable(
   return countNumericTrendPoints(trends, trendKey) >= minPoints;
 }
 
-export type TrendLineShape = { curve: 'linear' | 'monotone'; showDots: boolean };
+export type TrendLineShape = {
+  curve: 'linear' | 'monotone';
+  showDots: boolean;
+};
 
 // How a line should be drawn for the number of real points behind it. Spline
 // smoothing across two points draws a rise-and-fall that no measurement
@@ -197,7 +232,11 @@ export function windowEndingOn(until: string, days: number): { since: string; un
   return { since: toYmd(start), until: toYmd(end) };
 }
 
-export type DateAlignedPoint = { date: string; value: number | undefined; boosted: boolean };
+export type DateAlignedPoint = {
+  date: string;
+  value: number | undefined;
+  boosted: boolean;
+};
 
 // A series whose axis comes from the window's calendar dates rather than from
 // however many points the metric happens to carry. Positional slicing gave each

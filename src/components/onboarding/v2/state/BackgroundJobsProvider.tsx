@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 export type JobStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -41,42 +42,56 @@ type ContextValue = {
 const BackgroundJobsContext = createContext<ContextValue | null>(null);
 
 export function BackgroundJobsProvider({ children }: { children: React.ReactNode }) {
+  const uiErrorMessage = useUiErrorMessage();
   const [jobs, setJobs] = useState<JobsState>(initialState);
   const controllers = useRef<Partial<Record<JobKey, AbortController>>>({});
 
-  const start = useCallback(async <T,>(key: JobKey, runner: JobRunner<T>): Promise<T | null> => {
-    controllers.current[key]?.abort();
-    const ctrl = new AbortController();
-    controllers.current[key] = ctrl;
-    setJobs((prev) => ({
-      ...prev,
-      [key]: { status: 'running', data: null, error: null, startedAt: Date.now() },
-    }));
-    try {
-      const data = await runner(ctrl.signal);
-      if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
-      setJobs((prev) => ({
-        ...prev,
-        [key]: { status: 'done', data, error: null, startedAt: prev[key].startedAt },
-      }));
-      return data;
-    } catch (error) {
-      if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      // A job that streamed partial data (the Brand DNA cards) keeps it: one failure must
-      // not blank what already arrived.
+  const start = useCallback(
+    async <T,>(key: JobKey, runner: JobRunner<T>): Promise<T | null> => {
+      controllers.current[key]?.abort();
+      const ctrl = new AbortController();
+      controllers.current[key] = ctrl;
       setJobs((prev) => ({
         ...prev,
         [key]: {
-          status: 'error',
-          data: prev[key].data,
-          error: message,
-          startedAt: prev[key].startedAt,
+          status: 'running',
+          data: null,
+          error: null,
+          startedAt: Date.now(),
         },
       }));
-      return null;
-    }
-  }, []);
+      try {
+        const data = await runner(ctrl.signal);
+        if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
+        setJobs((prev) => ({
+          ...prev,
+          [key]: {
+            status: 'done',
+            data,
+            error: null,
+            startedAt: prev[key].startedAt,
+          },
+        }));
+        return data;
+      } catch (error) {
+        if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
+        const message = uiErrorMessage(error);
+        // A job that streamed partial data (the Brand DNA cards) keeps it: one failure must
+        // not blank what already arrived.
+        setJobs((prev) => ({
+          ...prev,
+          [key]: {
+            status: 'error',
+            data: prev[key].data,
+            error: message,
+            startedAt: prev[key].startedAt,
+          },
+        }));
+        return null;
+      }
+    },
+    [uiErrorMessage],
+  );
 
   const patch = useCallback((key: JobKey, data: unknown) => {
     setJobs((prev) => ({ ...prev, [key]: { ...prev[key], data } }));

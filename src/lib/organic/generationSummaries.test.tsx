@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // PP-DT-C-unpaid-brand-polls-402-on-every-page: the in-flight ticker's generations read is mounted
 // in the app header, so on a brand without Organic Plus every page asked the organic agent for its
 // generations and got 402 (×3–4 per landing with the retry), each a console error and a billing
@@ -5,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 const requestMock = mock(() =>

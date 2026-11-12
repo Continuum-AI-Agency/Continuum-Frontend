@@ -27,6 +27,7 @@
 import { Slider as SliderPrimitive } from '@base-ui/react/slider';
 import Color from 'color';
 import { PipetteIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   createContext,
   type HTMLAttributes,
@@ -238,11 +239,12 @@ export const ColorPickerSelection = memo(function ColorPickerSelection({
 export type ColorPickerHueProps = { className?: string };
 
 export function ColorPickerHue({ className }: ColorPickerHueProps) {
+  const uiText = useTranslations('common');
   const { hsl, commit } = useColorPicker();
 
   return (
     <SliderPrimitive.Root
-      aria-label="Hue"
+      aria-label={uiText('hue_4d7056f')}
       className={cn('w-full', className)}
       data-slot="color-picker-hue"
       max={360}
@@ -270,13 +272,15 @@ export type ColorPickerFormatProps = HTMLAttributes<HTMLDivElement>;
  * every keystroke would rewrite the field under the cursor.
  */
 export function ColorPickerFormat({ className, ...props }: ColorPickerFormatProps) {
+  const tUi = useTranslations('common');
+
   const { hex, commitHex } = useColorPicker();
   const [draft, setDraft] = useState<string | null>(null);
 
   return (
     <div className={cn('flex items-center gap-1', className)} {...props}>
       <Input
-        aria-label="Hex colour"
+        aria-label={tUi('m_daafa6d492')}
         className="h-8 flex-1 font-mono text-xs"
         onBlur={() => setDraft(null)}
         onChange={(event) => {
@@ -294,6 +298,8 @@ export function ColorPickerFormat({ className, ...props }: ColorPickerFormatProp
 
 /** Chromium-only. Hidden rather than shipped inert where the browser has no such API. */
 function ColorPickerEyeDropper() {
+  const tUi = useTranslations('common');
+
   const { commitHex } = useColorPicker();
   const [supported, setSupported] = useState(false);
 
@@ -318,7 +324,7 @@ function ColorPickerEyeDropper() {
 
   return (
     <Button
-      aria-label="Pick a colour from the screen"
+      aria-label={tUi('m_a8eba15c73')}
       className="size-8 shrink-0 text-muted-foreground"
       onClick={pick}
       size="icon"

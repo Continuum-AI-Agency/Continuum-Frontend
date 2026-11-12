@@ -1,4 +1,8 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useLabelTranslations,
+} from 'next-intl';
 
 // The adaptive Home (H01): how Continuum works the brand (the mode and its reason), the Ask bar,
 // then the board's five to seven tiles, each at its size, on a 1 / 2 / 4 column grid. The order is
@@ -27,7 +31,10 @@ const AskBar = lazy(() => import('./modules/ask/AskBar'));
 const StoryButton = lazy(() => import('./modules/story/StoryButton'));
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const;
-const GRID: Variants = { hidden: {}, shown: { transition: { staggerChildren: 0.05 } } };
+const GRID: Variants = {
+  hidden: {},
+  shown: { transition: { staggerChildren: 0.05 } },
+};
 const SLOT: Variants = {
   hidden: { opacity: 0, y: 14 },
   shown: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE_OUT } },
@@ -43,6 +50,10 @@ const SORTS: { id: HomeBoardSort; label: string }[] = [
 ];
 
 export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
+  const labelCopy = useLabelTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const reduce = useReducedMotion();
   const [sort, setSort] = useState<HomeBoardSort>('impact');
   const { pins, togglePin } = usePinnedTiles(ctx.userId, ctx.brandId);
@@ -58,7 +69,7 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
 
   return (
     <section
-      aria-label="Home"
+      aria-label={betaUiText('beta_3a78695388b3')}
       className={cn('space-y-3 px-[var(--card-pad)] py-4', boardPaletteClass)}
       data-testid="home-board-root"
     >
@@ -69,7 +80,7 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
               className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs"
               data-testid="home-board-mode"
             >
-              {ctx.reading.modeLabel}
+              {betaUiText('homeModeTitle', { mode: ctx.reading.mode })}
             </span>
             <span className="text-muted-foreground text-xs">{ctx.reading.modeReason}</span>
           </p>
@@ -79,10 +90,10 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
             <StoryButton ctx={ctx} />
           </Suspense>
           <Tabs onValueChange={(value) => setSort(value as HomeBoardSort)} value={sort}>
-            <TabsList aria-label="Order tiles by">
+            <TabsList aria-label={betaUiText('beta_63f5c5e4533a')}>
               {SORTS.map((option) => (
                 <TabsTrigger className="text-xs" key={option.id} value={option.id}>
-                  {option.label}
+                  {labelCopy('homeSort', { kind: option.id })}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -125,9 +136,7 @@ export function HomeBoard({ ctx }: { ctx: HomeBoardContext }) {
           })}
         </motion.div>
       </HomeBoardChromeContext.Provider>
-      <p className="px-1 text-muted-foreground text-xs">
-        Order = impact on the goal × urgency × confidence. A pinned tile stays at the top.
-      </p>
+      <p className="px-1 text-muted-foreground text-xs">{betaUiText('beta_159203132ccd')}</p>
     </section>
   );
 }

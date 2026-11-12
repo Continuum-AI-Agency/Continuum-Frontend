@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { act, cleanup, fireEvent, renderHook, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VIDEO_GENERATOR_NODE_BOUNDS } from '../utils/aspectRatioSizing';
 import { clearVideoAspectCache, useSnapToVideoAspect } from './useSnapToVideoAspect';
@@ -27,8 +33,14 @@ const resolveMetadata = async (width: number, height: number) => {
     expect(detectionVideos.length).toBeGreaterThan(0);
   });
   const element = detectionVideos[detectionVideos.length - 1];
-  Object.defineProperty(element, 'videoWidth', { configurable: true, value: width });
-  Object.defineProperty(element, 'videoHeight', { configurable: true, value: height });
+  Object.defineProperty(element, 'videoWidth', {
+    configurable: true,
+    value: width,
+  });
+  Object.defineProperty(element, 'videoHeight', {
+    configurable: true,
+    value: height,
+  });
   await act(async () => {
     fireEvent.loadedMetadata(element);
   });

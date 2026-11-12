@@ -1,6 +1,9 @@
 'use client';
 
 import type { Competitor, CompetitorHealthTone } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
+import { formatCompetitorNumber } from '@/components/competitor-spy/brandVisuals';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 import { cn } from '@/lib/utils';
 import { compactCount, initials, tileStyle } from './brandVisuals';
 import { competitorHealthChip } from './competitorHealth';
@@ -44,13 +47,14 @@ const TONE_DOT: Record<CompetitorHealthTone, string> = {
 // cannot nest the focusable CompetitorHealthBadge). Colour + native title convey
 // state; the full diagnostics tooltip lives in the Competitors tab list.
 function HealthDot({ competitor, adsFound }: { competitor: Competitor; adsFound?: number | null }) {
-  const chip = competitorHealthChip(competitor, adsFound);
+  const uiText = useTranslations('competitor');
+  const chip = competitorHealthChip(competitor, adsFound, uiText);
   return (
     <span
       role="img"
       className={cn('size-2 shrink-0 rounded-full', TONE_DOT[chip.tone])}
       title={chip.label}
-      aria-label={`Health: ${chip.label}`}
+      aria-label={uiText('m_8532eb2ea7', { health: chip.label })}
     />
   );
 }
@@ -74,14 +78,16 @@ export function CompetitorRail({
   adCounts?: Record<string, number>;
   className?: string;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
   return (
     <aside className={cn('flex flex-col gap-1', className)}>
       <div className="mb-1 hidden items-baseline justify-between px-2.5 md:flex">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Competitors
+          {uiText('competitors_e699b0b')}
         </span>
         <span className="font-mono text-xs tabular-nums text-muted-foreground">
-          {competitors.length}
+          {formatCompetitorNumber(competitors.length, uiLocale)}
         </span>
       </div>
 
@@ -94,9 +100,11 @@ export function CompetitorRail({
         >
           <Tile>{'∗'}</Tile>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm text-foreground">All competitors</span>
+            <span className="block truncate text-sm text-foreground">
+              {uiText('all_competitors_1d2adcc')}
+            </span>
             <span className="block truncate font-mono text-xs text-muted-foreground">
-              {competitors.length} tracked
+              {uiText('m_2098b01fa9', { count: competitors.length })}
             </span>
           </span>
         </button>
@@ -104,7 +112,7 @@ export function CompetitorRail({
         {competitors.map((competitor) => {
           const active = competitor.id === selectedId;
           const handle = competitor.instagramUsername ? `@${competitor.instagramUsername}` : null;
-          const metric = compactCount(competitor.instagramFollowersCount);
+          const metric = compactCount(competitor.instagramFollowersCount, uiLocale);
           const needsReview = competitor.paidStatus === 'needs_review';
           return (
             <button
@@ -122,7 +130,7 @@ export function CompetitorRail({
                   {competitor.name}
                 </span>
                 <span className="block truncate font-mono text-xs text-muted-foreground">
-                  {needsReview ? 'needs review' : (handle ?? competitor.slug)}
+                  {needsReview ? uiText('needs_review_42e1975') : (handle ?? competitor.slug)}
                 </span>
               </span>
               {showHealth || metric ? (
@@ -133,7 +141,14 @@ export function CompetitorRail({
                   {metric ? (
                     <span
                       className="font-mono text-xs tabular-nums text-muted-foreground"
-                      title={metricLabel}
+                      title={localizeCompetitorCopy(
+                        metricLabel === 'ads'
+                          ? 'Ads'
+                          : metricLabel === 'followers'
+                            ? 'Followers'
+                            : metricLabel,
+                        uiText,
+                      )}
                     >
                       {metric}
                     </span>
@@ -153,7 +168,7 @@ export function CompetitorRail({
             <span className="flex size-8 shrink-0 items-center justify-center text-base leading-none">
               +
             </span>
-            <span className="truncate">Add competitor</span>
+            <span className="truncate">{uiText('add_competitor_281df96')}</span>
           </button>
         ) : null}
       </div>

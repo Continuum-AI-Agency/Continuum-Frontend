@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type PresentationCommand, presentationDocumentSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { PresentationAgentPanel } from './PresentationAgentPanel';
 import type { PresentationEngine } from './presentationEngine';
 
@@ -13,7 +19,15 @@ const document = presentationDocumentSchema.parse({
   nativeDocument: 'native',
   source: null,
   size: { width: 720, height: 405 },
-  slides: [{ id: 'slide-a', title: 'Intro', layoutId: 'layout-a', notes: '', objects: [] }],
+  slides: [
+    {
+      id: 'slide-a',
+      title: 'Intro',
+      layoutId: 'layout-a',
+      notes: '',
+      objects: [],
+    },
+  ],
   fields: [],
   diagnostics: [],
   capabilities: { apply: true },
@@ -71,7 +85,11 @@ describe('PresentationAgentPanel layout permissions', () => {
       'true',
     );
     expect(
-      (screen.getByRole('button', { name: 'Drafting variants…' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Drafting variants…',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 });

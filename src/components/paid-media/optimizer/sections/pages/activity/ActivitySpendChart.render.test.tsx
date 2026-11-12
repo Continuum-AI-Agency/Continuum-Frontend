@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ActivitySpendChart, type ActivitySpendChartProps } from './ActivitySpendChart';
 import {
   type ActivityEvent,
@@ -37,8 +38,18 @@ const series = spendSeries(
 ) as SpendSeries;
 
 const events: ActivityEvent[] = [
-  { id: 'action:a1', source: 'optimizer', dayKey: '2026-10-27', label: 'Daily budget · Leads' },
-  { id: 'action:a2', source: 'team', dayKey: '2026-10-27', label: 'Autopilot paused · Leads' },
+  {
+    id: 'action:a1',
+    source: 'optimizer',
+    dayKey: '2026-10-27',
+    label: 'Daily budget · Leads',
+  },
+  {
+    id: 'action:a2',
+    source: 'team',
+    dayKey: '2026-10-27',
+    label: 'Autopilot paused · Leads',
+  },
   {
     id: 'delivery:stopped:2026-10-29',
     source: 'platform',

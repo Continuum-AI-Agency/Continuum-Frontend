@@ -2,6 +2,7 @@
 
 import type { TimelineEntry } from '@continuum/contracts';
 import { ExternalLink } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { CompetitorSearchBar } from '@/components/competitors/CompetitorSearchBar';
 import {
@@ -16,23 +17,28 @@ import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAdTimeline } from '@/lib/api/competitorSpy';
-import { adStatusBadge, formatRelativeDay } from '@/lib/competitor-spy/competitor-spy-rows';
+import { adStatusBadge } from '@/lib/competitor-spy/competitor-spy-rows';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import { CompetitorSpyLink } from './CompetitorSpyLink';
 
-function compactDays(firstSeenAt: string, lastSeenAt: string): string {
+function compactDays(firstSeenAt: string, lastSeenAt: string, locale: string): string {
   const first = Date.parse(firstSeenAt);
   const last = Date.parse(lastSeenAt);
   if (Number.isNaN(first) || Number.isNaN(last)) return '-';
   const days = Math.max(0, Math.round((last - first) / 86_400_000));
-  return days === 1 ? '1d' : `${days}d`;
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: 'day',
+    unitDisplay: 'narrow',
+  }).format(days);
 }
 
-function formatMetadataDate(iso: string | null | undefined): string {
+function formatMetadataDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return '-';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -43,12 +49,15 @@ function formatMetadataDate(iso: string | null | undefined): string {
 function formatDeliveryWindow(
   start: string | null | undefined,
   stop: string | null | undefined,
+  t: ReturnType<typeof useTranslations<'dashboard'>>,
+  locale: string,
 ): string {
-  const startLabel = formatMetadataDate(start);
-  const stopLabel = formatMetadataDate(stop);
-  if (startLabel !== '-' && stopLabel !== '-') return `${startLabel} to ${stopLabel}`;
-  if (startLabel !== '-') return `${startLabel} onward`;
-  if (stopLabel !== '-') return `Until ${stopLabel}`;
+  const startLabel = formatMetadataDate(start, locale);
+  const stopLabel = formatMetadataDate(stop, locale);
+  if (startLabel !== '-' && stopLabel !== '-')
+    return t('m_1fbe924781', { start: startLabel, stop: stopLabel });
+  if (startLabel !== '-') return t('m_d9ba0118fc', { start: startLabel });
+  if (stopLabel !== '-') return t('m_61b9ac23be', { stop: stopLabel });
   return '-';
 }
 
@@ -57,9 +66,15 @@ function formatList(values: string[] | undefined): string {
   return items.length > 0 ? items.join(', ') : '-';
 }
 
-function formatObservedLive(row: TimelineEntry): string {
+function formatObservedLive(row: TimelineEntry, locale: string): string {
   const days = row.publicMetadata?.observedActiveDays;
-  return typeof days === 'number' ? `${days}d` : compactDays(row.firstSeenAt, row.lastSeenAt);
+  return typeof days === 'number'
+    ? new Intl.NumberFormat(locale, {
+        style: 'unit',
+        unit: 'day',
+        unitDisplay: 'narrow',
+      }).format(days)
+    : compactDays(row.firstSeenAt, row.lastSeenAt, locale);
 }
 
 function MetadataItem({
@@ -78,16 +93,24 @@ function MetadataItem({
 }
 
 function StatusPill({ badge }: { badge: ReturnType<typeof adStatusBadge> }) {
+  const t = useTranslations('dashboard');
+  const keys = {
+    new: 'm_6403f2b7eb',
+    active: 'm_a733b809d2',
+    paused: 'm_c7dfb6f1d9',
+  } as const;
   const variant =
     badge.tone === 'new' ? 'success' : badge.tone === 'paused' ? 'destructive' : 'secondary';
   return (
     <Badge variant={variant} className="text-2xs">
-      {badge.label}
+      {t(keys[badge.tone])}
     </Badge>
   );
 }
 
 export function CompetitorAdsTable({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
   const { data, isLoading, isError } = useAdTimeline({
     brandId,
     limit: 12,
@@ -101,7 +124,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
     () => [
       {
         id: 'competitor',
-        header: 'Competitor',
+        header: uiText('m_4705687644'),
         cell: (row) => (
           <div className="min-w-0">
             <p className="truncate text-sm text-foreground">{row.competitorName}</p>
@@ -111,11 +134,11 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
       },
       {
         id: 'copy',
-        header: 'Ad copy',
+        header: uiText('m_e08a43be07'),
         cell: (row) => (
           <div className="min-w-0">
             <p className="truncate text-sm text-muted-foreground">
-              {row.body?.trim() || 'No primary text'}
+              {row.body?.trim() || uiText('no_primary_text_114934d')}
             </p>
             {row.analysis?.primaryTheme ? (
               <p className="truncate text-xs text-muted-foreground">{row.analysis.primaryTheme}</p>
@@ -125,7 +148,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
       },
       {
         id: 'platforms',
-        header: 'Platforms',
+        header: uiText('platforms_ab9bd75'),
         sortValue: (row) => row.platforms.length,
         cell: (row) => (
           <div className="flex max-w-36 flex-wrap justify-end gap-1">
@@ -152,7 +175,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
       },
       {
         id: 'status',
-        header: 'Status',
+        header: uiText('status_920e413'),
         align: 'right',
         sortValue: (row) =>
           adStatusBadge(row.status, row.firstSeenAt, now).tone === 'new'
@@ -167,27 +190,27 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
       },
       {
         id: 'firstSeen',
-        header: 'First seen',
+        header: uiText('first_seen_32fbd28'),
         align: 'right',
         sortValue: (row) => Date.parse(row.firstSeenAt) || 0,
-        cell: (row) => formatRelativeDay(row.firstSeenAt, now) || '-',
+        cell: (row) => (row.firstSeenAt ? formatRelativeTime(row.firstSeenAt, now, uiLocale) : '-'),
       },
       {
         id: 'duration',
-        header: 'Live',
+        header: uiText('m_65c821a596'),
         align: 'right',
         sortValue: (row) => Date.parse(row.lastSeenAt) - Date.parse(row.firstSeenAt),
-        cell: (row) => compactDays(row.firstSeenAt, row.lastSeenAt),
+        cell: (row) => compactDays(row.firstSeenAt, row.lastSeenAt, uiLocale),
       },
     ],
-    [now],
+    [now, uiText, uiLocale],
   );
 
   return (
     <div className="flex flex-col gap-2">
-      <CompetitorSearchBar comingSoon placeholder="Search competitor ads…" />
+      <CompetitorSearchBar comingSoon placeholder={uiText('search_competitor_ads_6ab109e')} />
       <InsightDataTable
-        title="Competitor ads"
+        title={uiText('competitor_ads_f0438cd')}
         headerAction={<CompetitorSpyLink href="/competitor-spy?tab=inspiration" />}
         rows={rows}
         columns={columns}
@@ -195,9 +218,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
         defaultSort={{ columnId: 'firstSeen', direction: 'desc' }}
         isLoading={isLoading}
         emptyState={
-          isError
-            ? 'Competitor ads are unavailable right now.'
-            : 'No paid competitor ads yet - tag competitors with a resolved Meta Page in Brand Spy.'
+          isError ? uiText('competitorAdsUnavailableEmpty') : uiText('competitorAdsNoPaidEmpty')
         }
         contextMenu={(row) => <InsightContextActions permalink={row.snapshotUrl ?? undefined} />}
         rowActions={(row) => <InsightActionsDropdown permalink={row.snapshotUrl ?? undefined} />}
@@ -205,7 +226,9 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
           <div className="flex flex-col gap-2 text-xs leading-relaxed">
             {row.body ? <p className="text-foreground">{row.body}</p> : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono tabular-nums text-muted-foreground">
-              {row.cta ? <span>CTA {row.cta}</span> : null}
+              {row.cta ? (
+                <span>{uiText.rich('sentence_380774176cfb', { v0: () => row.cta })}</span>
+              ) : null}
               {row.analysis?.hookArchetype ? (
                 <span>{row.analysis.hookArchetype.replace(/_/g, ' ')}</span>
               ) : null}
@@ -213,36 +236,59 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
             </div>
             <Card className="rounded-md border-border bg-muted/25 py-0 shadow-none">
               <CardContent className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-4">
-                <MetadataItem label="Meta page" value={row.publicMetadata?.pageName ?? '-'} />
                 <MetadataItem
-                  label="Library ID"
+                  label={uiText('meta_page_47bc35d')}
+                  value={row.publicMetadata?.pageName ?? '-'}
+                />
+                <MetadataItem
+                  label={uiText('library_id_d107031')}
                   value={row.publicMetadata?.sourceAdId ?? row.sourceAdId}
                 />
                 <MetadataItem
-                  label="Created"
-                  value={formatMetadataDate(row.publicMetadata?.creationTime)}
+                  label={uiText('created_d70b9e2')}
+                  value={formatMetadataDate(row.publicMetadata?.creationTime, uiLocale)}
                 />
                 <MetadataItem
-                  label="Delivery"
+                  label={uiText('delivery_52bfe58')}
                   value={formatDeliveryWindow(
                     row.publicMetadata?.deliveryStart ?? row.deliveryStart,
                     row.publicMetadata?.deliveryStop ?? row.deliveryStop,
+                    uiText,
+                    uiLocale,
                   )}
                 />
-                <MetadataItem label="First seen" value={formatMetadataDate(row.firstSeenAt)} />
-                <MetadataItem label="Last seen" value={formatMetadataDate(row.lastSeenAt)} />
                 <MetadataItem
-                  label="Fetched"
-                  value={formatMetadataDate(row.publicMetadata?.fetchedAt)}
+                  label={uiText('first_seen_32fbd28')}
+                  value={formatMetadataDate(row.firstSeenAt, uiLocale)}
                 />
-                <MetadataItem label="Observed live" value={formatObservedLive(row)} />
                 <MetadataItem
-                  label="Platforms"
+                  label={uiText('last_seen_21fd79c')}
+                  value={formatMetadataDate(row.lastSeenAt, uiLocale)}
+                />
+                <MetadataItem
+                  label={uiText('fetched_0013b4c')}
+                  value={formatMetadataDate(row.publicMetadata?.fetchedAt, uiLocale)}
+                />
+                <MetadataItem
+                  label={uiText('observed_live_ff0d525')}
+                  value={formatObservedLive(row, uiLocale)}
+                />
+                <MetadataItem
+                  label={uiText('platforms_ab9bd75')}
                   value={formatList(row.publicMetadata?.platforms ?? row.platforms)}
                 />
-                <MetadataItem label="Languages" value={formatList(row.publicMetadata?.languages)} />
-                <MetadataItem label="Link title" value={row.publicMetadata?.linkTitle ?? '-'} />
-                <MetadataItem label="Link caption" value={row.publicMetadata?.linkCaption ?? '-'} />
+                <MetadataItem
+                  label={uiText('languages_318655c')}
+                  value={formatList(row.publicMetadata?.languages)}
+                />
+                <MetadataItem
+                  label={uiText('link_title_6df6f32')}
+                  value={row.publicMetadata?.linkTitle ?? '-'}
+                />
+                <MetadataItem
+                  label={uiText('link_caption_41fd093')}
+                  value={row.publicMetadata?.linkCaption ?? '-'}
+                />
               </CardContent>
             </Card>
             {row.snapshotUrl ? (
@@ -256,7 +302,7 @@ export function CompetitorAdsTable({ brandId }: { brandId: string }) {
                 )}
               >
                 <ExternalLink className="size-3" />
-                Open in Meta Ad Library
+                {uiText('m_e0c329c016')}
               </a>
             ) : null}
           </div>

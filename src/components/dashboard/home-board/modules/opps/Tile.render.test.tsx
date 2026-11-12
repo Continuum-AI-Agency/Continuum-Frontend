@@ -4,7 +4,8 @@ import type {
   HomeOpportunityCard,
   PortfolioListItem,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { homeContext, tileOf } from './__fixtures__/homeContext';
 import {
@@ -64,14 +65,21 @@ mock.module('@/components/paid-media/optimizer/sections/OptimizerActionsPortfoli
 // The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
 let stack: HomeReadLoad<HomeOpportunitiesData> = { status: 'unavailable' };
 const realGoalRead = await import('../../useHomeGoalRead');
-mock.module('../../useHomeGoalRead', () => ({ ...realGoalRead, useHomeGoalRead: () => stack }));
+mock.module('../../useHomeGoalRead', () => ({
+  ...realGoalRead,
+  useHomeGoalRead: () => stack,
+}));
 
 const { default: OppsTile } = await import('./Tile');
 const { OPPS_MISSING, OPPS_GOAL_UNITS_NOTE } = await import('./oppsModel');
 
 afterEach(() => {
   cleanup();
-  portfoliosRead = { hasAnswer: true, isError: false, brandPortfolios: EASY_FIT_PORTFOLIOS };
+  portfoliosRead = {
+    hasAnswer: true,
+    isError: false,
+    brandPortfolios: EASY_FIT_PORTFOLIOS,
+  };
   stack = { status: 'unavailable' };
   refetch.mockClear();
   platformCardReads.length = 0;
@@ -135,7 +143,9 @@ describe('Opportunities tile', () => {
     portfoliosRead = {
       ...portfoliosRead,
       brandPortfolios: [
-        portfolioWith(EASY_FIT_PORTFOLIOS[1] as PortfolioListItem, { status: 'archived' }),
+        portfolioWith(EASY_FIT_PORTFOLIOS[1] as PortfolioListItem, {
+          status: 'archived',
+        }),
       ],
     };
     render(<OppsTile ctx={ctx} tile={tileOf('opps')} />);
@@ -209,7 +219,12 @@ describe('Opportunities tile with the Backend read', () => {
     state: null,
     cta: { kind: 'none', targetId: null },
     cardAction: null,
-    source: { kind: 'optimizer_get_account_read', ref: 'r1', since: null, until: '2026-11-04' },
+    source: {
+      kind: 'optimizer_get_account_read',
+      ref: 'r1',
+      since: null,
+      until: '2026-11-04',
+    },
     impact: {
       moneyPerDay: 9.16,
       currency: 'MXN',
@@ -246,7 +261,12 @@ describe('Opportunities tile with the Backend read', () => {
 
   it('keeps the figure in money where the read did not convert it, and does not pretend', () => {
     stack = ready([
-      opportunity({ unit: 'money', goalUnits: null, costPerResult: null, goalUnitsBasis: null }),
+      opportunity({
+        unit: 'money',
+        goalUnits: null,
+        costPerResult: null,
+        goalUnitsBasis: null,
+      }),
     ]);
     render(<OppsTile ctx={ctx} tile={tileOf('opps', 'm')} />);
     const impact = screen.getByTestId('home-tile-opps-impact');

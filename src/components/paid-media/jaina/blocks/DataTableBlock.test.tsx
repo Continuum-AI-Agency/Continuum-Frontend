@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { DataTableBlockV2 } from '@/lib/jaina/schemas';
 
 const requestPreview = mock(async () => ({
@@ -30,8 +31,18 @@ const baseBlock: DataTableBlockV2 = {
     { key: 'headline', label: 'Headline', format: 'text', align: 'left' },
     { key: 'placement', label: 'Placement', format: 'text', align: 'left' },
     { key: 'spend', label: 'Spend', format: 'currency', align: 'right' },
-    { key: 'cpa', label: 'Cost per result', format: 'currency', align: 'right' },
-    { key: 'impressions', label: 'Impressions', format: 'number', align: 'right' },
+    {
+      key: 'cpa',
+      label: 'Cost per result',
+      format: 'currency',
+      align: 'right',
+    },
+    {
+      key: 'impressions',
+      label: 'Impressions',
+      format: 'number',
+      align: 'right',
+    },
   ],
   rows: [
     {
@@ -60,7 +71,9 @@ describe('DataTableBlock', () => {
     render(<DataTableBlock block={baseBlock} isStreaming={false} />);
 
     const list = screen.getByRole('list', { name: 'Winning creatives' });
-    const card = within(list).getByRole('article', { name: 'Move with confidence' });
+    const card = within(list).getByRole('article', {
+      name: 'Move with confidence',
+    });
 
     expect(within(card).getByRole('heading', { name: 'Move with confidence' })).toBeTruthy();
     expect(within(card).getByText('Preview unavailable')).toBeTruthy();
@@ -236,7 +249,9 @@ describe('DataTableBlock', () => {
       />,
     );
 
-    const image = await screen.findByRole('img', { name: 'Move with confidence' });
+    const image = await screen.findByRole('img', {
+      name: 'Move with confidence',
+    });
     expect(image.getAttribute('src')).toBe('https://cdn.example.com/analyzed-creative.jpg');
     expect(requestPreview).toHaveBeenCalledTimes(1);
   });
@@ -253,9 +268,19 @@ describe('DataTableBlock', () => {
           card_fields: null,
           columns: [
             { key: 'entity', label: 'Entity', format: 'text', align: 'left' },
-            { key: 'headline', label: 'Headline', format: 'text', align: 'left' },
+            {
+              key: 'headline',
+              label: 'Headline',
+              format: 'text',
+              align: 'left',
+            },
           ],
-          rows: [{ entity: 'ITESO // TOURS // SEPTIEMBRE', headline: 'Move with confidence' }],
+          rows: [
+            {
+              entity: 'ITESO // TOURS // SEPTIEMBRE',
+              headline: 'Move with confidence',
+            },
+          ],
           row_meta: [{ entity_id: '120243403769620322', entity_type: 'campaign' }],
         }}
         isStreaming={false}

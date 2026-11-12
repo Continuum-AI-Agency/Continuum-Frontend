@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { PostedContentPreview } from './PostedContentQuickLook';
 import { SocialPostFrame } from './SocialPostFrame';
 import type { OrganicCalendarPostedContent } from './types';
@@ -63,7 +64,9 @@ describe('PostedContentPreview', () => {
     rerender(
       <PostedContentPreview post={post({ platform: 'facebook' })} onDelete={onDelete} isDeleting />,
     );
-    const pending = screen.getByRole('button', { name: 'Deleting from Facebook…' });
+    const pending = screen.getByRole('button', {
+      name: 'Deleting from Facebook…',
+    });
     expect(pending.hasAttribute('disabled')).toBe(true);
   });
 
@@ -248,7 +251,11 @@ describe('SocialPostFrame', () => {
     expect(container.querySelector('[data-story-progress]')).toBeTruthy();
 
     rerender(
-      <SocialPostFrame {...props} frame={{ kind: 'story', mediaAspect: 9 / 16 }} editable={false} />,
+      <SocialPostFrame
+        {...props}
+        frame={{ kind: 'story', mediaAspect: 9 / 16 }}
+        editable={false}
+      />,
     );
     expect(screen.getByText('Send message').getAttribute('aria-hidden')).toBe('true');
     expect(container.querySelector('[data-frame-media]')?.textContent).toBe('Preview unavailable');

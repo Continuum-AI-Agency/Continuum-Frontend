@@ -7,13 +7,15 @@ import {
   SelectionMode,
   useReactFlow,
 } from '@xyflow/react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from '@/i18n/navigation';
 import '@xyflow/react/dist/style.css';
 import type { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import { type ActionId, type UnsplashPhoto, validateWorkflowGraph } from '@continuum/contracts';
 import { AtSign, Camera, FolderOpen, Palette } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useShallow } from 'zustand/react/shallow';
 import { Canvas } from '@/components/ai-elements/canvas';
@@ -93,6 +95,8 @@ function Flow({
   focusNodeId?: string;
   organicPlannerSeed?: PlannerAiStudioHandoff | null;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   // A bare useStudioStore() subscribes to the WHOLE store, so this 800-line component
   // re-rendered on every unrelated field change — clipboard, history, saveTrigger. The
   // shallow selector narrows that to the fields actually read here.
@@ -290,7 +294,9 @@ function Flow({
     [nodes],
   );
   const handleComposerRun = useCallback(() => {
-    void executeWorkflow(composerExecutionControls, { brandId: brandProfileId });
+    void executeWorkflow(composerExecutionControls, {
+      brandId: brandProfileId,
+    });
   }, [composerExecutionControls, brandProfileId]);
 
   // Applies full brand-book enforcement to every selected generation node at once,
@@ -307,8 +313,8 @@ function Flow({
     );
     if (targets.length === 0) {
       show({
-        title: 'No generation nodes selected',
-        description: 'Select image or video generation nodes to enforce the brand book.',
+        title: translateUi('no_generation_nodes_selected_09af20c4'),
+        description: translateUi('select_image_or_video_generation_no_df4dd9e5'),
         variant: 'error',
       });
       return;
@@ -318,11 +324,13 @@ function Flow({
     });
     triggerSave();
     show({
-      title: 'Brand book enforced',
-      description: `${targets.length} node${targets.length === 1 ? '' : 's'} will follow the full brand book.`,
+      title: translateUi('brand_book_enforced_c30d991e'),
+      description: translateUi('value0_node_value1_will_follow_the__46e7ff79', {
+        count: Number(targets.length),
+      }),
       variant: 'success',
     });
-  }, [nodes, show, triggerSave, updateNodeData]);
+  }, [nodes, show, triggerSave, updateNodeData, translateUi]);
 
   // Places unfurled media as unattached reference nodes, laid out in a centered
   // row at the viewport center. Nodes have no edges, so they are inert references
@@ -333,7 +341,10 @@ function Flow({
       takeSnapshot();
       const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
       const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
-      const center = screenToFlowPosition({ x: viewportWidth / 2, y: viewportHeight / 2 });
+      const center = screenToFlowPosition({
+        x: viewportWidth / 2,
+        y: viewportHeight / 2,
+      });
       const positions = layoutInRow(items.length, center);
       const built = buildReferenceNodes(items, positions, () => uuidv4());
       const newNodes = built.map(
@@ -402,7 +413,10 @@ function Flow({
     (event: React.MouseEvent) => {
       lastMousePositionRef.current = { x: event.clientX, y: event.clientY };
       if (!reactFlowWrapper.current) return;
-      const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const { x, y } = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
       updateCursor(x, y);
     },
     [screenToFlowPosition, updateCursor],
@@ -535,8 +549,8 @@ function Flow({
       const remainingEdges = edges.filter((edge) => edge.id !== oldEdge.id);
       if (!isValidConnection(normalized, remainingEdges, nodes)) {
         show({
-          title: 'That connection does not fit',
-          description: 'Choose a compatible port with available capacity.',
+          title: translateUi('that_connection_does_not_fit_84445a7c'),
+          description: translateUi('choose_a_compatible_port_with_avail_35a42cb4'),
           variant: 'error',
         });
         return;
@@ -545,7 +559,7 @@ function Flow({
       setEdges(reconnectEdge(oldEdge, normalized, edges));
       triggerSave();
     },
-    [edges, nodes, setEdges, show, takeSnapshot, triggerSave],
+    [edges, nodes, setEdges, show, takeSnapshot, triggerSave, translateUi],
   );
 
   const onReconnectEnd = useCallback(
@@ -638,27 +652,27 @@ function Flow({
                 variant="outline"
                 size="sm"
                 onClick={() => setIsLibraryBrowserOpen((open) => !open)}
-                aria-label="Browse media library"
+                aria-label={translateUi('browse_media_library_7eccde04')}
               >
-                <FolderOpen className="mr-2 h-4 w-4" />
-                Library
+                <FolderOpen className="mr-2 h-4 w-4" /> {translateUi('library_dc20b3d5')}{' '}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setIsInstagramBrowserOpen((open) => !open)}
-                aria-label="Import media from Instagram"
+                aria-label={translateUi('import_media_from_instagram_5c66fa8a')}
               >
-                <AtSign className="mr-2 h-4 w-4" />
-                Import from Instagram
+                <AtSign className="mr-2 h-4 w-4" /> {translateUi(
+                  'import_from_instagram_ee939f89',
+                )}{' '}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setIsUnsplashBrowserOpen((open) => !open)}
-                aria-label="Search Unsplash photos"
+                aria-label={translateUi('search_unsplash_photos_ca8b90c3')}
               >
                 <Camera className="mr-2 h-4 w-4" />
                 Unsplash
@@ -668,16 +682,15 @@ function Flow({
                 variant="outline"
                 size="sm"
                 onClick={() => setIsStylesOpen((open) => !open)}
-                aria-label="Browse styles"
+                aria-label={translateUi('browse_styles_83e5ad00')}
               >
-                <Palette className="mr-2 h-4 w-4" />
-                Styles
+                <Palette className="mr-2 h-4 w-4" /> {translateUi('styles_3626e7fd')}{' '}
               </Button>
             </Panel>
 
             {isLibraryBrowserOpen && (
               <CanvasFloatingPanel
-                title="Media Library"
+                title={translateUi('media_library_3b414fc1')}
                 icon={<FolderOpen className="size-4" aria-hidden />}
                 onClose={() => setIsLibraryBrowserOpen(false)}
                 className="h-[560px] w-[360px]"
@@ -688,7 +701,7 @@ function Flow({
 
             {isStylesOpen && (
               <CanvasFloatingPanel
-                title="Styles"
+                title={translateUi('styles_3626e7fd')}
                 icon={<Palette className="size-4" aria-hidden />}
                 onClose={() => setIsStylesOpen(false)}
                 className="h-[560px] w-[360px]"
@@ -716,8 +729,17 @@ function Flow({
             <CanvasValidationPanel
               issues={validationIssues}
               onFocusIssue={(nodeId) => {
-                setNodes(nodes.map((node) => ({ ...node, selected: node.id === nodeId })));
-                void fitView({ nodes: [{ id: nodeId }], duration: 250, padding: 0.5 });
+                setNodes(
+                  nodes.map((node) => ({
+                    ...node,
+                    selected: node.id === nodeId,
+                  })),
+                );
+                void fitView({
+                  nodes: [{ id: nodeId }],
+                  duration: 250,
+                  padding: 0.5,
+                });
               }}
             />
 
@@ -849,7 +871,11 @@ export function StudioCanvas({
     },
     [activeRoomId, brandProfileId, currentSearch, router],
   );
-  const plannerApply = useApplyBackToPlanner({ brandProfileId, organicPlannerSeed, focusNodeId });
+  const plannerApply = useApplyBackToPlanner({
+    brandProfileId,
+    organicPlannerSeed,
+    focusNodeId,
+  });
 
   // The room itself is fenced above; this drops the previous brand's graph and its room
   // param. resetForBrandSwitch takes the new brand because child effects run before parent

@@ -8,8 +8,8 @@ import {
   getAllowedSourceHandles,
   getAllowedTargetHandles,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../../stores/useStudioStore';
@@ -91,7 +91,10 @@ describe('ActionNode', () => {
 
   it('previews an image op as an image', () => {
     const { container } = renderNode(
-      nodeData({ actionId: 'image.rotate', generatedImage: 'data:image/png;base64,abc' }),
+      nodeData({
+        actionId: 'image.rotate',
+        generatedImage: 'data:image/png;base64,abc',
+      }),
     );
 
     const img = container.querySelector('img');
@@ -140,7 +143,11 @@ describe('ActionNode', () => {
     for (const actionId of ['image.rotate', 'video.overlay', 'text.concat'] as ActionId[]) {
       const data = nodeData({ actionId });
       const { container } = renderNode(data);
-      const graphNode = { id: 'action-1', type: 'action', data: data as Record<string, unknown> };
+      const graphNode = {
+        id: 'action-1',
+        type: 'action',
+        data: data as Record<string, unknown>,
+      };
 
       expect(handleIds(container, 'left')).toEqual(getAllowedTargetHandles(graphNode));
       expect(handleIds(container, 'right')).toEqual(getAllowedSourceHandles(graphNode));
@@ -151,8 +158,18 @@ describe('ActionNode', () => {
   it('shows and persists the order of every clip wired to a multi-input port', () => {
     useStudioStore.setState({
       nodes: [
-        { id: 'clip-a', type: 'video', position: { x: 0, y: 0 }, data: { fileName: 'A.mp4' } },
-        { id: 'clip-b', type: 'video', position: { x: 0, y: 0 }, data: { fileName: 'B.mp4' } },
+        {
+          id: 'clip-a',
+          type: 'video',
+          position: { x: 0, y: 0 },
+          data: { fileName: 'A.mp4' },
+        },
+        {
+          id: 'clip-b',
+          type: 'video',
+          position: { x: 0, y: 0 },
+          data: { fileName: 'B.mp4' },
+        },
         {
           id: 'action-1',
           type: 'action',

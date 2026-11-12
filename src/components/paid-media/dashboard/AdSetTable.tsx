@@ -1,8 +1,8 @@
 'use client';
+
 import { ArrowDown, ArrowUp, ChevronDown, RotateCw } from 'lucide-react';
-
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import { CardOverlayDemo } from '@/components/shadcn-studio/card/card-07';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,6 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
 import {
   type PaidMetricsComparison,
@@ -84,20 +86,20 @@ type AdSetTableProps = {
 type SortField = 'name' | 'spend' | 'roas' | 'ctr' | 'impressions' | 'clicks';
 type SortDirection = 'asc' | 'desc';
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+function formatCurrency(value: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
   }).format(value);
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
+function formatNumber(value: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale).format(value);
 }
 
-function formatPercent(value: number): string {
-  return `${value.toFixed(2)}%`;
+function formatPercent(value: number, locale: UiLocale = 'en'): string {
+  return `${formatDecimal(value, 2, locale)}%`;
 }
 
 function getStatusColor(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -121,6 +123,8 @@ export function AdSetTable({
   adsByAdSet,
   onAdSetToggle,
 }: AdSetTableProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const [sortField, setSortField] = React.useState<SortField>('spend');
   const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
   const [expandedAdSetId, setExpandedAdSetId] = React.useState<string | null>(null);
@@ -212,7 +216,7 @@ export function AdSetTable({
   if (adSets.length === 0) {
     return (
       <div className="py-8 text-center text-muted-foreground">
-        No {segmentLabel} found for this campaign.
+        {uiText.rich('sentence_81670b2f425b', { v0: segmentLabel })}
       </div>
     );
   }
@@ -229,19 +233,22 @@ export function AdSetTable({
                 onClick={() => handleSort('name')}
                 className="font-medium hover:underline focus:outline-none"
               >
-                {segmentLabel === 'segments' ? 'Segment Name' : 'Ad Set Name'}
+                {segmentLabel === 'segments'
+                  ? uiText('segment_name_cccd820')
+                  : uiText('ad_set_name_55a16cc')}
                 <SortIcon field="name" />
               </button>
             </TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>{uiText('status_920e413')}</TableHead>
             <TableHead className="text-right">
               <button
                 type="button"
                 onClick={() => handleSort('spend')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
-                Spend
-                <SortIcon field="spend" />
+                {uiText.rich('sentence_97b5d5d0af3d', {
+                  v0: () => <SortIcon field="spend" />,
+                })}
               </button>
             </TableHead>
             <TableHead className="text-right">
@@ -250,8 +257,9 @@ export function AdSetTable({
                 onClick={() => handleSort('roas')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
-                ROAS
-                <SortIcon field="roas" />
+                {uiText.rich('sentence_f6901084fbf7', {
+                  v0: () => <SortIcon field="roas" />,
+                })}
               </button>
             </TableHead>
             <TableHead className="text-right">
@@ -260,8 +268,9 @@ export function AdSetTable({
                 onClick={() => handleSort('ctr')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
-                CTR
-                <SortIcon field="ctr" />
+                {uiText.rich('sentence_ccce938f3ce1', {
+                  v0: () => <SortIcon field="ctr" />,
+                })}
               </button>
             </TableHead>
             <TableHead className="text-right">
@@ -270,8 +279,9 @@ export function AdSetTable({
                 onClick={() => handleSort('impressions')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
-                Impressions
-                <SortIcon field="impressions" />
+                {uiText.rich('sentence_2b47b67ca097', {
+                  v0: () => <SortIcon field="impressions" />,
+                })}
               </button>
             </TableHead>
             <TableHead className="text-right">
@@ -280,8 +290,9 @@ export function AdSetTable({
                 onClick={() => handleSort('clicks')}
                 className="w-full text-right font-medium hover:underline focus:outline-none"
               >
-                Clicks
-                <SortIcon field="clicks" />
+                {uiText.rich('sentence_297c0d530965', {
+                  v0: () => <SortIcon field="clicks" />,
+                })}
               </button>
             </TableHead>
           </TableRow>
@@ -311,19 +322,19 @@ export function AdSetTable({
                     <Badge variant={getStatusColor(adSet.status)}>{adSet.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    {adSet.metrics ? formatCurrency(adSet.metrics.spend) : '-'}
+                    {adSet.metrics ? formatCurrency(adSet.metrics.spend, uiLocale) : '-'}
                   </TableCell>
                   <TableCell className="text-right">
-                    {adSet.metrics ? adSet.metrics.roas.toFixed(2) : '-'}
+                    {adSet.metrics ? formatDecimal(adSet.metrics.roas, 2, uiLocale) : '-'}
                   </TableCell>
                   <TableCell className="text-right">
-                    {adSet.metrics ? formatPercent(adSet.metrics.ctr) : '-'}
+                    {adSet.metrics ? formatPercent(adSet.metrics.ctr, uiLocale) : '-'}
                   </TableCell>
                   <TableCell className="text-right">
-                    {adSet.metrics ? formatNumber(adSet.metrics.impressions) : '-'}
+                    {adSet.metrics ? formatNumber(adSet.metrics.impressions, uiLocale) : '-'}
                   </TableCell>
                   <TableCell className="text-right">
-                    {adSet.metrics ? formatNumber(adSet.metrics.clicks) : '-'}
+                    {adSet.metrics ? formatNumber(adSet.metrics.clicks, uiLocale) : '-'}
                   </TableCell>
                 </TableRow>
 
@@ -339,19 +350,20 @@ export function AdSetTable({
                       {adsState?.status === 'loading' ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <RotateCw className="h-4 w-4 animate-spin" />
-                          Loading ads and creatives...
+                          {uiText('loading_ads_and_creatives_ba0ca66')}
                         </div>
                       ) : null}
 
                       {adsState?.status === 'error' ? (
                         <div className="text-sm text-destructive">
-                          {adsState.errorMessage || 'Failed to load ads for this ad set.'}
+                          {adsState.errorMessage ||
+                            uiText('failed_to_load_ads_for_this_ad_set_33b8842')}
                         </div>
                       ) : null}
 
                       {adsState?.status === 'success' && adsState.ads.length === 0 ? (
                         <div className="text-sm text-muted-foreground">
-                          No ads returned for this ad set.
+                          {uiText('no_ads_returned_for_this_ad_set_15f5269')}
                         </div>
                       ) : null}
 
@@ -360,8 +372,10 @@ export function AdSetTable({
                           {adsState.ads.map((ad) => {
                             const imageUrl =
                               ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
-                            const title = ad.creative?.title || ad.name || 'Untitled ad';
-                            const postCopy = ad.creative?.body || 'No post copy available.';
+                            const title =
+                              ad.creative?.title || ad.name || uiText('untitled_ad_7ff7472');
+                            const postCopy =
+                              ad.creative?.body || uiText('no_post_copy_available_428f984');
 
                             return (
                               <div key={ad.id} className="space-y-2">
@@ -374,7 +388,11 @@ export function AdSetTable({
                                   alt={ad.name}
                                 />
                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                  <span>Ad ID: {ad.id}</span>
+                                  <span>
+                                    {uiText.rich('sentence_61f63dc81db5', {
+                                      v0: ad.id,
+                                    })}
+                                  </span>
                                   {ad.previewShareableLink ? (
                                     <a
                                       href={ad.previewShareableLink}
@@ -382,7 +400,7 @@ export function AdSetTable({
                                       rel="noreferrer"
                                       className="underline underline-offset-2"
                                     >
-                                      Preview
+                                      {uiText('preview_324b134')}
                                     </a>
                                   ) : null}
                                 </div>

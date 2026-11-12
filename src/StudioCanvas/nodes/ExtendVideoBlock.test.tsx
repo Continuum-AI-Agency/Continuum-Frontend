@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -80,7 +86,9 @@ describe('ExtendVideoBlock generated-video preview', () => {
   });
 
   it('takes the shape of the extended clip instead of a hardcoded 16:9', async () => {
-    const { container } = renderNode({ generatedVideoUrl: 'https://example.com/portrait.mp4' });
+    const { container } = renderNode({
+      generatedVideoUrl: 'https://example.com/portrait.mp4',
+    });
 
     // The ratio is read from the element ALREADY showing the clip. Measuring with a
     // second, detached element downloaded the same bytes twice — both requests issued
@@ -91,8 +99,14 @@ describe('ExtendVideoBlock generated-video preview', () => {
     const detection = rendered[0];
     if (!detection) throw new Error('the node rendered no video to measure');
 
-    Object.defineProperty(detection, 'videoWidth', { configurable: true, value: 1080 });
-    Object.defineProperty(detection, 'videoHeight', { configurable: true, value: 1920 });
+    Object.defineProperty(detection, 'videoWidth', {
+      configurable: true,
+      value: 1080,
+    });
+    Object.defineProperty(detection, 'videoHeight', {
+      configurable: true,
+      value: 1920,
+    });
     await act(async () => {
       fireEvent.loadedMetadata(detection);
     });

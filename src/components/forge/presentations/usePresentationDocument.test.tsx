@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type PresentationCommand, presentationDocumentSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const doc = presentationDocumentSchema.parse({
   schemaVersion: 1,
@@ -25,13 +30,18 @@ const write = mock(
     draftRevision: 8,
   }),
 );
-mock.module('@/lib/api/presentations.client', () => ({ presentationsApi: { load, apply: write } }));
+mock.module('@/lib/api/presentations.client', () => ({
+  presentationsApi: { load, apply: write },
+}));
 mock.module('./presentationEngine', () => ({
   PresentationEngine: class {
     async process(request: { document: typeof doc }) {
       return {
         ok: true,
-        document: { ...request.document, revision: request.document.revision + 1 },
+        document: {
+          ...request.document,
+          revision: request.document.revision + 1,
+        },
       };
     }
     dispose() {}
@@ -40,15 +50,24 @@ mock.module('./presentationEngine', () => ({
 
 import { usePresentationDocument } from './usePresentationDocument';
 
-const scope = { brandId: 'brand', assetId: 'source', baseVersionId: 'source-version' };
+const scope = {
+  brandId: 'brand',
+  assetId: 'source',
+  baseVersionId: 'source-version',
+};
 afterEach(() => {
   cleanup();
   load.mockClear();
   write.mockReset();
-  write.mockImplementation(async () => ({ document: { ...doc, revision: 101 }, draftRevision: 8 }));
+  write.mockImplementation(async () => ({
+    document: { ...doc, revision: 101 },
+    draftRevision: 8,
+  }));
 });
 function mount() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const wrapper = ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );

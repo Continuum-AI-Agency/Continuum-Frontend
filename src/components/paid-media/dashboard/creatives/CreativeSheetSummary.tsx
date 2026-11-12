@@ -1,6 +1,7 @@
 'use client';
-
+import { useLocale, useTranslations } from 'next-intl';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
+import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 
 import type { RotationEvent } from './types';
@@ -19,10 +20,10 @@ type CreativeSheetSummaryProps = {
   className?: string;
 };
 
-function formatOccurredAt(iso: string): string {
+function formatOccurredAt(iso: string, uiLocale: UiLocale = 'en'): string {
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return iso;
-  return new Date(ms).toLocaleString('en-US', {
+  return new Date(ms).toLocaleString(uiLocale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -36,17 +37,24 @@ export function CreativeSheetSummary({
   rotationCount,
   className,
 }: CreativeSheetSummaryProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   return (
     <div className={cn('flex gap-3', className)}>
       <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-muted/50">
         {ad.imageUrl ? (
           <ChatMediaThumb
-            media={{ id: ad.name, url: ad.imageUrl, kind: 'image', name: ad.name }}
+            media={{
+              id: ad.name,
+              url: ad.imageUrl,
+              kind: 'image',
+              name: ad.name,
+            }}
             fallbackSeed={ad.name}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-2xs text-muted-foreground">
-            No preview
+            {uiText('no_preview_4b8bacd')}
           </div>
         )}
       </div>
@@ -56,13 +64,15 @@ export function CreativeSheetSummary({
           <div className="truncate text-xs text-muted-foreground">{ad.adSetName}</div>
         ) : null}
         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-          <span>
-            {rotationCount} rotation{rotationCount === 1 ? '' : 's'}
-          </span>
+          <span>{uiText.rich('sentence_9c1c946410f0', { count: rotationCount })}</span>
           {latestSwap ? (
             <>
               <span aria-hidden>·</span>
-              <span>Last: {formatOccurredAt(latestSwap.occurredAt)}</span>
+              <span>
+                {uiText.rich('sentence_2cdaaa2e0070', {
+                  v0: formatOccurredAt(latestSwap.occurredAt, uiLocale),
+                })}
+              </span>
             </>
           ) : null}
         </div>

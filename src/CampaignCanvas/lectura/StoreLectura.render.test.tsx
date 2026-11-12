@@ -1,9 +1,10 @@
+import { render } from '@/i18n/__tests__/render';
 // The companion → model hop of a campaign copy: the chat hands the canvas the Backend's diff,
 // and the canvas marks ITS graph from it — only when the graph is the scaffold it was drawn for.
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { StructureDiff } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import { SCAFFOLD_COPY_WITH_TESTS } from '@/lib/campaign-canvas/columnMap.fixtures';
 import type { CanvasHydration } from '@/lib/campaign-canvas/hydrate';
 import { useCampaignStore } from '../stores/useCampaignStore';
@@ -20,7 +21,14 @@ const DIFF: StructureDiff = {
       level: 'campaign',
       name: 'ZAPOPAN copy',
       change: 'changed',
-      fields: [{ key: 'name', label: 'Name', before: 'ZAPOPAN live', after: 'ZAPOPAN copy' }],
+      fields: [
+        {
+          key: 'name',
+          label: 'Name',
+          before: 'ZAPOPAN live',
+          after: 'ZAPOPAN copy',
+        },
+      ],
     },
     {
       path_key: 'c0/a0',
@@ -36,7 +44,14 @@ const DIFF: StructureDiff = {
       level: 'adset',
       name: 'Test Reels only',
       change: 'added',
-      fields: [{ key: 'placements', label: 'Placements', before: 'automatic', after: 'reels' }],
+      fields: [
+        {
+          key: 'placements',
+          label: 'Placements',
+          before: 'automatic',
+          after: 'reels',
+        },
+      ],
     },
   ],
 };
@@ -60,7 +75,11 @@ describe('StoreLectura with the chat’s diff', () => {
     load('parent-1');
     const { container } = render(
       <StoreLectura
-        structureDiff={{ parentScaffoldId: 'parent-1', scaffoldVersionId: 'v1', diff: DIFF }}
+        structureDiff={{
+          parentScaffoldId: 'parent-1',
+          scaffoldVersionId: 'v1',
+          diff: DIFF,
+        }}
       />,
     );
     // The renamed campaign and the one test ad set the diff names; s4, which the graph alone
@@ -72,7 +91,11 @@ describe('StoreLectura with the chat’s diff', () => {
     load('parent-2');
     const { container } = render(
       <StoreLectura
-        structureDiff={{ parentScaffoldId: 'parent-1', scaffoldVersionId: 'v1', diff: DIFF }}
+        structureDiff={{
+          parentScaffoldId: 'parent-1',
+          scaffoldVersionId: 'v1',
+          diff: DIFF,
+        }}
       />,
     );
     expect(changes(container)).toEqual(['s4:added', 's5:added']);

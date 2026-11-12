@@ -2,6 +2,7 @@
 
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { Archive, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,8 @@ export function CreativeLibrarySidebar({
   brandProfileId,
   expandedWidth = 400,
 }: CreativeLibrarySidebarProps) {
+  const translateUi = useUiTranslations('studio');
+
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -30,7 +33,7 @@ export function CreativeLibrarySidebar({
         <Button
           className="h-10 w-10 rounded-full shadow-xl bg-slate-900 text-white hover:bg-slate-800"
           onClick={() => setOpen(true)}
-          aria-label="Open creative library"
+          aria-label={translateUi('open_creative_library_1a5053db')}
         >
           <Archive className="size-5" />
         </Button>
@@ -52,7 +55,9 @@ export function CreativeLibrarySidebar({
               <div className="flex flex-shrink-0 items-center justify-between border-b border-white/5 p-4">
                 <div className="flex items-center gap-2 text-white">
                   <Archive className="h-5 w-5" />
-                  <SheetTitle className="font-medium text-white">Creative Library</SheetTitle>
+                  <SheetTitle className="font-medium text-white">
+                    {translateUi('creative_library_4b3f215c')}
+                  </SheetTitle>
                 </div>
                 <SheetClose
                   render={

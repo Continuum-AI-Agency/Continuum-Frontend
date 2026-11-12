@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type BriefCopy = ReturnType<typeof useTranslations<'dashboard'>>;
+
 // The Jaina brief tile (H05): the daily read the Optimizer's worker already wrote for each of the
 // brand's ad accounts (optimizer.account_daily_reads, through optimizer_get_account_read), shown
 // as stored. No model call happens here. Every read carries its own date, so a brief the worker
@@ -105,24 +110,41 @@ export function briefEntries(reads: readonly BriefRead[], today: Date): BriefEnt
 }
 
 /** "Read on Nov 2" — the year only when it is not this year. Read in UTC, as the day is. */
-export function readOnLabel(entry: Pick<BriefEntry, 'day'>, today: Date): string {
+export function readOnLabel(
+  entry: Pick<BriefEntry, 'day'>,
+  today: Date,
+  t?: BriefCopy,
+  locale: UiLocale = 'en',
+): string {
   const date = new Date(`${entry.day}T00:00:00Z`);
   const sameYear = date.getUTCFullYear() === today.getUTCFullYear();
-  const formatted = date.toLocaleDateString('en-US', {
+  const formatted = date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     ...(sameYear ? {} : { year: 'numeric' }),
     timeZone: 'UTC',
   });
-  return `Read on ${formatted}`;
+  return t ? t('briefReadOn', { date: formatted }) : `Read on ${formatted}`;
 }
 
 /** "4 days old" for a stale read; null while it is current. */
-export function staleLabel(entry: Pick<BriefEntry, 'stale' | 'daysOld'>): string | null {
-  return entry.stale ? `${entry.daysOld} days old` : null;
+export function staleLabel(
+  entry: Pick<BriefEntry, 'stale' | 'daysOld'>,
+  t?: BriefCopy,
+): string | null {
+  return entry.stale
+    ? t
+      ? t('briefAge', { count: entry.daysOld })
+      : `${entry.daysOld} days old`
+    : null;
 }
 
-export function briefView(reads: readonly BriefRead[], today: Date): BriefView {
+export function briefView(
+  reads: readonly BriefRead[],
+  today: Date,
+  t?: BriefCopy,
+  locale: UiLocale = 'en',
+): BriefView {
   if (reads.some((read) => read.status === 'pending')) return { state: 'loading' };
   const entries = briefEntries(reads, today);
   const failed = reads.filter((read) => read.status === 'error').length;
@@ -130,7 +152,7 @@ export function briefView(reads: readonly BriefRead[], today: Date): BriefView {
   if (!latest) return failed > 0 ? { state: 'error' } : { state: 'missing' };
   return {
     state: 'ready',
-    headline: { day: latest.day, label: readOnLabel(latest, today) },
+    headline: { day: latest.day, label: readOnLabel(latest, today, t, locale) },
     entries,
     failed,
   };

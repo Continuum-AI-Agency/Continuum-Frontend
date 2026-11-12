@@ -1,8 +1,11 @@
 import { AlertTriangle, type LucideIcon, Minus, TrendingUp } from 'lucide-react';
+
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Panel } from '@/components/shared/Panel';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 import { cn } from '@/lib/utils';
 
 export type InsightSeverity = 'positive' | 'negative' | 'neutral';
@@ -24,7 +27,11 @@ const SEVERITY: Record<InsightSeverity, { label: string; Icon: LucideIcon; class
     Icon: AlertTriangle,
     className: 'text-amber-600 dark:text-amber-500',
   },
-  neutral: { label: 'Informational', Icon: Minus, className: 'text-muted-foreground' },
+  neutral: {
+    label: 'Informational',
+    Icon: Minus,
+    className: 'text-muted-foreground',
+  },
 };
 
 type InsightsListProps = {
@@ -66,6 +73,7 @@ export function InsightsList({
   headerAction,
   maxHeight,
 }: InsightsListProps) {
+  const uiText = useTranslations('dashboard');
   const normalizedItems = normalizeInsightItems(items);
 
   return (
@@ -74,9 +82,11 @@ export function InsightsList({
         <div
           className="flex flex-col gap-3 p-[var(--card-pad)]"
           role="status"
-          aria-label="Loading recent insights"
+          aria-label={uiText('loading_recent_insights_be6078f')}
         >
-          <p className="text-xs text-muted-foreground">Loading recent insights…</p>
+          <p className="text-xs text-muted-foreground">
+            {uiText('loading_recent_insights_e097f54')}
+          </p>
           {['92%', '78%', '86%', '68%'].map((width) => (
             <div key={width} className="flex items-center gap-2.5">
               <Skeleton className="h-3.5 w-3.5 rounded-full" />
@@ -87,8 +97,10 @@ export function InsightsList({
       ) : normalizedItems.length === 0 ? (
         <Empty className="min-h-28">
           <EmptyHeader>
-            <EmptyTitle>No insights yet</EmptyTitle>
-            <EmptyDescription>{emptyState ?? 'Insights will appear here.'}</EmptyDescription>
+            <EmptyTitle>{uiText('no_insights_yet_ce8d75a')}</EmptyTitle>
+            <EmptyDescription>
+              {emptyState ?? uiText('insights_will_appear_here_b20aba0')}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -102,7 +114,7 @@ export function InsightsList({
               <li key={item.id} className="flex items-start gap-2.5 px-[var(--card-pad)] py-2">
                 <span className={cn('mt-0.5 flex-shrink-0', className)}>
                   <Icon className="h-3.5 w-3.5" aria-hidden />
-                  <span className="sr-only">{label}</span>
+                  <span className="sr-only">{localizeDashboardCopy(label, uiText)}</span>
                 </span>
                 <div className="min-w-0 flex-1">
                   {item.label ? (

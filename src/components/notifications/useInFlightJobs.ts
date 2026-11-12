@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { translateOrganicControlLabel as translateLabel } from '@/lib/ui/organicLifecycleLabels';
+
 // One live feed for work the user started and then walked away from. Until now an organic
 // generation was only visible inside the organic workspace tabs and a Jaina report only on
 // /scale, so leaving the page lost sight of the job — which is exactly when a completion
@@ -60,6 +65,7 @@ export type InFlightJob = {
   sortAt: number;
 };
 
+type Translator = ReturnType<typeof useTranslations<'common'>>;
 const REPORT_STEP_LABELS: Record<string, string> = {
   validating: 'Validating',
   'writing:executive': 'Writing the executive summary',
@@ -81,11 +87,15 @@ const capitalize = (value: string): string =>
   value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
 
 /** dayId is a YYYY-MM-DD slot; parsed as local midnight so the label does not shift a day west. */
-function formatDay(dayId: string | null | undefined): string | null {
+function formatDay(dayId: string | null | undefined, locale: UiLocale): string | null {
   if (!dayId) return null;
   const parsed = new Date(`${dayId}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return dayId;
-  return parsed.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return parsed.toLocaleDateString(locale, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 function timestamp(iso: string | null | undefined): number {
@@ -93,7 +103,11 @@ function timestamp(iso: string | null | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function fromGeneration(summary: OrganicGenerationSummary): InFlightJob {
+function fromGeneration(
+  summary: OrganicGenerationSummary,
+  t: Translator,
+  locale: UiLocale,
+): InFlightJob {
   const display = resolveOrganicLifecycle({
     status: summary.status,
     stage: summary.stage,
@@ -102,9 +116,16 @@ function fromGeneration(summary: OrganicGenerationSummary): InFlightJob {
   const active = summary.status === 'running' || summary.status === 'queued';
   // While running, lead with WHO is working so the row reads the same as the in-chat card.
   const stateLine = [
-    active ? resolveOrganicAgentLabel(summary.agentName) : null,
-    display.label,
-    active && typeof summary.pct === 'number' ? `${Math.round(summary.pct)}%` : null,
+    active && summary.agentName
+      ? translateLabel(resolveOrganicAgentLabel(summary.agentName) ?? '', t)
+      : null,
+    translateLabel(display.label, t),
+    active && typeof summary.pct === 'number'
+      ? new Intl.NumberFormat(locale, {
+          style: 'percent',
+          maximumFractionDigits: 0,
+        }).format(summary.pct / 100)
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -114,14 +135,16 @@ function fromGeneration(summary: OrganicGenerationSummary): InFlightJob {
     source: 'organic',
     jobId: summary.jobId,
     // Identity first: the concept title, so a row never reads as a bare "Instagram · Working".
-    title: summary.title?.trim() || (summary.platform ? capitalize(summary.platform) : 'Post'),
+    title:
+      summary.title?.trim() ||
+      (summary.platform ? capitalize(summary.platform) : t('m_7858ac3ff6')),
     badge: summary.platform ?? null,
-    meta: formatDay(summary.dayId),
+    meta: formatDay(summary.dayId, locale),
     stateLine,
     tone: display.tone,
     active,
     diagnostic: display.diagnostic,
-    error: summary.status === 'failed' ? (summary.error?.message ?? null) : null,
+    error: summary.status === 'failed' ? t('m_ebce1326da') : null,
     href: summary.draftId ? `/organic?tab=planner&draftId=${summary.draftId}` : null,
     canCancel: active,
     canRetry: summary.status === 'failed',
@@ -130,21 +153,21 @@ function fromGeneration(summary: OrganicGenerationSummary): InFlightJob {
   };
 }
 
-function fromReportJob(job: ReportJob): InFlightJob {
+function fromReportJob(job: ReportJob, t: Translator): InFlightJob {
   const state = REPORT_STATE[job.status];
   const step = job.step_name ? REPORT_STEP_LABELS[job.step_name] : null;
   return {
     key: `jaina:${job.job_id}`,
     source: 'jaina',
     jobId: job.job_id,
-    title: 'Performance report',
+    title: t('m_d8de1447c9'),
     badge: 'Jaina',
     meta: null,
-    stateLine: job.status === 'running' && step ? step : state.label,
+    stateLine: translateLabel(job.status === 'running' && step ? step : state.label, t),
     tone: state.tone,
     active: job.status === 'pending' || job.status === 'running',
     diagnostic: null,
-    error: job.status === 'failed' ? (job.error_message ?? 'Report generation failed.') : null,
+    error: job.status === 'failed' ? t('reportFailed') : null,
     href: '/scale?tab=jaina',
     canCancel: false,
     canRetry: false,
@@ -166,6 +189,11 @@ export type UseInFlightJobsResult = {
 };
 
 export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+  const uiLocale = useLocale();
+
   const queryClient = useQueryClient();
   const { show } = useToast();
 
@@ -182,17 +210,14 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
         key: `onboarding:${run.id}`,
         source: 'onboarding',
         jobId: run.id,
-        title: 'Your brand starter kit',
+        title: tUi('m_2cf331edc1'),
         badge: 'Onboarding',
         meta: null,
-        stateLine: starterStateLine(run),
+        stateLine: starterStateLine(run, tUi, uiLocale),
         tone: active ? 'active' : run.status === 'partial' ? 'error' : 'ready',
         active,
         diagnostic: null,
-        error:
-          run.status === 'partial'
-            ? 'Some items need attention. Your saved Elements are ready to use.'
-            : null,
+        error: run.status === 'partial' ? tUi('m_fc367ef5f1') : null,
         href: '/dashboard/starter-kit',
         canCancel: false,
         canRetry: !active && retryableStarterSlots(run).length > 0,
@@ -200,14 +225,16 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
         sortAt: timestamp(run.updatedAt),
       },
     ];
-  }, [starter.run]);
+  }, [starter.run, tUi, uiLocale]);
 
   const jobs = useMemo(
     () =>
-      [...summaries.map(fromGeneration), ...reportJobs.map(fromReportJob), ...starterJobs].sort(
-        (a, b) => rank(a) - rank(b) || b.sortAt - a.sortAt,
-      ),
-    [summaries, reportJobs, starterJobs],
+      [
+        ...summaries.map((summary) => fromGeneration(summary, tUi, uiLocale)),
+        ...reportJobs.map((job) => fromReportJob(job, tUi)),
+        ...starterJobs,
+      ].sort((a, b) => rank(a) - rank(b) || b.sortAt - a.sortAt),
+    [summaries, reportJobs, starterJobs, tUi, uiLocale],
   );
 
   const runningCount = useMemo(() => jobs.filter((job) => job.active).length, [jobs]);
@@ -234,7 +261,9 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
   );
 
   const settle = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: generationSummariesQueryKey(brandId) });
+    void queryClient.invalidateQueries({
+      queryKey: generationSummariesQueryKey(brandId),
+    });
   }, [brandId, queryClient]);
 
   const cancel = useCallback(
@@ -251,10 +280,14 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
         restore: () => revert(),
         confirm: () => {},
         notifyFailure: (message) =>
-          show({ title: 'Could not stop that generation', description: message, variant: 'error' }),
+          show({
+            title: tUi('m_46b0fab347'),
+            description: message,
+            variant: 'error',
+          }),
       }).finally(settle);
     },
-    [brandId, patchGeneration, settle, show],
+    [brandId, patchGeneration, settle, show, tUi],
   );
 
   const retry = useCallback(
@@ -262,7 +295,7 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
       if (job.source === 'onboarding' && starter.run) {
         void starter
           .retry(retryableStarterSlots(starter.run))
-          .catch(() => show({ title: 'Could not retry your starter kit', variant: 'error' }));
+          .catch(() => show({ title: tUi('m_cae5177fc5'), variant: 'error' }));
         return;
       }
       if (!brandId || job.source !== 'organic') return;
@@ -275,13 +308,13 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
         revert: () => revert(),
         notifyFailure: (message) =>
           show({
-            title: 'Could not retry that generation',
+            title: tUi('m_b3d0a6b736'),
             description: message,
             variant: 'error',
           }),
       }).finally(settle);
     },
-    [brandId, patchGeneration, settle, show, starter.run, starter.retry],
+    [brandId, patchGeneration, settle, show, starter.run, starter.retry, tUi],
   );
 
   const download = useCallback(
@@ -296,14 +329,14 @@ export function useInFlightJobs(brandId: string | null): UseInFlightJobsResult {
           window.open(data.signed_url, '_blank', 'noopener,noreferrer');
         } catch (error) {
           show({
-            title: 'Could not open that report',
-            description: error instanceof Error ? error.message : 'The download link expired.',
+            title: tUi('m_b53c4dfbd1'),
+            description: getUiErrorMessage(error),
             variant: 'error',
           });
         }
       })();
     },
-    [show],
+    [show, tUi, getUiErrorMessage],
   );
 
   return { jobs, runningCount, windowStats, cancel, retry, download };

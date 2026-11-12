@@ -1,3 +1,12 @@
+import type { UiLocale } from '@/i18n/config';
+import { accountDetectorLabel } from '@/lib/paid-media/accountPresentation';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
+import type { useTranslations } from 'next-intl';
+
+type DoctorCopy = ReturnType<typeof useTranslations<'dashboard'>>;
+
 // H13 Account doctor: a list of checks, each with where it is fixed. No score: a 0–100 number would
 // need weights nobody has decided, so the headline is "N of M checks pass", counted only over the
 // checks that could be read. A check whose source is not here or whose read failed is listed as
@@ -99,7 +108,13 @@ export type DoctorView =
   | { state: 'loading' }
   | { state: 'error' }
   | { state: 'missing'; reason: string }
-  | { state: 'ready'; checks: DoctorCheck[]; passing: number; failing: number; total: number };
+  | {
+      state: 'ready';
+      checks: DoctorCheck[];
+      passing: number;
+      failing: number;
+      total: number;
+    };
 
 export const DOCTOR_MISSING =
   'Nothing here can be checked yet — connect an ad account in Settings.';
@@ -111,8 +126,12 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-function optimizerFix(adAccountId: string | null): DoctorFix {
-  return { label: 'Open in the Optimizer', href: optimizerHref(adAccountId), external: false };
+function optimizerFix(adAccountId: string | null, t?: DoctorCopy): DoctorFix {
+  return {
+    label: t ? t('doctorOpenOptimizer') : 'Open in the Optimizer',
+    href: optimizerHref(adAccountId),
+    external: false,
+  };
 }
 
 function sameAccount(a: string | null, b: string): boolean {
@@ -122,28 +141,37 @@ function sameAccount(a: string | null, b: string): boolean {
 function portfolioChecks(
   issues: readonly HomeIssue[],
   portfolios: DoctorPortfoliosRead,
+  t?: DoctorCopy,
 ): DoctorCheck[] {
   const rows = portfolios.status === 'ready' ? portfolios.rows : [];
   if (issues.length > 0) {
     return issues.map((issue, index) => ({
       id: `issue:${issue.portfolioId}:${index}`,
       label: issue.title,
-      detail: 'The Optimizer cannot rely on this portfolio until it is fixed there.',
+      detail: t
+        ? t('doctorPortfolioFix')
+        : 'The Optimizer cannot rely on this portfolio until it is fixed there.',
       status: 'fail',
-      fix: optimizerFix(rows.find((row) => row.id === issue.portfolioId)?.ad_account_id ?? null),
+      fix: optimizerFix(rows.find((row) => row.id === issue.portfolioId)?.ad_account_id ?? null, t),
     }));
   }
   if (portfolios.status === 'pending') {
     return [
-      { id: 'portfolios', label: 'Optimizer portfolios', detail: '', status: 'loading', fix: null },
+      {
+        id: 'portfolios',
+        label: t ? t('doctorPortfolios') : 'Optimizer portfolios',
+        detail: '',
+        status: 'loading',
+        fix: null,
+      },
     ];
   }
   if (portfolios.status === 'error') {
     return [
       {
         id: 'portfolios',
-        label: 'Optimizer portfolios',
-        detail: `The Optimizer’s portfolios ${NOT_READ}`,
+        label: t ? t('doctorPortfolios') : 'Optimizer portfolios',
+        detail: t ? t('doctorPortfoliosUnread') : `The Optimizer’s portfolios ${NOT_READ}`,
         status: 'unreadable',
         fix: null,
       },
@@ -154,10 +182,12 @@ function portfolioChecks(
   return [
     {
       id: 'portfolios',
-      label: 'Every active portfolio reads fresh data',
-      detail: `${plural(acting.length, 'active portfolio', 'active portfolios')}: none has gone stale or lost its campaigns, and autopilot runs wherever it is on.`,
+      label: t ? t('doctorFresh') : 'Every active portfolio reads fresh data',
+      detail: t
+        ? t('doctorFreshDetail', { count: acting.length })
+        : `${plural(acting.length, 'active portfolio', 'active portfolios')}: none has gone stale or lost its campaigns, and autopilot runs wherever it is on.`,
       status: 'pass',
-      fix: optimizerFix(null),
+      fix: optimizerFix(null, t),
     },
   ];
 }
@@ -196,9 +226,14 @@ function deliveryCheck(
   cards: PlatformCardsState | null,
   portfolios: DoctorPortfoliosRead,
   googleAccounts: number,
+  t?: DoctorCopy,
+  scale?: ScaleCopy,
+  locale: UiLocale = 'en',
 ): DoctorCheck {
   const id = `delivery:${account.id}`;
-  const label = `${account.name}: Google shows this account’s ads`;
+  const label = t
+    ? t('doctorDelivery', { name: account.name })
+    : `${account.name}: Google shows this account’s ads`;
   if (!cards || cards.status === 'loading' || portfolios.status === 'pending') {
     return { id, label, detail: '', status: 'loading', fix: null };
   }
@@ -206,13 +241,15 @@ function deliveryCheck(
     return {
       id,
       label,
-      detail: `The Optimizer’s Google findings ${NOT_READ}`,
+      detail: t ? t('doctorGoogleUnread') : `The Optimizer’s Google findings ${NOT_READ}`,
       status: 'unreadable',
       fix: null,
     };
   }
   const status = googleDeliveryStatusOf(
     cardsOnAccount(cards.cards, account, portfolios.rows, googleAccounts),
+    scale,
+    locale,
   );
   if (status) {
     return {
@@ -220,39 +257,52 @@ function deliveryCheck(
       label: `${account.name}: ${status.title}`,
       detail: status.detail,
       status: 'fail',
-      fix: { label: 'Open in Google Ads', href: status.href, external: true },
+      fix: {
+        label: t ? t('doctorGoogleOpen') : 'Open in Google Ads',
+        href: status.href,
+        external: true,
+      },
     };
   }
   if (!watched(account, portfolios.rows, googleAccounts)) {
     return {
       id,
       label,
-      detail:
-        'No Optimizer portfolio watches this account’s delivery, so it is not readable yet. Group its campaigns in a portfolio to have it checked daily.',
+      detail: t
+        ? t('doctorNotWatched')
+        : 'No Optimizer portfolio watches this account\u2019s delivery, so it is not readable yet. Group its campaigns in a portfolio to have it checked daily.',
       status: 'unreadable',
-      fix: optimizerFix(account.id),
+      fix: optimizerFix(account.id, t),
     };
   }
   return {
     id,
     label,
-    detail: 'The Optimizer’s daily check finds campaigns serving on this account.',
+    detail: t
+      ? t('doctorServing')
+      : 'The Optimizer\u2019s daily check finds campaigns serving on this account.',
     status: 'pass',
     fix: null,
   };
 }
 
-function measurementChecks(read: DoctorAccountRead): DoctorCheck[] {
+function measurementChecks(
+  read: DoctorAccountRead,
+  t?: DoctorCopy,
+  scale?: ScaleCopy,
+): DoctorCheck[] {
   const { account } = read;
   const id = `measurement:${account.id}`;
-  const label = `${account.name}: measurement guards pass`;
+  const label = t
+    ? t('doctorMeasurement', { name: account.name })
+    : `${account.name}: measurement guards pass`;
   if (read.status === 'pending') return [{ id, label, detail: '', status: 'loading', fix: null }];
   if (read.status === 'error') {
     return [
       {
         id,
         label,
-        detail: `This account’s daily read ${NOT_READ}`,
+        detail: t ? t('doctorReadUnread') : `This account’s daily read ${NOT_READ}`,
         status: 'unreadable',
         fix: null,
       },
@@ -264,7 +314,9 @@ function measurementChecks(read: DoctorAccountRead): DoctorCheck[] {
       {
         id,
         label,
-        detail: 'No daily read is stored for this account yet, so its measurement is not readable.',
+        detail: t
+          ? t('doctorReadMissing')
+          : 'No daily read is stored for this account yet, so its measurement is not readable.',
         status: 'unreadable',
         fix: null,
       },
@@ -275,7 +327,9 @@ function measurementChecks(read: DoctorAccountRead): DoctorCheck[] {
       {
         id,
         label,
-        detail: 'Today’s read found nothing wrong with how results are counted.',
+        detail: t
+          ? t('doctorMeasurementOk')
+          : 'Today\u2019s read found nothing wrong with how results are counted.',
         status: 'pass',
         fix: null,
       },
@@ -283,10 +337,10 @@ function measurementChecks(read: DoctorAccountRead): DoctorCheck[] {
   }
   return guards.map((guard) => ({
     id: `guard:${account.id}:${guard.id}`,
-    label: `${account.name}: ${ACCOUNT_DETECTOR_META[guard.detector].label}`,
+    label: `${account.name}: ${scale ? accountDetectorLabel(guard.detector, scale) : ACCOUNT_DETECTOR_META[guard.detector].label}`,
     detail: guard.title ? titleText(guard.title) : guard.impact_basis,
     status: 'fail',
-    fix: optimizerFix(account.id),
+    fix: optimizerFix(account.id, t),
   }));
 }
 
@@ -331,28 +385,39 @@ const HYGIENE_STATUS: Record<HomeHygieneStatus, DoctorCheckStatus> = {
   unknown: 'unreadable',
 };
 
-function hygieneCheck(check: HomeHygieneCheck): DoctorCheck {
+function hygieneCheck(check: HomeHygieneCheck, t?: DoctorCopy): DoctorCheck {
   const status = HYGIENE_STATUS[check.status];
   return {
     id: `hygiene:${check.id}`,
-    label: HYGIENE_LABEL[check.id],
+    label: t
+      ? check.id === 'naming'
+        ? t('doctorNaming')
+        : t('doctorAdAge', { days: HOME_STALE_AD_DAYS })
+      : HYGIENE_LABEL[check.id],
     detail: check.detail,
     status,
     hygiene: check.status,
     examples: check.examples,
-    fix: status === 'fail' && check.id === 'stale_ads' ? optimizerFix(null) : null,
+    fix: status === 'fail' && check.id === 'stale_ads' ? optimizerFix(null, t) : null,
   };
 }
 
-function hygieneChecks(hygiene: HomeReadLoad<HomeAccountHygieneData>): DoctorCheck[] {
-  if (hygiene.status === 'ready') return hygiene.data.checks.map(hygieneCheck);
+function hygieneChecks(
+  hygiene: HomeReadLoad<HomeAccountHygieneData>,
+  t?: DoctorCopy,
+): DoctorCheck[] {
+  if (hygiene.status === 'ready') return hygiene.data.checks.map((check) => hygieneCheck(check, t));
   const unread = (
     id: HomeHygieneCheckId,
     detail: string,
     status: DoctorCheckStatus,
   ): DoctorCheck => ({
     id: `hygiene:${id}`,
-    label: HYGIENE_LABEL[id],
+    label: t
+      ? id === 'naming'
+        ? t('doctorNaming')
+        : t('doctorAdAge', { days: HOME_STALE_AD_DAYS })
+      : HYGIENE_LABEL[id],
     detail,
     status,
     fix: null,
@@ -360,9 +425,25 @@ function hygieneChecks(hygiene: HomeReadLoad<HomeAccountHygieneData>): DoctorChe
   return HYGIENE_IDS.map((id) => {
     if (hygiene.status === 'loading') return unread(id, '', 'loading');
     if (hygiene.status === 'missing') {
-      return unread(id, MISSING_DETAIL[hygiene.missing.reason], 'unreadable');
+      return unread(
+        id,
+        t
+          ? t(
+              hygiene.missing.reason === 'no_data'
+                ? 'doctorNoSync'
+                : ['not_deployed', 'no_goal_target'].includes(hygiene.missing.reason)
+                  ? 'doctorNotAvailable'
+                  : 'doctorNoAccount',
+            )
+          : MISSING_DETAIL[hygiene.missing.reason],
+        'unreadable',
+      );
     }
-    return unread(id, PENDING_DETAIL[id], 'unreadable');
+    return unread(
+      id,
+      t ? t(id === 'naming' ? 'doctorPendingNaming' : 'doctorPendingAge') : PENDING_DETAIL[id],
+      'unreadable',
+    );
   });
 }
 
@@ -378,22 +459,39 @@ function everyRemoteReadFailed(inputs: DoctorInputs): boolean {
   );
 }
 
-export function doctorView(inputs: DoctorInputs): DoctorView {
+export function doctorView(
+  inputs: DoctorInputs,
+  t?: DoctorCopy,
+  scale?: ScaleCopy,
+  locale: UiLocale = 'en',
+): DoctorView {
   const googleAccounts = inputs.adAccounts.filter((account) => account.platform === 'google_ads');
   const checks: DoctorCheck[] = [
-    ...portfolioChecks(inputs.issues, inputs.portfolios),
+    ...portfolioChecks(inputs.issues, inputs.portfolios, t),
     ...googleAccounts.map((account) =>
-      deliveryCheck(account, inputs.googleCards, inputs.portfolios, googleAccounts.length),
+      deliveryCheck(
+        account,
+        inputs.googleCards,
+        inputs.portfolios,
+        googleAccounts.length,
+        t,
+        scale,
+        locale,
+      ),
     ),
-    ...inputs.accountReads.flatMap(measurementChecks),
+    ...inputs.accountReads.flatMap((read) => measurementChecks(read, t, scale)),
     ...setupChecks(inputs.setup),
-    ...hygieneChecks(inputs.hygiene),
+    ...hygieneChecks(inputs.hygiene, t),
   ];
   if (checks.some((check) => check.status === 'loading')) return { state: 'loading' };
   if (everyRemoteReadFailed(inputs)) return { state: 'error' };
   const passing = checks.filter((check) => check.status === 'pass').length;
   const failing = checks.filter((check) => check.status === 'fail').length;
-  if (passing + failing === 0) return { state: 'missing', reason: DOCTOR_MISSING };
+  if (passing + failing === 0)
+    return {
+      state: 'missing',
+      reason: t ? t('doctorMissing') : DOCTOR_MISSING,
+    };
   return { state: 'ready', checks, passing, failing, total: passing + failing };
 }
 

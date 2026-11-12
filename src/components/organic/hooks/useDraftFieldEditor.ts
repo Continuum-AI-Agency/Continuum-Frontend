@@ -3,9 +3,12 @@
 import {
   formatPlannerTimeOfDay,
   type PlannerDraftFieldPatch,
+  PUBLISH_PLATFORM_LABELS,
   parsePlannerTimeOfDay,
+  plannerCaptionLimitErrorSchema,
   plannerDraftFieldPatchSchema,
 } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
@@ -44,14 +47,31 @@ export type DraftFieldPersistResult =
 /** The subset of a draft the persist step needs. Keeps callers from passing the world. */
 type PersistTarget = Pick<OrganicCalendarDraft, 'id' | 'backendDraftId' | 'updatedAt'>;
 
-function messageForError(error: unknown): string {
+function messageForError(
+  error: unknown,
+  translate: ReturnType<typeof useTranslations<'organic'>>,
+): string {
   if (error instanceof ApiError) {
-    // `caption_too_long` and `account_not_candidate` name the limit or the accounts: say it.
-    if (error.status === 422) return error.payload?.message ?? 'This post can no longer be edited.';
-    if (error.status === 403) return 'You do not have access to this post.';
-    if (error.status === 404) return 'This post no longer exists.';
+    const limit = plannerCaptionLimitErrorSchema.safeParse(error.payload);
+    if (limit.success)
+      return translate('fieldCaptionTooLong', {
+        platform: PUBLISH_PLATFORM_LABELS[limit.data.platform],
+        maximum: limit.data.maxLength,
+        length: limit.data.length,
+      });
   }
-  return 'Your change could not be saved.';
+  if (error instanceof ApiError)
+    return translate('fieldSaveError', {
+      reason:
+        error.status === 409
+          ? 'conflict'
+          : error.status === 403
+            ? 'forbidden'
+            : error.status === 404
+              ? 'missing'
+              : 'other',
+    });
+  return translate('fieldSaveError', { reason: 'other' });
 }
 
 // One save at a time per row. The route's concurrency token is the row's updated_at, so two
@@ -84,6 +104,7 @@ async function saveInTurn(
 }
 
 export function useDraftFieldPersistence() {
+  const uiText = useTranslations('organic');
   const persistDraftFields = React.useCallback(
     async (
       target: PersistTarget,
@@ -103,7 +124,11 @@ export function useDraftFieldPersistence() {
             expected_updated_at: token,
           });
           if (!parsed.success) {
-            return { ok: false, stale: false, message: 'That value is not valid.' };
+            return {
+              ok: false,
+              stale: false,
+              message: uiText('that_value_is_not_valid_1f47374'),
+            };
           }
           try {
             const response = await request<{ updated_at?: string | null }>({
@@ -114,13 +139,17 @@ export function useDraftFieldPersistence() {
             return { ok: true, updatedAt: response?.updated_at ?? null };
           } catch (error) {
             const stale = error instanceof ApiError && error.status === 409;
-            return { ok: false, stale, message: messageForError(error) };
+            return {
+              ok: false,
+              stale,
+              message: messageForError(error, uiText),
+            };
           }
         },
         patch.expected_updated_at ?? target.updatedAt ?? null,
       );
     },
-    [],
+    [uiText],
   );
 
   return { persistDraftFields };
@@ -180,6 +209,7 @@ const captionOf = (draft: OrganicCalendarDraft): string =>
  * both rather than this hook guessing a mapping that already lives in contracts.
  */
 export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldEditorResult {
+  const uiText = useTranslations('organic');
   const { show } = useToast();
   const { persistDraftFields } = useDraftFieldPersistence();
   const { updateDraft, markDraftEditPending, clearDraftEditPending, requestCalendarRefetch } =
@@ -299,8 +329,8 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
         // Someone else moved this draft on. Rolling back would replace their change
         // with an even older value, so reconcile from the server instead.
         show({
-          title: 'This post changed elsewhere',
-          description: 'Reloading the latest version.',
+          title: uiText('this_post_changed_elsewhere_fcb1a90'),
+          description: uiText('reloading_the_latest_version_81891d3'),
           variant: 'error',
         });
         requestCalendarRefetch();
@@ -313,7 +343,11 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       if (localPatch) updateDraft(draftId, (current) => ({ ...current, ...localPatch }));
       settleTyped();
       setSaveError(result.message);
-      show({ title: 'Change not saved', description: result.message, variant: 'error' });
+      show({
+        title: uiText('change_not_saved_c32fd78'),
+        description: result.message,
+        variant: 'error',
+      });
       return finish(false);
     },
     [
@@ -324,6 +358,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       requestCalendarRefetch,
       show,
       fillEmptyGroupCaptions,
+      uiText,
     ],
   );
 
@@ -390,16 +425,19 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       }
       const total = others.length + 1;
       show({
-        title: 'Time not changed',
+        title: uiText('time_not_changed_6290b16'),
         description: previous
-          ? `${total - moved.length} of ${total} platforms could not move, so none did.`
-          : 'Reloading the post as it is saved.',
+          ? uiText('timeMoveFailed', {
+              failed: total - moved.length,
+              total: total,
+            })
+          : uiText('reloadingSavedPost'),
         variant: 'error',
       });
       requestCalendarRefetch();
       return false;
     },
-    [persistDraftFields, requestCalendarRefetch, send, show, snapshotFor, updateDraft],
+    [persistDraftFields, requestCalendarRefetch, send, show, snapshotFor, updateDraft, uiText],
   );
 
   const flush = React.useCallback(async (): Promise<boolean> => {

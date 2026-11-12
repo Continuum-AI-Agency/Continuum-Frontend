@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { useToast } from '@/components/ui/ToastProvider';
@@ -117,6 +118,7 @@ export function useAiStudioHandoff({
   setSelectedDraftId,
   isCalendarHydrated,
 }: UseAiStudioHandoffOptions) {
+  const uiText = useTranslations('organic');
   const router = useRouter();
   const { show } = useToast();
   // Guards the one-shot apply-on-return so it consumes the pending-apply blob
@@ -281,8 +283,8 @@ export function useAiStudioHandoff({
     const parsed = plannerAiStudioApplyResponseSchema.safeParse(raw);
     if (!parsed.success) {
       show({
-        title: 'Could not apply AI Studio edits',
-        description: 'The response format was unexpected. Try editing again.',
+        title: uiText('could_not_apply_ai_studio_edits_9fc489f'),
+        description: uiText('the_response_format_was_unexpected_try_editin_e2d34eb'),
         variant: 'error',
       });
       removeLocalStorage(key);
@@ -292,8 +294,8 @@ export function useAiStudioHandoff({
 
     if (applyPayload.draftId !== draftId || applyPayload.brandProfileId !== brandProfileId) {
       show({
-        title: 'Could not apply AI Studio edits',
-        description: 'The draft or brand changed during the handoff. Open the draft again.',
+        title: uiText('could_not_apply_ai_studio_edits_9fc489f'),
+        description: uiText('the_draft_or_brand_changed_during_the_handoff_6dd4c80'),
         variant: 'error',
       });
       removeLocalStorage(key);
@@ -344,8 +346,10 @@ export function useAiStudioHandoff({
 
     setSelectedDraftId(applyPayload.draftId);
     show({
-      title: 'AI Studio edits applied',
-      description: `Updates applied to "${applyPayload.contentPatch.title ?? 'draft'}"`,
+      title: uiText('ai_studio_edits_applied_1ecdf6e'),
+      description: uiText('updatesAppliedTo', {
+        title: applyPayload.contentPatch.title ?? 'draft',
+      }),
       variant: 'success',
     });
     removeLocalStorage(key);
@@ -389,13 +393,17 @@ export function useAiStudioHandoff({
       window.sessionStorage.setItem(historyKey, JSON.stringify(history.slice(-10)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCalendarHydrated]);
+  }, [isCalendarHydrated, uiText]);
 
   const openDraft = React.useCallback(
     (draft: OrganicCalendarDraft) => {
       const issue = aiStudioHandoffIssue(draft);
       if (issue) {
-        show({ title: 'AI Studio unavailable', description: issue, variant: 'warning' });
+        show({
+          title: uiText('ai_studio_unavailable_318fb47'),
+          description: issue,
+          variant: 'warning',
+        });
         return;
       }
       const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(draft));
@@ -403,8 +411,8 @@ export function useAiStudioHandoff({
       const persisted = persistAiStudioContext(parsed.data);
       if (!persisted) {
         show({
-          title: 'Handoff preparation failed',
-          description: 'Unable to prepare handoff data. Try closing other tabs to free storage.',
+          title: uiText('handoff_preparation_failed_fca96f3'),
+          description: uiText('unable_to_prepare_handoff_data_try_closing_ot_c53d815'),
           variant: 'error',
         });
         return;
@@ -418,7 +426,7 @@ export function useAiStudioHandoff({
       const compositionHref = draft.mediaSuggestion?.reel?.composition?.openHref;
       router.push(withPlannerHandoffParams(compositionHref, draft.id));
     },
-    [buildAiStudioContext, persistAiStudioContext, router, show],
+    [buildAiStudioContext, persistAiStudioContext, router, show, uiText],
   );
 
   const handleOpenInAiStudio = React.useCallback(() => {

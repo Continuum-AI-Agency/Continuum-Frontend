@@ -1,5 +1,7 @@
 'use client';
 
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
+
 // Connecting the client's spreadsheet as the portfolio's attribution source (decisiones 20):
 // pick a Google Sheet or upload a CSV, pick the tab, map the columns over a five-row preview —
 // each dropdown prefilled from the service's header guess — and see the live match check
@@ -19,10 +21,11 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
+  attributionCopy,
   buildSheetConfig,
   COLUMN_ROLE_LABELS,
-  COVERAGE_BAR_EXPLAINED,
   clearsCoverageBar,
+  coverageBarExplanation,
   DATE_FORMAT_LABELS,
   draftFromSuggestion,
   MATCH_KEY_KIND_LABELS,
@@ -72,15 +75,18 @@ function SourceStep({
   onGoogleSheet: (spreadsheetId: string, name: string) => void;
   onCsv: (file: File) => void;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatter = useFormatter();
   const [link, setLink] = useState('');
-  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState(false);
   const picker = useGoogleSheetPicker(brandId, (sheet) =>
     onGoogleSheet(sheet.spreadsheetId, sheet.name),
   );
   return (
     <div className="grid gap-3 sm:grid-cols-2" data-testid="sheet-source-step">
       <div className="space-y-2">
-        <p className="font-medium text-xs">Connect a Google Sheet</p>
+        <p className="font-medium text-xs">{uiText('connect_a_google_sheet_9fb533e')}</p>
         <Button
           disabled={busy || picker.opening}
           onClick={() => void picker.open()}
@@ -88,7 +94,7 @@ function SourceStep({
           type="button"
           variant="secondary"
         >
-          Choose from Google Drive
+          {uiText('choose_from_google_drive_65d0200')}
         </Button>
         <form
           className="flex gap-2"
@@ -96,38 +102,43 @@ function SourceStep({
             event.preventDefault();
             const id = spreadsheetIdFrom(link);
             if (!id) {
-              setLinkError('That is not a Google Sheets link.');
+              setLinkError(true);
               return;
             }
-            setLinkError(null);
+            setLinkError(false);
             onGoogleSheet(id, 'Google Sheet');
           }}
         >
           <Input
-            aria-label="Google Sheet link"
+            aria-label={uiText('google_sheet_link_cbdbecf')}
             className="h-8 text-xs"
             onChange={(event) => setLink(event.target.value)}
-            placeholder="or paste the sheet link"
+            placeholder={uiText('or_paste_the_sheet_link_bab801f')}
             value={link}
           />
           <Button disabled={busy || !link.trim()} size="sm" type="submit" variant="outline">
-            Read
+            {uiText('read_9b9a8d0')}
           </Button>
         </form>
         {linkError || picker.error ? (
           <p className="text-destructive text-xs" role="alert">
-            {linkError ?? picker.error}
+            {linkError
+              ? attributionCopy('That is not a Google Sheets link.', uiText)
+              : attributionCopy(
+                  'The spreadsheet request could not be completed. Check the connection and try again.',
+                  uiText,
+                )}
           </p>
         ) : null}
       </div>
       <div className="space-y-2">
-        <p className="font-medium text-xs">Upload a CSV</p>
+        <p className="font-medium text-xs">{uiText('upload_a_csv_5b9b0da')}</p>
         <p className="text-muted-foreground text-xs">
-          One row per day and ad set or campaign, with a conversions column.
+          {uiText('one_row_per_day_and_ad_set_or_campaign_with_a_93999ef')}
         </p>
         <Input
           accept=".csv,text/csv"
-          aria-label="CSV file"
+          aria-label={uiText('csv_file_73aad53')}
           className="h-8 text-xs"
           disabled={busy}
           onChange={(event) => {
@@ -142,6 +153,10 @@ function SourceStep({
 }
 
 function PreviewTable({ inspect }: { inspect: SheetInspectResponse }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatter = useFormatter();
+
   return (
     <div className="overflow-x-auto border-border/60 border-y">
       <table className="w-full text-xs" data-testid="sheet-preview">
@@ -153,7 +168,7 @@ function PreviewTable({ inspect }: { inspect: SheetInspectResponse }) {
                 key={`${index}-${header}`}
                 scope="col"
               >
-                {header || `Column ${index + 1}`}
+                {header || uiText('template_2d10737ad394', { v0: index + 1 })}
               </th>
             ))}
           </tr>
@@ -216,22 +231,28 @@ function MappingFields({
   draft: SheetMappingDraft;
   onChange: (draft: SheetMappingDraft) => void;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatter = useFormatter();
   const columnOptions = inspect.suggestion.headers.map((header, index) => ({
     value: String(index),
-    label: header || `Column ${index + 1}`,
+    label: header || uiText('attributionColumn', { number: index + 1 }),
   }));
   const setColumn = (role: SheetColumnRole, value: string) =>
     onChange({
       ...draft,
-      columns: { ...draft.columns, [role]: value === '' ? null : Number(value) },
+      columns: {
+        ...draft.columns,
+        [role]: value === '' ? null : Number(value),
+      },
     });
   const roleField = (role: SheetColumnRole, optional: boolean) => (
     <SelectField
       key={role}
-      label={COLUMN_ROLE_LABELS[role]}
+      label={attributionCopy(COLUMN_ROLE_LABELS[role], uiText)}
       onChange={(value) => setColumn(role, value)}
       options={columnOptions}
-      placeholder={optional ? 'Not in this sheet' : 'Pick a column'}
+      placeholder={optional ? uiText('not_in_this_sheet_198417f') : uiText('pick_a_column_cde1c47')}
       value={draft.columns[role] === null ? '' : String(draft.columns[role])}
     />
   );
@@ -239,21 +260,33 @@ function MappingFields({
     <div className="grid gap-2 sm:grid-cols-3" data-testid="sheet-mapping">
       {REQUIRED_ROLES.map((role) => roleField(role, false))}
       <SelectField
-        label="That column holds"
+        label={uiText('that_column_holds_f69495e')}
         onChange={(value) =>
-          onChange({ ...draft, matchKeyKind: value === '' ? null : (value as SheetMatchKeyKind) })
+          onChange({
+            ...draft,
+            matchKeyKind: value === '' ? null : (value as SheetMatchKeyKind),
+          })
         }
-        options={Object.entries(MATCH_KEY_KIND_LABELS).map(([value, label]) => ({ value, label }))}
-        placeholder="Pick what it holds"
+        options={Object.entries(MATCH_KEY_KIND_LABELS).map(([value, label]) => ({
+          value,
+          label: attributionCopy(label, uiText),
+        }))}
+        placeholder={uiText('pick_what_it_holds_8f9c6b0')}
         value={draft.matchKeyKind ?? ''}
       />
       <SelectField
-        label="Date format"
+        label={uiText('date_format_43123f5')}
         onChange={(value) =>
-          onChange({ ...draft, dateFormat: value === '' ? null : (value as SheetDateFormat) })
+          onChange({
+            ...draft,
+            dateFormat: value === '' ? null : (value as SheetDateFormat),
+          })
         }
-        options={Object.entries(DATE_FORMAT_LABELS).map(([value, label]) => ({ value, label }))}
-        placeholder="Pick a format"
+        options={Object.entries(DATE_FORMAT_LABELS).map(([value, label]) => ({
+          value,
+          label: attributionCopy(label, uiText),
+        }))}
+        placeholder={uiText('pick_a_format_2938df9')}
         value={draft.dateFormat ?? ''}
       />
       {OPTIONAL_ROLES.map((role) => roleField(role, true))}
@@ -262,23 +295,31 @@ function MappingFields({
 }
 
 function MatchCheck({ state, kind }: { state: CheckState; kind: SheetMatchKeyKind | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatter = useFormatter();
   if (state.status === 'idle') return null;
   if (state.status === 'checking') {
     return (
-      <p className="text-muted-foreground text-xs">Checking the rows against this portfolio…</p>
+      <p className="text-muted-foreground text-xs">
+        {uiText('checking_the_rows_against_this_portfolio_3bfea60')}
+      </p>
     );
   }
   if (state.status === 'unavailable') {
     return (
       <p className="text-muted-foreground text-xs" data-testid="sheet-unavailable" role="status">
-        {UNAVAILABLE_LINE}
+        {attributionCopy(UNAVAILABLE_LINE, uiText)}
       </p>
     );
   }
   if (state.status === 'error') {
     return (
       <p className="text-destructive text-xs" role="alert">
-        {state.message}
+        {attributionCopy(
+          'The spreadsheet request could not be completed. Check the connection and try again.',
+          uiText,
+        )}
       </p>
     );
   }
@@ -290,24 +331,30 @@ function MatchCheck({ state, kind }: { state: CheckState; kind: SheetMatchKeyKin
         className={cn('font-medium text-xs', passes ? 'text-success' : 'text-warning')}
         data-testid="sheet-match-line"
       >
-        {matchCheckLine(report, kind ?? 'adset_name')}
+        {matchCheckLine(report, kind ?? 'adset_name', uiText, uiLocale)}
       </p>
       <p className="text-muted-foreground text-xs" data-testid="sheet-coverage-bar">
         {passes
-          ? 'Above the 80% bar: this sheet will be used.'
-          : "Below the 80% bar: each platform's own count stays in use until the sheet covers more."}{' '}
-        {COVERAGE_BAR_EXPLAINED}
+          ? uiText('above_the_80_bar_this_sheet_will_be_used_e054e4a')
+          : uiText('below_the_80_bar_each_platform_s_own_count_st_1dfd1b1')}{' '}
+        {coverageBarExplanation(uiText, uiLocale)}
       </p>
       {report.rowsInvalid > 0 ? (
         <p className="text-muted-foreground text-xs">
-          {report.rowsInvalid} rows could not be read — first: row {report.errors[0]?.row},{' '}
-          {report.errors[0]?.message}
+          {uiText('attributionInvalidRows', {
+            count: report.rowsInvalid,
+            row: report.errors[0]?.row === undefined ? '—' : formatter.number(report.errors[0].row),
+            guidance: attributionCopy(
+              'Check the date, conversion count, and mapped columns for this row.',
+              uiText,
+            ),
+          })}
         </p>
       ) : null}
       {report.unmatchedSamples.length > 0 ? (
         <div>
           <p className="font-medium text-xs">
-            {report.rowsUnmatched} rows named nothing in this portfolio
+            {uiText.rich('sentence_8d77882a160a', { v0: report.rowsUnmatched })}
           </p>
           <ul
             className="mt-1 space-y-0.5 text-muted-foreground text-xs"
@@ -315,8 +362,11 @@ function MatchCheck({ state, kind }: { state: CheckState; kind: SheetMatchKeyKin
           >
             {report.unmatchedSamples.map((sample) => (
               <li key={`${sample.row}-${sample.key}`}>
-                Row {sample.row} · {sample.key}
-                {sample.platform ? ` · ${PLATFORM_NAMES[sample.platform]}` : ''}
+                {uiText.rich('sentence_9c5a3ac15d62', {
+                  v0: sample.row,
+                  v1: sample.key,
+                  v2: sample.platform ? ` · ${PLATFORM_NAMES[sample.platform]}` : '',
+                })}
               </li>
             ))}
           </ul>
@@ -339,13 +389,18 @@ export function SheetSetupFlow({
   onSaved: () => void;
   onCancel: () => void;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatter = useFormatter();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [draft, setDraft] = useState<SheetMappingDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [stepError, setStepError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [check, setCheck] = useState<CheckState>({ status: 'idle' });
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<
+    { code: 'unavailable' } | { code: 'request'; diagnostic: string } | null
+  >(null);
 
   async function inspect(location: SheetLocation, csv: string | null, label: string, tab?: string) {
     setBusy(true);
@@ -353,7 +408,11 @@ export function SheetSetupFlow({
     const outcome = await api.inspect(
       portfolioId,
       location.source === 'google_sheet'
-        ? { source: 'google_sheet', spreadsheetId: location.spreadsheetId, ...(tab ? { tab } : {}) }
+        ? {
+            source: 'google_sheet',
+            spreadsheetId: location.spreadsheetId,
+            ...(tab ? { tab } : {}),
+          }
         : { source: 'csv_upload', csv: csv ?? '' },
     );
     setBusy(false);
@@ -374,8 +433,8 @@ export function SheetSetupFlow({
   }
 
   const build = useMemo(
-    () => (loaded && draft ? buildSheetConfig(loaded.location, draft) : null),
-    [loaded, draft],
+    () => (loaded && draft ? buildSheetConfig(loaded.location, draft, uiText) : null),
+    [loaded, draft, uiText],
   );
   const configKey = build?.ok ? JSON.stringify(build.config) : null;
 
@@ -403,19 +462,18 @@ export function SheetSetupFlow({
     const outcome = await api.save(portfolioId, build.config, loaded.label);
     setBusy(false);
     if (outcome.status === 'ready') onSaved();
-    else if (outcome.status === 'unavailable')
-      setSaveError("Saving a spreadsheet source isn't available yet.");
-    else setSaveError(outcome.message);
+    else if (outcome.status === 'unavailable') setSaveError({ code: 'unavailable' });
+    else setSaveError({ code: 'request', diagnostic: outcome.message });
   }
 
   if (unavailable) {
     return (
       <div className="space-y-2" data-testid="sheet-flow">
         <p className="text-muted-foreground text-xs" data-testid="sheet-unavailable" role="status">
-          {UNAVAILABLE_LINE}
+          {attributionCopy(UNAVAILABLE_LINE, uiText)}
         </p>
         <Button onClick={onCancel} size="sm" type="button" variant="ghost">
-          Back
+          {uiText('back_76900f1')}
         </Button>
       </div>
     );
@@ -428,7 +486,12 @@ export function SheetSetupFlow({
           brandId={brandId}
           busy={busy}
           onCsv={(file) =>
-            void file.text().then((text) => inspect({ source: 'csv_upload' }, text, file.name))
+            void file
+              .text()
+              .then((text) => inspect({ source: 'csv_upload' }, text, file.name))
+              .catch((cause: unknown) =>
+                setStepError(cause instanceof Error ? cause.message : 'csv_read_failed'),
+              )
           }
           onGoogleSheet={(spreadsheetId, name) =>
             void inspect({ source: 'google_sheet', spreadsheetId, tab: null }, null, name)
@@ -440,14 +503,17 @@ export function SheetSetupFlow({
             <p className="font-medium text-xs">{loaded.label}</p>
             {loaded.inspect.tabs.length > 1 && loaded.location.source === 'google_sheet' ? (
               <SelectField
-                label="Tab"
+                label={uiText('tab_90ddf19')}
                 onChange={(tab) => {
                   if (loaded.location.source === 'google_sheet' && tab) {
                     void inspect({ ...loaded.location, tab }, null, loaded.label, tab);
                   }
                 }}
-                options={loaded.inspect.tabs.map((tab) => ({ value: tab, label: tab }))}
-                placeholder="Pick a tab"
+                options={loaded.inspect.tabs.map((tab) => ({
+                  value: tab,
+                  label: tab,
+                }))}
+                placeholder={uiText('pick_a_tab_406ab6d')}
                 value={loaded.inspect.tab ?? ''}
               />
             ) : null}
@@ -458,7 +524,9 @@ export function SheetSetupFlow({
           ) : null}
           {build && !build.ok ? (
             <p className="text-muted-foreground text-xs" data-testid="sheet-missing">
-              Still to pick: {build.missing.join(', ')}.
+              {uiText.rich('sentence_814d6fb395e6', {
+                v0: build.missing.join(', '),
+              })}
             </p>
           ) : null}
           <MatchCheck kind={draft?.matchKeyKind ?? null} state={check} />
@@ -469,23 +537,33 @@ export function SheetSetupFlow({
               size="sm"
               type="button"
             >
-              Use this sheet
+              {uiText('use_this_sheet_5ef03b9')}
             </Button>
             <Button onClick={onCancel} size="sm" type="button" variant="ghost">
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
           </div>
           {saveError ? (
             <p className="text-destructive text-xs" role="alert">
-              {saveError}
+              {saveError.code === 'unavailable'
+                ? attributionCopy("Saving a spreadsheet source isn't available yet.", uiText)
+                : attributionCopy(
+                    'The spreadsheet request could not be completed. Check the connection and try again.',
+                    uiText,
+                  )}
             </p>
           ) : null}
         </>
       )}
-      {busy && !loaded ? <p className="text-muted-foreground text-xs">Reading the sheet…</p> : null}
+      {busy && !loaded ? (
+        <p className="text-muted-foreground text-xs">{uiText('reading_the_sheet_e430a7f')}</p>
+      ) : null}
       {stepError ? (
         <p className="text-destructive text-xs" role="alert">
-          {stepError}
+          {attributionCopy(
+            'The spreadsheet request could not be completed. Check the connection and try again.',
+            uiText,
+          )}
         </p>
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { CheckpointBlockV2 } from '@/lib/jaina/schemas';
 import { BlockHeading } from './BlockHeading';
 import {
@@ -13,7 +14,12 @@ import {
 afterEach(cleanup);
 
 const block = (raw: Record<string, unknown>): CheckpointBlockV2 =>
-  ({ scope: 'account', priority: 1, provenance: null, ...raw }) as unknown as CheckpointBlockV2;
+  ({
+    scope: 'account',
+    priority: 1,
+    provenance: null,
+    ...raw,
+  }) as unknown as CheckpointBlockV2;
 
 describe('idKey — what a raw id looks like', () => {
   it('reads every spelling of a Meta id down to its digits', () => {
@@ -50,7 +56,13 @@ describe('entityNamesOf — the names the report already knows', () => {
             },
             action: 'Pause',
             sizing: null,
-            evidence: { metric: 'cost', value: 54.84, unit: 'MXN', window: '7d', comparator: null },
+            evidence: {
+              metric: 'cost',
+              value: 54.84,
+              unit: 'MXN',
+              window: '7d',
+              comparator: null,
+            },
             cite_ids: [],
           },
         ],
@@ -159,7 +171,9 @@ describe('BlockHeading — the title every block draws', () => {
   it('prints the title as given outside any report', () => {
     render(<BlockHeading title="Key Metrics — account-521903353286118" />);
     expect(
-      screen.getByRole('heading', { name: 'Key Metrics — account-521903353286118' }),
+      screen.getByRole('heading', {
+        name: 'Key Metrics — account-521903353286118',
+      }),
     ).toBeTruthy();
   });
 

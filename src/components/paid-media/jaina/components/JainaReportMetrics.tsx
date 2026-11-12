@@ -1,16 +1,21 @@
+import { useTranslations } from 'next-intl';
 import { Pill } from '@/components/kibo-ui/pill';
 import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
+import { useAnswerLanguage } from '../answerLanguageContext';
 
 type JainaReportMetricsProps = {
   metrics: FrontendCheckpointReport['performance_snapshot'];
 };
 
 export function JainaReportMetrics({ metrics }: JainaReportMetricsProps) {
+  const uiText = useTranslations('scale');
   if (!metrics || metrics.length === 0) return null;
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-primary/80">Performance Snapshot</h3>
+      <h3 className="text-lg font-semibold text-primary/80">
+        {uiText('performance_snapshot_e467de5')}
+      </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {metrics.map((metric, index) => (
           <MetricCard key={buildMetricKey(metric, index)} item={metric} />
@@ -34,6 +39,8 @@ function buildMetricKey(
 }
 
 function MetricCard({ item }: { item: FrontendCheckpointReport['performance_snapshot'][number] }) {
+  const uiText = useTranslations('scale');
+  const reportLocale = useAnswerLanguage();
   const metric = (item ?? {}) as Record<string, unknown>;
   const change = getMetricChange(item);
   const numericChange =
@@ -46,16 +53,21 @@ function MetricCard({ item }: { item: FrontendCheckpointReport['performance_snap
     <div className="rounded-xl bg-muted/40 p-4">
       <div className="flex flex-col gap-1">
         <span className="text-xs text-muted-foreground uppercase tracking-wider">
-          {String(metric.metric ?? metric.label ?? 'Metric')}
+          {String(metric.metric ?? metric.label ?? uiText('metric_2d275a7'))}
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-xl font-semibold text-primary-ink">{formatMetricValue(item)}</span>
+          <span className="text-xl font-semibold text-primary-ink">
+            {formatMetricValue(item, reportLocale)}
+          </span>
           {hasChange || hasStatus ? (
             <Pill variant={statusVariant} className="text-xs">
               {hasChange ? (
                 <>
                   {numericChange > 0 ? '+' : ''}
-                  {numericChange}%
+                  {new Intl.NumberFormat(reportLocale, {
+                    style: 'percent',
+                    maximumFractionDigits: 20,
+                  }).format(numericChange / 100)}
                 </>
               ) : (
                 formatMetricStatusLabel(metric.status)
@@ -110,7 +122,10 @@ function formatMetricStatusLabel(status: unknown): string {
   return raw;
 }
 
-function formatMetricValue(item: FrontendCheckpointReport['performance_snapshot'][number]) {
+function formatMetricValue(
+  item: FrontendCheckpointReport['performance_snapshot'][number],
+  reportLocale: string = 'en',
+) {
   const metric = (item ?? {}) as Record<string, unknown>;
   const value = metric.value;
   const format = typeof metric.format === 'string' ? metric.format : undefined;
@@ -127,14 +142,17 @@ function formatMetricValue(item: FrontendCheckpointReport['performance_snapshot'
 
   let rendered: string;
   if (resolvedFormat === 'currency') {
-    rendered = new Intl.NumberFormat('en-US', {
+    rendered = new Intl.NumberFormat(reportLocale, {
       style: 'currency',
       currency: 'USD',
     }).format(value);
   } else if (resolvedFormat === 'percentage') {
-    rendered = `${value}%`;
+    rendered = new Intl.NumberFormat(reportLocale, {
+      style: 'percent',
+      maximumFractionDigits: 20,
+    }).format(value / 100);
   } else {
-    rendered = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    rendered = value.toLocaleString(reportLocale, { maximumFractionDigits: 2 });
   }
 
   if (prefix && resolvedFormat !== 'currency') {

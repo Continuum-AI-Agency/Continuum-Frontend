@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import type {
   ComponentProps,
   HTMLAttributes,
@@ -475,6 +476,7 @@ export const ReelControls = ({ className, ...props }: ReelControlsProps) => (
 export type ReelPreviousButtonProps = ComponentProps<typeof Button>;
 
 export const ReelPreviousButton = ({ className, children, ...props }: ReelPreviousButtonProps) => {
+  const uiText = useTranslations('common');
   const { currentIndex, setCurrentIndex, setIsNavigating } = useReelContext();
   const NAVIGATION_RESET_DELAY = 50;
 
@@ -488,7 +490,7 @@ export const ReelPreviousButton = ({ className, children, ...props }: ReelPrevio
 
   return (
     <Button
-      aria-label="Previous"
+      aria-label={uiText('previous_a57b08a')}
       className={cn('rounded-full text-white hover:bg-white/10 hover:text-white', className)}
       disabled={currentIndex === 0}
       onClick={handlePrevious}
@@ -505,6 +507,7 @@ export const ReelPreviousButton = ({ className, children, ...props }: ReelPrevio
 export type ReelNextButtonProps = ComponentProps<typeof Button>;
 
 export const ReelNextButton = ({ className, children, ...props }: ReelNextButtonProps) => {
+  const uiText = useTranslations('common');
   const { currentIndex, setCurrentIndex, data, setIsNavigating } = useReelContext();
   const totalItems = data?.length || 0;
   const NAVIGATION_RESET_DELAY = 50;
@@ -519,7 +522,7 @@ export const ReelNextButton = ({ className, children, ...props }: ReelNextButton
 
   return (
     <Button
-      aria-label="Next"
+      aria-label={uiText('next_1ff57a2')}
       className={cn('rounded-full text-white hover:bg-white/10 hover:text-white', className)}
       disabled={currentIndex === totalItems - 1}
       onClick={handleNext}
@@ -536,11 +539,12 @@ export const ReelNextButton = ({ className, children, ...props }: ReelNextButton
 export type ReelPlayButtonProps = ComponentProps<typeof Button>;
 
 export const ReelPlayButton = ({ className, children, ...props }: ReelPlayButtonProps) => {
+  const uiText = useTranslations('common');
   const { isPlaying, setIsPlaying } = useReelContext();
 
   return (
     <Button
-      aria-label={isPlaying ? 'Pause' : 'Play'}
+      aria-label={isPlaying ? uiText('pause_858e4ba') : uiText('play_436e610')}
       className={cn('rounded-full text-white hover:bg-white/10 hover:text-white', className)}
       onClick={() => setIsPlaying(!isPlaying)}
       size="icon"
@@ -555,11 +559,12 @@ export const ReelPlayButton = ({ className, children, ...props }: ReelPlayButton
 export type ReelMuteButtonProps = ComponentProps<typeof Button>;
 
 export const ReelMuteButton = ({ className, children, ...props }: ReelMuteButtonProps) => {
+  const uiText = useTranslations('common');
   const { isMuted, setIsMuted } = useReelContext();
 
   return (
     <Button
-      aria-label={isMuted ? 'Unmute' : 'Mute'}
+      aria-label={isMuted ? uiText('unmute_ce4ee4e') : uiText('mute_8dd6857')}
       className={cn('rounded-full text-white hover:bg-white/10 hover:text-white', className)}
       onClick={() => setIsMuted(!isMuted)}
       size="icon"

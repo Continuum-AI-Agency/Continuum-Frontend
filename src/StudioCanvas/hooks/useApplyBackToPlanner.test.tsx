@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import type { PlannerAiStudioHandoff } from '@/lib/organic/ai-studio-bridge';
 import type { StudioNode } from '../types';
@@ -142,9 +142,13 @@ describe('useApplyBackToPlanner', () => {
 
   afterAll(() => {
     global.fetch = originalFetch;
-    mock.module('../stores/useStudioStore', () => ({ useStudioStore: realUseStudioStore }));
+    mock.module('../stores/useStudioStore', () => ({
+      useStudioStore: realUseStudioStore,
+    }));
     mock.module('next/navigation', () => ({ useRouter: realUseRouter }));
-    mock.module('@/components/ui/ToastProvider', () => ({ useToast: realUseToast }));
+    mock.module('@/components/ui/ToastProvider', () => ({
+      useToast: realUseToast,
+    }));
   });
 
   beforeEach(() => {
@@ -229,7 +233,11 @@ describe('useApplyBackToPlanner', () => {
   });
 
   it('gates an ordered carousel on the seed authoritativeCount', () => {
-    const seed = makeSeed({ postType: 'carousel', format: 'Carousel', authoritativeCount: 3 });
+    const seed = makeSeed({
+      postType: 'carousel',
+      format: 'Carousel',
+      authoritativeCount: 3,
+    });
     const { result, rerender } = renderApply(seed, 'brand-1');
 
     expect(result.current.applyReadiness).toEqual({
@@ -311,7 +319,11 @@ describe('useApplyBackToPlanner', () => {
       await result.current.onApplyBack();
     });
     expect(requestBody().assets).toEqual([
-      { role: 'image_1', kind: 'image', sourceDataUrl: 'data:image/png;base64,NEW' },
+      {
+        role: 'image_1',
+        kind: 'image',
+        sourceDataUrl: 'data:image/png;base64,NEW',
+      },
     ]);
   });
 
@@ -326,7 +338,11 @@ describe('useApplyBackToPlanner', () => {
       await result.current.onApplyBack();
     });
     expect(requestBody().assets).toEqual([
-      { role: 'image_2', kind: 'image', sourceDataUrl: 'data:image/png;base64,EDITED' },
+      {
+        role: 'image_2',
+        kind: 'image',
+        sourceDataUrl: 'data:image/png;base64,EDITED',
+      },
     ]);
   });
 
@@ -355,7 +371,10 @@ describe('useApplyBackToPlanner', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       '/api/organic/calendar/drafts/server-draft-1/fields',
     );
-    const request = fetchMock.mock.calls[0]?.[1] as { body: string; method: string };
+    const request = fetchMock.mock.calls[0]?.[1] as {
+      body: string;
+      method: string;
+    };
     expect(request.method).toBe('PATCH');
     expect(JSON.parse(request.body)).toEqual({
       caption: 'Edited TikTok caption',
@@ -497,7 +516,10 @@ describe('useApplyBackToPlanner', () => {
 
   // K2: a grouped card's Instagram frame is its own row; the route keys on the row id.
   it("applies to the frame's own row, and keeps the planner id for the return leg", async () => {
-    const seed = makeSeed({ draftId: 'draft-1::instagram', backendDraftId: 'row-instagram' });
+    const seed = makeSeed({
+      draftId: 'draft-1::instagram',
+      backendDraftId: 'row-instagram',
+    });
     applyBody = {
       ...persistedResponse(seed, [{ role: 'image_1', kind: 'image' }]),
       draftId: 'row-instagram',
@@ -534,9 +556,16 @@ describe('useApplyBackToPlanner', () => {
     });
 
     const body = requestBody();
-    expect(body.selection).toEqual({ required: true, selectedAssetRole: 'image_1' });
+    expect(body.selection).toEqual({
+      required: true,
+      selectedAssetRole: 'image_1',
+    });
     expect(body.assets).toEqual([
-      { role: 'image_1', kind: 'image', sourceDataUrl: 'data:image/png;base64,AAA' },
+      {
+        role: 'image_1',
+        kind: 'image',
+        sourceDataUrl: 'data:image/png;base64,AAA',
+      },
     ]);
   });
 

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { PortfolioListItem, RecommendationRow } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { homeContext, tileOf } from '../opps/__fixtures__/homeContext';
 import {
   EASY_FIT_PORTFOLIOS,
@@ -48,7 +49,12 @@ mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
   }),
   useOptimizerPerformance: (portfolioId: string | null) => {
     if (portfolioId) performanceReads.push(portfolioId);
-    return { data: reportOf(recommendations), isSuccess: true, isError: false, refetch };
+    return {
+      data: reportOf(recommendations),
+      isSuccess: true,
+      isError: false,
+      refetch,
+    };
   },
 }));
 
@@ -65,7 +71,11 @@ const { CHECKLIST_MISSING, EMAIL_NOTE } = await import('./checklistModel');
 
 afterEach(() => {
   cleanup();
-  portfoliosRead = { hasAnswer: true, isError: false, brandPortfolios: PINK_ELEPHANT_PORTFOLIOS };
+  portfoliosRead = {
+    hasAnswer: true,
+    isError: false,
+    brandPortfolios: PINK_ELEPHANT_PORTFOLIOS,
+  };
   recommendations = PINK_ELEPHANT_RECOMMENDATIONS;
   performanceReads.length = 0;
   refetch.mockClear();
@@ -94,7 +104,10 @@ describe('Client checklist tile', () => {
   });
 
   it('is missing when no portfolio recommends changes for the client', () => {
-    portfoliosRead = { ...portfoliosRead, brandPortfolios: EASY_FIT_PORTFOLIOS };
+    portfoliosRead = {
+      ...portfoliosRead,
+      brandPortfolios: EASY_FIT_PORTFOLIOS,
+    };
     render(<ChecklistTile ctx={ctx} tile={tileOf('checklist')} />);
     expect(frame().getAttribute('data-module-state')).toBe('missing');
     expect(screen.getByTestId('home-tile-missing').textContent).toBe(CHECKLIST_MISSING);
@@ -133,7 +146,9 @@ describe('Client checklist expanded', () => {
     const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     try {
       const sheet = await openChecklist();
-      const exportButton = within(sheet).getByRole('button', { name: /Export checklist/ });
+      const exportButton = within(sheet).getByRole('button', {
+        name: /Export checklist/,
+      });
       await waitFor(() => expect(exportButton.hasAttribute('disabled')).toBe(false));
       fireEvent.click(exportButton);
       expect(created).toHaveLength(1);
@@ -161,7 +176,9 @@ describe('Client checklist expanded', () => {
     recommendations = [];
     const sheet = await openChecklist();
     expect(sheet.textContent).toContain('Nothing is open for the client right now.');
-    const exportButton = within(sheet).getByRole('button', { name: /Export checklist/ });
+    const exportButton = within(sheet).getByRole('button', {
+      name: /Export checklist/,
+    });
     expect(exportButton.hasAttribute('disabled')).toBe(true);
   });
 });

@@ -1,9 +1,16 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import type { ApiRenderTemplateContract } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
-const getContract = mock(async () => ({ template: { contractHash: 'hash' } }) as ApiRenderTemplateContract);
+const getContract = mock(
+  async () => ({ template: { contractHash: 'hash' } }) as ApiRenderTemplateContract,
+);
 mock.module('./apiRendersApi', () => ({ apiRendersApi: { getContract } }));
 mock.module('@/components/forge/RenderPreviewPanel', () => ({
   RenderPreviewPanel: ({ rows }: { rows: Array<{ values: Record<string, unknown> }> }) => (
@@ -21,7 +28,9 @@ afterEach(() => {
 test('Canvas previews the selected variation with its current mapped values', async () => {
   const onContract = mock((_contract: ApiRenderTemplateContract) => undefined);
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <CanvasRenderPreview
         brandId="brand"
         bindingId="binding"
@@ -37,7 +46,9 @@ test('Canvas previews the selected variation with its current mapped values', as
     </QueryClientProvider>,
   );
   expect(await screen.findByText('{"headline":"First"}')).toBeTruthy();
-  fireEvent.change(screen.getByRole('combobox', { name: 'Preview' }), { target: { value: 'two' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Preview' }), {
+    target: { value: 'two' },
+  });
   expect(await screen.findByText('{"headline":"Second"}')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
   expect(screen.getByRole('dialog').textContent).toContain('Second');
@@ -48,7 +59,9 @@ test('Canvas previews the selected variation with its current mapped values', as
 test('a changed template does not overwrite the node or preview stale values', async () => {
   const onContract = mock((_contract: ApiRenderTemplateContract) => undefined);
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
       <CanvasRenderPreview
         brandId="brand"
         bindingId="binding"
@@ -60,6 +73,10 @@ test('a changed template does not overwrite the node or preview stale values', a
       />
     </QueryClientProvider>,
   );
-  expect(await screen.findByText('The template changed. Choose it again to preview the current version.')).toBeTruthy();
+  expect(
+    await screen.findByText(
+      'The template changed. Choose it again to preview the current version.',
+    ),
+  ).toBeTruthy();
   expect(onContract).toHaveBeenCalledTimes(0);
 });

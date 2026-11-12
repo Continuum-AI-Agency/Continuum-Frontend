@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
 import type { PublishAccountCandidate } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -36,8 +37,13 @@ const accounts: PublishAccountCandidate[] = [
     isDefault: true,
   },
 ];
-const accountsHook = mock((_brandId?: string | null) => ({ accounts, isLoading: false }));
-mock.module('@/lib/organic/publishTargets', () => ({ usePublishAccountsState: accountsHook }));
+const accountsHook = mock((_brandId?: string | null) => ({
+  accounts,
+  isLoading: false,
+}));
+mock.module('@/lib/organic/publishTargets', () => ({
+  usePublishAccountsState: accountsHook,
+}));
 
 const { ToolApprovalCard } = await import('./ToolApprovalCard');
 

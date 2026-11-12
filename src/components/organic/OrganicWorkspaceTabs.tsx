@@ -1,8 +1,8 @@
 'use client';
 
 import type { OrganicMetricPlatform } from '@continuum/contracts';
-
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import React, { startTransition } from 'react';
 import { useGenerationJobsRealtime } from '@/components/organic/hooks/useGenerationJobsRealtime';
 import {
@@ -16,8 +16,11 @@ import { cn } from '@/lib/utils';
 // ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
 // Stable @types/react doesn't include it yet, so we pull it at runtime via cast.
 const ViewTransition =
-  (React as unknown as { ViewTransition?: React.ComponentType<{ children: React.ReactNode }> })
-    .ViewTransition ??
+  (
+    React as unknown as {
+      ViewTransition?: React.ComponentType<{ children: React.ReactNode }>;
+    }
+  ).ViewTransition ??
   function ViewTransitionFallback({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   };
@@ -42,15 +45,15 @@ type Props = {
 
 type OrganicView = 'planner' | 'metrics' | 'explore' | 'agent' | 'review' | 'styles' | 'rules';
 
-const WORKSPACE_LABELS: Record<OrganicView, string> = {
-  planner: 'Planner',
-  metrics: 'Metrics',
-  explore: 'Explore',
-  agent: 'Agent',
-  review: 'Review',
-  styles: 'Styles',
-  rules: 'Rules',
-};
+const WORKSPACE_LABELS = {
+  planner: 'workspacePlanner',
+  metrics: 'workspaceMetrics',
+  explore: 'workspaceExplore',
+  agent: 'workspaceAgent',
+  review: 'workspaceReview',
+  styles: 'workspaceStyles',
+  rules: 'workspaceRules',
+} as const satisfies Record<OrganicView, string>;
 
 export function OrganicWorkspaceTabs({
   plannerSlot,
@@ -63,6 +66,7 @@ export function OrganicWorkspaceTabs({
   rulesSlot,
   brandId,
 }: Props) {
+  const uiText = useTranslations('organic');
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const initialView: OrganicView =
@@ -93,10 +97,19 @@ export function OrganicWorkspaceTabs({
     const idleHandle =
       typeof requestIdleCallback === 'function'
         ? requestIdleCallback(() =>
-            prefetchMetricsDashboard({ brandId, integrationAccountId, platform }),
+            prefetchMetricsDashboard({
+              brandId,
+              integrationAccountId,
+              platform,
+            }),
           )
         : setTimeout(
-            () => prefetchMetricsDashboard({ brandId, integrationAccountId, platform }),
+            () =>
+              prefetchMetricsDashboard({
+                brandId,
+                integrationAccountId,
+                platform,
+              }),
             2000,
           );
 
@@ -166,14 +179,16 @@ export function OrganicWorkspaceTabs({
     <OpenPlannerDraftProvider value={openPlannerDraft}>
       <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
         <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
-          <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
+          <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">
+            {uiText('organic_89b8cb6')}
+          </h1>
 
           {/* At phone width the tabs scroll inside their own strip: overflowing the header
             lets a focus or click scroll the whole workspace sideways under the planner. */}
           <div className="flex min-w-0 items-center gap-2">
             <nav
               className="inline-flex min-w-0 overflow-x-auto rounded-lg border bg-muted/40 p-0.5"
-              aria-label="Organic workspace"
+              aria-label={uiText('organic_workspace_d0b8421')}
             >
               {(
                 [
@@ -208,7 +223,7 @@ export function OrganicWorkspaceTabs({
                     )}
                     aria-pressed={isActive}
                   >
-                    {WORKSPACE_LABELS[view]}
+                    {uiText(WORKSPACE_LABELS[view])}
                   </button>
                 );
               })}

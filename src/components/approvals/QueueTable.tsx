@@ -9,6 +9,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { ArrowUpDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,7 @@ import {
 } from '@/components/ui/table';
 import type { RuleAction } from '@/lib/approvals/types';
 import { getActionIcon } from './actionIcons';
-import { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } from './formatters';
+import { useApprovalFormatters } from './formatters';
 
 type Props = {
   actions: RuleAction[];
@@ -30,13 +31,16 @@ type Props = {
 };
 
 export function QueueTable({ actions, onSelect }: Props) {
+  const { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } = useApprovalFormatters();
+
+  const uiText = useTranslations('common');
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'created_at', desc: true }]);
 
   const columns = React.useMemo<ColumnDef<RuleAction>[]>(
     () => [
       {
         accessorKey: 'created_at',
-        header: ({ column }) => <SortHeader column={column} label="Queued" />,
+        header: ({ column }) => <SortHeader column={column} label={uiText('queued_661ff40')} />,
         cell: ({ row }) => (
           <span className="font-data text-xs tabular-nums text-muted-foreground">
             {formatRelativeTime(row.original.created_at)}
@@ -46,7 +50,7 @@ export function QueueTable({ actions, onSelect }: Props) {
       },
       {
         accessorKey: 'action_type',
-        header: 'Type',
+        header: uiText('m_3deb745651'),
         cell: ({ row }) => {
           const Icon = getActionIcon(row.original.action_type);
           return (
@@ -62,14 +66,14 @@ export function QueueTable({ actions, onSelect }: Props) {
       },
       {
         id: 'scope',
-        header: 'Scope',
+        header: uiText('m_4651a34e4d'),
         cell: ({ row }) => (
           <span className="font-data text-xs text-foreground">{scopeLabel(row.original)}</span>
         ),
       },
       {
         id: 'why',
-        header: 'Rationale',
+        header: uiText('m_98365abf7a'),
         cell: ({ row }) => (
           <span className="line-clamp-2 max-w-[36rem] text-xs text-muted-foreground">
             {whyText(row.original)}
@@ -77,7 +81,7 @@ export function QueueTable({ actions, onSelect }: Props) {
         ),
       },
     ],
-    [],
+    [uiText, uiText],
   );
 
   const table = useReactTable({
@@ -112,7 +116,7 @@ export function QueueTable({ actions, onSelect }: Props) {
                 colSpan={columns.length}
                 className="h-24 text-center text-sm text-muted-foreground"
               >
-                No actions match.
+                {uiText('m_77e8e4ed31')}
               </TableCell>
             </TableRow>
           ) : (
@@ -140,7 +144,10 @@ function SortHeader({
   column,
   label,
 }: {
-  column: { toggleSorting: (asc?: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' };
+  column: {
+    toggleSorting: (asc?: boolean) => void;
+    getIsSorted: () => false | 'asc' | 'desc';
+  };
   label: string;
 }) {
   return (

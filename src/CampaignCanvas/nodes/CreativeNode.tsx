@@ -1,4 +1,5 @@
 'use client';
+
 import {
   Copy,
   Film,
@@ -9,8 +10,9 @@ import {
   Trash2,
 } from 'lucide-react';
 import Image from 'next/image';
+import { useTranslations } from 'next-intl';
 import type React from 'react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Node } from '@/components/ai-elements/node';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
@@ -118,30 +120,6 @@ export function useSignedCreativeUrls(ids: readonly string[]) {
   return useSignedAssetUrls(activeBrandId || undefined, ids);
 }
 
-const FORMAT_OPTIONS: Array<{ value: CreativeAssetType; label: string; description: string }> = [
-  {
-    value: 'image',
-    label: 'Image',
-    description: 'One still image. Its ad runs as a single-image ad.',
-  },
-  {
-    value: 'video',
-    label: 'Video',
-    description: 'One video. Its ad runs as a single-video ad.',
-  },
-  {
-    value: 'carousel',
-    label: 'Carousel',
-    description: 'Two to ten swipeable cards, each with its own headline and link.',
-  },
-];
-
-const FORMAT_LABELS: Record<CreativeAssetType, string> = {
-  image: 'Image',
-  video: 'Video',
-  carousel: 'Carousel',
-};
-
 /** How many card tiles the node draws before folding the rest into "+N". */
 const CAROUSEL_STRIP_TILES = 3;
 
@@ -162,12 +140,17 @@ function CarouselStrip({
   cards: CarouselCard[];
   signed: Readonly<Record<string, string | undefined>>;
 }) {
+  const uiText = useTranslations('scale');
+
   if (cards.length === 0) {
     return (
       <AspectRatio ratio={2} className="w-full overflow-hidden">
         <MediaPlaceholder
           kind="carousel"
-          label={`Add ${CAROUSEL_MIN_CARDS}–${CAROUSEL_MAX_CARDS} cards`}
+          label={uiText('template_9d19cf98ce63', {
+            v0: CAROUSEL_MIN_CARDS,
+            v1: CAROUSEL_MAX_CARDS,
+          })}
         />
       </AspectRatio>
     );
@@ -184,7 +167,7 @@ function CarouselStrip({
           {card.thumbnailUrl || (card.kind === 'image' && signed[card.mediaId]) ? (
             <Image
               src={(card.thumbnailUrl || signed[card.mediaId]) as string}
-              alt={card.headline ?? `Card ${index + 1}`}
+              alt={card.headline ?? uiText('template_4b37917a2260', { v0: index + 1 })}
               fill
               unoptimized
               sizes="128px"
@@ -206,6 +189,41 @@ function CarouselStrip({
 }
 
 export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'creative'>) => {
+  const uiText = useTranslations('scale');
+  const FORMAT_OPTIONS: Array<{
+    value: CreativeAssetType;
+    label: string;
+    description: string;
+  }> = useMemo(
+    () => [
+      {
+        value: 'image',
+        label: uiText('image_1aa4cb0'),
+        description: uiText('one_still_image_its_ad_runs_as_a_single_image_f85f335'),
+      },
+      {
+        value: 'video',
+        label: uiText('video_d534be8'),
+        description: uiText('one_video_its_ad_runs_as_a_single_video_ad_752fc30'),
+      },
+      {
+        value: 'carousel',
+        label: uiText('carousel_37219fb'),
+        description: uiText('two_to_ten_swipeable_cards_each_with_its_own__957c6e5'),
+      },
+    ],
+    [uiText],
+  );
+
+  const FORMAT_LABELS: Record<CreativeAssetType, string> = useMemo(
+    () => ({
+      image: uiText('image_1aa4cb0'),
+      video: uiText('video_d534be8'),
+      carousel: uiText('carousel_37219fb'),
+    }),
+    [uiText],
+  );
+
   const { duplicateNode, removeNode, setCreativeFormat } = useCampaignStore();
 
   const { dropActive, dropHandlers, notice, uploads } = useCreativeAssetPlacement(id);
@@ -240,7 +258,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
 
   const caption =
     selectedAssetType === 'carousel'
-      ? `${FORMAT_LABELS.carousel} · ${cards.length} ${cards.length === 1 ? 'card' : 'cards'}`
+      ? uiText('canvasCarouselCardCount', { count: cards.length })
       : FORMAT_LABELS[selectedAssetType];
 
   return (
@@ -267,7 +285,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 {thumbnailUrl ? (
                   <Image
                     src={thumbnailUrl}
-                    alt="Creative Preview"
+                    alt={uiText('creative_preview_92e4353')}
                     fill
                     unoptimized
                     sizes="(max-width: 768px) 100vw, 240px"
@@ -290,7 +308,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 )}
                 {dropActive || uploading ? (
                   <span className="absolute inset-0 flex items-center justify-center bg-background/70 text-xs font-medium text-foreground">
-                    {uploading ? 'Uploading…' : 'Drop to use'}
+                    {uploading ? uiText('uploading_5ce44dd') : uiText('drop_to_use_5369c9c')}
                   </span>
                 ) : null}
                 {selectedAssetType === 'video' && (thumbnailUrl || assetUrl) ? (
@@ -325,16 +343,19 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
         }
       />
       <ContextMenuContent className="w-56">
-        <ContextMenuLabel>Creative Actions</ContextMenuLabel>
+        <ContextMenuLabel>{uiText('creative_actions_efaf7b7')}</ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
-              <ImageIcon className="mr-2 h-4 w-4" />
-              Format
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="The creative's format sets its ad's format: image, video or carousel."
-              />
+              {uiText.rich('sentence_a2daeb409083', {
+                v0: () => <ImageIcon className="mr-2 h-4 w-4" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    className="ml-2 mr-4"
+                    description={uiText('the_creative_s_format_sets_its_ad_s_format_im_a3d734e')}
+                  />
+                ),
+              })}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {FORMAT_OPTIONS.map((format) => (
@@ -355,15 +376,19 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
           <>
             <ContextMenuSeparator />
             <ContextMenuItem disabled={isDirty} onClick={() => canvasJaina.generateForCreative(id)}>
-              <Sparkles className="mr-2 h-4 w-4" /> Generate with Jaina
-              <ContextMenuItemInfo
-                className="ml-2"
-                description={
-                  isDirty
-                    ? 'Save first — Jaina fills the saved version.'
-                    : "Jaina makes this creative from its ad's copy and attaches it. Spend waits for your approval."
-                }
-              />
+              {uiText.rich('sentence_408cf6c19c78', {
+                v0: () => <Sparkles className="mr-2 h-4 w-4" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    className="ml-2"
+                    description={
+                      isDirty
+                        ? uiText('save_first_jaina_fills_the_saved_version_ff4e5ad')
+                        : uiText('jaina_makes_this_creative_from_its_ad_s_copy__dbd3438')
+                    }
+                  />
+                ),
+              })}
             </ContextMenuItem>
           </>
         ) : null}
@@ -372,24 +397,32 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
 
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
-            <Copy className="mr-2 h-4 w-4" /> Duplicate
-            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-            <ContextMenuItemInfo
-              className="ml-2"
-              description="A duplicate keeps the same creative settings as a starting variant."
-            />
+            {uiText.rich('sentence_cbb73dcd8c7a', {
+              v0: () => <Copy className="mr-2 h-4 w-4" />,
+              v1: () => <ContextMenuShortcut>⌘D</ContextMenuShortcut>,
+              v2: () => (
+                <ContextMenuItemInfo
+                  className="ml-2"
+                  description={uiText('a_duplicate_keeps_the_same_creative_settings__92fc2dd')}
+                />
+              ),
+            })}
           </ContextMenuItem>
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
 
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
-          <Trash2 className="mr-2 h-4 w-4" /> Delete
-          <ContextMenuShortcut>⌫</ContextMenuShortcut>
-          <ContextMenuItemInfo
-            className="ml-2"
-            description="Delete removes this creative object from the current graph."
-          />
+          {uiText.rich('sentence_cab0f08ddea5', {
+            v0: () => <Trash2 className="mr-2 h-4 w-4" />,
+            v1: () => <ContextMenuShortcut>⌫</ContextMenuShortcut>,
+            v2: () => (
+              <ContextMenuItemInfo
+                className="ml-2"
+                description={uiText('delete_removes_this_creative_object_from_the__3195fda')}
+              />
+            ),
+          })}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

@@ -23,16 +23,28 @@ function cardsForMessage(
   );
 }
 
+export type MilestoneMessageKey =
+  | 'milestonePlan'
+  | 'milestoneContent'
+  | 'milestoneCopy'
+  | 'milestoneBlueprint'
+  | 'milestoneMediaChoice'
+  | 'milestoneMedia';
+
 export function milestonesForMessage(
   message: ConversationMessage,
   pipeline: Readonly<Record<string, PipelineCardState>>,
+  translate?: (key: MilestoneMessageKey) => string,
 ): OrganicMilestone[] {
   if (message.role !== 'assistant') return [];
 
   const milestones: OrganicMilestone[] = [];
 
   if (message.uiCards?.some((card) => card.type === 'plan_card')) {
-    milestones.push({ id: `${message.id}::plan`, label: 'Plan ready' });
+    milestones.push({
+      id: `${message.id}::plan`,
+      label: translate?.('milestonePlan') ?? 'Plan ready',
+    });
   }
 
   const cards = cardsForMessage(message, pipeline);
@@ -43,16 +55,31 @@ export function milestonesForMessage(
   const textReady = cards.some((card) => card.checkpoint?.textReady);
   const blueprintReady = cards.some((card) => card.checkpoint?.blueprintReady);
   if (textReady && blueprintReady) {
-    milestones.push({ id: `${message.id}::content`, label: 'Content ready' });
+    milestones.push({
+      id: `${message.id}::content`,
+      label: translate?.('milestoneContent') ?? 'Content ready',
+    });
   } else if (textReady) {
-    milestones.push({ id: `${message.id}::copy`, label: 'Copy ready' });
+    milestones.push({
+      id: `${message.id}::copy`,
+      label: translate?.('milestoneCopy') ?? 'Copy ready',
+    });
   } else if (blueprintReady) {
-    milestones.push({ id: `${message.id}::blueprint`, label: 'Blueprint ready' });
+    milestones.push({
+      id: `${message.id}::blueprint`,
+      label: translate?.('milestoneBlueprint') ?? 'Blueprint ready',
+    });
   }
   if (cards.some((card) => card.checkpoint?.awaitingMediaChoice)) {
-    milestones.push({ id: `${message.id}::media-choice`, label: 'Awaiting media choice' });
+    milestones.push({
+      id: `${message.id}::media-choice`,
+      label: translate?.('milestoneMediaChoice') ?? 'Awaiting media choice',
+    });
   } else if (cards.some((card) => card.checkpoint?.mediaStatus === 'ready')) {
-    milestones.push({ id: `${message.id}::media`, label: 'Media ready' });
+    milestones.push({
+      id: `${message.id}::media`,
+      label: translate?.('milestoneMedia') ?? 'Media ready',
+    });
   }
 
   return milestones;
@@ -61,10 +88,11 @@ export function milestonesForMessage(
 export function deriveOrganicAnchors(
   messages: readonly ConversationMessage[],
   pipeline: Readonly<Record<string, PipelineCardState>>,
+  translate?: (key: MilestoneMessageKey) => string,
 ): TranscriptAnchor[] {
   return messages.flatMap((message): TranscriptAnchor[] => [
     { id: message.id, kind: message.role === 'user' ? 'user' : 'assistant' },
-    ...milestonesForMessage(message, pipeline).map(
+    ...milestonesForMessage(message, pipeline, translate).map(
       (milestone): TranscriptAnchor => ({
         id: milestone.id,
         kind: 'milestone',

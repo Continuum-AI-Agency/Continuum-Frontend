@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // H14 Ask Home: a question bar above the tiles, with three or four questions read from the Home's
 // reading. Asking opens Jaina with the question written in her composer (the same deep link the
@@ -15,6 +16,8 @@ import type { HomeBoardContext } from '../../types';
 import { askSuggestions } from './askModel';
 
 export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const router = useRouter();
   const [question, setQuestion] = useState('');
   const suggestions = useMemo(
@@ -34,25 +37,30 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
 
   return (
     <section
-      aria-label="Ask Jaina"
+      aria-label={betaUiText('beta_0d70d163e903')}
       className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3"
       data-testid="home-ask"
     >
       <form className="flex min-w-0 items-center gap-2" onSubmit={onSubmit}>
         <SparklesIcon aria-hidden className="size-4 shrink-0 text-primary" />
         <Input
-          aria-label="Ask Jaina about this brand"
+          aria-label={betaUiText('beta_92fd9720b233')}
           className="h-9 min-w-0 flex-1"
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask Jaina about this brand…"
+          placeholder={betaUiText('beta_66df6f8b70e4')}
           value={question}
         />
-        <Button aria-label="Ask Jaina" disabled={!typed} size="sm" type="submit">
-          Ask <ArrowRightIcon aria-hidden className="size-3.5" />
+        <Button
+          aria-label={betaUiText('beta_0d70d163e903')}
+          disabled={!typed}
+          size="sm"
+          type="submit"
+        >
+          {betaUiText('beta_b8c209cdead6')} <ArrowRightIcon aria-hidden className="size-3.5" />
         </Button>
       </form>
       {suggestions.length > 0 ? (
-        <ul aria-label="Suggested questions" className="flex min-w-0 flex-wrap gap-1.5">
+        <ul aria-label={betaUiText('beta_823a7e3a2c62')} className="flex min-w-0 flex-wrap gap-1.5">
           {suggestions.map((suggestion) => (
             <li className="min-w-0 max-w-full" key={suggestion.key}>
               <button
@@ -68,9 +76,7 @@ export default function AskBar({ ctx }: { ctx: HomeBoardContext }) {
           ))}
         </ul>
       ) : null}
-      <p className="text-muted-foreground text-xs">
-        Opens Jaina with the question written in. Nothing is sent until you send it.
-      </p>
+      <p className="text-muted-foreground text-xs">{betaUiText('beta_de7dc82698f1')}</p>
     </section>
   );
 }

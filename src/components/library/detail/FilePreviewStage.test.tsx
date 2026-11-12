@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { FilePreviewStage } from './FilePreviewStage';
 
 afterEach(cleanup);
@@ -23,7 +28,12 @@ function fileAsset(fileName: string, mimeType: string): MediaAsset {
     hasImageEmbedding: false,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
-    preview: { assetVersionId: 'v1', state: 'unsupported', kind: null, signedUrl: null },
+    preview: {
+      assetVersionId: 'v1',
+      state: 'unsupported',
+      kind: null,
+      signedUrl: null,
+    },
   } as MediaAsset;
 }
 
@@ -58,7 +68,9 @@ describe('FilePreviewStage', () => {
   });
 
   it('hands a 3D model to its viewer instead of the file card', () => {
-    render(<FilePreviewStage brandId="brand-1" asset={fileAsset('chair.glb', 'model/gltf-binary')} />);
+    render(
+      <FilePreviewStage brandId="brand-1" asset={fileAsset('chair.glb', 'model/gltf-binary')} />,
+    );
     expect(screen.getByTestId('family-viewer-loading')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Download' })).toBeNull();
   });
@@ -67,7 +79,10 @@ describe('FilePreviewStage', () => {
     const realFetch = globalThis.fetch;
     const calls: Array<{ url: string; body: unknown }> = [];
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      calls.push({ url: String(input), body: JSON.parse(String(init?.body ?? 'null')) });
+      calls.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? 'null')),
+      });
       return new Response(
         JSON.stringify({
           family: 'none',
@@ -80,7 +95,8 @@ describe('FilePreviewStage', () => {
     try {
       const archive = {
         ...fileAsset('notes.zip', 'application/zip'),
-        signedUrl: 'https://project.supabase.co/storage/v1/object/sign/media-source/a/notes.zip?token=t',
+        signedUrl:
+          'https://project.supabase.co/storage/v1/object/sign/media-source/a/notes.zip?token=t',
       };
       render(<FilePreviewStage brandId="brand-1" asset={archive} />);
       await waitFor(() => expect(screen.getByRole('button', { name: 'Download' })).not.toBeNull());

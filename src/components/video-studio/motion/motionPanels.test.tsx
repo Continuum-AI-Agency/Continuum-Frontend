@@ -6,7 +6,13 @@ import {
   TEXT_TEMPLATE_IDS,
   type VideoEditorOpName,
 } from '@continuum/contracts';
-import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { EasingCurveEditor } from '@/StudioCanvas/nodes/timeline/motion/EasingCurveEditor';
 import { createPlayheadStore } from '@/StudioCanvas/nodes/timeline/workspace/playheadStore';
@@ -24,7 +30,10 @@ import { readTemplateDrag, TEXT_TEMPLATE_DRAG_TYPE, TextTemplateShelf } from './
 
 afterEach(cleanup);
 
-function withClip(): { project: EditorProjectV2; clip: Exclude<KeyedClip, { kind: 'audio' }> } {
+function withClip(): {
+  project: EditorProjectV2;
+  clip: Exclude<KeyedClip, { kind: 'audio' }>;
+} {
   const blank = createEditorProjectV2({
     projectId: 'p1',
     title: 'Edit',
@@ -33,7 +42,13 @@ function withClip(): { project: EditorProjectV2; clip: Exclude<KeyedClip, { kind
   });
   const placed = placeAssetEdit(
     blank,
-    { assetId: 'a', kind: 'video', title: 'Reel', durationSec: 4, origin: 'project' },
+    {
+      assetId: 'a',
+      kind: 'video',
+      title: 'Reel',
+      durationSec: 4,
+      origin: 'project',
+    },
     { atSec: 0 },
   );
   const project = simulate(blank, placed.forward);
@@ -75,7 +90,9 @@ describe('TextTemplateShelf', () => {
     expect(view.container.querySelectorAll('[data-text-template]')).toHaveLength(
       TEXT_TEMPLATE_IDS.length,
     );
-    fireEvent.change(view.getByLabelText('Line'), { target: { value: 'Big news' } });
+    fireEvent.change(view.getByLabelText('Line'), {
+      target: { value: 'Big news' },
+    });
     fireEvent.click(view.getByRole('button', { name: 'Add Lower third' }));
     expect(onPlace).toHaveBeenCalledWith({
       template: 'lower_third',
@@ -125,7 +142,13 @@ describe('KeyframeLane', () => {
     });
     const placed = placeAssetEdit(
       blank,
-      { assetId: 'bed', kind: 'audio', title: 'Bed', durationSec: 4, origin: 'project' },
+      {
+        assetId: 'bed',
+        kind: 'audio',
+        title: 'Bed',
+        durationSec: 4,
+        origin: 'project',
+      },
       { atSec: 1 },
     );
     let project = simulate(blank, placed.forward);
@@ -149,7 +172,11 @@ describe('KeyframeLane', () => {
     fireEvent.click(view.getByRole('button', { name: 'Add Volume keyframe' }));
     const keyed = project.tracks.flatMap((track) => track.clips)[0];
     if (!keyed || keyed.kind !== 'audio') throw new Error('no audio');
-    expect(keyed.keyframes[0]).toMatchObject({ property: 'audio.volume', timeSec: 1, value: 1 });
+    expect(keyed.keyframes[0]).toMatchObject({
+      property: 'audio.volume',
+      timeSec: 1,
+      value: 1,
+    });
     view.rerender(
       <KeyframeLane
         clip={keyed}
@@ -197,7 +224,9 @@ describe('KeyframeLane', () => {
     });
     window.removeEventListener('keydown', onWindowKey);
     expect(onWindowKey).not.toHaveBeenCalled();
-    expect(edits.at(-1)?.forward[0]).toMatchObject({ commandType: 'remove_keyframes' });
+    expect(edits.at(-1)?.forward[0]).toMatchObject({
+      commandType: 'remove_keyframes',
+    });
   });
 });
 
@@ -216,7 +245,10 @@ describe('motion and look sections', () => {
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(calls).toEqual([
       { op: 'animate_clip', input: { clipId: clip.id, preset: 'pop' } },
-      { op: 'animate_clip', input: { clipId: clip.id, preset: 'shake', atSec: 4 } },
+      {
+        op: 'animate_clip',
+        input: { clipId: clip.id, preset: 'shake', atSec: 4 },
+      },
     ]);
   });
 
@@ -256,7 +288,9 @@ describe('KeyButton drag', () => {
         onSettle={() => undefined}
       />,
     );
-    const key = view.getByRole('button', { name: 'Position keyframe at 1.00 s' });
+    const key = view.getByRole('button', {
+      name: 'Position keyframe at 1.00 s',
+    });
     const row = key.parentElement as HTMLElement;
     row.getBoundingClientRect = () => ({ left: 0, width: 400 }) as DOMRect;
     key.setPointerCapture = () => undefined;

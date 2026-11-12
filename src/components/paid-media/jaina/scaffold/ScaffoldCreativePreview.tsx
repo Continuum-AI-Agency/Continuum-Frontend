@@ -1,9 +1,12 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+
+import { useTranslations } from 'next-intl';
+import { useEffect, useId, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import { Button } from '@/components/ui/button';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 export function ScaffoldCreativePreview({
   brandId,
@@ -18,6 +21,9 @@ export function ScaffoldCreativePreview({
   onGenerate?: (format: 'image' | 'video') => Promise<void>;
   disabled?: boolean;
 }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
+  const creativeFormatControlId = useId();
   const [preview, setPreview] = useState<{
     url: string;
     thumbnailUrl?: string;
@@ -48,18 +54,21 @@ export function ScaffoldCreativePreview({
         if (!controller.signal.aborted) {
           const kind = data.mimeType?.startsWith('video/') ? 'video' : 'image';
           setFormat(kind);
-          setPreview({ url: data.signedUrl, thumbnailUrl: data.thumbnailUrl, kind });
+          setPreview({
+            url: data.signedUrl,
+            thumbnailUrl: data.thumbnailUrl,
+            kind,
+          });
         }
       })
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted)
-          setError(cause instanceof Error ? cause.message : 'Creative preview unavailable.');
+        if (!controller.signal.aborted) setError(formatUiError(cause));
       });
     return () => controller.abort();
-  }, [brandId, assetId]);
+  }, [brandId, assetId, formatUiError]);
   return (
     <section
-      aria-label={`Creative for ${name}`}
+      aria-label={uiText('template_55db7eab5961', { v0: name })}
       className="mt-2 flex flex-col gap-2 rounded-lg bg-background/80 p-3"
     >
       <p className="text-xs font-medium">{name}</p>
@@ -71,22 +80,28 @@ export function ScaffoldCreativePreview({
         />
       ) : (
         <p className="text-xs text-muted-foreground">
-          {assetId ? 'Loading creative…' : 'This ad needs a creative.'}
+          {assetId
+            ? uiText('loading_creative_5e196ec')
+            : uiText('this_ad_needs_a_creative_2e95c06')}
         </p>
       )}
       {onGenerate ? (
-        <label className="flex items-center gap-2 text-xs">
-          Format
-          <select
-            aria-label="Creative format"
-            className="rounded bg-background p-1"
-            value={format}
-            disabled={disabled || busy}
-            onChange={(event) => setFormat(event.target.value === 'video' ? 'video' : 'image')}
-          >
-            <option value="image">Image</option>
-            <option value="video">Video</option>
-          </select>
+        <label htmlFor={creativeFormatControlId} className="flex items-center gap-2 text-xs">
+          {uiText.rich('sentence_0fd66514c7d6', {
+            v0: () => (
+              <select
+                id={creativeFormatControlId}
+                aria-label={uiText('creative_format_f211a16')}
+                className="rounded bg-background p-1"
+                value={format}
+                disabled={disabled || busy}
+                onChange={(event) => setFormat(event.target.value === 'video' ? 'video' : 'image')}
+              >
+                <option value="image">{uiText('image_1aa4cb0')}</option>
+                <option value="video">{uiText('video_d534be8')}</option>
+              </select>
+            ),
+          })}
         </label>
       ) : null}
       {onGenerate ? (
@@ -101,14 +116,14 @@ export function ScaffoldCreativePreview({
             try {
               await onGenerate(format);
             } catch (cause) {
-              setError(cause instanceof Error ? cause.message : 'Creative request failed.');
+              setError(formatUiError(cause));
             } finally {
               setBusy(false);
             }
           }}
         >
           <Sparkles className="size-3.5" />
-          Generate / Enrich
+          {uiText('generate_enrich_45de453')}
         </Button>
       ) : null}
       {error ? (

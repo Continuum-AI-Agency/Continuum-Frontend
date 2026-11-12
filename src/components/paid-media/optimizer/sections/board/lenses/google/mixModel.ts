@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type GoalStandingCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // G05 Mix, the figures: where the Google money goes and what it buys. By campaign type (Search,
 // Performance Max, YouTube / Demand Gen) from the Google tab's own read; by campaign when the
 // account runs a single type; by course line against the split agreed with the client when the
@@ -38,12 +42,20 @@ export function channelOf(type: CampaignTypeKey | null): MixChannel {
  *  (@continuum/contracts words it in the account's language). */
 export type ResultWords = { one: string; many: string; copy: MixCopyResult };
 
-const CONVERSIONS: ResultWords = { one: 'conversion', many: 'conversions', copy: 'conversions' };
+const CONVERSIONS: ResultWords = {
+  one: 'conversion',
+  many: 'conversions',
+  copy: 'conversions',
+};
 
 /** The result's words: the bucket the read counts, or plain "conversions" when it names none. */
 export function resultWordsOf(bucket: GoogleResultBucket | null): ResultWords {
   if (!bucket) return CONVERSIONS;
-  return { one: RESULT_WORDS[bucket].one, many: RESULT_WORDS[bucket].many, copy: bucket };
+  return {
+    one: RESULT_WORDS[bucket].one,
+    many: RESULT_WORDS[bucket].many,
+    copy: bucket,
+  };
 }
 
 export type MixRow = {
@@ -101,7 +113,10 @@ export type MixModel = MixSplit | MixLines | { kind: 'empty'; reason: string };
 export const MAX_CAMPAIGN_ROWS = 4;
 export const MORE_KEY = 'more';
 
-type Counted = { conversions: number | null; byResult?: GoogleResultCounts | null };
+type Counted = {
+  conversions: number | null;
+  byResult?: GoogleResultCounts | null;
+};
 type Counter = { words: ResultWords; count: (row: Counted) => number | null };
 
 /** How a row's result is counted: the single result the read counts, the one result type the
@@ -286,7 +301,11 @@ export type MixInput = {
 export function buildMix({ overview, campaigns, lineCard, bucket, goal }: MixInput): MixModel {
   const lines = lineCard ? mixByLine(lineCard) : null;
   if (lines) return lines;
-  if (!overview) return { kind: 'empty', reason: 'The Google Ads read has no campaigns yet.' };
+  if (!overview)
+    return {
+      kind: 'empty',
+      reason: 'The Google Ads read has no campaigns yet.',
+    };
   const split =
     mixByType(overview, bucket, goal) ??
     (campaigns ? mixByCampaign(campaigns, bucket, goal) : null);
@@ -322,9 +341,21 @@ export function mixHeadlineLine(lines: MixLines): MixLine | null {
 /** Where a cost per result sits against the portfolio goal, in the board's words. */
 export type GoalStanding = { side: 'under' | 'over' | 'on'; label: string };
 
-export function goalStanding(cost: number | null, goal: number | null): GoalStanding | null {
+export function goalStanding(
+  cost: number | null,
+  goal: number | null,
+  t?: GoalStandingCopy,
+): GoalStanding | null {
   if (cost == null || goal == null || goal <= 0) return null;
   const pct = Math.round((cost / goal - 1) * 100);
+  if (t)
+    return {
+      side: pct === 0 ? 'on' : pct < 0 ? 'under' : 'over',
+      label: t('mixGoalStanding', {
+        side: pct === 0 ? 'on' : pct < 0 ? 'under' : 'over',
+        percent: Math.abs(pct),
+      }),
+    };
   if (pct === 0) return { side: 'on', label: 'On goal' };
   return pct < 0
     ? { side: 'under', label: `${-pct}% under goal` }
@@ -364,7 +395,13 @@ function lineTakeaway(lines: MixLines): string | null {
   const told = (flagged.length > 0 ? flagged : lines.rows).flatMap((row) =>
     row.target == null
       ? []
-      : [{ label: row.label, share: shareLabel(row.share), agreed: shareLabel(row.target) }],
+      : [
+          {
+            label: row.label,
+            share: shareLabel(row.share),
+            agreed: shareLabel(row.target),
+          },
+        ],
   );
   return mixLineSentence(told);
 }

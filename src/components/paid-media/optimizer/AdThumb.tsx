@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The shared, recovery-aware creative thumbnail cell for optimizer tables (preview
 // drill-ins, reallocation rows, the picker's ad list). Renders the Meta creative
@@ -40,7 +41,11 @@ export function AdThumb({
   className,
   sizeClassName = 'size-6',
 }: AdThumbProps) {
-  const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId: accountId });
+  const uiText = useTranslations('scale');
+  const { freshUrlById, recover } = usePaidCreativeRecovery({
+    brandId,
+    adAccountId: accountId,
+  });
   const label = adName || adId;
   const media = mediaFromPaidVerdict({
     adId,
@@ -59,7 +64,7 @@ export function AdThumb({
         )}
         aria-hidden="true"
       >
-        AD
+        {uiText('ad_c7bf4bb')}
       </span>
     );
   }

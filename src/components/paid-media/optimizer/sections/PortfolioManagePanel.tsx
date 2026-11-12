@@ -1,4 +1,12 @@
 'use client';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // Inline management for one portfolio, laid out as ONE sheet: a sticky section index beside
 // (or, in a narrow panel, above) hairline-separated sections — Identity (name + objective +
@@ -85,9 +93,16 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { cn } from '@/lib/utils';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
-import { currencyFieldSuffix, formatCurrency, humanize, normalizeCurrency } from '../format';
+import {
+  currencyFieldSuffix,
+  formatCurrency,
+  formatPercent,
+  humanize,
+  normalizeCurrency,
+} from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { MultiPlatformPicker } from '../picker/MultiPlatformPicker';
@@ -109,6 +124,7 @@ import type { HeroSetting } from './detail/heroHeaderModel';
 import { OBJECTIVES } from './suggestionModel';
 import {
   ANALOG_LABEL,
+  analogLabel,
   buildConversionDescriptor,
   type ConversionDescriptorDraft,
   descriptorDraftFrom,
@@ -149,15 +165,7 @@ function selectLabels<Value extends string>(
 ): Record<string, string> {
   return Object.fromEntries(values.map((value) => [value, label(value)]));
 }
-const GRANULARITY_LABEL: Record<BudgetGranularity, string> = {
-  daily: 'Per day',
-  monthly: 'Per month',
-  total: 'Whole flight',
-};
-const SCALE_CADENCE_CHIPS: Array<{ label: string; days: number }> = [
-  { label: 'Every week', days: 7 },
-  { label: 'Every 2 weeks', days: 14 },
-];
+
 /**
  * What a person may choose here, which is NOT every member of the enum.
  *
@@ -209,29 +217,45 @@ export function adsetsThatStopMatching<T extends { id: string; kpiField?: string
 export function DriftedEnrollments({
   rows,
 }: {
-  rows: { adset_id: string; adset_name: string | null; missing_since?: string | null }[];
+  rows: {
+    adset_id: string;
+    adset_name: string | null;
+    missing_since?: string | null;
+  }[];
 }) {
+  const uiText = useTranslations('scale');
   const drifted = rows.filter((row) => Boolean(row.missing_since));
   if (drifted.length === 0) return null;
   const label = drifted.length === 1 ? 'ad set is' : 'ad sets are';
   return (
     <div className="rounded-md bg-warning/10 px-3 py-2 text-xs" role="status">
       <p className="font-medium text-warning">
-        {drifted.length} enrolled {label} no longer active on Meta
+        {uiText.rich('sentence_1d1744d24fad', {
+          v0: drifted.length,
+          v1: label,
+        })}
       </p>
       <ul className="mt-1 space-y-0.5 text-muted-foreground">
         {drifted.slice(0, 5).map((row) => (
           <li key={row.adset_id}>
             {row.adset_name ?? row.adset_id}
-            {row.missing_since ? ` — since ${row.missing_since.slice(0, 10)}` : ''}
+            {row.missing_since
+              ? uiText('template_339499b00714', {
+                  v0: row.missing_since.slice(0, 10),
+                })
+              : ''}
           </li>
         ))}
       </ul>
       {drifted.length > 5 ? (
-        <p className="mt-1 text-muted-foreground">+{drifted.length - 5} more</p>
+        <p className="mt-1 text-muted-foreground">
+          {uiText.rich('sentence_70c322a9a74f', {
+            v0: () => drifted.length - 5,
+          })}
+        </p>
       ) : null}
       <p className="mt-1 text-muted-foreground">
-        They still hold their enrollment. Deselect them above and save to release them.
+        {uiText('they_still_hold_their_enrollment_deselect_the_6749ca9')}
       </p>
     </div>
   );
@@ -239,14 +263,20 @@ export function DriftedEnrollments({
 
 /** One-line explanation of each optimization mode, shown under the Mode select as it changes.
  *  Radix select items don't nest tooltips cleanly, so the hint updates with the selection. */
-function modeExplainer(mode: string): string {
+function modeExplainer(mode: string, uiTranslate?: ScaleCopy): string {
   switch (mode) {
     case 'efficiency':
-      return 'Efficiency — protect cost per result. Budget moves hardest toward the cheapest ad sets and away from the expensive ones.';
+      return uiTranslate
+        ? uiTranslate('efficiency_protect_cost_per_result_budget_mov_5b75270')
+        : 'Efficiency — protect cost per result. Budget moves hardest toward the cheapest ad sets and away from the expensive ones.';
     case 'scale':
-      return 'Scale — chase volume. The optimizer tolerates a higher cost per result to spend into what is working.';
+      return uiTranslate
+        ? uiTranslate('scale_chase_volume_the_optimizer_tolerates_a__8b3a0b3')
+        : 'Scale — chase volume. The optimizer tolerates a higher cost per result to spend into what is working.';
     default:
-      return 'Balanced — trade a little efficiency for steadier volume. A sensible default.';
+      return uiTranslate
+        ? uiTranslate('balanced_trade_a_little_efficiency_for_steadi_d4d5328')
+        : 'Balanced — trade a little efficiency for steadier volume. A sensible default.';
   }
 }
 
@@ -281,6 +311,28 @@ export function PortfolioManagePanel({
   focusSetting = null,
   onFocusSettingDone,
 }: PortfolioManagePanelProps) {
+  const formatUiError = useUiErrorMessage();
+
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const GRANULARITY_LABEL: Record<BudgetGranularity, string> = useMemo(
+    () => ({
+      daily: uiText('per_day_5b9e193'),
+      monthly: uiText('managePerMonth'),
+      total: uiText('manageWholeFlight'),
+    }),
+    [uiText],
+  );
+
+  const SCALE_CADENCE_CHIPS: Array<{ label: string; days: number }> = useMemo(
+    () => [
+      { label: uiText('every_week_1b7e185'), days: 7 },
+      { label: uiText('every_2_weeks_6327e3a'), days: 14 },
+    ],
+    [uiText],
+  );
+
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   // A campaign portfolio edits campaigns, not ad sets: the level drives which snapshot
   // scope + picker mode the manage panel shows. Enroll/unenroll operate on the entity id
   // at either level, so the diff below is unchanged.
@@ -372,12 +424,13 @@ export function PortfolioManagePanel({
   // that value lives in the very form this schema is used to build.
   const formUnitRef = useRef<UnitContext>(seedUnit);
   const schema = useMemo(
-    () => createPortfolioFormSchema(() => formUnitRef.current, currentValues),
-    [currentValues],
+    () => createPortfolioFormSchema(() => formUnitRef.current, currentValues, uiText),
+    [currentValues, uiText],
   );
 
+  const validationErrorMap = useValidationErrorMap();
   const form = useForm<PortfolioFormValues, unknown, PortfolioFormPatch>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema, { error: validationErrorMap }),
     defaultValues: seededValues,
     // The report read lands after mount; `values` re-seeds the untouched fields from it
     // without discarding anything the operator has already changed.
@@ -395,8 +448,8 @@ export function PortfolioManagePanel({
     descriptorDraftFrom(storedDescriptor),
   );
   const builtDescriptor = useMemo(
-    () => buildConversionDescriptor(descriptorDraft),
-    [descriptorDraft],
+    () => buildConversionDescriptor(descriptorDraft, uiText),
+    [descriptorDraft, uiText],
   );
   const descriptor = 'descriptor' in builtDescriptor ? builtDescriptor.descriptor : null;
   // Leaving 'custom' clears the descriptor: a booked-demo label on a portfolio now buying
@@ -422,7 +475,10 @@ export function PortfolioManagePanel({
       : objective;
   // Metric follows the SELECTED target metric so the target label, its unit conversion and
   // the KPI the engine scores on (config.kpiField) all track it.
-  const metric = getOptimizationMetricDefinition(effectiveTargetMetric);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(effectiveTargetMetric),
+    optimizerText,
+  );
   const flightLength = flightDays(values.period_start, values.period_end);
   const formUnit = useMemo<UnitContext>(
     () => ({
@@ -443,7 +499,10 @@ export function PortfolioManagePanel({
     if (stored != null) {
       form.setValue(
         'period_budget',
-        toInput('period_budget', stored, { ...formUnit, budgetGranularity: next }),
+        toInput('period_budget', stored, {
+          ...formUnit,
+          budgetGranularity: next,
+        }),
         { shouldDirty: false },
       );
     }
@@ -536,7 +595,9 @@ export function PortfolioManagePanel({
     if (value === 'autopilot' && !isArmed) {
       if (!guardrailsReady) {
         if (!(capMinor && capMinor > 0) && suggestedMaxDaily != null) {
-          form.setValue('max_daily_apply_minor', String(suggestedMaxDaily), { shouldDirty: true });
+          form.setValue('max_daily_apply_minor', String(suggestedMaxDaily), {
+            shouldDirty: true,
+          });
         }
         if (!(capPct && capPct > 0)) {
           form.setValue('max_change_pct_per_cycle', SUGGESTED_MAX_CHANGE_PCT, {
@@ -611,12 +672,15 @@ export function PortfolioManagePanel({
       // Sequential, not Promise.all: one rejection out of N then names the ad set that
       // actually failed instead of whichever race lost.
       for (const adsetId of toRemove) {
-        await unenroll.mutateAsync({ portfolio_id: portfolio.id, adset_id: adsetId });
+        await unenroll.mutateAsync({
+          portfolio_id: portfolio.id,
+          adset_id: adsetId,
+        });
       }
       onDone?.();
     } catch (err) {
       form.setError('root', {
-        message: err instanceof Error ? err.message : 'Could not save your changes.',
+        message: formatUiError(err),
       });
     }
   }
@@ -650,7 +714,8 @@ export function PortfolioManagePanel({
 
   const symbol = normalizeCurrency(currency);
   const unit = currencyFieldSuffix(currency);
-  const mismatchLabel = freezeLabel('kpi_mismatch')?.label ?? 'Held · different goal';
+  const mismatchLabel =
+    freezeLabel('kpi_mismatch', undefined, optimizerText)?.label ?? 'Held · different goal';
   const rootError = form.formState.errors.root?.message;
 
   // One definition per field, shared by the chip and the Tab accelerator so the value the
@@ -680,15 +745,27 @@ export function PortfolioManagePanel({
   // action kinds to choose, because Meta's writes never cross the executor that reads them.
   const holdsNonMeta = (portfolio.platforms ?? []).some((platform) => platform !== 'meta');
   const sheetSections: SheetSection[] = [
-    { id: sectionId('identity'), label: 'Identity' },
-    { id: sectionId('strategy'), label: 'Strategy' },
-    { id: sectionId('plan'), label: 'Plan' },
-    { id: sectionId('creative'), label: 'Creative analysis' },
-    { id: sectionId('attribution'), label: 'Attribution' },
-    ...(guardrailsRelevant ? [{ id: sectionId('guardrails'), label: 'Guardrails' }] : []),
-    { id: sectionId('platform-limits'), label: 'Daily limits' },
-    ...(holdsNonMeta ? [{ id: sectionId('platform-actions'), label: 'Allowed actions' }] : []),
-    { id: sectionId('enrolled'), label: level === 'campaign' ? 'Campaigns' : 'Ad sets' },
+    { id: sectionId('identity'), label: uiText('identity_999f23f') },
+    { id: sectionId('strategy'), label: uiText('strategy_6b27710') },
+    { id: sectionId('plan'), label: uiText('plan_fa8ed0b') },
+    { id: sectionId('creative'), label: uiText('creative_analysis_d28c315') },
+    { id: sectionId('attribution'), label: uiText('attribution_a902dcc') },
+    ...(guardrailsRelevant
+      ? [{ id: sectionId('guardrails'), label: uiText('guardrails_443f975') }]
+      : []),
+    { id: sectionId('platform-limits'), label: uiText('daily_limits_c5c4a6c') },
+    ...(holdsNonMeta
+      ? [
+          {
+            id: sectionId('platform-actions'),
+            label: uiText('allowed_actions_f1ee293'),
+          },
+        ]
+      : []),
+    {
+      id: sectionId('enrolled'),
+      label: level === 'campaign' ? uiText('campaigns_30e9a08') : uiText('ad_sets_f59ed42'),
+    },
   ];
 
   return (
@@ -697,11 +774,11 @@ export function PortfolioManagePanel({
         <SheetIndex sections={sheetSections} />
         <div className="@container/sheet min-w-0">
           <Section
-            description="What this portfolio is, what it buys and what it should cost."
+            description={uiText('what_this_portfolio_is_what_it_buys_and_what__92db74d')}
             id={sectionId('identity')}
-            title="Identity"
+            title={uiText('identity_999f23f')}
           >
-            <FieldRow htmlFor={`manage-name-${portfolio.id}`} label="Name">
+            <FieldRow htmlFor={`manage-name-${portfolio.id}`} label={uiText('name_dcd1d52')}>
               <Input
                 className="max-w-md"
                 id={`manage-name-${portfolio.id}`}
@@ -711,44 +788,60 @@ export function PortfolioManagePanel({
                 <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
               ) : null}
             </FieldRow>
-            <FieldRow htmlFor={`manage-objective-${portfolio.id}`} label="Objective">
+            <FieldRow
+              htmlFor={`manage-objective-${portfolio.id}`}
+              label={uiText('objective_3b20adc')}
+            >
               <Select
                 value={objective}
                 onValueChange={(value) =>
-                  form.setValue('objective', value as OptimizationObjective, { shouldDirty: true })
+                  form.setValue('objective', value as OptimizationObjective, {
+                    shouldDirty: true,
+                  })
                 }
               >
                 <SelectTrigger id={`manage-objective-${portfolio.id}`}>
-                  <SelectValue items={selectLabels(selectableObjectives(objective), humanize)} />
+                  <SelectValue
+                    items={selectLabels(selectableObjectives(objective), (value) =>
+                      humanize(value, uiText),
+                    )}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {selectableObjectives(objective).map((value) => (
                     <SelectItem key={value} value={value}>
-                      {humanize(value)}
+                      {humanize(value, uiText)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Prices this portfolio on {descriptor?.result_label ?? metric.resultLabel} (
-                {descriptor?.cost_label ?? metric.costLabel}).
+                {uiText.rich('sentence_1b23a80fa83d', {
+                  v0: descriptor?.result_label ?? metric.resultLabel,
+                  v1: descriptor?.cost_label ?? metric.costLabel,
+                })}
               </p>
               {objectiveChanged && affectedAdsets.length > 0 ? (
                 <p className="text-xs text-warning">
-                  {affectedAdsets.length} of {enrolledIds.length} enrolled ad sets buy a different
-                  result and will be held ({mismatchLabel}) until moved.
+                  {uiText.rich('sentence_fd60de4946d9', {
+                    v0: affectedAdsets.length,
+                    v1: enrolledIds.length,
+                    v2: mismatchLabel,
+                  })}
                 </p>
               ) : null}
             </FieldRow>
             {objective === 'custom' ? (
               <>
-                <FieldRow label="The conversion you buy">
+                <FieldRow label={uiText('the_conversion_you_buy_39c0842')}>
                   <p className="text-xs text-muted-foreground @lg/sheet:pt-2">
-                    Nobody but you knows what this event is. Name it, and say how it behaves — it is
-                    measured against whichever calibrated objective behaves the same way.
+                    {uiText('nobody_but_you_knows_what_this_event_is_name__4b49aa3')}
                   </p>
                 </FieldRow>
-                <FieldRow htmlFor={`manage-conv-event-${portfolio.id}`} label="Event id">
+                <FieldRow
+                  htmlFor={`manage-conv-event-${portfolio.id}`}
+                  label={uiText('event_id_82e663f')}
+                >
                   <Input
                     className="max-w-md"
                     id={`manage-conv-event-${portfolio.id}`}
@@ -757,31 +850,40 @@ export function PortfolioManagePanel({
                     value={descriptorDraft.event_id}
                   />
                   <p className="text-xs text-muted-foreground">
-                    What the platform calls it, not what you call it.
+                    {uiText('what_the_platform_calls_it_not_what_you_call__f33996c')}
                   </p>
                 </FieldRow>
-                <FieldRow htmlFor={`manage-conv-result-${portfolio.id}`} label="What you call one">
+                <FieldRow
+                  htmlFor={`manage-conv-result-${portfolio.id}`}
+                  label={uiText('what_you_call_one_8a89376')}
+                >
                   <Input
                     className="max-w-md"
                     id={`manage-conv-result-${portfolio.id}`}
                     onChange={(event) => patchDescriptor({ result_label: event.target.value })}
-                    placeholder="Demos booked"
+                    placeholder={uiText('demos_booked_803091f')}
                     value={descriptorDraft.result_label}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Every card on this account says this word instead of &ldquo;conversions&rdquo;.
+                    {uiText('every_card_on_this_account_says_this_word_ins_46ecfb6')}
                   </p>
                 </FieldRow>
-                <FieldRow htmlFor={`manage-conv-cost-${portfolio.id}`} label="What one costs">
+                <FieldRow
+                  htmlFor={`manage-conv-cost-${portfolio.id}`}
+                  label={uiText('what_one_costs_0260258')}
+                >
                   <Input
                     className="max-w-md"
                     id={`manage-conv-cost-${portfolio.id}`}
                     onChange={(event) => patchDescriptor({ cost_label: event.target.value })}
-                    placeholder="Cost per demo booked"
+                    placeholder={uiText('cost_per_demo_booked_3cfda2f')}
                     value={descriptorDraft.cost_label}
                   />
                 </FieldRow>
-                <FieldRow htmlFor={`manage-conv-lag-${portfolio.id}`} label="Days to arrive">
+                <FieldRow
+                  htmlFor={`manage-conv-lag-${portfolio.id}`}
+                  label={uiText('days_to_arrive_c3a7ac7')}
+                >
                   <Input
                     className="max-w-[12rem] tabular-nums"
                     id={`manage-conv-lag-${portfolio.id}`}
@@ -791,7 +893,10 @@ export function PortfolioManagePanel({
                     value={descriptorDraft.typical_lag_days}
                   />
                 </FieldRow>
-                <FieldRow htmlFor={`manage-conv-volume-${portfolio.id}`} label="A week">
+                <FieldRow
+                  htmlFor={`manage-conv-volume-${portfolio.id}`}
+                  label={uiText('a_week_a2f8103')}
+                >
                   <Input
                     className="max-w-[12rem] tabular-nums"
                     id={`manage-conv-volume-${portfolio.id}`}
@@ -801,20 +906,20 @@ export function PortfolioManagePanel({
                     value={descriptorDraft.events_per_week}
                   />
                 </FieldRow>
-                <FieldRow label="Carries a value" switchRow>
+                <FieldRow label={uiText('carries_a_value_1e66281')} switchRow>
                   <div className="flex items-start gap-3">
                     <Switch
-                      aria-label="Carries a value"
+                      aria-label={uiText('carries_a_value_1e66281')}
                       checked={descriptorDraft.carries_revenue}
                       id={`manage-conv-revenue-${portfolio.id}`}
                       onCheckedChange={(checked) => patchDescriptor({ carries_revenue: checked })}
                     />
                     <Label className="font-normal" htmlFor={`manage-conv-revenue-${portfolio.id}`}>
-                      The event carries a money value — it IS the revenue, not a step toward it.
+                      {uiText('the_event_carries_a_money_value_it_is_the_rev_7d28881')}
                     </Label>
                   </div>
                 </FieldRow>
-                <FieldRow label="Measured like">
+                <FieldRow label={uiText('measured_like_d9f7b6d')}>
                   <Select
                     onValueChange={(value) =>
                       patchDescriptor({
@@ -830,18 +935,23 @@ export function PortfolioManagePanel({
                       <SelectValue
                         items={{
                           inferred: 'Work it out from the answers above',
-                          ...selectLabels(
-                            analogObjectiveSchema.options,
-                            (value) => `Like ${ANALOG_LABEL[value]}`,
+                          ...selectLabels(analogObjectiveSchema.options, (value) =>
+                            uiText('conversionLikeAnalog', {
+                              analog: analogLabel(value, uiText),
+                            }),
                           ),
                         }}
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="inferred">Work it out from the answers above</SelectItem>
+                      <SelectItem value="inferred">
+                        {uiText('work_it_out_from_the_answers_above_eb59ad7')}
+                      </SelectItem>
                       {analogObjectiveSchema.options.map((value) => (
                         <SelectItem key={value} value={value}>
-                          {`Like ${ANALOG_LABEL[value]}`}
+                          {uiText('template_66bd95a7ce7d', {
+                            v0: analogLabel(value, uiText),
+                          })}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -856,7 +966,10 @@ export function PortfolioManagePanel({
                 </FieldRow>
               </>
             ) : null}
-            <FieldRow htmlFor={`manage-target-metric-${portfolio.id}`} label="Target metric">
+            <FieldRow
+              htmlFor={`manage-target-metric-${portfolio.id}`}
+              label={uiText('target_metric_5e5b274')}
+            >
               {allowedMetrics.length > 1 ? (
                 <Select
                   onValueChange={(value) =>
@@ -874,14 +987,23 @@ export function PortfolioManagePanel({
                     <SelectValue
                       items={selectLabels(
                         allowedMetrics,
-                        (value) => getOptimizationMetricDefinition(value).costLabel,
+                        (value) =>
+                          localizeOptimizationMetricDefinition(
+                            getOptimizationMetricDefinition(value),
+                            optimizerText,
+                          ).costLabel,
                       )}
                     />
                   </SelectTrigger>
                   <SelectContent>
                     {allowedMetrics.map((value) => (
                       <SelectItem key={value} value={value}>
-                        {getOptimizationMetricDefinition(value).costLabel}
+                        {
+                          localizeOptimizationMetricDefinition(
+                            getOptimizationMetricDefinition(value),
+                            optimizerText,
+                          ).costLabel
+                        }
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -896,8 +1018,11 @@ export function PortfolioManagePanel({
               )}
               <p className="text-xs text-muted-foreground">
                 {allowedMetrics.length > 1
-                  ? `Which cost the target is set in. Every ad set is scored on it.`
-                  : `${humanize(objective)} is priced in ${metric.costLabel}.`}
+                  ? uiText('template_946728648642', {})
+                  : uiText('template_cc57c88a2e9f', {
+                      v0: humanize(objective, uiText),
+                      v1: metric.costLabel,
+                    })}
               </p>
             </FieldRow>
             <NumberField
@@ -907,8 +1032,7 @@ export function PortfolioManagePanel({
               name="cpa_target"
             >
               <p className="text-xs text-muted-foreground">
-                Scale mode grows the budget only while the portfolio beats this. Blank means the
-                engine&rsquo;s default target, not &ldquo;no target&rdquo;.
+                {uiText('scale_mode_grows_the_budget_only_while_the_po_abfe549')}
               </p>
               <GoalCostCapField
                 enabled={portfolio.goal_as_platform_cost_cap === true}
@@ -921,73 +1045,91 @@ export function PortfolioManagePanel({
           </Section>
 
           <Section
-            description="How hard it pushes, who applies the moves and how much it spends."
+            description={uiText('how_hard_it_pushes_who_applies_the_moves_and__8ed091e')}
             id={sectionId('strategy')}
-            title="Strategy"
+            title={uiText('strategy_6b27710')}
           >
-            <FieldRow htmlFor={`manage-mode-${portfolio.id}`} label="Mode">
+            <FieldRow htmlFor={`manage-mode-${portfolio.id}`} label={uiText('mode_5e23ec6')}>
               <Select
                 value={values.mode}
                 onValueChange={(value) =>
-                  form.setValue('mode', value as OptimizationModeDto, { shouldDirty: true })
+                  form.setValue('mode', value as OptimizationModeDto, {
+                    shouldDirty: true,
+                  })
                 }
               >
                 <SelectTrigger id={`manage-mode-${portfolio.id}`}>
-                  <SelectValue items={selectLabels(MODES, humanize)} />
+                  <SelectValue items={selectLabels(MODES, (value) => humanize(value, uiText))} />
                 </SelectTrigger>
                 <SelectContent>
                   {MODES.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {humanize(value)}
+                      {humanize(value, uiText)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">{modeExplainer(values.mode)}</p>
+              <p className="text-xs text-muted-foreground">{modeExplainer(values.mode, uiText)}</p>
             </FieldRow>
-            <FieldRow label="Autonomy tier">
+            <FieldRow label={uiText('autonomy_tier_fb493fa')}>
               <TierCards arming={arming} onSelect={handleApplyModeChange} value={applyMode} />
               {/* applyModeExplainer describes the selected tier and re-runs as the choice changes. */}
               <p className="text-xs text-muted-foreground">
                 {arming && !isArmed
-                  ? 'Check the guardrails below, preview the cycle, then arm.'
-                  : applyModeExplainer(applyMode)}
+                  ? uiText('check_the_guardrails_below_preview_the_cycle__ca75bd3')
+                  : applyModeExplainer(applyMode, undefined, optimizerText, uiLocale)}
               </p>
             </FieldRow>
-            <FieldRow htmlFor={`manage-budget-source-${portfolio.id}`} label="Total budget">
+            <FieldRow
+              htmlFor={`manage-budget-source-${portfolio.id}`}
+              label={uiText('total_budget_7f4ba95')}
+            >
               <Select
                 onValueChange={(value) =>
-                  form.setValue('budget_source', value as BudgetSource, { shouldDirty: true })
+                  form.setValue('budget_source', value as BudgetSource, {
+                    shouldDirty: true,
+                  })
                 }
                 value={budgetSource}
               >
                 <SelectTrigger id={`manage-budget-source-${portfolio.id}`}>
-                  <SelectValue items={BUDGET_SOURCE_LABEL} />
+                  <SelectValue
+                    items={{
+                      observed: uiText('manageBudgetSource', {
+                        source: 'observed',
+                      }),
+                      fixed: uiText('manageBudgetSource', { source: 'fixed' }),
+                    }}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {(Object.keys(BUDGET_SOURCE_LABEL) as BudgetSource[]).map((value) => (
                     <SelectItem key={value} value={value}>
-                      {BUDGET_SOURCE_LABEL[value]}
+                      {uiText('manageBudgetSource', { source: value })}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
                 {budgetSource === 'observed'
-                  ? 'Reallocates within whatever the enrolled ad sets are spending now — increases and decreases cancel out.'
-                  : 'Drives the portfolio toward the daily budget below, so the total can go up or down.'}
+                  ? uiText('reallocates_within_whatever_the_enrolled_ad_s_6e26dbc')
+                  : uiText('drives_the_portfolio_toward_the_daily_budget__4a3e306')}
               </p>
             </FieldRow>
             <NumberField
               control={form.control}
               disabled={budgetSource === 'observed'}
               id={`manage-daily-${portfolio.id}`}
-              label={`Daily budget${unit}`}
+              label={uiText('template_6a2664b8a681', { v0: unit })}
               name="daily_total"
               suggested={suggestedDaily}
               suggestionLabel={
                 suggestedDaily != null
-                  ? `Match current ${formatCurrency(suggestedDaily, currency)}/day`
+                  ? uiText('manageSuggestion', {
+                      kind: 'current',
+                      amount: formatCurrency(suggestedDaily, currency, uiLocale),
+                      days: 0,
+                    })
                   : undefined
               }
             >
@@ -996,44 +1138,51 @@ export function PortfolioManagePanel({
                   conserving a months-old sum. */}
               {budgetSource === 'observed' && selectedBudgetSum > 0 ? (
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  Currently {formatCurrency(selectedBudgetSum, currency)}/day across{' '}
-                  {selectedAdsetIds.length} {selectedAdsetIds.length === 1 ? 'ad set' : 'ad sets'}.
+                  {uiText.rich('sentence_0602e3e12e2b', {
+                    budget: formatCurrency(selectedBudgetSum, currency, uiLocale),
+                    count: selectedAdsetIds.length,
+                  })}
                 </p>
               ) : null}
             </NumberField>
             {values.mode === 'scale' ? (
               <>
-                <FieldRow label="Scaling">
+                <FieldRow label={uiText('scaling_f1766cc')}>
                   <p className="text-sm @lg/sheet:pt-2">
-                    Grow the budget{' '}
-                    <span className="font-medium tabular-nums">
-                      {scaleGrowth != null ? `${Math.round(scaleGrowth * 100)}%` : '…'}
-                    </span>{' '}
-                    every{' '}
-                    <span className="font-medium tabular-nums">
-                      {scaleCadence != null
-                        ? `${scaleCadence} day${scaleCadence === 1 ? '' : 's'}`
-                        : '…'}
-                    </span>{' '}
-                    while the portfolio beats its target
-                    {scaleCeiling != null
-                      ? `, up to ${formatCurrency(scaleCeiling, currency)}/day`
-                      : ''}
-                    .
+                    {uiText.rich('sentence_295cfe924bc7', {
+                      growth: () => (
+                        <span className="font-medium tabular-nums">
+                          {scaleGrowth != null
+                            ? formatPercent(Math.round(scaleGrowth * 100), {}, uiLocale)
+                            : '…'}
+                        </span>
+                      ),
+                      hasCadence: scaleCadence != null ? 'yes' : 'no',
+                      days: scaleCadence ?? 0,
+                      hasCeiling: scaleCeiling != null ? 'yes' : 'no',
+                      ceiling:
+                        scaleCeiling != null
+                          ? formatCurrency(scaleCeiling, currency, uiLocale)
+                          : '',
+                    })}
                   </p>
                 </FieldRow>
                 <NumberField
                   control={form.control}
                   id={`manage-scale-growth-${portfolio.id}`}
-                  label="Grow by (%)"
+                  label={uiText('grow_by_4db36a8')}
                   name="scale_growth_pct"
                   suggested="10"
-                  suggestionLabel="Suggest 10%"
+                  suggestionLabel={uiText('manageSuggestion', {
+                    kind: 'suggest',
+                    amount: formatPercent(10, {}, uiLocale),
+                    days: 0,
+                  })}
                 />
                 <NumberField
                   control={form.control}
                   id={`manage-scale-cadence-${portfolio.id}`}
-                  label="Every (days)"
+                  label={uiText('every_days_df0e6cc')}
                   name="scale_cadence_days"
                 >
                   <div className="flex flex-wrap gap-1.5">
@@ -1053,11 +1202,14 @@ export function PortfolioManagePanel({
                 <NumberField
                   control={form.control}
                   id={`manage-scale-ceiling-${portfolio.id}`}
-                  label={`Up to (${symbol ? `${symbol}/day` : 'per day'}, optional)`}
+                  label={uiText('template_16d7c73baa3d', {
+                    hasSymbol: symbol ? 'yes' : 'no',
+                    symbol: symbol ?? '',
+                  })}
                   name="scale_max_daily"
                 >
                   <p className="text-xs text-muted-foreground">
-                    A ceiling for the daily total. Blank means no ceiling.
+                    {uiText('a_ceiling_for_the_daily_total_blank_means_no__22f2126')}
                   </p>
                 </NumberField>
               </>
@@ -1065,24 +1217,33 @@ export function PortfolioManagePanel({
           </Section>
 
           <Section
-            description="A start date, an end date and a budget. With all three the optimizer paces spend to land on the budget; the lookback is the window every metric on this portfolio reads."
+            description={uiText('a_start_date_an_end_date_and_a_budget_with_al_7d4d5d0')}
             id={sectionId('plan')}
-            title="Plan"
+            title={uiText('plan_fa8ed0b')}
           >
-            <FieldRow htmlFor={`manage-lookback-${portfolio.id}`} label="Lookback window">
+            <FieldRow
+              htmlFor={`manage-lookback-${portfolio.id}`}
+              label={uiText('lookback_window_dd152e0')}
+            >
               <Select
                 onValueChange={(value) =>
-                  form.setValue('lookback_window', value as LookbackWindow, { shouldDirty: true })
+                  form.setValue('lookback_window', value as LookbackWindow, {
+                    shouldDirty: true,
+                  })
                 }
                 value={lookbackWindow}
               >
                 <SelectTrigger id={`manage-lookback-${portfolio.id}`}>
-                  <SelectValue items={LOOKBACK_LABEL} />
+                  <SelectValue
+                    items={selectLabels(LOOKBACK_WINDOWS, (window) =>
+                      uiText('manageLookback', { window }),
+                    )}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {LOOKBACK_WINDOWS.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {LOOKBACK_LABEL[value]}
+                      {uiText('manageLookback', { window: value })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1090,46 +1251,69 @@ export function PortfolioManagePanel({
               <p className="text-xs text-muted-foreground">{lookbackHint.reason}</p>
               {lookbackHint.window !== lookbackWindow ? (
                 <SuggestionChip
-                  label={`Use ${LOOKBACK_LABEL[lookbackHint.window]}`}
+                  label={uiText('template_1a047c4b6b9e', {
+                    v0: uiText('manageLookback', {
+                      window: lookbackHint.window,
+                    }),
+                  })}
                   onClick={() =>
-                    form.setValue('lookback_window', lookbackHint.window, { shouldDirty: true })
+                    form.setValue('lookback_window', lookbackHint.window, {
+                      shouldDirty: true,
+                    })
                   }
                 />
               ) : null}
             </FieldRow>
-            <FieldRow htmlFor={`manage-flight-${portfolio.id}`} label="Flight window">
+            <FieldRow
+              htmlFor={`manage-flight-${portfolio.id}`}
+              label={uiText('flight_window_8b37603')}
+            >
               <DateRangeField
                 disabled={saving}
                 id={`manage-flight-${portfolio.id}`}
                 onChange={(range) => {
-                  form.setValue('period_start', range.from, { shouldDirty: true });
+                  form.setValue('period_start', range.from, {
+                    shouldDirty: true,
+                  });
                   form.setValue('period_end', range.to, { shouldDirty: true });
                 }}
-                placeholder="No flight window"
-                value={{ from: values.period_start ?? null, to: values.period_end ?? null }}
+                placeholder={uiText('no_flight_window_607083d')}
+                value={{
+                  from: values.period_start ?? null,
+                  to: values.period_end ?? null,
+                }}
               />
               <p className="text-xs text-muted-foreground">
                 {values.period_start && values.period_end
-                  ? `${flightLength} days. The budget below paces against these dates.`
-                  : 'Set start and end dates to pace against the budget below.'}
+                  ? uiText('template_8343cfbd9675', { v0: flightLength ?? '' })
+                  : uiText('set_start_and_end_dates_to_pace_against_the_b_8f21454')}
               </p>
               {!(values.period_start && values.period_end) ? (
                 <SuggestionChip
-                  label={`Suggest next ${PACING_PERIOD_DAYS} days`}
+                  label={uiText('template_00b47b38da96', {
+                    v0: PACING_PERIOD_DAYS,
+                  })}
                   onClick={() => {
                     const range = nextFlightWindow(PACING_PERIOD_DAYS);
-                    form.setValue('period_start', range.from, { shouldDirty: true });
-                    form.setValue('period_end', range.to, { shouldDirty: true });
+                    form.setValue('period_start', range.from, {
+                      shouldDirty: true,
+                    });
+                    form.setValue('period_end', range.to, {
+                      shouldDirty: true,
+                    });
                   }}
                 />
               ) : null}
             </FieldRow>
             <FieldRow
               htmlFor={`manage-period-${portfolio.id}`}
-              label={`Budget${unit} · ${GRANULARITY_LABEL[budgetGranularity].toLowerCase()}`}
+              label={uiText('template_a056a92d3df9', {
+                v0: unit,
+                v1: GRANULARITY_LABEL[budgetGranularity].toLowerCase(),
+              })}
             >
               <ToggleGroup
-                aria-label="Budget granularity"
+                aria-label={uiText('budget_granularity_d1f47f1')}
                 className="flex-wrap"
                 onValueChange={(next) => {
                   if (next) handleGranularityChange(next as BudgetGranularity);
@@ -1161,31 +1345,42 @@ export function PortfolioManagePanel({
                 }
                 suggestionLabel={
                   budgetGranularity === 'daily' && hasDaily
-                    ? `Match ${formatCurrency(Math.round(dailyNum), currency)}/day`
+                    ? uiText('manageSuggestion', {
+                        kind: 'match',
+                        amount: formatCurrency(Math.round(dailyNum), currency, uiLocale),
+                        days: 0,
+                      })
                     : budgetGranularity === 'total' && suggestedPeriod != null
-                      ? `Suggest ${formatCurrency(suggestedPeriod, currency)} (${PACING_PERIOD_DAYS}d)`
+                      ? uiText('manageSuggestion', {
+                          kind: 'period',
+                          amount: formatCurrency(suggestedPeriod, currency, uiLocale),
+                          days: PACING_PERIOD_DAYS,
+                        })
                       : undefined
                 }
               />
               <p className="text-xs text-muted-foreground tabular-nums">
                 {storedPeriodBudget != null && flightLength != null
-                  ? `= ${formatCurrency(storedPeriodBudget, currency)} for the flight · ≈ ${formatCurrency(impliedDaily, currency)}/day`
+                  ? uiText('template_9c98c5150e32', {
+                      v0: formatCurrency(storedPeriodBudget, currency, uiLocale),
+                      v1: formatCurrency(impliedDaily, currency, uiLocale),
+                    })
                   : storedPeriodBudget != null
-                    ? 'Set a flight window to pace this budget over it.'
-                    : 'Clear to leave the portfolio unpaced.'}
+                    ? uiText('set_a_flight_window_to_pace_this_budget_over__3068314')
+                    : uiText('clear_to_leave_the_portfolio_unpaced_c67d350')}
               </p>
             </FieldRow>
           </Section>
 
           <Section
-            description="Off, the optimizer compares each creative against the others in its ad set — it can tell you one costs more than its neighbour. On, it also reads each creative's own 14-day trend, which is the only way to see a creative wearing out rather than simply losing. Recommendations still need your approval either way."
+            description={uiText('off_the_optimizer_compares_each_creative_agai_78bc9af')}
             id={sectionId('creative')}
-            title="Creative analysis"
+            title={uiText('creative_analysis_d28c315')}
           >
-            <FieldRow label="Ad-level analysis" switchRow>
+            <FieldRow label={uiText('ad_level_analysis_bb02be1')} switchRow>
               <div className="flex items-center gap-3">
                 <Switch
-                  aria-label="Ad-level analysis"
+                  aria-label={uiText('ad_level_analysis_bb02be1')}
                   checked={creativeAnalysis === 'on'}
                   id={`manage-creative-analysis-${portfolio.id}`}
                   onCheckedChange={(checked) =>
@@ -1200,22 +1395,22 @@ export function PortfolioManagePanel({
                 />
                 <Label htmlFor={`manage-creative-analysis-${portfolio.id}`}>
                   {creativeAnalysis === 'on'
-                    ? 'On — reads each creative’s own trend'
-                    : 'Off — ad-set level only'}
+                    ? uiText('on_reads_each_creative_s_own_trend_6b31976')
+                    : uiText('off_ad_set_level_only_b662a4e')}
                 </Label>
               </div>
               <p className="text-xs text-muted-foreground">
                 {creativeAnalysis === 'on'
-                  ? 'This portfolio can flag a creative that is decaying, including in ad sets running a single creative — where there is nothing to compare against.'
-                  : 'Turn on to see which creatives are wearing out. Reversible at any time; nothing else about this portfolio changes.'}
+                  ? uiText('this_portfolio_can_flag_a_creative_that_is_de_9a64d65')
+                  : uiText('turn_on_to_see_which_creatives_are_wearing_ou_84d94b3')}
               </p>
             </FieldRow>
           </Section>
 
           <Section
-            description="What this portfolio counts its results with. The source is named once, in the portfolio's header, and every cost carries it."
+            description={uiText('what_this_portfolio_counts_its_results_with_t_5b09000')}
             id={sectionId('attribution')}
-            title="Attribution"
+            title={uiText('attribution_a902dcc')}
           >
             <AttributionSection brandId={brandId} portfolioId={portfolio.id} />
           </Section>
@@ -1223,8 +1418,8 @@ export function PortfolioManagePanel({
           {guardrailsRelevant ? (
             <Section
               id={sectionId('guardrails')}
-              title="Autopilot guardrails"
-              description="Both caps are required to turn autopilot on; they bound the budget writes. Below, tick what autopilot may approve on its own — anything it creates is born paused."
+              title={uiText('autopilot_guardrails_4528348')}
+              description={uiText('both_caps_are_required_to_turn_autopilot_on_t_055d5db')}
               action={
                 portfolio.apply_mode === 'autopilot' || isArmed ? (
                   <Button
@@ -1248,18 +1443,17 @@ export function PortfolioManagePanel({
                     ) : (
                       <Pause className="size-3.5" />
                     )}
-                    {isPaused ? 'Resume' : 'Stop'}
+                    {isPaused ? uiText('resume_d640c74') : uiText('stop_cae7d57')}
                   </Button>
                 ) : null
               }
             >
               {isPaused && portfolio.apply_mode === 'autopilot' ? (
                 <p className="mb-1 text-xs text-amber-600 dark:text-amber-400">
-                  Stopped — no autonomous budget writes until you resume. Ingest and scoring still
-                  run.
+                  {uiText('stopped_no_autonomous_budget_writes_until_you_28c28de')}
                 </p>
               ) : null}
-              <FieldRow label="What autopilot may approve" switchRow>
+              <FieldRow label={uiText('what_autopilot_may_approve_05b49e1')} switchRow>
                 <AutopilotScopesField
                   disabled={portfolio.apply_mode !== 'autopilot' && !isArmed}
                   noActor={
@@ -1286,26 +1480,34 @@ export function PortfolioManagePanel({
               <NumberField
                 control={form.control}
                 id={`manage-maxdaily-${portfolio.id}`}
-                label={`Max autopilot spend/day${unit}`}
+                label={uiText('template_8994591a3490', { v0: unit })}
                 name="max_daily_apply_minor"
                 suggested={suggestedMaxDaily}
                 suggestionLabel={
                   suggestedMaxDaily != null
-                    ? `Suggest ${formatCurrency(suggestedMaxDaily, currency)}`
+                    ? uiText('manageSuggestion', {
+                        kind: 'suggest',
+                        amount: formatCurrency(suggestedMaxDaily, currency, uiLocale),
+                        days: 0,
+                      })
                     : undefined
                 }
               />
               <NumberField
                 control={form.control}
                 id={`manage-maxpct-${portfolio.id}`}
-                label="Max change per cycle (%)"
+                label={uiText('max_change_per_cycle_f6b020b')}
                 name="max_change_pct_per_cycle"
                 suggested={SUGGESTED_MAX_CHANGE_PCT}
-                suggestionLabel={`Suggest ${SUGGESTED_MAX_CHANGE_PCT}%`}
+                suggestionLabel={uiText('manageSuggestion', {
+                  kind: 'suggest',
+                  amount: formatPercent(Number(SUGGESTED_MAX_CHANGE_PCT), {}, uiLocale),
+                  days: 0,
+                })}
               />
 
               {!isArmed ? (
-                <FieldRow label="Before you arm">
+                <FieldRow label={uiText('before_you_arm_50f5b3e')}>
                   <ArmAutopilot
                     // Remounting on any input to the forecast drops a stale preview: an operator
                     // must never arm on a run that scored different caps or a different pool.
@@ -1329,8 +1531,8 @@ export function PortfolioManagePanel({
 
           <Section
             id={sectionId('platform-limits')}
-            title="Daily limit per platform"
-            description="The guardrails on this portfolio apply the same way on every platform: the change cap per cycle and the daily spend ceiling bound every platform's writes alike. Each platform can also carry its own daily limit, in that account's currency. Blank means no limit beyond the portfolio's."
+            title={uiText('daily_limit_per_platform_6039fa8')}
+            description={uiText('the_guardrails_on_this_portfolio_apply_the_sa_bcd20cd')}
           >
             <PlatformCapsField portfolioId={portfolio.id} />
           </Section>
@@ -1338,8 +1540,8 @@ export function PortfolioManagePanel({
           {holdsNonMeta ? (
             <Section
               id={sectionId('platform-actions')}
-              title="Allowed actions per platform"
-              description="What the Optimizer may change on each platform when you approve a card. Ticking a kind switches nothing on by itself: every change still waits for your approval, and a platform's changes stay off for this portfolio until they are enabled there."
+              title={uiText('allowed_actions_per_platform_f9ff3a8')}
+              description={uiText('what_the_optimizer_may_change_on_each_platfor_8f2ab1a')}
             >
               <PlatformActionsField portfolioId={portfolio.id} />
             </Section>
@@ -1347,7 +1549,11 @@ export function PortfolioManagePanel({
 
           <Section
             id={sectionId('enrolled')}
-            title={level === 'campaign' ? 'Enrolled campaigns' : 'Enrolled ad sets'}
+            title={
+              level === 'campaign'
+                ? uiText('enrolled_campaigns_a37742e')
+                : uiText('enrolled_ad_sets_6b4145f')
+            }
           >
             <div
               className="space-y-1.5 outline-none"
@@ -1392,9 +1598,11 @@ export function PortfolioManagePanel({
               </MultiPlatformPicker>
               {toAdd.length > 0 || toRemove.length > 0 ? (
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {toAdd.length > 0 ? `+${toAdd.length} to add` : ''}
+                  {toAdd.length > 0 ? uiText('template_84db9eb399da', { v0: toAdd.length }) : ''}
                   {toAdd.length > 0 && toRemove.length > 0 ? ' · ' : ''}
-                  {toRemove.length > 0 ? `−${toRemove.length} to remove` : ''}
+                  {toRemove.length > 0
+                    ? uiText('template_7d0593fd76d4', { v0: toRemove.length })
+                    : ''}
                 </p>
               ) : null}
               <DriftedEnrollments rows={enrolledRead.data} />
@@ -1412,7 +1620,7 @@ export function PortfolioManagePanel({
                   type="button"
                   className="hit-area flex w-full items-center justify-between text-sm font-semibold tracking-tight"
                 >
-                  Advanced
+                  {uiText('advanced_9f088db')}
                   <ChevronDown
                     className={cn(
                       'size-4 text-muted-foreground transition-transform',
@@ -1426,11 +1634,11 @@ export function PortfolioManagePanel({
               <NumberField
                 control={form.control}
                 id={`manage-velocity-${portfolio.id}`}
-                label="Max move per ad set/cycle (%)"
+                label={uiText('max_move_per_ad_set_cycle_1fd39e8')}
                 name="velocity_cap_pct"
               >
                 <p className="text-xs text-muted-foreground">
-                  Caps how far any single ad set&rsquo;s budget can move in one cycle.
+                  {uiText('caps_how_far_any_single_ad_set_s_budget_can_m_cfadd90')}
                 </p>
               </NumberField>
             </CollapsibleContent>
@@ -1453,28 +1661,33 @@ export function PortfolioManagePanel({
                     className="gap-1.5 text-destructive"
                   >
                     <Archive className="size-3.5" />
-                    Archive
+                    {uiText('archive_66f4804')}
                   </Button>
                 }
               />
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Archive “{portfolio.name}”?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {uiText.rich('sentence_cfd01f1c97e4', {
+                      v0: portfolio.name,
+                    })}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    It stops running cycles and leaves your list, but its history is kept — you can
-                    restore it later from Archived.
+                    {uiText('it_stops_running_cycles_and_leaves_your_list__89d698a')}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleArchive}>Archive</AlertDialogAction>
+                  <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleArchive}>
+                    {uiText('archive_66f4804')}
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
 
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => onDone?.()}>
-                Cancel
+                {uiText('cancel_19766ed')}
               </Button>
               <Button
                 type="button"
@@ -1484,7 +1697,7 @@ export function PortfolioManagePanel({
                 onClick={() => void submit()}
               >
                 {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                {saving ? 'Saving…' : 'Save changes'}
+                {saving ? uiText('saving_23e3929') : uiText('save_changes_dd0ae7a')}
               </Button>
             </div>
           </div>
@@ -1499,15 +1712,17 @@ export function PortfolioManagePanel({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Turn on autopilot for “{portfolio.name}”?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {uiText.rich('sentence_d675c7da3ad7', { v0: portfolio.name })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Autopilot begins writing real budgets to Meta on every cycle, within your guardrails.
-              Every change is logged and audited, and you can pause it instantly from this panel. It
-              takes effect when you save.
+              {uiText('autopilot_begins_writing_real_budgets_to_meta_53f287a')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingAutopilot(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingAutopilot(false)}>
+              {uiText('cancel_19766ed')}
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 form.setValue('apply_mode', 'autopilot', { shouldDirty: true });
@@ -1515,7 +1730,7 @@ export function PortfolioManagePanel({
                 setArming(false);
               }}
             >
-              Turn on autopilot
+              {uiText('turn_on_autopilot_67b12ff')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1529,15 +1744,22 @@ export function PortfolioManagePanel({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Change objective to {humanize(objective)}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {uiText.rich('sentence_04c36bd81aa7', {
+                v0: humanize(objective, uiText),
+              })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {affectedAdsets.length} of {enrolledIds.length} enrolled ad sets buy a different
-              result than {metric.resultLabel}. They will stop matching this KPI and be held (
-              {mismatchLabel}) until you move them to a portfolio that measures what they buy.
+              {uiText.rich('sentence_7c52a44b7ec8', {
+                v0: affectedAdsets.length,
+                v1: enrolledIds.length,
+                v2: metric.resultLabel,
+                v3: mismatchLabel,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setShowObjectiveConfirm(false);
@@ -1548,7 +1770,7 @@ export function PortfolioManagePanel({
                 saveConfirmed();
               }}
             >
-              Change objective &amp; save
+              {uiText('change_objective_save_4f92cab')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1563,32 +1785,41 @@ export function PortfolioManagePanel({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Move {toAdd.length === 1 ? 'this ad set' : 'these ad sets'}?
+              {uiText.rich('sentence_6f9141c809eb', {
+                v0:
+                  toAdd.length === 1
+                    ? uiText('this_ad_set_75e5434')
+                    : uiText('these_ad_sets_21b1211'),
+              })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              An ad set can only be optimized by one portfolio at a time, so enrolling these removes
-              them from where they are now. Their budgets stay exactly as Meta has them — only who
-              reallocates them changes.
+              {uiText('an_ad_set_can_only_be_optimized_by_one_portfo_4fd0ef1')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {pendingMoves.map((move) => (
               <li key={move.portfolioName}>
-                <span className="font-medium text-foreground">{move.adsetIds.length}</span>{' '}
-                {move.adsetIds.length === 1 ? 'ad set' : 'ad sets'} out of{' '}
-                <span className="font-medium text-foreground">{move.portfolioName}</span>
+                {uiText.rich('sentence_a9c87121f4de', {
+                  count: () => (
+                    <span className="font-medium text-foreground">{move.adsetIds.length}</span>
+                  ),
+                  amount: move.adsetIds.length,
+                  name: () => (
+                    <span className="font-medium text-foreground">{move.portfolioName}</span>
+                  ),
+                })}
               </li>
             ))}
           </ul>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setShowMoveConfirm(false);
                 saveConfirmed();
               }}
             >
-              Move &amp; save
+              {uiText('move_save_f4c8f24')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1627,6 +1858,7 @@ function ArmAutopilot({
   snapshots: AdSetSnapshot[];
   unit: UnitContext;
 }) {
+  const uiText = useTranslations('scale');
   const cyclePreview = useCyclePreview();
   const capsSet = Boolean(
     maxDailyApplyMinor &&
@@ -1651,8 +1883,8 @@ function ArmAutopilot({
     <div className="space-y-2">
       <p className="text-xs font-medium">
         {capsSet
-          ? 'Both caps are set. Preview the cycle autopilot would run before you arm it.'
-          : 'Set both caps above to preview what autopilot would do.'}
+          ? uiText('both_caps_are_set_preview_the_cycle_autopilot_94f5b1a')
+          : uiText('set_both_caps_above_to_preview_what_autopilot_8dc3bd9')}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -1677,7 +1909,9 @@ function ArmAutopilot({
           ) : (
             <SparklesIcon aria-hidden="true" className="size-3" />
           )}
-          {cyclePreview.isPending ? 'Running the engine…' : 'Preview what autopilot would do'}
+          {cyclePreview.isPending
+            ? uiText('running_the_engine_b3ef1f3')
+            : uiText('preview_what_autopilot_would_do_28525bb')}
         </Button>
         <Button
           type="button"
@@ -1686,23 +1920,22 @@ function ArmAutopilot({
           disabled={outcome?.status !== 'ready'}
           onClick={onArm}
         >
-          Arm autopilot
+          {uiText('arm_autopilot_1e4b7df')}
         </Button>
       </div>
       {capsSet && snapshots.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Enroll at least one ad set below — there is nothing for autopilot to reallocate yet.
+          {uiText('enroll_at_least_one_ad_set_below_there_is_not_baa211c')}
         </p>
       ) : null}
       {outcome?.status === 'unavailable' ? (
         <p className="text-xs text-muted-foreground">
-          The optimizer preview service isn&rsquo;t reachable for this account, so autopilot
-          can&rsquo;t be previewed right now.
+          {uiText('the_optimizer_preview_service_isn_t_reachable_4cb5f7a')}
         </p>
       ) : null}
       {outcome?.status === 'error' ? (
         <p className="text-xs text-muted-foreground">
-          Couldn&rsquo;t run the preview just now. Try again in a moment.
+          {uiText('couldn_t_run_the_preview_just_now_try_again_i_584cdd4')}
         </p>
       ) : null}
       {forecast && outcome?.status === 'ready' && maxDailyApplyMinor != null ? (
@@ -1734,6 +1967,8 @@ function AutopilotForecastBody({
   maxDailyApplyMinor: number;
   unit: UnitContext;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   // Back through the same descriptor that filled the input, so the ceiling named here is
   // literally the number in the field above it.
   const ceilingMajor = Number(toInput('max_daily_apply_minor', maxDailyApplyMinor, unit));
@@ -1749,9 +1984,10 @@ function AutopilotForecastBody({
   if (forecast.poolOverCeiling) {
     return (
       <p className="rounded-md bg-warning/10 px-2 py-1 text-xs text-warning">
-        This portfolio&rsquo;s {formatCurrency(dailyTotal, currency)}/day pool is over the{' '}
-        {formatCurrency(ceilingMajor, currency)} ceiling, so autopilot would write nothing at all.
-        Raise the ceiling or lower the daily budget before arming.
+        {uiText.rich('sentence_6e1b155aaa82', {
+          v0: formatCurrency(dailyTotal, currency, uiLocale),
+          v1: formatCurrency(ceilingMajor, currency, uiLocale),
+        })}
       </p>
     );
   }
@@ -1761,15 +1997,17 @@ function AutopilotForecastBody({
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        On this cycle autopilot would have written{' '}
-        <span className="font-medium text-foreground tabular-nums">{applied}</span>{' '}
-        {applied === 1 ? 'budget change' : 'budget changes'} and held{' '}
-        <span className="font-medium text-foreground tabular-nums">{held}</span> over your % cap for
-        your approval.
+        {uiText.rich('sentence_2812bbaf3093', {
+          applied: () => (
+            <span className="font-medium text-foreground tabular-nums">{applied}</span>
+          ),
+          count: applied,
+          held: () => <span className="font-medium text-foreground tabular-nums">{held}</span>,
+        })}
       </p>
       <ReallocationFlow items={flowItems} currency={currency} />
       <p className="text-xs text-muted-foreground">
-        A preview only — the engine ran read-only and nothing was written to Meta.
+        {uiText('a_preview_only_the_engine_ran_read_only_and_n_dba8128')}
       </p>
     </div>
   );
@@ -1838,11 +2076,12 @@ type SheetSection = { id: string; label: string };
  *  row of scrollable chips above them in a narrow one. The section nearest the top of the
  *  viewport is marked current; clicking scrolls to it. */
 function SheetIndex({ sections }: { sections: SheetSection[] }) {
+  const uiText = useTranslations('scale');
   const ids = sections.map((section) => section.id);
   const [active, setActive] = useActiveSection(ids);
   return (
     <nav
-      aria-label="Manage sections"
+      aria-label={uiText('manage_sections_98d40fa')}
       className="sticky top-0 z-10 mb-4 flex gap-1 overflow-x-auto bg-background py-1 @3xl/manage:mb-0 @3xl/manage:flex-col @3xl/manage:self-start @3xl/manage:overflow-visible @3xl/manage:py-0"
     >
       {sections.map((section) => (

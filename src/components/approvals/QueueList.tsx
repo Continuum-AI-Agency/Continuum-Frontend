@@ -1,10 +1,11 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { useApprovalsStore } from '@/lib/approvals/store';
 import type { RuleAction } from '@/lib/approvals/types';
 import { cn } from '@/lib/utils';
 import { getActionIcon } from './actionIcons';
-import { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } from './formatters';
+import { useApprovalFormatters } from './formatters';
 
 // The focused row is tinted bg-accent/60, where the muted caption colour measures 2.9:1 (light)
 // and 2.4:1 (dark); on that row the captions read in the foreground ink (7.9:1 / 4.9:1).
@@ -17,12 +18,15 @@ type Props = {
 };
 
 export function QueueList({ actions, focusedId, onFocus }: Props) {
+  const { actionTypeLabel, formatRelativeTime, scopeLabel, whyText } = useApprovalFormatters();
+  const tUi = useTranslations('common');
+
   const pendingDecisions = useApprovalsStore((s) => s.pendingDecisions);
 
   if (!actions.length) {
     return (
       <div className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-        Nothing else in the queue.
+        {tUi('m_cb53547b67')}
       </div>
     );
   }
@@ -58,7 +62,7 @@ export function QueueList({ actions, focusedId, onFocus }: Props) {
               </span>
               <span className={cn('truncate text-xs', FOCUSABLE_CAPTION)}>{whyText(action)}</span>
               <span className={cn('text-right text-xs', FOCUSABLE_CAPTION)}>
-                {optimistic ? optimistic : isFocused ? 'Focused' : ''}
+                {optimistic ? optimistic : isFocused ? tUi('m_6b04a17bd8') : ''}
               </span>
             </button>
           </li>

@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
+
 // Organic winners: the brand's own posts that beat their account's median — engagement rate ×2
 // or reach ×3 — each one a candidate to run as an ad. "Run as ad" puts the ORIGINAL post into a
 // chosen ad set PAUSED (its likes and comments come with it) and can also queue variations of it
@@ -28,32 +33,38 @@ const MEDIA_LABEL: Record<string, string> = {
   CAROUSEL_ALBUM: 'Carousel',
 };
 
-const times = (value: number | null) => (value == null ? '—' : `${value.toFixed(1)}×`);
+const times = (value: number | null, locale: UiLocale) =>
+  value == null ? '—' : `${formatDecimal(value, 1, locale)}×`;
 
-function adStatusLine(ad: PromoteOrganicWinnerResponse['ad']): string {
+function adStatusLine(
+  ad: PromoteOrganicWinnerResponse['ad'],
+  translate: ReturnType<typeof useTranslations<'organic'>>,
+): string {
   switch (ad.status) {
     case 'created':
-      return `Paused ad created (${ad.adId}). Turn it on in Ads Manager or the Optimizer.`;
+      return translate('promotionAdCreated', { id: ad.adId });
     case 'already_promoted':
-      return 'This post already runs as an ad — no second ad was made.';
+      return translate('promotionAlreadyRuns');
     case 'ineligible':
+      return translate('promotionIneligible');
     case 'refused':
-      return ad.reason;
+      return translate('promotionRefused');
   }
 }
 
 function variationsStatusLine(
   variations: PromoteOrganicWinnerResponse['variations'],
+  translate: ReturnType<typeof useTranslations<'organic'>>,
 ): string | null {
   switch (variations.status) {
     case 'not_requested':
       return null;
     case 'queued':
       return variations.publishesToMeta
-        ? 'Variations queued. Approve them in the Optimizer to publish beside this ad set’s ads.'
-        : 'Variations queued. This ad set has no synced ad to publish beside, so they land in the Library.';
+        ? translate('promotionVariationsQueued')
+        : translate('promotionVariationsLibrary');
     case 'failed':
-      return variations.reason;
+      return translate('promotionVariationsFailed');
   }
 }
 
@@ -66,6 +77,8 @@ function PromoteDialog({
   winner: OrganicWinner;
   onClose: () => void;
 }) {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorMessage();
   const adsets = usePromotionAdsets(brandId, true);
   const promote = usePromoteWinner(brandId);
   const [adsetId, setAdsetId] = React.useState('');
@@ -78,30 +91,30 @@ function PromoteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Megaphone className="size-4 text-primary" aria-hidden="true" />
-            Run this post as an ad
+            {uiText('run_this_post_as_an_ad_346946e')}
           </DialogTitle>
           <DialogDescription>
-            The original post runs as a paused ad in the ad set you choose, likes and comments
-            included. Nothing goes live until you turn it on.
+            {uiText('the_original_post_runs_as_a_paused_ad_in_the__20012a3')}
           </DialogDescription>
         </DialogHeader>
 
         {promote.data ? (
           <div className="space-y-2 text-sm" data-testid="organic-winner-promote-result">
-            <p>{adStatusLine(promote.data.ad)}</p>
-            {variationsStatusLine(promote.data.variations) ? (
+            <p>{adStatusLine(promote.data.ad, uiText)}</p>
+            {variationsStatusLine(promote.data.variations, uiText) ? (
               <p className="text-muted-foreground">
-                {variationsStatusLine(promote.data.variations)}
+                {variationsStatusLine(promote.data.variations, uiText)}
               </p>
             ) : null}
           </div>
         ) : adsets.isLoading ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Loading ad sets…
+            <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+            {uiText('loading_ad_sets_6efe89e')}
           </div>
         ) : refused ? (
           <p className="text-sm text-muted-foreground">
-            This brand is connected with Instagram only. Connect with Facebook to run posts as ads.
+            {uiText('this_brand_is_connected_with_instagram_only_c_b6c2d4c')}
           </p>
         ) : (
           <div className="space-y-4">
@@ -110,7 +123,7 @@ function PromoteDialog({
                 htmlFor="organic-winner-adset"
                 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                Ad set
+                {uiText('ad_set_639a64f')}
               </label>
               <select
                 id="organic-winner-adset"
@@ -118,7 +131,7 @@ function PromoteDialog({
                 onChange={(event) => setAdsetId(event.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
               >
-                <option value="">Choose an ad set…</option>
+                <option value="">{uiText('choose_an_ad_set_337ee51')}</option>
                 {(adsets.data?.adsets ?? []).map((adset) => (
                   <option key={adset.id} value={adset.id}>
                     {adset.campaignName ? `${adset.campaignName} · ` : ''}
@@ -128,7 +141,7 @@ function PromoteDialog({
               </select>
               {adsets.isError ? (
                 <span className="block text-xs text-destructive">
-                  Could not load ad sets from Meta. Try again in a moment.
+                  {uiText('could_not_load_ad_sets_from_meta_try_again_in_678dae1')}
                 </span>
               ) : null}
             </div>
@@ -140,31 +153,38 @@ function PromoteDialog({
                 className="mt-0.5"
               />
               <label htmlFor="organic-winner-variations">
-                Also make variations
+                {uiText('alsoMakeVariations')}
                 <span className="block text-xs text-muted-foreground">
-                  New creatives built from this post’s hook, format and numbers, queued in the
-                  Optimizer for your approval.
+                  {uiText('new_creatives_built_from_this_post_s_hook_for_cba2acd')}
                 </span>
               </label>
             </div>
             {promote.isError ? (
-              <p className="text-xs text-destructive">{promote.error.message}</p>
+              <p className="text-xs text-destructive">{formatUiError(promote.error)}</p>
             ) : null}
           </div>
         )}
 
         <DialogFooter>
           {promote.data || refused ? (
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{uiText('done_11a6767')}</Button>
           ) : (
             <Button
               disabled={!adsetId || promote.isPending}
-              onClick={() => promote.mutate({ mediaId: winner.mediaId, adsetId, makeVariations })}
+              onClick={() =>
+                promote.mutate({
+                  mediaId: winner.mediaId,
+                  adsetId,
+                  makeVariations,
+                })
+              }
             >
-              {promote.isPending ? (
-                <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-              ) : null}
-              Create paused ad
+              {uiText.rich('sentence_7b7ec520d080', {
+                v0: () =>
+                  promote.isPending ? (
+                    <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                  ) : null,
+              })}
             </Button>
           )}
         </DialogFooter>
@@ -174,19 +194,24 @@ function PromoteDialog({
 }
 
 function WinnerRow({ winner, onPromote }: { winner: OrganicWinner; onPromote: () => void }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const running = winner.promotion !== null;
   const title =
-    winner.hookText ?? `${MEDIA_LABEL[winner.mediaType ?? ''] ?? 'Post'} ${winner.mediaId}`;
+    winner.hookText ??
+    `${uiText('contentKindLabel', { kind: (winner.mediaType ?? '').toLowerCase() })} ${winner.mediaId}`;
   return (
     <tr className="border-t border-subtle" data-testid="organic-winner-row">
       <td className="py-2 pr-3 text-xs text-muted-foreground">
-        {MEDIA_LABEL[winner.mediaType ?? ''] ?? 'Post'}
+        {uiText('contentKindLabel', {
+          kind: (winner.mediaType ?? '').toLowerCase(),
+        })}
         {winner.trial ? (
           <span
             className="block text-2xs font-medium text-primary"
             title={winner.trial.verdict?.reason}
           >
-            Trial winner
+            {uiText('trial_winner_5bea711')}
           </span>
         ) : null}
       </td>
@@ -209,22 +234,24 @@ function WinnerRow({ winner, onPromote }: { winner: OrganicWinner; onPromote: ()
           </span>
         ) : null}
       </td>
-      <td className="py-2 pr-3 text-right tabular-nums">{times(winner.engagementRateLift)}</td>
-      <td className="py-2 pr-3 text-right tabular-nums">{times(winner.reachLift)}</td>
+      <td className="py-2 pr-3 text-right tabular-nums">
+        {times(winner.engagementRateLift, uiLocale)}
+      </td>
+      <td className="py-2 pr-3 text-right tabular-nums">{times(winner.reachLift, uiLocale)}</td>
       <td className="py-2 pr-3 text-right tabular-nums">
         {winner.hookRate == null ? '—' : `${Math.round(winner.hookRate)}%`}
       </td>
       <td className="py-2 text-right">
         {running ? (
           <span className="text-xs text-muted-foreground">
-            Running as ad
-            {winner.variationJobs.length > 0
-              ? ` · ${winner.variationJobs.length} variation jobs`
-              : ''}
+            {uiText.rich('sentence_f77f2229c83a', {
+              hasVariations: winner.variationJobs.length > 0 ? 'yes' : 'no',
+              count: winner.variationJobs.length,
+            })}
           </span>
         ) : (
           <Button size="sm" variant="outline" onClick={onPromote}>
-            Run as ad
+            {uiText('run_as_ad_848d175')}
           </Button>
         )}
       </td>
@@ -233,6 +260,7 @@ function WinnerRow({ winner, onPromote }: { winner: OrganicWinner; onPromote: ()
 }
 
 export function OrganicWinnersSection({ brandId }: { brandId?: string }) {
+  const uiText = useTranslations('organic');
   const winners = useOrganicWinners(brandId);
   const [promoting, setPromoting] = React.useState<OrganicWinner | null>(null);
 
@@ -244,20 +272,23 @@ export function OrganicWinnersSection({ brandId }: { brandId?: string }) {
       <div className="px-4 py-3">
         <span className="flex items-center gap-2 text-base font-semibold tracking-tight">
           <Megaphone className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          Winners to run as ads
+          {uiText('winners_to_run_as_ads_4e67ea4')}
         </span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
-          Your posts from the last {windowDays} days at {thresholds.engagementRateLift}× their
-          account’s median engagement rate or {thresholds.reachLift}× its median reach
+          {uiText.rich('sentence_6301c8d38cd3', {
+            days: windowDays,
+            engagement: thresholds.engagementRateLift,
+            reach: thresholds.reachLift,
+          })}
         </span>
         <table className="mt-3 w-full text-sm">
           <thead>
             <tr className="text-left text-2xs uppercase tracking-wide text-muted-foreground">
-              <th className="pb-1.5 font-semibold">Type</th>
-              <th className="pb-1.5 font-semibold">Post</th>
-              <th className="pb-1.5 text-right font-semibold">Engagement</th>
-              <th className="pb-1.5 text-right font-semibold">Reach</th>
-              <th className="pb-1.5 text-right font-semibold">Hook rate</th>
+              <th className="pb-1.5 font-semibold">{uiText('type_baaddf7')}</th>
+              <th className="pb-1.5 font-semibold">{uiText('post_a555462')}</th>
+              <th className="pb-1.5 text-right font-semibold">{uiText('engagement_ea68771')}</th>
+              <th className="pb-1.5 text-right font-semibold">{uiText('reach_2068b81')}</th>
+              <th className="pb-1.5 text-right font-semibold">{uiText('hook_rate_bd1de47')}</th>
               <th className="pb-1.5" />
             </tr>
           </thead>

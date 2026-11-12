@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderInDom, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // The cards name their posting account through React Query; no brand is set, so it stays idle.
@@ -26,7 +27,9 @@ import type {
 // contract `useCalendarDnD.parsePlannerCellId` reads on the other side.
 const registeredDroppableIds: string[] = [];
 const routerPush = mock((_href: string) => undefined);
-mock.module('next/navigation', () => ({ useRouter: () => ({ push: routerPush }) }));
+mock.module('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
 
 mock.module('@dnd-kit/core', () => ({
   useDroppable: ({ id }: { id: string }) => {
@@ -43,7 +46,11 @@ mock.module('./useDraftDragHandle', () => ({
   useDraftDragHandle: () => ({
     setNodeRef: () => undefined,
     listeners: {},
-    attributes: { role: 'button', tabIndex: 0, 'aria-roledescription': 'draggable' },
+    attributes: {
+      role: 'button',
+      tabIndex: 0,
+      'aria-roledescription': 'draggable',
+    },
     setActivatorNodeRef: () => undefined,
     activatorAttributes: {
       'aria-roledescription': 'draggable',
@@ -396,7 +403,13 @@ describe('OrganicMonthlyCalendar selection', () => {
   const OTHER_DAY_ID = '2026-08-10';
   // Built once: the claim is about a selection change, so the month's data must not move.
   const MONTH_DAYS: OrganicCalendarDay[] = [
-    { id: DAY_ID, label: 'Mon', dateLabel: 'Aug 3', suggestedTimes: [], slots: [draft()] },
+    {
+      id: DAY_ID,
+      label: 'Mon',
+      dateLabel: 'Aug 3',
+      suggestedTimes: [],
+      slots: [draft()],
+    },
     {
       id: OTHER_DAY_ID,
       label: 'Mon',
@@ -447,7 +460,11 @@ describe('OrganicMonthlyCalendar selection', () => {
     cleanup();
     renderMonth({
       slots: [
-        draft({ backendDraftId: 'srv-1', groupId: 'group-1', platforms: ['tiktok', 'instagram'] }),
+        draft({
+          backendDraftId: 'srv-1',
+          groupId: 'group-1',
+          platforms: ['tiktok', 'instagram'],
+        }),
       ],
     });
 

@@ -1,4 +1,8 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+} from 'next-intl';
 
 // The setup tile, on a brand with nothing connected: how many setup steps are done, the next one
 // behind the mode's button ("Start", linking to the page where that step is done), and what the
@@ -20,6 +24,10 @@ import { SETUP_MISSING, setupTileView } from './setupModel';
 const Module = lazy(() => import('./Module'));
 
 export default function SetupTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const { setup } = ctx;
   const view = setupTileView(setup);
   // `!setup` repeats what the view already says, for the type of the expanded module's prop.
@@ -36,7 +44,13 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
   const share = view.total > 0 ? (view.done / view.total) * 100 : 0;
   return (
     <HomeTileFrame
-      badge={view.remaining.length === 0 ? 'Setup done' : `${view.remaining.length} left`}
+      badge={
+        view.remaining.length === 0
+          ? betaUiText('beta_5c92b0ae0f97')
+          : betaUiText('beta_11e34c29bd73', {
+              value0: String(view.remaining.length),
+            })
+      }
       expanded={
         <Module
           brandBookRefreshedAt={ctx.brandBookRefreshedAt}
@@ -44,7 +58,7 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
           setup={setup}
         />
       }
-      expandedDescription="Connect an account and finish the Brand Book so every module has something to read."
+      expandedDescription={extraUiText('home_9c285e3d74ee')}
       state="ready"
       tile={tile}
     >
@@ -55,11 +69,16 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
           data-total={view.total}
           data-value={view.done}
         >
-          {view.done} of {view.total}{' '}
-          <span className="font-normal text-muted-foreground text-xs">setup steps</span>
+          {view.done} {betaUiText('beta_28391d3bc64e')} {view.total}{' '}
+          <span className="font-normal text-muted-foreground text-xs">
+            {betaUiText('beta_96866e147861')}
+          </span>
         </p>
         <div
-          aria-label={`${view.done} of ${view.total} setup steps done`}
+          aria-label={betaUiText('beta_13e773017dc9', {
+            value0: String(view.done),
+            value1: String(view.total),
+          })}
           className="h-2 w-full overflow-hidden rounded-full bg-muted"
           role="img"
         >
@@ -75,7 +94,7 @@ export default function SetupTile({ ctx, tile }: HomeTileProps) {
               )}
               href={next.href}
             >
-              {ctx.board.verb.label}
+              {betaUiText('homeVerbLabel', { mode: ctx.board.mode })}
             </Link>
           </div>
         ) : null}

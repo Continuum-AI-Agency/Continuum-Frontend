@@ -5,7 +5,12 @@ import {
   suggestedAnswer,
   type TemplateForgeNeed,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { MappingQuestions } from './MappingQuestions';
 
 afterEach(cleanup);
@@ -63,7 +68,10 @@ describe('decisionsFor', () => {
   test('sends one entry per comp that asked, keyed by comp', () => {
     const [url, fecha] = groupMappingNeeds(NEEDS);
     expect(
-      decisionsFor([url!, fecha!], { [url!.key]: 'template_field_2', [fecha!.key]: '__keep' }),
+      decisionsFor([url!, fecha!], {
+        [url!.key]: 'template_field_2',
+        [fecha!.key]: '__keep',
+      }),
     ).toEqual({
       mappings: {
         'SPONSOR_9-16': [
@@ -86,7 +94,9 @@ describe('MappingQuestions', () => {
     render(<MappingQuestions needs={NEEDS} busy={false} onAnswer={onAnswer} />);
 
     expect(screen.getByText('1 still to answer.', { exact: false })).toBeTruthy();
-    const apply = screen.getByRole('button', { name: 'Apply answers' }) as HTMLButtonElement;
+    const apply = screen.getByRole('button', {
+      name: 'Apply answers',
+    }) as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
     fireEvent.click(apply);
     expect(onAnswer).not.toHaveBeenCalled();
@@ -98,7 +108,9 @@ describe('MappingQuestions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply answers' }));
     expect(onAnswer).toHaveBeenCalledWith({
-      mappings: { 'SPONSOR_9-16': [{ slotStableKey: 'text-12', fieldPath: 'fecha' }] },
+      mappings: {
+        'SPONSOR_9-16': [{ slotStableKey: 'text-12', fieldPath: 'fecha' }],
+      },
     });
   });
 });

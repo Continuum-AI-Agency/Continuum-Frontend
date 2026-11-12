@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Edge } from '@xyflow/react';
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../messages/studio/en.json';
 import { useStudioStore } from './stores/useStudioStore';
 import type { StudioNode } from './types';
 import { executeWorkflow } from './utils/executeWorkflow';
@@ -55,7 +57,11 @@ describe('StudioCanvas Integration', () => {
         id: 'video-gen',
         type: 'veoDirector',
         position: { x: 400, y: 0 },
-        data: { model: 'veo-3.1', prompt: 'A majestic lion video', enhancePrompt: false },
+        data: {
+          model: 'veo-3.1',
+          prompt: 'A majestic lion video',
+          enhancePrompt: false,
+        },
       },
     ];
 
@@ -91,7 +97,11 @@ describe('StudioCanvas Integration', () => {
       if (nodeId === 'image-gen') {
         return {
           success: true,
-          output: { type: 'image', base64: 'lion_image_base64', mimeType: 'image/png' },
+          output: {
+            type: 'image',
+            base64: 'lion_image_base64',
+            mimeType: 'image/png',
+          },
         };
       }
       if (nodeId === 'video-gen') {
@@ -108,6 +118,11 @@ describe('StudioCanvas Integration', () => {
     });
 
     const controls = {
+      translateUi: createTranslator({
+        locale: 'en',
+        messages: { studio: studioMessages },
+        namespace: 'studio',
+      }),
       executeGeneration,
       cancel: () => {},
       reset: () => {},

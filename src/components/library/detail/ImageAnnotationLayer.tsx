@@ -6,6 +6,7 @@
 // render as numbered pins whose marks re-render in place on hover/selection, or
 // all at once with "View all annotations". The still zooms (see zoom/ZoomStage).
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { OverlayPin, SpatialAnnotation } from './AnnotationOverlay';
 import { ImageReviewStage } from './annotation/ImageReviewStage';
 import { CommentComposer, type ComposerExtras } from './CommentComposer';
@@ -30,6 +31,8 @@ export function ImageAnnotationLayer({
   brandId,
   onPostAnnotated,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <ImageReviewStage
       src={src}
@@ -39,7 +42,11 @@ export function ImageAnnotationLayer({
       renderComposer={({ annotation, docked, clear }) =>
         docked || annotation ? (
           <CommentComposer
-            placeholder={docked ? 'Comment on these marks...' : 'Comment on this spot...'}
+            placeholder={
+              docked
+                ? translateUi('comment_on_these_marks_b63b644b')
+                : translateUi('comment_on_this_spot_8036263a')
+            }
             busy={posting}
             autoFocus={!docked}
             brandId={brandId}

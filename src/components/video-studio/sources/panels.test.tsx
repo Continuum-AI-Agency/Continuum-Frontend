@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import {
   createEditorProjectV2,
+  HEADLESS_CONCEPTS,
   type VideoEditorOpName,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE, type VideoStudioContext } from '../types';
 import { GraphPoolPanel } from './GraphPoolPanel';
@@ -15,10 +21,27 @@ afterEach(cleanup);
 
 const TIMEOUT_MS = 30_000;
 const pool: VideoEditorPoolAsset[] = [
-  { assetId: 'reel', kind: 'video', title: 'Day pass reel', durationSec: 12, origin: 'graph' },
+  {
+    assetId: 'reel',
+    kind: 'video',
+    title: 'Day pass reel',
+    durationSec: 12,
+    origin: 'graph',
+  },
   { assetId: 'still', kind: 'image', title: 'Front desk', origin: 'graph' },
-  { assetId: 'made', kind: 'image', title: 'Studio sweep', origin: 'generated' },
-  { assetId: 'take', kind: 'video', title: 'Take 1', durationSec: 4, origin: 'project' },
+  {
+    assetId: 'made',
+    kind: 'image',
+    title: 'Studio sweep',
+    origin: 'generated',
+  },
+  {
+    assetId: 'take',
+    kind: 'video',
+    title: 'Take 1',
+    durationSec: 4,
+    origin: 'project',
+  },
 ];
 
 const fakeStudio = (responses: Partial<Record<VideoEditorOpName, (input: unknown) => unknown>>) => {
@@ -53,7 +76,9 @@ describe('GraphPoolPanel', () => {
   it(
     'groups the pool by origin as draggable cards that carry the asset',
     async () => {
-      const { studio, addAssetToTimeline } = fakeStudio({ get_pool: () => ({ assets: pool }) });
+      const { studio, addAssetToTimeline } = fakeStudio({
+        get_pool: () => ({ assets: pool }),
+      });
       const view = render(<GraphPoolPanel studio={studio} />);
       await waitFor(() =>
         expect(view.container.querySelectorAll('[data-pool-asset]').length).toBe(4),
@@ -67,7 +92,9 @@ describe('GraphPoolPanel', () => {
       expect(card.getAttribute('draggable')).toBe('true');
       const data = new Map<string, string>();
       fireEvent.dragStart(card, {
-        dataTransfer: { setData: (type: string, value: string) => data.set(type, value) },
+        dataTransfer: {
+          setData: (type: string, value: string) => data.set(type, value),
+        },
       });
       expect(JSON.parse(data.get(VIDEO_STUDIO_ASSET_DRAG_TYPE) ?? '{}')).toEqual(pool[0]);
 
@@ -105,7 +132,9 @@ describe('QuickStartPanel', () => {
         view.container.querySelector('[data-quick-start="create_image"]') as HTMLElement,
       );
       const prompt = await view.findByLabelText('Prompt');
-      fireEvent.change(prompt, { target: { value: 'the front desk at golden hour' } });
+      fireEvent.change(prompt, {
+        target: { value: 'the front desk at golden hour' },
+      });
       fireEvent.click(view.getByRole('button', { name: 'Generate' }));
 
       await waitFor(() => expect(calls.some((call) => call.op === 'generate')).toBe(true));
@@ -183,7 +212,9 @@ describe('QuickStartPanel', () => {
     fireEvent.click(
       view.container.querySelector('[data-quick-start="create_image"]') as HTMLElement,
     );
-    fireEvent.change(await view.findByLabelText('Prompt'), { target: { value: 'a front desk' } });
+    fireEvent.change(await view.findByLabelText('Prompt'), {
+      target: { value: 'a front desk' },
+    });
     fireEvent.click(view.getByRole('button', { name: 'Generate' }));
   };
   const jobRow = (view: ReturnType<typeof render>, jobId: string) =>
@@ -205,7 +236,7 @@ describe('QuickStartPanel', () => {
         () => expect(jobRow(view, 'job_gone')?.getAttribute('data-state')).toBe('failed'),
         { timeout: 8_000 },
       );
-      expect(jobRow(view, 'job_gone')?.textContent).toContain('Generation job not found');
+      expect(jobRow(view, 'job_gone')?.textContent).toContain('This item is no longer available.');
       const polls = calls.filter((call) => call.op === 'generate_status').length;
       await new Promise((resolve) => setTimeout(resolve, 3_500));
       expect(calls.filter((call) => call.op === 'generate_status').length).toBe(polls);
@@ -295,7 +326,9 @@ describe('QuickStartPanel', () => {
       fireEvent.click(
         view.container.querySelector('[data-quick-start="headless_concept"]') as HTMLElement,
       );
-      await waitFor(() => expect(document.querySelectorAll('[data-concept]').length).toBe(10));
+      await waitFor(() =>
+        expect(document.querySelectorAll('[data-concept]').length).toBe(HEADLESS_CONCEPTS.length),
+      );
       const generate = view.getByRole('button', { name: 'Generate reel' });
       expect(generate.hasAttribute('disabled')).toBe(true);
       const offer = document.querySelector(

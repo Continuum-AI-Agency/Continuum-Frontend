@@ -12,8 +12,9 @@ import {
 } from '@continuum/contracts';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderInDom, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import { ApiError, markFetchFailure } from '@/lib/api/errors';
 import type { RequestOptions } from '@/lib/api/http.types';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
@@ -40,7 +41,9 @@ import {
 
 /** The month's read is held by React Query, so each render gets a client of its own. */
 const render = (ui: ReactElement) => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return renderInDom(ui, {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -77,7 +80,10 @@ mock.module('@/lib/supabase/client', () => ({
       },
     },
     schema: () => ({
-      rpc: async (fn: string) => ({ data: fn === 'brand_role' ? role : null, error: null }),
+      rpc: async (fn: string) => ({
+        data: fn === 'brand_role' ? role : null,
+        error: null,
+      }),
     }),
   }),
 }));
@@ -101,7 +107,7 @@ const request = async (options: RequestOptions<unknown>) => {
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
 
 const saved: { scope: string; metrics: string[] }[] = [];
-mock.module('@/app/(post-auth)/dashboard/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/dashboard/actions', () => ({
   saveHomeObjectivesAction: async (
     _brandId: string,
     scope: string,
@@ -156,7 +162,13 @@ const deployedRoute =
     };
   };
 
-const TILE: HomeBoardTile = { id: 'goals', size: 'l', urgency: 2, score: 80, why: null };
+const TILE: HomeBoardTile = {
+  id: 'goals',
+  size: 'l',
+  urgency: 2,
+  score: 80,
+  why: null,
+};
 
 function contextFor(input: {
   accounts: HomeAdAccount[];
@@ -219,7 +231,10 @@ describe('the Goal tile, ready', () => {
     answer = answersEveryRead;
     const home = render(
       <GoalsTile
-        ctx={contextFor({ accounts: [MXN_ACCOUNT], rows: brandGoals('leads', 'conversations') })}
+        ctx={contextFor({
+          accounts: [MXN_ACCOUNT],
+          rows: brandGoals('leads', 'conversations'),
+        })}
         tile={TILE}
       />,
     );
@@ -270,7 +285,10 @@ describe('the Goal tile, ready', () => {
     answer = answersEveryRead;
     const home = render(
       <GoalsTile
-        ctx={contextFor({ accounts: [GOOGLE_ACCOUNT], rows: brandGoals('leads') })}
+        ctx={contextFor({
+          accounts: [GOOGLE_ACCOUNT],
+          rows: brandGoals('leads'),
+        })}
         tile={TILE}
       />,
     );
@@ -368,7 +386,9 @@ describe('the Goal tile, when the read fails', () => {
   it('tells a viewer their role cannot read Google Ads', async () => {
     answer = () => ({
       status: 404,
-      body: { error: 'Google Ads account not configured or access token missing' },
+      body: {
+        error: 'Google Ads account not configured or access token missing',
+      },
     });
     role = 'viewer';
     const home = render(<GoalsTile ctx={contextFor({ accounts: [GOOGLE_ACCOUNT] })} tile={TILE} />);
@@ -384,7 +404,10 @@ describe('the Goal tile, setting a goal', () => {
     answer = answersEveryRead;
     const home = render(
       <GoalsTile
-        ctx={contextFor({ accounts: [MXN_ACCOUNT, USD_ACCOUNT], rows: brandGoals('leads') })}
+        ctx={contextFor({
+          accounts: [MXN_ACCOUNT, USD_ACCOUNT],
+          rows: brandGoals('leads'),
+        })}
         tile={TILE}
       />,
     );
@@ -420,7 +443,10 @@ describe('the Goal tile, while the targets route is not available', () => {
         state: 'missing',
         brandId: BRAND_ID,
         generatedAt: '2026-11-03T12:00:00Z',
-        missing: { reason: 'not_deployed', detail: 'Goal targets are not deployed yet.' },
+        missing: {
+          reason: 'not_deployed',
+          detail: 'Goal targets are not deployed yet.',
+        },
       }),
     ],
     [
@@ -492,8 +518,12 @@ describe('the Goal tile, with no target for the primary goal', () => {
 
     await openModule(home);
     await home.findByTestId('home-goals-target-form');
-    fireEvent.change(home.getByLabelText('Target'), { target: { value: '70' } });
-    fireEvent.change(home.getByLabelText('Period'), { target: { value: 'week' } });
+    fireEvent.change(home.getByLabelText('Target'), {
+      target: { value: '70' },
+    });
+    fireEvent.change(home.getByLabelText('Period'), {
+      target: { value: 'week' },
+    });
     fireEvent.click(home.getByRole('button', { name: 'Save target' }));
 
     await waitFor(() => expect(writes()).toHaveLength(1));
@@ -529,7 +559,9 @@ describe('the Goal tile, with no target for the primary goal', () => {
     await openModule(home);
     await home.findByTestId('home-goals-target-form');
     expect((home.getByLabelText('Currency') as HTMLInputElement).value).toBe('MXN');
-    fireEvent.change(home.getByLabelText('Target'), { target: { value: '9000' } });
+    fireEvent.change(home.getByLabelText('Target'), {
+      target: { value: '9000' },
+    });
     fireEvent.click(home.getByRole('button', { name: 'Save target' }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(homeGoalTargetUpsertRequestSchema.parse(writes()[0]?.body).currency).toBe('MXN');
@@ -544,8 +576,12 @@ describe('the Goal tile, with no target for the primary goal', () => {
 
     expect(home.queryByLabelText('Starts')).toBeNull();
     expect(home.queryByLabelText('Currency')).toBeNull();
-    fireEvent.change(home.getByLabelText('Target'), { target: { value: '70' } });
-    fireEvent.change(home.getByLabelText('Period'), { target: { value: 'custom' } });
+    fireEvent.change(home.getByLabelText('Target'), {
+      target: { value: '70' },
+    });
+    fireEvent.change(home.getByLabelText('Period'), {
+      target: { value: 'custom' },
+    });
     fireEvent.click(home.getByRole('button', { name: 'Save target' }));
 
     await waitFor(() =>
@@ -555,8 +591,12 @@ describe('the Goal tile, with no target for the primary goal', () => {
     );
     expect(writes()).toEqual([]);
 
-    fireEvent.change(home.getByLabelText('Starts'), { target: { value: '2026-11-01' } });
-    fireEvent.change(home.getByLabelText('Ends'), { target: { value: '2026-11-15' } });
+    fireEvent.change(home.getByLabelText('Starts'), {
+      target: { value: '2026-11-01' },
+    });
+    fireEvent.change(home.getByLabelText('Ends'), {
+      target: { value: '2026-11-15' },
+    });
     fireEvent.click(home.getByRole('button', { name: 'Save target' }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(homeGoalTargetUpsertRequestSchema.parse(writes()[0]?.body)).toMatchObject({
@@ -580,7 +620,9 @@ describe('the Goal tile, with no target for the primary goal', () => {
     const home = renderLeadsTile();
     await openModule(home);
     await home.findByTestId('home-goals-target-form');
-    fireEvent.change(home.getByLabelText('Target'), { target: { value: '70' } });
+    fireEvent.change(home.getByLabelText('Target'), {
+      target: { value: '70' },
+    });
     fireEvent.click(home.getByRole('button', { name: 'Save target' }));
 
     await waitFor(() =>
@@ -607,7 +649,9 @@ describe('the Goal tile, with no target for the primary goal', () => {
     const home = renderLeadsTile();
     await openModule(home);
     await home.findByTestId('home-goals-target-form');
-    fireEvent.change(home.getByLabelText('Target'), { target: { value: '70' } });
+    fireEvent.change(home.getByLabelText('Target'), {
+      target: { value: '70' },
+    });
     fireEvent.click(home.getByRole('button', { name: 'Save target' }));
     await waitFor(() =>
       expect(home.getByRole('alert').textContent).toContain('A money target names its currency.'),
@@ -667,7 +711,11 @@ describe('the Goal tile, with a target set', () => {
   it('says a period has not started, with no pace, no ring and no read of it', async () => {
     answer = answersEveryRead;
     targetsAnswer = deployedRoute([
-      goalTarget({ period: 'custom', periodStart: '2026-12-01', periodEnd: '2026-12-31' }),
+      goalTarget({
+        period: 'custom',
+        periodStart: '2026-12-01',
+        periodEnd: '2026-12-31',
+      }),
     ]);
     const home = renderLeadsTile();
 
@@ -728,7 +776,11 @@ describe('the Goal tile, with a target set', () => {
   it('closes out an ended period on its final figure, with no pace', async () => {
     answer = answersEveryRead;
     targetsAnswer = deployedRoute([
-      goalTarget({ period: 'custom', periodStart: '2026-10-01', periodEnd: '2026-10-31' }),
+      goalTarget({
+        period: 'custom',
+        periodStart: '2026-10-01',
+        periodEnd: '2026-10-31',
+      }),
     ]);
     const home = renderLeadsTile();
 
@@ -756,7 +808,10 @@ describe('the Goal tile, with a target set', () => {
     ]);
     const home = render(
       <GoalsTile
-        ctx={contextFor({ accounts: [MXN_ACCOUNT], rows: brandGoals('purchase_value') })}
+        ctx={contextFor({
+          accounts: [MXN_ACCOUNT],
+          rows: brandGoals('purchase_value'),
+        })}
         tile={TILE}
       />,
     );

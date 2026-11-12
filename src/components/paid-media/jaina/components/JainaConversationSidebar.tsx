@@ -1,8 +1,12 @@
 'use client';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
 
 import { type AgentSessionListFilters, agentInitiatorLabel } from '@continuum/contracts';
 import { Loader2Icon, Plus, Trash2Icon } from 'lucide-react';
-import React from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import React, { useMemo } from 'react';
 import { ChatHistoryFilterBar } from '@/components/chat/ChatHistoryFilterBar';
 import {
   CollapseConversationsButton,
@@ -52,11 +56,6 @@ type JainaConversationSidebarProps = {
   onUpdateConversationTags?: (sessionId: string, tags: string[]) => Promise<string[]>;
 };
 
-const AGENT_OPTIONS = [
-  { value: 'organic', label: 'Organic' },
-  { value: 'canvas', label: 'AI Studio' },
-];
-
 // Breakpoints are `@3xl/jaina` — the chat surface's own width — never viewport `md:`. The same
 // sidebar sits in a full-width tab and in a 420px floating panel on a desktop screen.
 // A row's tag and delete actions stay out of the list until the row is hovered or holds focus,
@@ -70,6 +69,7 @@ const SIDEBAR_BASE_CLASS =
 function getSessionTitle(
   session: JainaConversationSession,
   sessionTitleById?: Record<string, string>,
+  uiTranslate?: ScaleCopy,
 ): string {
   const overrideTitle = sessionTitleById?.[session.sessionId]?.trim();
   if (overrideTitle) {
@@ -81,7 +81,7 @@ function getSessionTitle(
   if (session.lastMessagePreview && session.lastMessagePreview.length > 0) {
     return session.lastMessagePreview;
   }
-  return 'New conversation';
+  return uiTranslate ? uiTranslate('new_conversation_396c946') : 'New conversation';
 }
 
 export function JainaConversationSidebar({
@@ -104,6 +104,16 @@ export function JainaConversationSidebar({
   onSearchConversations,
   onUpdateConversationTags,
 }: JainaConversationSidebarProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const AGENT_OPTIONS = useMemo(
+    () => [
+      { value: 'organic', label: uiText('organic_89b8cb6') },
+      { value: 'canvas', label: 'AI Studio' },
+    ],
+    [uiText],
+  );
+
   const [mode, setMode] = React.useState<SidebarMode>('chats');
   const [tagOverrides, setTagOverrides] = React.useState<Record<string, string[]>>({});
 
@@ -148,14 +158,14 @@ export function JainaConversationSidebar({
             type="single"
             value={mode}
             onValueChange={(value) => value && setMode(value as SidebarMode)}
-            aria-label="Jaina workspace view"
+            aria-label={uiText('jaina_workspace_view_415feb7')}
           >
             <ToggleGroupItem value="chats" className="h-6 px-2 text-xs">
-              Chats
+              {uiText('chats_ef5b404')}
             </ToggleGroupItem>
             {goalsAccessEnabled ? (
               <ToggleGroupItem value="goals" className="h-6 px-2 text-xs">
-                Goals
+                {uiText('goals_116cd39')}
               </ToggleGroupItem>
             ) : (
               <TooltipProvider delay={150}>
@@ -166,10 +176,12 @@ export function JainaConversationSidebar({
                         <ToggleGroupItem
                           value="goals"
                           disabled
-                          aria-label={`Goals (${GOALS_PRODUCTION_DISABLED_REASON})`}
+                          aria-label={uiText('template_f588622a4d95', {
+                            v0: GOALS_PRODUCTION_DISABLED_REASON,
+                          })}
                           className="pointer-events-none h-6 px-2 text-xs opacity-50"
                         >
-                          Goals
+                          {uiText('goals_116cd39')}
                         </ToggleGroupItem>
                       </span>
                     }
@@ -188,10 +200,10 @@ export function JainaConversationSidebar({
             onClick={onCreateConversation}
             disabled={isInteractionDisabled}
             className="gap-1"
-            aria-label="Create new conversation"
+            aria-label={uiText('create_new_conversation_39779e2')}
           >
             <Plus />
-            New
+            {uiText('new_18fdd54')}
           </Button>
         ) : mode === 'goals' ? (
           <CreateCampaignGoalDialog brandId={brandId} compact />
@@ -215,7 +227,7 @@ export function JainaConversationSidebar({
             <div className="flex gap-1 p-2 @3xl/jaina:flex-col @3xl/jaina:gap-0.5">
               {isLoading && visibleSessions.length === 0 && !search.isActive ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
-                  Loading conversations…
+                  {uiText('loading_conversations_1eec1df')}
                 </span>
               ) : null}
 
@@ -232,7 +244,7 @@ export function JainaConversationSidebar({
                       onClick={onRetryLoad}
                       type="button"
                     >
-                      Retry
+                      {uiText('retry_942087c')}
                     </button>
                   ) : null}
                 </span>
@@ -247,13 +259,13 @@ export function JainaConversationSidebar({
               !search.failure &&
               visibleSessions.length === 0 ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
-                  No conversations match these filters.
+                  {uiText('no_conversations_match_these_filters_80b056d')}
                 </span>
               ) : null}
 
               {!isLoading && !loadError && !search.isActive && sessions.length === 0 ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
-                  Start a chat to create your first conversation.
+                  {uiText('start_a_chat_to_create_your_first_conversatio_d32940c')}
                 </span>
               ) : null}
 
@@ -298,16 +310,19 @@ export function JainaConversationSidebar({
                           isActive ? 'text-primary-ink' : 'text-foreground',
                         )}
                       >
-                        {getSessionTitle(session, sessionTitleById)}
+                        {getSessionTitle(session, sessionTitleById, uiText)}
                       </span>
                       <span className="flex w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
                         {isGenerating ? (
                           <span className="inline-flex shrink-0 items-center gap-1 text-primary-ink">
-                            <Loader2Icon className="size-3 animate-spin" />
-                            Working
-                            <span aria-hidden="true" className="text-muted-foreground">
-                              ·
-                            </span>
+                            {uiText.rich('sentence_950c98d9306c', {
+                              v0: () => <Loader2Icon className="size-3 animate-spin" />,
+                              v1: () => (
+                                <span aria-hidden="true" className="text-muted-foreground">
+                                  ·
+                                </span>
+                              ),
+                            })}
                           </span>
                         ) : null}
                         <time
@@ -315,7 +330,7 @@ export function JainaConversationSidebar({
                           data-testid={`jaina-conversation-time-${session.sessionId}`}
                           dateTime={activityAt ?? undefined}
                         >
-                          {formatSessionActivity(activityAt)}
+                          {formatSessionActivity(activityAt, undefined, uiText, uiLocale)}
                         </time>
                         {initiatorWord ? (
                           <span className="shrink-0">
@@ -344,7 +359,9 @@ export function JainaConversationSidebar({
                       type="button"
                       onClick={() => onDeleteConversation(session.sessionId)}
                       disabled={isInteractionDisabled || isDeleting}
-                      aria-label={`Delete conversation ${getSessionTitle(session, sessionTitleById)}`}
+                      aria-label={uiText('template_ffd2211b43d4', {
+                        v0: getSessionTitle(session, sessionTitleById, uiText),
+                      })}
                       className={cn(
                         'hit-area mt-1.5 mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors',
                         isDeleting ? 'opacity-100' : ROW_ACTION_REVEAL,

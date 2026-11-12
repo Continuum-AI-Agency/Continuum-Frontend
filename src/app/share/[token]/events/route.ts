@@ -4,7 +4,7 @@
 
 import { shareBeaconEventRequestSchema } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
-import { recordShareEvent } from '../shareEvents.server';
+import { recordShareEvent } from '../../../[locale]/share/[token]/shareEvents.server.ts';
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

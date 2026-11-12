@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('motion/react', () => {
   const React = require('react');
@@ -9,7 +10,11 @@ mock.module('motion/react', () => {
       return React.createElement(tag, { ...rest, ref });
     });
   return {
-    motion: { span: passthrough('span'), div: passthrough('div'), p: passthrough('p') },
+    motion: {
+      span: passthrough('span'),
+      div: passthrough('div'),
+      p: passthrough('p'),
+    },
     useReducedMotion: () => false,
   };
 });

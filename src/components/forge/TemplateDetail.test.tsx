@@ -275,7 +275,11 @@ mock.module('@/components/forge/useForgeRun', () => ({
 }));
 
 mock.module('@/components/forge/TemplateAuthoringEditor', () => ({
-  TemplateAuthoringEditor: (props: { brandId: string; assetId: string; versionId: string | null }) => (
+  TemplateAuthoringEditor: (props: {
+    brandId: string;
+    assetId: string;
+    versionId: string | null;
+  }) => (
     <div
       data-testid="authoring-source"
       data-source-key={`${props.brandId}:${props.assetId}:${props.versionId ?? ''}`}
@@ -296,10 +300,18 @@ mock.module('@/lib/supabase/realtime', () => ({
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     getContract: async () => ({
-      publishCheck: { state: 'pass', issues: [], workerAttachmentId: 7, media: [] },
+      publishCheck: {
+        state: 'pass',
+        issues: [],
+        workerAttachmentId: 7,
+        media: [],
+      },
     }),
     listJobs: async () => ({ items: jobs, nextCursor: null }),
-    listRenderSets: async () => ({ items: [{ id: 'set-1' }, { id: 'set-2' }], nextCursor: null }),
+    listRenderSets: async () => ({
+      items: [{ id: 'set-1' }, { id: 'set-2' }],
+      nextCursor: null,
+    }),
     libraryState: async (_brandId: string, assetIds: string[]) => ({
       items: assetIds.map((assetId) => ({
         assetId,
@@ -313,12 +325,19 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TemplateDetail } from './TemplateDetail';
 
 installPickerDomGlobals();
@@ -330,7 +349,10 @@ let naturalWidth: PropertyDescriptor | undefined;
 beforeAll(() => {
   imagePrototype = Object.getPrototypeOf(document.createElement('img')) as object;
   naturalWidth = Object.getOwnPropertyDescriptor(imagePrototype, 'naturalWidth');
-  Object.defineProperty(imagePrototype, 'naturalWidth', { configurable: true, get: () => 1 });
+  Object.defineProperty(imagePrototype, 'naturalWidth', {
+    configurable: true,
+    get: () => 1,
+  });
 });
 afterAll(() => {
   if (imagePrototype && naturalWidth) {
@@ -380,7 +402,9 @@ function renderDetail(
   onOpenRender = mock((_intent: unknown) => undefined),
   source: TemplateSource = SOURCE,
 ) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   client.setQueryData(['forge', BRAND, 'template-variants'], []);
   const tree = (nextSource: TemplateSource) => (
     <QueryClientProvider client={client}>
@@ -407,7 +431,10 @@ describe('TemplateDetail', () => {
     const tabs = screen.getByRole('tablist');
     expect(within(tabs).getByRole('tab', { name: 'Edit layers', exact: true })).toBeTruthy();
     expect(within(tabs).getByRole('tab', { name: /Variants/ })).toBeTruthy();
-    const authorTab = within(tabs).getByRole('tab', { name: 'Author', exact: true });
+    const authorTab = within(tabs).getByRole('tab', {
+      name: 'Author',
+      exact: true,
+    });
 
     fireEvent.click(authorTab);
 
@@ -419,11 +446,17 @@ describe('TemplateDetail', () => {
 
   test('layer editing is beside Checks in the preview inspector', async () => {
     renderDetail();
-    const edit = await screen.findByRole('tab', { name: 'Edit layers', exact: true });
+    const edit = await screen.findByRole('tab', {
+      name: 'Edit layers',
+      exact: true,
+    });
     const tabs = edit.closest('[role="tablist"]');
     expect(tabs).toBeTruthy();
     expect(
-      within(tabs as HTMLElement).getByRole('tab', { name: 'Checks', exact: true }),
+      within(tabs as HTMLElement).getByRole('tab', {
+        name: 'Checks',
+        exact: true,
+      }),
     ).toBeTruthy();
   });
   test('identifiers stay inside the Details tab; the default view names things', async () => {
@@ -490,7 +523,12 @@ describe('TemplateDetail', () => {
 
   test('reports unread font requirements truthfully instead of claiming none', async () => {
     fontReadiness = { fonts: [], missing: 0, parseState: 'pending' };
-    renderDetail(undefined, { ...SOURCE, parseState: 'pending', parse: null, fonts: [] });
+    renderDetail(undefined, {
+      ...SOURCE,
+      parseState: 'pending',
+      parse: null,
+      fonts: [],
+    });
     await waitFor(() => expect(fact('Fonts')).toBe('Not known yet'));
     expect(check('Fonts').textContent).toContain('Waiting for your file to be read');
     expect(visibleText()).not.toMatch(/All 0 found|No fonts used/);
@@ -498,7 +536,12 @@ describe('TemplateDetail', () => {
 
   test('refreshes pending font state from readiness without mixing in stale source names', async () => {
     fontReadiness = { fonts: [], missing: 0, parseState: 'pending' };
-    const pending = { ...SOURCE, parseState: 'pending' as const, parse: null, fonts: [] };
+    const pending = {
+      ...SOURCE,
+      parseState: 'pending' as const,
+      parse: null,
+      fonts: [],
+    };
     const { rerenderSource } = renderDetail(undefined, pending);
     await waitFor(() => expect(fact('Fonts')).toBe('Not known yet'));
 
@@ -528,7 +571,11 @@ describe('TemplateDetail', () => {
 
   test('with nothing to fix, Investigate opens the ingest trail', async () => {
     run = { ...PUBLISHED_RUN, state: 'failed', ok: false };
-    renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'failed' });
+    renderDetail(undefined, {
+      ...SOURCE,
+      templateKey: null,
+      forgeState: 'failed',
+    });
     fireEvent.click(await screen.findByRole('button', { name: 'Investigate' }));
     expect(
       await screen.findByText('Read 9 variables in 4 format(s); it uses 3 font(s).', {
@@ -540,7 +587,12 @@ describe('TemplateDetail', () => {
   test('Fix retries a failed initial parse', async () => {
     variableParseState = 'failed';
     run = null;
-    renderDetail(undefined, { ...SOURCE, parse: null, parseState: 'failed', templateKey: null });
+    renderDetail(undefined, {
+      ...SOURCE,
+      parse: null,
+      parseState: 'failed',
+      templateKey: null,
+    });
     fireEvent.click(await screen.findByRole('button', { name: 'Fix problems' }));
     await waitFor(() => expect(healTemplateFonts).toHaveBeenCalledWith(BRAND, ASSET));
   });
@@ -559,7 +611,11 @@ describe('TemplateDetail', () => {
         },
       ],
     };
-    renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'needs_input' });
+    renderDetail(undefined, {
+      ...SOURCE,
+      templateKey: null,
+      forgeState: 'needs_input',
+    });
     fireEvent.click(await screen.findByRole('button', { name: 'Fix problems' }));
     await waitFor(() =>
       expect(advanceTemplateForgeRun).toHaveBeenCalledWith(BRAND, ASSET, 'resume'),
@@ -602,7 +658,11 @@ describe('TemplateDetail', () => {
 
   test('mapping and render checks say what they proved; a draft offers its test render', async () => {
     run = { ...PUBLISHED_RUN, state: 'draft_ready' };
-    renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'draft_ready' });
+    renderDetail(undefined, {
+      ...SOURCE,
+      templateKey: null,
+      forgeState: 'draft_ready',
+    });
     const rows = within(await screen.findByRole('list', { name: 'Checks' })).getAllByRole(
       'listitem',
     );
@@ -627,7 +687,10 @@ describe('TemplateDetail', () => {
 
   test('facts read formats, unassigned variables, sets and the last render from cached reads', async () => {
     jobs = [
-      job({ status: 'failed', updatedAt: new Date(Date.now() - 60 * 60_000).toISOString() }),
+      job({
+        status: 'failed',
+        updatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      }),
       job({ finishedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString() }),
     ];
     renderDetail();
@@ -649,10 +712,14 @@ describe('TemplateDetail', () => {
       }),
     ];
     renderDetail();
-    const preview = await screen.findByRole('group', { name: 'Template preview' });
+    const preview = await screen.findByRole('group', {
+      name: 'Template preview',
+    });
     const frame = () => preview.querySelector('[data-slot="format-preview-frame"]') as HTMLElement;
 
-    const square = await within(preview).findByRole('img', { name: 'StarCraft Promo · 1:1' });
+    const square = await within(preview).findByRole('img', {
+      name: 'StarCraft Promo · 1:1',
+    });
     expect(square.getAttribute('src')).toBe('https://cdn.test/Main_1x1_1mjxxwb.jpg');
     expect(frame().style.aspectRatio).toBe('1080 / 1080');
     expect(within(preview).getByText('Rendered · 2h ago')).toBeTruthy();
@@ -763,7 +830,9 @@ describe('TemplateDetail', () => {
     previewTemplateRebind.mockRejectedValueOnce(new Error('Review is unavailable'));
     renderDetail(undefined, source);
     fireEvent.click(await screen.findByRole('button', { name: 'Repair text' }));
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Headline' }), { key: 'ArrowRight' });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Headline' }), {
+      key: 'ArrowRight',
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save text layout' }));
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Your text changes are saved but not live yet',
@@ -771,7 +840,11 @@ describe('TemplateDetail', () => {
     expect(screen.getByRole('alert').textContent).toContain('Review is unavailable');
     expect(confirmTemplateRebind).not.toHaveBeenCalled();
     expect(
-      (screen.getByRole('button', { name: 'Preview changes' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Preview changes',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The Decisions module's body. At size s: how many decisions wait, split by tier, and the top
 // card. At m, l and w: the filters (All, Fix, Grow, Clean, each with its count) and the stack in
@@ -70,6 +71,8 @@ function CardSlot({ card, props }: { card: DecisionCard; props: DecisionsViewPro
 
 /** Size s: the count, the split by tier as one thin bar, and the card that leads. */
 function DecisionsSummary(props: DecisionsViewProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { cards } = props;
   const tiers = tierCounts(cards);
   const split = TIERS.filter((tier) => tiers[tier] > 0)
@@ -87,7 +90,7 @@ function DecisionsSummary(props: DecisionsViewProps) {
             {cards.length}
           </span>
           <span className="text-muted-foreground text-xs">
-            {cards.length === 1 ? 'decision waits' : 'decisions wait'}
+            {cards.length === 1 ? betaUiText('beta_059de7f9a538') : betaUiText('beta_328f9a3ffe75')}
             {split ? ` · ${split}` : ''}
           </span>
         </p>
@@ -108,6 +111,8 @@ function DecisionsSummary(props: DecisionsViewProps) {
 
 /** Sizes m, l and w: the filters and the stack. */
 function DecisionsStackList(props: DecisionsViewProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const [filter, setFilter] = useState<DecisionFilter>('all');
   const [expanded, setExpanded] = useState(false);
@@ -121,7 +126,7 @@ function DecisionsStackList(props: DecisionsViewProps) {
   return (
     <div className="space-y-3">
       <ToggleGroup
-        aria-label="Filter decisions"
+        aria-label={betaUiText('beta_6095f16bac42')}
         className="flex-wrap"
         onValueChange={(value) => {
           if (!isFilter(value)) return;
@@ -181,7 +186,7 @@ function DecisionsStackList(props: DecisionsViewProps) {
           type="button"
           variant="ghost"
         >
-          Show {hidden} more
+          {betaUiText('beta_0df6f1cad36c')} {hidden} {betaUiText('beta_187897ce0afc')}
         </Button>
       ) : null}
     </div>
@@ -195,22 +200,22 @@ function NoDecisions({
   mode: ControlContext['mode'];
   onCreatePortfolio: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (mode === 'setup') {
     return (
       <div className="space-y-2" data-testid="decisions-empty">
-        <p className="text-muted-foreground text-sm">
-          No portfolio yet, so the Optimizer has no decisions for this account.
-        </p>
+        <p className="text-muted-foreground text-sm">{betaUiText('beta_b10191dc4407')}</p>
         <Button data-testid="decision-create" onClick={onCreatePortfolio} size="sm" type="button">
           <PlusIcon aria-hidden="true" />
-          Create portfolio
+          {betaUiText('beta_a53487ce414c')}
         </Button>
       </div>
     );
   }
   return (
     <p className="text-muted-foreground text-sm" data-testid="decisions-empty">
-      Nothing waits for a decision.
+      {betaUiText('beta_231603abdef3')}
     </p>
   );
 }

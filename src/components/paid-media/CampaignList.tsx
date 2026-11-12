@@ -1,5 +1,6 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -11,6 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Campaign = {
@@ -28,6 +31,9 @@ type CampaignListProps = {
 };
 
 export function CampaignList({ brandId, adAccountId, onSelectCampaign }: CampaignListProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const supabase = createSupabaseBrowserClient();
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -74,7 +80,7 @@ export function CampaignList({ brandId, adAccountId, onSelectCampaign }: Campaig
         }
       } catch (err) {
         if (mounted) {
-          setError(err instanceof Error ? err.message : 'Unable to load campaigns.');
+          setError(formatUiError(err));
         }
       } finally {
         if (mounted) {
@@ -89,12 +95,14 @@ export function CampaignList({ brandId, adAccountId, onSelectCampaign }: Campaig
       mounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, adAccountId]);
+  }, [brandId, adAccountId, formatUiError]);
 
   if (!adAccountId) {
     return (
       <div className="flex h-64 items-center justify-center border border-dashed border-gray-200 rounded-lg">
-        <span className="text-muted-foreground">Select an ad account to view campaigns</span>
+        <span className="text-muted-foreground">
+          {uiText('select_an_ad_account_to_view_campaigns_62e1cd2')}
+        </span>
       </div>
     );
   }
@@ -102,7 +110,7 @@ export function CampaignList({ brandId, adAccountId, onSelectCampaign }: Campaig
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <span className="text-muted-foreground">Loading campaigns...</span>
+        <span className="text-muted-foreground">{uiText('loading_campaigns_0c8164a')}</span>
       </div>
     );
   }
@@ -118,7 +126,7 @@ export function CampaignList({ brandId, adAccountId, onSelectCampaign }: Campaig
   if (campaigns.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center border border-dashed border-gray-200 rounded-lg">
-        <span className="text-muted-foreground">No campaigns found</span>
+        <span className="text-muted-foreground">{uiText('no_campaigns_found_1b93a5e')}</span>
       </div>
     );
   }
@@ -128,10 +136,10 @@ export function CampaignList({ brandId, adAccountId, onSelectCampaign }: Campaig
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Campaign Name</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Spend</TableHead>
-            <TableHead className="text-right">ROAS</TableHead>
+            <TableHead>{uiText('campaign_name_c96fffc')}</TableHead>
+            <TableHead>{uiText('status_920e413')}</TableHead>
+            <TableHead className="text-right">{uiText('spend_85f3d55')}</TableHead>
+            <TableHead className="text-right">{uiText('roas_b81bd97')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -148,10 +156,10 @@ export function CampaignList({ brandId, adAccountId, onSelectCampaign }: Campaig
                 </Pill>
               </TableCell>
               <TableCell className="text-right">
-                {campaign.spend ? `$${campaign.spend.toLocaleString()}` : '-'}
+                {campaign.spend ? `$${campaign.spend.toLocaleString(uiLocale)}` : '-'}
               </TableCell>
               <TableCell className="text-right">
-                {campaign.roas ? campaign.roas.toFixed(2) : '-'}
+                {campaign.roas ? formatDecimal(campaign.roas, 2, uiLocale) : '-'}
               </TableCell>
             </TableRow>
           ))}

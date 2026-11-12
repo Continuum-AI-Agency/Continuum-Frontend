@@ -2,9 +2,10 @@
 
 import { canvasDeepLink, type ForgeProvenance } from '@continuum/contracts';
 import { ExternalLink, RefreshCw, Workflow } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
+import { Link } from '@/i18n/navigation';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -13,7 +14,12 @@ import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 // and node that made or revised it — each with the way back. An asset with neither renders
 // nothing, and a failed read is not worth a warning on an asset detail — it renders nothing too.
 
-type CanvasOrigin = { label: string; action: string; href: string };
+type CanvasOrigin = {
+  kind: 'created' | 'revised';
+  target: 'room' | 'node';
+  version?: number;
+  href: string;
+};
 
 type LineageRow = {
   operation: string;
@@ -51,8 +57,11 @@ async function readCanvasOrigins(brandId: string, assetId: string): Promise<Canv
     ?.origin_ref;
   const originRoom = originRef?.kind === 'canvas' ? text(originRef.roomId) : null;
   if (originRoom) {
-    const href = canvasDeepLink({ roomId: originRoom, nodeId: text(originRef?.nodeId) });
-    origins.set(href, { label: 'Made in canvas', action: 'Open room', href });
+    const href = canvasDeepLink({
+      roomId: originRoom,
+      nodeId: text(originRef?.nodeId),
+    });
+    origins.set(href, { kind: 'created', target: 'room', href });
   }
 
   const rows = (lineageResult.data ?? []) as LineageRow[];
@@ -72,14 +81,18 @@ async function readCanvasOrigins(brandId: string, assetId: string): Promise<Canv
   for (const row of rows) {
     const roomId = text(row.parameters?.roomId);
     if (!roomId) continue;
-    const href = canvasDeepLink({ roomId, nodeId: text(row.parameters?.nodeId) });
+    const href = canvasDeepLink({
+      roomId,
+      nodeId: text(row.parameters?.nodeId),
+    });
     // The origin already links this room + node; a lineage edge per source would repeat it.
     if (origins.has(href)) continue;
     const version = versionNumber.get(row.derived_version_id);
-    const made = row.operation === 'canvas_revision' ? 'Revised from canvas' : 'Made in canvas';
+    const kind = row.operation === 'canvas_revision' ? 'revised' : 'created';
     origins.set(href, {
-      label: version ? `${made} (v${version})` : made,
-      action: 'Open node',
+      kind,
+      version,
+      target: 'node',
       href,
     });
   }
@@ -87,6 +100,8 @@ async function readCanvasOrigins(brandId: string, assetId: string): Promise<Canv
 }
 
 export function ProvenancePanel({ brandId, assetId }: { brandId: string; assetId: string }) {
+  const translateUi = useUiTranslations('library');
+
   const [provenance, setProvenance] = useState<ForgeProvenance | null>(null);
   const [canvasOrigins, setCanvasOrigins] = useState<CanvasOrigin[]>([]);
 
@@ -116,20 +131,28 @@ export function ProvenancePanel({ brandId, assetId }: { brandId: string; assetId
       {provenance ? <ForgeSection provenance={provenance} /> : null}
       {canvasOrigins.length > 0 ? (
         <section
-          aria-label="Canvas origin"
+          aria-label={translateUi('canvas_origin_82226f9a')}
           data-testid="library-canvas-origin"
           className="rounded-md border border-border p-2.5"
         >
-          <p className="text-3xs uppercase tracking-wide text-muted-foreground">Canvas</p>
+          <p className="text-3xs uppercase tracking-wide text-muted-foreground">
+            {translateUi('canvas_3824a9f4')}
+          </p>
           <ul className="mt-1.5 flex flex-col gap-1 text-xs">
             {canvasOrigins.map((origin) => (
               <li key={origin.href} className="flex items-center justify-between gap-3">
-                <span className="min-w-0 truncate text-foreground">{origin.label}</span>
+                <span className="min-w-0 truncate text-foreground">
+                  {translateUi('canvasOriginLabel', {
+                    kind: origin.kind,
+                    version: origin.version ? String(origin.version) : 'none',
+                  })}
+                </span>
                 <Link
                   href={origin.href}
                   className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
                 >
-                  <Workflow className="size-3" aria-hidden /> {origin.action}
+                  <Workflow className="size-3" aria-hidden />{' '}
+                  {translateUi('canvasOriginAction', { target: origin.target })}
                 </Link>
               </li>
             ))}
@@ -141,11 +164,16 @@ export function ProvenancePanel({ brandId, assetId }: { brandId: string; assetId
 }
 
 function ForgeSection({ provenance }: { provenance: ForgeProvenance }) {
+  const translateUi = useUiTranslations('library');
+
   const facts = [
-    ['Template', provenance.templateName ?? provenance.templateKey],
-    ['Set', provenance.renderSetName],
-    ['Row', provenance.labelPath.length ? provenance.labelPath.join(' › ') : null],
-    ['Format', provenance.format],
+    [translateUi('provenanceTemplate'), provenance.templateName ?? provenance.templateKey],
+    [translateUi('provenanceSet'), provenance.renderSetName],
+    [
+      translateUi('provenanceRow'),
+      provenance.labelPath.length ? provenance.labelPath.join(' › ') : null,
+    ],
+    [translateUi('provenanceFormat'), provenance.format],
   ].filter((fact): fact is [string, string] => Boolean(fact[1]));
   const link = {
     templateAssetId: provenance.templateAssetId,
@@ -154,8 +182,13 @@ function ForgeSection({ provenance }: { provenance: ForgeProvenance }) {
   };
 
   return (
-    <section aria-label="Forge render" className="rounded-md border border-border p-2.5">
-      <p className="text-3xs uppercase tracking-wide text-muted-foreground">Forge render</p>
+    <section
+      aria-label={translateUi('forge_render_2ff58070')}
+      className="rounded-md border border-border p-2.5"
+    >
+      <p className="text-3xs uppercase tracking-wide text-muted-foreground">
+        {translateUi('forge_render_2ff58070')}
+      </p>
       {facts.length ? (
         <dl className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
           {facts.map(([label, value]) => (
@@ -173,7 +206,9 @@ function ForgeSection({ provenance }: { provenance: ForgeProvenance }) {
           href={forgeDeepLinkHref(link)}
           className="inline-flex items-center gap-1 text-primary hover:underline"
         >
-          <ExternalLink className="size-3" aria-hidden /> Open in Forge
+          <ExternalLink className="size-3" aria-hidden /> {translateUi(
+            'open_in_forge_37cf02a0',
+          )}{' '}
         </Link>
         {/* Re-render needs the row it came from; it opens that row selected, ready for Render. */}
         {link.templateAssetId && link.renderSetId && link.rowId ? (
@@ -181,7 +216,7 @@ function ForgeSection({ provenance }: { provenance: ForgeProvenance }) {
             href={forgeDeepLinkHref({ ...link, rerender: true })}
             className="inline-flex items-center gap-1 text-primary hover:underline"
           >
-            <RefreshCw className="size-3" aria-hidden /> Re-render
+            <RefreshCw className="size-3" aria-hidden /> {translateUi('re_render_f6e0dcab')}{' '}
           </Link>
         ) : null}
       </div>

@@ -2,6 +2,7 @@
 
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ function DialogContent({
   showOverlay?: boolean;
   overlayClassName?: string;
 }) {
+  const uiText = useTranslations('common');
   return (
     <DialogPortal>
       {showOverlay && <DialogOverlay className={overlayClassName} />}
@@ -73,7 +75,7 @@ function DialogContent({
             render={<Button variant="ghost" className="absolute top-2 right-2" size="icon-sm" />}
           >
             <X />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{uiText('close_7d9eb7a')}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -95,6 +97,7 @@ function DialogFooter({
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean;
 }) {
+  const uiText = useTranslations('common');
   return (
     <div
       data-slot="dialog-footer"
@@ -106,7 +109,9 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>
+        <DialogPrimitive.Close render={<Button variant="outline" />}>
+          {uiText('close_7d9eb7a')}
+        </DialogPrimitive.Close>
       )}
     </div>
   );

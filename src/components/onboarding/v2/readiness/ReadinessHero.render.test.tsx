@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { type RadarData, type RadarMetric, RadarProvider } from '@/components/charts/radar-context';
+import { render } from '@/i18n/__tests__/render';
 import { READINESS_LEGACY, READINESS_PARTIAL, READINESS_V2 } from './readiness.fixtures';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =

@@ -21,9 +21,11 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { Plus, Redo2, Undo2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { useElementMutations, useElements } from '@/lib/ai-studio/elements';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import { captionAnimationFromEditorId, captionMotionTransform } from '@/lib/clips/captionAnimation';
@@ -133,6 +135,10 @@ export function EditorProjectV2Assembly({
   onRedo: () => void;
   onRender: () => void;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const [pxPerSec, setPxPerSec] = useState(PX_PER_SEC);
   const [timelineMode, setTimelineMode] = useState<'edit' | 'motion'>(initialTimelineMode);
@@ -196,7 +202,11 @@ export function EditorProjectV2Assembly({
     },
     [clipById, urls],
   );
-  const audioPreview = useEditorProjectV2AudioPreview({ project, layout, exactUrls: urls });
+  const audioPreview = useEditorProjectV2AudioPreview({
+    project,
+    layout,
+    exactUrls: urls,
+  });
   const playback = usePlayheadPlayback({
     layout,
     mediaFor,
@@ -371,14 +381,13 @@ export function EditorProjectV2Assembly({
         );
       } catch (error) {
         show({
-          title: 'Could not place that clip',
-          description:
-            error instanceof Error ? error.message : 'The assembly could not take this source.',
+          title: translateUi('could_not_place_that_clip_7f4f5cd9'),
+          description: uiErrorText(error),
           variant: 'warning',
         });
       }
     },
-    [onApply, playback.playheadSec, project, show],
+    [onApply, playback.playheadSec, project, show, uiErrorText, translateUi],
   );
 
   const handleDragEnd = useCallback(
@@ -425,7 +434,7 @@ export function EditorProjectV2Assembly({
       <div className="grid grid-cols-1 gap-3 lg:min-h-[640px] lg:grid-cols-[240px_minmax(0,1fr)_280px]">
         <aside className="flex flex-col rounded-lg border border-border/60 bg-card p-3 lg:min-h-0">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium">Canonical assembly</h2>
+            <h2 className="text-sm font-medium">{translateUi('canonical_assembly_71555eb8')}</h2>
             <div className="flex">
               <Button
                 variant="ghost"
@@ -433,7 +442,7 @@ export function EditorProjectV2Assembly({
                 className="size-8"
                 onClick={onUndo}
                 disabled={!canUndo || busy}
-                aria-label="Undo assembly edit"
+                aria-label={translateUi('undo_assembly_edit_d710c744')}
               >
                 <Undo2 className="size-3.5" />
               </Button>
@@ -443,15 +452,15 @@ export function EditorProjectV2Assembly({
                 className="size-8"
                 onClick={onRedo}
                 disabled={!canRedo || busy}
-                aria-label="Redo assembly edit"
+                aria-label={translateUi('redo_assembly_edit_d7cf8c37')}
               >
                 <Redo2 className="size-3.5" />
               </Button>
             </div>
           </div>
           <p className="mb-3 text-2xs text-muted-foreground">
-            Every edit commits a durable project revision. Undo and redo restore persisted timeline
-            snapshots with optimistic concurrency.
+            {' '}
+            {translateUi('every_edit_commits_a_durable_projec_65c8e3e9')}{' '}
           </p>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-3">
             <section className="min-h-[9rem]">
@@ -459,7 +468,8 @@ export function EditorProjectV2Assembly({
             </section>
             <section>
               <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                Pinned overlays
+                {' '}
+                {translateUi('pinned_overlays_e551b60a')}{' '}
               </div>
               {overlayPool.length ? (
                 <div className="space-y-2">
@@ -489,12 +499,15 @@ export function EditorProjectV2Assembly({
                 </div>
               ) : (
                 <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-                  Connect a pinned Library image or video to add picture-in-picture or a logo.
+                  {' '}
+                  {translateUi('connect_a_pinned_library_image_or_v_e110e855')}{' '}
                 </p>
               )}
             </section>
             <section>
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">Pinned audio</div>
+              <div className="mb-2 text-xs font-semibold text-muted-foreground">
+                {translateUi('pinned_audio_cdbae6b1')}
+              </div>
               {audioPool.length ? (
                 <div className="space-y-2">
                   {audioPool.map((source) => (
@@ -520,7 +533,8 @@ export function EditorProjectV2Assembly({
                 </div>
               ) : (
                 <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-                  Connect a pinned Library audio source to place music or voiceover.
+                  {' '}
+                  {translateUi('connect_a_pinned_library_audio_sour_196f77ad')}{' '}
                 </p>
               )}
             </section>
@@ -531,7 +545,8 @@ export function EditorProjectV2Assembly({
             disabled={busy || !clips.length || renderBlockers.length > 0}
             title={renderBlockers.length > 0 ? renderBlockers.join(' ') : undefined}
           >
-            Render final 1080p
+            {' '}
+            {translateUi('render_final_1080p_5d483b77')}{' '}
           </Button>
           {renderBlockers.length > 0 ? (
             <p className="mt-1.5 text-2xs text-muted-foreground">{renderBlockers[0]}</p>
@@ -580,7 +595,8 @@ export function EditorProjectV2Assembly({
                 className="h-7 text-2xs"
                 onClick={() => setTimelineMode('edit')}
               >
-                Edit
+                {' '}
+                {translateUi('edit_464c4ffd')}{' '}
               </Button>
               <Button
                 type="button"
@@ -589,7 +605,8 @@ export function EditorProjectV2Assembly({
                 className="h-7 text-2xs"
                 onClick={() => setTimelineMode('motion')}
               >
-                Motion
+                {' '}
+                {translateUi('motion_8ca34424')}{' '}
               </Button>
               {editingSequenceId ? (
                 <Button
@@ -599,9 +616,10 @@ export function EditorProjectV2Assembly({
                   className="h-7 text-2xs"
                   onClick={() => setEditingSequenceId(null)}
                 >
-                  Main /{' '}
+                  {' '}
+                  {translateUi('main_1e945631')}{' '}
                   {project.nestedSequences.find((sequence) => sequence.id === editingSequenceId)
-                    ?.name ?? 'Precomp'}
+                    ?.name ?? translateUi('precomp_a553548b')}
                 </Button>
               ) : null}
               <Button
@@ -623,12 +641,15 @@ export function EditorProjectV2Assembly({
                 onClick={() => {
                   if (!selectedMotionClipId) return;
                   commit(
-                    precomposeClipsOperation(viewProject, { clipIds: [selectedMotionClipId] }),
+                    precomposeClipsOperation(viewProject, {
+                      clipIds: [selectedMotionClipId],
+                    }),
                   );
                   setSelectedMotionClipId(null);
                 }}
               >
-                Precompose
+                {' '}
+                {translateUi('precompose_e338d3be')}{' '}
               </Button>
               <Button
                 type="button"
@@ -653,7 +674,8 @@ export function EditorProjectV2Assembly({
                   }
                 }}
               >
-                Open nest
+                {' '}
+                {translateUi('open_nest_4af506ab')}{' '}
               </Button>
             </div>
             {timelineMode === 'motion' ? (
@@ -687,7 +709,13 @@ export function EditorProjectV2Assembly({
                 onTogglePlay={playback.toggle}
                 onCyclePlayback={playback.cyclePlaybackMode}
                 onPatchKeyframe={({ trackId, clipId, keyframe }) =>
-                  commit(upsertKeyframeOperation(viewProject, { trackId, clipId, keyframe }))
+                  commit(
+                    upsertKeyframeOperation(viewProject, {
+                      trackId,
+                      clipId,
+                      keyframe,
+                    }),
+                  )
                 }
                 onAddKeyframe={({ trackId, clipId, property, timeSec }) => {
                   const track = viewProject.tracks.find((candidate) => candidate.id === trackId);
@@ -740,8 +768,8 @@ export function EditorProjectV2Assembly({
                   if (!clip || !('keyframes' in clip) || !('source' in clip)) return;
                   if (clip.source.sourceType !== 'library_asset') {
                     show({
-                      title: 'Needs a Library overlay',
-                      description: 'Save Element uses the overlay image as the Element member.',
+                      title: translateUi('needs_a_library_overlay_cde0b54e'),
+                      description: translateUi('save_element_uses_the_overlay_image_b6a9ffcd'),
                       variant: 'warning',
                     });
                     return;
@@ -757,17 +785,14 @@ export function EditorProjectV2Assembly({
                     })
                     .then(() => {
                       show({
-                        title: 'Saved Element',
-                        description: 'Place it onto any overlay from Motion.',
+                        title: translateUi('saved_element_66fedb9d'),
+                        description: translateUi('place_it_onto_any_overlay_from_moti_dbc2ca79'),
                       });
                     })
                     .catch((error: unknown) => {
                       show({
-                        title: 'Could not save Element',
-                        description:
-                          error instanceof Error
-                            ? error.message
-                            : 'The Element could not be created.',
+                        title: translateUi('could_not_save_element_b740703e'),
+                        description: uiErrorText(error),
                         variant: 'warning',
                       });
                     });
@@ -836,11 +861,14 @@ export function EditorProjectV2Assembly({
           </div>
           <div className="overflow-x-auto rounded-lg border border-border/60 bg-card px-3 py-2">
             <div className="mb-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Review · comments persist on the source
+              {' '}
+              {translateUi('review_comments_persist_on_the_sour_8ebf3473')}{' '}
             </div>
             <div
               className="min-w-full"
-              style={{ width: `${Math.max(480, layout.totalSec * pxPerSec)}px` }}
+              style={{
+                width: `${Math.max(480, layout.totalSec * pxPerSec)}px`,
+              }}
             >
               <TimelineCommentLayer
                 brandId={brandId}
@@ -889,7 +917,8 @@ export function EditorProjectV2Assembly({
           {selectedAudio && urls.get(selectedAudio.item.id) ? (
             <div className="flex items-center gap-3 rounded-md border border-border/60 bg-card px-3 py-2">
               <span className="shrink-0 text-2xs font-medium text-muted-foreground">
-                Audition selected audio
+                {' '}
+                {translateUi('audition_selected_audio_8f25484d')}{' '}
               </span>
               {/* biome-ignore lint/a11y/useMediaCaption: audio audition has no visual content. */}
               <audio

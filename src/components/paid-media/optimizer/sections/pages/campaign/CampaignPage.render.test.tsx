@@ -7,7 +7,8 @@ import {
   paidAccountOverviewSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { EKATAR, GOALS, HISTORY, WITH_E1 } from '../../google/__fixtures__/googleTab';
 import { campaignViews, type HistoryRead } from '../../google/campaignExplorerModel';
 
@@ -18,7 +19,11 @@ import { campaignViews, type HistoryRead } from '../../google/campaignExplorerMo
 const WEEK = { since: '2026-10-20', until: '2026-10-26' };
 const DAILY = paidAccountOverviewSchema.parse({
   metrics: { spend: 7_000, roas: 0, ctr: 2.8 },
-  result_basis: { rule: 'google_conversion_rule_v1', bucket: 'leads', unambiguous: true },
+  result_basis: {
+    rule: 'google_conversion_rule_v1',
+    bucket: 'leads',
+    unambiguous: true,
+  },
   trends: [
     { date: '2026-10-20', spend: 1200, clicks: 140, conversions: 1 },
     { date: '2026-10-21', spend: 1100, clicks: 130, conversions: 1 },
@@ -179,7 +184,11 @@ const NETWORKS = GoogleBreakdownReadSchema.parse({
       },
     },
   ],
-  result_basis: { rule: 'google_conversion_rule_v1', bucket: 'leads', unambiguous: true },
+  result_basis: {
+    rule: 'google_conversion_rule_v1',
+    bucket: 'leads',
+    unambiguous: true,
+  },
   range: { since: '2026-10-20', until: '2026-10-26' },
   currency: 'MXN',
 });
@@ -226,7 +235,10 @@ afterEach(() => {
 });
 
 const READY: HistoryRead = { status: 'ready', history: HISTORY };
-const TARGET = { brandId: '61b80f51-709a-4408-9f11-04142a286baa', customerId: '3710693645' };
+const TARGET = {
+  brandId: '61b80f51-709a-4408-9f11-04142a286baa',
+  customerId: '3710693645',
+};
 
 function campaignOf(read: GoogleTopCampaigns = WITH_E1) {
   const found = campaignViews(read, GOALS, 'MXN').find((row) => row.id === EKATAR);
@@ -255,7 +267,9 @@ function body(props: Partial<Parameters<typeof GoogleCampaignDetailBody>[0]> = {
 }
 
 function sheet(read: GoogleTopCampaigns = WITH_E1) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <GoogleCampaignDetail
@@ -343,7 +357,12 @@ describe('the campaign trend', () => {
     const view = body({ daily: { status: 'loading' } });
     expect(screen.queryByTestId('campaign-trend')).toBeNull();
     view.unmount();
-    body({ daily: { status: 'error', message: 'The Google Ads read did not answer.' } });
+    body({
+      daily: {
+        status: 'error',
+        message: 'The Google Ads read did not answer.',
+      },
+    });
     expect(document.body.textContent).toContain(
       "The campaign's days could not be read: The Google Ads read did not answer.",
     );

@@ -61,3 +61,16 @@ describe('successMessage — YouTube outcomes', () => {
     expect(successMessage(null)).toBe('Integration connected.');
   });
 });
+
+describe('presented callbacks', () => {
+  it('never forwards an unknown provider diagnostic into UI copy', () => {
+    const present = (source: string) => `translated:${source}`;
+    expect(errorMessage('provider sent private detail', present)).toBe(
+      'translated:Connection failed.',
+    );
+    expect(errorMessage('missing_code', present)).toBe(
+      'translated:The provider did not return an authorization code.',
+    );
+    expect(successMessage(null, present)).toBe('translated:Integration connected.');
+  });
+});

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -57,7 +58,9 @@ function renderPalette() {
 }
 
 function search(query: string) {
-  fireEvent.change(screen.getByPlaceholderText('Search'), { target: { value: query } });
+  fireEvent.change(screen.getByPlaceholderText('Search'), {
+    target: { value: query },
+  });
 }
 
 /** The labels cmdk left visible, in the order it ranked them. */

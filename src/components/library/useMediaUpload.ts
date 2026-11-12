@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
 import { partitionSidecarUploads } from '@/lib/library/sidecarUploads';
@@ -26,6 +27,8 @@ export type UploadItem = {
   progress: number;
   status: UploadStatus;
   error?: string;
+  refusalFile?: { name: string; size: number; type?: string };
+  errorKind?: 'sidecar';
   // Who paused it: only network pauses resume by themselves when the browser
   // comes back online — a file the user paused stays paused.
   pausedBy?: 'user' | 'network';
@@ -88,7 +91,12 @@ export function requeueUpload(items: readonly UploadItem[], id: string): UploadI
 export function pauseUploadsForNetwork(items: readonly UploadItem[]): UploadItem[] {
   return items.map((item) =>
     item.status === 'uploading'
-      ? { ...item, status: 'paused', pausedBy: 'network', error: NETWORK_WAIT_MESSAGE }
+      ? {
+          ...item,
+          status: 'paused',
+          pausedBy: 'network',
+          error: NETWORK_WAIT_MESSAGE,
+        }
       : item,
   );
 }
@@ -116,6 +124,8 @@ export function useMediaUpload(
     onUploaded?: (result: { file: File; uploaded: UploadMediaAssetResult }) => void;
   } = {},
 ) {
+  const uiErrorText = useUiErrorMessage();
+
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [online, setOnline] = useState(isOnline);
   const counter = useRef(0);
@@ -162,15 +172,19 @@ export function useMediaUpload(
         // paused it) before aborting; only an unexplained failure lands here.
         if (aborted) return;
         if (!isOnline()) {
-          patch(id, { status: 'paused', pausedBy: 'network', error: NETWORK_WAIT_MESSAGE });
+          patch(id, {
+            status: 'paused',
+            pausedBy: 'network',
+            error: NETWORK_WAIT_MESSAGE,
+          });
           return;
         }
-        patch(id, { status: 'error', error: err instanceof Error ? err.message : 'Upload failed' });
+        patch(id, { status: 'error', error: uiErrorText(err) });
       } finally {
         if (job.controller === controller) job.controller = null;
       }
     },
-    [brandId, finish, patch],
+    [brandId, finish, patch, uiErrorText],
   );
 
   const runCompanion = useCallback(
@@ -191,13 +205,13 @@ export function useMediaUpload(
         if (job.cancelled) return;
         patch(id, {
           status: 'error',
-          error: err instanceof Error ? err.message : 'Could not attach sidecar preview',
+          error: uiErrorText(err),
         });
       } finally {
         job.controller = null;
       }
     },
-    [brandId, finish, patch],
+    [brandId, finish, patch, uiErrorText],
   );
 
   // The scheduler: whenever the queue changes, fill free slots from the front.
@@ -251,7 +265,12 @@ export function useMediaUpload(
 
     const added: UploadItem[] = files.map((file) => {
       const id = idFor.get(file) ?? '';
-      jobs.current.set(id, { file, resume: null, controller: null, cancelled: false });
+      jobs.current.set(id, {
+        file,
+        resume: null,
+        controller: null,
+        cancelled: false,
+      });
       // Refused before any network call: the cap would reject it after the bytes.
       const afterId = sourceOf.get(file);
       const source = files.find((candidate) => idFor.get(candidate) === afterId);
@@ -264,7 +283,21 @@ export function useMediaUpload(
         sizeBytes: file.size,
         progress: 0,
         status: refusal ? 'error' : 'queued',
-        ...(refusal ? { error: refusal, refused: true } : {}),
+        ...(refusal
+          ? {
+              error: refusal,
+              refused: true,
+              ...(uploadSizeRefusal(file)
+                ? {
+                    refusalFile: {
+                      name: file.name,
+                      size: file.size,
+                      type: file.type,
+                    },
+                  }
+                : { errorKind: 'sidecar' as const }),
+            }
+          : {}),
         ...(afterId ? { afterId } : {}),
       };
     });
@@ -304,7 +337,12 @@ export function useMediaUpload(
         .filter((upload) => upload.id !== id)
         .map((upload) =>
           upload.afterId === id && upload.status === 'queued'
-            ? { ...upload, status: 'error', error: 'Could not attach sidecar preview' }
+            ? {
+                ...upload,
+                status: 'error',
+                error: 'Could not attach sidecar preview',
+                errorKind: 'sidecar',
+              }
             : upload,
         ),
     );

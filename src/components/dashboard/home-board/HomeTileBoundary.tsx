@@ -3,6 +3,7 @@
 // One tile that throws while drawing costs that tile, never the Home: the frame stays at its size
 // and says it could not be drawn (data-module-state="error", which the board's bench reads).
 import { HOME_TILE_LABELS, type HomeBoardTile } from '@continuum/contracts';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { ModuleFrame } from '@/components/paid-media/optimizer/sections/board/ModuleFrame';
 
@@ -23,16 +24,21 @@ export class HomeTileBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (!this.state.failed) return this.props.children;
     const { tile } = this.props;
-    return (
-      <ModuleFrame
-        reason={tile.why ?? undefined}
-        size={tile.size}
-        state="error"
-        testId={`home-tile-${tile.id}`}
-        title={HOME_TILE_LABELS[tile.id]}
-      >
-        <p className="text-muted-foreground text-xs">This tile could not be drawn.</p>
-      </ModuleFrame>
-    );
+    return <TileFailure tile={tile} />;
   }
+}
+
+function TileFailure({ tile }: Pick<Props, 'tile'>) {
+  const betaUiText = useBetaTranslations('dashboard');
+  return (
+    <ModuleFrame
+      reason={tile.why ?? undefined}
+      size={tile.size}
+      state="error"
+      testId={`home-tile-${tile.id}`}
+      title={betaUiText('homeTileTitle', { id: tile.id })}
+    >
+      <p className="text-muted-foreground text-xs">{betaUiText('beta_89d245d85b1c')}</p>
+    </ModuleFrame>
+  );
 }

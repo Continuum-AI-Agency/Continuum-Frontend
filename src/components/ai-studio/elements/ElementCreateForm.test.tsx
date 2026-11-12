@@ -1,7 +1,19 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
 import type React from 'react';
 import type { ReactNode } from 'react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import commonEs from '../../../../messages/common/es.json';
+import commonPt from '../../../../messages/common/pt-BR.json';
+import studioEs from '../../../../messages/studio/es.json';
+import studioPt from '../../../../messages/studio/pt-BR.json';
 
 // The real Select is a Base UI popup; a native select drives the same
 // `onValueChange` and lets the test change category without a portal dance.
@@ -94,7 +106,9 @@ describe('ElementCreateForm', () => {
 
     const input = document.getElementById('element-images') as HTMLInputElement;
     fireEvent.change(input, {
-      target: { files: Array.from({ length: 10 }, (_, index) => pngFile(`img-${index}.png`)) },
+      target: {
+        files: Array.from({ length: 10 }, (_, index) => pngFile(`img-${index}.png`)),
+      },
     });
 
     await waitFor(() => {
@@ -109,7 +123,11 @@ describe('ElementCreateForm', () => {
     renderForm();
 
     expect(
-      (screen.getByRole('button', { name: 'Create Element' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Create Element',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 
@@ -118,7 +136,9 @@ describe('ElementCreateForm', () => {
     renderForm({ onSubmit });
 
     await addImages(['face.png']);
-    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'model' } });
+    fireEvent.change(screen.getByLabelText('Category'), {
+      target: { value: 'model' },
+    });
 
     await waitFor(() => {
       expect(
@@ -138,8 +158,12 @@ describe('ElementCreateForm', () => {
     renderForm({ onSubmit });
 
     await addImages(['face.png']);
-    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'model' } });
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Aria' } });
+    fireEvent.change(screen.getByLabelText('Category'), {
+      target: { value: 'model' },
+    });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Aria' },
+    });
     await waitFor(() => {
       expect(screen.getByLabelText('Rights basis')).toBeTruthy();
     });
@@ -173,14 +197,20 @@ describe('ElementCreateForm', () => {
 
     expect(screen.queryByLabelText('Rights basis')).toBeNull();
     expect(
-      (screen.getByRole('button', { name: 'Create Element' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Create Element',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 
   it('tells a style Element to vary the subject rather than the treatment', async () => {
     renderForm();
 
-    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'style' } });
+    fireEvent.change(screen.getByLabelText('Category'), {
+      target: { value: 'style' },
+    });
 
     await waitFor(() => {
       expect(
@@ -190,4 +220,50 @@ describe('ElementCreateForm', () => {
       ).toBeTruthy();
     });
   });
+});
+
+describe('ElementCreateForm locale validation boundary', () => {
+  afterEach(cleanup);
+  for (const locale of ['pt-BR', 'es'] as const) {
+    it(`renders controlled guidance and validates the real form in ${locale}`, async () => {
+      const onSubmit = mock(() => {});
+      const { container } = render(
+        <NextIntlClientProvider
+          locale={locale}
+          timeZone="UTC"
+          messages={{
+            common: locale === 'pt-BR' ? commonPt : commonEs,
+            studio: locale === 'pt-BR' ? studioPt : studioEs,
+          }}
+          onError={(error) => {
+            throw error;
+          }}
+        >
+          <ElementCreateForm
+            brandId="brand-1"
+            onCancel={() => {}}
+            onSubmit={onSubmit}
+            uploadAsset={uploader()}
+          />
+        </NextIntlClientProvider>,
+      );
+      await addImages(['source-original.png']);
+      expect(container.textContent).toContain(locale === 'pt-BR' ? 'mesmo SKU' : 'mismo SKU');
+      expect(container.textContent).not.toContain('Keep constant');
+      expect(container.textContent).not.toContain('Optional. Call out');
+      const form = container.querySelector('form');
+      expect(form).not.toBeNull();
+      if (!form) throw new Error('Element form was not rendered');
+      fireEvent.submit(form);
+      await waitFor(() =>
+        expect(
+          screen.getByText(
+            locale === 'pt-BR' ? 'O nome é obrigatório' : 'El nombre es obligatorio',
+          ),
+        ).toBeTruthy(),
+      );
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(screen.getByAltText('source-original.png')).toBeTruthy();
+    });
+  }
 });

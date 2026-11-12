@@ -1,4 +1,7 @@
 'use client';
+import { useTranslations } from 'next-intl';
+
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // One optional daily limit per platform among the portfolio's members, each in that platform
 // account's own currency. Each row saves on its own (optimizer_set_portfolio_platform_cap), as
@@ -20,26 +23,35 @@ import {
 } from './usePortfolioPlatformCaps';
 
 export function PlatformCapsField({ portfolioId }: { portfolioId: string }) {
+  const uiText = useTranslations('scale');
   const caps = usePortfolioPlatformCaps(portfolioId);
   const setCap = useSetPortfolioPlatformCap(portfolioId);
 
   if (caps.status === 'loading') {
-    return <p className="text-xs text-muted-foreground">Reading the platform limits…</p>;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {uiText('reading_the_platform_limits_9b90a4d')}
+      </p>
+    );
   }
   if (caps.status === 'unavailable') {
     return (
       <p className="text-xs text-muted-foreground">
-        Per-platform limits aren&rsquo;t available yet.
+        {uiText('per_platform_limits_aren_t_available_yet_c61c917')}
       </p>
     );
   }
   if (caps.status === 'error') {
-    return <p className="text-xs text-destructive">The platform limits could not be read.</p>;
+    return (
+      <p className="text-xs text-destructive">
+        {uiText('the_platform_limits_could_not_be_read_a27fe87')}
+      </p>
+    );
   }
   if (caps.caps.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        This portfolio has no platform accounts to limit yet.
+        {uiText('this_portfolio_has_no_platform_accounts_to_li_58a54af')}
       </p>
     );
   }
@@ -67,12 +79,14 @@ function PlatformCapRow({
   portfolioId: string;
   save: (dailyCapMinor: number | null) => Promise<unknown>;
 }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const currency = normalizeCurrency(cap.currency);
   const stored = platformCapToInput(cap.dailyCapMinor, cap.platform, currency);
   const [value, setValue] = useState(stored);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const parsed = parsePlatformCapInput(value, cap.platform, currency);
+  const parsed = parsePlatformCapInput(value, cap.platform, currency, uiText);
   const dirty = value.trim() !== stored;
   const id = `manage-platform-cap-${cap.platform}-${portfolioId}`;
 
@@ -83,7 +97,7 @@ function PlatformCapRow({
     try {
       await save(parsed.minor);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'The limit could not be saved.');
+      setSaveError(formatUiError(error));
     } finally {
       setSaving(false);
     }
@@ -93,7 +107,7 @@ function PlatformCapRow({
     // Same label-left / control-right row as the rest of the Manage sheet.
     <div className="grid gap-1.5 py-2.5 @lg/sheet:grid-cols-[11rem_minmax(0,1fr)] @lg/sheet:gap-6">
       <Label className="self-start text-muted-foreground @lg/sheet:pt-2" htmlFor={id}>
-        {platformCapLabel(cap.platform)}
+        {platformCapLabel(cap.platform, uiText)}
         {currency ? ` (${currency})` : ''}
       </Label>
       <div className="min-w-0 space-y-1.5">
@@ -105,7 +119,7 @@ function PlatformCapRow({
             id={id}
             inputMode="decimal"
             onChange={(event) => setValue(event.target.value)}
-            placeholder="No limit"
+            placeholder={uiText('no_limit_f7fcff0')}
             value={value}
           />
           <Button
@@ -115,19 +129,23 @@ function PlatformCapRow({
             disabled={!dirty || !parsed.ok || saving}
             onClick={() => void handleSave()}
           >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Save
+            {uiText.rich('sentence_e66795836de4', {
+              v0: () => (saving ? <Loader2 className="size-3.5 animate-spin" /> : null),
+            })}
           </Button>
         </div>
         {!currency ? (
           <p className="text-xs text-muted-foreground">
-            The {PLATFORM_NAMES[cap.platform]} accounts here use more than one currency, so one
-            limit can&rsquo;t be set for them.
+            {uiText.rich('sentence_5dfd8b427ebf', {
+              v0: PLATFORM_NAMES[cap.platform],
+            })}
           </p>
         ) : cap.accounts > 1 ? (
           <p className="text-xs text-muted-foreground">
-            Applies to each of the {cap.accounts} {PLATFORM_NAMES[cap.platform]} accounts on its
-            own.
+            {uiText.rich('sentence_5d9959c1d2de', {
+              v0: cap.accounts,
+              v1: PLATFORM_NAMES[cap.platform],
+            })}
           </p>
         ) : null}
         {dirty && !parsed.ok && currency ? (

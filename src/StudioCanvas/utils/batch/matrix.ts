@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 // Where a fan-out result lands in the results grid.
 //
 // The mapping is not cosmetic: it has to agree, cell for cell, with the order
@@ -34,8 +35,15 @@ export interface MatrixLayout {
   cellAt(row: number, col: number): MatrixCell | undefined;
 }
 
-const axis = (items: readonly BatchItem[]): MatrixAxisEntry[] =>
-  items.map((item, index) => ({ index, label: batchItemLabel(item, index), item }));
+const axis = (
+  items: readonly BatchItem[],
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
+): MatrixAxisEntry[] =>
+  items.map((item, index) => ({
+    index,
+    label: batchItemLabel(item, index, translate),
+    item,
+  }));
 
 export interface BatchMatrixParams {
   readonly combine: BatchCombine;
@@ -53,15 +61,18 @@ export interface BatchMatrixParams {
  *   column rather than a mostly-empty square, because a grid of blanks reads as failure.
  * - a single batch is one column, one row per item.
  */
-export function batchMatrix(params: BatchMatrixParams): MatrixLayout {
+export function batchMatrix(
+  params: BatchMatrixParams,
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
+): MatrixLayout {
   const { combine, left, outputs } = params;
   const right = params.right ?? [];
   const paired = right.length > 0;
 
-  const rows = axis(left);
+  const rows = axis(left, translate);
   // `zip` stops at the shorter list — pairing past it would invent an item nobody added.
   const zipLength = Math.min(left.length, right.length);
-  const cols = paired && combine === 'cross' ? axis(right) : [];
+  const cols = paired && combine === 'cross' ? axis(right, translate) : [];
 
   const cellFor = (pairIndex: number): MatrixCell => ({
     pairIndex,
@@ -107,7 +118,10 @@ export function matrixCellLabel(layout: MatrixLayout, row: number, col: number):
  * instead would break the moment the batch node upstream was edited after the run — the
  * results belong to the inputs they were MADE from, not to whatever is wired now.
  */
-export function matrixFromRunRecord(record: BatchRunRecord): MatrixLayout {
+export function matrixFromRunRecord(
+  record: BatchRunRecord,
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
+): MatrixLayout {
   const toItem = (entry: BatchAxisEntry): BatchItem => ({
     id: `axis-${entry.index}`,
     kind: record.itemType,
@@ -131,10 +145,13 @@ export function matrixFromRunRecord(record: BatchRunRecord): MatrixLayout {
         : null;
   }
 
-  return batchMatrix({
-    combine: record.combine,
-    left: record.left.map(toItem),
-    right: record.right.length > 0 ? record.right.map(toItem) : undefined,
-    outputs,
-  });
+  return batchMatrix(
+    {
+      combine: record.combine,
+      left: record.left.map(toItem),
+      right: record.right.length > 0 ? record.right.map(toItem) : undefined,
+      outputs,
+    },
+    translate,
+  );
 }

@@ -3,6 +3,7 @@
 import type { EmblaOptionsType, EmblaPluginType } from 'embla-carousel';
 import useEmblaCarousel, { type UseEmblaCarouselType } from 'embla-carousel-react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ function useCarousel() {
 
 const Carousel = React.forwardRef<HTMLDivElement, CarouselProps>(
   ({ orientation = 'horizontal', opts, setApi, plugins, className, children, ...props }, ref) => {
+    const uiText = useTranslations('common');
     const [carouselRef, api] = useEmblaCarousel(
       {
         ...opts,
@@ -90,7 +92,7 @@ const Carousel = React.forwardRef<HTMLDivElement, CarouselProps>(
           ref={ref}
           className={cn('relative', className)}
           role="region"
-          aria-roledescription="carousel"
+          aria-roledescription={uiText('carouselRole')}
           {...props}
         >
           {children}
@@ -125,13 +127,14 @@ CarouselContent.displayName = 'CarouselContent';
 const CarouselItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => {
     const { orientation } = useCarousel();
+    const uiText = useTranslations('common');
 
     return (
       // biome-ignore lint/a11y/useSemanticElements: carousel slide, not a form <fieldset>
       <div
         ref={ref}
         role="group"
-        aria-roledescription="slide"
+        aria-roledescription={uiText('slideRole')}
         className={cn(
           'min-w-0 shrink-0 grow-0 basis-full',
           orientation === 'horizontal' ? 'pl-4' : 'pt-4',
@@ -146,6 +149,7 @@ CarouselItem.displayName = 'CarouselItem';
 
 const CarouselPrevious = React.forwardRef<HTMLButtonElement, React.ComponentProps<typeof Button>>(
   ({ className, variant = 'outline', size = 'icon', ...props }, ref) => {
+    const uiText = useTranslations('common');
     const { orientation, scrollPrev, canScrollPrev } = useCarousel();
 
     return (
@@ -165,7 +169,7 @@ const CarouselPrevious = React.forwardRef<HTMLButtonElement, React.ComponentProp
         {...props}
       >
         <ArrowLeft className="h-4 w-4" />
-        <span className="sr-only">Previous slide</span>
+        <span className="sr-only">{uiText('previous_slide_bfb5492')}</span>
       </Button>
     );
   },
@@ -174,6 +178,7 @@ CarouselPrevious.displayName = 'CarouselPrevious';
 
 const CarouselNext = React.forwardRef<HTMLButtonElement, React.ComponentProps<typeof Button>>(
   ({ className, variant = 'outline', size = 'icon', ...props }, ref) => {
+    const uiText = useTranslations('common');
     const { orientation, scrollNext, canScrollNext } = useCarousel();
 
     return (
@@ -193,7 +198,7 @@ const CarouselNext = React.forwardRef<HTMLButtonElement, React.ComponentProps<ty
         {...props}
       >
         <ArrowRight className="h-4 w-4" />
-        <span className="sr-only">Next slide</span>
+        <span className="sr-only">{uiText('next_slide_cdc93d1')}</span>
       </Button>
     );
   },

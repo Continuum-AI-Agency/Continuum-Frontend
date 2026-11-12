@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The news, as the redesign says it (portafolio.html, "Lo común a todas" and idea 01; the
 // module's right-hand column in portafolio-unificado.html, idea D; P1 in
@@ -82,6 +83,7 @@ export function Sentence({ sentence }: { sentence: HeadlineSentence }) {
 }
 
 export function PortfolioHeadline({ headline, onEditSetting }: PortfolioHeadlineProps) {
+  const uiText = useTranslations('scale');
   const read = attributedRead(headline);
   return (
     <section className="flex min-w-0 flex-col gap-2" data-testid="portfolio-headline">
@@ -95,7 +97,7 @@ export function PortfolioHeadline({ headline, onEditSetting }: PortfolioHeadline
           data-testid="jaina-read"
         >
           <span className="font-semibold text-primary-ink" data-testid="jaina-read-label">
-            {read.ago ? `Jaina · ${read.ago}` : 'Jaina'}
+            {read.ago ? uiText('template_9f84d5bb711d', { v0: read.ago }) : uiText('jaina_15cdaaf')}
           </span>
           {' — '}
           {/* The sentence carries figures inside prose, so the node declares the one it is

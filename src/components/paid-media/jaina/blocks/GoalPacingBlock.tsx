@@ -1,4 +1,6 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { useAnswerLanguage } from '../answerLanguageContext';
 
 // Am I on plan — one figure, one sentence, and the shape underneath that says the same thing.
 //
@@ -44,8 +46,13 @@ const STATUS_SENTENCE: Record<GoalPacingBlockV2['status'], string> = {
 const pct = (share: number) => `${Math.round(share * 100)}%`;
 
 export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
+  const reportLocale = useAnswerLanguage();
+  const uiText = useTranslations('scale');
   const money = (value: number) =>
-    formatValue(value, 'currency', { currency: block.currency_code ?? undefined });
+    formatValue(value, 'currency', {
+      locale: reportLocale,
+      currency: block.currency_code ?? undefined,
+    });
   const spentShare = block.budget > 0 ? Math.min(1, block.spent / block.budget) : 0;
 
   return (
@@ -70,7 +77,11 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
         data-testid="goal-pacing-figure"
       >
         <span className={cn(JAINA_TYPE.figure, 'text-foreground')}>{pct(block.pace_ratio)}</span>
-        <span className="text-foreground">of plan · {STATUS_SENTENCE[block.status]}</span>
+        <span className="text-foreground">
+          {uiText.rich('sentence_f421c2673043', {
+            v0: STATUS_SENTENCE[block.status],
+          })}
+        </span>
       </p>
 
       {/* The one sentence. Money, then the calendar it is being judged against — in that
@@ -79,10 +90,19 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
         className={cn('mt-0.5 text-foreground', JAINA_TYPE.body)}
         data-testid="goal-pacing-sentence"
       >
-        <span className="tabular-nums">
-          {money(block.spent)} of {money(block.budget)}
-        </span>{' '}
-        spent with {pct(block.elapsed_pct)} of {block.period_start} – {block.period_end} elapsed.
+        {uiText.rich('sentence_37a0d9386bfb', {
+          v0: () => (
+            <span className="tabular-nums">
+              {uiText.rich('sentence_e900eefa5ce5', {
+                v0: money(block.spent),
+                v1: money(block.budget),
+              })}
+            </span>
+          ),
+          v1: pct(block.elapsed_pct),
+          v2: block.period_start,
+          v3: block.period_end,
+        })}
       </p>
 
       {/* The comparison, drawn once. */}
@@ -99,11 +119,13 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
             aria-hidden="true"
             className="absolute inset-y-[-3px] w-px bg-foreground"
             data-testid="goal-pacing-elapsed-tick"
-            style={{ left: `${Math.min(100, Math.max(0, block.elapsed_pct * 100))}%` }}
+            style={{
+              left: `${Math.min(100, Math.max(0, block.elapsed_pct * 100))}%`,
+            }}
           />
         </span>
         <p className="mt-1 text-xs text-muted-foreground">
-          fill: budget spent · tick: time elapsed
+          {uiText('fill_budget_spent_tick_time_elapsed_31e8d5d')}
         </p>
       </div>
 
@@ -114,7 +136,10 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
           className={cn('mt-1 text-muted-foreground tabular-nums', JAINA_TYPE.table)}
           data-testid="goal-pacing-projection"
         >
-          {money(block.projected_end)} projected by {block.period_end}
+          {uiText.rich('sentence_64a7bb93888d', {
+            v0: money(block.projected_end),
+            v1: block.period_end,
+          })}
         </p>
       ) : null}
     </section>

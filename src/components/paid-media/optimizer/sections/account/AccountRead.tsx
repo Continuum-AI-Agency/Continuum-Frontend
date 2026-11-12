@@ -1,5 +1,13 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import {
+  accountActionVerbLabel,
+  accountDetectorLabel,
+  accountFamilyCopy,
+} from '@/lib/paid-media/accountPresentation';
+
 // The recommendation cards: what the Optimizer Overview says to DO, once it has said how the
 // account is doing (the headline, the KPI tiles, the Jaina band) and before the portfolio rows.
 //
@@ -54,10 +62,10 @@ import {
   blocksTheAccount,
   isReadOnly,
   ownsItsActions,
-  PLATFORM_CARD_TYPE,
   platformCardActionLabel,
   platformCardOf,
   platformCardTitle,
+  platformCardType,
   platformsOf,
 } from '../platformCards/platformCardModel';
 import { PlatformChip } from '../platforms/PlatformChip';
@@ -115,28 +123,34 @@ export type AccountReadProps = {
 };
 
 function StateNote({ candidate }: { candidate: AccountCandidate }) {
+  const uiText = useTranslations('scale');
   if (!candidate.state) return null;
-  const family = ACTION_FAMILY_COPY[DETECTOR_ACTION_FAMILY[candidate.detector]].label;
+  const family = accountFamilyCopy(DETECTOR_ACTION_FAMILY[candidate.detector], uiText).label;
   if (candidate.state_lowered) {
     return (
       <p className="text-warning text-xs" data-testid="state-lowered">
-        Marked to act on its own, but “{family}” does not allow it yet — it will recommend.
+        {uiText.rich('sentence_a4e420368ffe', { v0: family })}
       </p>
     );
   }
   if (candidate.state === 'autopilot') {
-    return <p className="text-muted-foreground text-xs">Acts on its own, within your limits.</p>;
+    return (
+      <p className="text-muted-foreground text-xs">
+        {uiText('acts_on_its_own_within_your_limits_79bac8e')}
+      </p>
+    );
   }
   return null;
 }
 
 function CapNote({ candidate }: { candidate: AccountCandidate }) {
+  const uiText = useTranslations('scale');
   if (!candidate.capped_by) return null;
   return (
     <p className="text-muted-foreground text-xs">
       {candidate.capped_by === 'velocity'
-        ? "Capped by this objective's per-cycle ceiling, not by the gap."
-        : 'Capped by your guardrail, not by the gap.'}
+        ? uiText('capped_by_this_objective_s_per_cycle_ceiling__6fa23ad')
+        : uiText('capped_by_your_guardrail_not_by_the_gap_e51c965')}
     </p>
   );
 }
@@ -176,6 +190,18 @@ function RecommendationCard({
   platform?: AdPlatform;
   cardAction?: PlatformCardAction;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const TIER_LABEL = useMemo(
+    () =>
+      ({
+        high: uiText('high_c4ebc6d'),
+        medium: uiText('medium_8e588cd'),
+        low: uiText('low_f793de2'),
+      }) as const,
+    [uiText],
+  );
+
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
   const title = candidate.title ?? accountCandidateTitle(candidate, currency);
   const action = candidate.action ?? accountCandidateAction(candidate, currency);
@@ -186,10 +212,10 @@ function RecommendationCard({
   const priced = platformCard == null || candidate.impact_per_day > 0;
   const tier = cardTier(candidate, dailySpend, priced);
   const titleLine = platformCard
-    ? platformCardTitle(platformCard)
+    ? platformCardTitle(platformCard, uiText, uiLocale)
     : title
       ? titleText(title)
-      : meta.label;
+      : accountDetectorLabel(candidate.detector, uiText);
   const chips = platformCard ? platformsOf(platformCard) : platform ? [platform] : [];
   const cardHoldsAction =
     platformCard != null && cardActionAvailability(platformCard, cardAction) !== 'none';
@@ -214,15 +240,21 @@ function RecommendationCard({
         {chips.map((chip) => (
           <PlatformChip key={chip} platform={chip} />
         ))}
-        {lead ? <span className="font-semibold text-primary-ink">Lead</span> : null}
+        {lead ? (
+          <span className="font-semibold text-primary-ink">{uiText('lead_6459782')}</span>
+        ) : null}
         <span className={cn(tier === 'high' && 'font-medium text-foreground')} data-tier={tier}>
           {TIER_LABEL[tier]}
         </span>
         <span aria-hidden="true">·</span>
         <span>
-          {platformCard ? PLATFORM_CARD_TYPE[platformCard.variant] : ACTION_VERB_LABEL[action.verb]}
+          {platformCard
+            ? platformCardType(platformCard, uiText)
+            : accountActionVerbLabel(action.verb, uiText)}
         </span>
-        {doubted ? <span className="text-warning">affected by the guard</span> : null}
+        {doubted ? (
+          <span className="text-warning">{uiText('affected_by_the_guard_aaa570d')}</span>
+        ) : null}
       </div>
       <div className="grid gap-x-6 gap-y-3 @2xl/recs:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0 space-y-1.5">
@@ -269,7 +301,8 @@ function RecommendationCard({
               type="button"
               variant={lead ? 'default' : 'secondary'}
             >
-              {(platformCard && platformCardActionLabel(platformCard)) ?? actionLabel(action)}
+              {(platformCard && platformCardActionLabel(platformCard, uiText, uiLocale)) ??
+                actionLabel(action)}
             </Button>
           ) : null}
           <a
@@ -278,7 +311,7 @@ function RecommendationCard({
             href={jainaPromptHref(jainaPrompt(titleLine, names))}
           >
             <SparklesIcon aria-hidden className="size-3.5" />
-            Ask Jaina
+            {uiText('ask_jaina_0d70d16')}
           </a>
         </footer>
       </div>
@@ -327,6 +360,8 @@ export function AccountRead({
   platform,
   cardActions,
 }: AccountReadProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [showRest, setShowRest] = useState(false);
   const guards = accountGuards(candidates);
   const ranked = accountBlockersFirst(rankAccountCandidates(candidates));
@@ -349,12 +384,11 @@ export function AccountRead({
           <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-warning" />
           <div className="min-w-0 space-y-1">
             <h3 className="font-semibold text-foreground text-sm">
-              {ACCOUNT_DETECTOR_META[guard.detector].label}
+              {accountDetectorLabel(guard.detector, uiText)}
             </h3>
             <p className="text-muted-foreground text-xs">{guard.impact_basis}</p>
             <p className="text-muted-foreground text-xs">
-              Read this before the cards: it decides whether the rest of these figures mean
-              anything.
+              {uiText('read_this_before_the_cards_it_decides_whether_0892f9c')}
             </p>
           </div>
         </div>
@@ -392,8 +426,11 @@ export function AccountRead({
             className={cn('size-3.5 transition-transform', showRest && 'rotate-180')}
           />
           {showRest
-            ? 'Hide the rest'
-            : `${rest.length} more · ${formatPerPeriod(restWorth, currency)} between them`}
+            ? uiText('hide_the_rest_0868c8a')
+            : uiText('template_a575b1f6148e', {
+                v0: rest.length,
+                v1: formatPerPeriod(restWorth, currency, uiLocale),
+              })}
         </Button>
       ) : null}
     </section>

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { AssetPerformance, AssetUsage } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -216,7 +216,12 @@ describe('PerformanceView — display rules', () => {
 
   it('lists the assets generated from this one', () => {
     const { getByText } = renderView(
-      { assetId: 'asset-4', window: 'd30', deployments: [], versionRollups: [] },
+      {
+        assetId: 'asset-4',
+        window: 'd30',
+        deployments: [],
+        versionRollups: [],
+      },
       {
         derivedAssets: [
           {

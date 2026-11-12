@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // H15 Weekly story: a button in the board's header that opens the brand's week as a few slides.
 // The sheet's content is its own lazy chunk, so the story (and its one read) downloads only when
@@ -20,6 +21,8 @@ import type { HomeBoardContext } from '../../types';
 const StorySheet = lazy(() => import('./StorySheet'));
 
 export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -31,7 +34,7 @@ export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
         type="button"
         variant="outline"
       >
-        <BookOpenIcon aria-hidden className="size-3.5" /> Weekly story
+        <BookOpenIcon aria-hidden className="size-3.5" /> {betaUiText('beta_bc910681c42f')}
       </Button>
       <Sheet onOpenChange={setOpen} open={open}>
         <SheetContent
@@ -40,9 +43,9 @@ export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
           side="right"
         >
           <SheetHeader>
-            <SheetTitle>Weekly story</SheetTitle>
+            <SheetTitle>{betaUiText('beta_bc910681c42f')}</SheetTitle>
             <SheetDescription>
-              {ctx.brandName ?? 'This brand'} this week, from what Continuum already read.
+              {ctx.brandName ?? betaUiText('beta_e285f857cc05')} {betaUiText('beta_28d8f4a8eeb5')}
             </SheetDescription>
           </SheetHeader>
           <div className="min-w-0 px-4 pb-6">

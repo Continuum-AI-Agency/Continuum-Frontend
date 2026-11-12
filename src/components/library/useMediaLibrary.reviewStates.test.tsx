@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { libraryBrowseQuerySchema, type MediaAsset } from '@continuum/contracts';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The live grid's row topic needs a configured Supabase client; this suite is about the list read.
-mock.module('@/lib/supabase/realtime', () => ({ subscribeToRowBroadcasts: () => () => {} }));
+mock.module('@/lib/supabase/realtime', () => ({
+  subscribeToRowBroadcasts: () => () => {},
+}));
 
 const { useMediaLibrary } = await import('./useMediaLibrary');
 
@@ -17,7 +19,10 @@ afterEach(() => {
 
 const BRAND = '4b1bb67e-5c2a-4c0f-9f26-3f9b2f9a9a10';
 const LEGAL = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
-const query = libraryBrowseQuerySchema.parse({ brandId: BRAND, destination: 'home' });
+const query = libraryBrowseQuerySchema.parse({
+  brandId: BRAND,
+  destination: 'home',
+});
 // Stable across renders, like the RSC seed prop: a fresh [] per render is a new seed each time.
 const NO_SEED: MediaAsset[] = [];
 const STATES = [LEGAL];
@@ -26,7 +31,9 @@ function recordFetches() {
   const urls: string[] = [];
   globalThis.fetch = (async (url: string) => {
     urls.push(String(url));
-    return new Response(JSON.stringify({ items: [], nextCursor: null }), { status: 200 });
+    return new Response(JSON.stringify({ items: [], nextCursor: null }), {
+      status: 200,
+    });
   }) as typeof fetch;
   return urls;
 }
@@ -92,7 +99,10 @@ describe('useMediaLibrary — custom review states', () => {
 
   it('refetches with the base status once its navigation lands after the state was picked', async () => {
     const urls = recordFetches();
-    const before = libraryBrowseQuerySchema.parse({ brandId: BRAND, tags: ['run'] });
+    const before = libraryBrowseQuerySchema.parse({
+      brandId: BRAND,
+      tags: ['run'],
+    });
     const { rerender } = renderHook(
       ({ query: current }) =>
         useMediaLibrary({
@@ -120,7 +130,12 @@ describe('useMediaLibrary — custom review states', () => {
   it('keeps the server seed and fetches nothing when no state is chosen', async () => {
     const urls = recordFetches();
     const { result } = renderHook(() =>
-      useMediaLibrary({ query, seed: [], initialNextCursor: null, reviewStateIds: [] }),
+      useMediaLibrary({
+        query,
+        seed: [],
+        initialNextCursor: null,
+        reviewStateIds: [],
+      }),
     );
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(urls).toEqual([]);

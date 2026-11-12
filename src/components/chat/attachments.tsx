@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertCircle, Check, FileText, Loader2, RefreshCw, X } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromAttachment } from '@/components/chat/media/media';
 import {
@@ -14,6 +15,7 @@ import {
   AttachmentTitle,
 } from '@/components/ui/attachment';
 import type { AgentDocumentAttachment } from '@/lib/agent-references';
+import { translateControlLabel } from '@/lib/ui/controlLabels';
 
 // 'indexing' exists because for a DOCUMENT, uploaded does not mean usable — the text
 // still has to be extracted, chunked and embedded before the agent can retrieve any of
@@ -43,6 +45,7 @@ export type Attachment = {
   status?: ChatAttachmentStatus;
   // Retained so an expired signed URL can be re-minted instead of the attachment being lost.
   storagePath?: string;
+  /** Already localized application guidance from the upload hook. */
   error?: string;
   /** Pasted text carried directly with the next turn; never uploaded or indexed. */
   text?: string;
@@ -66,6 +69,8 @@ const CHIP_STATE = {
 
 /** The composer's pending-attachment chips, shared by every agent chat. */
 export function Attachments({ files, onRemove, onRetry }: AttachmentsProps) {
+  const tUi = useTranslations('common');
+
   if (!files.length) return null;
 
   return (
@@ -92,14 +97,16 @@ export function Attachments({ files, onRemove, onRetry }: AttachmentsProps) {
             </AttachmentMedia>
             <AttachmentContent>
               <AttachmentTitle>{file.name}</AttachmentTitle>
-              <AttachmentDescription>{statusText(file)}</AttachmentDescription>
+              <AttachmentDescription>
+                {translateControlLabel(statusText(file, tUi), tUi)}
+              </AttachmentDescription>
             </AttachmentContent>
             <AttachmentActions>
               {file.status === 'error' && onRetry ? (
                 <AttachmentAction
                   type="button"
                   onClick={() => onRetry(file.id)}
-                  aria-label={`Retry ${file.name}`}
+                  aria-label={tUi('m_423656ea80', { v0: String(file.name) })}
                 >
                   <RefreshCw aria-hidden="true" />
                 </AttachmentAction>
@@ -108,7 +115,7 @@ export function Attachments({ files, onRemove, onRetry }: AttachmentsProps) {
                 <AttachmentAction
                   type="button"
                   onClick={() => onRemove(file.id)}
-                  aria-label={`Remove ${file.name}`}
+                  aria-label={tUi('m_a31c68e147', { v0: String(file.name) })}
                 >
                   <X aria-hidden="true" />
                 </AttachmentAction>
@@ -121,12 +128,12 @@ export function Attachments({ files, onRemove, onRetry }: AttachmentsProps) {
   );
 }
 
-function statusText(file: Attachment): string {
+function statusText(file: Attachment, t: ReturnType<typeof useTranslations<'common'>>): string {
   const isDocument = file.kind === 'document';
 
   if (file.status === 'uploading') return isDocument ? 'Uploading…' : 'Uploading to Library…';
   if (file.status === 'indexing') return 'Indexing…';
-  if (file.status === 'error') return file.error ?? 'Upload failed';
+  if (file.status === 'error') return file.error ?? translateControlLabel('Upload failed', t);
   // A temporary document says so on the chip, so the 14-day life is visible at the
   // moment of sending and not only in the toast that has since disappeared.
   if (file.status === 'ready' && isDocument && file.retention === 'ephemeral') {
@@ -154,6 +161,8 @@ export function SentDocumentAttachments({
 }: {
   documents?: readonly AgentDocumentAttachment[];
 }) {
+  const uiText = useTranslations('common');
+  const uiLocale = useLocale();
   if (!documents?.length) return null;
 
   return (
@@ -164,8 +173,10 @@ export function SentDocumentAttachments({
             <FileText aria-hidden="true" />
           </AttachmentMedia>
           <AttachmentContent>
-            <AttachmentTitle>{document.name ?? 'Document'}</AttachmentTitle>
-            <AttachmentDescription>{sentDocumentText(document)}</AttachmentDescription>
+            <AttachmentTitle>{document.name ?? uiText('document_d6bd8c0')}</AttachmentTitle>
+            <AttachmentDescription>
+              {translateControlLabel(sentDocumentText(document, uiText, uiLocale), uiText)}
+            </AttachmentDescription>
           </AttachmentContent>
         </AttachmentChip>
       ))}
@@ -173,10 +184,19 @@ export function SentDocumentAttachments({
   );
 }
 
-function sentDocumentText(document: AgentDocumentAttachment): string {
+function sentDocumentText(
+  document: AgentDocumentAttachment,
+  t: ReturnType<typeof useTranslations<'common'>>,
+  locale: string,
+): string {
   if (document.retention !== 'ephemeral') return 'Document';
   const expires = document.expiresAt ? new Date(document.expiresAt) : null;
   return expires && !Number.isNaN(expires.getTime())
-    ? `Temporary · expires ${expires.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    ? t('m_546753456a', {
+        date: expires.toLocaleDateString(locale, {
+          month: 'short',
+          day: 'numeric',
+        }),
+      })
     : 'Temporary';
 }

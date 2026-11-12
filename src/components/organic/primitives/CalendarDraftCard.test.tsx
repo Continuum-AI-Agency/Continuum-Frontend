@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderInDom, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import { publishAccountsKey } from '@/lib/organic/publishTargets';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
@@ -21,7 +22,11 @@ import { CalendarDraftCard } from './CalendarDraftCard';
 import { makeCalendarDay } from './calendar-utils';
 import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 
-type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+type RequestOptions = {
+  path: string;
+  method?: string;
+  body?: Record<string, unknown>;
+};
 const requestCalls: RequestOptions[] = [];
 const request = mock(async (opts: RequestOptions) => {
   requestCalls.push(opts);
@@ -36,7 +41,11 @@ const store = {
   duplicateDraft: mock(),
   beginEditingDraft: mock((_id: string) => undefined),
   days: storeDays,
-  accountContext: { accountIds: { linkedin: 'li-acct' }, accountOptions: {}, brandId: 'b1' },
+  accountContext: {
+    accountIds: { linkedin: 'li-acct' },
+    accountOptions: {},
+    brandId: 'b1',
+  },
 };
 
 mock.module('@/lib/organic/store', () => createCalendarStoreStub(store));
@@ -130,7 +139,9 @@ mock.module('./DraftHoverCardContent', () => ({
 // The brand's posting accounts, already cached: the card names its account by handle and
 // makes no request of its own for them.
 const ACCOUNT_ID = '6f1c0b9e-0000-4000-8000-000000000001';
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
 queryClient.setQueryData(publishAccountsKey('b1'), {
   accounts: [
     {
@@ -321,7 +332,11 @@ describe('CalendarDraftCard', () => {
     expect(requestCalls[0]).toMatchObject({
       path: '/api/organic/calendar/drafts/srv-1/fields',
       method: 'PATCH',
-      body: { dayId: '2030-01-07', timeOfDay: '13:00', expected_updated_at: 'T0' },
+      body: {
+        dayId: '2030-01-07',
+        timeOfDay: '13:00',
+        expected_updated_at: 'T0',
+      },
     });
   });
 
@@ -334,7 +349,12 @@ describe('CalendarDraftCard', () => {
       targetAccountId: ACCOUNT_ID,
       platforms: ['instagram', 'tiktok'],
       groupMembers: [
-        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: ACCOUNT_ID },
+        {
+          backendDraftId: 'srv-1',
+          platform: 'instagram',
+          status: 'draft',
+          accountId: ACCOUNT_ID,
+        },
         {
           backendDraftId: 'srv-2',
           platform: 'tiktok',
@@ -400,7 +420,10 @@ describe('CalendarDraftCard', () => {
   it('shows the caption its first platform receives, hashtags included', () => {
     const { container } = render(
       <CalendarDraftCard
-        draft={{ ...draft, hashtags: { high: ['#launch'], medium: [], low: [] } }}
+        draft={{
+          ...draft,
+          hashtags: { high: ['#launch'], medium: [], low: [] },
+        }}
         isSelected={false}
         isMultiSelected={false}
         onSelect={mock()}
@@ -555,7 +578,11 @@ describe('CalendarDraftCard', () => {
   it('keeps a published card free of an old publish failure', () => {
     render(
       <CalendarDraftCard
-        draft={{ ...draft, status: 'published', publishError: '(#200) Permissions error' }}
+        draft={{
+          ...draft,
+          status: 'published',
+          publishError: '(#200) Permissions error',
+        }}
         isSelected={false}
         isMultiSelected={false}
         onSelect={mock()}
@@ -662,7 +689,11 @@ describe('CalendarDraftCard', () => {
   it('shows no needs-media marker once the draft is scheduled', () => {
     const { container } = render(
       <CalendarDraftCard
-        draft={{ ...draft, status: 'scheduled', mediaSuggestion: { mediaStatus: 'pending' } }}
+        draft={{
+          ...draft,
+          status: 'scheduled',
+          mediaSuggestion: { mediaStatus: 'pending' },
+        }}
         isSelected={false}
         isMultiSelected={false}
         onSelect={mock()}
@@ -895,7 +926,11 @@ describe('CalendarDraftCard', () => {
     const onRealize = mock();
     render(
       <CalendarDraftCard
-        draft={{ ...draft, backendDraftId: 'server-1', mediaStage: 'storyboard_ready' }}
+        draft={{
+          ...draft,
+          backendDraftId: 'server-1',
+          mediaStage: 'storyboard_ready',
+        }}
         isSelected={false}
         isMultiSelected={false}
         onSelect={mock()}

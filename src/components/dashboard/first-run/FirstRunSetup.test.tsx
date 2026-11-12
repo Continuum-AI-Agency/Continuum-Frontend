@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { BrandBookResponse } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -17,7 +18,11 @@ function readyBook(): BrandBookResponse {
     status: 'ready',
     present: true,
     refreshed_at: '2026-07-01T00:00:00.000Z',
-    assembled: { report: { readiness: { overall_score: 80, findings: [], dimensions: {} } } },
+    assembled: {
+      report: {
+        readiness: { overall_score: 80, findings: [], dimensions: {} },
+      },
+    },
   } as unknown as BrandBookResponse;
 }
 

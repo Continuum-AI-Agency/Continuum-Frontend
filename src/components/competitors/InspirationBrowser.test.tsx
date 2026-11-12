@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -26,7 +27,11 @@ mock.module('@/lib/api/competitorSpy', () => ({
   useInstagramCompetitorSearch: () => ({ ...emptyQuery, data: undefined }),
   useAdTimeline: () => ({ ...emptyQuery, data: [] }),
   useSavedInspirationPosts: () => ({ ...emptyQuery, data: [] }),
-  useSaveInspirationUrl: () => ({ mutate: () => {}, isPending: false, isError: false }),
+  useSaveInspirationUrl: () => ({
+    mutate: () => {},
+    isPending: false,
+    isError: false,
+  }),
 }));
 
 import { InspirationBrowser } from './InspirationBrowser';
@@ -91,10 +96,16 @@ describe('InspirationBrowser', () => {
     expect(queryByRole('button', { name: 'For your brand' })).toBeNull();
     expect(queryByLabelText('Search competitors')).toBeNull();
     // Outlier has no YouTube meaning, so the grid asks for newest instead of a 400.
-    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({ platform: 'youtube', sort: 'recent' });
+    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      platform: 'youtube',
+      sort: 'recent',
+    });
     expect(getByText(/add a YouTube channel to a competitor/)).toBeDefined();
 
     fireEvent.click(getByRole('button', { name: 'Most viewed' }));
-    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({ platform: 'youtube', sort: 'views' });
+    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      platform: 'youtube',
+      sort: 'views',
+    });
   });
 });

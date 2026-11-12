@@ -8,7 +8,7 @@ import {
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Clapperboard, Redo2, RotateCcw, Undo2 } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useReducer, useState } from 'react';
 import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
@@ -17,6 +17,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Link } from '@/i18n/navigation';
 import { fetchSceneTemplate, sceneProblem } from '@/lib/library/sceneTemplates';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import { SceneInspector } from './SceneInspector';
@@ -52,27 +53,36 @@ function SceneMediaTypePicker({
   value: SceneMediaType;
   onChange: (next: SceneMediaType) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const frames = sceneFrameCount(output);
   if (frames <= 1) return null;
   const tooLong = frames > MAX_FRAMES;
   return (
     <RadioGroup
-      aria-label="Render as"
+      aria-label={translateUi('render_as_b696ffa7')}
       value={value}
       onValueChange={(next) => onChange(next as SceneMediaType)}
       className="flex w-auto flex-wrap items-center gap-x-3 gap-y-1"
     >
       <Label className="text-xs font-normal">
         <RadioGroupItem value="image" />
-        {`Still · frame ${output.frameStart}`}
+        {translateUi('still_frame_value0_abfe17ef', {
+          value0: String(output.frameStart),
+        })}
       </Label>
       <Label className="text-xs font-normal">
         <RadioGroupItem value="video" disabled={tooLong} />
-        {`Animation · ${frames} frames`}
+        {translateUi('animation_value0_frames_391eaf1a', {
+          value0: String(frames),
+        })}
       </Label>
       {tooLong ? (
         <span className="text-2xs text-muted-foreground">
-          {`Blender's range is ${frames} frames; renders take at most ${MAX_FRAMES}`}
+          {translateUi('blender_s_range_is_value0_frames_re_29367d15', {
+            value0: String(frames),
+            value1: String(MAX_FRAMES),
+          })}
         </span>
       ) : null}
     </RadioGroup>
@@ -80,6 +90,8 @@ function SceneMediaTypePicker({
 }
 
 export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: string }) {
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const view = useQuery({
     queryKey: forgeQueryKeys.sceneTemplate(brandId, assetId),
@@ -101,7 +113,7 @@ export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: st
     return (
       <div
         role="status"
-        aria-label="Reading the scene…"
+        aria-label={translateUi('reading_the_scene_708494d1')}
         className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[18rem_minmax(0,1fr)_20rem]"
       >
         <Skeleton className="h-96 bg-muted/70" />
@@ -115,7 +127,8 @@ export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: st
       <div role="alert" className="flex flex-col items-start gap-2 p-3 text-sm text-destructive">
         {sceneProblem(view.error).message}
         <Button size="sm" variant="outline" onClick={() => void view.refetch()}>
-          Retry
+          {' '}
+          {translateUi('retry_942087cc')}{' '}
         </Button>
       </div>
     );
@@ -150,6 +163,8 @@ function SceneEditorBody({
   view: SceneTemplateView;
   onReload: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [state, dispatch] = useReducer(sceneEditorReducer, view, initialSceneEditor);
   const output = view.outputs.find((candidate) => candidate.id === state.outputId) ?? null;
   // Cleared whenever the output changes, so each output starts from its own default.
@@ -174,15 +189,26 @@ function SceneEditorBody({
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Link
-            href={forgeDeepLinkHref({ templateAssetId: assetId, renderSetId: null, rowId: null })}
-            className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'gap-1' })}
+            href={forgeDeepLinkHref({
+              templateAssetId: assetId,
+              renderSetId: null,
+              rowId: null,
+            })}
+            className={buttonVariants({
+              variant: 'ghost',
+              size: 'sm',
+              className: 'gap-1',
+            })}
           >
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Template
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('template_0575f29d')}{' '}
           </Link>
           <h1 className="min-w-0 truncate text-base font-semibold">{name}</h1>
           <Badge variant={changed ? 'violet' : 'muted'} className="text-2xs">
-            {changed ? `${changed} changed` : 'As in the file'}
+            {changed
+              ? translateUi('value0_changed_579d06b0', {
+                  value0: String(changed),
+                })
+              : translateUi('as_in_the_file_d9d0a6c0')}
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -190,7 +216,7 @@ function SceneEditorBody({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Undo"
+            aria-label={translateUi('undo_a8283ade')}
             disabled={!state.past.length}
             onClick={() => dispatch({ type: 'undo' })}
           >
@@ -200,7 +226,7 @@ function SceneEditorBody({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Redo"
+            aria-label={translateUi('redo_74273989')}
             disabled={!state.future.length}
             onClick={() => dispatch({ type: 'redo' })}
           >
@@ -214,8 +240,7 @@ function SceneEditorBody({
             disabled={!changed}
             onClick={() => dispatch({ type: 'resetAll' })}
           >
-            <RotateCcw className="size-3.5" aria-hidden />
-            Reset
+            <RotateCcw className="size-3.5" aria-hidden /> {translateUi('reset_daee7606')}{' '}
           </Button>
           {output && mediaType ? (
             <SceneMediaTypePicker output={output} value={mediaType} onChange={setPickedMediaType} />
@@ -237,7 +262,9 @@ function SceneEditorBody({
             }
           >
             <Clapperboard className="size-3.5" aria-hidden />
-            {render.starting ? 'Starting…' : 'Render final'}
+            {render.starting
+              ? translateUi('starting_bbe5fc3b')
+              : translateUi('render_final_fd62d41c')}
           </Button>
         </div>
       </header>
@@ -246,23 +273,26 @@ function SceneEditorBody({
           role="alert"
           className="m-0 flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-xs text-destructive"
         >
-          Someone saved a newer version of this file. Load it to keep editing; your changes here
-          start over.
+          {' '}
+          {translateUi('someone_saved_a_newer_version_of_th_7ba54ccc')}{' '}
           <Button size="xs" variant="outline" onClick={onReload}>
-            Load newest
+            {' '}
+            {translateUi('load_newest_4ee5e8bc')}{' '}
           </Button>
         </p>
       ) : null}
       {view.externals.length ? (
         <p className="m-0 shrink-0 border-b border-border px-3 py-2 text-xs text-muted-foreground">
-          This file points at {view.externals.length} file(s) it does not carry (
-          {view.externals.map((external) => external.path).join(', ')}); they render missing. Pack
-          them in Blender (File › External Data › Pack Resources).
+          {' '}
+          {translateUi('this_file_points_at_aa813de2')} {view.externals.length}{' '}
+          {translateUi('file_s_it_does_not_carry_2c784b5d')}{' '}
+          {view.externals.map((external) => external.path).join(', ')}
+          {translateUi('they_render_missing_pack_them_in_bl_eeefa1d3')}{' '}
         </p>
       ) : null}
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[18rem_minmax(0,1fr)_20rem] lg:overflow-hidden">
         <aside
-          aria-label="Fields"
+          aria-label={translateUi('fields_616f48c1')}
           className="min-h-0 overflow-y-auto border-b border-border lg:border-r lg:border-b-0"
         >
           <SceneInspector
@@ -289,7 +319,7 @@ function SceneEditorBody({
           />
         </main>
         <aside
-          aria-label="Final renders"
+          aria-label={translateUi('final_renders_6240966e')}
           className="min-h-0 overflow-y-auto border-t border-border lg:border-t-0 lg:border-l"
         >
           <SceneRenderPanel

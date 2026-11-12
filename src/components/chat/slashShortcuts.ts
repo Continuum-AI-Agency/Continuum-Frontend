@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 // The pure half of the `/` typeahead: where a slash fragment sits in the text, which
 // options the brand's skill list offers, and what the text reads after one is picked.
 // The Backend parses `/slug` tokens out of the prompt (contracts `parseShortcutTokens`),
@@ -47,10 +48,18 @@ export const BRAND_BOOK_GROUP = 'Brand book';
 export const BRAND_SKILLS_GROUP = 'Brand skills';
 
 const BRAND_BOOK_OPTIONS: SlashOption[] = [
-  { slug: 'brand', label: 'Full brand book for this generation', group: BRAND_BOOK_GROUP },
+  {
+    slug: 'brand',
+    label: 'Full brand book for this generation',
+    group: BRAND_BOOK_GROUP,
+  },
   { slug: 'brand:colors', label: 'Brand colors only', group: BRAND_BOOK_GROUP },
   { slug: 'brand:logo', label: 'Brand logo only', group: BRAND_BOOK_GROUP },
-  { slug: 'nobrand', label: 'No brand guidance for this generation', group: BRAND_BOOK_GROUP },
+  {
+    slug: 'nobrand',
+    label: 'No brand guidance for this generation',
+    group: BRAND_BOOK_GROUP,
+  },
 ];
 
 /**
@@ -58,7 +67,31 @@ const BRAND_BOOK_OPTIONS: SlashOption[] = [
  * skills, then the shortcut library by category. Groups are contiguous, which is what
  * lets one flat index drive both the arrow keys and the grouped list.
  */
-export function buildSlashOptions(skills: readonly Skill[]): SlashOption[] {
+export function buildSlashOptions(
+  skills: readonly Skill[],
+  t?: ReturnType<typeof useTranslations<'common'>>,
+): SlashOption[] {
+  const labelKeys = {
+    'Full brand book for this generation': 'm_81437d16f1',
+    'Brand colors only': 'm_7518ff47f3',
+    'Brand logo only': 'm_977e4389ac',
+    'No brand guidance for this generation': 'm_ecbb1625ae',
+    'Brand book': 'm_796d17a796',
+    'Brand skills': 'm_9f6b78bbf4',
+    'Camera & framing': 'm_88b0ce0ced',
+    Light: 'm_a36ef8aba2',
+    'Capture & film': 'm_0e1f0484f1',
+    'Weather & atmosphere': 'm_a78f0b07ad',
+    'Era & aesthetic': 'm_0a9c9fed1b',
+    Environment: 'm_d443a11855',
+    'Genre & world': 'm_194c5ae9cd',
+    'Art medium': 'm_bc5f99d0be',
+    'Material & FX': 'm_550bfd54cd',
+    Restyle: 'm_5cf3cf1ea4',
+    'Reel format': 'm_60afd3f463',
+  } as const;
+  const label = (text: string) =>
+    t && Object.hasOwn(labelKeys, text) ? t(labelKeys[text as keyof typeof labelKeys]) : text;
   const usable = skills.filter(
     (skill): skill is Skill & { slug: string } =>
       skill.status === 'active' &&
@@ -68,7 +101,11 @@ export function buildSlashOptions(skills: readonly Skill[]): SlashOption[] {
   );
   const brandSkills = usable
     .filter((skill) => !skill.isTemplate && !isShortcutSkill(skill))
-    .map((skill) => ({ slug: skill.slug, label: skill.name, group: BRAND_SKILLS_GROUP }));
+    .map((skill) => ({
+      slug: skill.slug,
+      label: skill.name,
+      group: label(BRAND_SKILLS_GROUP),
+    }));
   const shortcuts = usable.filter(isShortcutSkill);
   const byCategory = SHORTCUT_CATEGORIES.flatMap((category) =>
     shortcuts
@@ -76,12 +113,20 @@ export function buildSlashOptions(skills: readonly Skill[]): SlashOption[] {
       .map((skill) => ({
         slug: skill.slug,
         label: skill.name,
-        group: SHORTCUT_CATEGORY_LABELS[category],
+        group: label(SHORTCUT_CATEGORY_LABELS[category]),
       })),
   );
 
   const seen = new Set<string>();
-  return [...BRAND_BOOK_OPTIONS, ...brandSkills, ...byCategory].filter((option) => {
+  return [
+    ...BRAND_BOOK_OPTIONS.map((option) => ({
+      ...option,
+      label: label(option.label),
+      group: label(option.group),
+    })),
+    ...brandSkills,
+    ...byCategory,
+  ].filter((option) => {
     const key = option.slug.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);

@@ -1,10 +1,16 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { type PublishAccountsResponse, publishAccountsResponseSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
-type RequestArgs = { path: string; method?: string; body?: unknown; schema?: unknown };
+type RequestArgs = {
+  path: string;
+  method?: string;
+  body?: unknown;
+  schema?: unknown;
+};
 const request = mock(async (_args: RequestArgs): Promise<unknown> => ({ accounts: [] }));
 
 mock.module('@/lib/api/http', () => ({ http: { request }, request }));
@@ -82,7 +88,9 @@ describe('account helpers', () => {
 describe('usePublishAccounts', () => {
   it("reads the store brand's candidates from the publish-accounts route", async () => {
     request.mockImplementation(async () => ({ accounts: [IG_A, FB_PAGE] }));
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const { result } = renderHook(() => usePublishAccounts(), {
       wrapper: wrapperWith(queryClient),
     });
@@ -120,8 +128,12 @@ describe('useSaveDefaultAccount', () => {
           else resolve({ accounts: [IG_A, IG_B, FB_PAGE] });
         }),
     );
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    queryClient.setQueryData(publishAccountsKey(BRAND), { accounts: [IG_A, IG_B, FB_PAGE] });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(publishAccountsKey(BRAND), {
+      accounts: [IG_A, IG_B, FB_PAGE],
+    });
     const { result } = renderHook(() => useSaveDefaultAccount(), {
       wrapper: wrapperWith(queryClient),
     });
@@ -130,7 +142,11 @@ describe('useSaveDefaultAccount', () => {
 
     const put = request.mock.calls.find(([args]) => args.method === 'PUT')?.[0];
     expect(put?.path).toBe('/api/organic/publish-accounts/default');
-    expect(put?.body).toEqual({ brandId: BRAND, platform: 'instagram', accountId: 'ig-b' });
+    expect(put?.body).toEqual({
+      brandId: BRAND,
+      platform: 'instagram',
+      accountId: 'ig-b',
+    });
     // The store default for new drafts moves at once.
     expect(useCalendarStore.getState().accountContext.accountIds.instagram).toBe('ig-b');
     // Optimistic: the list names the new default before the server answers, other platforms untouched.

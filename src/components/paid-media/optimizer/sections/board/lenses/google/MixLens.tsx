@@ -1,5 +1,13 @@
 'use client';
 
+import { useLocale as useMixLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { googleUiResultWord } from '@/i18n/googleResultWords';
+
+type MixCopy = ReturnType<typeof useBetaTranslations<'scale'>>;
+
+import { useTranslations as useBetaTranslations } from 'next-intl';
+
 // G05 Mix: where the Google money goes and what it buys. By campaign type, two whole bars — the
 // spend and the results, each split by type — joined by a ribbon per type, so a type that takes
 // more than it brings is seen at once; by campaign, a pair of bars per campaign when the account
@@ -117,7 +125,13 @@ export function mixLensState({
   if (lineCard) {
     return {
       status: 'ready',
-      model: buildMix({ overview: null, campaigns: null, lineCard, bucket: null, goal: null }),
+      model: buildMix({
+        overview: null,
+        campaigns: null,
+        lineCard,
+        bucket: null,
+        goal: null,
+      }),
       currency: lineCard.currency,
       scope: "From the Optimizer's last cycle",
       figureWindow: figureWindowOf(lineCard.window_days),
@@ -126,7 +140,12 @@ export function mixLensState({
   }
   if (google.status === 'loading') return { status: 'loading' };
   if (google.status !== 'ready') {
-    return googleReadBlocked(google) ?? { status: 'error', line: 'Google Ads could not be read.' };
+    return (
+      googleReadBlocked(google) ?? {
+        status: 'error',
+        line: 'Google Ads could not be read.',
+      }
+    );
   }
   if (campaigns?.isError) {
     return {
@@ -183,6 +202,9 @@ export function MixLensView({
   size: BoardModuleSize;
   reason?: string;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const mixLocale = useMixLocale();
+
   return (
     <ModuleFrame
       action={
@@ -195,7 +217,7 @@ export function MixLensView({
       size={size}
       state={mixFrameState(state)}
       testId="board-module-mix"
-      title="Campaign mix"
+      title={betaUiText('beta_b9d96ee6d749')}
     >
       <MixBody size={size} state={state} />
     </ModuleFrame>
@@ -229,6 +251,9 @@ function capitalized(text: string): string {
 }
 
 function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow: FigureWindow }) {
+  const betaUiText = useBetaTranslations('scale');
+  const mixLocale = useMixLocale();
+
   const lead = mixHeadlineRow(split);
   if (!lead) return null;
   const figure = figureProps(
@@ -242,7 +267,7 @@ function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow:
     return (
       <LensHeadline
         figure={figure}
-        label={`${lead.label} · share of spend`}
+        label={betaUiText('beta_ca281ac0895c', { value0: String(lead.label) })}
         testId="mix-headline"
         value={shareLabel(lead.spendShare)}
       />
@@ -251,7 +276,10 @@ function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow:
   return (
     <LensHeadline
       figure={figure}
-      label={`${lead.label} · share of spend → share of ${split.words.many}`}
+      label={betaUiText('beta_23123037c76b', {
+        value0: String(lead.label),
+        value1: String(googleUiResultWord(split.words.copy, 'many', betaUiText)),
+      })}
       testId="mix-headline"
       value={`${shareLabel(lead.spendShare)} → ${shareLabel(lead.resultShare)}`}
     />
@@ -259,19 +287,39 @@ function SplitHeadline({ split, figureWindow }: { split: MixSplit; figureWindow:
 }
 
 /** "62% of spend → 8% of leads": a part's two shares, as its row says them. */
-function sharesLine(row: MixRow, split: MixSplit): string {
-  const spend = `${shareLabel(row.spendShare)} of spend`;
+function sharesLine(row: MixRow, split: MixSplit, t: MixCopy, locale: UiLocale): string {
+  const spend = t('mixSpendShare', {
+    share: shareLabel(row.spendShare, locale),
+  });
   if (split.results == null) return spend;
-  if (split.results === 0) return `${spend} · no ${split.words.many} in this window`;
-  return `${spend} → ${shareLabel(row.resultShare ?? 0)} of ${split.words.many}`;
+  if (split.results === 0)
+    return t('mixNoWindow', {
+      spend,
+      result: googleUiResultWord(split.words.copy, 'many', t),
+    });
+  return t('mixResultShare', {
+    spend,
+    share: shareLabel(row.resultShare ?? 0, locale),
+    result: googleUiResultWord(split.words.copy, 'many', t),
+  });
 }
-
-function costLine(row: MixRow, split: MixSplit, currency: string | null): string {
-  if (row.costPerResult != null) {
-    return `${formatCurrency(row.costPerResult, currency)} per ${split.words.one}`;
-  }
-  if (row.results != null) return `no ${split.words.one} yet`;
-  return formatCurrency(row.spend, currency);
+function costLine(
+  row: MixRow,
+  split: MixSplit,
+  currency: string | null,
+  t: MixCopy,
+  locale: UiLocale,
+): string {
+  if (row.costPerResult != null)
+    return t('mixCost', {
+      cost: formatCurrency(row.costPerResult, currency, locale),
+      result: googleUiResultWord(split.words.copy, 'one', t),
+    });
+  if (row.results != null)
+    return t('mixNoneYet', {
+      result: googleUiResultWord(split.words.copy, 'one', t),
+    });
+  return formatCurrency(row.spend, currency, locale);
 }
 
 function GoalBadge({ standing }: { standing: GoalStanding }) {
@@ -330,6 +378,9 @@ function SegmentBar({
   compact: boolean;
   onActive: (key: string | null) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const mixLocale = useMixLocale();
+
   return (
     <div className={cn('relative w-full', compact ? 'h-4' : 'h-[22px]')}>
       {segments.map((segment, index) =>
@@ -340,7 +391,10 @@ function SegmentBar({
             delay={index * 0.06}
             fillClassName={compact ? 'inset-x-0 inset-y-1 rounded-full' : 'inset-0 rounded-[4px]'}
             key={segment.row.key}
-            label={`${segment.row.label} · share of ${measure}`}
+            label={betaUiText('beta_a564e8fa8d58', {
+              value0: String(segment.row.label),
+              value1: String(measure),
+            })}
             onActive={(active) => onActive(active ? segment.row.key : null)}
             style={{
               left: `${segment.x0.toFixed(3)}%`,
@@ -379,6 +433,9 @@ function RibbonChart({
   currency: string | null;
   compact: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const mixLocale = useMixLocale();
+
   const reduce = useReducedMotion();
   const [active, setActive] = useState<string | null>(null);
   const spend = segmentsOf(split.rows, (row) => row.spendShare);
@@ -392,7 +449,10 @@ function RibbonChart({
     .join('. ');
   return (
     <figure
-      aria-label={`Spend and ${words.many} by campaign type. ${summary}.`}
+      aria-label={betaUiText('beta_a483b9195427', {
+        value0: String(words.many),
+        value1: String(summary),
+      })}
       className="min-w-0 space-y-1"
       data-testid="mix-ribbons"
     >
@@ -418,7 +478,10 @@ function RibbonChart({
                   fill={CHANNEL_COLOR[top.row.channel]}
                   initial={reduce ? false : { opacity: 0 }}
                   key={top.row.key}
-                  transition={{ duration: 0.45, delay: reduce || active != null ? 0 : 0.25 }}
+                  transition={{
+                    duration: 0.45,
+                    delay: reduce || active != null ? 0 : 0.25,
+                  }}
                 />
               );
             })}
@@ -436,8 +499,8 @@ function RibbonChart({
       ) : (
         <p className="text-muted-foreground text-xs" data-testid="mix-no-results">
           {split.results === 0
-            ? `No ${words.many} in this window: only the spend splits here.`
-            : 'No single result is counted for these campaigns: only the spend splits here.'}
+            ? betaUiText('beta_0cfe1541e5b7', { value0: String(words.many) })
+            : betaUiText('beta_8cffaa140408')}
         </p>
       )}
     </figure>
@@ -445,14 +508,20 @@ function RibbonChart({
 }
 
 function legendOf(split: MixSplit): LegendItem[] {
-  return split.rows.map((row) => ({ label: row.label, color: CHANNEL_COLOR[row.channel] }));
+  return split.rows.map((row) => ({
+    label: row.label,
+    color: CHANNEL_COLOR[row.channel],
+  }));
 }
 
 function TypeRows({ split, currency }: { split: MixSplit; currency: string | null }) {
+  const betaUiText = useBetaTranslations('scale');
+  const mixLocale = useMixLocale();
+
   return (
     <ul className="divide-y divide-border/60" data-testid="mix-rows">
       {split.rows.map((row) => {
-        const standing = goalStanding(row.costPerResult, split.goal);
+        const standing = goalStanding(row.costPerResult, split.goal, betaUiText);
         return (
           <li className="flex items-start gap-2 py-1.5 text-xs" data-testid="mix-row" key={row.key}>
             <span
@@ -465,16 +534,19 @@ function TypeRows({ split, currency }: { split: MixSplit; currency: string | nul
                 <span className="font-medium text-foreground">{row.label}</span>
                 <span className="text-muted-foreground">
                   {' '}
-                  · {row.campaigns} {row.campaigns === 1 ? 'campaign' : 'campaigns'}
+                  · {row.campaigns}{' '}
+                  {row.campaigns === 1
+                    ? betaUiText('beta_3dc260b24720')
+                    : betaUiText('beta_7a4c3d21f9c6')}
                 </span>
               </p>
               <p className="text-muted-foreground" data-testid="mix-row-shares">
-                {sharesLine(row, split)}
+                {sharesLine(row, split, betaUiText, mixLocale)}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               <span className="font-semibold tabular-nums" data-testid="mix-row-cost">
-                {costLine(row, split, currency)}
+                {costLine(row, split, currency, betaUiText, mixLocale)}
               </span>
               {standing ? <GoalBadge standing={standing} /> : null}
             </div>
@@ -522,6 +594,9 @@ function CampaignView({
   small: boolean;
   figureWindow: FigureWindow;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const mixLocale = useMixLocale();
+
   const rows = small ? split.rows.slice(0, 3) : split.rows;
   const longest = Math.max(
     ...split.rows.flatMap((row) => [row.spendShare, row.resultShare ?? 0]),
@@ -539,7 +614,7 @@ function CampaignView({
       {small ? <SplitHeadline split={split} figureWindow={figureWindow} /> : null}
       <ul className="space-y-2" data-testid="mix-pairs">
         {rows.map((row, index) => {
-          const standing = goalStanding(row.costPerResult, split.goal);
+          const standing = goalStanding(row.costPerResult, split.goal, betaUiText);
           return (
             <li className="min-w-0 space-y-1" data-testid="mix-pair" key={row.key}>
               <div className="flex items-baseline justify-between gap-2 text-xs">
@@ -547,7 +622,7 @@ function CampaignView({
                   {row.label}
                 </span>
                 <span className="shrink-0 font-semibold tabular-nums" data-testid="mix-row-cost">
-                  {costLine(row, split, currency)}
+                  {costLine(row, split, currency, betaUiText, mixLocale)}
                 </span>
               </div>
               <div className="space-y-0.5">
@@ -556,7 +631,9 @@ function CampaignView({
                   color={spendInk(row)}
                   delay={index * 0.05}
                   fillClassName="inset-x-0 inset-y-0.5 rounded-full"
-                  label={`${row.label} · share of spend`}
+                  label={betaUiText('beta_ca281ac0895c', {
+                    value0: String(row.label),
+                  })}
                   style={{ width: width(row.spendShare) }}
                   value={shareLabel(row.spendShare)}
                 />
@@ -566,7 +643,10 @@ function CampaignView({
                     color={resultColor(row.channel)}
                     delay={index * 0.05 + 0.03}
                     fillClassName="inset-x-0 inset-y-0.5 rounded-full"
-                    label={`${row.label} · share of ${split.words.many}`}
+                    label={betaUiText('beta_a564e8fa8d58', {
+                      value0: String(row.label),
+                      value1: String(googleUiResultWord(split.words.copy, 'many', betaUiText)),
+                    })}
                     style={{ width: width(row.resultShare) }}
                     value={shareLabel(row.resultShare)}
                   />
@@ -574,7 +654,9 @@ function CampaignView({
               </div>
               {small ? null : (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
-                  <span data-testid="mix-row-shares">{sharesLine(row, split)}</span>
+                  <span data-testid="mix-row-shares">
+                    {sharesLine(row, split, betaUiText, mixLocale)}
+                  </span>
                   {standing ? <GoalBadge standing={standing} /> : null}
                 </div>
               )}
@@ -584,13 +666,25 @@ function CampaignView({
       </ul>
       {split.results == null ? (
         <p className="text-muted-foreground text-xs" data-testid="mix-no-results">
-          No single result is counted for these campaigns: only the spend splits here.
+          {betaUiText('beta_8cffaa140408')}
         </p>
       ) : null}
       <Legend
         items={[
-          { label: 'Share of spend', color: split.results ? NEUTRAL_MARK : resultInk },
-          ...(split.results ? [{ label: `Share of ${split.words.many}`, color: resultInk }] : []),
+          {
+            label: betaUiText('mixShareSpend'),
+            color: split.results ? NEUTRAL_MARK : resultInk,
+          },
+          ...(split.results
+            ? [
+                {
+                  label: betaUiText('mixShareResult', {
+                    result: googleUiResultWord(split.words.copy, 'many', betaUiText),
+                  }),
+                  color: resultInk,
+                },
+              ]
+            : []),
         ]}
         testId="mix-legend"
       />
@@ -609,19 +703,29 @@ function signedPoints(points: number): string {
   return `${points > 0 ? '+' : ''}${points} pts`;
 }
 
-function lineLegend(lines: MixLines): LegendItem[] {
+function lineLegend(lines: MixLines, t: MixCopy): LegendItem[] {
   const items: LegendItem[] = [];
   const off = lines.rows.filter((row) => row.flagged && row.target != null);
   if (off.some((row) => row.share > (row.target ?? 0))) {
-    items.push({ label: 'Over the agreed share', color: BOARD_COLOR.above });
+    items.push({
+      label: t('mixLegend', { kind: 'above' }),
+      color: BOARD_COLOR.above,
+    });
   }
   if (off.some((row) => row.share < (row.target ?? 0))) {
-    items.push({ label: 'Under the agreed share', color: BOARD_COLOR.below });
+    items.push({
+      label: t('mixLegend', { kind: 'below' }),
+      color: BOARD_COLOR.below,
+    });
   }
   if (lines.rows.some((row) => !row.flagged)) {
-    items.push({ label: 'On the agreed split', color: NEUTRAL_MARK });
+    items.push({ label: t('mixLegend', { kind: 'on' }), color: NEUTRAL_MARK });
   }
-  items.push({ label: 'Agreed share', color: AGREED_TICK, mark: 'tick' });
+  items.push({
+    label: t('mixLegend', { kind: 'agreed' }),
+    color: AGREED_TICK,
+    mark: 'tick',
+  });
   return items;
 }
 
@@ -634,6 +738,9 @@ function LineView({
   small: boolean;
   figureWindow: FigureWindow;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const mixLocale = useMixLocale();
+
   const lead = mixHeadlineLine(lines);
   const top = Math.min(
     1,
@@ -654,8 +761,11 @@ function LineView({
           )}
           label={
             lead.target == null
-              ? `${lead.label} · share of spend`
-              : `${lead.label} · share of spend, agreed ${shareLabel(lead.target)}`
+              ? betaUiText('beta_ca281ac0895c', { value0: String(lead.label) })
+              : betaUiText('beta_4f7adcd63ad6', {
+                  value0: String(lead.label),
+                  value1: String(shareLabel(lead.target)),
+                })
           }
           testId="mix-headline"
           value={shareLabel(lead.share)}
@@ -679,7 +789,7 @@ function LineView({
                   {row.target == null ? null : (
                     <span className="text-muted-foreground">
                       {' '}
-                      · agreed {shareLabel(row.target)}
+                      {betaUiText('beta_3096f8ed8ac8')} {shareLabel(row.target)}
                     </span>
                   )}
                 </span>
@@ -695,7 +805,9 @@ function LineView({
                 color={lineColor(row)}
                 delay={index * 0.06}
                 fillClassName="inset-x-0 inset-y-[3px] rounded-full"
-                label={`${row.label} · share of spend`}
+                label={betaUiText('beta_ca281ac0895c', {
+                  value0: String(row.label),
+                })}
                 style={{ width: at(row.share) }}
                 value={shareLabel(row.share)}
               />
@@ -731,7 +843,7 @@ function LineView({
           </li>
         ))}
       </ul>
-      <Legend items={lineLegend(lines)} testId="mix-legend" />
+      <Legend items={lineLegend(lines, betaUiText)} testId="mix-legend" />
     </>
   );
 }

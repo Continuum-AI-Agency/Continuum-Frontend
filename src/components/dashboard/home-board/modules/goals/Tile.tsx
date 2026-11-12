@@ -1,4 +1,10 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+  useLocale as useGoalLocale,
+  useLocale as useNumberLocale,
+} from 'next-intl';
 
 // H02 Goal: the brand's primary goal against the team's target, a per-day line beside it, and up
 // to three secondary goals, month to date. The goal comes from the team's saved profile, else from
@@ -52,12 +58,20 @@ const SOURCE_LABELS: Record<GoalSource, string> = {
   business: 'Suggested by your Brand Book',
 };
 
-function amountsText(figure: GoalFigure): string {
+function amountsText(
+  figure: GoalFigure,
+  t?: ReturnType<typeof useBetaTranslations<'dashboard'>>,
+  locale: import('@/i18n/config').UiLocale = 'en',
+): string {
   if (figure.amounts.length === 0) {
-    return figure.unreported ? 'Not counted by Google Ads' : 'Not counted yet';
+    return t
+      ? t('goalNoCount', { reported: figure.unreported ? 'no' : 'yes' })
+      : figure.unreported
+        ? 'Not counted by Google Ads'
+        : 'Not counted yet';
   }
   return figure.amounts
-    .map((amount) => formatFigure(amount.value, figure.unit, amount.currency))
+    .map((amount) => formatFigure(amount.value, figure.unit, amount.currency, locale))
     .join(' · ');
 }
 
@@ -69,9 +83,14 @@ const PERIOD_WORDS: Record<HomeGoalPeriod, string> = {
 };
 
 /** What the figure covers, in words: the target's period when one sets the window. */
-function figureWords(target: GoalTargetStatus): string | null {
+function figureWords(
+  target: GoalTargetStatus,
+  t?: ReturnType<typeof useBetaTranslations<'dashboard'>>,
+): string | null {
   return target.kind === 'compared' || target.kind === 'mismatch'
-    ? PERIOD_WORDS[target.target.period]
+    ? t
+      ? t('goalPeriodWords', { period: target.target.period })
+      : PERIOD_WORDS[target.target.period]
     : null;
 }
 
@@ -84,9 +103,12 @@ function TargetFooter({
   target: GoalTargetStatus;
   onSetGoal: () => void;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+  const goalLocale = useGoalLocale();
+
   const hasTarget =
     target.kind === 'compared' || target.kind === 'mismatch' || target.kind === 'not-running';
-  const note = goalTargetNote(target);
+  const note = goalTargetNote(target, betaUiText, goalLocale);
   return (
     <>
       {note ? (
@@ -96,10 +118,10 @@ function TargetFooter({
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
         {target.kind === 'none' || target.kind === 'unavailable' ? (
-          <span className="font-medium text-xs">No target set yet</span>
+          <span className="font-medium text-xs">{betaUiText('beta_354d24a88d4e')}</span>
         ) : null}
         <Button className="ml-auto h-7 text-xs" onClick={onSetGoal} size="sm" variant="outline">
-          {hasTarget ? 'Edit target' : 'Set a goal'}
+          {hasTarget ? betaUiText('beta_1455e6602d31') : betaUiText('beta_8e331a71fb24')}
         </Button>
       </div>
       {target.kind === 'unavailable' && size !== 's' ? (
@@ -118,14 +140,19 @@ function ReadyBody({
   size: 'l' | 'm' | 's';
   onSetGoal: () => void;
 }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('dashboard');
+  const goalLocale = useGoalLocale();
+
   const { primary, headline, others, secondaries, target } = view;
   const label = primary.objective.label;
   const compared = target.kind === 'compared' ? target : null;
-  const words = figureWords(target);
+  const words = figureWords(target, betaUiText);
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <p className="truncate text-2xs text-muted-foreground uppercase tracking-wide">
-        {label} · {words ?? 'month to date'}
+        {label} · {words ?? betaUiText('beta_aff3da645940')}
       </p>
       <div className="flex min-w-0 items-end justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
@@ -137,14 +164,14 @@ function ReadyBody({
             data-testid="home-tile-goals-headline"
             data-value={String(headline.value)}
           >
-            {formatFigure(headline.value, primary.unit, headline.currency)}
+            {formatFigure(headline.value, primary.unit, headline.currency, numberLocale)}
           </span>
           {compared ? (
             <span
               className="text-muted-foreground text-sm tabular-nums"
               data-testid="home-tile-goals-target"
             >
-              of {goalTargetFigure(compared.target)}
+              {betaUiText('beta_28391d3bc64e')} {goalTargetFigure(compared.target, goalLocale)}
             </span>
           ) : null}
         </div>
@@ -152,7 +179,10 @@ function ReadyBody({
           <Sparkline
             className="shrink-0"
             height={32}
-            label={`${label}, per day ${words ?? 'this month'}`}
+            label={betaUiText('beta_08f9946b94e0', {
+              value0: String(label),
+              value1: String(words ?? betaUiText('goalThisMonth')),
+            })}
             values={headline.series}
             width={size === 's' ? 72 : 120}
           />
@@ -162,29 +192,38 @@ function ReadyBody({
         <>
           <GoalProgressBar label={label} status={compared} />
           <p className="text-muted-foreground text-xs" data-testid="home-tile-goals-pace">
-            {goalPaceLine(compared)}
+            {goalPaceLine(compared, betaUiText, goalLocale)}
           </p>
         </>
       ) : null}
       <p className="text-muted-foreground text-xs">
-        {goalWindowLabel(view.figureWindow)} · {SOURCE_LABELS[view.source]}
+        {goalWindowLabel(view.figureWindow)} ·{' '}
+        {betaUiText('goalSourceLabel', { source: view.source })}
       </p>
       {others.length > 0 ? (
         <p className="text-muted-foreground text-xs" data-testid="home-tile-goals-currencies">
           {compared
-            ? `In ${headline.currency}, the target's currency. Also `
-            : `In ${headline.currency ?? 'an unknown currency'}, the currency most of the spending ad accounts use. Also `}
+            ? betaUiText('beta_b5bb5f4aed89', {
+                value0: String(headline.currency),
+              })
+            : betaUiText('beta_29eda712210e', {
+                value0: String(headline.currency ?? 'unknown'),
+              })}
           {others
-            .map((amount) => formatFigure(amount.value, primary.unit, amount.currency))
+            .map((amount) =>
+              formatFigure(amount.value, primary.unit, amount.currency, numberLocale),
+            )
             .join(' and ')}
-          , never added together.
+          {betaUiText('beta_bb6aa5f8c89e')}
         </p>
       ) : null}
       {view.unanswered > 0 ? (
         <p className="text-muted-foreground text-xs">
           {view.unanswered === 1
-            ? '1 ad account didn’t answer and is not in these figures.'
-            : `${view.unanswered} ad accounts didn’t answer and are not in these figures.`}
+            ? betaUiText('beta_148424e7bc95')
+            : betaUiText('beta_71447b58f21e', {
+                value0: String(view.unanswered),
+              })}
         </p>
       ) : null}
       {size !== 's' && secondaries.length > 0 ? (
@@ -197,9 +236,11 @@ function ReadyBody({
             >
               <span className="truncate text-muted-foreground">
                 {figure.objective.label}
-                {words ? ' · month to date' : ''}
+                {words ? betaUiText('beta_fc7ea67e39b2') : ''}
               </span>
-              <span className="shrink-0 font-mono tabular-nums">{amountsText(figure)}</span>
+              <span className="shrink-0 font-mono tabular-nums">
+                {amountsText(figure, betaUiText, goalLocale)}
+              </span>
             </li>
           ))}
         </ul>
@@ -210,6 +251,13 @@ function ReadyBody({
 }
 
 export default function GoalsTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('dashboard');
+  const goalLocale = useGoalLocale();
+
   // The day is fixed when the tile mounts: yesterday moves at midnight, the board does not.
   const [now] = useState(() => new Date());
   const monthWindow = useMemo(() => monthToDateWindow(now), [now]);
@@ -219,7 +267,14 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
   const load = useGoalRead(ctx.brandId, ctx.adAccounts, monthWindow, attempt);
   const suggested = ctx.reading.goal.suggested;
   const active = useMemo(
-    () => goalActiveTarget({ targets: targets.load, load, rows: profiles.rows, suggested, now }),
+    () =>
+      goalActiveTarget({
+        targets: targets.load,
+        load,
+        rows: profiles.rows,
+        suggested,
+        now,
+      }),
     [targets.load, load, profiles.rows, suggested, now],
   );
   const periodLoad = useGoalRead(
@@ -257,7 +312,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
     view.state === 'error' && refusal?.status === 'loading' ? 'loading' : view.state;
   const badge =
     view.state === 'ready'
-      ? `${view.primary.objective.label} ${figureWords(view.target) ?? 'this month'}: ${formatFigure(view.headline.value, view.primary.unit, view.headline.currency)}`
+      ? `${view.primary.objective.label} ${figureWords(view.target, betaUiText) ?? 'this month'}: ${formatFigure(view.headline.value, view.primary.unit, view.headline.currency, numberLocale)}`
       : null;
 
   return (
@@ -277,7 +332,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
           targetStatus={view.state === 'ready' ? view.target : null}
         />
       }
-      expandedDescription="The goals the Home measures and the target for the main one."
+      expandedDescription={extraUiText('home_9088af80d0d4')}
       state={state}
       tile={tile}
     >
@@ -300,7 +355,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
           <GoogleReadNotice state={refusal} />
         ) : (
           <p className="text-destructive-ink text-xs" role="alert">
-            Couldn’t read these results — the ad platform didn’t answer.{' '}
+            {betaUiText('beta_2ec1824b9e76')}{' '}
             <Button
               className="h-5 px-1 text-xs"
               onClick={() => setAttempt((count) => count + 1)}
@@ -308,7 +363,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
               type="button"
               variant="link"
             >
-              Retry
+              {betaUiText('beta_942087cc2d41')}
             </Button>
           </p>
         )}

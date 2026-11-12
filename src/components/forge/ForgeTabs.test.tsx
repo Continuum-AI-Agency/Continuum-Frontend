@@ -99,7 +99,13 @@ mock.module('@/components/forge/RenderJobsGrid', () => ({
   RenderJobsGrid: () => <p>Render ledger</p>,
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ForgeTabs } from './ForgeTabs';
 
 afterEach(() => {
@@ -121,7 +127,12 @@ const waiting: RenderApproval = {
   adsetId: 'adset-1',
   adId: null,
   files: [
-    { url: 'https://example.com/render.png', adCopy: null, adStatus: null, landingUrl: null },
+    {
+      url: 'https://example.com/render.png',
+      adCopy: null,
+      adStatus: null,
+      landingUrl: null,
+    },
   ],
   status: 'pending',
   decidedBy: null,
@@ -139,7 +150,9 @@ const waiting: RenderApproval = {
 
 /** The approvals list is seeded fresh, so the tabs read it without a request. */
 const renderTabs = (approvals: RenderApproval[] | null = []) => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   if (approvals !== null) client.setQueryData(forgeQueryKeys.approvals(BRAND), approvals);
   return render(
     <QueryClientProvider client={client}>
@@ -172,7 +185,9 @@ describe('ForgeTabs', () => {
     });
     renderTabs(null);
 
-    const ledger = await screen.findByRole('tab', { name: /approval count unavailable/i });
+    const ledger = await screen.findByRole('tab', {
+      name: /approval count unavailable/i,
+    });
     expect(ledger.textContent).not.toMatch(/\b0\b/);
     expect(screen.getAllByTitle(/approval count unavailable/i)).toHaveLength(2);
   });
@@ -184,7 +199,10 @@ describe('ForgeTabs', () => {
 
     await waitFor(() => expect(selectedTab()).toBe('Render'));
     await screen.findByTestId('render-grid');
-    expect(intentOnGrid()).toEqual({ templateKey: '133', renderSetId: 'set-1' });
+    expect(intentOnGrid()).toEqual({
+      templateKey: '133',
+      renderSetId: 'set-1',
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Take intent' }));
     expect(intentOnGrid()).toBeNull();
@@ -197,7 +215,10 @@ describe('ForgeTabs', () => {
     expect(selectedTab()).toBe('Templates');
     fireEvent.click(await screen.findByRole('button', { name: 'Save as a new variant' }));
     await waitFor(() => expect(selectedTab()).toBe('Render'));
-    expect(intentOnGrid()).toEqual({ templateKey: '133', renderSetId: 'set-1' });
+    expect(intentOnGrid()).toEqual({
+      templateKey: '133',
+      renderSetId: 'set-1',
+    });
   });
 
   test('the Render grid stays mounted across a tab round trip', async () => {
@@ -233,7 +254,9 @@ describe('ForgeTabs', () => {
   test('approvals live on the ledger, and its tab counts what waits', async () => {
     renderTabs([waiting]);
     expect(screen.queryByText('Pending approvals (1)')).toBeNull();
-    const ledger = screen.getByRole('tab', { name: 'Render ledger 1 waiting for approval' });
+    const ledger = screen.getByRole('tab', {
+      name: 'Render ledger 1 waiting for approval',
+    });
 
     fireEvent.click(ledger);
     expect(await screen.findByText('Pending approvals (1)')).toBeTruthy();

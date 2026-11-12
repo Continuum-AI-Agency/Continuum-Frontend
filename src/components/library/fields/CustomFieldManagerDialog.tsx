@@ -23,6 +23,7 @@ import {
   MAX_CUSTOM_FIELDS_PER_BRAND,
 } from '@continuum/contracts';
 import { ChevronDown, ChevronUp, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -105,6 +106,8 @@ export function CustomFieldManagerDialog({
   fields,
   onChanged,
 }: CustomFieldManagerDialogProps) {
+  const translateUi = useUiTranslations('library');
+
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<CustomField | null>(null);
 
@@ -146,8 +149,16 @@ export function CustomFieldManagerDialog({
     void run(
       () =>
         Promise.all([
-          updateCustomField({ brandId, fieldId: field.id, position: neighbour.position }),
-          updateCustomField({ brandId, fieldId: neighbour.id, position: field.position }),
+          updateCustomField({
+            brandId,
+            fieldId: field.id,
+            position: neighbour.position,
+          }),
+          updateCustomField({
+            brandId,
+            fieldId: neighbour.id,
+            position: field.position,
+          }),
         ]),
       'Reordering failed',
     );
@@ -167,17 +178,18 @@ export function CustomFieldManagerDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="flex max-h-[80dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
-            <DialogTitle className="text-sm">Custom fields</DialogTitle>
+            <DialogTitle className="text-sm">{translateUi('custom_fields_5566db49')}</DialogTitle>
             <DialogDescription className="text-xs">
-              Your brand's own metadata on an asset. Every field here can filter, sort and group the
-              Library.
+              {' '}
+              {translateUi('your_brand_s_own_metadata_on_an_ass_ea2bfd7a')}{' '}
             </DialogDescription>
           </DialogHeader>
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
             {fields.length === 0 ? (
               <p className="py-2 text-xs text-muted-foreground">
-                No fields yet. Add one below — a rating, a usage-rights status, a shoot date.
+                {' '}
+                {translateUi('no_fields_yet_add_one_below_a_ratin_39c82322')}{' '}
               </p>
             ) : null}
 
@@ -200,7 +212,9 @@ export function CustomFieldManagerDialog({
           <div className="shrink-0 border-t border-border p-4">
             {atCapacity ? (
               <p className="text-xs text-muted-foreground">
-                This brand has the maximum of {MAX_CUSTOM_FIELDS_PER_BRAND} fields.
+                {' '}
+                {translateUi('this_brand_has_the_maximum_of_16df4da4')}{' '}
+                {MAX_CUSTOM_FIELDS_PER_BRAND} {translateUi('fields_64805f12')}{' '}
               </p>
             ) : (
               <NewFieldForm
@@ -220,14 +234,20 @@ export function CustomFieldManagerDialog({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-sm">Delete “{pendingDelete?.name}”?</AlertDialogTitle>
+            <AlertDialogTitle className="text-sm">
+              {translateUi('delete_fdd77e66')}
+              {pendingDelete?.name}”?
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              Every value your assets hold for this field is deleted with it. This cannot be undone.
+              {' '}
+              {translateUi('every_value_your_assets_hold_for_th_a0e67bb2')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Delete field</AlertDialogAction>
+            <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>
+              {translateUi('delete_field_0a73a606')}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -256,6 +276,8 @@ function FieldRow({
   onSaveOptions: (options: CustomFieldOptions) => void;
   onDelete: () => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [draftOption, setDraftOption] = useState('');
   const isSelect = CHOICE_TYPES.includes(field.type);
   const options = customFieldChoiceOptions(field);
@@ -286,7 +308,7 @@ function FieldRow({
 
   const removeOption = (optionId: string) => {
     if (options.length <= 1) {
-      toast.error('A select field needs at least one option');
+      toast.error(translateUi('a_select_field_needs_at_least_one_o_58ed4a9d'));
       return;
     }
     onSaveOptions(options.filter((option) => option.id !== optionId));
@@ -298,7 +320,9 @@ function FieldRow({
         <Input
           defaultValue={field.name}
           disabled={busy}
-          aria-label={`Field name: ${field.name}`}
+          aria-label={translateUi('field_name_value0_65741a14', {
+            value0: String(field.name),
+          })}
           className="h-7 border-transparent bg-transparent px-1.5 text-xs font-medium shadow-none hover:border-border focus-visible:border-border"
           onBlur={(event) => onRename(event.target.value)}
           onKeyDown={(event) => {
@@ -313,7 +337,9 @@ function FieldRow({
             size="icon"
             className="size-6 text-muted-foreground"
             disabled={busy || !canMoveUp}
-            aria-label={`Move ${field.name} up`}
+            aria-label={translateUi('move_value0_up_4f93d150', {
+              value0: String(field.name),
+            })}
             onClick={onMoveUp}
           >
             <ChevronUp className="size-3.5" />
@@ -324,7 +350,9 @@ function FieldRow({
             size="icon"
             className="size-6 text-muted-foreground"
             disabled={busy || !canMoveDown}
-            aria-label={`Move ${field.name} down`}
+            aria-label={translateUi('move_value0_down_7c18b9ea', {
+              value0: String(field.name),
+            })}
             onClick={onMoveDown}
           >
             <ChevronDown className="size-3.5" />
@@ -335,7 +363,9 @@ function FieldRow({
             size="icon"
             className="size-6 text-muted-foreground hover:text-destructive"
             disabled={busy}
-            aria-label={`Delete ${field.name}`}
+            aria-label={translateUi('delete_value0_8782b778', {
+              value0: String(field.name),
+            })}
             onClick={onDelete}
           >
             <Trash2 className="size-3.5" />
@@ -352,7 +382,9 @@ function FieldRow({
                   type="color"
                   defaultValue={option.color ?? STATUS_PALETTE[0]}
                   disabled={busy}
-                  aria-label={`Colour of ${option.label}`}
+                  aria-label={translateUi('colour_of_value0_f30861fb', {
+                    value0: String(option.label),
+                  })}
                   className="size-6 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
                   onBlur={(event) => {
                     if (event.target.value !== option.color) {
@@ -364,7 +396,9 @@ function FieldRow({
               <Input
                 defaultValue={option.label}
                 disabled={busy}
-                aria-label={`Option: ${option.label}`}
+                aria-label={translateUi('option_value0_9080106c', {
+                  value0: String(option.label),
+                })}
                 className="h-7 border-transparent bg-transparent px-1.5 text-xs shadow-none hover:border-border focus-visible:border-border"
                 onBlur={(event) => relabelOption(option.id, event.target.value)}
                 onKeyDown={(event) => {
@@ -377,7 +411,9 @@ function FieldRow({
                 size="icon"
                 className="size-6 shrink-0 text-muted-foreground"
                 disabled={busy}
-                aria-label={`Remove option ${option.label}`}
+                aria-label={translateUi('remove_option_value0_f13ad12d', {
+                  value0: String(option.label),
+                })}
                 onClick={() => removeOption(option.id)}
               >
                 <X className="size-3" />
@@ -388,8 +424,10 @@ function FieldRow({
             <Input
               value={draftOption}
               disabled={busy}
-              placeholder="Add an option"
-              aria-label={`Add an option to ${field.name}`}
+              placeholder={translateUi('add_an_option_e74b28f5')}
+              aria-label={translateUi('add_an_option_to_value0_d3334080', {
+                value0: String(field.name),
+              })}
               className="h-7 px-1.5 text-xs"
               onChange={(event) => setDraftOption(event.target.value)}
               onKeyDown={(event) => {
@@ -405,7 +443,9 @@ function FieldRow({
               size="icon"
               className="size-6 shrink-0 text-muted-foreground"
               disabled={busy || draftOption.trim().length === 0}
-              aria-label={`Add option to ${field.name}`}
+              aria-label={translateUi('add_option_to_value0_6e50a77c', {
+                value0: String(field.name),
+              })}
               onClick={addOption}
             >
               <Plus className="size-3.5" />
@@ -438,15 +478,21 @@ function RatingScalePicker({
   disabled: boolean;
   onChange: (max: number) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <div className="mt-1.5 flex items-center gap-2 border-t border-border/60 pt-1.5 pl-1.5">
-      <span className="text-2xs text-muted-foreground">Out of</span>
+      <span className="text-2xs text-muted-foreground">{translateUi('out_of_0286d42a')}</span>
       <Select
         value={String(value)}
         disabled={disabled}
         onValueChange={(next) => onChange(Number(next))}
       >
-        <SelectTrigger size="sm" className="h-7 w-20 text-xs" aria-label="Rating scale">
+        <SelectTrigger
+          size="sm"
+          className="h-7 w-20 text-xs"
+          aria-label={translateUi('rating_scale_9db16857')}
+        >
           <SelectValue
             items={Object.fromEntries(
               Array.from({ length: 10 }, (_, index) => [String(index + 1), `${index + 1} stars`]),
@@ -456,7 +502,7 @@ function RatingScalePicker({
         <SelectContent>
           {Array.from({ length: 10 }, (_, index) => index + 1).map((max) => (
             <SelectItem key={max} value={String(max)} className="text-xs">
-              {max} stars
+              {max} {translateUi('stars_b2547aa0')}{' '}
             </SelectItem>
           ))}
         </SelectContent>
@@ -476,6 +522,8 @@ function NewFieldForm({
     options?: CustomFieldOptions;
   }) => Promise<void>;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [name, setName] = useState('');
   const [type, setType] = useState<CustomFieldType>('single_select');
   const [optionsText, setOptionsText] = useState('');
@@ -506,8 +554,8 @@ function NewFieldForm({
         <Input
           value={name}
           disabled={busy}
-          placeholder="New field name"
-          aria-label="New field name"
+          placeholder={translateUi('new_field_name_aabd2ec9')}
+          aria-label={translateUi('new_field_name_aabd2ec9')}
           className="h-8 flex-1 text-xs"
           onChange={(event) => setName(event.target.value)}
         />
@@ -516,7 +564,11 @@ function NewFieldForm({
           disabled={busy}
           onValueChange={(next) => setType(next as CustomFieldType)}
         >
-          <SelectTrigger size="sm" className="h-8 w-32 text-xs" aria-label="New field type">
+          <SelectTrigger
+            size="sm"
+            className="h-8 w-32 text-xs"
+            aria-label={translateUi('new_field_type_4c2511b1')}
+          >
             <SelectValue items={TYPE_LABEL} />
           </SelectTrigger>
           <SelectContent>
@@ -534,8 +586,8 @@ function NewFieldForm({
           disabled={!ready || busy}
           onClick={() => void submit()}
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-          Add
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}{' '}
+          {translateUi('add_9fd728c6')}{' '}
         </Button>
       </div>
       {isSelect ? (
@@ -543,8 +595,12 @@ function NewFieldForm({
           value={optionsText}
           disabled={busy}
           rows={3}
-          placeholder={type === 'status' ? 'One stage per line' : 'One option per line'}
-          aria-label="New field options, one per line"
+          placeholder={
+            type === 'status'
+              ? translateUi('one_stage_per_line_b26f7a8d')
+              : translateUi('one_option_per_line_62a34483')
+          }
+          aria-label={translateUi('new_field_options_one_per_line_a5d5dc36')}
           className="resize-none text-xs"
           onChange={(event) => setOptionsText(event.target.value)}
         />

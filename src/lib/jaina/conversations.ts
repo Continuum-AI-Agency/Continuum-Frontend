@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import {
   type AgentInitiator,
   agentInitiatorSchema,
@@ -364,12 +369,20 @@ export function sessionActivityAt(
   return null;
 }
 
-const MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-const MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
+const SESSION_DATE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+function sessionDateFormatter(locale: UiLocale, withYear: boolean): Intl.DateTimeFormat {
+  const key = locale + ':' + withYear;
+  let formatter = SESSION_DATE_FORMATTERS.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      ...(withYear ? { year: 'numeric' as const } : {}),
+    });
+    SESSION_DATE_FORMATTERS.set(key, formatter);
+  }
+  return formatter;
+}
 
 function clockTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, '0');
@@ -383,14 +396,21 @@ function startOfDay(date: Date): number {
 
 /** A conversation's last activity in the viewer's local time: "14:32" today, "Yesterday 18:05",
  *  "Oct 3 · 16:20" earlier this year, "Oct 3, 2025 · 16:20" before it. */
-export function formatSessionActivity(value: string | null, now: Date = new Date()): string {
+export function formatSessionActivity(
+  value: string | null,
+  now: Date = new Date(),
+  uiTranslate?: ScaleCopy,
+  locale: UiLocale = 'en',
+): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   const dayDelta = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
   if (dayDelta <= 0) return clockTime(date);
-  if (dayDelta === 1) return `Yesterday ${clockTime(date)}`;
-  const day =
-    date.getFullYear() === now.getFullYear() ? MONTH_DAY.format(date) : MONTH_DAY_YEAR.format(date);
+  if (dayDelta === 1)
+    return uiTranslate
+      ? uiTranslate('helper_e113155feafe', { v0: clockTime(date) })
+      : `Yesterday ${clockTime(date)}`;
+  const day = sessionDateFormatter(locale, date.getFullYear() !== now.getFullYear()).format(date);
   return `${day} · ${clockTime(date)}`;
 }

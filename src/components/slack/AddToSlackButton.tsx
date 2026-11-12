@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 /**
@@ -15,7 +16,7 @@ import { cn } from '@/lib/utils';
  */
 export function AddToSlackButton({
   href,
-  label = 'Add to Slack',
+  label: uiProvidedLabel,
   className,
 }: {
   href: string;
@@ -23,6 +24,9 @@ export function AddToSlackButton({
   label?: string;
   className?: string;
 }) {
+  const defaultUiText = useTranslations('common');
+  const label = uiProvidedLabel ?? defaultUiText('m_48a183444d');
+
   return (
     <a
       href={href}

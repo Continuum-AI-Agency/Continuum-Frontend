@@ -1,3 +1,4 @@
+import { formatAutomationWallClock } from './wall-clock';
 // Schedule helpers for the Automations UI: preset -> cron canonicalization,
 // human-readable schedule sentences, next-fire-time previews, and cron
 // validation. croner owns occurrence math (IANA timezone + DST aware) so the
@@ -5,6 +6,7 @@
 
 import type { AutomationSchedule } from '@continuum/contracts';
 import { Cron } from 'croner';
+import type { useTranslations } from 'next-intl';
 
 const DAY_NAMES = [
   'Sunday',
@@ -43,13 +45,18 @@ export function validateCron(expression: string): { ok: true } | { ok: false; re
     new Cron(expression);
     return { ok: true };
   } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : 'Invalid cron expression' };
+    return {
+      ok: false,
+      reason: err instanceof Error ? err.message : 'Invalid cron expression',
+    };
   }
 }
 
 export function nextRunTimes(schedule: AutomationSchedule, count = 3): Date[] {
   try {
-    const cron = new Cron(scheduleToCronExpression(schedule), { timezone: schedule.timezone });
+    const cron = new Cron(scheduleToCronExpression(schedule), {
+      timezone: schedule.timezone,
+    });
     return cron.nextRuns(count);
   } catch {
     return [];
@@ -64,7 +71,31 @@ function formatClockTime(time: string): string {
   return `${displayHour}:${minute} ${suffix}`;
 }
 
-export function describeSchedule(schedule: AutomationSchedule): string {
+export function describeSchedule(
+  schedule: AutomationSchedule,
+  locale = 'en',
+  translate?: ReturnType<typeof useTranslations<'automations'>>,
+): string {
+  if (translate) {
+    if (schedule.kind === 'cron')
+      return translate('scheduleCron', {
+        expression: schedule.expr,
+        timezone: schedule.timezone,
+      });
+    const time = formatAutomationWallClock(schedule.time, locale);
+    const values = { time, timezone: schedule.timezone };
+    if (schedule.kind === 'daily') return translate('scheduleDaily', values);
+    if (schedule.kind === 'monthly')
+      return translate('scheduleMonthly', {
+        ...values,
+        day: schedule.dayOfMonth,
+      });
+    const day = new Intl.DateTimeFormat(locale, {
+      weekday: 'long',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(2024, 0, 7 + schedule.dayOfWeek)));
+    return translate('scheduleWeekly', { ...values, day });
+  }
   switch (schedule.kind) {
     case 'daily':
       return `Daily at ${formatClockTime(schedule.time)} (${schedule.timezone})`;
@@ -77,9 +108,9 @@ export function describeSchedule(schedule: AutomationSchedule): string {
   }
 }
 
-export function formatInTimezone(date: Date, timeZone: string): string {
+export function formatInTimezone(date: Date, timeZone: string, locale?: string): string {
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(locale, {
       timeZone,
       weekday: 'short',
       month: 'short',
@@ -89,7 +120,7 @@ export function formatInTimezone(date: Date, timeZone: string): string {
       timeZoneName: 'short',
     }).format(date);
   } catch {
-    return date.toLocaleString();
+    return date.toLocaleString(locale);
   }
 }
 

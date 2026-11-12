@@ -8,6 +8,7 @@
 // letterboxing.
 
 import type { CommentAnnotation, DrawingShape } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { StageTool } from './annotation/DrawingToolbar';
@@ -94,6 +95,8 @@ export function AnnotationOverlay({
   composer,
   composerWidth = 288,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const rootRef = useRef<HTMLDivElement>(null);
   const [dragStart, setDragStart] = useState<NormalizedPoint | null>(null);
   const [dragCurrent, setDragCurrent] = useState<NormalizedPoint | null>(null);
@@ -210,7 +213,10 @@ export function AnnotationOverlay({
                 <button
                   type="button"
                   title={pin.title}
-                  aria-label={`Comment ${pin.label}: ${pin.title}`}
+                  aria-label={translateUi('comment_value0_value1_8b7dacb4', {
+                    value0: String(pin.label),
+                    value1: String(pin.title),
+                  })}
                   data-comment-pin={pin.id}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {

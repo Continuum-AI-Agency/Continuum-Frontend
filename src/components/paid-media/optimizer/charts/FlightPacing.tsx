@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
 // Flight pacing, told as two bars anyone can read: how much of the flight has ELAPSED
 // and how much of the budget is SPENT. When the two bars line up the portfolio is on
 // plan; the gap between them is the verdict, in the reader's own eyes before the chip
@@ -38,9 +41,15 @@ const STATUS_HINT: Record<FlightPacingStatus, string> = {
     'Spend is more than 5% ahead of the plan. The optimizer lowers the daily total to stay on budget.',
 };
 
-const DATE_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-function fmtDate(date: string): string {
-  return DATE_FMT.format(new Date(`${date}T00:00:00Z`));
+const DATE_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+});
+function fmtDate(date: string, locale: UiLocale = 'en'): string {
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(`${date}T00:00:00Z`));
 }
 
 function Bar({
@@ -54,6 +63,7 @@ function Bar({
   detail: string;
   tone: 'time' | 'spend';
 }) {
+  const uiLocale = useLocale();
   const clamped = Math.max(0, Math.min(100, pct));
   return (
     <div className="space-y-1">
@@ -62,7 +72,7 @@ function Bar({
         <span className="font-medium text-foreground tabular-nums">{detail}</span>
       </div>
       <div
-        aria-label={`${label}: ${Math.round(clamped)}%`}
+        aria-label={`${label}: ${new Intl.NumberFormat(uiLocale, { style: 'percent', maximumFractionDigits: 0 }).format(Math.round(clamped) / 100)}`}
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={Math.round(clamped)}
@@ -89,12 +99,13 @@ type FlightPacingProps = {
 };
 
 export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   if (model.kind === 'no_flight') {
     return (
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          No flight yet. Give this portfolio a start date, an end date and a total budget and the
-          optimizer will pace spend to land on it.
+          {uiText('no_flight_yet_give_this_portfolio_a_start_dat_6e6466c')}
         </p>
         {onSetFlight ? (
           <Button
@@ -105,7 +116,7 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
             variant="secondary"
           >
             <CalendarPlusIcon aria-hidden className="size-3.5" />
-            Set a flight
+            {uiText('set_a_flight_1bc9e41')}
           </Button>
         ) : null}
       </div>
@@ -115,8 +126,11 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
   if (model.kind === 'not_started') {
     return (
       <p className="text-xs text-muted-foreground">
-        Flight starts {fmtDate(model.start)} · {formatCurrency(model.budget, currency)} through{' '}
-        {fmtDate(model.end)}. Pacing begins on day one.
+        {uiText.rich('sentence_fffb63dd4b2d', {
+          v0: fmtDate(model.start, uiLocale),
+          v1: formatCurrency(model.budget, currency, uiLocale),
+          v2: fmtDate(model.end, uiLocale),
+        })}
       </p>
     );
   }
@@ -125,14 +139,20 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
     return (
       <div className="space-y-2">
         <Bar
-          detail={`Day ${model.dayIndex} of ${model.periodDays}`}
-          label="Time elapsed"
+          detail={uiText('flightDayProgress', {
+            day: model.dayIndex,
+            total: model.periodDays,
+            hasPercentage: 'no',
+            percentage: '',
+          })}
+          label={uiText('time_elapsed_5550d8a')}
           pct={(model.dayIndex / model.periodDays) * 100}
           tone="time"
         />
         <p className="text-xs text-muted-foreground">
-          Spend to date is not known yet — it arrives with the next scored cycle (the daily series
-          does not reach back to {fmtDate(model.start)}).
+          {uiText.rich('sentence_cc28421f680e', {
+            v0: fmtDate(model.start, uiLocale),
+          })}
         </p>
       </div>
     );
@@ -141,17 +161,29 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
   if (model.kind === 'ended') {
     return (
       <div className="space-y-2">
-        <Bar detail="Flight ended" label="Time elapsed" pct={100} tone="time" />
+        <Bar
+          detail={uiText('flightEndedLabel')}
+          label={uiText('time_elapsed_5550d8a')}
+          pct={100}
+          tone="time"
+        />
         {model.spent != null && model.spentPct != null ? (
           <Bar
-            detail={`${formatCurrency(model.spent, currency)} of ${formatCurrency(model.budget, currency)}`}
-            label="Budget spent"
+            detail={uiText('flightBudgetProgress', {
+              spent: formatCurrency(model.spent, currency, uiLocale),
+              budget: formatCurrency(model.budget, currency, uiLocale),
+              hasPercentage: 'no',
+              percentage: '',
+            })}
+            label={uiText('budget_spent_0538a8b')}
             pct={model.spentPct}
             tone="spend"
           />
         ) : null}
         <p className="text-xs text-muted-foreground">
-          Ended {fmtDate(model.end)}. Set a new flight to keep pacing.
+          {uiText.rich('sentence_85f111260c2b', {
+            v0: fmtDate(model.end, uiLocale),
+          })}
         </p>
       </div>
     );
@@ -161,51 +193,93 @@ export function FlightPacing({ model, currency, onSetFlight }: FlightPacingProps
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <StatusChip hint={STATUS_HINT[model.status]} tone={tone}>
-          {STATUS_LABEL[model.status]}
+        <StatusChip hint={uiText('flightStatusHint', { status: model.status })} tone={tone}>
+          {uiText('flightStatusLabel', { status: model.status })}
         </StatusChip>
         <span className="text-xs text-muted-foreground">
-          {fmtDate(model.start)} → {fmtDate(model.end)}
-          {model.source === 'client' ? ' · estimated from spend' : ''}
+          {fmtDate(model.start, uiLocale)} → {fmtDate(model.end, uiLocale)}
+          {model.source === 'client' ? uiText('estimated_from_spend_d0b878b') : ''}
         </span>
       </div>
       <Bar
-        detail={`Day ${model.dayIndex} of ${model.periodDays} · ${Math.round(model.timePct)}%`}
-        label="Time elapsed"
+        detail={uiText('flightDayProgress', {
+          day: model.dayIndex,
+          total: model.periodDays,
+          hasPercentage: 'yes',
+          percentage: new Intl.NumberFormat(uiLocale, {
+            style: 'percent',
+            maximumFractionDigits: 0,
+          }).format(Math.round(model.timePct) / 100),
+        })}
+        label={uiText('time_elapsed_5550d8a')}
         pct={model.timePct}
         tone="time"
       />
       <Bar
-        detail={`${formatCurrency(model.spent, currency)} of ${formatCurrency(model.budget, currency)} · ${Math.round(model.spentPct)}%`}
-        label="Budget spent"
+        detail={uiText('flightBudgetProgress', {
+          spent: formatCurrency(model.spent, currency, uiLocale),
+          budget: formatCurrency(model.budget, currency, uiLocale),
+          hasPercentage: 'yes',
+          percentage: new Intl.NumberFormat(uiLocale, {
+            style: 'percent',
+            maximumFractionDigits: 0,
+          }).format(Math.round(model.spentPct) / 100),
+        })}
+        label={uiText('budget_spent_0538a8b')}
         pct={model.spentPct}
         tone="spend"
       />
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>
-          At this pace:{' '}
-          <b className="text-foreground">{formatCurrency(model.projectedEnd, currency)}</b> by{' '}
-          {fmtDate(model.end)}
+          {uiText.rich('sentence_96bfc423db79', {
+            v0: () => (
+              <b className="text-foreground">
+                {formatCurrency(model.projectedEnd, currency, uiLocale)}
+              </b>
+            ),
+            v1: fmtDate(model.end, uiLocale),
+          })}
         </span>
         <span>
-          To land on budget:{' '}
-          <b className="text-foreground">{formatCurrency(model.dailyNeeded, currency)}</b>
-          /day
+          {uiText.rich('sentence_f8fe74c17d98', {
+            v0: () => (
+              <b className="text-foreground">
+                {formatCurrency(model.dailyNeeded, currency, uiLocale)}
+              </b>
+            ),
+          })}
         </span>
-        <ExplainPopover title="How pacing is judged">
+        <ExplainPopover title={uiText('how_pacing_is_judged_48ce572')}>
           <p>
-            The plan spends the budget evenly: {formatCurrency(model.dailyPlanned, currency)} a day.
-            Actual spend is compared with what the plan says should have been spent by today; more
-            than 5% off in either direction changes the verdict.
+            {uiText.rich('sentence_13d8e6c2441f', {
+              v0: formatCurrency(model.dailyPlanned, currency, uiLocale),
+            })}
           </p>
           <ExplainRow
-            label="Should have spent by today"
-            value={formatCurrency(model.dailyPlanned * Math.max(0, model.dayIndex - 1), currency)}
+            label={uiText('should_have_spent_by_today_aa66b0c')}
+            value={formatCurrency(
+              model.dailyPlanned * Math.max(0, model.dayIndex - 1),
+              currency,
+              uiLocale,
+            )}
           />
-          <ExplainRow label="Actually spent" value={formatCurrency(model.spent, currency)} />
-          <ExplainRow label="Actual ÷ plan" value={`${Math.round(model.ratio * 100)}%`} />
-          <ExplainRow label="Remaining" value={formatCurrency(model.remaining, currency)} />
-          {model.note ? <p className="pt-1 italic">Engine: {model.note}</p> : null}
+          <ExplainRow
+            label={uiText('actually_spent_64fd3b5')}
+            value={formatCurrency(model.spent, currency, uiLocale)}
+          />
+          <ExplainRow
+            label={uiText('actual_plan_6b5832e')}
+            value={`${Math.round(model.ratio * 100)}%`}
+          />
+          <ExplainRow
+            label={uiText('remaining_f3e4352')}
+            value={formatCurrency(model.remaining, currency, uiLocale)}
+          />
+          {model.note ? (
+            <p className="pt-1 italic">
+              {uiText.rich('sentence_730867679513', { v0: model.note })}
+            </p>
+          ) : null}
         </ExplainPopover>
       </div>
     </div>

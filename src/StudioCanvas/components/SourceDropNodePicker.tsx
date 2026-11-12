@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { NodeType, SourceDropCandidate } from '../hooks/useEdgeDropNode';
+import { useStudioMetadata } from '../hooks/useStudioMetadata';
 
 interface SourceDropNodePickerProps {
   candidates: SourceDropCandidate[];
@@ -29,6 +31,9 @@ export function SourceDropNodePicker({
   onSelect,
   onDismiss,
 }: SourceDropNodePickerProps) {
+  const translateUi = useUiTranslations('studio');
+  const registryText = useStudioMetadata();
+
   return (
     <DropdownMenu
       open
@@ -53,13 +58,13 @@ export function SourceDropNodePicker({
         {/* Base UI's GroupLabel reads its group's context and THROWS outside one — this
             picker rendered nothing at all until the group was here. */}
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Connect to…</DropdownMenuLabel>
+          <DropdownMenuLabel>{translateUi('connect_to_a86fff7b')}</DropdownMenuLabel>
           {candidates.map((candidate) => (
             <DropdownMenuItem
               key={candidate.nodeType}
               onSelect={() => onSelect(candidate.nodeType)}
             >
-              {candidate.label}
+              {registryText(candidate.label)}
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>

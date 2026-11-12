@@ -1,6 +1,8 @@
 'use client';
 
 import { LIBRARY_PREVIEW_FRAME_SPECS, type LibraryPreviewFrame } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useMemo as useUiConfigMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -8,21 +10,35 @@ type Props = {
   onChange: (frame: LibraryPreviewFrame) => void;
 };
 
-const OPTIONS: { id: LibraryPreviewFrame; label: string; hint: string }[] = [
-  { id: 'native', label: 'Native', hint: 'As shot' },
-  ...LIBRARY_PREVIEW_FRAME_SPECS.map((spec) => ({
-    id: spec.id,
-    label: spec.label,
-    hint: spec.surface,
-  })),
-];
+function useLocalOptionsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value: { id: LibraryPreviewFrame; label: string; hint: string }[] = [
+      {
+        id: 'native',
+        label: translateConfig('native_d509e493'),
+        hint: 'As shot',
+      },
+      ...LIBRARY_PREVIEW_FRAME_SPECS.map((spec) => ({
+        id: spec.id,
+        label: spec.label,
+        hint: spec.surface,
+      })),
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 export function PlacementBar({ value, onChange }: Props) {
+  const OPTIONS = useLocalOptionsMessages();
+
+  const translateUi = useUiTranslations('library');
+
   return (
     <div
       className="flex flex-wrap items-center gap-1 rounded-lg border border-border p-0.5"
       role="tablist"
-      aria-label="Preview as"
+      aria-label={translateUi('preview_as_e3342c3e')}
     >
       {OPTIONS.map((option) => {
         const selected = value === option.id;

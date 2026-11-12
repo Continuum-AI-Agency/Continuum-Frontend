@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // The arithmetic behind the board's marks: where a cost sits against its goal, the diverging
 // colour that says so, the bullet's scale, the ring's share and the trend line's geometry. Pure,
 // so a mark and the figure written next to it are computed from the same numbers.
@@ -41,9 +45,15 @@ export function pctAgainstGoal(
 export function goalDistanceLabel(
   cost: number | null | undefined,
   goal: number | null | undefined,
+  t?: ScaleCopy,
 ): string {
   const side = goalSide(cost, goal);
   if (side === 'none') return '';
+  if (t)
+    return t('boardDistance', {
+      side,
+      percent: Math.abs(pctAgainstGoal(cost, goal) ?? 0),
+    });
   if (side === 'at') return 'On goal';
   return `${Math.abs(pctAgainstGoal(cost, goal) ?? 0)}% ${side === 'below' ? 'under' : 'over'} goal`;
 }
@@ -56,6 +66,7 @@ export function goalDistanceLabel(
 export function divergingColor(
   cost: number | null | undefined,
   goal: number | null | undefined,
+  t?: ScaleCopy,
 ): string {
   const side = goalSide(cost, goal);
   if (side === 'none' || side === 'at') return BOARD_COLOR.mid;

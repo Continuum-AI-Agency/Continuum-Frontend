@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
 
 const showMock = mock();
@@ -63,8 +64,12 @@ mock.module('./JainaReportCharts', () => ({
   JainaReportCharts: () => null,
 }));
 mock.module('./JainaReportMetrics', () => ({ JainaReportMetrics: () => null }));
-mock.module('./JainaReportRecommendations', () => ({ JainaReportRecommendations: () => null }));
-mock.module('./JainaReportSections', () => ({ JainaReportSections: () => null }));
+mock.module('./JainaReportRecommendations', () => ({
+  JainaReportRecommendations: () => null,
+}));
+mock.module('./JainaReportSections', () => ({
+  JainaReportSections: () => null,
+}));
 mock.module('./JainaReportTables', () => ({ JainaReportTables: () => null }));
 
 const { JainaInlineReport } = await import('./JainaInlineReport');
@@ -110,7 +115,10 @@ describe('JainaInlineReport export actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export report to Google Sheets' }));
 
     await waitFor(() => expect(exportToSheetsMock).toHaveBeenCalledTimes(1));
-    expect(buildSheetsRequestMock).toHaveBeenCalledWith({ report, fallbackTables });
+    expect(buildSheetsRequestMock).toHaveBeenCalledWith({
+      report,
+      fallbackTables,
+    });
   });
 
   it('does not download or open email before the native confirmation resolves', async () => {
@@ -129,8 +137,11 @@ describe('JainaInlineReport export actions', () => {
     resolveShare?.('cancelled');
     await waitFor(() =>
       expect(
-        (screen.getByRole('button', { name: 'Share report by email' }) as HTMLButtonElement)
-          .disabled,
+        (
+          screen.getByRole('button', {
+            name: 'Share report by email',
+          }) as HTMLButtonElement
+        ).disabled,
       ).toBe(false),
     );
   });

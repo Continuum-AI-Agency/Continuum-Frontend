@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -61,14 +62,18 @@ describe('MediaLightbox', () => {
 
   it('disables previous at the first item and next at the last', () => {
     const { onIndexChange } = setup({ index: 0 });
-    const prev = screen.getByRole('button', { name: 'Previous creative' }) as HTMLButtonElement;
+    const prev = screen.getByRole('button', {
+      name: 'Previous creative',
+    }) as HTMLButtonElement;
     expect(prev.disabled).toBe(true);
     fireEvent.click(prev);
     expect(onIndexChange).not.toHaveBeenCalled();
 
     cleanup();
     setup({ index: 1 });
-    const next = screen.getByRole('button', { name: 'Next creative' }) as HTMLButtonElement;
+    const next = screen.getByRole('button', {
+      name: 'Next creative',
+    }) as HTMLButtonElement;
     expect(next.disabled).toBe(true);
   });
 

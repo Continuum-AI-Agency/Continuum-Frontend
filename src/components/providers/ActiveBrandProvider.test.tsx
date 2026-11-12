@@ -1,4 +1,5 @@
 import { mock } from 'bun:test';
+import { render } from '@/i18n/__tests__/render';
 
 // ─── Module mocks (hoisted by bun before imports) ────────────────────────────
 //
@@ -10,14 +11,18 @@ import { mock } from 'bun:test';
 let mockSwitchActionThrows = false;
 let mockSessionUser: { user_metadata?: Record<string, unknown> } | null = null;
 
-mock.module('@/app/(post-auth)/settings/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/actions', () => ({
   switchActiveBrandAction: async (_brandId: string) => {
     if (mockSwitchActionThrows) throw new Error('Switch failed');
   },
 }));
 
 mock.module('@/hooks/useSession', () => ({
-  useSession: () => ({ session: null, user: mockSessionUser, isLoading: false }),
+  useSession: () => ({
+    session: null,
+    user: mockSessionUser,
+    isLoading: false,
+  }),
 }));
 
 mock.module('@/components/ui/ToastProvider', () => ({
@@ -27,7 +32,7 @@ mock.module('@/components/ui/ToastProvider', () => ({
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { act, render } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import React from 'react';
 import { ActiveBrandProvider, useActiveBrandContext } from './ActiveBrandProvider';
 
@@ -44,8 +49,16 @@ type BrandSummary = {
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-const brandA: BrandSummary = { id: 'brand-a', name: 'Brand A', completed: true };
-const brandB: BrandSummary = { id: 'brand-b', name: 'Brand B', completed: true };
+const brandA: BrandSummary = {
+  id: 'brand-a',
+  name: 'Brand A',
+  completed: true,
+};
+const brandB: BrandSummary = {
+  id: 'brand-b',
+  name: 'Brand B',
+  completed: true,
+};
 const summaries: BrandSummary[] = [brandA, brandB];
 
 // ─── Consumer component ───────────────────────────────────────────────────────
@@ -70,7 +83,10 @@ function TestConsumer({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-type ProviderProps = { activeBrandId?: string; brandSummaries?: BrandSummary[] };
+type ProviderProps = {
+  activeBrandId?: string;
+  brandSummaries?: BrandSummary[];
+};
 
 function renderProvider(props: ProviderProps = {}) {
   let selectBrandFn: (id: string) => Promise<void>;
@@ -117,14 +133,18 @@ describe('ActiveBrandProvider', () => {
   });
 
   it('optimistically updates activeBrandId when selectBrand is called', async () => {
-    const { container, selectBrand } = renderProvider({ activeBrandId: 'brand-a' });
+    const { container, selectBrand } = renderProvider({
+      activeBrandId: 'brand-a',
+    });
     await selectBrand('brand-b');
     expect(readActiveBrand(container)).toBe('brand-b');
   });
 
   it('reverts activeBrandId when the server action throws', async () => {
     mockSwitchActionThrows = true;
-    const { container, selectBrand } = renderProvider({ activeBrandId: 'brand-a' });
+    const { container, selectBrand } = renderProvider({
+      activeBrandId: 'brand-a',
+    });
     await selectBrand('brand-b');
     expect(readActiveBrand(container)).toBe('brand-a');
   });
@@ -132,13 +152,17 @@ describe('ActiveBrandProvider', () => {
   it('leaves activeBrandId unchanged when the target brand is already active', async () => {
     // switchBrand returns false (no-op) when target === activeBrandId, which
     // triggers the revert path back to the previous selectedBrandId.
-    const { container, selectBrand } = renderProvider({ activeBrandId: 'brand-a' });
+    const { container, selectBrand } = renderProvider({
+      activeBrandId: 'brand-a',
+    });
     await selectBrand('brand-a');
     expect(readActiveBrand(container)).toBe('brand-a');
   });
 
   it('syncs activeBrandId when the activeBrandId prop changes', async () => {
-    const { container, rerender } = renderProvider({ activeBrandId: 'brand-a' });
+    const { container, rerender } = renderProvider({
+      activeBrandId: 'brand-a',
+    });
 
     await act(async () => {
       rerender(
@@ -164,7 +188,9 @@ describe('ActiveBrandProvider', () => {
       user_metadata: { onboarding: { activeBrandId: 'brand-a' } },
     };
 
-    const { container, selectBrand } = renderProvider({ activeBrandId: 'brand-a' });
+    const { container, selectBrand } = renderProvider({
+      activeBrandId: 'brand-a',
+    });
 
     // Switch optimistically to brand-b. The action succeeds but metadata stays brand-a.
     await selectBrand('brand-b');
@@ -182,7 +208,9 @@ describe('ActiveBrandProvider', () => {
   // Fix: split into two effects so setSelectedBrandId fires only when the
   // activeBrandId prop actually changes.
   it('preserves optimistic activeBrandId when brandSummaries reference changes but activeBrandId prop stays the same', async () => {
-    const { container, rerender, selectBrand } = renderProvider({ activeBrandId: 'brand-a' });
+    const { container, rerender, selectBrand } = renderProvider({
+      activeBrandId: 'brand-a',
+    });
 
     await selectBrand('brand-b');
     expect(readActiveBrand(container)).toBe('brand-b');
@@ -228,7 +256,10 @@ describe('ActiveBrandProvider', () => {
 
     const otherTab = new BroadcastChannel('continuum:brand');
     await act(async () => {
-      otherTab.postMessage({ type: 'brand-switched', brandId: 'brand-unknown' });
+      otherTab.postMessage({
+        type: 'brand-switched',
+        brandId: 'brand-unknown',
+      });
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
     otherTab.close();

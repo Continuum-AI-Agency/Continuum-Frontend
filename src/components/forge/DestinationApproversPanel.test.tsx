@@ -11,12 +11,19 @@ import type {
   RenderApprovalDestination,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 installPickerDomGlobals();
 
@@ -55,7 +62,9 @@ const ASKING = approver('88888888-8888-4888-8888-888888888881', 'requested', {
   platformUserId: 'U_CLIENT',
   displayName: 'Marta (client)',
 });
-const ACTIVE = approver('88888888-8888-4888-8888-888888888882', 'active', { userId: MEMBER });
+const ACTIVE = approver('88888888-8888-4888-8888-888888888882', 'active', {
+  userId: MEMBER,
+});
 const GONE = approver('88888888-8888-4888-8888-888888888883', 'revoked', {
   platformUserId: 'U_OLD',
   displayName: 'Old approver',
@@ -144,7 +153,9 @@ const names = (list: HTMLElement) =>
 
 test('requested approvers lead, and one click activates them', async () => {
   renderPanel();
-  const asking = await screen.findByRole('list', { name: 'Requested approvers' });
+  const asking = await screen.findByRole('list', {
+    name: 'Requested approvers',
+  });
   expect(fetchDestinationApprovers).toHaveBeenCalledWith(ROOM.id);
   expect(screen.getByText('Asking to approve (1)')).toBeTruthy();
   expect(names(asking)).toEqual(['Marta (client) · U_CLIENT']);
@@ -193,7 +204,9 @@ async function pickMember(email: string) {
 test('adds a brand member by user id, or someone in Slack by id with a display name', async () => {
   renderPanel();
   await screen.findByRole('list', { name: 'Active approvers' });
-  const add = screen.getByRole<HTMLButtonElement>('button', { name: 'Add approver' });
+  const add = screen.getByRole<HTMLButtonElement>('button', {
+    name: 'Add approver',
+  });
   expect(add.disabled).toBe(true);
 
   await pickMember('leo@vivo47.com');
@@ -211,8 +224,12 @@ test('adds a brand member by user id, or someone in Slack by id with a display n
 
   openSelect('Approver kind');
   chooseOption(/Someone in Slack by id/);
-  fireEvent.change(screen.getByLabelText('Slack member id'), { target: { value: ' U_NEW ' } });
-  fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Nia' } });
+  fireEvent.change(screen.getByLabelText('Slack member id'), {
+    target: { value: ' U_NEW ' },
+  });
+  fireEvent.change(screen.getByLabelText('Display name'), {
+    target: { value: 'Nia' },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Add approver' }));
   await waitFor(() =>
     expect(addDestinationApprover).toHaveBeenLastCalledWith(ROOM.id, {

@@ -7,8 +7,14 @@ import {
   ugcTalkingHeadPipelineCandidate,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
 import { PipelineProposalCard } from './PipelineProposalCard';
@@ -61,7 +67,11 @@ const capability: PipelineCapabilityV2 = pipelineCapabilityV2Schema.parse({
     approval: 'within_limit',
     on_exceed: 'refuse',
   },
-  quality_policy: { minimum_score: 0.7, required_checks: ['persona_match'], on_failure: 'refuse' },
+  quality_policy: {
+    minimum_score: 0.7,
+    required_checks: ['persona_match'],
+    on_failure: 'refuse',
+  },
 });
 
 const proposal: ComposerPipelineProposal = { request, capability };
@@ -73,7 +83,9 @@ function renderCard(
   const onPublished = mock(() => {});
   const onDismiss = mock(() => {});
   const publish = mock(
-    async (_input: unknown): Promise<PipelinePublicationResponse> => ({ capability }),
+    async (_input: unknown): Promise<PipelinePublicationResponse> => ({
+      capability,
+    }),
   );
   render(
     <QueryClientProvider client={queryClient}>
@@ -112,9 +124,13 @@ describe('PipelineProposalCard', () => {
     queryClient.invalidateQueries = invalidate as typeof queryClient.invalidateQueries;
     const { publish, onPublished } = renderCard({}, queryClient);
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Founder UGC' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Founder UGC' },
+    });
     fireEvent.change(screen.getByLabelText('What it makes and when to use it'), {
-      target: { value: 'Makes a 9:16 founder talking-head video for launches.' },
+      target: {
+        value: 'Makes a 9:16 founder talking-head video for launches.',
+      },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
 
@@ -149,7 +165,7 @@ describe('PipelineProposalCard', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("shows the server's message inline when publishing fails", async () => {
+  it('shows localized guidance without exposing an unknown server message when publishing fails', async () => {
     const { onPublished } = renderCard({
       publish: async () => {
         throw new Error('A pipeline named that already exists for this brand.');
@@ -159,11 +175,15 @@ describe('PipelineProposalCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
 
     expect((await screen.findByRole('alert')).textContent).toBe(
-      'A pipeline named that already exists for this brand.',
+      'An unexpected error occurred. Please try again.',
     );
     expect(onPublished).not.toHaveBeenCalled();
     expect(
-      (screen.getByRole('button', { name: 'Publish pipeline' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Publish pipeline',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 

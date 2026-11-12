@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { renderHook, waitFor } from '@testing-library/react';
+import { waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { useTimelineBlocks } from './useTimelineBlocks';
 
@@ -60,7 +61,9 @@ describe('useTimelineBlocks', () => {
       if (body.resolution === 'daily') {
         return Promise.resolve(
           new Response(
-            JSON.stringify({ blocks: [buildBlock('block-primary', 'campaign-primary')] }),
+            JSON.stringify({
+              blocks: [buildBlock('block-primary', 'campaign-primary')],
+            }),
             {
               status: 200,
               headers: { 'Content-Type': 'application/json' },

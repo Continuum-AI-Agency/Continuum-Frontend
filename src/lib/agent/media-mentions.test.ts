@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import type { MediaAsset, MediaCollection } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
+import enMessages from '../../../messages/library/en.json';
+import esMessages from '../../../messages/library/es.json';
+import ptMessages from '../../../messages/library/pt-BR.json';
 import {
   collectionToSuggestion,
   filterSuggestionsByQuery,
@@ -83,7 +87,10 @@ describe('mediaAssetToMentionSuggestion', () => {
 
   it('uses the thumbnail when no signed URL is present', () => {
     const suggestion = mediaAssetToMentionSuggestion(
-      makeAsset({ signedUrl: null, thumbnailUrl: 'https://signed.example/thumb.png' }),
+      makeAsset({
+        signedUrl: null,
+        thumbnailUrl: 'https://signed.example/thumb.png',
+      }),
     );
     expect(suggestion.preview?.url).toBe('https://signed.example/thumb.png');
   });
@@ -111,7 +118,9 @@ describe('source + collection folders', () => {
   it('round-trips an inspiration source folder key', () => {
     const folder = MEDIA_SOURCE_FOLDERS.find((f) => f.value === 'inspiration')!;
     const suggestion = sourceFolderToSuggestion(folder);
-    expect(parseMediaFolderKey(suggestion.key)).toEqual({ source: 'inspiration' });
+    expect(parseMediaFolderKey(suggestion.key)).toEqual({
+      source: 'inspiration',
+    });
   });
 
   it('labels smart vs manual collections distinctly', () => {
@@ -163,4 +172,51 @@ describe('filterSuggestionsByQuery', () => {
       'Mountain trail',
     ]);
   });
+});
+
+describe('media mention UI language boundaries', () => {
+  for (const [locale, messages] of [
+    ['en', enMessages],
+    ['pt-BR', ptMessages],
+    ['es', esMessages],
+  ] as const) {
+    it(`${locale}: localizes structured menu labels without changing references or authored content`, () => {
+      const uiText = createTranslator({
+        locale,
+        messages: { library: messages },
+        namespace: 'library',
+      });
+      const asset = makeAsset({
+        title: 'Canvas',
+        description: 'Image from our launch',
+      });
+      const original = mediaAssetToMentionSuggestion(asset, 'canvas');
+      const result = mediaAssetToMentionSuggestion(asset, 'canvas', uiText);
+      expect(result.label).toBe(asset.title!);
+      expect(result.description).toBe(`${uiText('image_1aa4cb0b')} · ${asset.description}`);
+      expect(result.badge).toBe(uiText('image_1aa4cb0b'));
+      expect(result.group).toBe(uiText('mentionMediaLibrary'));
+      expect(result.reference).toEqual(original.reference);
+      expect(result.preview).toEqual(original.preview);
+      const snapshot = JSON.stringify(MEDIA_SOURCE_FOLDERS);
+      for (const folder of MEDIA_SOURCE_FOLDERS) {
+        const localized = sourceFolderToSuggestion(folder, 'canvas', uiText);
+        expect(localized.key).toBe(sourceFolderToSuggestion(folder, 'canvas').key);
+        expect(parseMediaFolderKey(localized.key)).toEqual({
+          source: folder.value,
+        });
+        expect(localized.childrenLabel).toBe(uiText('mentionBrowseCreatives'));
+      }
+      expect(JSON.stringify(MEDIA_SOURCE_FOLDERS)).toBe(snapshot);
+      for (const kind of ['manual', 'smart'] as const) {
+        const collection = makeCollection({ kind, name: 'Collection' });
+        const localized = collectionToSuggestion(collection, 'canvas', uiText);
+        expect(localized.label).toBe('Collection');
+        expect(localized.key).toBe(collectionToSuggestion(collection).key);
+        expect(localized.childrenLabel).toBe(
+          uiText(kind === 'smart' ? 'mentionSmartCollection' : 'mentionCollection'),
+        );
+      }
+    });
+  }
 });

@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 
@@ -8,6 +9,8 @@ type EditableHeadingProps = {
 };
 
 export function EditableHeading({ value, placeholder, onCommit }: EditableHeadingProps) {
+  const tUi = useTranslations('onboarding');
+
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
@@ -21,7 +24,7 @@ export function EditableHeading({ value, placeholder, onCommit }: EditableHeadin
         }}
         className="text-left text-xl font-bold text-[#0b1220] transition-colors hover:text-[#5a39ff]"
       >
-        {value || <span className="text-[#94a3b8]">{placeholder ?? 'Untitled'}</span>}
+        {value || <span className="text-[#94a3b8]">{placeholder ?? tUi('m_621521f9a8')}</span>}
       </button>
     );
   }

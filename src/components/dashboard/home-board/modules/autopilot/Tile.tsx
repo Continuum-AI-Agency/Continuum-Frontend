@@ -1,4 +1,8 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+} from 'next-intl';
 
 // H07 Overnight: how many actions ran for the brand in the last 24 h, and what happened to each.
 // optimizer_list_portfolios says who may act. The Backend's Overnight read says what each action's
@@ -36,6 +40,10 @@ const Module = lazy(() => import('./Module'));
 const ROWS_AT_SIZE = { l: 3, m: 1, s: 0 } as const;
 
 export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const [now] = useState(() => new Date());
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const logLoad = useHomeRead<HomeOvernightLogData>({
@@ -77,7 +85,7 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
             void actions.refetch();
           }}
         >
-          The Optimizer's action log could not be read, so this tile cannot say what ran.
+          {betaUiText('beta_0e12f6664990')}
         </TileReadError>
       </HomeTileFrame>
     );
@@ -110,11 +118,11 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
   const allRows = fallsBack ? rows : logRows;
   const shown = allRows.slice(0, ROWS_AT_SIZE[tile.size]);
   const skippedByCap = log?.capSkipped.count ?? 0;
-  const said = count === 0 && skippedByCap === 0 ? 'Nothing ran in the last 24 h.' : summary;
+  const said = count === 0 && skippedByCap === 0 ? betaUiText('beta_3c1b6623b90c') : summary;
 
   return (
     <HomeTileFrame
-      badge={`${count} in 24 h`}
+      badge={betaUiText('beta_4f93f1ccb24b', { value0: String(count) })}
       expanded={
         <Module
           capSkipped={log?.capSkipped.items ?? []}
@@ -124,7 +132,7 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
           truncated={log?.truncated ?? false}
         />
       }
-      expandedDescription="What the Optimizer recorded for this brand in the last 24 hours, and how each portfolio is set to run."
+      expandedDescription={extraUiText('home_f98bf5d9f8fe')}
       state="ready"
       tile={tile}
     >
@@ -140,7 +148,7 @@ export default function AutopilotTile({ ctx, tile }: HomeTileProps) {
             {count}
           </span>
           <span className="text-muted-foreground text-xs">
-            {count === 1 ? 'action in the last 24 h' : 'actions in the last 24 h'}
+            {count === 1 ? betaUiText('beta_4e8da9d4ff58') : betaUiText('beta_12d99c706a72')}
           </span>
         </p>
         <p

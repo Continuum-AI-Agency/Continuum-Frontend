@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OptimizerAdsetRow } from '../../kpiColumns';
 import { vsTarget, vsTargetColumn } from './vsTargetColumn';
 
@@ -18,11 +19,19 @@ const row = (over: Partial<OptimizerAdsetRow> = {}): OptimizerAdsetRow => ({
 
 describe('vsTarget', () => {
   it('reads a cost under the target as its share of it', () => {
-    expect(vsTarget(61, 95)).toEqual({ ratio: 61 / 95, fill: 61 / 95, over: false });
+    expect(vsTarget(61, 95)).toEqual({
+      ratio: 61 / 95,
+      fill: 61 / 95,
+      over: false,
+    });
   });
 
   it('caps the fill at a full track once the cost is over the target', () => {
-    expect(vsTarget(128.4, 95)).toEqual({ ratio: 128.4 / 95, fill: 1, over: true });
+    expect(vsTarget(128.4, 95)).toEqual({
+      ratio: 128.4 / 95,
+      fill: 1,
+      over: true,
+    });
   });
 
   it('has nothing to say without a cost or without a target', () => {

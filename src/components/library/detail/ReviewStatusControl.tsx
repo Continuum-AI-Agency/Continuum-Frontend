@@ -18,6 +18,7 @@ import type {
   VersionReviewState,
 } from '@continuum/contracts';
 import { ChevronDown, Download, History, Loader2, Palette } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -83,11 +84,23 @@ function HistoryList({
   labels: Labels;
   customStates: ReviewCustomState[];
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+
   if (events === null) {
-    return <p className="py-2 text-xs text-muted-foreground">Loading history…</p>;
+    return (
+      <p className="py-2 text-xs text-muted-foreground">
+        {translateUi('loading_history_a960c435')}
+      </p>
+    );
   }
   if (events.length === 0) {
-    return <p className="py-2 text-xs text-muted-foreground">No review activity yet.</p>;
+    return (
+      <p className="py-2 text-xs text-muted-foreground">
+        {translateUi('no_review_activity_yet_45d0a47f')}
+      </p>
+    );
   }
   return (
     <ul className="space-y-2">
@@ -98,7 +111,8 @@ function HistoryList({
           </span>
           <span className="text-muted-foreground">
             {' '}
-            by {event.actorName ?? 'a teammate'} · {formatRelativeTime(event.createdAt)}
+            {translateUi('by_a7e2d26e')} {event.actorName ?? translateUi('a_teammate_1ca7804e')} ·{' '}
+            {formatRelativeTime(event.createdAt, undefined, currentUiLocale)}
           </span>
           {event.note ? (
             <p className="mt-0.5 text-muted-foreground italic">“{event.note}”</p>
@@ -115,6 +129,8 @@ export function ReviewStatusControl({
   version = null,
   onChanged,
 }: ReviewStatusControlProps) {
+  const translateUi = useUiTranslations('library');
+
   const headTarget = (): Target => ({
     status: normalizeReviewStatus(asset.reviewStatus),
     stateId: asset.reviewStateId ?? null,
@@ -146,9 +162,13 @@ export function ReviewStatusControl({
         if (read !== historyRead.current) return;
         setEvents([]);
         setVersionStates([]);
-        toast.error(`Loading review history failed · ${(err as Error).message}`);
+        toast.error(
+          translateUi('loading_review_history_failed_value_4493e03a', {
+            value0: String((err as Error).message),
+          }),
+        );
       });
-  }, [brandId, asset.id]);
+  }, [brandId, asset.id, translateUi]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: headTarget reads only `asset`, which is listed
   useEffect(() => {
@@ -175,7 +195,10 @@ export function ReviewStatusControl({
     ? versionStates?.find((state) => state.versionId === versionId)
     : undefined;
   const shown: Target = versionId
-    ? { status: versionState?.reviewStatus ?? 'none', stateId: versionState?.reviewStateId ?? null }
+    ? {
+        status: versionState?.reviewStatus ?? 'none',
+        stateId: versionState?.reviewStateId ?? null,
+      }
     : current;
   const display = reviewDisplay(shown.status, shown.stateId, labels, customStates);
 
@@ -199,7 +222,10 @@ export function ReviewStatusControl({
           ...(transitionNote ? { note: transitionNote } : {}),
         });
         if (result.isHead) {
-          setCurrent({ status: result.reviewStatus, stateId: result.reviewStateId });
+          setCurrent({
+            status: result.reviewStatus,
+            stateId: result.reviewStateId,
+          });
         } else {
           // The write's own answer is the version's state now; a read already in
           // flight is stale and is dropped.
@@ -221,7 +247,11 @@ export function ReviewStatusControl({
       if (versionId) await loadHistory();
       onChanged?.();
     } catch (err) {
-      toast.error(`Status change failed · ${(err as Error).message}`);
+      toast.error(
+        translateUi('status_change_failed_value0_9fc36915', {
+          value0: String((err as Error).message),
+        }),
+      );
     } finally {
       setSaving(false);
     }
@@ -263,7 +293,9 @@ export function ReviewStatusControl({
               type="button"
               disabled={saving}
               className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-              aria-label={`Review status: ${pillLabel}`}
+              aria-label={translateUi('review_status_value0_30fe59c1', {
+                value0: String(pillLabel),
+              })}
               data-review-status={shown.status}
               data-review-state-id={shown.stateId ?? ''}
               data-review-version={versionId ?? 'head'}
@@ -310,8 +342,7 @@ export function ReviewStatusControl({
           ])}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setLabelsOpen(true)} className="gap-2 text-xs">
-            <Palette className="size-3.5" />
-            Customize status labels…
+            <Palette className="size-3.5" /> {translateUi('customize_status_labels_649e9ecb')}{' '}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -324,7 +355,7 @@ export function ReviewStatusControl({
               variant="ghost"
               size="icon"
               className="size-6 text-muted-foreground"
-              aria-label="Review history"
+              aria-label={translateUi('review_history_063ea299')}
             >
               <History className="size-3.5" />
             </Button>
@@ -332,7 +363,9 @@ export function ReviewStatusControl({
         />
         <PopoverContent align="start" className="w-72 p-3">
           <p className="mb-1 font-medium text-xs">
-            Review history{version ? ` · v${version.versionNumber}` : ''}
+            {' '}
+            {translateUi('review_history_063ea299')}
+            {version ? ` · v${version.versionNumber}` : ''}
           </p>
           <HistoryList events={shownEvents} labels={labels} customStates={customStates} />
           <div className="mt-3 flex flex-col gap-1 border-t border-border pt-2">
@@ -341,16 +374,18 @@ export function ReviewStatusControl({
               download
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
-              <Download className="size-3.5" />
-              Approval report (this asset)
+              <Download className="size-3.5" /> {translateUi(
+                'approval_report_this_asset_6f70ebf8',
+              )}{' '}
             </a>
             <a
               href={approvalReportHref({ brandId })}
               download
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
-              <Download className="size-3.5" />
-              Approval report (all assets)
+              <Download className="size-3.5" /> {translateUi(
+                'approval_report_all_assets_b908aee2',
+              )}{' '}
             </a>
           </div>
         </PopoverContent>
@@ -364,24 +399,27 @@ export function ReviewStatusControl({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Request changes</DialogTitle>
+            <DialogTitle className="text-sm">{translateUi('request_changes_cb5d9f98')}</DialogTitle>
             <DialogDescription className="text-xs">
-              Add an optional note explaining what needs to change.
+              {' '}
+              {translateUi('add_an_optional_note_explaining_wha_26666f2d')}{' '}
             </DialogDescription>
           </DialogHeader>
           <Textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="e.g. Logo is off-brand — use the dark variant."
+            placeholder={translateUi('e_g_logo_is_off_brand_use_the_dark__004ecadc')}
             rows={3}
             maxLength={2000}
           />
           <DialogFooter>
             <Button type="button" variant="ghost" size="sm" onClick={() => setNoteTarget(null)}>
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
             <Button type="button" size="sm" onClick={submitNoteDialog}>
-              Move to{' '}
+              {' '}
+              {translateUi('move_to_beb8194b')}{' '}
               {noteTarget
                 ? reviewDisplay(noteTarget.status, noteTarget.stateId, labels, customStates).label
                 : labels.needs_changes.label}

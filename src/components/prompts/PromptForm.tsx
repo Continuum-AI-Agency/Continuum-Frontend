@@ -2,6 +2,7 @@
 
 import type { Prompt } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { createBrandPrompt, updateBrandPrompt } from '@/lib/organic/prompts-api';
@@ -24,6 +25,7 @@ const parseTags = (raw: string): string[] =>
 // Create/edit form for a brand prompt. Saves straight to the database via the
 // brand-prompt endpoints — the same shape SkillForm uses, so the two feel identical.
 export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: Props) {
+  const uiText = useTranslations('common');
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [body, setBody] = useState(initial?.body ?? '');
@@ -57,9 +59,7 @@ export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: 
       // rather than a generic failure.
       const conflict = err instanceof Error && /409|name_conflict/i.test(err.message);
       setError(
-        conflict
-          ? `You already have a prompt named “${name.trim()}”.`
-          : 'Could not save the prompt. Try again.',
+        conflict ? uiText('m_69cf1c5322', { v0: String(name.trim()) }) : uiText('m_825d418b35'),
       );
     } finally {
       setSaving(false);
@@ -71,18 +71,18 @@ export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: 
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Prompt name"
+        placeholder={uiText('m_b180cb61ee')}
         maxLength={120}
-        aria-label="Prompt name"
+        aria-label={uiText('m_b180cb61ee')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-medium"
       />
 
       <input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Short description (when to use it)"
+        placeholder={uiText('m_b468afcf87')}
         maxLength={500}
-        aria-label="Prompt description"
+        aria-label={uiText('m_ce37cd809e')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
       />
 
@@ -90,25 +90,25 @@ export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: 
         value={body}
         onChange={(e) => setBody(e.target.value)}
         rows={6}
-        placeholder="The prompt text. Picking this in the composer types it into the box, ready to edit."
-        aria-label="Prompt text"
+        placeholder={uiText('m_14af6fa9c9')}
+        aria-label={uiText('m_c38029934e')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm leading-relaxed"
       />
 
       <input
         value={category}
         onChange={(e) => setCategory(e.target.value)}
-        placeholder="Category (groups the picker) — defaults to Custom"
+        placeholder={uiText('m_577f123ae4')}
         maxLength={80}
-        aria-label="Prompt category"
+        aria-label={uiText('m_206c088461')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
       />
 
       <input
         value={tags}
         onChange={(e) => setTags(e.target.value)}
-        placeholder="Tags (comma separated)"
-        aria-label="Prompt tags"
+        placeholder={uiText('m_8c7e01ee22')}
+        aria-label={uiText('m_a64d214977')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
       />
 
@@ -116,7 +116,7 @@ export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: 
 
       <div className="mt-0.5 flex items-center justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancelAction}>
-          Cancel
+          {uiText('cancel_19766ed')}
         </Button>
         <Button
           variant="default"
@@ -126,7 +126,7 @@ export function PromptForm({ brandId, initial, onCancelAction, onSavedAction }: 
           onClick={save}
         >
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {initial ? 'Save changes' : 'Create prompt'}
+          {initial ? uiText('save_changes_dd0ae7a') : uiText('m_c2d17a8fdc')}
         </Button>
       </div>
     </div>

@@ -139,6 +139,7 @@ mock.module('@/lib/supabase/realtime', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import {
   act,
   cleanup,
@@ -146,8 +147,7 @@ import {
   render as renderInDom,
   screen,
   waitFor,
-} from '@testing-library/react';
-import type { ReactElement } from 'react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { RenderPreviewPanel } from './RenderPreviewPanel';
 import type { RequestRow } from './renderRequestRows';
 
@@ -219,7 +219,10 @@ const CONTRACT = {
     contractHash: 'hash',
   },
   variables: [
-    variable('headline', 'Headline', 'text', { charBudget: 10, sample: 'Hola' }),
+    variable('headline', 'Headline', 'text', {
+      charBudget: 10,
+      sample: 'Hola',
+    }),
     variable('hero', 'Hero', 'image'),
     variable('bg', 'Background', 'color'),
     variable('logo', 'Logo', 'image', { reserved: true }),
@@ -284,12 +287,17 @@ const job = (
 
 /** Renders inside a fresh query cache, as the grid mounts it; rerender keeps the same cache. */
 function render(ui: ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+  });
   const wrap = (next: ReactElement) => (
     <QueryClientProvider client={client}>{next}</QueryClientProvider>
   );
   const view = renderInDom(wrap(ui));
-  return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
+  return {
+    ...view,
+    rerender: (next: ReactElement) => view.rerender(wrap(next)),
+  };
 }
 
 /** The Exact view: what the server composes over the closest real render. */
@@ -318,7 +326,11 @@ const composedOver = (over: Partial<ForgeRenderPreview> = {}): ForgeRenderPrevie
   comp: 'Square',
   at: 0.0167,
   source: 'render',
-  basedOn: { jobId: '44444444-4444-4444-8444-444444444444', label: 'Spain', finishedAt: null },
+  basedOn: {
+    jobId: '44444444-4444-4444-8444-444444444444',
+    label: 'Spain',
+    finishedAt: null,
+  },
   notes: [],
   notPreviewed: [],
   overflows: [],
@@ -334,7 +346,10 @@ let naturalWidth: PropertyDescriptor | undefined;
 beforeAll(() => {
   imagePrototype = Object.getPrototypeOf(document.createElement('img')) as object;
   naturalWidth = Object.getOwnPropertyDescriptor(imagePrototype, 'naturalWidth');
-  Object.defineProperty(imagePrototype, 'naturalWidth', { configurable: true, get: () => 1 });
+  Object.defineProperty(imagePrototype, 'naturalWidth', {
+    configurable: true,
+    get: () => 1,
+  });
 });
 afterAll(() => {
   if (imagePrototype && naturalWidth) {
@@ -347,7 +362,10 @@ afterEach(() => {
   subscription = null;
   setRevision = 3;
   listJobsMock.mockReset();
-  listJobsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
+  listJobsMock.mockImplementation(async () => ({
+    items: [],
+    nextCursor: null,
+  }));
   composePreviewMock.mockReset();
   composePreviewMock.mockImplementation(async () => {
     throw new Error('preview_unavailable');
@@ -367,7 +385,10 @@ describe('RenderPreviewPanel', () => {
   test('the animation sketch is asked for, plays for these values, and an edit hides it', async () => {
     const contract = {
       ...CONTRACT,
-      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+      template: {
+        ...CONTRACT.template,
+        motion: { durationSec: 6, frameRate: 30 },
+      },
     } as ApiRenderTemplateContract;
     const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: null };
     const { container, rerender } = render(
@@ -377,7 +398,10 @@ describe('RenderPreviewPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sketch the animation' }));
     await waitFor(() => expect(badge(container)).toBe('Animation sketch'));
     expect(sketchPreviewMock).toHaveBeenCalledWith(
-      expect.objectContaining({ fps: 8, values: expect.objectContaining({ headline: 'Hola' }) }),
+      expect.objectContaining({
+        fps: 8,
+        values: expect.objectContaining({ headline: 'Hola' }),
+      }),
     );
     expect(container.querySelector('video')?.getAttribute('src')).toBe(
       'data:video/mp4;base64,AAAA',
@@ -390,7 +414,10 @@ describe('RenderPreviewPanel', () => {
   test('plays only the selected row’s settled full animation proof', async () => {
     const contract = {
       ...CONTRACT,
-      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+      template: {
+        ...CONTRACT.template,
+        motion: { durationSec: 6, frameRate: 30 },
+      },
       outputs: [],
     } as ApiRenderTemplateContract;
     const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: null };
@@ -424,19 +451,28 @@ describe('RenderPreviewPanel', () => {
   test('in a set, a row the confirmation found refusing is not proofed until it would render', async () => {
     const contract = {
       ...CONTRACT,
-      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+      template: {
+        ...CONTRACT.template,
+        motion: { durationSec: 6, frameRate: 30 },
+      },
       outputs: [],
     } as ApiRenderTemplateContract;
-    const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: SET, rows: rowWith('Hola') };
-    const { rerender } = render(
-      <RenderPreviewPanel {...props} refusal="Use a brand colour." />,
-    );
+    const props = {
+      brandId: BRAND,
+      contract,
+      rowId: ROW,
+      renderSetId: SET,
+      rows: rowWith('Hola'),
+    };
+    const { rerender } = render(<RenderPreviewPanel {...props} refusal="Use a brand colour." />);
     // Past the proof's own debounce: a row that will not render is never proofed.
     await act(async () => await new Promise((resolve) => setTimeout(resolve, 1800)));
     expect(startMotionProofMock).not.toHaveBeenCalled();
     // An edit retires the refusal, and the row is proofed.
     rerender(<RenderPreviewPanel {...props} />);
-    await waitFor(() => expect(startMotionProofMock).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(startMotionProofMock).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
   });
 
   test('shows worker and canvas measurement findings on a render row', () => {
@@ -447,7 +483,14 @@ describe('RenderPreviewPanel', () => {
         issues: ['Worker graph pointer check was denied by Template Forge permissions.'],
         workerAttachmentId: null,
         media: [
-          { key: 'hero', label: 'Hero', comp: null, box: null, source: [254, 305], rigged: true },
+          {
+            key: 'hero',
+            label: 'Hero',
+            comp: null,
+            box: null,
+            source: [254, 305],
+            rigged: true,
+          },
         ],
       },
     } as ApiRenderTemplateContract;
@@ -497,7 +540,10 @@ describe('RenderPreviewPanel', () => {
         brandId={BRAND}
         contract={{
           ...contract,
-          template: { ...contract.template, updatedAt: '2026-09-29T00:00:00.000Z' },
+          template: {
+            ...contract.template,
+            updatedAt: '2026-09-29T00:00:00.000Z',
+          },
         }}
         rows={rowWith('Hola')}
         rowId={ROW}
@@ -510,7 +556,12 @@ describe('RenderPreviewPanel', () => {
   test('sample length is not evidence that decimal odds overflow', () => {
     const contract = {
       ...CONTRACT,
-      variables: [variable('headline', 'Draw Bet', 'text', { charBudget: 3, sample: '3.4' })],
+      variables: [
+        variable('headline', 'Draw Bet', 'text', {
+          charBudget: 3,
+          sample: '3.4',
+        }),
+      ],
     } as ApiRenderTemplateContract;
     const { container } = render(
       <RenderPreviewPanel
@@ -527,14 +578,21 @@ describe('RenderPreviewPanel', () => {
   });
 
   test('draws text in its box and flags actual layout overflow live from props', () => {
-    const props = { brandId: BRAND, contract: CONTRACT, rowId: ROW, renderSetId: null };
+    const props = {
+      brandId: BRAND,
+      contract: CONTRACT,
+      rowId: ROW,
+      renderSetId: null,
+    };
     const { container, rerender } = render(
       <RenderPreviewPanel {...props} rows={rowWith('Una oferta enorme hoy '.repeat(50))} />,
     );
 
     expect(slot(container, 'headline')?.textContent).toContain('Una oferta');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBe('true');
-    expect(screen.getByText(/Will render · Headline may shrink or clip \(fits only at/)).toBeTruthy();
+    expect(
+      screen.getByText(/Will render · Headline may shrink or clip \(fits only at/),
+    ).toBeTruthy();
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
 
@@ -624,8 +682,13 @@ describe('RenderPreviewPanel', () => {
       renderSetRowId: ROW,
       status: 'finished',
     });
-    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 50, { renderSetId: SET, status: 'finished' });
-    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 10, { templateKey: '133' });
+    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 50, {
+      renderSetId: SET,
+      status: 'finished',
+    });
+    expect(listJobsMock).toHaveBeenCalledWith(BRAND, 10, {
+      templateKey: '133',
+    });
   });
 
   test('a format no file answers shows the estimate, never another format’s file', async () => {
@@ -652,7 +715,9 @@ describe('RenderPreviewPanel', () => {
 
   test('a render of an older set revision with no recorded input: the whole row is composed over it', async () => {
     setRevision = 4;
-    const stale = job(ROW, [file('Square_1mjxxwb.png')], { renderSetRevision: 3 });
+    const stale = job(ROW, [file('Square_1mjxxwb.png')], {
+      renderSetRevision: 3,
+    });
     serveJobs([stale]);
     composeWith(
       composedOver({
@@ -793,7 +858,11 @@ describe('RenderPreviewPanel', () => {
       items: options?.templateKey ? [madrid] : [],
       nextCursor: null,
     }));
-    composeWith(composedOver({ basedOn: { jobId: madrid.id, label: 'Madrid', finishedAt: null } }));
+    composeWith(
+      composedOver({
+        basedOn: { jobId: madrid.id, label: 'Madrid', finishedAt: null },
+      }),
+    );
     const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
@@ -838,9 +907,18 @@ describe('RenderPreviewPanel', () => {
   });
 
   test('typing keeps the last picture, marked as updating, and composes once it settles', async () => {
-    serveJobs([job(ROW, [file('Square_1mjxxwb.png')], { renderInput: { headline: 'Hola' } })]);
+    serveJobs([
+      job(ROW, [file('Square_1mjxxwb.png')], {
+        renderInput: { headline: 'Hola' },
+      }),
+    ]);
     composeWith(composedOver());
-    const props = { brandId: BRAND, contract: CONTRACT, rowId: ROW, renderSetId: SET };
+    const props = {
+      brandId: BRAND,
+      contract: CONTRACT,
+      rowId: ROW,
+      renderSetId: SET,
+    };
     const { container, rerender } = render(
       <RenderPreviewPanel {...props} rows={rowWith('Adiós')} />,
     );
@@ -858,7 +936,11 @@ describe('RenderPreviewPanel', () => {
   });
 
   test('when no composition can be made, the last render or the measured boxes stand in, and say so', async () => {
-    serveJobs([job(ROW, [file('Square_1mjxxwb.png')], { renderInput: { headline: 'Hola' } })]);
+    serveJobs([
+      job(ROW, [file('Square_1mjxxwb.png')], {
+        renderInput: { headline: 'Hola' },
+      }),
+    ]);
     const { container } = renderExact(
       <RenderPreviewPanel
         brandId={BRAND}
@@ -891,9 +973,17 @@ describe('RenderPreviewPanel', () => {
   });
 
   test('the picked format stays picked when another row is selected', async () => {
-    const OTHER: RequestRow = { ...(rowWith('Adiós')[0] as RequestRow), id: OTHER_ROW };
+    const OTHER: RequestRow = {
+      ...(rowWith('Adiós')[0] as RequestRow),
+      id: OTHER_ROW,
+    };
     const rows = [...rowWith('Hola'), OTHER];
-    const props = { brandId: BRAND, contract: CONTRACT, rows, renderSetId: SET };
+    const props = {
+      brandId: BRAND,
+      contract: CONTRACT,
+      rows,
+      renderSetId: SET,
+    };
     const { container, rerender } = render(<RenderPreviewPanel {...props} rowId={ROW} />);
     fireEvent.click(screen.getByRole('button', { name: 'Story' }));
 
@@ -991,7 +1081,12 @@ describe('RenderPreviewPanel', () => {
         ...CONTRACT,
         template: { ...CONTRACT.template, motion },
       }) as unknown as ApiRenderTemplateContract;
-    const props = { brandId: BRAND, rows: rowWith('Hola'), rowId: ROW, renderSetId: null };
+    const props = {
+      brandId: BRAND,
+      rows: rowWith('Hola'),
+      rowId: ROW,
+      renderSetId: null,
+    };
     // Template 133: three delivery comps, each 0.033367s at 29.97 — one frame, a jpeg.
     const { rerender } = render(
       <RenderPreviewPanel
@@ -1014,7 +1109,10 @@ describe('RenderPreviewPanel', () => {
   test('scrubbing requests the selected template frame', async () => {
     const contract = {
       ...CONTRACT,
-      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+      template: {
+        ...CONTRACT.template,
+        motion: { durationSec: 6, frameRate: 30 },
+      },
     } as ApiRenderTemplateContract;
     renderExact(
       <RenderPreviewPanel
@@ -1090,10 +1188,34 @@ describe('RenderPreviewPanel · Live', () => {
     notes: [],
     brandMark: null,
     variables: [
-      { key: 'headline', label: 'Headline', kind: 'text', reserved: false, layerIds: [7] },
-      { key: 'hero', label: 'Hero', kind: 'image', reserved: false, layerIds: [8] },
-      { key: 'bg', label: 'Background', kind: 'color', reserved: false, layerIds: [] },
-      { key: 'logo', label: 'Logo', kind: 'image', reserved: true, layerIds: [] },
+      {
+        key: 'headline',
+        label: 'Headline',
+        kind: 'text',
+        reserved: false,
+        layerIds: [7],
+      },
+      {
+        key: 'hero',
+        label: 'Hero',
+        kind: 'image',
+        reserved: false,
+        layerIds: [8],
+      },
+      {
+        key: 'bg',
+        label: 'Background',
+        kind: 'color',
+        reserved: false,
+        layerIds: [],
+      },
+      {
+        key: 'logo',
+        label: 'Logo',
+        kind: 'image',
+        reserved: true,
+        layerIds: [],
+      },
     ],
     scene: {
       ok: true,
@@ -1139,7 +1261,13 @@ describe('RenderPreviewPanel · Live', () => {
           kind: 'shape',
           fill: '#000000',
           corners: quad(0, 0, 1080, 1080),
-          refs: [{ layer: 'Controls', effect: 'Background', prop: 'ADBE Vector Fill Color' }],
+          refs: [
+            {
+              layer: 'Controls',
+              effect: 'Background',
+              prop: 'ADBE Vector Fill Color',
+            },
+          ],
         },
       ],
     },
@@ -1274,7 +1402,11 @@ function playComponentPage(frame: HTMLIFrameElement) {
   page.postMessage = ((message: { id: string; method: string; params: unknown }) => {
     sent.push({ method: message.method, params: message.params });
     queueMicrotask(() =>
-      reply({ id: message.id, ok: true, result: message.method === 'applyOverrides' ? [] : null }),
+      reply({
+        id: message.id,
+        ok: true,
+        result: message.method === 'applyOverrides' ? [] : null,
+      }),
     );
   }) as Window['postMessage'];
   reply({ event: 'ready', nodes: [] });
@@ -1285,7 +1417,10 @@ describe('RenderPreviewPanel for a web component', () => {
   const PREVIEW_URL = 'https://api.test/api/media/web-component-preview/token';
   const WEB_CONTRACT = {
     ...CONTRACT,
-    template: { ...CONTRACT.template, key: 'web:99999999-9999-4999-8999-999999999999' },
+    template: {
+      ...CONTRACT.template,
+      key: 'web:99999999-9999-4999-8999-999999999999',
+    },
     web: {
       width: 1080,
       height: 1080,
@@ -1337,9 +1472,14 @@ describe('RenderPreviewPanel for a web component', () => {
       });
       expect(sent.find((message) => message.method === 'renderAt')?.params).toEqual({ timeSec: 0 });
 
-      fireEvent.change(screen.getByLabelText('Preview time'), { target: { value: '1.5' } });
+      fireEvent.change(screen.getByLabelText('Preview time'), {
+        target: { value: '1.5' },
+      });
       await waitFor(() =>
-        expect(sent.at(-1)).toEqual({ method: 'renderAt', params: { timeSec: 1.5 } }),
+        expect(sent.at(-1)).toEqual({
+          method: 'renderAt',
+          params: { timeSec: 1.5 },
+        }),
       );
       expect(screen.getByText('1.50 / 4.00 s')).toBeTruthy();
       // None of the After Effects reads: they are workspace-scoped and mean nothing here.

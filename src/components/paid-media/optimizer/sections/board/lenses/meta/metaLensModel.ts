@@ -1,3 +1,9 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+
+type MetaCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // What the four Meta views share: one row shape for the ranking reads (campaigns, ad sets and
 // ads from paid-media-reporting/metrics over the last 30 days), the result that counts on the
 // account with the goal it is measured against, and how a cost reads against that goal.
@@ -61,7 +67,11 @@ export function rankRowOf(entity: PaidRankedEntity): MetaRankRow {
 /** The results a Meta ranking row counts. */
 export type MetaResultKind = 'purchases' | 'leads' | 'conversations';
 
-const FUNNEL_DEPTH: Record<MetaResultKind, number> = { purchases: 3, leads: 2, conversations: 1 };
+const FUNNEL_DEPTH: Record<MetaResultKind, number> = {
+  purchases: 3,
+  leads: 2,
+  conversations: 1,
+};
 
 export type ResultWords = { one: string; many: string };
 
@@ -228,14 +238,26 @@ export function vsReferenceText(cost: number | null, reference: CostReference | 
 }
 
 /** A share of a whole, 0.243 → "24%"; a sliver reads "<1%", never "0%". */
-export function formatShare(share: number | null): string {
+let percentFormatters: Map<UiLocale, Intl.NumberFormat> | undefined;
+
+export function formatShare(share: number | null, locale: UiLocale = 'en'): string {
   if (share == null || !Number.isFinite(share)) return '—';
-  if (share > 0 && share < 0.005) return '<1%';
-  return `${Math.round(share * 100)}%`;
+  if (locale === 'en') return share > 0 && share < 0.005 ? '<1%' : `${Math.round(share * 100)}%`;
+  let format = percentFormatters?.get(locale);
+  if (!format) {
+    format = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+    });
+    (percentFormatters ??= new Map()).set(locale, format);
+  }
+  if (share > 0 && share < 0.005) return '<' + format.format(0.01);
+  const rounded = Math.round(share * 100);
+  return format.format(rounded === 0 ? 0 : rounded / 100);
 }
 
-export function formatRoas(roas: number | null): string {
-  return roas == null || !Number.isFinite(roas) ? '—' : roas.toFixed(2);
+export function formatRoas(roas: number | null, locale: UiLocale = 'en'): string {
+  return roas == null || !Number.isFinite(roas) ? '—' : formatDecimal(roas, 2, locale);
 }
 
 /** "$305–$509 MXN": both ends with the symbol, the code once at the end (M1). */
@@ -244,8 +266,8 @@ export function formatMoneyRange(lo: number, hi: number, currency: string | null
 }
 
 /** "Oct 15", product chrome. */
-export function monthDayEn(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+export function monthDayEn(iso: string, locale: string = 'en-US'): string {
+  return new Date(iso).toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
@@ -255,4 +277,11 @@ export function monthDayEn(iso: string): string {
 /** Whether a date string parses. */
 export function isDate(iso: string | null | undefined): iso is string {
   return typeof iso === 'string' && !Number.isNaN(Date.parse(iso));
+}
+
+export function resultWordsUi(kind: MetaResultKind, t: MetaCopy): ResultWords {
+  return {
+    one: t('overviewResultWord', { kind, many: 'no' }),
+    many: t('overviewResultWord', { kind, many: 'yes' }),
+  };
 }

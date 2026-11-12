@@ -14,6 +14,7 @@ import {
   isImageGeneratorModel,
   supportsImageSize,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { NanoGenNodeData } from '../../types';
 import { InspectorNote, InspectorSection, OptionRow } from './controls';
 
@@ -40,14 +41,16 @@ export function ImageGenSection({
   data: NanoGenNodeData;
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const model = isImageGeneratorModel(data.model) ? data.model : 'nano-banana-2-lite';
   const sizes = imageSizesForModel(model);
 
   return (
     <>
-      <InspectorSection title="Model">
+      <InspectorSection title={translateUi('model_5e2c614c')}>
         <OptionRow<ImageGeneratorModel>
-          label="Generator"
+          label={translateUi('generator_1ade60ab')}
           value={model}
           options={imageModelOptions(undefined, model).map((option) => ({
             value: option.model,
@@ -59,21 +62,26 @@ export function ImageGenSection({
         />
       </InspectorSection>
 
-      <InspectorSection title="Output">
+      <InspectorSection title={translateUi('output_b2439bcb')}>
         {supportsImageSize(model) ? (
           <OptionRow<ImageSize>
-            label="Size"
+            label={translateUi('size_1af85190')}
             value={data.imageSize}
             options={sizes.map((value) => ({ value, label: value }))}
             onChange={(value) => onPatch({ imageSize: value })}
           />
         ) : (
-          <InspectorNote>This model takes no size parameter — it renders at 1024px.</InspectorNote>
+          <InspectorNote>
+            {translateUi('this_model_takes_no_size_parameter__9337720c')}
+          </InspectorNote>
         )}
         <OptionRow
-          label="Aspect ratio"
+          label={translateUi('aspect_ratio_d7ad336f')}
           value={data.aspectRatio || '16:9'}
-          options={imageAspectRatios(model).map((value) => ({ value, label: value }))}
+          options={imageAspectRatios(model).map((value) => ({
+            value,
+            label: value,
+          }))}
           onChange={(value) => onPatch({ aspectRatio: value })}
         />
       </InspectorSection>

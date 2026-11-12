@@ -1,7 +1,8 @@
 'use client';
-import { ArrowUpToLine, RotateCw, ScrollText, SquareArrowOutUpRight } from 'lucide-react';
 
+import { ArrowUpToLine, RotateCw, ScrollText, SquareArrowOutUpRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { CreativeSwapComparison } from '@/components/dco/CreativeSwapComparison';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -47,8 +48,9 @@ import type {
   ProductSwapProduct,
 } from '@/lib/types/dco';
 import { cn } from '@/lib/utils';
+import { dcoActionLabel, dcoScopeLabel, dcoStatusLabel } from './dcoControlLabels';
 
-function formatTimestamp(isoString: string): string {
+function formatTimestamp(isoString: string, locale = 'en'): string {
   const date = new Date(isoString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -56,11 +58,17 @@ function formatTimestamp(isoString: string): string {
 
   if (diffHours < 1) {
     const diffMins = Math.floor(diffMs / (1000 * 60));
-    return `${diffMins}m ago`;
+    return new Intl.RelativeTimeFormat(locale, {
+      numeric: 'always',
+      style: 'short',
+    }).format(-diffMins, 'minute');
   } else if (diffHours < 24) {
-    return `${Math.floor(diffHours)}h ago`;
+    return new Intl.RelativeTimeFormat(locale, {
+      numeric: 'always',
+      style: 'short',
+    }).format(-Math.floor(diffHours), 'hour');
   } else {
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
@@ -101,24 +109,24 @@ const getActionTypeColor = (
 
 const CURRENCY_KEYS = ['spend', 'budget', 'cost', 'price', 'bid', 'cpc', 'cpm', 'cpa', 'revenue'];
 
-function formatCurrency(value: number | string): string {
+function formatCurrency(value: number | string, locale = 'en'): string {
   const num = Number(value);
   if (isNaN(num)) return String(value);
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'USD',
   }).format(num);
 }
 
-function formatDetailValue(key: string, value: unknown): string {
+function formatDetailValue(key: string, value: unknown, locale = 'en'): string {
   const lowerKey = key.toLowerCase();
   const isCurrencyKey = CURRENCY_KEYS.some((term) => lowerKey.includes(term));
 
   if (typeof value === 'number') {
     if (isCurrencyKey) {
-      return formatCurrency(value);
+      return formatCurrency(value, locale);
     }
-    return value.toString();
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 20 }).format(value);
   }
 
   if (typeof value === 'string') {
@@ -130,7 +138,7 @@ function formatDetailValue(key: string, value: unknown): string {
       if (match) {
         const prefix = match[1] || '';
         const numberPart = match[2];
-        return `${prefix}${formatCurrency(numberPart)}`;
+        return `${prefix}${formatCurrency(numberPart, locale)}`;
       }
     }
 
@@ -143,7 +151,9 @@ function formatDetailValue(key: string, value: unknown): string {
       // Reconstruct the string with the formatted currency
       const prefix = operator ? `${operator} ` : '';
       // Clean up whitespace in reconstruction
-      return `${keyword} ${prefix.trim()} ${formatCurrency(number)}`.trim().replace(/\s+/g, ' ');
+      return `${keyword} ${prefix.trim()} ${formatCurrency(number, locale)}`
+        .trim()
+        .replace(/\s+/g, ' ');
     });
   }
 
@@ -154,6 +164,8 @@ function formatDetailValue(key: string, value: unknown): string {
 }
 
 function DetailSection({ data, label }: { data: Record<string, unknown> | null; label: string }) {
+  const uiLocale = useLocale();
+
   if (!data || Object.keys(data).length === 0) return null;
 
   return (
@@ -169,7 +181,7 @@ function DetailSection({ data, label }: { data: Record<string, unknown> | null; 
                 {key.replace(/_/g, ' ')}
               </span>
               <span className="text-gray-900 break-words font-mono text-xs">
-                {formatDetailValue(key, value)}
+                {formatDetailValue(key, value, uiLocale)}
               </span>
             </div>
           ))}
@@ -186,16 +198,19 @@ function ProductSwapSection({
   outgoing: ProductSwapProduct;
   replacement: ProductSwapProduct;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('dashboard');
   return (
     <div>
       <span className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        Product Swap
+        {uiText('product_swap_28725af')}
       </span>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-md border bg-red-50/40 p-3 text-sm">
           <div className="mb-2 flex items-center gap-2">
             <ShadcnBadge variant="destructive" className="text-2xs">
-              Outgoing
+              {uiText('outgoing_3619cf0')}
             </ShadcnBadge>
             {outgoing.reason && (
               <span className="text-2xs text-muted-foreground capitalize">
@@ -211,11 +226,13 @@ function ProductSwapSection({
         <div className="rounded-md border bg-green-50/40 p-3 text-sm">
           <div className="mb-2 flex items-center gap-2">
             <ShadcnBadge variant="default" className="text-2xs">
-              Replacement
+              {uiText('replacement_cefd665')}
             </ShadcnBadge>
             {replacement.discount != null && (
               <span className="text-2xs font-semibold text-green-700">
-                {replacement.discount}% off
+                {uiText.rich('sentence_1bbee745d52c', {
+                  v0: () => replacement.discount,
+                })}
               </span>
             )}
           </div>
@@ -224,15 +241,39 @@ function ProductSwapSection({
             {replacement.brand} · #{replacement.external_id}
           </p>
           {replacement.sizes && (
-            <p className="mt-1 text-xs text-muted-foreground">Sizes: {replacement.sizes}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {uiText.rich('sentence_73995ad03da2', {
+                v0: () => replacement.sizes,
+              })}
+            </p>
           )}
           {(replacement.similarity_score != null || replacement.quality_score != null) && (
             <div className="mt-1.5 flex gap-3 text-xs text-muted-foreground">
               {replacement.similarity_score != null && (
-                <span>Similarity: {replacement.similarity_score.toFixed(1)}</span>
+                <span>
+                  {uiText.rich('sentence_ba1c7ec7bee0', {
+                    v0: () =>
+                      replacement.similarity_score === undefined
+                        ? ''
+                        : new Intl.NumberFormat(uiLocale, {
+                            minimumFractionDigits: 1,
+                            maximumFractionDigits: 1,
+                          }).format(replacement.similarity_score),
+                  })}
+                </span>
               )}
               {replacement.quality_score != null && (
-                <span>Quality: {replacement.quality_score.toFixed(2)}</span>
+                <span>
+                  {uiText.rich('sentence_428e98b5586b', {
+                    v0: () =>
+                      replacement.quality_score === undefined
+                        ? ''
+                        : new Intl.NumberFormat(uiLocale, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }).format(replacement.quality_score),
+                  })}
+                </span>
               )}
             </div>
           )}
@@ -243,6 +284,7 @@ function ProductSwapSection({
 }
 
 function ActionItemContent({ log }: { log: ActionLog }) {
+  const uiText = useTranslations('dashboard');
   const payload = log.actionPayload as Partial<CreativeSwitchExternalPayload>;
 
   const hasOriginalCreativeUrl = typeof payload?.original_creative_url === 'string';
@@ -277,7 +319,7 @@ function ActionItemContent({ log }: { log: ActionLog }) {
       {log.decisionNote && (
         <div>
           <span className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Decision Note
+            {uiText('decision_note_4990c10')}
           </span>
           <div className="rounded-md border bg-blue-50/50 p-3 text-sm text-gray-900">
             {log.decisionNote}
@@ -300,17 +342,20 @@ function ActionItemContent({ log }: { log: ActionLog }) {
       )}
 
       {!isCreativeSwap && !paramsChangedIsRedundant && (
-        <DetailSection data={log.paramsChanged} label="Parameters Changed" />
+        <DetailSection data={log.paramsChanged} label={uiText('parameters_changed_df2cd18')} />
       )}
 
-      <DetailSection data={cleanedPayload as Record<string, unknown>} label="Action Payload" />
+      <DetailSection
+        data={cleanedPayload as Record<string, unknown>}
+        label={uiText('action_payload_c62a605')}
+      />
 
-      <DetailSection data={log.result} label="Result" />
+      <DetailSection data={log.result} label={uiText('result_6e7d50e')} />
 
       {log.error && (
         <div>
           <span className="mb-2 block text-xs font-medium uppercase tracking-wider text-destructive">
-            Error
+            {uiText('error_54a0e8c')}
           </span>
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
             {log.error}
@@ -360,18 +405,19 @@ function AdAccountSelector({
   onChange: (value: string | undefined) => void;
   isLoading: boolean;
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">Ad Account:</span>
+      <span className="text-xs text-muted-foreground">{uiText('ad_account_0360aa2')}</span>
       <Select
         value={selectedId ?? ''}
         onValueChange={(value) => onChange(value === 'all' ? undefined : value)}
       >
         <SelectTrigger className="w-[200px]" disabled={isLoading}>
-          <SelectValue placeholder="All accounts" />
+          <SelectValue placeholder={uiText('all_accounts_f4f6813')} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All accounts</SelectItem>
+          <SelectItem value="all">{uiText('all_accounts_f4f6813')}</SelectItem>
           {accounts.map((account) => (
             <SelectItem key={account.id} value={account.id}>
               {account.name || account.id}
@@ -396,18 +442,19 @@ function CampaignSelector({
   onChange: (value: string | undefined) => void;
   isLoading: boolean;
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">Campaign:</span>
+      <span className="text-xs text-muted-foreground">{uiText('campaign_2983410')}</span>
       <Select
         value={selectedId ?? ''}
         onValueChange={(value) => onChange(value === 'all' ? undefined : value)}
       >
         <SelectTrigger className="w-[200px]" disabled={isLoading}>
-          <SelectValue placeholder="All campaigns" />
+          <SelectValue placeholder={uiText('all_campaigns_ffdb9c4')} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All campaigns</SelectItem>
+          <SelectItem value="all">{uiText('all_campaigns_ffdb9c4')}</SelectItem>
           {campaigns.map((campaign) => (
             <SelectItem key={campaign.id} value={campaign.id}>
               {campaign.name || campaign.id.slice(0, 12) + '...'}
@@ -428,16 +475,17 @@ function SortSelector({
   value: 'occurred_at' | 'campaign_id';
   onChange: (value: 'occurred_at' | 'campaign_id') => void;
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">Sort by:</span>
+      <span className="text-xs text-muted-foreground">{uiText('sort_by_27ab006')}</span>
       <Select value={value} onValueChange={(val) => onChange(val as 'occurred_at' | 'campaign_id')}>
         <SelectTrigger className="w-[140px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="occurred_at">Date (default)</SelectItem>
-          <SelectItem value="campaign_id">Campaign ID</SelectItem>
+          <SelectItem value="occurred_at">{uiText('date_default_2013b7f')}</SelectItem>
+          <SelectItem value="campaign_id">{uiText('campaign_id_1078a0a')}</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -451,9 +499,10 @@ function DateRangeSelector({
   value: DateRangeDays;
   onChange: (value: DateRangeDays) => void;
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">Range:</span>
+      <span className="text-xs text-muted-foreground">{uiText('range_01059eb')}</span>
       <Select
         value={value.toString()}
         onValueChange={(val) => onChange(Number(val) as DateRangeDays)}
@@ -462,8 +511,8 @@ function DateRangeSelector({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="7">Last 7d</SelectItem>
-          <SelectItem value="30">Last 30d</SelectItem>
+          <SelectItem value="7">{uiText('last_7d_9976054')}</SelectItem>
+          <SelectItem value="30">{uiText('last_30d_bbada0d')}</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -493,6 +542,7 @@ function FilterControls({
   isLoadingAdAccounts,
   onFilterChange,
 }: FilterControlsProps) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex flex-wrap items-center gap-2">
       <AdAccountSelector
@@ -514,16 +564,16 @@ function FilterControls({
         onValueChange={(value) => onFilterChange('status', value === 'all' ? undefined : value)}
       >
         <SelectTrigger className="w-[100px]">
-          <SelectValue placeholder="Status" />
+          <SelectValue placeholder={uiText('status_920e413')} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All Status</SelectItem>
-          <SelectItem value="APPROVED">Approved</SelectItem>
-          <SelectItem value="SUCCESS">Success</SelectItem>
-          <SelectItem value="EXECUTED">Executed</SelectItem>
-          <SelectItem value="REJECTED">Rejected</SelectItem>
-          <SelectItem value="FAILED">Failed</SelectItem>
-          <SelectItem value="PENDING">Pending</SelectItem>
+          <SelectItem value="all">{uiText('all_status_4310add')}</SelectItem>
+          <SelectItem value="APPROVED">{uiText('approved_87b42e4')}</SelectItem>
+          <SelectItem value="SUCCESS">{uiText('success_c88a0b9')}</SelectItem>
+          <SelectItem value="EXECUTED">{uiText('executed_3aa8b68')}</SelectItem>
+          <SelectItem value="REJECTED">{uiText('rejected_aea4a04')}</SelectItem>
+          <SelectItem value="FAILED">{uiText('failed_031a8f0')}</SelectItem>
+          <SelectItem value="PENDING">{uiText('pending_331551b')}</SelectItem>
         </SelectContent>
       </Select>
 
@@ -532,22 +582,24 @@ function FilterControls({
         onValueChange={(value) => onFilterChange('actionType', value === 'all' ? undefined : value)}
       >
         <SelectTrigger className="w-[140px]">
-          <SelectValue placeholder="Action" />
+          <SelectValue placeholder={uiText('action_64cff13')} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All Actions</SelectItem>
-          <SelectItem value="PAUSE_CAMPAIGN">Pause Campaign</SelectItem>
-          <SelectItem value="ALERT_ACCOUNT">Alert Account</SelectItem>
-          <SelectItem value="NOOP">No-op</SelectItem>
-          <SelectItem value="SWITCH_CREATIVE">Switch Creative</SelectItem>
-          <SelectItem value="CREATIVE_SWITCH_EXTERNAL">Creative Switch External</SelectItem>
-          <SelectItem value="ADJUST_BUDGET">Adjust Budget</SelectItem>
-          <SelectItem value="SCALE_BUDGET">Scale Budget</SelectItem>
-          <SelectItem value="SCALE_CAMPAIGN">Scale Campaign</SelectItem>
-          <SelectItem value="SCALE_AD">Scale Ad</SelectItem>
-          <SelectItem value="PAUSE_AD">Pause Ad</SelectItem>
-          <SelectItem value="CREATE_VARIANT">Create Variant</SelectItem>
-          <SelectItem value="ARCHIVE_ENTITY">Archive Entity</SelectItem>
+          <SelectItem value="all">{uiText('all_actions_d409578')}</SelectItem>
+          <SelectItem value="PAUSE_CAMPAIGN">{uiText('pause_campaign_0f63c6b')}</SelectItem>
+          <SelectItem value="ALERT_ACCOUNT">{uiText('alert_account_04d4764')}</SelectItem>
+          <SelectItem value="NOOP">{uiText('no_op_d5440dd')}</SelectItem>
+          <SelectItem value="SWITCH_CREATIVE">{uiText('switch_creative_3040cdc')}</SelectItem>
+          <SelectItem value="CREATIVE_SWITCH_EXTERNAL">
+            {uiText('creative_switch_external_201b340')}
+          </SelectItem>
+          <SelectItem value="ADJUST_BUDGET">{uiText('adjust_budget_e6fadbc')}</SelectItem>
+          <SelectItem value="SCALE_BUDGET">{uiText('scale_budget_ea66b21')}</SelectItem>
+          <SelectItem value="SCALE_CAMPAIGN">{uiText('scale_campaign_db3b15e')}</SelectItem>
+          <SelectItem value="SCALE_AD">{uiText('scale_ad_b92ac59')}</SelectItem>
+          <SelectItem value="PAUSE_AD">{uiText('pause_ad_4f3b26a')}</SelectItem>
+          <SelectItem value="CREATE_VARIANT">{uiText('create_variant_94ef3ff')}</SelectItem>
+          <SelectItem value="ARCHIVE_ENTITY">{uiText('archive_entity_7b12ae7')}</SelectItem>
         </SelectContent>
       </Select>
 
@@ -556,15 +608,15 @@ function FilterControls({
         onValueChange={(value) => onFilterChange('scopeType', value === 'all' ? undefined : value)}
       >
         <SelectTrigger className="w-[100px]">
-          <SelectValue placeholder="Scope" />
+          <SelectValue placeholder={uiText('scope_b073f6c')} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All Scopes</SelectItem>
-          <SelectItem value="GLOBAL">Global</SelectItem>
-          <SelectItem value="ACCOUNT">Account</SelectItem>
-          <SelectItem value="CAMPAIGN">Campaign</SelectItem>
-          <SelectItem value="ADSET">Ad Set</SelectItem>
-          <SelectItem value="AD">Ad</SelectItem>
+          <SelectItem value="all">{uiText('all_scopes_c2e1087')}</SelectItem>
+          <SelectItem value="GLOBAL">{uiText('global_a258b30')}</SelectItem>
+          <SelectItem value="ACCOUNT">{uiText('account_7e1b0d5')}</SelectItem>
+          <SelectItem value="CAMPAIGN">{uiText('campaign_268286d')}</SelectItem>
+          <SelectItem value="ADSET">{uiText('ad_set_8fa52e4')}</SelectItem>
+          <SelectItem value="AD">{uiText('ad_1d97c9f')}</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -586,6 +638,9 @@ export function DCOActionsWidget({
   className,
   variant = 'table',
 }: DCOActionsWidgetProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('dashboard');
   const {
     logs,
     isLoading,
@@ -649,9 +704,14 @@ export function DCOActionsWidget({
             <div className="flex flex-wrap items-center justify-between gap-1.5">
               <div className="flex min-w-0 items-center gap-1.5">
                 <ScrollText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <h3 className="truncate text-xs font-semibold sm:text-sm">DCO actions</h3>
+                <h3 className="truncate text-xs font-semibold sm:text-sm">
+                  {uiText('dco_actions_d3f7a22')}
+                </h3>
                 <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground tabular-nums">
-                  {pagination.totalCount} · {dateRangeDays}d
+                  {uiText.rich('sentence_3b6c7451c3a7', {
+                    v0: () => pagination.totalCount,
+                    v1: () => dateRangeDays,
+                  })}
                 </span>
               </div>
               <div className="flex items-center gap-1">
@@ -662,16 +722,16 @@ export function DCOActionsWidget({
                   }
                 >
                   <SelectTrigger className="h-7 min-w-0 rounded-md px-2 text-xs">
-                    <SelectValue placeholder="Status" />
+                    <SelectValue placeholder={uiText('status_920e413')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All status</SelectItem>
-                    <SelectItem value="APPROVED">Approved</SelectItem>
-                    <SelectItem value="SUCCESS">Success</SelectItem>
-                    <SelectItem value="EXECUTED">Executed</SelectItem>
-                    <SelectItem value="REJECTED">Rejected</SelectItem>
-                    <SelectItem value="FAILED">Failed</SelectItem>
-                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="all">{uiText('all_status_32b9b2c')}</SelectItem>
+                    <SelectItem value="APPROVED">{uiText('approved_87b42e4')}</SelectItem>
+                    <SelectItem value="SUCCESS">{uiText('success_c88a0b9')}</SelectItem>
+                    <SelectItem value="EXECUTED">{uiText('executed_3aa8b68')}</SelectItem>
+                    <SelectItem value="REJECTED">{uiText('rejected_aea4a04')}</SelectItem>
+                    <SelectItem value="FAILED">{uiText('failed_031a8f0')}</SelectItem>
+                    <SelectItem value="PENDING">{uiText('pending_331551b')}</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -683,8 +743,8 @@ export function DCOActionsWidget({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="7">7d</SelectItem>
-                    <SelectItem value="30">30d</SelectItem>
+                    <SelectItem value="7">{uiText('7d_a7c7426')}</SelectItem>
+                    <SelectItem value="30">{uiText('30d_e3ba17e')}</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -696,13 +756,13 @@ export function DCOActionsWidget({
                         size="icon-sm"
                         onClick={refresh}
                         disabled={isLoading}
-                        aria-label="Refresh actions"
+                        aria-label={uiText('refresh_actions_ee8e81d')}
                       >
                         <RotateCw className={isLoading ? 'animate-spin' : undefined} />
                       </Button>
                     }
                   />
-                  <TooltipContent>Refresh actions</TooltipContent>
+                  <TooltipContent>{uiText('refresh_actions_ee8e81d')}</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -717,7 +777,7 @@ export function DCOActionsWidget({
                   onClick={refresh}
                   className="mt-2 text-xs font-medium text-destructive underline-offset-4 hover:underline"
                 >
-                  Retry
+                  {uiText('retry_942087c')}
                 </button>
               </div>
             ) : null}
@@ -732,18 +792,22 @@ export function DCOActionsWidget({
 
             {!isLoading && !error && visibleLogs.length === 0 ? (
               <div className="flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed px-4 text-center">
-                <p className="text-sm font-medium">No actions in the last {dateRangeDays}d</p>
+                <p className="text-sm font-medium">
+                  {uiText.rich('sentence_76b541083484', {
+                    count: dateRangeDays,
+                  })}
+                </p>
                 {dateRangeDays < 30 ? (
                   <button
                     type="button"
                     onClick={() => handleDateRangeChange(30)}
                     className="mt-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
                   >
-                    Try last 30 days
+                    {uiText('try_last_30_days_b7594fe')}
                   </button>
                 ) : (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Automation activity will appear here.
+                    {uiText('automation_activity_will_appear_here_9183eb5')}
                   </p>
                 )}
               </div>
@@ -769,14 +833,14 @@ export function DCOActionsWidget({
                               variant={getStatusVariant(log.status)}
                               className="h-5 px-1.5 text-2xs"
                             >
-                              {log.status}
+                              {dcoStatusLabel(log.status, uiText)}
                             </ShadcnBadge>
                             <span className="truncate text-xs text-muted-foreground">
-                              {log.scopeType}
+                              {dcoScopeLabel(log.scopeType, uiText)}
                             </span>
                           </span>
                           <span className="mt-1 block truncate text-xs font-medium">
-                            {log.actionType.replace(/_/g, ' ')}
+                            {dcoActionLabel(log.actionType, uiText)}
                           </span>
                           {log.decisionNote ? (
                             <span className="mt-0.5 block line-clamp-2 text-xs leading-snug text-muted-foreground">
@@ -785,7 +849,7 @@ export function DCOActionsWidget({
                           ) : null}
                         </span>
                         <span className="whitespace-nowrap text-xs text-muted-foreground">
-                          {formatTimestamp(log.occurredAt)}
+                          {formatTimestamp(log.occurredAt, uiLocale)}
                         </span>
                       </div>
 
@@ -796,7 +860,10 @@ export function DCOActionsWidget({
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            transition={{
+                              duration: 0.18,
+                              ease: [0.16, 1, 0.3, 1],
+                            }}
                             className="overflow-hidden border-t"
                           >
                             <div className="p-2">
@@ -820,7 +887,7 @@ export function DCOActionsWidget({
                 disabled={!pagination.hasPrevPage}
                 className="font-medium text-foreground disabled:pointer-events-none disabled:opacity-35"
               >
-                Prev
+                {uiText('prev_7391299')}
               </button>
               <span>
                 {pagination.page} / {pagination.totalPages}
@@ -831,7 +898,7 @@ export function DCOActionsWidget({
                 disabled={!pagination.hasNextPage}
                 className="font-medium text-foreground disabled:pointer-events-none disabled:opacity-35"
               >
-                Next
+                {uiText('next_1ff57a2')}
               </button>
             </div>
           ) : null}
@@ -849,9 +916,9 @@ export function DCOActionsWidget({
               <ScrollText aria-hidden="true" />
             </Pill>
             <div>
-              <h3 className="text-lg font-semibold">DCO Actions</h3>
+              <h3 className="text-lg font-semibold">{uiText('dco_actions_4e1fede')}</h3>
               <p className="text-sm text-muted-foreground">
-                Last {dateRangeDays}d automated actions
+                {uiText.rich('sentence_409d00e19eb1', { count: dateRangeDays })}
               </p>
             </div>
           </div>
@@ -864,12 +931,16 @@ export function DCOActionsWidget({
                   </Button>
                 }
               />
-              <TooltipContent>Refresh</TooltipContent>
+              <TooltipContent>{uiText('refresh_0e91610')}</TooltipContent>
             </Tooltip>
-            <Button variant="secondary" size="icon" aria-label="Open full activity log">
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label={uiText('open_full_activity_log_b0964bb')}
+            >
               <SquareArrowOutUpRight />
             </Button>
-            <Button variant="secondary" size="icon" aria-label="Pin activity log">
+            <Button variant="secondary" size="icon" aria-label={uiText('pin_activity_log_85aa1aa')}>
               <ArrowUpToLine />
             </Button>
           </div>
@@ -895,7 +966,11 @@ export function DCOActionsWidget({
           <div className="flex items-center gap-3">
             <SortSelector value={sort.sortBy} onChange={handleSortChange} />
             <DateRangeSelector value={dateRangeDays} onChange={handleDateRangeChange} />
-            <span className="text-sm text-muted-foreground">{pagination.totalCount} actions</span>
+            <span className="text-sm text-muted-foreground">
+              {uiText.rich('sentence_6f4adc336b07', {
+                count: pagination.totalCount,
+              })}
+            </span>
           </div>
         </div>
 
@@ -903,7 +978,7 @@ export function DCOActionsWidget({
           <div className="rounded-md bg-destructive/10 p-3">
             <p className="text-sm text-destructive">{error}</p>
             <Button variant="destructive" size="sm" className="mt-2" onClick={refresh}>
-              Retry
+              {uiText('retry_942087c')}
             </Button>
           </div>
         )}
@@ -913,10 +988,10 @@ export function DCOActionsWidget({
         {!isLoading && !error && logs.length === 0 && (
           <div className="py-6 text-center">
             <p className="text-sm text-muted-foreground">
-              No DCO activity in the selected time period.
+              {uiText('no_dco_activity_in_the_selected_time_period_5d188a8')}
             </p>
             <span className="mt-1 block text-xs text-muted-foreground">
-              Automations will appear here as they run.
+              {uiText('automations_will_appear_here_as_they_run_7dd9787')}
             </span>
           </div>
         )}
@@ -927,10 +1002,10 @@ export function DCOActionsWidget({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Scope</TableHead>
-                    <TableHead>Occurred</TableHead>
+                    <TableHead>{uiText('status_920e413')}</TableHead>
+                    <TableHead>{uiText('action_64cff13')}</TableHead>
+                    <TableHead>{uiText('scope_b073f6c')}</TableHead>
+                    <TableHead>{uiText('occurred_553bd4f')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -945,20 +1020,22 @@ export function DCOActionsWidget({
                         >
                           <TableCell>
                             <ShadcnBadge variant={getStatusVariant(log.status)}>
-                              {log.status}
+                              {dcoStatusLabel(log.status, uiText)}
                             </ShadcnBadge>
                           </TableCell>
                           <TableCell>
                             <ShadcnBadge variant={getActionTypeColor(log.actionType)}>
-                              {log.actionType.replace(/_/g, ' ')}
+                              {dcoActionLabel(log.actionType, uiText)}
                             </ShadcnBadge>
                           </TableCell>
                           <TableCell>
-                            <ShadcnBadge variant="outline">{log.scopeType}</ShadcnBadge>
+                            <ShadcnBadge variant="outline">
+                              {dcoScopeLabel(log.scopeType, uiText)}
+                            </ShadcnBadge>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {formatTimestamp(log.occurredAt)}
+                              {formatTimestamp(log.occurredAt, uiLocale)}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -975,7 +1052,10 @@ export function DCOActionsWidget({
                                   initial={{ opacity: 0, height: 0 }}
                                   animate={{ opacity: 1, height: 'auto' }}
                                   exit={{ opacity: 0, height: 0 }}
-                                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                                  transition={{
+                                    duration: 0.18,
+                                    ease: [0.16, 1, 0.3, 1],
+                                  }}
                                   className="overflow-hidden"
                                 >
                                   <div className="p-4">
@@ -1004,7 +1084,9 @@ export function DCOActionsWidget({
                       />
                     </PaginationItem>
 
-                    {Array.from({ length: Math.min(5, pagination.totalPages) }).map((_, i) => {
+                    {Array.from({
+                      length: Math.min(5, pagination.totalPages),
+                    }).map((_, i) => {
                       let pageNum: number;
                       if (pagination.totalPages <= 5) {
                         pageNum = i + 1;

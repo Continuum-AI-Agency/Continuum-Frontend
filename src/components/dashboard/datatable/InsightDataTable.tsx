@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, ChevronDown, ChevronsUpDown, Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { Panel } from '@/components/shared/Panel';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -89,9 +90,11 @@ export function InsightDataTable<T>({
   className,
   maxHeight,
   searchable = false,
-  searchPlaceholder = 'Search…',
+  searchPlaceholder: providedSearchPlaceholder,
   searchValue,
 }: InsightDataTableProps<T>) {
+  const uiText = useTranslations('dashboard');
+  const searchPlaceholder = providedSearchPlaceholder ?? uiText('tableSearch');
   const [sort, setSort] = useState<SortState | null>(defaultSort ?? null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -193,8 +196,12 @@ export function InsightDataTable<T>({
                 </TableHead>
               );
             })}
-            {rowActions ? <TableHead className="h-8 w-10 px-2" aria-label="Actions" /> : null}
-            {expandedContent ? <TableHead className="h-8 w-9 px-2" aria-label="Expand" /> : null}
+            {rowActions ? (
+              <TableHead className="h-8 w-10 px-2" aria-label={uiText('actions_ff8059d')} />
+            ) : null}
+            {expandedContent ? (
+              <TableHead className="h-8 w-9 px-2" aria-label={uiText('expand_07548c2')} />
+            ) : null}
           </TableRow>
         </TableHeader>
 
@@ -208,8 +215,8 @@ export function InsightDataTable<T>({
                 className="px-[var(--card-pad)] py-6 text-center text-xs text-muted-foreground"
               >
                 {canSearch && query.trim().length > 0
-                  ? `No matches for “${query.trim()}”.`
-                  : (emptyState ?? 'Nothing here yet.')}
+                  ? uiText('m_5e2746433d', { v0: String(query.trim()) })
+                  : (emptyState ?? uiText('nothing_here_yet_2de5247'))}
               </TableCell>
             </TableRow>
           ) : (

@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // The curated Brand Book surface: one cohesive, tabbed experience over the
 // materialized book. Every piece is rendered as a designed component (color
@@ -57,14 +58,20 @@ import { BrandMdEditor } from './BrandMdEditor';
 import { BrandScorecard } from './BrandScorecard';
 import { resolveColorTokens, resolveFontTokens } from './brandBookIdentity';
 
-type ReadinessBadge = { label: string; variant: 'default' | 'secondary' | 'outline' };
+type ReadinessBadge = {
+  label: string;
+  variant: 'default' | 'secondary' | 'outline';
+};
 
-function readinessBadge(score: number): ReadinessBadge {
+function readinessBadge(
+  score: number,
+  tUi: ReturnType<typeof useTranslations<'settings'>>,
+): ReadinessBadge {
   const band = readinessBandForScore(score);
-  if (band === 'ready') return { label: 'Ready', variant: 'default' };
-  if (band === 'developing') return { label: 'Developing', variant: 'secondary' };
-  if (band === 'needs_work') return { label: 'Needs work', variant: 'outline' };
-  return { label: 'Not started', variant: 'outline' };
+  if (band === 'ready') return { label: tUi('m_20c7c5522f'), variant: 'default' };
+  if (band === 'developing') return { label: tUi('m_7903b5f5b9'), variant: 'secondary' };
+  if (band === 'needs_work') return { label: tUi('m_eafabce9ae'), variant: 'outline' };
+  return { label: tUi('m_db2c45d557'), variant: 'outline' };
 }
 
 function Chips({
@@ -151,6 +158,8 @@ function EmptyTab({
 // ---------------------------------------------------------------------------
 
 function ColorPalette({ colors }: { colors: BrandColorToken[] }) {
+  const tUi = useTranslations('settings');
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {colors.map((token, i) => (
@@ -158,7 +167,7 @@ function ColorPalette({ colors }: { colors: BrandColorToken[] }) {
           <div className="h-16 w-full" style={{ backgroundColor: token.value }} aria-hidden />
           <div className="flex flex-col gap-0.5 px-3 py-2">
             <span className="truncate text-sm font-medium">
-              {token.name ?? token.role ?? 'Color'}
+              {token.name ?? token.role ?? tUi('m_1d0c8304ba')}
             </span>
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="font-mono uppercase">{token.value}</span>
@@ -172,6 +181,8 @@ function ColorPalette({ colors }: { colors: BrandColorToken[] }) {
 }
 
 function TypeSpecimens({ fonts }: { fonts: BrandFontToken[] }) {
+  const tUi = useTranslations('settings');
+
   return (
     <div className="flex flex-col gap-3">
       {fonts.map((font, i) => (
@@ -180,15 +191,15 @@ function TypeSpecimens({ fonts }: { fonts: BrandFontToken[] }) {
           className="flex items-center gap-4 rounded-lg border px-4 py-3"
         >
           <span className="text-3xl leading-none" style={{ fontFamily: font.family }} aria-hidden>
-            Ag
+            {tUi('m_2813c80ab0')}
           </span>
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-medium" style={{ fontFamily: font.family }}>
               {font.family}
             </span>
             <span className="text-xs text-muted-foreground">
-              {font.role ? <span className="capitalize">{font.role}</span> : 'Typeface'}
-              {font.note ? ` · ${font.note}` : ''}
+              {font.role ? <span className="capitalize">{font.role}</span> : tUi('m_eb29514de8')}
+              {font.note ? tUi('m_2130fb1aa9', { v0: String(font.note) }) : ''}
             </span>
           </div>
         </div>
@@ -204,6 +215,8 @@ function IdentityTab({
   tokens: BrandMdTokens | null;
   composite: BrandReportResult | null;
 }) {
+  const tUi = useTranslations('settings');
+
   const colors = resolveColorTokens(tokens, composite);
   const typography = resolveFontTokens(tokens, composite);
   const voice = tokens?.voice ?? null;
@@ -213,51 +226,47 @@ function IdentityTab({
 
   if (!hasIdentity) {
     return (
-      <EmptyTab
-        icon={Palette}
-        title="Identity is still assembling"
-        description="Colors, type, and voice appear here once onboarding and the brand report finish."
-      />
+      <EmptyTab icon={Palette} title={tUi('m_13351499db')} description={tUi('m_bf3150f1fd')} />
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
       {colors.length > 0 ? (
-        <SectionCard
-          icon={Palette}
-          title="Color palette"
-          description="The brand's core colors and their roles."
-        >
+        <SectionCard icon={Palette} title={tUi('m_c1c32ec261')} description={tUi('m_a5e1f25c31')}>
           <ColorPalette colors={colors} />
         </SectionCard>
       ) : null}
 
       {typography.length > 0 ? (
-        <SectionCard icon={Type} title="Typography" description="Typefaces used on creative.">
+        <SectionCard icon={Type} title={tUi('m_f4beb9af58')} description={tUi('m_be6071721a')}>
           <TypeSpecimens fonts={typography} />
         </SectionCard>
       ) : null}
 
       {voice ? (
-        <SectionCard icon={AudioLines} title="Voice" description="How the brand sounds in copy.">
+        <SectionCard
+          icon={AudioLines}
+          title={tUi('m_3091c8446f')}
+          description={tUi('m_816c666d70')}
+        >
           {voice.tone ? (
-            <Field label="Tone">
+            <Field label={tUi('m_376990dbb4')}>
               <p className="text-sm">{voice.tone}</p>
             </Field>
           ) : null}
           {voice.style ? (
-            <Field label="Style">
+            <Field label={tUi('m_99a0efc6cf')}>
               <p className="text-sm text-muted-foreground">{voice.style}</p>
             </Field>
           ) : null}
           {voice.power_verbs.length > 0 ? (
-            <Field label="Power verbs">
+            <Field label={tUi('m_3841b59485')}>
               <Chips items={voice.power_verbs} />
             </Field>
           ) : null}
           {voice.banned_words.length > 0 ? (
-            <Field label="Avoid">
+            <Field label={tUi('m_33fc27cf0a')}>
               <Chips items={voice.banned_words} variant="outline" />
             </Field>
           ) : null}
@@ -268,19 +277,19 @@ function IdentityTab({
       (personality.archetype ||
         personality.traits.length > 0 ||
         personality.descriptors.length > 0) ? (
-        <SectionCard icon={Sparkles} title="Personality">
+        <SectionCard icon={Sparkles} title={tUi('m_2981a38391')}>
           {personality.archetype ? (
-            <Field label="Archetype">
+            <Field label={tUi('m_85e8a71471')}>
               <p className="text-sm">{personality.archetype}</p>
             </Field>
           ) : null}
           {personality.traits.length > 0 ? (
-            <Field label="Traits">
+            <Field label={tUi('m_d1a616085a')}>
               <Chips items={personality.traits} />
             </Field>
           ) : null}
           {personality.descriptors.length > 0 ? (
-            <Field label="Descriptors">
+            <Field label={tUi('m_4b52e2ccdf')}>
               <Chips items={personality.descriptors} variant="outline" />
             </Field>
           ) : null}
@@ -291,9 +300,9 @@ function IdentityTab({
       (imagery.creative_direction.length > 0 ||
         imagery.mood.length > 0 ||
         imagery.avoid.length > 0) ? (
-        <SectionCard icon={ImageIcon} title="Imagery" description="Creative direction for visuals.">
+        <SectionCard icon={ImageIcon} title={tUi('m_8e72e49ebf')} description={tUi('m_9494ad3317')}>
           {imagery.creative_direction.length > 0 ? (
-            <Field label="Direction">
+            <Field label={tUi('m_fd8e45bac7')}>
               <ul className="flex list-disc flex-col gap-1 pl-4 text-sm text-muted-foreground">
                 {imagery.creative_direction.map((line, i) => (
                   <li key={i}>{line}</li>
@@ -302,12 +311,12 @@ function IdentityTab({
             </Field>
           ) : null}
           {imagery.mood.length > 0 ? (
-            <Field label="Mood">
+            <Field label={tUi('m_c16981e681')}>
               <Chips items={imagery.mood} />
             </Field>
           ) : null}
           {imagery.avoid.length > 0 ? (
-            <Field label="Avoid">
+            <Field label={tUi('m_33fc27cf0a')}>
               <Chips items={imagery.avoid} variant="outline" />
             </Field>
           ) : null}
@@ -322,11 +331,13 @@ function IdentityTab({
 // ---------------------------------------------------------------------------
 
 function DoDontList({ dos, donts }: { dos: readonly string[]; donts: readonly string[] }) {
+  const tUi = useTranslations('settings');
+
   if (dos.length === 0 && donts.length === 0) return null;
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {dos.length > 0 ? (
-        <Field label="Do">
+        <Field label={tUi('m_22bdf47be3')}>
           <ul className="flex flex-col gap-1.5">
             {dos.map((line, i) => (
               <li key={i} className="flex items-start gap-2 text-sm">
@@ -338,7 +349,7 @@ function DoDontList({ dos, donts }: { dos: readonly string[]; donts: readonly st
         </Field>
       ) : null}
       {donts.length > 0 ? (
-        <Field label="Don't">
+        <Field label={tUi('m_bfed24b7dd')}>
           <ul className="flex flex-col gap-1.5">
             {donts.map((line, i) => (
               <li key={i} className="flex items-start gap-2 text-sm">
@@ -354,6 +365,8 @@ function DoDontList({ dos, donts }: { dos: readonly string[]; donts: readonly st
 }
 
 function GuidelinesCard({ guidelines }: { guidelines: BrandGuidelines }) {
+  const tUi = useTranslations('settings');
+
   const g = guidelines.messaging_guardrails;
   const hasGuardrails =
     g.required_themes.length > 0 ||
@@ -369,15 +382,11 @@ function GuidelinesCard({ guidelines }: { guidelines: BrandGuidelines }) {
   if (!hasAny) return null;
 
   return (
-    <SectionCard
-      icon={ListChecks}
-      title="Content rules"
-      description="The operational guidelines every post must honor."
-    >
+    <SectionCard icon={ListChecks} title={tUi('m_b6c982981c')} description={tUi('m_dcd225e120')}>
       <DoDontList dos={guidelines.voice_rules.dos} donts={guidelines.voice_rules.donts} />
 
       {guidelines.content_pillars.length > 0 ? (
-        <Field label="Content pillars">
+        <Field label={tUi('m_c5a309f176')}>
           <div className="flex flex-col gap-1.5">
             {guidelines.content_pillars.map((p, i) => (
               <div key={i} className="text-sm">
@@ -390,7 +399,7 @@ function GuidelinesCard({ guidelines }: { guidelines: BrandGuidelines }) {
       ) : null}
 
       {guidelines.tonal_rules.length > 0 ? (
-        <Field label="Tone">
+        <Field label={tUi('m_376990dbb4')}>
           <div className="flex flex-col gap-1">
             {guidelines.tonal_rules.map((t, i) => (
               <div key={i} className="text-sm">
@@ -407,22 +416,22 @@ function GuidelinesCard({ guidelines }: { guidelines: BrandGuidelines }) {
           <Separator />
           <div className="grid gap-3 sm:grid-cols-2">
             {g.required_themes.length > 0 ? (
-              <Field label="Required themes">
+              <Field label={tUi('m_8866c251da')}>
                 <Chips items={g.required_themes} />
               </Field>
             ) : null}
             {g.avoid_themes.length > 0 ? (
-              <Field label="Avoid themes">
+              <Field label={tUi('m_3d4753ae2c')}>
                 <Chips items={g.avoid_themes} variant="outline" />
               </Field>
             ) : null}
             {g.preferred_terms.length > 0 ? (
-              <Field label="Preferred terms">
+              <Field label={tUi('m_e3cd8ec172')}>
                 <Chips items={g.preferred_terms} />
               </Field>
             ) : null}
             {g.banned_words.length > 0 ? (
-              <Field label="Banned words">
+              <Field label={tUi('m_7455fac9c6')}>
                 <Chips items={g.banned_words} variant="destructive" />
               </Field>
             ) : null}
@@ -434,13 +443,11 @@ function GuidelinesCard({ guidelines }: { guidelines: BrandGuidelines }) {
 }
 
 function StrategyTab({ composite }: { composite: BrandReportResult | null }) {
+  const tUi = useTranslations('settings');
+
   if (!composite) {
     return (
-      <EmptyTab
-        icon={Compass}
-        title="Strategy is still assembling"
-        description="Positioning, audience, and content rules appear here once the brand report finishes."
-      />
+      <EmptyTab icon={Compass} title={tUi('m_b1a9a49c80')} description={tUi('m_7072199452')} />
     );
   }
 
@@ -453,24 +460,24 @@ function StrategyTab({ composite }: { composite: BrandReportResult | null }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <SectionCard icon={Compass} title="Positioning" description="What the brand stands for.">
+      <SectionCard icon={Compass} title={tUi('m_86ba514122')} description={tUi('m_1c94705824')}>
         {understanding.positioning_thesis ? (
           <p className="text-sm">{understanding.positioning_thesis}</p>
         ) : null}
         {pillars.length > 0 ? (
-          <Field label="Brand pillars">
+          <Field label={tUi('m_352c56ff4d')}>
             <Chips items={pillars} />
           </Field>
         ) : null}
         {understanding.tonal_signal ? (
-          <Field label="Tonal signal">
+          <Field label={tUi('m_aac6a2780a')}>
             <p className="text-sm text-muted-foreground">{understanding.tonal_signal}</p>
           </Field>
         ) : null}
       </SectionCard>
 
       {audienceSummary || segments.length > 0 ? (
-        <SectionCard icon={Users} title="Audience" description="Who the brand is speaking to.">
+        <SectionCard icon={Users} title={tUi('m_51d9934555')} description={tUi('m_78abed9169')}>
           {audienceSummary ? <p className="text-sm">{audienceSummary}</p> : null}
           {segments.length > 0 ? (
             <div className="flex flex-col gap-3">
@@ -505,14 +512,10 @@ function ReadinessTab({
   readiness: ReadinessAnalysis | null;
   brandId: string;
 }) {
+  const tUi = useTranslations('settings');
+
   if (!readiness) {
-    return (
-      <EmptyTab
-        icon={Gauge}
-        title="Readiness not scored yet"
-        description="The 7-dimension readiness score appears once the brand report has run."
-      />
-    );
+    return <EmptyTab icon={Gauge} title={tUi('m_0ce22c5b26')} description={tUi('m_0ff797762b')} />;
   }
   const summary = deriveReadinessSummary(readiness);
   return (
@@ -520,12 +523,12 @@ function ReadinessTab({
       {summary.top_blocker ? (
         <Card>
           <CardHeader>
-            <CardTitle>Top blocker</CardTitle>
+            <CardTitle>{tUi('m_0b8cbf263e')}</CardTitle>
             <CardDescription>{summary.top_blocker}</CardDescription>
           </CardHeader>
           {summary.next_action ? (
             <CardContent>
-              <Field label="Next action">
+              <Field label={tUi('m_d816c3c7c7')}>
                 <p className="text-sm">{summary.next_action}</p>
               </Field>
             </CardContent>
@@ -544,6 +547,8 @@ function ReadinessTab({
 type BookDocument = BrandBookResponse['documents'][number];
 
 function DocumentsCard({ documents }: { documents: BookDocument[] }) {
+  const tUi = useTranslations('settings');
+
   const byCategory = new Map<DocumentCategory, BookDocument[]>();
   for (const doc of documents) {
     const list = byCategory.get(doc.category) ?? [];
@@ -551,11 +556,7 @@ function DocumentsCard({ documents }: { documents: BookDocument[] }) {
     byCategory.set(doc.category, list);
   }
   return (
-    <SectionCard
-      icon={FolderOpen}
-      title="Knowledge base"
-      description="Documents grounding this brand."
-    >
+    <SectionCard icon={FolderOpen} title={tUi('m_70cd2e748f')} description={tUi('m_fc5051e023')}>
       <div className="flex flex-col gap-4">
         {[...byCategory.entries()].map(([category, docs]) => (
           <div key={category} className="flex flex-col gap-2">
@@ -591,14 +592,14 @@ function SourcesTab({
   documents: BookDocument[];
   onboarding: NonNullable<BrandBookResponse['assembled']>['onboarding'];
 }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+
   const onboardingPresent = onboarding?.present ?? false;
   if (documents.length === 0 && !onboardingPresent) {
     return (
-      <EmptyTab
-        icon={FolderOpen}
-        title="No sources yet"
-        description="Upload guidelines, personas, or strategy docs under Knowledge to ground this brand."
-      />
+      <EmptyTab icon={FolderOpen} title={tUi('m_1780c4a5f9')} description={tUi('m_1f67cf9a88')} />
     );
   }
   return (
@@ -606,20 +607,20 @@ function SourcesTab({
       {documents.length > 0 ? <DocumentsCard documents={documents} /> : null}
       <SectionCard
         icon={ClipboardCheck}
-        title="Onboarding intake"
-        description="The source interview behind this book."
+        title={tUi('m_f99bd73154')}
+        description={tUi('m_fbc6617c65')}
       >
         <div className="flex items-center gap-2">
           <Badge variant={onboarding?.completed ? 'default' : 'secondary'}>
             {onboarding?.completed
-              ? 'Completed'
+              ? tUi('m_1798b3ba42')
               : onboardingPresent
-                ? 'In progress'
-                : 'Not started'}
+                ? tUi('m_b6bd42e4e7')
+                : tUi('m_db2c45d557')}
           </Badge>
           {onboarding?.completed_at ? (
             <span className="text-xs text-muted-foreground">
-              {new Date(onboarding.completed_at).toLocaleDateString()}
+              {new Date(onboarding.completed_at).toLocaleDateString(uiLocale)}
             </span>
           ) : null}
         </div>
@@ -639,6 +640,10 @@ export function BrandBookView({
   brandBook: BrandBookResponse;
   brandName: string;
 }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+
   const tokens = brandBook.brand_tokens ?? null;
   const composite = brandBook.composite ?? null;
   const assembled = brandBook.assembled;
@@ -650,7 +655,7 @@ export function BrandBookView({
   // prefer whichever is present so the score shows in both places.
   const effectiveReadiness = composite?.readiness ?? assembled?.report?.readiness ?? null;
   const overall = effectiveReadiness?.overall_score ?? null;
-  const badge = overall != null ? readinessBadge(overall) : null;
+  const badge = overall != null ? readinessBadge(overall, tUi) : null;
 
   return (
     <BrandMdDirtyProvider>
@@ -660,9 +665,7 @@ export function BrandBookView({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex flex-col gap-1">
                 <CardTitle className="text-xl">{brandName}</CardTitle>
-                <CardDescription>
-                  Your living brand identity — one source of truth for every generation.
-                </CardDescription>
+                <CardDescription>{tUi('m_c0f95dc9e4')}</CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 {badge ? <Badge variant={badge.variant}>{badge.label}</Badge> : null}
@@ -697,7 +700,8 @@ export function BrandBookView({
                 ) : null}
                 {brandBook.refreshed_at ? (
                   <span className="ml-auto text-xs text-muted-foreground">
-                    Updated {new Date(brandBook.refreshed_at).toLocaleDateString()}
+                    {tUi('m_c95815a044')}
+                    {new Date(brandBook.refreshed_at).toLocaleDateString(uiLocale)}
                   </span>
                 ) : null}
               </div>
@@ -707,11 +711,11 @@ export function BrandBookView({
 
         <Tabs defaultValue="identity" className="gap-4">
           <TabsList className="flex-wrap">
-            <TabsTrigger value="identity">Identity</TabsTrigger>
-            <TabsTrigger value="strategy">Strategy</TabsTrigger>
-            <TabsTrigger value="readiness">Readiness</TabsTrigger>
-            <TabsTrigger value="sources">Sources</TabsTrigger>
-            <TabsTrigger value="document">Document</TabsTrigger>
+            <TabsTrigger value="identity">{tUi('m_7e5a975b6a')}</TabsTrigger>
+            <TabsTrigger value="strategy">{tUi('m_69fb26dda8')}</TabsTrigger>
+            <TabsTrigger value="readiness">{tUi('m_6dc1222c37')}</TabsTrigger>
+            <TabsTrigger value="sources">{tUi('m_2eb56be3c2')}</TabsTrigger>
+            <TabsTrigger value="document">{tUi('m_e214b8a299')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="identity">
@@ -733,8 +737,8 @@ export function BrandBookView({
           <TabsContent value="document">
             <SectionCard
               icon={FileText}
-              title="Brand document"
-              description="The editable master brand.md. Powers the views above."
+              title={tUi('m_4733a831b3')}
+              description={tUi('m_5a4995717a')}
             >
               <BrandMdEditor
                 brandId={brandBook.brand_id}
@@ -750,6 +754,8 @@ export function BrandBookView({
 }
 
 export function BrandDnaPanel({ brandBook }: { brandBook: BrandBookResponse }) {
+  const tUi = useTranslations('settings');
+
   const composite = brandBook.composite ?? null;
   const tokens = brandBook.brand_tokens ?? null;
   return (
@@ -757,11 +763,7 @@ export function BrandDnaPanel({ brandBook }: { brandBook: BrandBookResponse }) {
       <div className="flex flex-col gap-4">
         <IdentityTab tokens={tokens} composite={composite} />
         <StrategyTab composite={composite} />
-        <SectionCard
-          icon={FileText}
-          title="Authoritative brand document"
-          description="Edit the brand.md source agents must follow. Derived intelligence never overwrites it."
-        >
+        <SectionCard icon={FileText} title={tUi('m_fef5aa706d')} description={tUi('m_0a76f0c4c5')}>
           <BrandMdEditor
             brandId={brandBook.brand_id}
             initialBrandMd={brandBook.brand_md}

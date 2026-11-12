@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +36,8 @@ type BrandInsightsDataTableProps = {
   rows: BrandInsightsTableRow[];
   emptyTitle: string;
   emptyDescription: string;
-  countLabel: string;
+  countLabel?: string;
+  formatCount?: (count: number) => string;
   searchPlaceholder: string;
   secondaryHeaderLabel?: string;
   isLoading?: boolean;
@@ -109,14 +111,18 @@ export function BrandInsightsDataTable({
   rows,
   emptyTitle,
   emptyDescription,
-  countLabel,
+  countLabel = '',
+  formatCount,
   searchPlaceholder,
-  secondaryHeaderLabel = 'Date',
+  secondaryHeaderLabel: uiProvidedSecondaryHeaderLabel,
   isLoading = false,
   density = 'default',
   scrollWithinSection = false,
   renderRowAction,
 }: BrandInsightsDataTableProps) {
+  const uiText = useTranslations('common');
+  const secondaryHeaderLabel = uiProvidedSecondaryHeaderLabel ?? uiText('date_99c40ab');
+
   const [query, setQuery] = useState('');
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -193,7 +199,14 @@ export function BrandInsightsDataTable({
           variant="outline"
           className={cn('px-3 text-xs font-semibold', compact ? 'h-7' : 'h-9')}
         >
-          {filteredRows.length} {countLabel}
+          {formatCount ? (
+            formatCount(filteredRows.length)
+          ) : (
+            <>
+              {filteredRows.length}
+              {countLabel ? ` ${countLabel}` : ''}
+            </>
+          )}
         </Badge>
       </div>
 
@@ -211,7 +224,7 @@ export function BrandInsightsDataTable({
                       compact ? 'py-1.5' : 'py-2',
                     )}
                   >
-                    Content
+                    {uiText('m_4f9be057f0')}
                   </TableHead>
                   <TableHead
                     className={cn(
@@ -250,7 +263,7 @@ export function BrandInsightsDataTable({
                       className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                       onClick={() => handleSort('title')}
                     >
-                      Content
+                      {uiText('m_4f9be057f0')}
                       {sortKey === 'title' ? (
                         sortDir === 'asc' ? (
                           <ArrowUp className="h-3 w-3" />
@@ -288,7 +301,7 @@ export function BrandInsightsDataTable({
                   </TableHead>
                   {renderRowAction ? (
                     <TableHead className={cn('w-10 px-2', compact ? 'py-1.5' : 'py-2')}>
-                      <span className="sr-only">Actions</span>
+                      <span className="sr-only">{uiText('actions_ff8059d')}</span>
                     </TableHead>
                   ) : null}
                 </TableRow>
@@ -307,7 +320,12 @@ export function BrandInsightsDataTable({
                     detailEntries.length > 0
                       ? detailEntries
                       : row.subtitle?.trim()
-                        ? [{ label: 'Summary', value: row.subtitle }]
+                        ? [
+                            {
+                              label: uiText('m_12b71c3e0f'),
+                              value: row.subtitle,
+                            },
+                          ]
                         : [];
                   const titleClassName = cn(
                     'block line-clamp-2 font-medium',
@@ -354,7 +372,7 @@ export function BrandInsightsDataTable({
                             {normalizedPlatforms.length > 0 ? (
                               <div className="flex items-center gap-1">
                                 <span className="sr-only">
-                                  Platforms:{' '}
+                                  {uiText('m_ff66c9102c')}{' '}
                                   {normalizedPlatforms.map(formatPlatformLabel).join(', ')}
                                 </span>
                                 {normalizedPlatforms.map((platform) => {
@@ -408,7 +426,7 @@ export function BrandInsightsDataTable({
                               </dl>
                             ) : (
                               <p className="text-muted-foreground text-sm">
-                                No additional details for this item.
+                                {uiText('m_323c0b10b5')}
                               </p>
                             )}
                           </TableCell>

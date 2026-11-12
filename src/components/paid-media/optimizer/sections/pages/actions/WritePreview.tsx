@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // G12, the change preview: a write the Optimizer proposes or applied, drawn before → after. Each
 // entity gets two thin bars on one scale (the before muted, the after in the board's up or down
@@ -101,7 +102,10 @@ function BarRow({
           data-pct={bar.afterPct}
           data-testid="write-bar-after"
           initial={reduce ? false : { width: `${bar.beforePct}%` }}
-          style={{ width: `${bar.afterPct}%`, background: AFTER_COLOR[bar.direction] }}
+          style={{
+            width: `${bar.afterPct}%`,
+            background: AFTER_COLOR[bar.direction],
+          }}
           transition={{
             type: 'spring',
             visualDuration: 0.7,
@@ -164,28 +168,31 @@ export function BarLegend({
   bars: readonly WriteBar[];
   currency: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const net = netDelta(bars);
   const directions = new Set(bars.map((bar) => bar.direction));
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
       <span className="inline-flex items-center gap-1.5">
         <Swatch color="color-mix(in srgb, var(--muted-foreground) 30%, transparent)" />
-        Before
+        {betaUiText('beta_9bb725005055')}
       </span>
       {directions.has('up') ? (
         <span className="inline-flex items-center gap-1.5">
           <Swatch color={BOARD_COLOR.search} />
-          After, up
+          {betaUiText('beta_97a4344c85fd')}
         </span>
       ) : null}
       {directions.has('down') ? (
         <span className="inline-flex items-center gap-1.5">
           <Swatch color={BOARD_COLOR.pmax} />
-          After, down
+          {betaUiText('beta_96e7d5564a67')}
         </span>
       ) : null}
       <span className="font-medium text-foreground tabular-nums" data-testid="write-net">
-        Net {signedMoney(net, currency)}/day
+        {betaUiText('beta_660fb2c41d02')} {signedMoney(net, currency)}
+        {betaUiText('beta_ea30d1c554b8')}
       </span>
     </div>
   );
@@ -207,10 +214,12 @@ const CHECK_TONE: Record<GuardrailState, string> = {
 
 /** The guardrails as a checklist: each one's state as a mark, its rule and what it found. */
 export function GuardrailChecklist({ checks }: { checks: readonly GuardrailCheck[] }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   return (
     <ul
-      aria-label="Guardrails"
+      aria-label={betaUiText('beta_443f975eefe8')}
       className="grid grid-cols-[repeat(auto-fit,minmax(min(14rem,100%),1fr))] gap-x-4 gap-y-2"
       data-testid="write-checks"
     >
@@ -224,7 +233,11 @@ export function GuardrailChecklist({ checks }: { checks: readonly GuardrailCheck
             data-state={check.state}
             initial={reduce ? false : { opacity: 0, y: 4 }}
             key={check.id}
-            transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.15 + index * 0.05 }}
+            transition={{
+              duration: 0.35,
+              ease: EASE_OUT,
+              delay: 0.15 + index * 0.05,
+            }}
           >
             <Icon
               aria-hidden="true"
@@ -265,6 +278,8 @@ function WriteStateFooter({
   onApprove: (keys: string[]) => void;
   onApply: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (state.kind === 'none') return null;
   return (
     <div
@@ -282,11 +297,11 @@ function WriteStateFooter({
             type="button"
           >
             <SendIcon aria-hidden="true" className="size-3.5" />
-            Approve {plural(state.keys.length, 'move', 'moves')}
+            {betaUiText('beta_6007acbe30b2')} {plural(state.keys.length, 'move', 'moves')}
           </Button>
           {state.approved > 0 ? (
             <span className="text-muted-foreground text-xs">
-              {plural(state.approved, 'more is', 'more are')} approved and wait for Apply
+              {plural(state.approved, 'more is', 'more are')} {betaUiText('beta_953516f41426')}
             </span>
           ) : null}
         </>
@@ -294,7 +309,7 @@ function WriteStateFooter({
         <>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 font-medium text-foreground text-xs">
             <Clock3Icon aria-hidden="true" className="size-3.5" />
-            Queued: approved, not written yet
+            {betaUiText('beta_aad9cfb3f7f3')}
           </span>
           <Button
             className="h-8 px-3 text-sm"
@@ -303,7 +318,7 @@ function WriteStateFooter({
             size="sm"
             type="button"
           >
-            Apply now
+            {betaUiText('beta_3f0c9286cd8c')}
           </Button>
         </>
       )}
@@ -316,6 +331,8 @@ function WriteStateFooter({
 
 /** Autopilot's own next run, when it is armed: what is queued without anyone pressing a thing. */
 function AutopilotRunLine({ run, now }: { run: AutopilotRun; now: Date }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <p
       className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs"
@@ -323,11 +340,11 @@ function AutopilotRunLine({ run, now }: { run: AutopilotRun; now: Date }) {
     >
       <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
         <Clock3Icon aria-hidden="true" className="size-3.5" />
-        Queued for {runWhenWords(run.at, now)}
+        {betaUiText('beta_b1189be7ba8f')} {runWhenWords(run.at, now)}
       </span>
       <span>
-        Autopilot writes the Meta ad sets' budgets inside these guardrails on its own; a bigger move
-        {run.othersWait ? ', and every move on another platform,' : ''} waits here for a person.
+        {betaUiText('beta_c029085a4afd')}
+        {run.othersWait ? betaUiText('beta_7343e99eae21') : ''} {betaUiText('beta_16346adc24cd')}
       </span>
     </p>
   );
@@ -374,12 +391,14 @@ export function BudgetWritePreview({
   onApply,
   now = new Date(),
 }: BudgetWritePreviewProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const bars = writeBars(moves);
   if (bars.length === 0 && !autopilotRun) return null;
   const count = plural(bars.length, 'budget move', 'budget moves');
   return (
     <section
-      aria-label="Change preview"
+      aria-label={betaUiText('beta_af6683418a96')}
       className={cn(
         '@container flex flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground',
         boardPaletteClass,
@@ -387,9 +406,11 @@ export function BudgetWritePreview({
       data-testid="write-preview"
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className="font-semibold text-sm tracking-tight">Change preview</p>
+        <p className="font-semibold text-sm tracking-tight">{betaUiText('beta_af6683418a96')}</p>
         <span className="text-muted-foreground text-xs">
-          {bars.length > 0 ? `${count}, before and after` : 'Autopilot budget moves'}
+          {bars.length > 0
+            ? betaUiText('beta_94b9c6ee0038', { value0: String(count) })
+            : betaUiText('beta_6d372d798809')}
         </span>
         <span className="ml-auto">
           <PlatformChips platforms={platforms} />
@@ -397,7 +418,11 @@ export function BudgetWritePreview({
       </header>
       {bars.length > 0 ? (
         <>
-          <BeforeAfterBars bars={bars} currency={currency} label={`${count}, before and after`} />
+          <BeforeAfterBars
+            bars={bars}
+            currency={currency}
+            label={betaUiText('beta_94b9c6ee0038', { value0: String(count) })}
+          />
           <BarLegend bars={bars} currency={currency} />
         </>
       ) : null}
@@ -430,6 +455,8 @@ export function AppliedWriteRow({
   currency: string | null;
   entityNames?: ActionEntityNames;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const change = readActionChange(row);
   const entity = actionEntity(row, entityNames);
   const platform = actionPlatform(row);
@@ -437,7 +464,12 @@ export function AppliedWriteRow({
   const amounts = changeAmounts(change, currency);
   const bars = amounts
     ? writeBars([
-        { key: row.id, entityId: entity.id ?? entity.name, name: entity.name, ...amounts },
+        {
+          key: row.id,
+          entityId: entity.id ?? entity.name,
+          name: entity.name,
+          ...amounts,
+        },
       ])
     : [];
   return (
@@ -515,7 +547,9 @@ export function AppliedWriteRow({
           <PlatformChip platform={platform} />
         </p>
         {row.justification ? (
-          <p className="text-muted-foreground text-xs leading-relaxed">Why: {row.justification}</p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {betaUiText('beta_ad389aa4c08e')} {row.justification}
+          </p>
         ) : null}
         {receipt ? <ReceiptToken platform={platform} value={receipt} /> : null}
       </div>

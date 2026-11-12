@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const uploadMediaAsset = mock(async () => ({
   assetId: 'asset-9',
@@ -20,7 +21,10 @@ const uploadEphemeralChatDocument = mock(async () => ({
 }));
 
 let documentRows: Record<string, unknown>[] = [];
-const selectDocumentRows = mock(async () => ({ data: documentRows, error: null }));
+const selectDocumentRows = mock(async () => ({
+  data: documentRows,
+  error: null,
+}));
 const selectDocuments = mock(() => ({ in: selectDocumentRows }));
 const fromDocuments = mock(() => ({ select: selectDocuments }));
 const schemaDocuments = mock(() => ({ from: fromDocuments }));
@@ -48,7 +52,9 @@ mock.module('@/lib/supabase/realtime', () => ({ subscribeToRowBroadcasts }));
 // heartbeat landed after the deadline it was meant to push back, which made the test fail
 // about four runs in five on a loaded machine. 900ms keeps it sub-two-seconds with 300ms of
 // slack on either side of every checkpoint.
-mock.module('@/components/documents/useDocuments', () => ({ STALE_PROCESSING_MS: 900 }));
+mock.module('@/components/documents/useDocuments', () => ({
+  STALE_PROCESSING_MS: 900,
+}));
 
 const { MAX_ATTACHMENT_BYTES, useChatAttachments } = await import('./useChatAttachments');
 
@@ -261,7 +267,9 @@ describe('useChatAttachments', () => {
     // Past the ORIGINAL deadline (900ms) and still indexing — which only holds because the
     // heartbeat moved it. Without it this would already read 'error'.
     expect(result.current.files[0]?.status).toBe('indexing');
-    await waitFor(() => expect(result.current.files[0]?.status).toBe('error'), { timeout: 900 });
+    await waitFor(() => expect(result.current.files[0]?.status).toBe('error'), {
+      timeout: 900,
+    });
     expect(result.current.files[0]?.error).toBe('Indexing timed out');
   });
 

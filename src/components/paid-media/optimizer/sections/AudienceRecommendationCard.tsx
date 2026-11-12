@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { formatDecimal } from '@/lib/format/decimal';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // An audience proposal, opened. Read in the order a person decides in: first, when the row
 // failed, what failed and the one button that fixes it; then the comparison — the ad set's
 // audience today beside the proposed one, every change coloured in place; then a rail of
@@ -102,8 +107,6 @@ export type AudienceRecommendationCardProps = {
 /** The card's buttons, one size up from the dense `sm` default. */
 const ROOMY_BUTTON = 'h-8 px-3 text-sm';
 
-const ASK_AGAIN = 'Ask Jaina again';
-
 /** Where a Meta connection that can read but not write gets fixed — the same place the
  *  integration error banner sends a missing-permissions account. */
 export const META_CONNECTION_HREF = '/settings?section=integrations';
@@ -145,9 +148,14 @@ const CHIP_TONE: Record<AudienceChip['tone'], string> = {
   kept: 'border-border text-muted-foreground',
 };
 
-const CHIP_SIGN: Record<AudienceChip['tone'], string> = { added: '+', removed: '−', kept: '' };
+const CHIP_SIGN: Record<AudienceChip['tone'], string> = {
+  added: '+',
+  removed: '−',
+  kept: '',
+};
 
 function Chip({ chip }: { chip: AudienceChip }) {
+  const uiText = useTranslations('scale');
   return (
     <Badge
       className={cn('max-w-full whitespace-normal text-left', CHIP_TONE[chip.tone])}
@@ -161,9 +169,9 @@ function Chip({ chip }: { chip: AudienceChip }) {
         <span
           className="rounded-sm bg-primary px-1 font-semibold text-primary-foreground text-xs leading-4"
           data-testid="audience-chip-new"
-          title="No other ad set in the portfolio uses it"
+          title={uiText('no_other_ad_set_in_the_portfolio_uses_it_e956ba2')}
         >
-          NEW
+          {uiText('new_a253ff0')}
         </span>
       ) : null}
     </Badge>
@@ -210,9 +218,15 @@ function BeforeAfter({
   state: AudienceCardView['state'];
   block: AudienceProposalBlock | null;
 }) {
-  const comparison = plan ? audienceComparison(plan, novelty) : null;
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const comparison = plan ? audienceComparison(plan, novelty, uiText, uiLocale) : null;
   const frequency =
-    snapshot?.frequency7d != null ? `freq ${snapshot.frequency7d.toFixed(1)} / 7 days` : null;
+    snapshot?.frequency7d != null
+      ? uiText('audienceFrequencySevenDays', {
+          frequency: formatDecimal(snapshot.frequency7d, 1, uiLocale),
+        })
+      : null;
   const currentFooter = [comparison?.currentReach ?? null, frequency].filter(Boolean).join(' · ');
   return (
     <div
@@ -223,16 +237,19 @@ function BeforeAfter({
         className="grid min-w-0 content-start gap-2 border-border/60 border-t pt-2"
         data-testid="audience-current"
       >
-        <TileLabel>Current audience</TileLabel>
+        <TileLabel>{uiText('current_audience_5fb91be')}</TileLabel>
         {comparison?.hasPrevious ? (
           <FacetList
-            rows={comparison.rows.map((row) => ({ label: row.label, cell: row.current }))}
+            rows={comparison.rows.map((row) => ({
+              label: row.label,
+              cell: row.current,
+            }))}
           />
         ) : (
           <Muted>
             {snapshot?.audienceType
-              ? `No record of the current targeting; the ad set is ${snapshot.audienceType}.`
-              : 'No record of the current targeting.'}
+              ? uiText('template_662cabf722c8', { v0: snapshot.audienceType })
+              : uiText('no_record_of_the_current_targeting_f419c55')}
           </Muted>
         )}
         {currentFooter ? (
@@ -246,11 +263,14 @@ function BeforeAfter({
         className="grid min-w-0 content-start gap-2 border-primary/60 border-t-2 pt-2"
         data-testid="audience-proposed"
       >
-        <TileLabel className="text-primary-ink">Proposed audience</TileLabel>
+        <TileLabel className="text-primary-ink">{uiText('proposed_audience_844ec1d')}</TileLabel>
         {comparison ? (
           <>
             <FacetList
-              rows={comparison.rows.map((row) => ({ label: row.label, cell: row.proposed }))}
+              rows={comparison.rows.map((row) => ({
+                label: row.label,
+                cell: row.proposed,
+              }))}
             />
             {comparison.proposedReach ? (
               <p className="flex flex-wrap items-center gap-2 text-xs tabular-nums">
@@ -301,15 +321,17 @@ export function WhatAudience({
   state: AudienceCardView['state'];
   block: AudienceProposalBlock | null;
 }) {
-  if (plan) return <Muted>The proposed audience is in the comparison.</Muted>;
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  if (plan) return <Muted>{uiText('the_proposed_audience_is_in_the_comparison_8b3c5b0')}</Muted>;
   if (state === 'blocked' || state === 'blocked_cbo') {
     return (
       <div className="space-y-1.5">
         <Badge className={typeScale.label} variant="warning">
-          Blocked
+          {uiText('blocked_18f2a09')}
         </Badge>
         <p className="text-foreground text-sm" data-testid="audience-blocked-reason">
-          {block?.message ?? "The proposal couldn't be put together."}
+          {block?.message ?? uiText('the_proposal_couldn_t_be_put_together_a4f477e')}
         </p>
       </div>
     );
@@ -319,17 +341,14 @@ export function WhatAudience({
       <p className="flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2Icon className="size-3.5 animate-spin" />
         {state === 'queued'
-          ? 'Queued: Jaina picks it up in under a minute.'
-          : 'Jaina is reading the audience, the catalogue and the creatives…'}
+          ? uiText('queued_jaina_picks_it_up_in_under_a_minute_44f7764')
+          : uiText('jaina_is_reading_the_audience_the_catalogue_a_397b8e7')}
       </p>
     );
   }
-  if (state === 'failed') return <Muted>No proposal to show — what failed is above.</Muted>;
-  return (
-    <Muted>
-      Jaina proposes it with the optimizer's daily cycle for this ad set. Ask now to have it today.
-    </Muted>
-  );
+  if (state === 'failed')
+    return <Muted>{uiText('no_proposal_to_show_what_failed_is_above_13b42c5')}</Muted>;
+  return <Muted>{uiText('jaina_proposes_it_with_the_optimizer_s_daily__f46115a')}</Muted>;
 }
 
 // ── What failed ────────────────────────────────────────────────────────────────────────
@@ -372,6 +391,8 @@ export function ProposalFailureBlock({
   notice: ActionNotice | null;
   reaskTestId?: string;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const retry = failure.action === 'retry' ? onRetry : null;
   return (
     <div
@@ -385,7 +406,7 @@ export function ProposalFailureBlock({
       </p>
       {failure.metaSaid ? (
         <p className="text-muted-foreground text-xs" data-testid="audience-meta-said">
-          Meta said: “{failure.metaSaid}”
+          {uiText.rich('sentence_36336a8e77b4', { v0: failure.metaSaid })}
         </p>
       ) : null}
       <p className="text-muted-foreground">{failure.outcome}</p>
@@ -399,12 +420,14 @@ export function ProposalFailureBlock({
             size="sm"
             type="button"
           >
-            {retrying ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <RotateCwIcon className="size-3.5" />
-            )}
-            Retry in Meta
+            {uiText.rich('sentence_bb0e4dac6611', {
+              v0: () =>
+                retrying ? (
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                ) : (
+                  <RotateCwIcon className="size-3.5" />
+                ),
+            })}
           </Button>
         ) : onReask ? (
           <Button
@@ -421,7 +444,7 @@ export function ProposalFailureBlock({
             ) : (
               <SparklesIcon className="size-3.5" />
             )}
-            {ASK_AGAIN}
+            {uiText('askJainaAgain')}
           </Button>
         ) : null}
         {failure.checkConnection ? (
@@ -430,7 +453,7 @@ export function ProposalFailureBlock({
             data-testid="audience-check-connection"
             href={META_CONNECTION_HREF}
           >
-            Check Meta connection
+            {uiText('check_meta_connection_d4fc139')}
           </a>
         ) : null}
       </div>
@@ -450,12 +473,18 @@ function WhyTile({
   rec: RecommendationRow;
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const [open, setOpen] = React.useState(false);
-  const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
+  const evidence =
+    queueHeadlineLine(rec, currency, uiLocale) ??
+    evidenceLine(rec.evidence, currency, optimizerText, uiLocale);
   return (
-    <RailTile label="Why" testId="audience-why">
+    <RailTile label={uiText('why_d3ae14a')} testId="audience-why">
       <p className="text-sm">
-        <span className="font-semibold text-foreground">{triggerLabel(rec.trigger)}.</span>{' '}
+        <span className="font-semibold text-foreground">{triggerLabel(rec.trigger, uiText)}.</span>{' '}
         <span className="text-foreground">{plan ? plan.diagnosis : (rec.reason ?? '')}</span>
       </p>
       {evidence ? <p className="text-muted-foreground text-xs tabular-nums">{evidence}</p> : null}
@@ -465,7 +494,7 @@ function WhyTile({
             <p className="text-muted-foreground text-sm">{plan.rationale}</p>
           </CollapsibleContent>
           <CollapsibleTrigger className="text-primary-ink text-xs underline-offset-2 hover:underline">
-            {open ? 'Read less' : 'Read more'}
+            {open ? uiText('read_less_dbda1af') : uiText('read_more_83b7941')}
           </CollapsibleTrigger>
         </Collapsible>
       ) : null}
@@ -474,17 +503,18 @@ function WhyTile({
 }
 
 function NoveltyTile({ novelty }: { novelty: AudienceNovelty | null }) {
+  const uiText = useTranslations('scale');
   if (!novelty) {
     return (
-      <RailTile label="New to the portfolio" testId="audience-new">
-        <Muted>Known once there is a proposal.</Muted>
+      <RailTile label={uiText('new_to_the_portfolio_49a5c94')} testId="audience-new">
+        <Muted>{uiText('known_once_there_is_a_proposal_07f537e')}</Muted>
       </RailTile>
     );
   }
-  const summary = noveltySummary(novelty);
+  const summary = noveltySummary(novelty, uiText);
   const hasLists = novelty.fresh.length + novelty.reused.length + novelty.excludedByRule.length > 0;
   return (
-    <RailTile label="New to the portfolio" testId="audience-new">
+    <RailTile label={uiText('new_to_the_portfolio_49a5c94')} testId="audience-new">
       <p className="font-semibold text-foreground text-sm tabular-nums">{summary.headline}</p>
       <p className="text-muted-foreground text-xs">{summary.basis}</p>
       {summary.counts ? (
@@ -493,7 +523,8 @@ function NoveltyTile({ novelty }: { novelty: AudienceNovelty | null }) {
       {hasLists ? (
         <Collapsible>
           <CollapsibleTrigger className="inline-flex items-center gap-1 text-primary-ink text-xs underline-offset-2 hover:underline">
-            <ChevronDownIcon className="size-3.5" /> See the list
+            <ChevronDownIcon className="size-3.5" />
+            {uiText('see_the_list_b15e722')}
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div
@@ -506,8 +537,9 @@ function NoveltyTile({ novelty }: { novelty: AudienceNovelty | null }) {
                     <li className="text-foreground" key={`${item.kindLabel}:${item.name}`}>
                       {item.name}
                       <span className="text-muted-foreground">
-                        {' '}
-                        · {item.kindLabel} · unused today
+                        {uiText.rich('sentence_de13fca5707b', {
+                          v0: item.kindLabel,
+                        })}
                       </span>
                     </li>
                   ))}
@@ -517,7 +549,10 @@ function NoveltyTile({ novelty }: { novelty: AudienceNovelty | null }) {
                 <ul className="space-y-1" data-testid="audience-reused">
                   {novelty.reused.map((item) => (
                     <li className="text-muted-foreground" key={`${item.kindLabel}:${item.name}`}>
-                      {item.name} already runs in {item.usedIn.join(', ')}
+                      {uiText.rich('sentence_7bb897112835', {
+                        v0: item.name,
+                        v1: item.usedIn.join(', '),
+                      })}
                     </li>
                   ))}
                 </ul>
@@ -526,8 +561,10 @@ function NoveltyTile({ novelty }: { novelty: AudienceNovelty | null }) {
                 <ul className="space-y-1" data-testid="audience-excluded">
                   {novelty.excludedByRule.map((item) => (
                     <li className="text-muted-foreground" key={item.name}>
-                      <span className="line-through">{item.name}</span> · filtered by a brand rule:{' '}
-                      {item.rule}
+                      {uiText.rich('sentence_875027414830', {
+                        v0: () => <span className="line-through">{item.name}</span>,
+                        v1: item.rule,
+                      })}
                     </li>
                   ))}
                 </ul>
@@ -551,11 +588,13 @@ function LaunchPlanTile({
   currency: string | null;
   startActive: boolean;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   return (
-    <RailTile label="Launch plan" testId="audience-how">
+    <RailTile label={uiText('launch_plan_67d1dec')} testId="audience-how">
       {plan ? (
         <dl className="space-y-1.5 text-sm">
-          {implementationLines(plan, currency, startActive).map((line) => (
+          {implementationLines(plan, currency, startActive, uiText, uiLocale).map((line) => (
             <div key={line.label}>
               <dt className="text-muted-foreground text-xs">{line.label}</dt>
               <dd className="min-w-0 break-words text-foreground">{line.value}</dd>
@@ -565,8 +604,8 @@ function LaunchPlanTile({
       ) : (
         <Muted>
           {state === 'blocked' || state === 'blocked_cbo'
-            ? 'Nothing is created while the proposal is blocked.'
-            : 'A new ad set, paused, next to the current one; the current one keeps running.'}
+            ? uiText('nothing_is_created_while_the_proposal_is_bloc_7fbdb17')
+            : uiText('a_new_ad_set_paused_next_to_the_current_one_t_97f3672')}
         </Muted>
       )}
     </RailTile>
@@ -628,9 +667,17 @@ function AdsTile({
   brandId: string;
   adAccountId: string;
 }) {
-  const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId });
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const { freshUrlById, recover } = usePaidCreativeRecovery({
+    brandId,
+    adAccountId,
+  });
   return (
-    <RailTile label={`Ads · ${plan.creatives.length}`} testId="audience-ads">
+    <RailTile
+      label={uiText('template_6f5e21ecc9dd', { v0: plan.creatives.length })}
+      testId="audience-ads"
+    >
       {plan.creatives.length > 0 ? (
         <ul className="grid grid-cols-3 gap-2">
           {plan.creatives.map((creative) => (
@@ -646,17 +693,19 @@ function AdsTile({
               />
               <p className="mt-1 truncate text-foreground text-xs tabular-nums">
                 {creative.cost_per_event != null
-                  ? formatCurrency(creative.cost_per_event, currency)
+                  ? formatCurrency(creative.cost_per_event, currency, uiLocale)
                   : '—'}
               </p>
               <p className="truncate text-muted-foreground text-xs tabular-nums">
-                {creative.events} results
+                {uiText.rich('sentence_679ae875fc8d', {
+                  count: creative.events,
+                })}
               </p>
             </li>
           ))}
         </ul>
       ) : (
-        <Muted>None with enough results yet.</Muted>
+        <Muted>{uiText('none_with_enough_results_yet_7aadf06')}</Muted>
       )}
       {plan.creatives_disclosure ? (
         <p className="text-muted-foreground text-xs">{plan.creatives_disclosure}</p>
@@ -668,6 +717,8 @@ function AdsTile({
 // ── The card ───────────────────────────────────────────────────────────────────────────
 
 export function AudienceRecommendationCard(props: AudienceRecommendationCardProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const { rec, view, currency, adAccountId, portfolioSpecs } = props;
   const { plan, state, block, result, row, failure } = view;
   const [budgetMajor, setBudgetMajor] = React.useState<string>('');
@@ -700,7 +751,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
     setNotice(null);
     props.onRequest({
       onDone: (proposalId) => {
-        const throttled = reaskThrottledNote(proposalId, row);
+        const throttled = reaskThrottledNote(proposalId, row, undefined, uiText, uiLocale);
         setNotice(throttled ? { tone: 'info', text: throttled } : null);
       },
       onError,
@@ -778,23 +829,28 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
 
         {state === 'blocked_cbo' && block ? (
           <div className="space-y-3 text-sm">
-            <p className="font-medium text-foreground">This campaign holds the budget</p>
-            <Muted>
-              Recommendations need a daily budget per ad set to set the pace and compare ad sets.
-              Convert the campaign, then ask Jaina for the proposal again.
-            </Muted>
+            <p className="font-medium text-foreground">
+              {uiText('this_campaign_holds_the_budget_fdcfa30')}
+            </p>
+            <Muted>{uiText('recommendations_need_a_daily_budget_per_ad_se_e324953')}</Muted>
             {props.cboPreview?.ok && props.cboPreview.dryRun !== false ? (
               <div className="border-border/60 border-l pl-3">
                 <p className="mb-1 font-medium text-foreground">
-                  Preview: {props.cboPreview.adset_budgets.length} ad set
-                  {props.cboPreview.adset_budgets.length === 1 ? '' : 's'} with a daily budget of
-                  their own
+                  {uiText.rich('sentence_d871e444dfbd', {
+                    count: props.cboPreview.adset_budgets.length,
+                  })}
                 </p>
                 <ul className="space-y-1 text-muted-foreground">
                   {props.cboPreview.adset_budgets.slice(0, 6).map((b) => (
                     <li className="truncate" key={b.adset_id}>
-                      {b.adset_name ?? b.adset_id} ·{' '}
-                      {formatCurrency(b.daily_major, props.cboPreview?.currency ?? currency)}/day
+                      {uiText.rich('sentence_a6671f4c5dd2', {
+                        v0: b.adset_name ?? b.adset_id,
+                        v1: formatCurrency(
+                          b.daily_major,
+                          props.cboPreview?.currency ?? currency,
+                          uiLocale,
+                        ),
+                      })}
                     </li>
                   ))}
                 </ul>
@@ -805,14 +861,19 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   size="sm"
                   type="button"
                 >
-                  {props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-                  Convert the campaign to ad set budgets
+                  {uiText.rich('sentence_f1eb2ab61a93', {
+                    v0: () =>
+                      props.convertingCbo ? (
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                      ) : null,
+                  })}
                 </Button>
               </div>
             ) : props.cboPreview?.ok && props.cboPreview.dryRun === false ? (
               <p className="text-foreground">
-                Converted{props.cboPreview.deduped ? ' (already today)' : ''}. Ask Jaina for the
-                proposal again.
+                {uiText.rich('sentence_468e97ec7df3', {
+                  v0: props.cboPreview.deduped ? uiText('already_today_aff86ef') : '',
+                })}
               </p>
             ) : (
               <Button
@@ -823,11 +884,13 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 type="button"
                 variant="secondary"
               >
-                {props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-                Preview the conversion
+                {uiText.rich('sentence_5a0b5bd7f7a8', {
+                  v0: () =>
+                    props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null,
+                })}
               </Button>
             )}
-            {askButton(ASK_AGAIN, 'ghost')}
+            {askButton(uiText('askJainaAgain'), 'ghost')}
           </div>
         ) : null}
 
@@ -844,15 +907,12 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               title={block?.message}
               type="button"
             >
-              Create the new ad set (paused)
+              {uiText('create_the_new_ad_set_paused_6dde703')}
             </Button>
             {rec.status === 'pending' ? (
-              askButton(ASK_AGAIN)
+              askButton(uiText('askJainaAgain'))
             ) : (
-              <Muted>
-                The cycle already closed this recommendation, so it can't be asked for again from
-                here.
-              </Muted>
+              <Muted>{uiText('the_cycle_already_closed_this_recommendation__9d5174e')}</Muted>
             )}
           </div>
         ) : null}
@@ -860,7 +920,11 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         {state === 'ready' && plan ? (
           <div className="space-y-3 text-sm">
             <label className="block space-y-1" htmlFor={`budget-${rec.id}`}>
-              <span className="text-muted-foreground">Daily budget ({plan.budget.currency})</span>
+              <span className="text-muted-foreground">
+                {uiText.rich('sentence_b5ef0cc61c4e', {
+                  v0: plan.budget.currency,
+                })}
+              </span>
               <Input
                 className="h-8 max-w-48 text-sm"
                 id={`budget-${rec.id}`}
@@ -869,21 +933,23 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 value={budgetMajor}
               />
               <span className="block text-muted-foreground text-xs tabular-nums">
-                between {majorUnits(plan.budget.bounds.min_minor_units)} and{' '}
-                {majorUnits(plan.budget.bounds.max_minor_units)}
-                {budgetClamped ? ' · clamped to the limits' : ''}
-                {plan.budget.note ? ` · ${plan.budget.note}` : ''}
+                {uiText.rich('sentence_3a28c2ab4e73', {
+                  v0: majorUnits(plan.budget.bounds.min_minor_units),
+                  v1: majorUnits(plan.budget.bounds.max_minor_units),
+                  v2: budgetClamped ? uiText('clamped_to_the_limits_021a871') : '',
+                  v3: plan.budget.note ? ` · ${plan.budget.note}` : '',
+                })}
               </span>
             </label>
             <label className="flex items-center gap-2" htmlFor={`activate-${rec.id}`}>
               <Switch checked={activate} id={`activate-${rec.id}`} onCheckedChange={setActivate} />
-              <span className="text-foreground">Start active</span>
+              <span className="text-foreground">{uiText('start_active_5c2403b')}</span>
               <span className="text-muted-foreground">
                 {activate
                   ? plan.mode === 'replace'
-                    ? '— pauses the current ad set once the new one is live'
-                    : '— delivers as soon as Meta approves it'
-                  : '— created paused; you switch it on'}
+                    ? uiText('pauses_the_current_ad_set_once_the_new_one_is_058b1ba')
+                    : uiText('delivers_as_soon_as_meta_approves_it_ca32302')
+                  : uiText('created_paused_you_switch_it_on_b2b1f92')}
               </span>
             </label>
             <div className="flex flex-wrap gap-2">
@@ -895,8 +961,11 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 size="sm"
                 type="button"
               >
-                {props.approving ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-                Create the new ad set ({activate ? 'active' : 'paused'})
+                {uiText.rich('sentence_90f2277981c0', {
+                  icon: () =>
+                    props.approving ? <Loader2Icon className="size-3.5 animate-spin" /> : null,
+                  active: activate ? 'yes' : 'no',
+                })}
               </Button>
               <Button
                 className={ROOMY_BUTTON}
@@ -906,28 +975,34 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 type="button"
                 variant="ghost"
               >
-                Discard
+                {uiText('discard_eb1a70e')}
               </Button>
             </div>
             <AlertDialog onOpenChange={setConfirmOpen} open={confirmOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Create "{plan.adset_name}" in Meta?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {uiText.rich('sentence_a503a21f3870', {
+                      v0: plan.adset_name,
+                    })}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    A new ad set in {plan.source.campaign_name ?? 'this campaign'} with the proposed
-                    audience, {formatCurrency(majorUnits(budgetMinor), plan.budget.currency)}
-                    /day and {plan.creatives.length} ad
-                    {plan.creatives.length === 1 ? '' : 's'} reusing the portfolio's best creatives.{' '}
-                    {activate
-                      ? plan.mode === 'replace'
-                        ? `It starts active and "${plan.source.adset_name ?? 'the current ad set'}" pauses once it is live.`
-                        : 'It starts active.'
-                      : 'It is created paused; you switch it on from this card.'}{' '}
-                    Meta restarts the learning phase for a new ad set.
+                    {uiText.rich('sentence_38af52066a32', {
+                      campaign: plan.source.campaign_name ?? uiText('this_campaign_d855659'),
+                      budget: formatCurrency(
+                        majorUnits(budgetMinor),
+                        plan.budget.currency,
+                        uiLocale,
+                      ),
+                      ads: plan.creatives.length,
+                      active: activate ? 'yes' : 'no',
+                      replace: plan.mode === 'replace' ? 'yes' : 'no',
+                      current: plan.source.adset_name ?? uiText('the_current_ad_set_f79a4fb'),
+                    })}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => {
                       setConfirmOpen(false);
@@ -935,7 +1010,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                       props.onApprove({ budgetMinorUnits: budgetMinor, activate }, { onError });
                     }}
                   >
-                    Create the ad set
+                    {uiText('create_the_ad_set_1c007cc')}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -950,12 +1025,12 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
           <p className="flex items-center gap-2 text-muted-foreground text-sm">
             <Loader2Icon className="size-3.5 animate-spin" />
             {state === 'approved'
-              ? 'Approved: the worker creates it in under a minute.'
+              ? uiText('approved_the_worker_creates_it_in_under_a_min_3946361')
               : state === 'executing'
-                ? 'Creating the ad set and its ads in Meta…'
+                ? uiText('creating_the_ad_set_and_its_ads_in_meta_0f4d889')
                 : state === 'switching'
-                  ? 'Activating the new ad set…'
-                  : 'Undoing…'}
+                  ? uiText('activating_the_new_ad_set_61970c7')
+                  : uiText('undoing_62daa93')}
           </p>
         ) : null}
 
@@ -963,52 +1038,67 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
           <div className="space-y-3 text-sm">
             <div className="space-y-1">
               <p className="font-medium text-foreground">
-                {state === 'undone' ? 'Undone' : 'Created in Meta'}
+                {state === 'undone' ? uiText('undone_dcccf56') : uiText('created_in_meta_35c3bdc')}
                 {(row?.approval as { via?: string } | null)?.via === 'autopilot' ? (
                   <Badge className="ml-2 text-xs" variant="success">
-                    Approved by autopilot · created paused
+                    {uiText('approved_by_autopilot_created_paused_a61d168')}
                   </Badge>
                 ) : null}
               </p>
               {result.campaign ? (
                 <p className="truncate text-muted-foreground">
-                  Campaign {result.campaign.name ?? ''}{' '}
-                  <span className="text-xs tabular-nums">{result.campaign.id}</span>
+                  {uiText.rich('sentence_6ecb06535308', {
+                    v0: result.campaign.name ?? '',
+                    v1: () => (
+                      <span className="text-xs tabular-nums">{result.campaign?.id ?? ''}</span>
+                    ),
+                  })}
                 </p>
               ) : null}
               {result.adset ? (
                 <p className="truncate">
-                  Ad set {result.adset.name ?? ''}{' '}
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    {result.adset.id}
-                  </span>{' '}
-                  · {result.adset.effective_status ?? result.adset.status ?? ''}
-                  {urls?.adset ? (
-                    <a
-                      className="ml-1 inline-flex items-center gap-0.5 text-primary-ink"
-                      href={urls.adset}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      open <ExternalLinkIcon className="size-3.5" />
-                    </a>
-                  ) : null}
+                  {uiText.rich('sentence_d396a66a2e17', {
+                    v0: result.adset.name ?? '',
+                    v1: () => (
+                      <span className="text-muted-foreground text-xs tabular-nums">
+                        {result.adset?.id ?? ''}
+                      </span>
+                    ),
+                    v2: result.adset.effective_status ?? result.adset.status ?? '',
+                    v3: () =>
+                      urls?.adset ? (
+                        <a
+                          className="ml-1 inline-flex items-center gap-0.5 text-primary-ink"
+                          href={urls.adset}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {uiText('open_2348f99')}
+                          <ExternalLinkIcon className="size-3.5" />
+                        </a>
+                      ) : null,
+                  })}
                 </p>
               ) : null}
               {result.ads.map((ad, index) => (
                 <p className="truncate text-muted-foreground" key={ad.id}>
-                  Ad {ad.name ?? ''} <span className="text-xs tabular-nums">{ad.id}</span> ·{' '}
-                  {ad.effective_status ?? ad.status ?? ''}
-                  {urls?.ads[index] ? (
-                    <a
-                      className="ml-1 inline-flex items-center gap-0.5 text-primary-ink"
-                      href={urls.ads[index]}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      open <ExternalLinkIcon className="size-3.5" />
-                    </a>
-                  ) : null}
+                  {uiText.rich('sentence_a9e5a7204309', {
+                    v0: ad.name ?? '',
+                    v1: () => <span className="text-xs tabular-nums">{ad.id}</span>,
+                    v2: ad.effective_status ?? ad.status ?? '',
+                    v3: () =>
+                      urls?.ads[index] ? (
+                        <a
+                          className="ml-1 inline-flex items-center gap-0.5 text-primary-ink"
+                          href={urls.ads[index]}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {uiText('open_2348f99')}
+                          <ExternalLinkIcon className="size-3.5" />
+                        </a>
+                      ) : null,
+                  })}
                 </p>
               ))}
             </div>
@@ -1019,11 +1109,12 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   'h-8 gap-1.5 px-3 text-sm',
                 )}
               >
-                <ChevronDownIcon className="size-3.5" /> What was implemented
+                <ChevronDownIcon className="size-3.5" />
+                {uiText('what_was_implemented_58e62c4')}
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <dl className="mt-1.5 space-y-1.5 border-border/60 border-l pl-3 text-sm">
-                  {implementedRows(result, plan).map((line) => (
+                  {implementedRows(result, plan, uiText, uiLocale).map((line) => (
                     <div className="flex items-baseline gap-2" key={`${line.label}:${line.value}`}>
                       <dt className="w-28 shrink-0 text-muted-foreground text-xs">{line.label}</dt>
                       <dd className="min-w-0 break-words text-foreground">{line.value}</dd>
@@ -1042,7 +1133,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                     size="sm"
                     type="button"
                   >
-                    Switch to the new one
+                    {uiText('switch_to_the_new_one_4745b55')}
                   </Button>
                 ) : null}
                 {!result.activation?.requested && plan?.mode === 'add' ? (
@@ -1053,7 +1144,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                     size="sm"
                     type="button"
                   >
-                    Activate
+                    {uiText('activate_24433c7')}
                   </Button>
                 ) : null}
                 <Button
@@ -1064,7 +1155,8 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   type="button"
                   variant="ghost"
                 >
-                  <UndoIcon className="size-3.5" /> Undo
+                  <UndoIcon className="size-3.5" />
+                  {uiText('undo_a8283ad')}
                 </Button>
               </div>
             ) : null}

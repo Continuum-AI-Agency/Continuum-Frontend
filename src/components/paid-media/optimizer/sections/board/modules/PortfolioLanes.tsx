@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // O04 Portfolio lanes (rLanes in docs/optimizer-redesign/adaptive-15/app.js): one lane per
 // portfolio — its cost per result on a bullet against its own goal (the goal's tick, the band
@@ -104,9 +105,15 @@ function GoogleLanes({ ctx, slot }: BoardModuleProps) {
 
 const STATUS_STYLE: Record<LaneStatus, { icon: LucideIcon; tone: string }> = {
   'on-track': { icon: CheckIcon, tone: 'border-success/30 text-success-ink' },
-  'above-goal': { icon: TriangleAlertIcon, tone: 'border-destructive/30 text-destructive-ink' },
+  'above-goal': {
+    icon: TriangleAlertIcon,
+    tone: 'border-destructive/30 text-destructive-ink',
+  },
   'no-goal': { icon: TargetIcon, tone: 'border-border text-muted-foreground' },
-  'lost-ad-sets': { icon: TriangleAlertIcon, tone: 'border-destructive/30 text-destructive-ink' },
+  'lost-ad-sets': {
+    icon: TriangleAlertIcon,
+    tone: 'border-destructive/30 text-destructive-ink',
+  },
   unread: { icon: ClockIcon, tone: 'border-border text-muted-foreground' },
 };
 
@@ -125,26 +132,28 @@ function LanesView({
   lanes,
   loading,
 }: BoardModuleProps & { lanes: PortfolioLane[]; loading: boolean }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const [sort, setSort] = useState<LaneSort>('distance');
   const frame = {
     reason: slot.reason,
     size: slot.size,
     testId: 'board-module-portfolios',
-    title: BOARD_MODULE_TITLES.portfolios,
+    title: betaUiText('boardModuleTitle', { id: 'portfolios' }),
   };
   if (lanes.length === 0) {
     return (
       <ModuleFrame {...frame} state="missing">
         <p className="text-muted-foreground text-sm" data-testid="board-lanes-empty">
-          No portfolio holds this account's campaigns yet.{' '}
+          {betaUiText('beta_91398ce42dae')}{' '}
           <button
             className="inline-flex items-center gap-1 font-medium text-primary-ink hover:underline"
             onClick={ctx.onCreatePortfolio}
             type="button"
           >
             <PlusIcon aria-hidden="true" className="size-3.5" />
-            Create a portfolio
+            {betaUiText('beta_2283fad67e39')}
           </button>
         </p>
       </ModuleFrame>
@@ -166,7 +175,7 @@ function LanesView({
     <ModuleFrame {...frame}>
       <div className="space-y-3">
         <ToggleGroup
-          aria-label="Sort portfolios by"
+          aria-label={betaUiText('beta_703463b5e86b')}
           className="flex-wrap"
           data-testid="board-lanes-sort"
           onValueChange={(next) => {
@@ -189,7 +198,11 @@ function LanesView({
             <motion.li
               key={lane.portfolio.id}
               layout={reduce ? false : 'position'}
-              transition={{ type: 'spring', visualDuration: 0.42, bounce: 0.12 }}
+              transition={{
+                type: 'spring',
+                visualDuration: 0.42,
+                bounce: 0.12,
+              }}
             >
               <Lane lane={lane} onSelect={() => ctx.onSelectPortfolio(lane.portfolio.id)} />
             </motion.li>
@@ -218,10 +231,12 @@ function laneFigureLine(lane: PortfolioLane): string {
 }
 
 function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { portfolio, status, cost, goal, currency } = lane;
   const style = STATUS_STYLE[status];
   const StatusIcon = style.icon;
-  const distance = goalDistanceLabel(cost, goal);
+  const distance = goalDistanceLabel(cost, goal, betaUiText);
   return (
     <button
       className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring @[40rem]/module:grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_auto] @[40rem]/module:items-center"
@@ -254,7 +269,10 @@ function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void })
           <BulletMark
             color={divergingColor(cost, goal)}
             goal={goal}
-            label={`${formatCpa(cost, currency)} against a goal of ${formatCpa(goal, currency)}`}
+            label={betaUiText('beta_ea26c96bdc69', {
+              value0: String(formatCpa(cost, currency)),
+              value1: String(formatCpa(goal, currency)),
+            })}
             testId="board-lane-bullet"
             value={cost}
           />
@@ -281,10 +299,16 @@ function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void })
             'per-period',
           )}
         >
-          {lane.dailyBudget != null ? `${formatCurrency(lane.dailyBudget, currency)} / day` : '—'}
+          {lane.dailyBudget != null
+            ? betaUiText('beta_d19a4214887d', {
+                value0: String(formatCurrency(lane.dailyBudget, currency)),
+              })
+            : '—'}
         </span>
         <span className="text-muted-foreground">
-          {lane.pending > 0 ? `${lane.pending} waiting` : 'nothing waiting'}
+          {lane.pending > 0
+            ? betaUiText('beta_243a8a63a270', { value0: String(lane.pending) })
+            : betaUiText('beta_53fc431ccd89')}
         </span>
       </div>
     </button>
@@ -292,6 +316,8 @@ function Lane({ lane, onSelect }: { lane: PortfolioLane; onSelect: () => void })
 }
 
 function LanesLegend() {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <div
       className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs"
@@ -299,7 +325,7 @@ function LanesLegend() {
     >
       <span className="inline-flex items-center gap-1.5">
         <span aria-hidden="true" className="size-2.5 rounded-full bg-muted-foreground" />
-        Cost per result, last 7 days
+        {betaUiText('beta_8bd368931df1')}
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span
@@ -307,14 +333,14 @@ function LanesLegend() {
           className="h-1.5 w-3 rounded-full"
           style={{ background: BOARD_COLOR.below, opacity: 0.22 }}
         />
-        Under the goal
+        {betaUiText('beta_31547225f931')}
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span
           aria-hidden="true"
           className="h-3 border-foreground/55 border-l-[1.5px] border-dashed"
         />
-        Goal
+        {betaUiText('beta_cdbf6975e8a3')}
       </span>
     </div>
   );

@@ -97,7 +97,10 @@ type ConceptStatusInput = {
   checkpoint?: CheckpointState | null;
 };
 
-export function resolveConceptStatus(input: ConceptStatusInput): ConceptStatus {
+export function resolveConceptStatus(
+  input: ConceptStatusInput,
+  localizeLabel: (label: string) => string = (label) => label,
+): ConceptStatus {
   const checkpoint = input.checkpoint ?? null;
   // A failure that already produced a blueprint is a MEDIA failure, not a dead job:
   // the words are saved and only the image is missing, so the row keeps the copy and
@@ -122,7 +125,7 @@ export function resolveConceptStatus(input: ConceptStatusInput): ConceptStatus {
 
   return {
     kind,
-    label: resolved.label,
+    label: localizeLabel(resolved.label),
     tone: conceptTone(resolved.tone, resolved.advancing, mediaStage),
     diagnostic: resolved.diagnostic,
     advancing: resolved.advancing,
@@ -149,19 +152,22 @@ function conceptTone(
  * The plan row's status, folding in the pre-dispatch case: an untouched plan item is
  * still a *concept*, not a generation, so the generation vocabulary must not describe it.
  */
-export function resolvePlanItemStatus(input: {
-  itemStatus: PlanItemStatus;
-  pipeline?: PipelineCardState | null;
-  /** The card dispatched locally and is waiting for its first frame. */
-  dispatched?: boolean;
-}): ConceptStatus {
+export function resolvePlanItemStatus(
+  input: {
+    itemStatus: PlanItemStatus;
+    pipeline?: PipelineCardState | null;
+    /** The card dispatched locally and is waiting for its first frame. */
+    dispatched?: boolean;
+  },
+  localizeLabel: (label: string) => string = (label) => label,
+): ConceptStatus {
   const { itemStatus, pipeline, dispatched } = input;
   const pipelineStatus = pipeline?.status;
 
   if (itemStatus === 'pending' && !pipeline && !dispatched) {
     return {
       kind: 'concept',
-      label: 'Concept',
+      label: localizeLabel('Concept'),
       tone: 'neutral',
       diagnostic: null,
       advancing: false,
@@ -170,7 +176,7 @@ export function resolvePlanItemStatus(input: {
   if (itemStatus === 'cancelled' && !pipeline) {
     return {
       kind: 'cancelled',
-      label: 'Cancelled',
+      label: localizeLabel('Cancelled'),
       tone: 'neutral',
       diagnostic: null,
       advancing: false,
@@ -190,9 +196,12 @@ export function resolvePlanItemStatus(input: {
               ? 'queued'
               : 'running';
 
-  return resolveConceptStatus({
-    status,
-    stage: pipeline?.currentStage ?? null,
-    checkpoint: pipeline?.checkpoint ?? null,
-  });
+  return resolveConceptStatus(
+    {
+      status,
+      stage: pipeline?.currentStage ?? null,
+      checkpoint: pipeline?.checkpoint ?? null,
+    },
+    localizeLabel,
+  );
 }

@@ -39,6 +39,8 @@ export type CompetitorScanState = {
   analyzedCreatives: ScanAnalyzedCreative[];
   gapSummary: ScanGapSummary | null;
   error: string | null;
+  /** Local transport cause retains HTTP/code diagnostics; never crosses the wire. */
+  transportError?: unknown;
 };
 
 export const INITIAL_SCAN_STATE: CompetitorScanState = {
@@ -81,7 +83,10 @@ export function reduceScanFrame(
       const { stage, status, counts } = frame.data;
       return {
         ...state,
-        stages: { ...state.stages, [stage]: { status, ...(counts ? { counts } : {}) } },
+        stages: {
+          ...state.stages,
+          [stage]: { status, ...(counts ? { counts } : {}) },
+        },
       };
     }
     case 'competitor_started':

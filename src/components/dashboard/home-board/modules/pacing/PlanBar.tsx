@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // Spent against the plan as one bar, with a tick where the plan expected spend to be by now.
 import type { PacingCurrencyGroup } from './pacingModel';
@@ -8,10 +9,14 @@ export function PlanBar({
 }: {
   group: Pick<PacingCurrencyGroup, 'spent' | 'plan' | 'expected'>;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const share = (value: number) => Math.max(0, Math.min(100, (value / group.plan) * 100));
   return (
     <div
-      aria-label={`Spent ${Math.round(share(group.spent))}% of the plan`}
+      aria-label={betaUiText('beta_c0cf136b57ad', {
+        value0: String(Math.round(share(group.spent))),
+      })}
       className="relative h-2 w-full overflow-hidden rounded-full bg-muted"
       role="img"
     >

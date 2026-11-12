@@ -9,8 +9,9 @@ import {
   setSystemTime,
 } from 'bun:test';
 import type { HomeOvernightLogData, PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { OptimizerActionFeedRow } from '@/components/paid-media/optimizer/useOptimizerData';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeReadLoad } from '../../homeRead';
 import { homeContext, tileOf } from '../opps/__fixtures__/homeContext';
 import {
@@ -74,7 +75,10 @@ mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
 // The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
 let logLoad: HomeReadLoad<HomeOvernightLogData> = { status: 'unavailable' };
 const realRead = await import('../../useHomeRead');
-mock.module('../../useHomeRead', () => ({ ...realRead, useHomeRead: () => logLoad }));
+mock.module('../../useHomeRead', () => ({
+  ...realRead,
+  useHomeRead: () => logLoad,
+}));
 
 const { default: AutopilotTile } = await import('./Tile');
 const { OUTCOME_NOTE, OVERNIGHT_MISSING } = await import('./overnightModel');
@@ -83,7 +87,11 @@ beforeAll(() => setSystemTime(OVERNIGHT_NOW));
 afterAll(() => setSystemTime());
 afterEach(() => {
   cleanup();
-  portfoliosRead = { hasAnswer: true, isError: false, brandPortfolios: EASY_FIT_PORTFOLIOS };
+  portfoliosRead = {
+    hasAnswer: true,
+    isError: false,
+    brandPortfolios: EASY_FIT_PORTFOLIOS,
+  };
   actionsRead = readyActions();
   fetchNextPage.mockClear();
   refetchActions.mockClear();
@@ -115,7 +123,10 @@ describe('Overnight tile', () => {
   });
 
   it('pages back while every loaded row is still inside the 24 h, and holds the figure', () => {
-    actionsRead = { ...readyActions(EASY_FIT_ACTIONS.slice(0, 3)), hasNextPage: true };
+    actionsRead = {
+      ...readyActions(EASY_FIT_ACTIONS.slice(0, 3)),
+      hasNextPage: true,
+    };
     render(<AutopilotTile ctx={ctx} tile={tileOf('autopilot')} />);
     expect(fetchNextPage).toHaveBeenCalled();
     expect(frame().getAttribute('data-module-state')).toBe('loading');
@@ -130,7 +141,10 @@ describe('Overnight tile', () => {
   });
 
   it('is missing when no portfolio acts, saying so in one sentence', () => {
-    portfoliosRead = { ...portfoliosRead, brandPortfolios: PINK_ELEPHANT_PORTFOLIOS };
+    portfoliosRead = {
+      ...portfoliosRead,
+      brandPortfolios: PINK_ELEPHANT_PORTFOLIOS,
+    };
     render(<AutopilotTile ctx={ctx} tile={tileOf('autopilot')} />);
     expect(frame().getAttribute('data-module-state')).toBe('missing');
     expect(screen.getByTestId('home-tile-missing').textContent).toBe(OVERNIGHT_MISSING);
@@ -237,7 +251,12 @@ describe('Overnight tile with the Backend read', () => {
         },
       ],
     },
-    source: { kind: 'optimizer_list_action_outcomes', ref: null, since: null, until: null },
+    source: {
+      kind: 'optimizer_list_action_outcomes',
+      ref: null,
+      since: null,
+      until: null,
+    },
   };
   const ready: HomeReadLoad<HomeOvernightLogData> = {
     status: 'ready',
@@ -281,7 +300,10 @@ describe('Overnight tile with the Backend read', () => {
   it('a window the ledgers hold nothing for is zero, without reading the feed', () => {
     logLoad = {
       status: 'missing',
-      missing: { reason: 'no_data', detail: 'The Optimizer recorded no action.' },
+      missing: {
+        reason: 'no_data',
+        detail: 'The Optimizer recorded no action.',
+      },
     };
     render(
       <AutopilotTile ctx={homeContext(EASY_FIT_META_BRAND_ID)} tile={tileOf('autopilot', 'l')} />,

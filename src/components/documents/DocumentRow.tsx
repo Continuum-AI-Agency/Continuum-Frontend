@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentPreviewCard } from './DocumentPreviewCard';
@@ -68,6 +69,9 @@ export function PendingRow({
   onRetry: (key: string) => void;
   onDiscard: (key: string) => void;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('common');
   const reduceMotion = useReducedMotion();
   const isError = entry.status === 'error';
   return (
@@ -91,14 +95,14 @@ export function PendingRow({
           {isError ? <AlertCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
         </span>
         <span className="shrink-0 font-mono text-sm text-muted-foreground">
-          {formatBytes(entry.file.size)}
+          {formatBytes(entry.file.size, uiLocale)}
         </span>
         <span className="min-w-0 flex-1 truncate">
           <span className="block truncate text-sm font-medium text-foreground">
             {entry.file.name}
           </span>
           <span className="block truncate text-xs text-muted-foreground">
-            {isError ? (entry.error ?? 'Failed') : 'Uploading…'}
+            {isError ? (entry.error ?? uiText('failed_031a8f0')) : uiText('uploading_5ce44dd')}
           </span>
         </span>
       </div>
@@ -106,20 +110,26 @@ export function PendingRow({
         {isError ? (
           <>
             <CircleAction
-              ariaLabel="Retry upload"
+              ariaLabel={uiText('documentRetryUpload')}
               tone="neutral"
               icon={RotateCw}
               onClick={() => onRetry(entry.key)}
             />
             <CircleAction
-              ariaLabel="Discard upload"
+              ariaLabel={uiText('documentDiscardUpload')}
               tone="muted"
               icon={X}
               onClick={() => onDiscard(entry.key)}
             />
           </>
         ) : (
-          <CircleAction ariaLabel="Uploading" tone="progress" icon={Loader2} spin disabled />
+          <CircleAction
+            ariaLabel={uiText('m_de27240983')}
+            tone="progress"
+            icon={Loader2}
+            spin
+            disabled
+          />
         )}
       </div>
     </motion.li>
@@ -151,12 +161,15 @@ export function DocumentRow({
   /** Absent in onboarding, where no brand exists yet — the project submenu hides itself. */
   brandId?: string;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('common');
   const reduceMotion = useReducedMotion();
-  const label = describeStep(doc);
+  const label = describeStep(doc, uiText, uiLocale);
   const Icon = iconFor(doc);
-  const codeParts: string[] = [kindLabel(doc).toUpperCase()];
+  const codeParts: string[] = [kindLabel(doc, uiText).toUpperCase()];
   if (doc.pageCount) codeParts.push(`${doc.pageCount} pp`);
-  else if (doc.size) codeParts.push(formatBytes(doc.size));
+  else if (doc.size) codeParts.push(formatBytes(doc.size, uiLocale));
 
   const subtitle =
     label.tone === 'progress' && typeof doc.progressPercent === 'number'
@@ -192,7 +205,7 @@ export function DocumentRow({
       >
         <button
           type="button"
-          aria-label={`Preview ${doc.name}`}
+          aria-label={uiText('m_2a7e06aec8', { v0: String(doc.name) })}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -234,7 +247,7 @@ export function DocumentRow({
           <DocumentCategorySelect
             value={documentCategoryOf(doc)}
             onChange={(category) => onCategoryChange(doc.id, category)}
-            ariaLabel={`Category for ${doc.name}`}
+            ariaLabel={uiText('documentCategoryFor', { name: doc.name })}
           />
         ) : null}
         {/* Save is the one action that must not be buried: a temporary document is
@@ -246,7 +259,7 @@ export function DocumentRow({
             onClick={() => void actions.onSavePermanently(doc)}
             className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-emerald-700 outline-none transition-colors hover:bg-emerald-500/10 focus-visible:ring-2 focus-visible:ring-ring dark:text-emerald-400"
           >
-            Save
+            {uiText('save_1509f56')}
           </button>
         ) : null}
         {/* Overflow menu — revealed on hover (always visible for errors) */}

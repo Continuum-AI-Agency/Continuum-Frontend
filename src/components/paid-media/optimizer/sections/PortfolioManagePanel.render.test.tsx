@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -48,8 +49,16 @@ mock.module('../useOptimizerData', () => ({
     data: enrolledRows,
     isLoading: false,
   }),
-  useOptimizerAccountEnrollments: () => ({ data: [], isLoading: false, isError: false }),
-  useOptimizerPerformance: () => ({ data: performanceData, isLoading: false, isError: false }),
+  useOptimizerAccountEnrollments: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
+  useOptimizerPerformance: () => ({
+    data: performanceData,
+    isLoading: false,
+    isError: false,
+  }),
   useCyclePreview: () => ({
     mutate: cyclePreviewMutate,
     data: cyclePreviewOutcome,
@@ -114,7 +123,10 @@ const realPlatformCaps = await import('./platformCaps/usePortfolioPlatformCaps')
 mock.module('./platformCaps/usePortfolioPlatformCaps', () => ({
   ...realPlatformCaps,
   usePortfolioPlatformCaps: () => platformCapsState,
-  useSetPortfolioPlatformCap: () => ({ mutateAsync: setPlatformCapMutateAsync, isPending: false }),
+  useSetPortfolioPlatformCap: () => ({
+    mutateAsync: setPlatformCapMutateAsync,
+    isPending: false,
+  }),
 }));
 
 // The allowed actions read optimizer_get_portfolio_platform_actions; same spread-the-real rule.
@@ -123,9 +135,18 @@ mock.module('./platformActions/usePortfolioPlatformActions', () => ({
   ...realPlatformActions,
   usePortfolioPlatformActions: () => ({
     status: 'ready',
-    platforms: [{ platform: 'google_ads', allowed: ['set_budget', 'set_status'], accounts: 1 }],
+    platforms: [
+      {
+        platform: 'google_ads',
+        allowed: ['set_budget', 'set_status'],
+        accounts: 1,
+      },
+    ],
   }),
-  useSetPortfolioPlatformActions: () => ({ mutateAsync: async () => [], isPending: false }),
+  useSetPortfolioPlatformActions: () => ({
+    mutateAsync: async () => [],
+    isPending: false,
+  }),
 }));
 
 // The cost-cap checkbox writes optimizer_set_portfolio_goal_as_platform_cost_cap; its own
@@ -134,7 +155,10 @@ const setGoalAsCostCapMutate = mock((_enabled: boolean) => {});
 const realGoalAsCostCap = await import('./goalCostCap/useGoalAsCostCap');
 mock.module('./goalCostCap/useGoalAsCostCap', () => ({
   ...realGoalAsCostCap,
-  useSetGoalAsCostCap: () => ({ mutate: setGoalAsCostCapMutate, isPending: false }),
+  useSetGoalAsCostCap: () => ({
+    mutate: setGoalAsCostCapMutate,
+    isPending: false,
+  }),
 }));
 
 // The picker's Google half reads paid-media-metrics; this suite is about the Meta form, so the
@@ -150,7 +174,10 @@ const realMembers = await import('../picker/usePortfolioPlatformMembers');
 mock.module('../picker/usePortfolioPlatformMembers', () => ({
   ...realMembers,
   usePortfolioMembers: () => ({ status: 'ready', members: [] }),
-  useSaveGoogleMembers: () => ({ mutateAsync: async () => undefined, isPending: false }),
+  useSaveGoogleMembers: () => ({
+    mutateAsync: async () => undefined,
+    isPending: false,
+  }),
 }));
 
 // The picker is a heavy virtualized tree; stub it so this suite is only about the config form.
@@ -390,18 +417,29 @@ describe('arming autopilot is staged: caps → preview → arm', () => {
     openStaging();
     fireEvent.change(input(/Max change per cycle/), { target: { value: '' } });
     expect(
-      (screen.getByRole('button', { name: /Preview what autopilot would do/ }) as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole('button', {
+          name: /Preview what autopilot would do/,
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     expect(
-      (screen.getByRole('button', { name: 'Arm autopilot' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Arm autopilot',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 
   it('runs the real engine preview once both caps are set, and only then offers the arm', () => {
     openStaging();
-    fireEvent.change(input(/Max autopilot spend\/day/), { target: { value: '6300' } });
-    fireEvent.change(input(/Max change per cycle/), { target: { value: '20' } });
+    fireEvent.change(input(/Max autopilot spend\/day/), {
+      target: { value: '6300' },
+    });
+    fireEvent.change(input(/Max change per cycle/), {
+      target: { value: '20' },
+    });
 
     const preview = screen.getByRole('button', {
       name: /Preview what autopilot would do/,
@@ -409,7 +447,11 @@ describe('arming autopilot is staged: caps → preview → arm', () => {
     expect(preview.disabled).toBe(false);
     // Still not armable — nothing has been previewed yet.
     expect(
-      (screen.getByRole('button', { name: 'Arm autopilot' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Arm autopilot',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
 
     fireEvent.click(preview);
@@ -449,14 +491,22 @@ describe('arming autopilot is staged: caps → preview → arm', () => {
       },
     };
     openStaging();
-    fireEvent.change(input(/Max autopilot spend\/day/), { target: { value: '6300' } });
-    fireEvent.change(input(/Max change per cycle/), { target: { value: '20' } });
+    fireEvent.change(input(/Max autopilot spend\/day/), {
+      target: { value: '6300' },
+    });
+    fireEvent.change(input(/Max change per cycle/), {
+      target: { value: '20' },
+    });
 
     // One move inside the 20% cap is written; the −60% move is held for approval.
     expect(document.body.textContent).toContain('would have written');
     expect(screen.getByRole('button', { name: 'Arm autopilot' })).toBeDefined();
     expect(
-      (screen.getByRole('button', { name: 'Arm autopilot' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Arm autopilot',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 
@@ -480,8 +530,12 @@ describe('arming autopilot is staged: caps → preview → arm', () => {
     };
     openStaging();
     // A $10/day ceiling under a $4,200/day pool: the service refuses every write.
-    fireEvent.change(input(/Max autopilot spend\/day/), { target: { value: '10' } });
-    fireEvent.change(input(/Max change per cycle/), { target: { value: '20' } });
+    fireEvent.change(input(/Max autopilot spend\/day/), {
+      target: { value: '10' },
+    });
+    fireEvent.change(input(/Max change per cycle/), {
+      target: { value: '20' },
+    });
 
     expect(document.body.textContent).toContain('autopilot would write nothing at all');
   });
@@ -602,12 +656,16 @@ describe('the custom conversion an advertiser names', () => {
   it('sends the descriptor with the patch the operator saved', async () => {
     renderPanel({ objective: 'custom', conversion_descriptor: stored });
 
-    fireEvent.change(input(/What you call one/), { target: { value: 'Demos held' } });
+    fireEvent.change(input(/What you call one/), {
+      target: { value: 'Demos held' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
     const sent = updateMutateAsync.mock.calls[0]?.[0] as {
-      patch: { conversion_descriptor?: { result_label: string; analog: string } };
+      patch: {
+        conversion_descriptor?: { result_label: string; analog: string };
+      };
     };
     expect(sent.patch.conversion_descriptor?.result_label).toBe('Demos held');
     expect(sent.patch.conversion_descriptor?.analog).toBe('lead');
@@ -630,7 +688,12 @@ describe('PortfolioManagePanel — Attribution', () => {
       status: 'ready',
       caps: [
         { platform: 'meta', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
-        { platform: 'google_ads', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
+        {
+          platform: 'google_ads',
+          currency: 'MXN',
+          dailyCapMinor: null,
+          accounts: 1,
+        },
       ],
     };
     renderPanel();
@@ -663,9 +726,24 @@ describe('PortfolioManagePanel — per-platform daily limits', () => {
     platformCapsState = {
       status: 'ready',
       caps: [
-        { platform: 'meta', currency: 'MXN', dailyCapMinor: 50000, accounts: 1 },
-        { platform: 'google_ads', currency: 'MXN', dailyCapMinor: null, accounts: 1 },
-        { platform: 'tiktok_ads', currency: 'USD', dailyCapMinor: 2500, accounts: 2 },
+        {
+          platform: 'meta',
+          currency: 'MXN',
+          dailyCapMinor: 50000,
+          accounts: 1,
+        },
+        {
+          platform: 'google_ads',
+          currency: 'MXN',
+          dailyCapMinor: null,
+          accounts: 1,
+        },
+        {
+          platform: 'tiktok_ads',
+          currency: 'USD',
+          dailyCapMinor: 2500,
+          accounts: 2,
+        },
       ],
     };
   };
@@ -735,7 +813,14 @@ describe('PortfolioManagePanel — per-platform daily limits', () => {
   it('cannot type one limit for accounts in two currencies', () => {
     platformCapsState = {
       status: 'ready',
-      caps: [{ platform: 'google_ads', currency: null, dailyCapMinor: null, accounts: 2 }],
+      caps: [
+        {
+          platform: 'google_ads',
+          currency: null,
+          dailyCapMinor: null,
+          accounts: 2,
+        },
+      ],
     };
     renderPanel();
     expect(input(/^Daily limit on Google$/).disabled).toBe(true);
@@ -795,7 +880,10 @@ describe('the cost-cap checkbox under the CPA goal', () => {
 
   it('shows the stored tick, with the step from the portfolio change cap', () => {
     performanceData = null;
-    renderPanel({ goal_as_platform_cost_cap: true, max_change_pct_per_cycle: 0.15 });
+    renderPanel({
+      goal_as_platform_cost_cap: true,
+      max_change_pct_per_cycle: 0.15,
+    });
     expect(box().getAttribute('aria-checked')).toBe('true');
     expect(document.body.textContent).toContain(
       'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign and the Meta cost cap (bid setting) of each ad set already bidding with a cost cap to this goal, in steps of up to 15% a day.',

@@ -9,8 +9,9 @@ import {
   readAdAccount,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { networkFixture } from '../../../google/views/__fixtures__/googleViews';
 import {
   easyFitPmaxRead,
@@ -69,7 +70,9 @@ const CARDS = [VIVO_PMAX_CARD, PINK_AD_WINNER].map((card) => PlatformCardSchema.
 
 function atWidth(width: number) {
   (
-    window as unknown as { happyDOM: { setViewport(v: { width: number; height: number }): void } }
+    window as unknown as {
+      happyDOM: { setViewport(v: { width: number; height: number }): void };
+    }
   ).happyDOM.setViewport({ width, height: 900 });
   expect(window.innerWidth).toBe(width);
 }
@@ -109,7 +112,10 @@ function view(
       currency="MXN"
       goal={goal}
       slot={slot(size)}
-      state={{ status: 'ready', data: { read: GoogleSignalsReadSchema.parse(raw), cards } }}
+      state={{
+        status: 'ready',
+        data: { read: GoogleSignalsReadSchema.parse(raw), cards },
+      }}
     />,
   );
 }
@@ -266,7 +272,10 @@ describe('PmaxLensView states', () => {
         goal={null}
         slot={slot('m')}
         channels={null}
-        state={{ status: 'missing', reason: 'No Google Ads account is granted to this brand.' }}
+        state={{
+          status: 'missing',
+          reason: 'No Google Ads account is granted to this brand.',
+        }}
       />,
     );
     expect(text('board-module-pmax-missing')).toBe(
@@ -284,7 +293,10 @@ describe('PmaxLensView states', () => {
     expect(text('pmax-lens-channels-loading')).toBe('Reading the spend by channel…');
     cleanup();
     // A channel read that failed costs the split, not the lens.
-    view('m', vivoPmaxRead(), 400, CARDS, { status: 'error', message: 'did not answer' });
+    view('m', vivoPmaxRead(), 400, CARDS, {
+      status: 'error',
+      message: 'did not answer',
+    });
     expect(screen.getByTestId('board-module-pmax').dataset.moduleState).toBe('ready');
   });
 
@@ -302,7 +314,10 @@ describe('PmaxLensView states', () => {
     render(
       <ChannelSplitView
         currency="MXN"
-        read={{ status: 'error', message: 'The Google Ads breakdown read did not answer.' }}
+        read={{
+          status: 'error',
+          message: 'The Google Ads breakdown read did not answer.',
+        }}
       />,
     );
     expect(text('pmax-lens-channels-unread')).toBe(
@@ -313,7 +328,9 @@ describe('PmaxLensView states', () => {
 
 describe('PmaxLens', () => {
   it("reads V4's blocks once, then the top campaign's channels over the same window", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );

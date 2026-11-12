@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { Skeleton, SkeletonText } from './skeleton';
 import { MAX_STAGGERED_ROWS, observeRowResolve, ROW_STAGGER_MS } from './use-row-resolve';
 
@@ -9,7 +10,11 @@ import { MAX_STAGGERED_ROWS, observeRowResolve, ROW_STAGGER_MS } from './use-row
 // removeChild + appendChild React performs.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
 
-type AnimateCall = { el: Element; keyframes: Keyframe[]; options: KeyframeAnimationOptions };
+type AnimateCall = {
+  el: Element;
+  keyframes: Keyframe[];
+  options: KeyframeAnimationOptions;
+};
 let calls: AnimateCall[] = [];
 let teardown: () => void = () => {};
 const originalAnimate = HTMLElement.prototype.animate;
@@ -40,7 +45,11 @@ function row(id: string): HTMLElement {
 }
 
 /** A shell root holding one card whose body is a wrapper of skeletons, observed. */
-function mountCard({ skip = false, header = false, bones = () => [skeletonBar(), skeletonBar()] } = {}) {
+function mountCard({
+  skip = false,
+  header = false,
+  bones = () => [skeletonBar(), skeletonBar()],
+} = {}) {
   const root = document.createElement('main');
   const card = document.createElement('section');
   if (skip) card.dataset.rowResolve = 'skip';
@@ -66,7 +75,11 @@ const ids = (list: AnimateCall[]) => list.map((call) => call.el.getAttribute('da
 beforeEach(() => {
   calls = [];
   HTMLElement.prototype.animate = function (this: Element, keyframes, options) {
-    calls.push({ el: this, keyframes: keyframes as Keyframe[], options: options as KeyframeAnimationOptions });
+    calls.push({
+      el: this,
+      keyframes: keyframes as Keyframe[],
+      options: options as KeyframeAnimationOptions,
+    });
     return {} as Animation;
   };
   stubReducedMotion(false);
@@ -86,7 +99,11 @@ describe('observeRowResolve', () => {
     await settle();
 
     expect(ids(fades())).toEqual(['row-0', 'row-1', 'row-2']);
-    expect(fades().map((call) => call.options.delay)).toEqual([0, ROW_STAGGER_MS, 2 * ROW_STAGGER_MS]);
+    expect(fades().map((call) => call.options.delay)).toEqual([
+      0,
+      ROW_STAGGER_MS,
+      2 * ROW_STAGGER_MS,
+    ]);
     expect(fades()[0].keyframes).toEqual([{ opacity: 0 }, {}]);
     expect(fades().every((call) => call.options.fill === 'backwards')).toBe(true);
   });

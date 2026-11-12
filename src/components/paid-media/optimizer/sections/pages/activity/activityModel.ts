@@ -14,12 +14,25 @@
 // its events but no point on the line.
 
 import type { OptimizerLogRow, PaidAccountOverview } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 import { calendarDayIn, shiftDay } from '@/lib/paid-media/reportingWindow';
 import type { OptimizerActionFeedRow } from '../../../useOptimizerData';
 import { readActionChange } from '../../actionRows';
 import { BOARD_COLOR } from '../../board/palette';
 import { groupActionFeed } from '../../crossPlatformMove/moveDecisionModel';
 import { ALL_PORTFOLIOS, readLifecycleRow } from '../../logFilters';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
+export function activitySourceCopy(source: ActivitySource, t?: ScaleCopy) {
+  return t
+    ? {
+        label: t('activitySource', { source }),
+        hint: t('activitySourceHint', { source }),
+      }
+    : SOURCE_COPY[source];
+}
 
 export type ActivitySource = 'optimizer' | 'team' | 'platform';
 export type ActivitySourceFilter = 'all' | ActivitySource;
@@ -31,7 +44,10 @@ export const ACTIVITY_SOURCES = [
 ] as const satisfies readonly ActivitySource[];
 
 export const SOURCE_COPY: Record<ActivitySource, { label: string; hint: string }> = {
-  optimizer: { label: 'Optimizer', hint: 'What autopilot and the cycles wrote.' },
+  optimizer: {
+    label: 'Optimizer',
+    hint: 'What autopilot and the cycles wrote.',
+  },
   team: { label: 'Team', hint: 'What a person approved or changed.' },
   platform: {
     label: 'Platform',
@@ -71,16 +87,22 @@ export function dayKeyOf(ts: string): string | null {
   return Number.isFinite(at.getTime()) ? calendarDayIn(at) : null;
 }
 
-const DAY_FMT = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
+const dayFormatters = new Map<string, Intl.DateTimeFormat>();
 
-/** "Oct 26" from a `YYYY-MM-DD` day key. */
-export function dayKeyLabel(key: string): string {
+/** Format a calendar-day key without changing its UTC calendar identity. */
+export function dayKeyLabel(key: string, locale: UiLocale = 'en'): string {
   const at = new Date(`${key}T00:00:00Z`);
-  return Number.isFinite(at.getTime()) ? DAY_FMT.format(at) : key;
+  if (!Number.isFinite(at.getTime())) return key;
+  let formatter = dayFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
+    dayFormatters.set(locale, formatter);
+  }
+  return formatter.format(at);
 }
 
 /** The local midnight a day key starts at, as an instant: where a whole-day event sorts. */
@@ -128,7 +150,10 @@ export function spendSeries(
       point.impressions == null
         ? (seen?.impressions ?? null)
         : (seen?.impressions ?? 0) + point.impressions;
-    byDay.set(key, { spend: (seen?.spend ?? 0) + (point.spend ?? 0), impressions });
+    byDay.set(key, {
+      spend: (seen?.spend ?? 0) + (point.spend ?? 0),
+      impressions,
+    });
   }
   const series: SpendDay[] = days.map((day) => {
     if (!day.complete) return { key: day.key, spend: null, dark: false };
@@ -192,8 +217,28 @@ export function deliveryEvents(series: SpendSeries): DeliveryEvent[] {
   return events;
 }
 
-/** The words a delivery edge is listed with — product chrome, so English. */
-export function deliveryWords(event: DeliveryEvent): { title: string; detail: string } {
+/** The words a delivery edge is listed with, in the UI language. */
+export function deliveryWords(
+  event: DeliveryEvent,
+  t?: ScaleCopy,
+  locale: UiLocale = 'en',
+): { title: string; detail: string } {
+  if (t)
+    return {
+      title: t('activityDeliveryTitle', { kind: event.kind }),
+      detail: t('activityDeliveryDetail', {
+        kind:
+          event.kind === 'resumed'
+            ? 'resumed'
+            : event.ongoing
+              ? 'ongoing'
+              : event.key === event.through
+                ? 'single'
+                : 'range',
+        from: dayKeyLabel(event.key, locale),
+        through: dayKeyLabel(event.through, locale),
+      }),
+    };
   if (event.kind === 'resumed') {
     return {
       title: 'Ads showing again',
@@ -232,9 +277,27 @@ export type PlatformChange = {
 
 /** A platform event as the list renders it, beside the action rows. */
 export type ActivityPlatformItem =
-  | { kind: 'log'; id: string; ts: string; portfolioName: string | null; row: OptimizerLogRow }
-  | { kind: 'delivery'; id: string; ts: string; portfolioName: null; event: DeliveryEvent }
-  | { kind: 'change'; id: string; ts: string; portfolioName: null; change: PlatformChange };
+  | {
+      kind: 'log';
+      id: string;
+      ts: string;
+      portfolioName: string | null;
+      row: OptimizerLogRow;
+    }
+  | {
+      kind: 'delivery';
+      id: string;
+      ts: string;
+      portfolioName: null;
+      event: DeliveryEvent;
+    }
+  | {
+      kind: 'change';
+      id: string;
+      ts: string;
+      portfolioName: null;
+      change: PlatformChange;
+    };
 
 export function logEventId(row: Pick<OptimizerLogRow, 'id' | 'ts'>): string {
   return `log:${row.id}:${row.ts}`;
@@ -287,9 +350,15 @@ export function platformItems(
   return items.sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
 }
 
-export type ActivityFilter = { source: ActivitySourceFilter; portfolio: string };
+export type ActivityFilter = {
+  source: ActivitySourceFilter;
+  portfolio: string;
+};
 
-export const ALL_ACTIVITY: ActivityFilter = { source: 'all', portfolio: ALL_PORTFOLIOS };
+export const ALL_ACTIVITY: ActivityFilter = {
+  source: 'all',
+  portfolio: ALL_PORTFOLIOS,
+};
 
 /** The action rows the list shows under a filter. */
 export function filterActions<
@@ -313,12 +382,12 @@ export function filterPlatformItems(
   return items.filter((item) => item.portfolioName === filter.portfolio);
 }
 
-function platformLabel(item: ActivityPlatformItem): string {
-  if (item.kind === 'delivery') return deliveryWords(item.event).title;
+function platformLabel(item: ActivityPlatformItem, t?: ScaleCopy, locale: UiLocale = 'en'): string {
+  if (item.kind === 'delivery') return deliveryWords(item.event, t, locale).title;
   if (item.kind === 'change') {
     return `${item.change.what}${item.change.where ? ` · ${item.change.where}` : ''}`;
   }
-  return `${readLifecycleRow(item.row).title}${item.portfolioName ? ` · ${item.portfolioName}` : ''}`;
+  return `${readLifecycleRow(item.row, t).title}${item.portfolioName ? ` · ${item.portfolioName}` : ''}`;
 }
 
 /** One event on the chart: where it sits and what it says when pointed at. */
@@ -334,6 +403,8 @@ export type ActivityEvent = {
 export function activityEvents(
   rows: OptimizerActionFeedRow[],
   platform: readonly ActivityPlatformItem[],
+  t?: ScaleCopy,
+  locale: UiLocale = 'en',
 ): ActivityEvent[] {
   const events: ActivityEvent[] = [];
   for (const item of groupActionFeed(rows)) {
@@ -344,13 +415,13 @@ export function activityEvents(
         id: moveEventId(item.move.moveId),
         source: actionSource(item.move.actorRow),
         dayKey,
-        label: `Budget move between platforms${item.move.portfolioName ? ` · ${item.move.portfolioName}` : ''}`,
+        label: `${t ? t('activityBudgetMove') : 'Budget move between platforms'}${item.move.portfolioName ? ` · ${item.move.portfolioName}` : ''}`,
       });
       continue;
     }
     const dayKey = dayKeyOf(item.row.ts);
     if (!dayKey) continue;
-    const change = readActionChange(item.row);
+    const change = readActionChange(item.row, t, locale);
     events.push({
       id: actionEventId(item.row),
       source: actionSource(item.row),
@@ -365,7 +436,7 @@ export function activityEvents(
       id: item.id,
       source: 'platform',
       dayKey,
-      label: platformLabel(item),
+      label: platformLabel(item, t, locale),
     });
   }
   return events;
@@ -373,7 +444,11 @@ export function activityEvents(
 
 /** How many of each hand's events there are, for the filter's counts. */
 export function sourceCounts(events: readonly ActivityEvent[]): Record<ActivitySource, number> {
-  const counts: Record<ActivitySource, number> = { optimizer: 0, team: 0, platform: 0 };
+  const counts: Record<ActivitySource, number> = {
+    optimizer: 0,
+    team: 0,
+    platform: 0,
+  };
   for (const event of events) counts[event.source] += 1;
   return counts;
 }
@@ -391,7 +466,10 @@ export const MARKER_STACK = 3;
 export function layoutMarkers(
   events: readonly ActivityEvent[],
   days: readonly ActivityDay[],
-): { markers: ActivityMarker[]; overflow: { column: number; count: number }[] } {
+): {
+  markers: ActivityMarker[];
+  overflow: { column: number; count: number }[];
+} {
   const column = new Map(days.map((day, index) => [day.key, index]));
   const perDay = new Map<number, number>();
   const markers: ActivityMarker[] = [];

@@ -2,6 +2,7 @@
 
 import type { VideoEditorPoolAsset } from '@continuum/contracts';
 import { ExternalLink, Film, ImageIcon, Music, Plus } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,8 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE, type VideoStudioContext } from '../types';
 
 const KIND_ICON = { video: Film, image: ImageIcon, audio: Music } as const;
@@ -19,10 +22,10 @@ const KIND_ICON = { video: Film, image: ImageIcon, audio: Music } as const;
 /** Tells every sources panel the pool changed (a generation finished). */
 export const POOL_CHANGED_EVENT = 'video-studio:pool-changed';
 
-export const formatDuration = (sec: number): string =>
+export const formatDuration = (sec: number, locale: UiLocale = 'en'): string =>
   sec >= 60
     ? `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`
-    : `${sec.toFixed(1)}s`;
+    : `${formatDecimal(sec, 1, locale)}s`;
 
 /** Playable bytes for the hover preview, signed only when someone actually hovers. */
 export async function signAsset(
@@ -33,7 +36,11 @@ export async function signAsset(
   const response = await fetch('/api/library/sign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brandId, assetId, ...(versionId ? { versionId } : {}) }),
+    body: JSON.stringify({
+      brandId,
+      assetId,
+      ...(versionId ? { versionId } : {}),
+    }),
   });
   if (!response.ok) return null;
   const body = (await response.json()) as { signedUrl?: unknown };
@@ -47,12 +54,15 @@ export function PoolAssetCard({
   asset: VideoEditorPoolAsset;
   studio: Pick<VideoStudioContext, 'brandId' | 'addAssetToTimeline'>;
 }): React.ReactNode {
+  const translateUi = useUiTranslations('studio');
+  const locale = useUiLocale();
+
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const Icon = KIND_ICON[asset.kind];
   const add = () => void studio.addAssetToTimeline(asset);
   const meta = [
-    asset.kind,
-    asset.durationSec ? formatDuration(asset.durationSec) : null,
+    translateUi('mediaKindLabel', { kind: asset.kind }),
+    asset.durationSec ? formatDuration(asset.durationSec, locale) : null,
     asset.width && asset.height ? `${asset.width}×${asset.height}` : null,
   ]
     .filter(Boolean)
@@ -114,7 +124,9 @@ export function PoolAssetCard({
           <Button
             size="icon"
             variant="secondary"
-            aria-label={`Add ${asset.title} at the playhead`}
+            aria-label={translateUi('add_value0_at_the_playhead_4bc9b871', {
+              value0: String(asset.title),
+            })}
             className="absolute top-1 right-1 size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
             onClick={add}
           >
@@ -149,8 +161,7 @@ export function PoolAssetCard({
       </HoverCard>
       <ContextMenuContent className="w-52">
         <ContextMenuItem onClick={add}>
-          <Plus className="mr-2 size-4" />
-          Add at playhead
+          <Plus className="mr-2 size-4" /> {translateUi('add_at_playhead_1c335439')}{' '}
         </ContextMenuItem>
         <ContextMenuItem
           onClick={() =>
@@ -161,8 +172,7 @@ export function PoolAssetCard({
             )
           }
         >
-          <ExternalLink className="mr-2 size-4" />
-          Open in Library
+          <ExternalLink className="mr-2 size-4" /> {translateUi('open_in_library_c0a66bb6')}{' '}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

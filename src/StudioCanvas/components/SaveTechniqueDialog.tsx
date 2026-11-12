@@ -14,6 +14,7 @@
 
 import { canvasTechniqueMetadataSchema, type WorkflowFragmentKind } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,7 @@ import {
 } from '@/components/ui/select';
 import { throwToastError, useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { formatMiB } from '@/lib/ai-studio/referenceDrop';
 import { brandTechniquesQueryKey } from '@/lib/ai-studio/techniques';
 import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
@@ -103,6 +105,10 @@ export function SaveTechniqueDialog({
   nodes,
   saveTimeoutMs = TECHNIQUE_SAVE_TIMEOUT_MS,
 }: Props) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const { edges, defaultEdgeType } = useStudioStore();
   const { show } = useToast();
   const queryClient = useQueryClient();
@@ -145,8 +151,11 @@ export function SaveTechniqueDialog({
       const payloadBytes = new TextEncoder().encode(JSON.stringify(snapshot)).length;
       if (payloadBytes > TECHNIQUE_PAYLOAD_MAX_BYTES) {
         throwToastError({
-          title: 'Technique too large to save',
-          description: `${formatMiB(payloadBytes)} (max ${formatMiB(TECHNIQUE_PAYLOAD_MAX_BYTES)}). Remove large media inputs.`,
+          title: translateUi('technique_too_large_to_save_9b9ddf57'),
+          description: translateUi('value0_max_value1_remove_large_medi_bd0ca6a0', {
+            value0: String(formatMiB(payloadBytes)),
+            value1: String(formatMiB(TECHNIQUE_PAYLOAD_MAX_BYTES)),
+          }),
           variant: 'error',
         });
       }
@@ -177,15 +186,19 @@ export function SaveTechniqueDialog({
       // button on "Saving…" (Airtable #282): StudioCanvas keeps useTechniques mounted
       // for the whole session, so the invalidation always has an active observer and
       // always refetches every workflow the brand owns before resolving.
-      void queryClient.invalidateQueries({ queryKey: brandTechniquesQueryKey(brandProfileId) });
+      void queryClient.invalidateQueries({
+        queryKey: brandTechniquesQueryKey(brandProfileId),
+      });
       show({
-        title: 'Technique saved',
-        description: `"${name.trim()}" can be dropped onto any canvas.`,
+        title: translateUi('technique_saved_45144527'),
+        description: translateUi('value0_can_be_dropped_onto_any_canv_366acaca', {
+          value0: String(name.trim()),
+        }),
         variant: 'success',
       });
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the technique. Try again.');
+      setError(uiErrorText(err));
     } finally {
       setIsSaving(false);
     }
@@ -203,39 +216,42 @@ export function SaveTechniqueDialog({
     saveTimeoutMs,
     show,
     onOpenChange,
+
+    uiErrorText,
+    translateUi,
   ]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg" data-testid="save-technique-dialog">
         <DialogHeader>
-          <DialogTitle>Save selection as technique</DialogTitle>
+          <DialogTitle>{translateUi('save_selection_as_technique_c3849b70')}</DialogTitle>
           <DialogDescription>
-            Save the selected nodes as a reusable piece. Its inputs and outputs are read from where
-            the selection&apos;s edges cross the boundary, so you can drop it into any canvas and
-            wire it up.
+            {' '}
+            {translateUi('save_the_selected_nodes_as_a_reusab_6983a665')}{' '}
           </DialogDescription>
         </DialogHeader>
 
         {!hasNodes ? (
           <p className="py-4 text-sm text-muted-foreground">
-            Select the nodes you want to reuse, then try again.
+            {' '}
+            {translateUi('select_the_nodes_you_want_to_reuse__7a07833a')}{' '}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="technique-name">Name</Label>
+              <Label htmlFor="technique-name">{translateUi('name_dcd1d522')}</Label>
               <Input
                 id="technique-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={160}
-                placeholder="e.g. Palette smash-up"
+                placeholder={translateUi('e_g_palette_smash_up_6b2072c6')}
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="technique-kind">Kind</Label>
+              <Label htmlFor="technique-kind">{translateUi('kind_f5387f9b')}</Label>
               <Select value={kind} onValueChange={(next) => setKind(next as WorkflowFragmentKind)}>
                 <SelectTrigger id="technique-kind">
                   <SelectValue items={KIND_LABELS} />
@@ -251,13 +267,13 @@ export function SaveTechniqueDialog({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="technique-description">Description</Label>
+              <Label htmlFor="technique-description">{translateUi('description_526e0087')}</Label>
               <Textarea
                 id="technique-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 rows={3}
-                placeholder="Optional notes on when to reach for this technique"
+                placeholder={translateUi('optional_notes_on_when_to_reach_for_55e351c6')}
               />
             </div>
 
@@ -266,29 +282,34 @@ export function SaveTechniqueDialog({
               data-testid="technique-ports"
             >
               <p>
-                <span className="font-medium text-foreground">Takes:</span>{' '}
+                <span className="font-medium text-foreground">{translateUi('takes_6228c88a')}</span>{' '}
                 {portSummary(inference.inputPorts)}
               </p>
               <p>
-                <span className="font-medium text-foreground">Gives:</span>{' '}
+                <span className="font-medium text-foreground">{translateUi('gives_f74fc9fe')}</span>{' '}
                 {portSummary(inference.outputPorts)}
               </p>
               {inference.truncated && (
                 <p className="mt-1 text-amber-600 dark:text-amber-500">
-                  More than 12 ports on one side — the extras are not recorded.
+                  {' '}
+                  {translateUi('more_than_12_ports_on_one_side_the__eb9baba8')}{' '}
                 </p>
               )}
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Saving {nodes.length} node{nodes.length === 1 ? '' : 's'} and {selectedEdges.length}{' '}
-              connection{selectedEdges.length === 1 ? '' : 's'}.
+              {' '}
+              {translateUi('saving_096b7362')} {nodes.length} {translateUi('node_545ea538')}
+              {nodes.length === 1 ? '' : 's'} {translateUi('and_6201111b')} {selectedEdges.length}{' '}
+              {translateUi('connection_b38d9d16')}
+              {selectedEdges.length === 1 ? '' : 's'}.
             </p>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
             {!brandProfileId && (
               <p className="text-xs text-muted-foreground">
-                Select a brand before saving a technique.
+                {' '}
+                {translateUi('select_a_brand_before_saving_a_tech_f3fa31ad')}{' '}
               </p>
             )}
           </div>
@@ -296,7 +317,7 @@ export function SaveTechniqueDialog({
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button type="button" onClick={() => void save()} disabled={!canSave || !brandProfileId}>
-            {isSaving ? 'Saving…' : 'Save technique'}
+            {isSaving ? translateUi('saving_23e39291') : translateUi('save_technique_89563bd8')}
           </Button>
         </DialogFooter>
       </DialogContent>

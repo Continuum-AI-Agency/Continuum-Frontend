@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The expanded spotlight: the brand's top ads by spend, as the read returned them. Thumbnails are
 // stored Meta URLs that expire: CreativeThumb falls back to the creative report's copy, then to a
@@ -33,14 +34,17 @@ export function SpotlightSection({
   /** The creative report's stored thumbnail per ad, tried when the read's own has expired. */
   reportThumbs: ReadonlyMap<string, string | null>;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <section className="flex min-w-0 flex-col gap-2" data-testid="creative-spotlight">
       <h4 className="font-semibold text-xs">
-        Top ads by spend, last {data.window === '7d' ? '7' : '14'} days
+        {betaUiText('beta_faaf6ac2bcb2')} {data.window === '7d' ? '7' : '14'}{' '}
+        {betaUiText('beta_ab51004e9d71')}
       </h4>
       <p className="text-2xs text-muted-foreground" data-testid="creative-spotlight-age">
         {spotlightAgeLine(data)}
-        {data.currency ? ` · in ${data.currency}` : ''}
+        {data.currency ? betaUiText('beta_76a5c23c5ccf', { value0: String(data.currency) }) : ''}
       </p>
       <ul className="flex min-w-0 snap-x gap-2.5 overflow-x-auto pb-2">
         {data.ads.map((ad) => {
@@ -88,7 +92,7 @@ export function SpotlightSection({
                   rel="noreferrer"
                   target="_blank"
                 >
-                  View post
+                  {betaUiText('beta_fe9715bcd31d')}
                 </a>
               ) : null}
             </li>
@@ -97,7 +101,7 @@ export function SpotlightSection({
       </ul>
       {data.otherCurrencies.length > 0 ? (
         <p className="text-2xs text-muted-foreground">
-          Not ranked with these:{' '}
+          {betaUiText('beta_74331f28202a')}{' '}
           {data.otherCurrencies
             .map(
               (other) => `${other.adsWithSpend} in ${other.currency ?? 'an unreported currency'}`,

@@ -3,7 +3,8 @@
 // writes — the marks Recharts draws from the stubbed width, their labels, and the theme tokens
 // they are painted with — not pixels.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { chartBlockV2Schema } from '@/lib/jaina/schemas';
 import { ChartBlock } from './ChartBlock';
 import { CHART_CASES } from './chartCases.fixture';
@@ -511,7 +512,11 @@ describe('ChartBlock draws each form of the §4 vocabulary', () => {
           orientation: 'horizontal',
           data: [
             ...spendRows.slice(0, 3),
-            { campaign: 'SUPERCALIFRAGILISTICEXPIALIDOCIOUS', spend: 20, cpr: 30 },
+            {
+              campaign: 'SUPERCALIFRAGILISTICEXPIALIDOCIOUS',
+              spend: 20,
+              cpr: 30,
+            },
           ],
         };
         const desc = renderChart({ ...ranking, sort: 'desc' }, theme, width);
@@ -549,7 +554,9 @@ describe('ChartBlock draws each form of the §4 vocabulary', () => {
               { cause: 'Volume', delta: -5 },
               { cause: 'Mix', delta: 3 },
             ],
-            chart_config: { delta: { label: 'Impact', color: 'var(--chart-1)' } },
+            chart_config: {
+              delta: { label: 'Impact', color: 'var(--chart-1)' },
+            },
           },
           theme,
           width,
@@ -583,7 +590,9 @@ describe('ChartBlock draws each form of the §4 vocabulary', () => {
               { stage: 'Carts', people: 200 },
               { stage: 'Checkouts', people: 250 },
             ],
-            chart_config: { people: { label: 'People', color: 'var(--chart-1)' } },
+            chart_config: {
+              people: { label: 'People', color: 'var(--chart-1)' },
+            },
           },
           theme,
           width,
@@ -622,7 +631,10 @@ describe('ChartBlock draws each form of the §4 vocabulary', () => {
           <div className={theme === 'dark' ? 'dark' : undefined}>
             <div data-case="labelled">
               <ChartBlock
-                block={chartBlockV2Schema.parse({ ...spendBar, show_values: true })}
+                block={chartBlockV2Schema.parse({
+                  ...spendBar,
+                  show_values: true,
+                })}
                 isStreaming={false}
               />
             </div>
@@ -636,7 +648,10 @@ describe('ChartBlock draws each form of the §4 vocabulary', () => {
                   chart_type: 'line',
                   category_key: 'day',
                   // A week: fewer points and a one-series line is its figures as tiles.
-                  data: WEEK.map((spend, index) => ({ day: `Oct ${index + 1}`, spend })),
+                  data: WEEK.map((spend, index) => ({
+                    day: `Oct ${index + 1}`,
+                    spend,
+                  })),
                   show_values: true,
                 })}
                 isStreaming={false}

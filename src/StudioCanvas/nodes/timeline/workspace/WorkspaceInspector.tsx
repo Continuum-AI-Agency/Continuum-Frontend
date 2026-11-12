@@ -33,7 +33,17 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useMemo as useUiConfigMemo,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';
@@ -49,6 +59,7 @@ import {
 import { KeyframeLane } from '@/components/video-studio/motion/KeyframeLane';
 import { TextAnimationPicker } from '@/components/video-studio/motion/TextAnimationPicker';
 import type { RunVideoEditorOp } from '@/components/video-studio/types';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import {
   type CaptionPresetId,
@@ -113,11 +124,29 @@ const SELECT_CLASS =
 /** Long enough to outlast one slider drag's stream of ticks, short enough to feel live. */
 const SETTLE_MS = 300;
 const TEXT_WEIGHTS = [400, 600, 700, 800, 900];
-const ALIGNMENTS = [
-  { id: 'left', label: 'Align left', Icon: AlignLeft },
-  { id: 'center', label: 'Align center', Icon: AlignCenter },
-  { id: 'right', label: 'Align right', Icon: AlignRight },
-] as const;
+function useLocalAlignmentsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value = [
+      {
+        id: 'left',
+        label: translateConfig('align_left_eac0f9c3'),
+        Icon: AlignLeft,
+      },
+      {
+        id: 'center',
+        label: translateConfig('align_center_e55c7659'),
+        Icon: AlignCenter,
+      },
+      {
+        id: 'right',
+        label: translateConfig('align_right_8f4f8efc'),
+        Icon: AlignRight,
+      },
+    ] as const;
+    return value;
+  }, [translateConfig]);
+}
 const CROP_EDGES = ['left', 'top', 'right', 'bottom'] as const;
 // The keyframe properties a Ken Burns move writes; opacity and 3D stops are not its to drop.
 const MOTION_PROPERTIES = new Set([
@@ -292,7 +321,10 @@ export function inspectorSpecFor(clip: VisualClip): ClipEffectSpec {
   const stops = spec.keyframes ?? [];
   return {
     ...spec,
-    kenBurns: { from: stops[0]?.transform ?? {}, to: stops.at(-1)?.transform ?? {} },
+    kenBurns: {
+      from: stops[0]?.transform ?? {},
+      to: stops.at(-1)?.transform ?? {},
+    },
   };
 }
 
@@ -329,7 +361,10 @@ export function clipWithEffectSpec<T extends VisualClip>(
           {
             ...spec,
             keyframes: undefined,
-            kenBurns: { from: stop(spec.kenBurns.from), to: stop(spec.kenBurns.to) },
+            kenBurns: {
+              from: stop(spec.kenBurns.from),
+              to: stop(spec.kenBurns.to),
+            },
           },
           durationSec,
         ).keyframes
@@ -364,7 +399,10 @@ export function clipWithEffectSpec<T extends VisualClip>(
     blendMode: mapped.blendMode,
     keyframes: [
       ...kept,
-      ...motion.map((key) => ({ ...key, timeSec: key.timeSec + (retimed.keyframeOffsetSec ?? 0) })),
+      ...motion.map((key) => ({
+        ...key,
+        timeSec: key.timeSec + (retimed.keyframeOffsetSec ?? 0),
+      })),
     ],
   };
   return (clip.kind === 'video' ? { ...next, playbackRate: nextRate, durationSec } : next) as T;
@@ -446,6 +484,8 @@ function VisualClipInspector({
   runOp,
   store,
 }: SectionProps<VisualClip> & MotionProps & { sourceDurationSec?: number }) {
+  const translateUi = useUiTranslations('studio');
+
   const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const { pending, schedule, now } = edits;
   const main = mainVideoTrack(project);
@@ -460,7 +500,9 @@ function VisualClipInspector({
     [clip.id, main, project],
   );
   const [draftSpec, setDraftSpec] = useState<ClipEffectSpec>();
-  const [draftTransition, setDraftTransition] = useState<{ value?: ClipTransition }>();
+  const [draftTransition, setDraftTransition] = useState<{
+    value?: ClipTransition;
+  }>();
   const queuedSpec = useRef<{ spec: ClipEffectSpec; motion: boolean } | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new server clip is the trigger.
   useEffect(() => {
@@ -482,7 +524,11 @@ function VisualClipInspector({
     // Layers render muted; only a main-sequence video clip carries sound.
     muteAudio: clip.kind === 'video' && onMain ? !clip.audioEnabled : true,
     ...(view.kind === 'video'
-      ? { volume: view.volume, audioFadeInSec: view.fadeInSec, audioFadeOutSec: view.fadeOutSec }
+      ? {
+          volume: view.volume,
+          audioFadeInSec: view.fadeInSec,
+          audioFadeOutSec: view.fadeOutSec,
+        }
       : {}),
     effects,
     transition: draftTransition ? draftTransition.value : committedTransition,
@@ -517,7 +563,7 @@ function VisualClipInspector({
           context={onMain ? 'base' : 'overlay'}
           durationSec={(clip.durationSec * rate) / (clip.kind === 'video' ? speedFor(effects) : 1)}
           sourceDurationSec={sourceDurationSec}
-          label={clip.name ?? 'Clip'}
+          label={clip.name ?? translateUi('clip_82337888')}
           onTrim={(range) =>
             now((latest) => trimFromSource(latest, clip.id, range, sourceDurationSec))
           }
@@ -570,11 +616,13 @@ function VisualClipInspector({
         />
       </div>
       <div className="flex shrink-0 flex-col gap-3 rounded-lg border border-border/60 p-3">
-        <span className={SECTION_LABEL}>Crop</span>
+        <span className={SECTION_LABEL}>{translateUi('crop_98caf7c4')}</span>
         {CROP_EDGES.map((edge) => (
           <SliderField
             key={edge}
-            label={`Crop ${edge}`}
+            label={translateUi('crop_value0_ca4cba23', {
+              value0: String(edge),
+            })}
             value={view.crop[edge]}
             min={0}
             max={0.45}
@@ -603,6 +651,8 @@ function InspectorHeader({
   label: string;
   onDeselect: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-1.5">
@@ -613,7 +663,7 @@ function InspectorHeader({
         variant="ghost"
         size="icon"
         className="h-6 w-6 shrink-0"
-        aria-label="Deselect clip"
+        aria-label={translateUi('deselect_clip_5f2088ca')}
         onClick={onDeselect}
       >
         <X className="h-3 w-3" />
@@ -629,6 +679,8 @@ function AudioClipInspector({
   onDeselect,
   store,
 }: SectionProps<EditorAudioClip> & Pick<MotionProps, 'store'>) {
+  const translateUi = useUiTranslations('studio');
+
   const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const fadeMax = Math.min(5, view.durationSec);
   const setSpeed = (playbackRate: number) => {
@@ -638,12 +690,12 @@ function AudioClipInspector({
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-lg border border-border/60 p-3">
       <InspectorHeader
         icon={<Music className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-        label={clip.name ?? 'Audio'}
+        label={clip.name ?? translateUi('audio_bc1b8890')}
         onDeselect={onDeselect}
       />
-      <span className={SECTION_LABEL}>Audio</span>
+      <span className={SECTION_LABEL}>{translateUi('audio_bc1b8890')}</span>
       <SliderField
-        label="Volume"
+        label={translateUi('volume_b10fb966')}
         value={view.volume}
         min={0}
         max={2}
@@ -652,7 +704,7 @@ function AudioClipInspector({
         onChange={(volume) => patch({ volume }, 'Change volume')}
       />
       <SliderField
-        label="Fade in"
+        label={translateUi('fade_in_2fd5d206')}
         value={Math.min(view.fadeInSec, fadeMax)}
         min={0}
         max={fadeMax}
@@ -661,7 +713,7 @@ function AudioClipInspector({
         onChange={(fadeInSec) => patch(editorClipWithLocalFades(view, { fadeInSec }), 'Fade in')}
       />
       <SliderField
-        label="Fade out"
+        label={translateUi('fade_out_2193021e')}
         value={Math.min(view.fadeOutSec, fadeMax)}
         min={0}
         max={fadeMax}
@@ -670,7 +722,7 @@ function AudioClipInspector({
         onChange={(fadeOutSec) => patch(editorClipWithLocalFades(view, { fadeOutSec }), 'Fade out')}
       />
       <SliderField
-        label="Speed"
+        label={translateUi('speed_c372fee9')}
         value={view.playbackRate}
         min={0.25}
         max={4}
@@ -691,6 +743,8 @@ function NestedSequenceInspector({
   store,
   runOp,
 }: SectionProps<EditorNestedSequenceClip> & MotionProps) {
+  const translateUi = useUiTranslations('studio');
+
   const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const [speed, setSpeed] = useState(clip.playbackRate);
   const [sourceStart, setSourceStart] = useState(clip.sourceInSec);
@@ -723,14 +777,16 @@ function NestedSequenceInspector({
       <div className="flex shrink-0 flex-col gap-3 rounded-lg border border-border/60 p-3">
         <InspectorHeader
           icon={<Film className="h-3.5 w-3.5 text-muted-foreground" />}
-          label={clip.name ?? 'Composition'}
+          label={clip.name ?? translateUi('composition_47fca483')}
           onDeselect={onDeselect}
         />
-        <span className={SECTION_LABEL}>Transform</span>
+        <span className={SECTION_LABEL}>{translateUi('transform_d2d68041')}</span>
         {(['x', 'y'] as const).map((axis) => (
           <NumberScrubField
             key={axis}
-            label={`Position ${axis.toUpperCase()}`}
+            label={translateUi('position_value0_bd18e9f7', {
+              value0: String(axis.toUpperCase()),
+            })}
             value={view.transform.position[axis]}
             min={-8}
             max={8}
@@ -775,7 +831,7 @@ function NestedSequenceInspector({
           />
         ))}
         <SliderField
-          label="Opacity"
+          label={translateUi('opacity_6062652e')}
           value={view.transform.opacity}
           min={0}
           max={1}
@@ -787,12 +843,13 @@ function NestedSequenceInspector({
         />
         {view.keyframes.length > 0 && (
           <p className="text-2xs text-muted-foreground">
-            Edit animated properties in Keyframes below.
+            {' '}
+            {translateUi('edit_animated_properties_in_keyfram_68293a98')}{' '}
           </p>
         )}
-        <span className={SECTION_LABEL}>Source window</span>
+        <span className={SECTION_LABEL}>{translateUi('source_window_8cc44335')}</span>
         <NumberScrubField
-          label="Source start"
+          label={translateUi('source_start_134e99de')}
           value={sourceStart}
           min={0}
           max={sourceEnd - MIN_ASSEMBLY_CLIP_SEC * speed}
@@ -803,7 +860,7 @@ function NestedSequenceInspector({
           onCommit={(value) => trimSource('start', value)}
         />
         <NumberScrubField
-          label="Source end"
+          label={translateUi('source_end_f257f809')}
           value={sourceEnd}
           min={sourceStart + MIN_ASSEMBLY_CLIP_SEC * speed}
           max={child?.durationSec}
@@ -814,7 +871,7 @@ function NestedSequenceInspector({
           onCommit={(value) => trimSource('end', value)}
         />
         <NumberScrubField
-          label="Speed"
+          label={translateUi('speed_c372fee9')}
           value={speed}
           min={0.05}
           max={Math.min(20, (clip.durationSec * clip.playbackRate) / MIN_ASSEMBLY_CLIP_SEC)}
@@ -837,7 +894,8 @@ function NestedSequenceInspector({
           aria-pressed={view.audioEnabled}
           onClick={() => patch({ audioEnabled: !view.audioEnabled }, 'Toggle composition audio')}
         >
-          Composition audio
+          {' '}
+          {translateUi('composition_audio_3cb32959')}{' '}
         </Button>
       </div>
       <MotionPresetsSection clip={clip} getPlayheadSec={store.getSec} runOp={runOp} />
@@ -854,6 +912,10 @@ function TextClipInspector({
   runOp,
   store,
 }: SectionProps<EditorTextClip> & MotionProps) {
+  const ALIGNMENTS = useLocalAlignmentsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const ids = useId();
   const [text, setText] = useState(clip.text);
@@ -867,7 +929,12 @@ function TextClipInspector({
     patch({ style: { ...view.style, ...next } }, label);
   const setPosition = (axis: 'x' | 'y', value: number) =>
     patch(
-      { transform: { ...view.transform, position: { ...view.transform.position, [axis]: value } } },
+      {
+        transform: {
+          ...view.transform,
+          position: { ...view.transform.position, [axis]: value },
+        },
+      },
       'Move text',
     );
   // Typing is not a revision: text and font commit on blur or Enter, never mid-word.
@@ -894,12 +961,12 @@ function TextClipInspector({
       <div className="flex shrink-0 flex-col gap-3 rounded-lg border border-border/60 p-3">
         <InspectorHeader
           icon={<Type className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-          label={clip.name ?? 'Text'}
+          label={clip.name ?? translateUi('text_71988c4d')}
           onDeselect={onDeselect}
         />
-        <span className={SECTION_LABEL}>Text</span>
+        <span className={SECTION_LABEL}>{translateUi('text_71988c4d')}</span>
         <Textarea
-          aria-label="Text content"
+          aria-label={translateUi('text_content_c2462350')}
           value={text}
           className="min-h-16 text-xs"
           onChange={(event) => setText(event.target.value)}
@@ -913,7 +980,8 @@ function TextClipInspector({
         />
         <div className="flex flex-col gap-1">
           <Label htmlFor={`${ids}-font`} className="text-2xs">
-            Font
+            {' '}
+            {translateUi('font_64d0b3ad')}{' '}
           </Label>
           <Input
             id={`${ids}-font`}
@@ -928,7 +996,7 @@ function TextClipInspector({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <NumberScrubField
-            label="Size"
+            label={translateUi('size_1af85190')}
             value={view.style.fontSizePx}
             min={1}
             max={2000}
@@ -938,7 +1006,8 @@ function TextClipInspector({
           />
           <div className="flex flex-col gap-1">
             <Label htmlFor={`${ids}-weight`} className="text-2xs">
-              Weight
+              {' '}
+              {translateUi('weight_81d27ef6')}{' '}
             </Label>
             <select
               id={`${ids}-weight`}
@@ -956,42 +1025,46 @@ function TextClipInspector({
         </div>
         <div className="grid grid-cols-2 gap-2 text-2xs">
           <div className="flex flex-col gap-1">
-            Color
+            {' '}
+            {translateUi('color_6b73191a')}{' '}
             <ColorField
-              label="Text"
+              label={translateUi('text_71988c4d')}
               value={view.style.color}
               onChange={(color) => setStyle({ color })}
             />
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
-              Background
+              {' '}
+              {translateUi('background_ea2b8a87')}{' '}
               {view.style.backgroundColor ? (
                 <button
                   type="button"
                   className="text-3xs text-muted-foreground hover:text-foreground"
                   onClick={() => setStyle({ backgroundColor: undefined })}
                 >
-                  Clear
+                  {' '}
+                  {translateUi('clear_83b12c22')}{' '}
                 </button>
               ) : null}
             </div>
             <ColorField
-              label="Text background"
+              label={translateUi('text_background_2dd1a4f1')}
               value={view.style.backgroundColor ?? null}
               onChange={(backgroundColor) => setStyle({ backgroundColor })}
             />
           </div>
           <div className="flex flex-col gap-1">
-            Outline
+            {' '}
+            {translateUi('outline_eabbf3ab')}{' '}
             <ColorField
-              label="Text outline"
+              label={translateUi('text_outline_f2944adb')}
               value={view.style.outlineColor ?? null}
               onChange={(outlineColor) => setStyle({ outlineColor })}
             />
           </div>
           <SliderField
-            label="Outline width"
+            label={translateUi('outline_width_ce044329')}
             value={view.style.outlineWidthPx}
             min={0}
             max={20}
@@ -1016,7 +1089,7 @@ function TextClipInspector({
           ))}
         </div>
         <SliderField
-          label="Position X"
+          label={translateUi('position_x_205942db')}
           value={view.transform.position.x}
           min={0}
           max={1}
@@ -1025,7 +1098,7 @@ function TextClipInspector({
           onChange={(value) => setPosition('x', value)}
         />
         <SliderField
-          label="Position Y"
+          label={translateUi('position_y_9a71d289')}
           value={view.transform.position.y}
           min={0}
           max={1}
@@ -1033,7 +1106,7 @@ function TextClipInspector({
           format={{ style: 'percent', maximumFractionDigits: 0 }}
           onChange={(value) => setPosition('y', value)}
         />
-        <span className={SECTION_LABEL}>Animation</span>
+        <span className={SECTION_LABEL}>{translateUi('animation_1dd10f24')}</span>
         <TextAnimationPicker
           animationIn={view.animationIn}
           animationOut={view.animationOut}
@@ -1102,7 +1175,10 @@ function captionStyleFromClip(
     fontWeight: style.fontWeight,
     fontSizeFrac: style.fontSizePx / canvasHeight,
     outlineWidthFrac: style.fontSizePx > 0 ? style.outlineWidthPx / style.fontSizePx : 0,
-    position: { xFrac: clip.transform.position.x, yFrac: clip.transform.position.y },
+    position: {
+      xFrac: clip.transform.position.x,
+      yFrac: clip.transform.position.y,
+    },
     ...(style.backgroundColor ? { backgroundColor: style.backgroundColor } : {}),
     ...(clip.highlightMode === 'none' ? { activeWordMode: 'none' as const } : {}),
   };
@@ -1130,7 +1206,11 @@ export function captionClipWithStyle(
     },
     transform: {
       ...clip.transform,
-      position: { x: resolved.position.xFrac, y: resolved.position.yFrac, unit: 'normalized' },
+      position: {
+        x: resolved.position.xFrac,
+        y: resolved.position.yFrac,
+        unit: 'normalized',
+      },
     },
     highlightMode: resolved.activeWordMode === 'none' ? 'none' : 'word',
     highlightColor: resolved.highlightColor,
@@ -1184,7 +1264,11 @@ export function captionCueDrafts(
   }
   for (const clip of track.clips) {
     if (!kept.has(clip.id)) {
-      drafts.push({ commandType: 'remove_clip', trackId: track.id, clipId: clip.id });
+      drafts.push({
+        commandType: 'remove_clip',
+        trackId: track.id,
+        clipId: clip.id,
+      });
     }
   }
   return drafts;
@@ -1210,6 +1294,10 @@ function CaptionTrackInspector({
   onDeselect: () => void;
   runOp: RunVideoEditorOp;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiErrorText = useUiErrorMessage();
+
   const { show } = useToast();
   const { schedule, pending } = useSettledEdits(onEdit);
   const [selectedCueId, setSelectedCueId] = useState(clipId);
@@ -1242,7 +1330,7 @@ function CaptionTrackInspector({
     schedule('cues', (latest) => {
       const current = captionTrackIn(latest, track.id);
       const forward = current ? captionCueDrafts(current, next) : [];
-      return forward.length > 0 ? { label: 'Edit captions', forward } : null;
+      return forward.length > 0 ? { label: translateUi('edit_captions_05772dc6'), forward } : null;
     });
   };
   const changeStyle = (next: CaptionStyle) => {
@@ -1252,7 +1340,7 @@ function CaptionTrackInspector({
       const current = captionTrackIn(latest, track.id);
       if (!current || current.clips.length === 0) return null;
       return {
-        label: 'Restyle captions',
+        label: translateUi('restyle_captions_11375ff1'),
         forward: current.clips.map((clip) => ({
           commandType: 'upsert_clip' as const,
           trackId: current.id,
@@ -1267,8 +1355,8 @@ function CaptionTrackInspector({
       await runOp('set_captions', { style: presetId });
     } catch (error) {
       show({
-        title: 'Auto-captions failed',
-        description: error instanceof Error ? error.message : 'Captions could not be generated.',
+        title: translateUi('auto_captions_failed_aa898e49'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     } finally {
@@ -1291,13 +1379,17 @@ function CaptionTrackInspector({
           ) : (
             <Wand2 className="h-3 w-3" />
           )}
-          {captioning ? 'Captioning…' : `Auto-captions · ${resolveCaptionPreset(presetId).label}`}
+          {captioning
+            ? translateUi('captioning_267eb75a')
+            : translateUi('auto_captions_value0_e6696d55', {
+                value0: String(resolveCaptionPreset(presetId).label),
+              })}
         </Button>
         <Button
           variant="ghost"
           size="icon"
           className="h-6 w-6 shrink-0"
-          aria-label="Deselect clip"
+          aria-label={translateUi('deselect_clip_5f2088ca')}
           onClick={onDeselect}
         >
           <X className="h-3 w-3" />
@@ -1345,12 +1437,25 @@ export function WorkspaceInspector({
   store: PlayheadStore;
   onDeselect: () => void;
 }): ReactNode {
+  const translateUi = useUiTranslations('studio');
+
   const found = clipId ? findClip(project, clipId) : undefined;
-  if (!found) return <InspectorNote>Select a clip to edit it.</InspectorNote>;
+  if (!found)
+    return <InspectorNote>{translateUi('select_a_clip_to_edit_it_d699d7d8')}</InspectorNote>;
   const { clip, track } = found;
-  if (track.locked) return <InspectorNote>Unlock {track.name} to edit this clip.</InspectorNote>;
+  if (track.locked)
+    return (
+      <InspectorNote>
+        {translateUi('unlock_4ac709aa')} {track.name} {translateUi('to_edit_this_clip_fa408e1c')}
+      </InspectorNote>
+    );
   if (clip.locked)
-    return <InspectorNote>Unlock {clip.name ?? 'this clip'} to edit it.</InspectorNote>;
+    return (
+      <InspectorNote>
+        {translateUi('unlock_4ac709aa')} {clip.name ?? translateUi('this_clip_726109c7')}{' '}
+        {translateUi('to_edit_it_63a71fba')}
+      </InspectorNote>
+    );
   const section = { project, onEdit, onDeselect };
   const motion = { runOp, store };
   switch (clip.kind) {
@@ -1382,6 +1487,8 @@ export function WorkspaceInspector({
         />
       ) : null;
     default:
-      return <InspectorNote>This clip has no inspector yet.</InspectorNote>;
+      return (
+        <InspectorNote>{translateUi('this_clip_has_no_inspector_yet_2c815fcb')}</InspectorNote>
+      );
   }
 }

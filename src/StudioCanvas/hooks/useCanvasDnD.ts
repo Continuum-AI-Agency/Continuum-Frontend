@@ -2,6 +2,7 @@ import type { StudioNodeType } from '@continuum/contracts';
 import { createNodeData } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useReactFlow } from '@xyflow/react';
+import { useLocale as useDropLocale, useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -33,6 +34,10 @@ const TEXT_MIME = 'text/plain';
 // desktop. Dropping an asset near a generator also wires it, which is why this
 // needs the graph and not just the pointer.
 export function useCanvasDnD() {
+  const dropUiLocale = useDropLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const { nodes, edges, setNodes, setEdges, takeSnapshot, triggerSave, defaultEdgeType } =
     useStudioStore();
   const { screenToFlowPosition } = useReactFlow();
@@ -117,7 +122,12 @@ export function useCanvasDnD() {
         return;
       }
 
-      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveCanvasDropBase64);
+      const resolved = await resolveCreativeAssetDrop(
+        rawPayload,
+        resolveCanvasDropBase64,
+        undefined,
+        { t: translateUi, locale: dropUiLocale },
+      );
       if (resolved.status === 'error') {
         show({
           title: resolved.title,
@@ -218,11 +228,11 @@ export function useCanvasDnD() {
       const burnIn = resolveBurnInDropTarget(event.clientX, event.clientY, assetNodeType, nodes);
       if (burnIn) {
         show({
-          title: 'Burn this image into the clip?',
-          description: 'Adds a Burn In action wired to both, with a timed window you can set.',
+          title: translateUi('burn_this_image_into_the_clip_9f103949'),
+          description: translateUi('adds_a_burn_in_action_wired_to_both_2d5b7f68'),
           variant: 'info',
           action: {
-            label: 'Burn in as overlay',
+            label: translateUi('burn_in_as_overlay_eda408e9'),
             onClick: () => {
               // FRESH state, never the arrays captured at drop time. The toast sits on
               // screen for seconds, and another drop, a finishing generation or a
@@ -263,6 +273,9 @@ export function useCanvasDnD() {
       takeSnapshot,
       triggerSave,
       defaultEdgeType,
+
+      translateUi,
+      dropUiLocale,
     ],
   );
 

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { ListReviewEventsResponse, MediaAsset } from '@continuum/contracts';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ReviewStatusControl } from './ReviewStatusControl';
 
 // Reads that land out of order: the read started when v1 came on stage is still in
@@ -15,8 +20,20 @@ const V2 = '44444444-4444-4444-8444-444444444444';
 const history = (v1Status: 'approved' | null): ListReviewEventsResponse => ({
   events: [],
   versions: [
-    { versionId: V2, versionNumber: 2, isHead: true, reviewStatus: 'draft', reviewStateId: null },
-    { versionId: V1, versionNumber: 1, isHead: false, reviewStatus: v1Status, reviewStateId: null },
+    {
+      versionId: V2,
+      versionNumber: 2,
+      isHead: true,
+      reviewStatus: 'draft',
+      reviewStateId: null,
+    },
+    {
+      versionId: V1,
+      versionNumber: 1,
+      isHead: false,
+      reviewStatus: v1Status,
+      reviewStateId: null,
+    },
   ],
 });
 
@@ -44,7 +61,11 @@ describe('ReviewStatusControl on an older version, reads out of order', () => {
       return Promise.resolve(Response.json(history('approved')));
     }) as typeof fetch;
 
-    const asset = { id: ASSET, brandId: BRAND, reviewStatus: 'draft' } as unknown as MediaAsset;
+    const asset = {
+      id: ASSET,
+      brandId: BRAND,
+      reviewStatus: 'draft',
+    } as unknown as MediaAsset;
     const { container, rerender } = render(
       <ReviewStatusControl brandId={BRAND} asset={asset} version={{ id: V1, versionNumber: 1 }} />,
     );

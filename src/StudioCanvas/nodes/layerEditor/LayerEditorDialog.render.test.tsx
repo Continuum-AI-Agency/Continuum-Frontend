@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { LayerEditorLayer } from '../../types';
 
 /**
@@ -88,7 +93,12 @@ describe('layer motion dock', () => {
 
 /** Press first: that selects, which legitimately changes the panel's props exactly once. */
 const pressLayer = (frame: Element) =>
-  fireEvent.pointerDown(frame, { pointerId: 1, clientX: 100, clientY: 100, button: 0 });
+  fireEvent.pointerDown(frame, {
+    pointerId: 1,
+    clientX: 100,
+    clientY: 100,
+    button: 0,
+  });
 
 const moveBy = (frame: Element, samples: number) => {
   for (let step = 1; step <= samples; step += 1) {

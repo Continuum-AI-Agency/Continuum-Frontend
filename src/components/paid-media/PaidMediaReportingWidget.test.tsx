@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { type PaidMetricsResponse, PaidMetricsResponseSchema } from '@/lib/schemas/paidMetrics';
 import {
   deriveMetricTrendValue,
@@ -148,7 +149,9 @@ describe('MetricsPanel — delta colour follows the metric, not the sign', () =>
   function withComparison(metricKey: string, percentageChange: number): PaidMetricsResponse {
     return {
       ...baseData,
-      comparison: { [metricKey]: { current: 1, previous: 2, percentageChange } },
+      comparison: {
+        [metricKey]: { current: 1, previous: 2, percentageChange },
+      },
     };
   }
 
@@ -228,8 +231,15 @@ describe('MetricsPanel — Google ambiguous result basis', () => {
       cpc: 1.2472,
       cpa: null,
     },
-    result_basis: { rule: 'google_conversion_rule_v1', bucket: null, unambiguous: false },
-    comparison: { spend: { current: 79.82, previous: 70, percentageChange: 14.0286 }, cpa: null },
+    result_basis: {
+      rule: 'google_conversion_rule_v1',
+      bucket: null,
+      unambiguous: false,
+    },
+    comparison: {
+      spend: { current: 79.82, previous: 70, percentageChange: 14.0286 },
+      cpa: null,
+    },
     trends: [
       {
         date: '2026-10-20',

@@ -89,19 +89,35 @@ mock.module('@/lib/library/templateSources', () => ({
   discoverWorkspaceTemplates,
   loadWorkspaceTemplates: async () => (await discoverWorkspaceTemplates()).items,
   setTemplateAdoption: async () => ({ granted: true }),
-  fetchTemplateVariables: async () => ({ variables: [], edits: [], parseState: 'parsed' }),
+  fetchTemplateVariables: async () => ({
+    variables: [],
+    edits: [],
+    parseState: 'parsed',
+  }),
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge: async () => SOURCE,
   advanceTemplateForgeRun: async () => undefined,
 }));
 let reducedMotion = false;
 const motion = await import('motion/react');
-mock.module('motion/react', () => ({ ...motion, useReducedMotion: () => reducedMotion }));
-mock.module('@/components/forge/useForgeRun', () => ({
-  useForgeRun: () => ({ run: null, pushed: true, loading: false, refresh: async () => undefined }),
+mock.module('motion/react', () => ({
+  ...motion,
+  useReducedMotion: () => reducedMotion,
 }));
-mock.module('@/components/forge/SourceRebindPanel', () => ({ SourceRebindPanel: () => null }));
-mock.module('@/components/forge/OutputSettingsPanel', () => ({ OutputSettingsPanel: () => null }));
+mock.module('@/components/forge/useForgeRun', () => ({
+  useForgeRun: () => ({
+    run: null,
+    pushed: true,
+    loading: false,
+    refresh: async () => undefined,
+  }),
+}));
+mock.module('@/components/forge/SourceRebindPanel', () => ({
+  SourceRebindPanel: () => null,
+}));
+mock.module('@/components/forge/OutputSettingsPanel', () => ({
+  OutputSettingsPanel: () => null,
+}));
 mock.module('@/components/library/useMediaUpload', () => ({
   useMediaUpload: (
     _brandId: string,
@@ -114,25 +130,44 @@ mock.module('@/components/library/useMediaUpload', () => ({
   },
 }));
 const WEB_KEY = `web:${ASSET}`;
-const getContract = mock(async (_brandId: string, templateKey: string, _bindingId?: string | null) => ({
-  template: { key: templateKey, name: 'hello', bindingId: WEB_COMPONENT_BINDING_ID },
-  variables: [
-    { key: 'title_text', label: 'Title · text', kind: 'text', options: [] },
-    { key: 'title_align', label: 'Title · align', kind: 'enum', options: ['left', 'center'] },
-  ],
-  outputs: [],
-  publishCheck: { state: 'warn', issues: ['Video needs an even width.'], workerAttachmentId: null, media: [] },
-  web: {
-    width: 1080,
-    height: 1080,
-    durationSec: 4,
-    fps: 30,
-    previewUrl: 'https://api.test/preview',
-    variables: [{ key: 'title_text', nodeId: 'title', property: 'text' }],
-  },
-}));
+const getContract = mock(
+  async (_brandId: string, templateKey: string, _bindingId?: string | null) => ({
+    template: {
+      key: templateKey,
+      name: 'hello',
+      bindingId: WEB_COMPONENT_BINDING_ID,
+    },
+    variables: [
+      { key: 'title_text', label: 'Title · text', kind: 'text', options: [] },
+      {
+        key: 'title_align',
+        label: 'Title · align',
+        kind: 'enum',
+        options: ['left', 'center'],
+      },
+    ],
+    outputs: [],
+    publishCheck: {
+      state: 'warn',
+      issues: ['Video needs an even width.'],
+      workerAttachmentId: null,
+      media: [],
+    },
+    web: {
+      width: 1080,
+      height: 1080,
+      durationSec: 4,
+      fps: 30,
+      previewUrl: 'https://api.test/preview',
+      variables: [{ key: 'title_text', nodeId: 'title', property: 'text' }],
+    },
+  }),
+);
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }), getContract },
+  apiRendersApi: {
+    listJobs: async () => ({ items: [], nextCursor: null }),
+    getContract,
+  },
 }));
 const toasts = await import('@/components/ui/toast-imperative');
 mock.module('@/components/ui/toast-imperative', () => ({
@@ -146,8 +181,14 @@ mock.module('@/components/ui/toast-imperative', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ForgeWorkbench } from './ForgeWorkbench';
 
 beforeEach(() => {
@@ -213,7 +254,10 @@ describe('ForgeWorkbench', () => {
     });
     try {
       fetchedSources = [{ ...SOURCE, parseState: 'pending' }];
-      uploadFinished?.({ file: new File(['x'], 'promo.aep'), uploaded: { assetId: 'asset-new' } });
+      uploadFinished?.({
+        file: new File(['x'], 'promo.aep'),
+        uploaded: { assetId: 'asset-new' },
+      });
 
       expect(await screen.findByText('Opening')).toBeTruthy();
       expect(screen.getByLabelText('Search templates')).toBeTruthy();
@@ -230,7 +274,9 @@ describe('ForgeWorkbench', () => {
   });
 
   test('reuses fresh template and workspace data after a remount', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const first = renderWorkbench(client);
     await screen.findByRole('button', { name: 'Open Untitled template' });
     first.unmount();
@@ -268,8 +314,12 @@ describe('ForgeWorkbench', () => {
   });
 
   test('retains cached own-template cards after a failed refresh', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    client.setQueryData(forgeQueryKeys.templateSources(BRAND), [SOURCE], { updatedAt: 0 });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    client.setQueryData(forgeQueryKeys.templateSources(BRAND), [SOURCE], {
+      updatedAt: 0,
+    });
     fetchTemplateSources.mockRejectedValueOnce(new Error('private source detail'));
     renderWorkbench(client);
     expect(await screen.findByText('Your templates could not be refreshed')).toBeTruthy();
@@ -288,9 +338,18 @@ describe('ForgeWorkbench', () => {
   });
 
   test('preserves own and shared templates while warning that some workspaces failed', async () => {
-    discovered = [workspaceTemplate({ templateKey: '88', name: 'Hero offer', granted: true })];
+    discovered = [
+      workspaceTemplate({
+        templateKey: '88',
+        name: 'Hero offer',
+        granted: true,
+      }),
+    ];
     discoveryFailures = [
-      { bindingId: '00000000-0000-4000-8000-0000000000b2', code: 'workspace_discovery_failed' },
+      {
+        bindingId: '00000000-0000-4000-8000-0000000000b2',
+        code: 'workspace_discovery_failed',
+      },
     ];
     renderWorkbench();
 
@@ -303,7 +362,10 @@ describe('ForgeWorkbench', () => {
   test('shows unavailable instead of a confirmed empty catalog when every workspace failed', async () => {
     discovered = [];
     discoveryFailures = [
-      { bindingId: '00000000-0000-4000-8000-0000000000b1', code: 'workspace_discovery_failed' },
+      {
+        bindingId: '00000000-0000-4000-8000-0000000000b1',
+        code: 'workspace_discovery_failed',
+      },
     ];
     renderWorkbench();
 
@@ -344,7 +406,11 @@ describe('ForgeWorkbench', () => {
         name: '[DRAFT/agent] StarCraft Promo',
         sourceAssetId: ASSET,
       }),
-      workspaceTemplate({ templateKey: '88', name: 'Hero offer', granted: true }),
+      workspaceTemplate({
+        templateKey: '88',
+        name: 'Hero offer',
+        granted: true,
+      }),
     ];
     renderWorkbench();
     expect(await screen.findByRole('button', { name: 'Open StarCraft Promo' })).toBeTruthy();
@@ -374,7 +440,11 @@ describe('ForgeWorkbench', () => {
     renderWorkbench();
     expect(await screen.findByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open Inyogo · Card A' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show 2 variants of Untitled template' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Show 2 variants of Untitled template',
+      }),
+    );
     expect(screen.getByRole('button', { name: 'Open Inyogo · Card A' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit Inyogo · Card B' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Remove Inyogo · Card B from / })).toBeTruthy();
@@ -416,7 +486,12 @@ describe('ForgeWorkbench', () => {
   });
   test('an imported web component opens its own sheet, and Render with this hands over its web key', async () => {
     fetchedSources = [
-      { ...SOURCE, family: 'web_component', templateKey: WEB_KEY, displayName: 'Hello card' },
+      {
+        ...SOURCE,
+        family: 'web_component',
+        templateKey: WEB_KEY,
+        displayName: 'Hello card',
+      },
     ];
     // The preview page never arrives here; the sheet around it is what is under test.
     const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
@@ -425,13 +500,17 @@ describe('ForgeWorkbench', () => {
     const onOpenRender = mock((_intent: { templateKey: string }) => undefined);
     try {
       render(
-        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
           <ForgeWorkbench brandId={BRAND} onOpenRender={onOpenRender} />
         </QueryClientProvider>,
       );
       fireEvent.click(await screen.findByRole('button', { name: 'Open Hello card' }));
 
-      const columns = await screen.findByRole('region', { name: 'Render columns' });
+      const columns = await screen.findByRole('region', {
+        name: 'Render columns',
+      });
       expect(columns.textContent).toContain('Title · text');
       expect(columns.textContent).toContain('One of: left, center');
       expect(screen.getByText('Video needs an even width.')).toBeTruthy();
@@ -451,7 +530,9 @@ describe('ForgeWorkbench', () => {
 
   test('a template intent from another tab opens its settings once, and is handed back', async () => {
     const consumed = mock(() => undefined);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const view = render(
       <QueryClientProvider client={client}>
         <ForgeWorkbench
@@ -496,8 +577,14 @@ describe('ForgeWorkbench', () => {
       expect(await screen.findAllByTestId('hyperframes-seed-handoff')).toHaveLength(2);
       expect(screen.getByRole('tab', { name: 'Author' })).toBeTruthy();
       expect(screen.getByText('Source selected · Untitled template')).toBeTruthy();
-      expect(screen.getAllByText(/privately stage and verify the composition package/i)).toHaveLength(2);
-      expect(screen.getAllByRole('button', { name: /Import into this Forge workspace|Create private draft and import/ })).toHaveLength(1);
+      expect(
+        screen.getAllByText(/privately stage and verify the composition package/i),
+      ).toHaveLength(2);
+      expect(
+        screen.getAllByRole('button', {
+          name: /Import into this Forge workspace|Create private draft and import/,
+        }),
+      ).toHaveLength(1);
     });
 
     test('?set and ?row open that set in Render with the row, selected for a re-render', async () => {

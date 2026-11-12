@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -135,7 +136,13 @@ describe('OptimizerActions — work pending', () => {
     // The regression: budget moves are cycle_items, not recommendations, so a cycle that
     // wanted to move money without firing a trigger counted as zero pending and the whole
     // portfolio vanished from the queue. Four live portfolios were in exactly this state.
-    renderActions([portfolio({ id: 'p1', pending_recommendations: 0, pending_budget_moves: 2 })]);
+    renderActions([
+      portfolio({
+        id: 'p1',
+        pending_recommendations: 0,
+        pending_budget_moves: 2,
+      }),
+    ]);
 
     expect(screen.getAllByTestId('portfolio-group')).toHaveLength(1);
     expect(document.body.textContent).not.toContain('Nothing needs your decision');
@@ -143,10 +150,26 @@ describe('OptimizerActions — work pending', () => {
 
   it('counts recommendations and budget moves independently', () => {
     renderActions([
-      portfolio({ id: 'p1', pending_recommendations: 2, pending_budget_moves: 0 }),
-      portfolio({ id: 'p2', pending_recommendations: 0, pending_budget_moves: 8 }),
-      portfolio({ id: 'p3', pending_recommendations: 1, pending_budget_moves: 3 }),
-      portfolio({ id: 'p4', pending_recommendations: 0, pending_budget_moves: 0 }),
+      portfolio({
+        id: 'p1',
+        pending_recommendations: 2,
+        pending_budget_moves: 0,
+      }),
+      portfolio({
+        id: 'p2',
+        pending_recommendations: 0,
+        pending_budget_moves: 8,
+      }),
+      portfolio({
+        id: 'p3',
+        pending_recommendations: 1,
+        pending_budget_moves: 3,
+      }),
+      portfolio({
+        id: 'p4',
+        pending_recommendations: 0,
+        pending_budget_moves: 0,
+      }),
     ]);
 
     expect(screen.getAllByTestId('portfolio-group')).toHaveLength(3);
@@ -194,11 +217,18 @@ describe('OptimizerActions — platform chips', () => {
 // merges them), so each group names its own platforms and gets its own platform cards.
 describe("OptimizerActions — a Google portfolio's queue", () => {
   const card = (id: string, portfolioId: string) =>
-    ({ id: `platform_signal:${id}`, portfolio_ids: [portfolioId] }) as unknown as AccountCandidate;
+    ({
+      id: `platform_signal:${id}`,
+      portfolio_ids: [portfolioId],
+    }) as unknown as AccountCandidate;
 
   it('names a Google portfolio by its own platform, not Meta', () => {
     renderActions([
-      portfolio({ id: 'meta', pending_recommendations: 1, platforms: ['meta'] }),
+      portfolio({
+        id: 'meta',
+        pending_recommendations: 1,
+        platforms: ['meta'],
+      }),
       portfolio({
         id: 'google',
         ad_account_id: '5251780631',
@@ -218,12 +248,23 @@ describe("OptimizerActions — a Google portfolio's queue", () => {
 
   it("hands each group exactly its own portfolio's pending cards, from every platform read", () => {
     cardStates = {
-      google_ads: { status: 'ready', cards: [card('g1', 'google'), card('g2', 'other')] },
+      google_ads: {
+        status: 'ready',
+        cards: [card('g1', 'google'), card('g2', 'other')],
+      },
       tiktok_ads: { status: 'ready', cards: [card('t1', 'google')] },
     };
     renderActions([
-      portfolio({ id: 'google', pending_recommendations: 2, platforms: ['google_ads'] }),
-      portfolio({ id: 'meta', pending_recommendations: 1, platforms: ['meta'] }),
+      portfolio({
+        id: 'google',
+        pending_recommendations: 2,
+        platforms: ['google_ads'],
+      }),
+      portfolio({
+        id: 'meta',
+        pending_recommendations: 1,
+        platforms: ['meta'],
+      }),
     ]);
     const handed = screen
       .getAllByTestId('portfolio-group')
@@ -232,7 +273,10 @@ describe("OptimizerActions — a Google portfolio's queue", () => {
   });
 
   it('hands no cards while a read is pending or failed, so its recommendations stay rows', () => {
-    cardStates = { google_ads: { status: 'error' }, tiktok_ads: { status: 'loading' } };
+    cardStates = {
+      google_ads: { status: 'error' },
+      tiktok_ads: { status: 'loading' },
+    };
     renderActions([portfolio({ id: 'google', pending_recommendations: 2 })]);
     expect(screen.getByTestId('portfolio-group').getAttribute('data-cards')).toBe('');
   });

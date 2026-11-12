@@ -3,6 +3,7 @@
 import type { Skill } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Type, Wand2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { BrandBookPiecePresentation } from '@/lib/brands/generationConfigPresentation';
 import { getCreativeAssetsBucket } from '@/lib/creative-assets/config';
 import { createSignedAssetUrl } from '@/lib/creative-assets/storageClient';
@@ -18,6 +19,8 @@ const frameClass = (size: Size): string =>
   );
 
 function BrandLogoPreview({ storagePath, size }: { storagePath: string; size: Size }) {
+  const tUi = useTranslations('common');
+
   const bucket = getCreativeAssetsBucket();
   const source = resolveBrandLogoSource({ logo: { storage_path: storagePath } }, bucket);
   const query = useQuery({
@@ -34,7 +37,7 @@ function BrandLogoPreview({ storagePath, size }: { storagePath: string; size: Si
   });
 
   return (
-    <div className={frameClass(size)} role="img" aria-label="Brand logo preview">
+    <div className={frameClass(size)} role="img" aria-label={tUi('m_b65e015dbb')}>
       {query.data ? (
         // biome-ignore lint/performance/noImgElement: transient signed Brand Book asset
         <img src={query.data} alt="" className="size-full object-contain p-1" />
@@ -52,6 +55,8 @@ export function BrandBookPiecePreview({
   presentation: BrandBookPiecePresentation;
   size?: Size;
 }) {
+  const tUi = useTranslations('common');
+
   const preview = presentation.preview;
   if (preview.kind === 'logo') {
     return <BrandLogoPreview storagePath={preview.storagePath} size={size} />;
@@ -62,7 +67,9 @@ export function BrandBookPiecePreview({
       <div
         className={cn(frameClass(size), 'grid grid-flow-col auto-cols-fr')}
         role="img"
-        aria-label={`Brand colors: ${preview.values.join(', ')}`}
+        aria-label={tUi('m_bcad1a7ce7', {
+          v0: String(preview.values.join(', ')),
+        })}
       >
         {preview.values.slice(0, 5).map((value) => (
           <span key={value} className="h-full" style={{ backgroundColor: value }} />
@@ -85,7 +92,7 @@ export function BrandBookPiecePreview({
       <div
         className={cn(frameClass(size), 'relative bg-background')}
         role="img"
-        aria-label={`${preview.brandName} Brand Book preview`}
+        aria-label={tUi('m_2853949d2c', { v0: String(preview.brandName) })}
       >
         {preview.colors.length > 0 ? (
           <span className="absolute inset-x-0 bottom-0 flex h-1.5">
@@ -107,11 +114,13 @@ export function BrandBookPiecePreview({
 }
 
 export function SkillConfigPreview({ skill, size = 'row' }: { skill: Skill; size?: Size }) {
+  const tUi = useTranslations('common');
+
   return (
     <div
       className={cn(frameClass(size), 'flex-col gap-0.5 px-1')}
       role="img"
-      aria-label={`${skill.name} skill config`}
+      aria-label={tUi('m_5123cba2d4', { v0: String(skill.name) })}
     >
       <Wand2 className="size-3.5" aria-hidden />
       {skill.tags[0] ? (

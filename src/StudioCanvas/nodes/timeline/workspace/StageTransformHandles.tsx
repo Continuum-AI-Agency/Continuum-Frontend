@@ -1,6 +1,7 @@
 'use client';
 
 import type { EditorTransform } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
@@ -54,6 +55,8 @@ export function StageTransformHandles({
   onBegin: () => void;
   onCommit: (transform: EditorTransform, gesture: StageGesture, timeSec: number) => void;
 }): ReactNode {
+  const translateUi = useUiTranslations('studio');
+
   const rootRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<Gesture | null>(null);
   const [draft, setDraft] = useState<EditorTransform | null>(null);
@@ -107,7 +110,10 @@ export function StageTransformHandles({
       timeSec,
       start: transform,
       latest: transform,
-      startPointer: { x: event.clientX - frame.left, y: event.clientY - frame.top },
+      startPointer: {
+        x: event.clientX - frame.left,
+        y: event.clientY - frame.top,
+      },
       frame,
       element: event.currentTarget,
       pointerId: event.pointerId,
@@ -122,7 +128,10 @@ export function StageTransformHandles({
       gesture: gesture.kind,
       start: gesture.start,
       startPointer: gesture.startPointer,
-      pointer: { x: event.clientX - gesture.frame.left, y: event.clientY - gesture.frame.top },
+      pointer: {
+        x: event.clientX - gesture.frame.left,
+        y: event.clientY - gesture.frame.top,
+      },
       frame: gesture.frame,
       shift: event.shiftKey,
     });
@@ -162,7 +171,7 @@ export function StageTransformHandles({
       >
         <button
           type="button"
-          aria-label="Move selected clip"
+          aria-label={translateUi('move_selected_clip_a47b3741')}
           className="pointer-events-auto absolute inset-0 cursor-move touch-none"
           onPointerDown={begin('move')}
         />
@@ -170,7 +179,7 @@ export function StageTransformHandles({
           <button
             key={corner}
             type="button"
-            aria-label="Scale selected clip"
+            aria-label={translateUi('scale_selected_clip_5f46fb22')}
             className="pointer-events-auto absolute size-2.5 -translate-x-1/2 -translate-y-1/2 touch-none border border-primary bg-background"
             style={cornerStyle(corner, shown.rotationDeg)}
             onPointerDown={begin('scale')}
@@ -180,7 +189,7 @@ export function StageTransformHandles({
       {/* Keep the grip reachable when the selected picture extends beyond the frame. */}
       <button
         type="button"
-        aria-label="Rotate selected clip"
+        aria-label={translateUi('rotate_selected_clip_1b9ca60c')}
         className="pointer-events-auto absolute size-3 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border border-primary bg-background"
         style={{
           left: `clamp(12px, calc(${gripX * 100}% + ${Math.sin(angle) * 24}px), calc(100% - 12px))`,

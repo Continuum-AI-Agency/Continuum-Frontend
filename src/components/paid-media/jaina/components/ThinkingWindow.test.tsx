@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 // Render markdown as its raw string so we can assert on the thought prose, and
 // flatten the shimmer wrapper to a plain span so the header label is queryable.
@@ -21,7 +22,11 @@ function thought(detail: string, at = '2026-06-10T00:00:00.000Z'): JainaProgress
 }
 
 function agentSpawn(displayName: string, at = '2026-06-10T00:00:01.000Z'): JainaProgressEntry {
-  return { stage: 'agent_spawn', at, data: { agent_id: displayName, display_name: displayName } };
+  return {
+    stage: 'agent_spawn',
+    at,
+    data: { agent_id: displayName, display_name: displayName },
+  };
 }
 
 describe('ThinkingWindow', () => {

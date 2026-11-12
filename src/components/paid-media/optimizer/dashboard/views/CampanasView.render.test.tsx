@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { configFixture, payloadFixture } from '../__fixtures__/easyfitPayload';
 import { chipThresholds } from '../dashboardModel';
 import { CampanasView } from './CampanasView';

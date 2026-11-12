@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The portfolio config form's units and its validator — both derived, neither hand-rolled.
 //
 // Four of these columns are STORED in a unit no operator ever types: max_daily_apply_minor
@@ -144,6 +148,7 @@ function numericField(
   key: NumericFieldKey,
   getUnit: () => UnitContext,
   current: number | null | undefined,
+  uiTranslate?: ScaleCopy,
 ) {
   const clearable = CLEARABLE.has(key) || current == null;
   return z
@@ -152,12 +157,20 @@ function numericField(
       const trimmed = raw.trim();
       if (trimmed === '') {
         if (clearable) return null;
-        ctx.addIssue({ code: 'custom', message: 'Enter a number — this cannot be cleared.' });
+        ctx.addIssue({
+          code: 'custom',
+          message: uiTranslate
+            ? uiTranslate('enter_a_number_this_cannot_be_cleared_ae047b5')
+            : 'Enter a number — this cannot be cleared.',
+        });
         return z.NEVER;
       }
       const parsed = Number(trimmed);
       if (!Number.isFinite(parsed)) {
-        ctx.addIssue({ code: 'custom', message: 'Enter a number.' });
+        ctx.addIssue({
+          code: 'custom',
+          message: uiTranslate ? uiTranslate('enter_a_number_7b2968f') : 'Enter a number.',
+        });
         return z.NEVER;
       }
       return NUMERIC_UNITS[key].toStored(parsed, getUnit());
@@ -188,6 +201,7 @@ export type PortfolioCurrentValues = Record<NumericFieldKey, number | null | und
 export function createPortfolioFormSchema(
   getUnit: () => UnitContext,
   current: PortfolioCurrentValues,
+  uiTranslate?: ScaleCopy,
 ) {
   return (
     z
@@ -203,22 +217,44 @@ export function createPortfolioFormSchema(
         period_end: PATCH_SHAPE.period_end.unwrap(),
         target_metric: PATCH_SHAPE.target_metric.unwrap(),
         budget_granularity: PATCH_SHAPE.budget_granularity.unwrap(),
-        scale_growth_pct: numericField('scale_growth_pct', getUnit, current.scale_growth_pct),
-        scale_cadence_days: numericField('scale_cadence_days', getUnit, current.scale_cadence_days),
-        scale_max_daily: numericField('scale_max_daily', getUnit, current.scale_max_daily),
-        daily_total: numericField('daily_total', getUnit, current.daily_total),
-        period_budget: numericField('period_budget', getUnit, current.period_budget),
-        cpa_target: numericField('cpa_target', getUnit, current.cpa_target),
-        velocity_cap_pct: numericField('velocity_cap_pct', getUnit, current.velocity_cap_pct),
+        scale_growth_pct: numericField(
+          'scale_growth_pct',
+          getUnit,
+          current.scale_growth_pct,
+          uiTranslate,
+        ),
+        scale_cadence_days: numericField(
+          'scale_cadence_days',
+          getUnit,
+          current.scale_cadence_days,
+          uiTranslate,
+        ),
+        scale_max_daily: numericField(
+          'scale_max_daily',
+          getUnit,
+          current.scale_max_daily,
+          uiTranslate,
+        ),
+        daily_total: numericField('daily_total', getUnit, current.daily_total, uiTranslate),
+        period_budget: numericField('period_budget', getUnit, current.period_budget, uiTranslate),
+        cpa_target: numericField('cpa_target', getUnit, current.cpa_target, uiTranslate),
+        velocity_cap_pct: numericField(
+          'velocity_cap_pct',
+          getUnit,
+          current.velocity_cap_pct,
+          uiTranslate,
+        ),
         max_daily_apply_minor: numericField(
           'max_daily_apply_minor',
           getUnit,
           current.max_daily_apply_minor,
+          uiTranslate,
         ),
         max_change_pct_per_cycle: numericField(
           'max_change_pct_per_cycle',
           getUnit,
           current.max_change_pct_per_cycle,
+          uiTranslate,
         ),
       })
       // The client mirror of optimizer_portfolios_autopilot_guardrails_chk. The DB refuses to
@@ -235,8 +271,12 @@ export function createPortfolioFormSchema(
               code: 'custom',
               path: [hasStep ? 'scale_cadence_days' : 'scale_growth_pct'],
               message: hasStep
-                ? 'Say how often to grow (every N days).'
-                : 'Say how much to grow by (%).',
+                ? uiTranslate
+                  ? uiTranslate('portfolioScaleCadenceRequired')
+                  : 'Say how often to grow (every N days).'
+                : uiTranslate
+                  ? uiTranslate('portfolioScaleGrowthRequired')
+                  : 'Say how much to grow by (%).',
             });
           }
         }
@@ -245,14 +285,18 @@ export function createPortfolioFormSchema(
           ctx.addIssue({
             code: 'custom',
             path: ['max_daily_apply_minor'],
-            message: 'Autopilot needs a spend ceiling above 0.',
+            message: uiTranslate
+              ? uiTranslate('autopilot_needs_a_spend_ceiling_above_0_7cd7165')
+              : 'Autopilot needs a spend ceiling above 0.',
           });
         }
         if (!values.max_change_pct_per_cycle || values.max_change_pct_per_cycle <= 0) {
           ctx.addIssue({
             code: 'custom',
             path: ['max_change_pct_per_cycle'],
-            message: 'Autopilot needs a change cap above 0.',
+            message: uiTranslate
+              ? uiTranslate('autopilot_needs_a_change_cap_above_0_973af30')
+              : 'Autopilot needs a change cap above 0.',
           });
         }
       })
@@ -340,8 +384,10 @@ function platformMinorOffset(platform: AdPlatform, currency: string | null): num
   }
 }
 
-export function platformCapLabel(platform: AdPlatform): string {
-  return `Daily limit on ${PLATFORM_NAMES[platform]}`;
+export function platformCapLabel(platform: AdPlatform, uiTranslate?: ScaleCopy): string {
+  return uiTranslate
+    ? uiTranslate('helper_c2d9fb526b9c', { v0: PLATFORM_NAMES[platform] })
+    : `Daily limit on ${PLATFORM_NAMES[platform]}`;
 }
 
 /** stored minor cap -> the major amount the input shows; blank for no cap or no currency. */
@@ -362,15 +408,29 @@ export function parsePlatformCapInput(
   raw: string,
   platform: AdPlatform,
   currency: string | null,
+  uiTranslate?: ScaleCopy,
 ): PlatformCapInput {
   const offset = platformMinorOffset(platform, currency);
   if (offset == null) {
-    return { ok: false, message: 'These accounts have no single currency to set a limit in.' };
+    return {
+      ok: false,
+      message: uiTranslate
+        ? uiTranslate('portfolioCapCurrency')
+        : 'These accounts have no single currency to set a limit in.',
+    };
   }
   const trimmed = raw.trim();
   if (trimmed === '') return { ok: true, minor: null };
   const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed)) return { ok: false, message: 'Enter a number.' };
-  if (parsed < 0) return { ok: false, message: 'A limit cannot be negative.' };
+  if (!Number.isFinite(parsed))
+    return {
+      ok: false,
+      message: uiTranslate ? uiTranslate('enter_a_number_7b2968f') : 'Enter a number.',
+    };
+  if (parsed < 0)
+    return {
+      ok: false,
+      message: uiTranslate ? uiTranslate('portfolioCapNegative') : 'A limit cannot be negative.',
+    };
   return { ok: true, minor: Math.round(parsed * offset) };
 }

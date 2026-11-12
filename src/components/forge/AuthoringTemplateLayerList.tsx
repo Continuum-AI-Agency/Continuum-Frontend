@@ -33,6 +33,7 @@ import {
   Shapes,
   Type,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -71,14 +72,17 @@ export function TemplateLayerList({
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
   const ids = rows.map((row) => row.id);
   const move = (from: number, to: number) => {
     if (onReorder && from !== to && to >= 0 && to < ids.length) onReorder(arrayMove(ids, from, to));
   };
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (over) move(ids.indexOf(active.id as number | string), ids.indexOf(over.id as number | string));
+    if (over)
+      move(ids.indexOf(active.id as number | string), ids.indexOf(over.id as number | string));
   };
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -128,11 +132,20 @@ function LayerRow({
   groupSelected: boolean;
   onToggleGroupSelection?: (id: number | string) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
     disabled: !movable,
   });
-  const Icon = row.kind === 'text' ? Type : row.kind === 'shape' ? Shapes : row.kind === 'composition' || row.kind === 'group' ? Layers : ImageIcon;
+  const Icon =
+    row.kind === 'text'
+      ? Type
+      : row.kind === 'shape'
+        ? Shapes
+        : row.kind === 'composition' || row.kind === 'group'
+          ? Layers
+          : ImageIcon;
   const name = (
     <>
       <span className={cn('block truncate', row.hidden && 'text-muted-foreground')}>
@@ -157,7 +170,9 @@ function LayerRow({
       {movable ? (
         <button
           type="button"
-          aria-label={`Drag ${row.label}`}
+          aria-label={translateUi('drag_value0_ec7c9477', {
+            value0: String(row.label),
+          })}
           className="flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
           {...attributes}
           {...listeners}
@@ -168,7 +183,9 @@ function LayerRow({
       {row.groupable && onToggleGroupSelection ? (
         <input
           type="checkbox"
-          aria-label={`Include ${row.label} in group`}
+          aria-label={translateUi('include_value0_in_group_93f720db', {
+            value0: String(row.label),
+          })}
           checked={groupSelected}
           onChange={() => onToggleGroupSelection(row.id)}
           className="size-3.5 shrink-0 accent-primary"
@@ -191,7 +208,7 @@ function LayerRow({
         <span
           className="size-1.5 shrink-0 rounded-full bg-primary"
           role="img"
-          aria-label="Edited"
+          aria-label={translateUi('edited_7117f080')}
         />
       ) : null}
       {movable ? (
@@ -200,7 +217,9 @@ function LayerRow({
             type="button"
             size="icon-xs"
             variant="ghost"
-            aria-label={`Bring ${row.label} forward`}
+            aria-label={translateUi('bring_value0_forward_f6beb422', {
+              value0: String(row.label),
+            })}
             disabled={first}
             onClick={() => onStep(-1)}
           >
@@ -210,7 +229,9 @@ function LayerRow({
             type="button"
             size="icon-xs"
             variant="ghost"
-            aria-label={`Send ${row.label} backward`}
+            aria-label={translateUi('send_value0_backward_f0ec2deb', {
+              value0: String(row.label),
+            })}
             disabled={last}
             onClick={() => onStep(1)}
           >
@@ -223,7 +244,15 @@ function LayerRow({
           type="button"
           size="icon-xs"
           variant="ghost"
-          aria-label={row.hidden ? `Show ${row.label}` : `Hide ${row.label}`}
+          aria-label={
+            row.hidden
+              ? translateUi('show_value0_bf682fa5', {
+                  value0: String(row.label),
+                })
+              : translateUi('hide_value0_e1ddf57b', {
+                  value0: String(row.label),
+                })
+          }
           onClick={() => onToggleVisible(row.id)}
         >
           {row.hidden ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
@@ -232,7 +261,7 @@ function LayerRow({
         <EyeOff
           className="size-3.5 shrink-0 text-muted-foreground"
           role="img"
-          aria-label="Hidden"
+          aria-label={translateUi('hidden_7e6fefff')}
         />
       ) : null}
     </li>

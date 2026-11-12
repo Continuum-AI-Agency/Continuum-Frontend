@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AccountCandidate, AdAccount, GoogleTopCampaigns } from '@continuum/contracts';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { platformCardOf } from '../../../platformCards/platformCardModel';
 import { buildGoogleOverview } from '../../../platforms/googleAdsOverviewModel';
 import type { GoogleAdsOverviewState } from '../../../platforms/useGoogleAdsOverview';
@@ -217,7 +218,10 @@ describe('AuctionLensView — the frame says what the lens could show', () => {
     render(
       <AuctionLensView
         size="m"
-        state={auctionLensState({ ...base, google: { status: 'no-connection' } })}
+        state={auctionLensState({
+          ...base,
+          google: { status: 'no-connection' },
+        })}
       />,
     );
     expect(frameState()).toBe('missing');
@@ -230,7 +234,11 @@ describe('AuctionLensView — the frame says what the lens could show', () => {
         size="m"
         state={auctionLensState({
           ...base,
-          google: { status: 'error', account: null, message: 'USER_PERMISSION_DENIED' },
+          google: {
+            status: 'error',
+            account: null,
+            message: 'USER_PERMISSION_DENIED',
+          },
         })}
       />,
     );

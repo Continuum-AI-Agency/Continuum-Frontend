@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The companion canvas when Jaina proposes an edit to a LIVE campaign: the campaign as Meta
 // has it, in columns, with the pending change marked (amber changed, green new and paused, red
@@ -47,6 +48,8 @@ export function LiveChangeCanvas({
   /** False when a host draws the subject and the decision above it. */
   showHeader?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const model = React.useMemo(() => columnMapFromLiveChange(preview), [preview]);
   return (
     <div
@@ -56,7 +59,7 @@ export function LiveChangeCanvas({
       {showHeader ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 text-xs">
           <span className="min-w-0 break-words text-muted-foreground">
-            {preview.subject ?? 'Pending change'}
+            {preview.subject ?? betaUiText('beta_64b979c02d33')}
           </span>
           <LiveChangeDecisionPill decision={decision} />
         </div>
@@ -71,9 +74,7 @@ export function LiveChangeCanvas({
               <span className="flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
                 <span className="font-semibold">{liveChangeSummaryOf(preview)}</span>
                 {preview.truncated ? (
-                  <span className="text-muted-foreground">
-                    Large campaign: only the first items are shown
-                  </span>
+                  <span className="text-muted-foreground">{betaUiText('beta_1f1bda5ac8c7')}</span>
                 ) : null}
               </span>
             }

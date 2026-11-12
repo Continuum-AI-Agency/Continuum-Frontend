@@ -1,10 +1,11 @@
+import { render } from '@/i18n/__tests__/render';
 // The panel adds no data path of its own: both query hooks arrive through
 // `source`, so this spec drives the real component with fakes instead of a
 // process-wide `mock.module`.
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { AutomationRun } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { RunHistoryPanel, type RunHistorySource } from './RunHistoryPanel';
 
 afterEach(cleanup);
@@ -67,9 +68,18 @@ describe('RunHistoryPanel', () => {
         onFocusRun={mock(() => {})}
         source={stubSource({
           runs: [
-            run({ runId: 'aaaaaaaa-old', enqueuedAt: '2026-07-26T09:00:00.000Z' }),
-            run({ runId: 'cccccccc-new', enqueuedAt: '2026-07-28T09:00:00.000Z' }),
-            run({ runId: 'bbbbbbbb-mid', enqueuedAt: '2026-07-27T09:00:00.000Z' }),
+            run({
+              runId: 'aaaaaaaa-old',
+              enqueuedAt: '2026-07-26T09:00:00.000Z',
+            }),
+            run({
+              runId: 'cccccccc-new',
+              enqueuedAt: '2026-07-28T09:00:00.000Z',
+            }),
+            run({
+              runId: 'bbbbbbbb-mid',
+              enqueuedAt: '2026-07-27T09:00:00.000Z',
+            }),
           ],
         })}
       />,
@@ -107,7 +117,10 @@ describe('RunHistoryPanel', () => {
         onFocusRun={mock(() => {})}
         source={stubSource({
           runs: [
-            run({ runId: 'run-focused', enqueuedAt: '2026-07-28T09:00:00.000Z' }),
+            run({
+              runId: 'run-focused',
+              enqueuedAt: '2026-07-28T09:00:00.000Z',
+            }),
             run({ runId: 'run-other', enqueuedAt: '2026-07-27T09:00:00.000Z' }),
           ],
         })}
@@ -119,7 +132,7 @@ describe('RunHistoryPanel', () => {
     expect(other?.getAttribute('aria-current')).toBeNull();
   });
 
-  test('surfaces the error message of a failed run', () => {
+  test('shows safe failure guidance while preserving the original diagnostic', () => {
     render(
       <RunHistoryPanel
         automationId="automation-1"
@@ -138,7 +151,8 @@ describe('RunHistoryPanel', () => {
       />,
     );
 
-    expect(screen.getByText('organic_publish rejected the caption')).toBeTruthy();
+    expect(screen.queryByText('organic_publish rejected the caption')).toBeNull();
+    expect(screen.getByText('An unexpected error occurred. Please try again.')).toBeTruthy();
     expect(screen.getByText('Failed')).toBeTruthy();
   });
 
@@ -159,7 +173,10 @@ describe('RunHistoryPanel', () => {
         activeRunId={null}
         onFocusRun={mock(() => {})}
         source={{
-          useRuns: () => ({ data: [run({ runId: 'run-with-report' })], isLoading: false }),
+          useRuns: () => ({
+            data: [run({ runId: 'run-with-report' })],
+            isLoading: false,
+          }),
           useRunReport: (_runId, enabled) => {
             enabledCalls.push(enabled);
             return { data: enabled ? reportRun : undefined, isLoading: false };
@@ -197,7 +214,9 @@ describe('RunHistoryPanel', () => {
         automationId="automation-1"
         activeRunId={null}
         onFocusRun={mock(() => {})}
-        source={stubSource({ runs: [run({ status: 'queued', completedAt: null })] })}
+        source={stubSource({
+          runs: [run({ status: 'queued', completedAt: null })],
+        })}
       />,
     );
 

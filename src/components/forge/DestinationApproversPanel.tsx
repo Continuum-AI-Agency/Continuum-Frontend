@@ -7,6 +7,7 @@ import type {
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon, ChevronsUpDownIcon, Loader2, UserPlus } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Button } from '@/components/ui/button';
@@ -64,6 +65,8 @@ export function DestinationApproversPanel({
   brandId: string;
   destination: RenderApprovalDestination;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const listKey = approversKey(brandId, destination.id);
   const approversQuery = useQuery({
@@ -90,7 +93,9 @@ export function DestinationApproversPanel({
         : [...current, approver],
     );
     // Not awaited: the row above is already right, and the room counts can follow.
-    void queryClient.invalidateQueries({ queryKey: approvalDestinationsKey(brandId) });
+    void queryClient.invalidateQueries({
+      queryKey: approvalDestinationsKey(brandId),
+    });
   };
 
   const run = async (busy: string, write: () => Promise<DestinationApprover>) => {
@@ -135,7 +140,7 @@ export function DestinationApproversPanel({
           size="xs"
           variant={action === 'activate' && approver.status === 'requested' ? 'default' : 'outline'}
           disabled={busyId !== null}
-          aria-label={`${action === 'activate' ? 'Activate' : 'Revoke'} ${name}`}
+          aria-label={`${action === 'activate' ? translateUi('activate_24433c70') : translateUi('revoke_87e6d00b')} ${name}`}
           onClick={() =>
             void run(approver.id, () =>
               (action === 'activate' ? activateDestinationApprover : revokeDestinationApprover)(
@@ -148,7 +153,9 @@ export function DestinationApproversPanel({
           {busyId === approver.id ? (
             <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
           ) : null}
-          {action === 'activate' ? 'Activate' : 'Revoke'}
+          {action === 'activate'
+            ? translateUi('activate_24433c70')
+            : translateUi('revoke_87e6d00b')}
         </Button>
       </li>
     );
@@ -156,46 +163,65 @@ export function DestinationApproversPanel({
 
   return (
     <fieldset
-      aria-label={`Approvers for ${destination.name}`}
+      aria-label={translateUi('approvers_for_value0_ade2d324', {
+        value0: String(destination.name),
+      })}
       className="space-y-2 rounded-md border bg-muted/20 p-2 text-xs"
     >
       {approversQuery.isPending ? (
         <p className="flex items-center gap-1.5 text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Loading approvers…
+          <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+          {translateUi('loading_approvers_8f6c0f93')}{' '}
         </p>
       ) : approversQuery.isError ? (
-        <p className="text-destructive">Couldn’t load approvers: {approversQuery.error.message}</p>
+        <p className="text-destructive">
+          {translateUi('couldn_t_load_approvers_ae967198')} {approversQuery.error.message}
+        </p>
       ) : (
         <>
           {requested.length ? (
             <section className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1">
-              <h4 className="font-medium">Asking to approve ({requested.length})</h4>
+              <h4 className="font-medium">
+                {translateUi('asking_to_approve_cb3cedba')}
+                {requested.length})
+              </h4>
               <p className="text-muted-foreground">
-                They pressed “Request approver access” in this room. Nothing they decide counts
-                until you activate them.
+                {' '}
+                {translateUi('they_pressed_request_approver_acces_6ee424cb')}{' '}
               </p>
-              <ul aria-label="Requested approvers">
+              <ul aria-label={translateUi('requested_approvers_858cd847')}>
                 {requested.map((item) => row(item, 'activate'))}
               </ul>
             </section>
           ) : null}
           <section>
-            <h4 className="font-medium">Can approve ({active.length})</h4>
+            <h4 className="font-medium">
+              {translateUi('can_approve_756607ec')}
+              {active.length})
+            </h4>
             {active.length ? (
-              <ul aria-label="Active approvers" className="divide-y divide-border">
+              <ul
+                aria-label={translateUi('active_approvers_e182e91c')}
+                className="divide-y divide-border"
+              >
                 {active.map((item) => row(item, 'revoke'))}
               </ul>
             ) : (
               <p className="text-warning">
-                Nobody can approve here yet. Someone in the room can press “Request approver access”
-                on a package, or add them below.
+                {' '}
+                {translateUi('nobody_can_approve_here_yet_someone_21f33763')}{' '}
               </p>
             )}
           </section>
           {revoked.length ? (
             <section className="text-muted-foreground">
-              <h4 className="font-medium">Revoked ({revoked.length})</h4>
-              <ul aria-label="Revoked approvers">{revoked.map((item) => row(item, 'activate'))}</ul>
+              <h4 className="font-medium">
+                {translateUi('revoked_a281a7ba')}
+                {revoked.length})
+              </h4>
+              <ul aria-label={translateUi('revoked_approvers_452c42c7')}>
+                {revoked.map((item) => row(item, 'activate'))}
+              </ul>
             </section>
           ) : null}
         </>
@@ -230,6 +256,8 @@ function AddApprover({
   busy: boolean;
   onAdd: (body: AddDestinationApproverRequest) => Promise<boolean>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [mode, setMode] = useState<AddMode>('member');
   const [userId, setUserId] = useState('');
   const [platformUserId, setPlatformUserId] = useState('');
@@ -242,7 +270,10 @@ function AddApprover({
         ? { userId }
         : null
       : platformUserId.trim()
-        ? { platformUserId: platformUserId.trim(), displayName: displayName.trim() || null }
+        ? {
+            platformUserId: platformUserId.trim(),
+            displayName: displayName.trim() || null,
+          }
         : null;
 
   const add = async () => {
@@ -260,7 +291,8 @@ function AddApprover({
     <div className="space-y-1.5 border-t border-border pt-2">
       <div className="flex flex-col gap-1">
         <Label htmlFor={`approver-kind-${destination.id}`} className="text-muted-foreground">
-          Add an approver
+          {' '}
+          {translateUi('add_an_approver_a0396c52')}{' '}
         </Label>
         <Select
           value={mode}
@@ -268,7 +300,7 @@ function AddApprover({
         >
           <SelectTrigger
             id={`approver-kind-${destination.id}`}
-            aria-label="Approver kind"
+            aria-label={translateUi('approver_kind_8a0a6874')}
             size="sm"
             className="w-full"
           >
@@ -280,8 +312,10 @@ function AddApprover({
             />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="member">A member of this brand</SelectItem>
-            <SelectItem value="platform">Someone in {platformLabel} by id</SelectItem>
+            <SelectItem value="member">{translateUi('a_member_of_this_brand_1eb3278c')}</SelectItem>
+            <SelectItem value="platform">
+              {translateUi('someone_in_eedd6d2b')} {platformLabel} {translateUi('by_id_f3967f12')}
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -297,13 +331,13 @@ function AddApprover({
                 variant="outline"
                 role="combobox"
                 size="sm"
-                aria-label="Brand member"
+                aria-label={translateUi('brand_member_f3c71fcb')}
                 aria-expanded={picking}
                 disabled={busy}
                 className="w-full justify-between font-normal"
               >
                 <span className="min-w-0 truncate">
-                  {userId ? labelOf(userId) : 'Choose a member'}
+                  {userId ? labelOf(userId) : translateUi('choose_a_member_c6aaa720')}
                 </span>
                 <ChevronsUpDownIcon className="ml-2 size-3.5 shrink-0 opacity-50" />
               </Button>
@@ -311,12 +345,12 @@ function AddApprover({
           />
           <PopoverContent className="w-(--anchor-width) min-w-56 p-0" align="start">
             <Command>
-              <CommandInput placeholder="Search by email…" />
+              <CommandInput placeholder={translateUi('search_by_email_f3ec907b')} />
               <CommandList className="scrollbar-thin">
                 <CommandEmpty>
                   {members.size && !addable.length
-                    ? 'Everyone in this brand is already listed.'
-                    : 'No one matches.'}
+                    ? translateUi('everyone_in_this_brand_is_already_l_a202a166')
+                    : translateUi('no_one_matches_b7bab112')}
                 </CommandEmpty>
                 <CommandGroup>
                   {addable.map(([id]) => (
@@ -349,8 +383,8 @@ function AddApprover({
             className="h-8 text-sm"
           />
           <Input
-            aria-label="Display name"
-            placeholder="Display name"
+            aria-label={translateUi('display_name_2b7f6a84')}
+            placeholder={translateUi('display_name_2b7f6a84')}
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             className="h-8 text-sm"
@@ -365,7 +399,7 @@ function AddApprover({
           disabled={!body || busy}
           onClick={() => void add()}
         >
-          <UserPlus className="size-3.5" aria-hidden /> Add approver
+          <UserPlus className="size-3.5" aria-hidden /> {translateUi('add_approver_10746b93')}{' '}
         </Button>
       </div>
     </div>

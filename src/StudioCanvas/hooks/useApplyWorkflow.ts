@@ -8,6 +8,7 @@
 import { mergeGraphs, type WorkflowGraph } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useReactFlow } from '@xyflow/react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
@@ -38,12 +39,17 @@ function placeModuleAt(
 
   return nodes.map((node) =>
     moduleNodeIds.has(node.id)
-      ? { ...node, position: { x: node.position.x + dx, y: node.position.y + dy } }
+      ? {
+          ...node,
+          position: { x: node.position.x + dx, y: node.position.y + dy },
+        }
       : node,
   );
 }
 
 export function useApplyWorkflow() {
+  const translateUi = useUiTranslations('studio');
+
   const { setNodes, setEdges, takeSnapshot, triggerSave, defaultEdgeType } = useStudioStore();
   const { registerModule, collapseModule } = useModuleFoldStore();
   const { fitView } = useReactFlow();
@@ -126,10 +132,16 @@ export function useApplyWorkflow() {
       });
 
       show({
-        title: options?.toastTitle ?? 'Workflow module added',
+        title: options?.toastTitle ?? translateUi('workflow_module_added_3dfd7568'),
         description: options?.collapsed
-          ? `${workflow.name} was added as one collapsed node over ${namespaced.nodes.length} editable nodes.`
-          : `${workflow.name} was expanded into ${namespaced.nodes.length} editable nodes.`,
+          ? translateUi('value0_was_added_as_one_collapsed_n_212b7fce', {
+              value0: String(workflow.name),
+              value1: String(namespaced.nodes.length),
+            })
+          : translateUi('value0_was_expanded_into_value1_edi_487a7f9b', {
+              value0: String(workflow.name),
+              value1: String(namespaced.nodes.length),
+            }),
         variant: 'success',
       });
     },
@@ -143,6 +155,8 @@ export function useApplyWorkflow() {
       show,
       takeSnapshot,
       triggerSave,
+
+      translateUi,
     ],
   );
 }

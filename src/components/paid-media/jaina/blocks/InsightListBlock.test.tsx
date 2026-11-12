@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { InsightListBlockV2 } from '@/lib/jaina/schemas';
 import { AnswerLanguageProvider } from '../answerLanguageContext';
 

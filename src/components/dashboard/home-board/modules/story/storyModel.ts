@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type StoryCopy = ReturnType<typeof useTranslations<'dashboard'>>;
+
 // The weekly story (H15): the brand's week told in a few slides, composed only from what the Home
 // already read — how Continuum works the brand, the goal, what blocks results, what waits for a
 // decision, and Jaina's latest stored read. A part with nothing behind it is left out; no slide
@@ -19,28 +24,37 @@ export type StorySlide = {
 
 const MAX_LIST = 3;
 
-export function weeklyStory(input: {
-  reading: HomeBrandReading;
-  brief: BriefEntry | null;
-  today: Date;
-}): StorySlide[] {
+export function weeklyStory(
+  input: {
+    reading: HomeBrandReading;
+    brief: BriefEntry | null;
+    today: Date;
+  },
+  t?: StoryCopy,
+  locale: UiLocale = 'en',
+): StorySlide[] {
   const { reading, brief, today } = input;
   const slides: StorySlide[] = [
     {
       key: 'mode',
-      kicker: 'How Continuum works the brand',
+      kicker: t ? t('storyMode') : 'How Continuum works the brand',
       title: reading.modeLabel,
       body: reading.modeReason,
     },
   ];
 
   const issues = reading.issues.slice(0, MAX_LIST).map((issue) => issue.title);
-  if (issues.length > 0) slides.push({ key: 'issues', kicker: 'Fix first', list: issues });
+  if (issues.length > 0)
+    slides.push({
+      key: 'issues',
+      kicker: t ? t('storyFix') : 'Fix first',
+      list: issues,
+    });
 
   if (reading.goal.source !== 'none') {
     slides.push({
       key: 'goal',
-      kicker: 'Goal',
+      kicker: t ? t('storyGoal') : 'Goal',
       title: reading.goal.label,
       body: reading.goal.detail,
     });
@@ -50,24 +64,34 @@ export function weeklyStory(input: {
   const [biggest, ...rest] = waiting;
   const nextStep = reading.opportunities.find((opportunity) => opportunity.portfolioId === null);
   if (biggest) {
-    slides.push({ key: 'opportunity', kicker: 'Biggest opportunity', title: biggest.title });
+    slides.push({
+      key: 'opportunity',
+      kicker: t ? t('storyOpportunity') : 'Biggest opportunity',
+      title: biggest.title,
+    });
   } else if (nextStep) {
-    slides.push({ key: 'opportunity', kicker: 'Next step', title: nextStep.title });
+    slides.push({
+      key: 'opportunity',
+      kicker: t ? t('storyNext') : 'Next step',
+      title: nextStep.title,
+    });
   }
   if (rest.length > 0) {
     slides.push({
       key: 'waiting',
-      kicker: 'Also waiting',
+      kicker: t ? t('storyWaiting') : 'Also waiting',
       list: rest.slice(0, MAX_LIST).map((opportunity) => opportunity.title),
     });
   }
 
   if (brief) {
-    const age = staleLabel(brief);
+    const age = staleLabel(brief, t);
     slides.push({
       key: 'brief',
-      kicker: "Jaina's latest read",
-      title: age ? `${readOnLabel(brief, today)} · ${age}` : readOnLabel(brief, today),
+      kicker: t ? t('storyBrief') : "Jaina's latest read",
+      title: age
+        ? `${readOnLabel(brief, today, t, locale)} · ${age}`
+        : readOnLabel(brief, today, t, locale),
       body: brief.narrative,
     });
   }

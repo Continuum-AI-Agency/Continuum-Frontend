@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import type { OrganicTrend, OrganicTrendType } from '@/components/organic/primitives/types';
@@ -36,6 +37,7 @@ export function BrandInsightsCollapsibleSignals({
   selectedTrendIds,
   maxTrendSelections,
 }: BrandInsightsCollapsibleSignalsProps) {
+  const uiText = useTranslations('common');
   const mappedTrends = React.useMemo<OrganicTrend[]>(
     () =>
       trends.map((t) => ({
@@ -77,9 +79,24 @@ export function BrandInsightsCollapsibleSignals({
   );
 
   const sections = [
-    { id: 'trends', label: 'Market Trends', data: mappedTrends, showMomentum: true },
-    { id: 'events', label: 'Key Events', data: mappedEvents, showMomentum: false },
-    { id: 'questions', label: 'Audience Questions', data: mappedQuestions, showMomentum: false },
+    {
+      id: 'trends',
+      label: uiText('market_trends_211c0a2'),
+      data: mappedTrends,
+      showMomentum: true,
+    },
+    {
+      id: 'events',
+      label: uiText('key_events_1be2ed7'),
+      data: mappedEvents,
+      showMomentum: false,
+    },
+    {
+      id: 'questions',
+      label: uiText('audience_questions_00e9182'),
+      data: mappedQuestions,
+      showMomentum: false,
+    },
   ].filter((s) => s.data.length > 0);
 
   // Sections only appear once their data is non-empty, so an uncontrolled default would be

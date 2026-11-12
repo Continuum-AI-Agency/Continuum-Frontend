@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { libraryUploadRefusal } from '@continuum/contracts';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const uploaded = {
   assetId: 'asset-aep',
@@ -17,7 +17,11 @@ const uploadMediaAsset = mock(async () => uploaded);
 mock.module('@/lib/library/uploadMediaAsset', () => ({
   uploadMediaAsset,
   uploadSizeRefusal: (file: File) =>
-    libraryUploadRefusal({ fileName: file.name, mimeType: file.type, sizeBytes: file.size }),
+    libraryUploadRefusal({
+      fileName: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
+    }),
 }));
 
 const { useMediaUpload } = await import('./useMediaUpload');
@@ -25,7 +29,9 @@ const { useMediaUpload } = await import('./useMediaUpload');
 test('a completed AEP upload is exposed to the Library so it can show the new template', async () => {
   const onUploaded = mock(() => undefined);
   const { result } = renderHook(() => useMediaUpload('brand-1', { onUploaded }));
-  const file = new File(['aep bytes'], 'project.aep', { type: 'application/octet-stream' });
+  const file = new File(['aep bytes'], 'project.aep', {
+    type: 'application/octet-stream',
+  });
 
   await act(async () => {
     await result.current.uploadFiles([file]);
@@ -49,12 +55,17 @@ test('every dropped file is queued; the ones it cannot take are named with the r
   const byName = new Map(result.current.uploads.map((item) => [item.name, item]));
   expect([...byName.keys()]).toEqual(['thread.msg', 'Brand.otf', 'shoot.mov']);
   expect(byName.get('thread.msg')?.refused).toBeUndefined();
-  expect(byName.get('Brand.otf')).toMatchObject({ status: 'error', refused: true });
+  expect(byName.get('Brand.otf')).toMatchObject({
+    status: 'error',
+    refused: true,
+  });
   expect(byName.get('Brand.otf')?.error).toContain('Brand.otf is a font');
   expect(byName.get('shoot.mov')).toMatchObject({
     status: 'error',
     refused: true,
     error: 'shoot.mov is 600 MB — uploads are capped at 500 MB right now.',
   });
-  await waitFor(() => expect(uploadMediaAsset).toHaveBeenCalledWith(expect.objectContaining({ file: unknown })));
+  await waitFor(() =>
+    expect(uploadMediaAsset).toHaveBeenCalledWith(expect.objectContaining({ file: unknown })),
+  );
 });

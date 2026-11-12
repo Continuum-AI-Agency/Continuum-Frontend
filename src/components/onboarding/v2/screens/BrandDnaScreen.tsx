@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ReadinessAnalysis, ReadinessFinding } from '@/lib/onboarding/agentClient';
@@ -46,12 +47,19 @@ function countSuccessfulSections(buckets: AgentPreviewBuckets | null): number {
 
 const reveal = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08, delayChildren: 0.1 },
+  },
 };
 
 const card = {
   hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] as const } },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] as const },
+  },
 };
 
 const heroEnter = {
@@ -63,23 +71,27 @@ const heroEnter = {
   },
 };
 
-const proseSkeleton = (
-  <div className="space-y-2" role="status" aria-label="Drafting">
-    <Skeleton className="h-3 w-3/4" />
-    <Skeleton className="h-3 w-full" />
-    <Skeleton className="h-3 w-5/6" />
-    <Skeleton className="h-3 w-2/3" />
-  </div>
-);
+function renderProseSkeleton(tUi: ReturnType<typeof useTranslations<'onboarding'>>) {
+  return (
+    <div className="space-y-2" role="status" aria-label={tUi('m_48180fdfb0')}>
+      <Skeleton className="h-3 w-3/4" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-5/6" />
+      <Skeleton className="h-3 w-2/3" />
+    </div>
+  );
+}
 
-const voiceSkeleton = (
-  <div className="space-y-2.5" role="status" aria-label="Drafting">
-    <Skeleton className="h-3 w-1/3" />
-    <Skeleton className="h-6 w-full rounded-md" />
-    <Skeleton className="h-3 w-1/4" />
-    <Skeleton className="h-6 w-5/6 rounded-md" />
-  </div>
-);
+function renderVoiceSkeleton(tUi: ReturnType<typeof useTranslations<'onboarding'>>) {
+  return (
+    <div className="space-y-2.5" role="status" aria-label={tUi('m_48180fdfb0')}>
+      <Skeleton className="h-3 w-1/3" />
+      <Skeleton className="h-6 w-full rounded-md" />
+      <Skeleton className="h-3 w-1/4" />
+      <Skeleton className="h-6 w-5/6 rounded-md" />
+    </div>
+  );
+}
 
 function findingFor(
   readiness: ReadinessAnalysis | null,
@@ -89,6 +101,12 @@ function findingFor(
 }
 
 export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: BrandDnaScreenProps) {
+  const tUi = useTranslations('onboarding');
+
+  const voiceSkeleton = renderVoiceSkeleton(tUi);
+
+  const proseSkeleton = renderProseSkeleton(tUi);
+
   const { state, updateState } = useOnboarding();
   const brand = state.brand;
   const websiteHost = hostOf(brand.website);
@@ -135,16 +153,16 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       <motion.header variants={heroEnter} className="mb-6">
         <div className="space-y-2 text-left">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Brand DNA
+            {tUi('m_087bbcc244')}
           </p>
           <h2 className="text-balance text-5xl font-bold leading-[0.95] tracking-tighter text-foreground md:text-7xl">
             {thinResult ? (
               <>
-                <span className="text-muted-foreground">Let&apos;s get to know </span>
-                {brand.name || 'your brand'}
+                <span className="text-muted-foreground">{tUi('m_919d614004')}</span>
+                {brand.name || tUi('m_abf537e51b')}
               </>
             ) : (
-              brand.name || 'Your brand'
+              brand.name || tUi('m_db92cb9d1f')
             )}
           </h2>
           <RunProgressBanner
@@ -180,10 +198,10 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
-        <HorizontalRow label="Narrative" layout="grid">
+        <HorizontalRow label={tUi('m_fafe72dfca')} layout="grid">
           <CardSurface
-            title="Business overview"
-            badge="Core"
+            title={tUi('m_9ccc2e81b3')}
+            badge={tUi('dnaBadgeCore')}
             status={businessStatus}
             isEmpty={businessEmpty}
             settled={settled}
@@ -216,15 +234,15 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           >
             <EditableProse
               value={overviewValue}
-              placeholder={placeholderFor(businessStatus, 'Write your own')}
+              placeholder={placeholderFor(businessStatus, tUi('m_df0dea29ad'))}
               onCommit={(next) => updateState({ brand: { overview: next } })}
             />
             {business ? <BusinessFeatureChips business={business} /> : null}
           </CardSurface>
 
           <CardSurface
-            title="Brand voice & tone"
-            badge="Voice"
+            title={tUi('m_8eb8e64676')}
+            badge={tUi('dnaBadgeVoice')}
             status={voiceStatus}
             isEmpty={!voice}
             settled={settled}
@@ -248,8 +266,8 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           </CardSurface>
 
           <CardSurface
-            title="Target audience"
-            badge="Audience"
+            title={tUi('m_7dc3007664')}
+            badge={tUi('dnaBadgeAudience')}
             status={audienceStatus}
             isEmpty={audienceEmpty}
             settled={settled}
@@ -282,7 +300,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           >
             <EditableProse
               value={audienceValue}
-              placeholder={placeholderFor(audienceStatus, 'Write your own')}
+              placeholder={placeholderFor(audienceStatus, tUi('m_df0dea29ad'))}
               onCommit={(next) => updateState({ brand: { targetAudience: next } })}
             />
             {audience ? <AudienceDetail audience={audience} /> : null}
@@ -295,7 +313,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
-        <HorizontalRow label="Analysis" layout="grid">
+        <HorizontalRow label={tUi('m_62c7fcf46e')} layout="grid">
           <WebsiteSummaryCard buckets={agentBuckets} settled={settled} onRetry={onRetry} />
           <UnderstandingCard buckets={agentBuckets} settled={settled} onRetry={onRetry} />
         </HorizontalRow>

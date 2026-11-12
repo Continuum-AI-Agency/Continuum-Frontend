@@ -8,6 +8,7 @@ import type {
   TemplateLayerEdit,
 } from '@continuum/contracts';
 import { Minus, Plus, RotateCcw, Scan, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   type CSSProperties,
   type ReactNode,
@@ -194,13 +195,22 @@ type AuthoredHandleGesture = {
   startRotation: number;
   targets: CanvasRect[];
   tolerance: number;
-  edit: { position?: [number, number]; scale?: [number, number]; rotation?: number };
+  edit: {
+    position?: [number, number];
+    scale?: [number, number];
+    rotation?: number;
+  };
   bounds: CanvasRect;
   elements: Array<{ element: SVGGElement; transform: string | null }>;
 };
 
 type ActiveGesture = TransformGesture | PanGesture;
-type SelectionBox = { left: number; top: number; width: number; height: number };
+type SelectionBox = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
 const HANDLE_POSITIONS: Record<ResizeHandle, CSSProperties> = {
   nw: { left: '0%', top: '0%' },
@@ -487,6 +497,8 @@ export function AuthoredTemplateLayerPreview({
   onTextChange?: (text: string) => void;
   onTextCommit?: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   // The private canvas retains Position for its geometry math. Only this view adapter
   // creates tuples; native edits crossing the editor boundary remain canonical x/y.
   const layers = useMemo(() => nativeLayers.map(authoringLayer), [nativeLayers]);
@@ -914,7 +926,9 @@ export function AuthoredTemplateLayerPreview({
           );
           setGuides(delta.guides);
           const next: [number, number] = [startPosition[0] + delta.dx, startPosition[1] + delta.dy];
-          authoredCallbacks.current.onAuthoredGestureCommit?.(node.nodeId, { position: next });
+          authoredCallbacks.current.onAuthoredGestureCommit?.(node.nodeId, {
+            position: next,
+          });
         };
         const cancel = (cancelEvent: PointerEvent) => {
           if (cancelEvent.pointerId !== event.pointerId) return;
@@ -1015,7 +1029,10 @@ export function AuthoredTemplateLayerPreview({
   const paintPreview = useCallback(
     (local = shadowRef.current) => {
       if (!preview.current) return;
-      preview.current.update({ ...basePreview, current: { ...basePreview.current, ...local } });
+      preview.current.update({
+        ...basePreview,
+        current: { ...basePreview.current, ...local },
+      });
     },
     [basePreview],
   );
@@ -1379,7 +1396,10 @@ export function AuthoredTemplateLayerPreview({
       return false;
     const inverse = screenMatrix.inverse();
     const start = pointFromClient(inverse, event.clientX, event.clientY);
-    const pivot = { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 };
+    const pivot = {
+      x: (bounds.left + bounds.right) / 2,
+      y: (bounds.top + bounds.bottom) / 2,
+    };
     active.current = {
       kind,
       pointerId: event.pointerId,
@@ -1519,7 +1539,12 @@ export function AuthoredTemplateLayerPreview({
     }
     gesture.edit = { position, scale, rotation };
     if (gesture.node.kind === 'group') {
-      const delta = poseDelta(gesture.node, { ...gesture.node, position, scale, rotation });
+      const delta = poseDelta(gesture.node, {
+        ...gesture.node,
+        position,
+        scale,
+        rotation,
+      });
       for (const { element, transform } of gesture.elements)
         element.setAttribute('transform', [delta, transform].filter(Boolean).join(' '));
     } else {
@@ -1598,7 +1623,10 @@ export function AuthoredTemplateLayerPreview({
       const rect = canvas.current.getBoundingClientRect();
       const point = { x: clientX - rect.left, y: clientY - rect.top };
       const ratio = updated / zoom;
-      setPan({ x: point.x - (point.x - pan.x) * ratio, y: point.y - (point.y - pan.y) * ratio });
+      setPan({
+        x: point.x - (point.x - pan.x) * ratio,
+        y: point.y - (point.y - pan.y) * ratio,
+      });
     }
     setZoom(updated);
   };
@@ -1667,7 +1695,10 @@ export function AuthoredTemplateLayerPreview({
         !pointerIsOnRenderedResizeEdge(
           resizeHandle,
           selectionBox,
-          { x: event.clientX - hostBounds.left, y: event.clientY - hostBounds.top },
+          {
+            x: event.clientX - hostBounds.left,
+            y: event.clientY - hostBounds.top,
+          },
           handleBounds?.width ?? 0,
           handleBounds?.height ?? 0,
         )
@@ -1856,8 +1887,8 @@ export function AuthoredTemplateLayerPreview({
             <div
               ref={canvas}
               role="application"
-              aria-roledescription="template canvas"
-              aria-label="Interactive template preview"
+              aria-roledescription={translateUi('templateCanvasRole')}
+              aria-label={translateUi('interactive_template_preview_b850d502')}
               aria-describedby="template-preview-help"
               // biome-ignore lint/a11y/noNoninteractiveTabindex: the canvas provides layer selection, transform handles, and zoom/pan shortcuts.
               tabIndex={0}
@@ -1893,7 +1924,7 @@ export function AuthoredTemplateLayerPreview({
               <div
                 ref={content}
                 role="img"
-                aria-label="Layout preview of the template with these edits"
+                aria-label={translateUi('layout_preview_of_the_template_with_b19ce0df')}
                 className="size-full select-none"
                 style={{ transform: translated, transformOrigin: '0 0' }}
               />
@@ -1915,7 +1946,7 @@ export function AuthoredTemplateLayerPreview({
               />
               {inlineText && selectionBox && selectedText ? (
                 <textarea
-                  aria-label="Edit layer text"
+                  aria-label={translateUi('edit_layer_text_83789bb0')}
                   // biome-ignore lint/a11y/noAutofocus: opened by a double-click on the layer itself.
                   autoFocus
                   className="absolute z-10 resize-none rounded border border-primary bg-background/95 p-1 text-sm text-foreground shadow-sm outline-none"
@@ -1960,7 +1991,7 @@ export function AuthoredTemplateLayerPreview({
                     <button
                       type="button"
                       data-canvas-handle="move"
-                      aria-label="Move selected group"
+                      aria-label={translateUi('move_selected_group_98a244b9')}
                       className="pointer-events-auto absolute left-1/2 -top-2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   ) : null}
@@ -1970,7 +2001,10 @@ export function AuthoredTemplateLayerPreview({
                           key={handle}
                           type="button"
                           data-canvas-handle={handle}
-                          aria-label={`Resize selected ${liveCount === 1 ? 'layer' : 'layers'} from ${handle}`}
+                          aria-label={translateUi('resize_selected_value0_from_value1_54258c6d', {
+                            value0: String(liveCount === 1 ? 'layer' : 'layers'),
+                            value1: String(handle),
+                          })}
                           className="pointer-events-auto absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           style={HANDLE_POSITIONS[handle]}
                         />
@@ -1985,7 +2019,9 @@ export function AuthoredTemplateLayerPreview({
                       <button
                         type="button"
                         data-canvas-handle="rotate"
-                        aria-label={`Rotate selected ${liveCount === 1 ? 'layer' : 'layers'}`}
+                        aria-label={translateUi('rotate_selected_value0_78668966', {
+                          value0: String(liveCount === 1 ? 'layer' : 'layers'),
+                        })}
                         className="pointer-events-auto absolute left-1/2 -top-5 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     </>
@@ -2003,7 +2039,7 @@ export function AuthoredTemplateLayerPreview({
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  aria-label="Zoom out"
+                  aria-label={translateUi('zoom_out_bc7b631a')}
                   onClick={() => zoomAt(zoom / 1.2)}
                 >
                   <Minus aria-hidden />
@@ -2017,7 +2053,7 @@ export function AuthoredTemplateLayerPreview({
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  aria-label="Zoom in"
+                  aria-label={translateUi('zoom_in_0e47f09a')}
                   onClick={() => zoomAt(zoom * 1.2)}
                 >
                   <Plus aria-hidden />
@@ -2025,8 +2061,8 @@ export function AuthoredTemplateLayerPreview({
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  aria-label="Frame selected layers"
-                  title="Frame selection (Shift+2)"
+                  aria-label={translateUi('frame_selected_layers_08bbde68')}
+                  title={translateUi('frame_selection_shift_2_82b332a6')}
                   disabled={!selectionBox}
                   onClick={frameSelection}
                 >
@@ -2035,8 +2071,8 @@ export function AuthoredTemplateLayerPreview({
                 <Button
                   size="xs"
                   variant="ghost"
-                  aria-label="Reset canvas view"
-                  title="Fit artboard (0)"
+                  aria-label={translateUi('reset_canvas_view_0ac0a082')}
+                  title={translateUi('fit_artboard_0_fc816196')}
                   onClick={() => {
                     setZoom(1);
                     setPan({ x: 0, y: 0 });
@@ -2049,33 +2085,38 @@ export function AuthoredTemplateLayerPreview({
                 <p className="pointer-events-none absolute inset-x-3 bottom-3 bg-background/90 px-2 py-1 text-2xs text-muted-foreground">
                   {displayedLayer.name}:{' '}
                   {(edit?.visible ?? displayedLayer.visible)
-                    ? 'no visible marks in this preview. Use the layer controls.'
-                    : 'hidden in this composition.'}
+                    ? translateUi('no_visible_marks_in_this_preview_us_ee73d197')
+                    : translateUi('hidden_in_this_composition_0dfaf461')}
                 </p>
               ) : null}
               <span className="sr-only" aria-live="polite">
                 {liveCount
-                  ? `${liveCount} layer${liveCount === 1 ? '' : 's'} selected.`
-                  : 'No layers selected.'}{' '}
-                Hold Shift while selecting to add or remove layers. Hold Space and drag to pan. Use
-                plus/minus or the wheel to zoom.
+                  ? translateUi('value0_layer_value1_selected_fb12b124', {
+                      count: Number(liveCount),
+                    })
+                  : translateUi('no_layers_selected_708f38bb')}{' '}
+                {translateUi('hold_shift_while_selecting_to_add_o_6d956cc4')}{' '}
               </span>
             </div>
           }
         />
         <ContextMenuContent className="min-w-48">
-          <ContextMenuLabel>Canvas</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('canvas_3824a9f4')}</ContextMenuLabel>
           {displayedLayer ? (
-            <ContextMenuItem onSelect={() => setOpen(true)}>Layer controls</ContextMenuItem>
+            <ContextMenuItem onSelect={() => setOpen(true)}>
+              {translateUi('layer_controls_a77d8702')}
+            </ContextMenuItem>
           ) : null}
           {selectedNodeId && onDuplicateNode ? (
             <ContextMenuItem disabled={disabled} onSelect={onDuplicateNode}>
-              Duplicate selected layer
+              {' '}
+              {translateUi('duplicate_selected_layer_4f05e173')}{' '}
             </ContextMenuItem>
           ) : null}
           {selectedNodeId && onDeleteNode ? (
             <ContextMenuItem disabled={disabled} onSelect={onDeleteNode}>
-              Delete selected layer
+              {' '}
+              {translateUi('delete_selected_layer_15c7b7d4')}{' '}
             </ContextMenuItem>
           ) : null}
           <ContextMenuItem
@@ -2103,10 +2144,11 @@ export function AuthoredTemplateLayerPreview({
               if (ids[0] !== undefined) onSelect(ids[0]);
             }}
           >
-            Select editable layers
+            {' '}
+            {translateUi('select_editable_layers_c1d247cb')}{' '}
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuLabel>Align selected</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('align_selected_8d4ee794')}</ContextMenuLabel>
           {(
             [
               ['left', 'Align left'],
@@ -2128,7 +2170,7 @@ export function AuthoredTemplateLayerPreview({
         </ContextMenuContent>
       </ContextMenu>
       <PopoverContent
-        aria-label="Layer controls"
+        aria-label={translateUi('layer_controls_a77d8702')}
         side="right"
         align="start"
         collisionPadding={12}
@@ -2137,11 +2179,11 @@ export function AuthoredTemplateLayerPreview({
         className="max-h-[70dvh] w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto p-3"
       >
         <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="text-xs font-medium">Layer controls</span>
+          <span className="text-xs font-medium">{translateUi('layer_controls_a77d8702')}</span>
           <Button
             size="icon-xs"
             variant="ghost"
-            aria-label="Close layer controls"
+            aria-label={translateUi('close_layer_controls_cc3314b1')}
             onClick={() => setOpen(false)}
           >
             <X aria-hidden />
@@ -2150,7 +2192,8 @@ export function AuthoredTemplateLayerPreview({
         {displayedLayer ? controls : null}
         {displayedLayer?.parentId ? (
           <p className="mt-3 text-2xs text-muted-foreground">
-            Move this layer with X and Y in its parent’s coordinates.
+            {' '}
+            {translateUi('move_this_layer_with_x_and_y_in_its_bd2586fd')}{' '}
           </p>
         ) : null}
       </PopoverContent>

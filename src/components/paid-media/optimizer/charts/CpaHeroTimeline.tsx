@@ -1,5 +1,11 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+import { uiDateFormat } from '@/lib/paid-media/uiDateFormat';
+
 // The Portfolio-detail HERO: an objective-cost-over-cycles timeline that carries
 // the whole story in one interaction. The cost line is engine-derived from
 // spend/results; a dashed ProjectionLine continues it toward the target (or
@@ -54,8 +60,6 @@ import {
   timelineEventSummary,
 } from './vizData';
 
-const dayFmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-
 type CpaHeroTimelineProps = {
   series: CpaSeriesPoint[];
   eventsByTs?: Record<string, TimelineEvent[]>;
@@ -73,13 +77,17 @@ export function CpaHeroTimeline({
   confidenceBand,
   objective,
 }: CpaHeroTimelineProps) {
-  const metric = getOptimizationMetricDefinition(objective);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(objective),
+    optimizerText,
+  );
   const points = buildCpaHeroPoints(series, eventsByTs, metric.denominatorMultiplier);
 
   if (points.length < 2) {
-    return (
-      <ChartEmpty message={`The ${metric.costLabel} timeline appears after a few scored cycles.`} />
-    );
+    return <ChartEmpty message={uiText('chartCostTimelineEmpty', { metric: metric.costLabel })} />;
   }
 
   const projection = buildCpaProjection(
@@ -89,7 +97,7 @@ export function CpaHeroTimeline({
   const hasProjection = projection.length >= 2;
   const last = points.at(-1)?.cpaExact ?? null;
   const projectedEnd = projectionEndpoint(projection);
-  const band = bandMeta(confidenceBand);
+  const band = bandMeta(confidenceBand, optimizerText);
   // Goldilocks only when the portfolio set an explicit target — same gate the
   // engine uses for meetsTarget. Silent engine default ($50) is never drawn.
   const zone = goldilocksZone(targetCpa);
@@ -99,19 +107,25 @@ export function CpaHeroTimeline({
       {hasProjection && last != null && projectedEnd != null ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">
-            Projected {metric.costLabel} next cycle:{' '}
-            <span className="font-data font-medium text-foreground tabular-nums">
-              <span {...figureProps('timeline.projected.last', last, currency, 'd7')}>
-                {formatCpa(last, currency)}
-              </span>{' '}
-              →{' '}
-              <span {...figureProps('timeline.projected.next', projectedEnd, currency)}>
-                {formatCpa(projectedEnd, currency)}
-              </span>
-            </span>
+            {uiText.rich('sentence_73a349d2f741', {
+              v0: metric.costLabel,
+              v1: () => (
+                <span className="font-data font-medium text-foreground tabular-nums">
+                  <span {...figureProps('timeline.projected.last', last, currency, 'd7')}>
+                    {formatCpa(last, currency, uiLocale)}
+                  </span>{' '}
+                  →{' '}
+                  <span {...figureProps('timeline.projected.next', projectedEnd, currency)}>
+                    {formatCpa(projectedEnd, currency, uiLocale)}
+                  </span>
+                </span>
+              ),
+            })}
           </span>
           <span className={`${typeScale.label} text-muted-foreground`}>
-            {band.label.toLowerCase()} confidence
+            {uiText.rich('sentence_01cabaa82058', {
+              v0: band.label.toLowerCase(),
+            })}
           </span>
         </div>
       ) : null}
@@ -162,7 +176,10 @@ export function CpaHeroTimeline({
           <CycleActionPins points={points} />
           <XAxis />
           {/* M1: the ticks print "$80" and the axis title carries the code, as a column header does. */}
-          <YAxis formatValue={(value) => formatCurrencyInColumn(value, currency)} numTicks={4} />
+          <YAxis
+            formatValue={(value) => formatCurrencyInColumn(value, currency, uiLocale)}
+            numTicks={4}
+          />
           <ChartTooltip
             content={({ point }) => (
               <HeroTooltip
@@ -262,8 +279,6 @@ function eventStyle(kind: string) {
   return EVENT_STYLE[kind] ?? EVENT_STYLE.cycle;
 }
 
-const timeFmt = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
-
 function HeroTooltip({
   point,
   currency,
@@ -275,6 +290,8 @@ function HeroTooltip({
   costLabel: string;
   resultLabel: string;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   // The panel carries its own --chart-tooltip-* palette (popover-derived, per theme) rather
   // than the page's text-foreground: the tooltip is a chart surface, and a chart may set a
   // custom panel background, at which point the page's foreground is no longer guaranteed
@@ -283,13 +300,15 @@ function HeroTooltip({
   return (
     <div className="min-w-[196px] max-w-[260px] space-y-2 p-1">
       <div className={`${typeScale.label} text-chart-tooltip-muted`}>
-        {point.date instanceof Date ? dayFmt.format(point.date) : ''}
+        {point.date instanceof Date
+          ? uiDateFormat(uiLocale, { month: 'short', day: 'numeric' }).format(point.date)
+          : ''}
       </div>
       <div className="flex items-baseline justify-between gap-4">
         <span className="text-xs text-chart-tooltip-muted">{costLabel}</span>
         <span className="flex items-baseline gap-1.5">
           <span className="font-data font-semibold text-base text-chart-tooltip-foreground tabular-nums">
-            {formatCpa(point.cpa, currency)}
+            {formatCpa(point.cpa, currency, uiLocale)}
           </span>
           {delta != null && delta !== 0 ? (
             <span
@@ -297,15 +316,22 @@ function HeroTooltip({
               style={{ color: delta < 0 ? 'var(--success)' : 'var(--warning)' }}
             >
               {delta < 0 ? '↓' : '↑'}
-              {formatCpa(Math.abs(delta), currency)}
+              {formatCpa(Math.abs(delta), currency, uiLocale)}
             </span>
           ) : null}
         </span>
       </div>
       <div className="flex items-center justify-between text-xs text-chart-tooltip-muted tabular-nums">
-        <span>spend {formatCurrency(point.spend, currency)}</span>
         <span>
-          {Math.round(point.conv)} {resultLabel.toLowerCase()}
+          {uiText.rich('sentence_b9d7f4c7e6b8', {
+            v0: formatCurrency(point.spend, currency, uiLocale),
+          })}
+        </span>
+        <span>
+          {new Intl.NumberFormat(uiLocale, { maximumFractionDigits: 0 }).format(
+            Math.round(point.conv),
+          )}{' '}
+          {resultLabel.toLowerCase()}
         </span>
       </div>
       {point.events.length > 0 ? (
@@ -325,7 +351,10 @@ function HeroTooltip({
                   <span className="text-chart-tooltip-foreground">{group.label}</span>
                   {group.count > 1 ? (
                     <span className="ml-1 rounded-sm bg-chart-tooltip-border px-1 text-xs text-chart-tooltip-foreground tabular-nums">
-                      ×{group.count}
+                      ×
+                      {new Intl.NumberFormat(uiLocale, {
+                        maximumFractionDigits: 0,
+                      }).format(group.count)}
                     </span>
                   ) : null}
                   {group.detail ? (
@@ -334,7 +363,10 @@ function HeroTooltip({
                 </span>
                 {Number.isNaN(at) ? null : (
                   <span className="shrink-0 text-xs text-chart-tooltip-muted tabular-nums">
-                    {timeFmt.format(new Date(at))}
+                    {uiDateFormat(uiLocale, {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    }).format(new Date(at))}
                   </span>
                 )}
               </div>
@@ -355,28 +387,41 @@ function HeroLegend({
   hasZone: boolean;
   costLabel: string;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5">
-        <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-1)' }} />
-        {costLabel} (actual)
+        {uiText.rich('sentence_4da380f70b7c', {
+          v0: () => (
+            <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-1)' }} />
+          ),
+          v1: costLabel,
+        })}
       </span>
       {hasProjection ? (
         <span className="inline-flex items-center gap-1.5">
-          <span
-            className="h-0 w-4 border-t-2 border-dashed"
-            style={{ borderColor: 'var(--chart-4)' }}
-          />
-          Projected
+          {uiText.rich('sentence_eb3c409f9df7', {
+            v0: () => (
+              <span
+                className="h-0 w-4 border-t-2 border-dashed"
+                style={{ borderColor: 'var(--chart-4)' }}
+              />
+            ),
+          })}
         </span>
       ) : null}
       {hasZone ? (
         <span className="inline-flex items-center gap-1.5">
-          <span
-            className="h-0 w-4 border-t border-dashed"
-            style={{ borderColor: 'color-mix(in oklch, var(--muted-foreground) 70%, transparent)' }}
-          />
-          Target
+          {uiText.rich('sentence_95de8a1f0851', {
+            v0: () => (
+              <span
+                className="h-0 w-4 border-t border-dashed"
+                style={{
+                  borderColor: 'color-mix(in oklch, var(--muted-foreground) 70%, transparent)',
+                }}
+              />
+            ),
+          })}
         </span>
       ) : null}
       {(['cycle', 'applied', 'status', 'config'] as const).map((kind) => {

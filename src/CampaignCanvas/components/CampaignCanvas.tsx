@@ -1,4 +1,5 @@
 'use client';
+
 import {
   type Connection as FlowConnection,
   MarkerType,
@@ -11,6 +12,7 @@ import {
   type NodeProps as ReactFlowNodeProps,
   useReactFlow,
 } from '@xyflow/react';
+import { useTranslations as useBetaTranslations, useTranslations } from 'next-intl';
 import React, {
   type ComponentType,
   useCallback,
@@ -138,6 +140,10 @@ export const CampaignCanvas = ({
   /** The Backend's diff of a campaign copy, from the chat beside the canvas (columns only). */
   structureDiff?: ScaffoldStructureDiff | null;
 }) => {
+  const uiText = useTranslations('scale');
+
+  const betaUiText = useBetaTranslations('scale');
+
   const {
     nodes,
     edges,
@@ -201,12 +207,15 @@ export const CampaignCanvas = ({
     (connection) => {
       const reason = connectionBlockReason(connection);
       if (reason) {
-        toast({ title: 'Connection blocked', description: reason });
+        toast({
+          title: uiText('connection_blocked_e312a28'),
+          description: reason,
+        });
         return;
       }
       onConnect(connection);
     },
-    [connectionBlockReason, onConnect, toast],
+    [connectionBlockReason, onConnect, toast, uiText],
   );
 
   const isValidConnection = useCallback(
@@ -262,8 +271,8 @@ export const CampaignCanvas = ({
         hasExistingSingleParentAttachment(startNode.id, nodeTypeToCreate, nodes, edges)
       ) {
         toast({
-          title: 'Connection blocked',
-          description: getSingleParentConstraintMessage(startNode.type, nodeTypeToCreate),
+          title: uiText('connection_blocked_e312a28'),
+          description: getSingleParentConstraintMessage(startNode.type, nodeTypeToCreate, uiText),
         });
         return;
       }
@@ -275,7 +284,10 @@ export const CampaignCanvas = ({
           ? childBlockReason(startNode.id, nodeTypeToCreate)
           : null;
       if (childRefusal) {
-        toast({ title: 'Connection blocked', description: childRefusal });
+        toast({
+          title: uiText('connection_blocked_e312a28'),
+          description: childRefusal,
+        });
         return;
       }
 
@@ -308,7 +320,7 @@ export const CampaignCanvas = ({
         targetHandle: connectStart.handleId,
       });
     },
-    [addNode, childBlockReason, edges, handleConnect, nodes, screenToFlowPosition, toast],
+    [addNode, childBlockReason, edges, handleConnect, nodes, screenToFlowPosition, toast, uiText],
   );
 
   const confirmDelete = useCallback(() => {
@@ -317,30 +329,37 @@ export const CampaignCanvas = ({
 
     selectedNodes.forEach((n) => removeNode(n.id));
     toast({
-      title: 'Nodes deleted',
+      title: uiText('nodes_deleted_f2aeda3'),
       description: `Removed ${selectedNodes.length} node(s) from the canvas.`,
     });
 
     setShowDeleteDialog(false);
-  }, [nodes, removeNode, toast]);
+  }, [nodes, removeNode, toast, uiText]);
 
   const handleExport = useCallback(() => {
-    const payload = buildCampaignCanvasPayload(nodes, edges, { source: 'export' });
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const payload = buildCampaignCanvasPayload(nodes, edges, {
+      source: 'export',
+    });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'campaign-canvas-payload.json';
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: 'Exported', description: 'Canonical campaign payload downloaded as JSON.' });
-  }, [nodes, edges, toast]);
+    toast({
+      title: uiText('exported_391065e'),
+      description: uiText('canonical_campaign_payload_downloaded_as_json_c448c35'),
+    });
+  }, [nodes, edges, toast, uiText]);
 
   const handleValidateStructure = useCallback(() => {
     const validationResult = validateGraph();
     if (!validationResult.payloadValid) {
       toast({
-        title: 'Validation failed',
+        title: uiText('validation_failed_23a86f5'),
         description: validationResult.payloadError ?? 'Payload schema check failed.',
       });
       return;
@@ -348,17 +367,17 @@ export const CampaignCanvas = ({
 
     if (validationResult.invalidNodeCount > 0) {
       toast({
-        title: 'Validation warnings',
+        title: uiText('validation_warnings_d423e07'),
         description: `Found ${validationResult.invalidNodeCount} node(s) with errors. Payload schema passed.`,
       });
       return;
     }
 
     toast({
-      title: 'Structure valid',
-      description: 'Graph rules and canonical payload schema both passed.',
+      title: uiText('structure_valid_30aaa9d'),
+      description: uiText('graph_rules_and_canonical_payload_schema_both_6ad4494'),
     });
-  }, [toast, validateGraph]);
+  }, [toast, validateGraph, uiText]);
 
   const selectedCount = useMemo(() => nodes.filter((n) => n.selected).length, [nodes]);
 
@@ -395,7 +414,11 @@ export const CampaignCanvas = ({
   const selectFolded = useCallback(
     (id: string) =>
       onNodesChange(
-        nodes.map((node) => ({ type: 'select' as const, id: node.id, selected: node.id === id })),
+        nodes.map((node) => ({
+          type: 'select' as const,
+          id: node.id,
+          selected: node.id === id,
+        })),
       ),
     [nodes, onNodesChange],
   );
@@ -423,10 +446,10 @@ export const CampaignCanvas = ({
       if (isCmd && event.key === 'z' && !inField) {
         if (event.shiftKey) {
           redo();
-          toast({ title: 'Redo', durationMs: 1000 });
+          toast({ title: uiText('redo_7427398'), durationMs: 1000 });
         } else {
           undo();
-          toast({ title: 'Undo', durationMs: 1000 });
+          toast({ title: uiText('undo_a8283ad'), durationMs: 1000 });
         }
       } else if (event.shiftKey && !isCmd && event.key.toLowerCase() === 'f' && !inField) {
         // The shortcut the "Fit to Screen" menu item advertises.
@@ -473,7 +496,7 @@ export const CampaignCanvas = ({
             className="gap-2 px-3 py-1 text-xs font-medium border shadow-sm animate-in fade-in slide-in-from-top-2"
           >
             <MousePointer2 className="h-3 w-3" />
-            <span className="tabular-nums">{selectedCount}</span> nodes selected
+            <span className="tabular-nums">{selectedCount}</span> {betaUiText('beta_d7b95981a1f6')}
           </Badge>
         </Panel>
       )}
@@ -488,7 +511,7 @@ export const CampaignCanvas = ({
           onClick={handleValidateStructure}
         >
           <ShieldCheck className="h-4 w-4 text-primary" />
-          Validate
+          {betaUiText('beta_40611abbdda2')}
         </Button>
       </Panel>
     </>
@@ -547,31 +570,34 @@ export const CampaignCanvas = ({
         </ContextMenuTrigger>
 
         <ContextMenuContent className="w-[clamp(13rem,17vw,17rem)]">
-          <ContextMenuLabel>Workspace Actions</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('workspace_actions_a6d9491')}</ContextMenuLabel>
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
               <Plus className="mr-2 h-4 w-4" />
-              Add Component
+              {uiText('add_component_861860d')}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               {platform === 'openai' ? (
                 <>
                   <ContextMenuItem onClick={() => handleAddNode('openai-campaign')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                      Campaign
+                      {uiText.rich('sentence_3e4f5e6a6aba', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-emerald-500" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                   <ContextMenuItem onClick={() => handleAddNode('openai-ad-group')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-emerald-400" />
-                      Ad Group
+                      {uiText.rich('sentence_a6676650b37f', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-emerald-400" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                   <ContextMenuItem onClick={() => handleAddNode('openai-ad')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-emerald-300" />
-                      Chat Card Ad
+                      {uiText.rich('sentence_5740eb5d5ff0', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-emerald-300" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                 </>
@@ -579,33 +605,38 @@ export const CampaignCanvas = ({
                 <>
                   <ContextMenuItem onClick={() => handleAddNode('campaign')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-blue-500" />
-                      Campaign
+                      {uiText.rich('sentence_3e4f5e6a6aba', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-blue-500" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                   <ContextMenuItem onClick={() => handleAddNode('ad-set')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                      Ad Set
+                      {uiText.rich('sentence_ae6f479f7b45', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-primary" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                   <ContextMenuItem onClick={() => handleAddNode('ad')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                      Ad
+                      {uiText.rich('sentence_82d9c2e74f58', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-emerald-500" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem onClick={() => handleAddNode('audience')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-orange-500" />
-                      Audience
+                      {uiText.rich('sentence_8e2f9c33320e', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-orange-500" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                   <ContextMenuItem onClick={() => handleAddNode('creative')}>
                     <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-pink-500" />
-                      Creative
+                      {uiText.rich('sentence_20dd3d8e9c28', {
+                        v0: () => <div className="h-2 w-2 rounded-full bg-pink-500" />,
+                      })}
                     </div>
                   </ContextMenuItem>
                 </>
@@ -615,46 +646,46 @@ export const CampaignCanvas = ({
 
           <ContextMenuSeparator />
 
-          <ContextMenuLabel>Canvas & View</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('canvas_view_d9410cb')}</ContextMenuLabel>
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
               <Settings className="mr-2 h-4 w-4" />
-              View Settings
+              {uiText('view_settings_0f649a1')}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               <ContextMenuCheckboxItem
                 checked={edgeStyle === 'curved'}
                 onClick={() => setEdgeStyle('curved')}
               >
-                Curved Connections
+                {uiText('curved_connections_4dd9330')}
               </ContextMenuCheckboxItem>
               <ContextMenuCheckboxItem
                 checked={edgeStyle === 'straight'}
                 onClick={() => setEdgeStyle('straight')}
               >
-                Straight Connections
+                {uiText('straight_connections_14f63e9')}
               </ContextMenuCheckboxItem>
               <ContextMenuSeparator />
               <ContextMenuItem onClick={fitScreen}>
-                Fit to Screen
+                {betaUiText('beta_5372bce6ad1f')}
                 <ContextMenuShortcut>⇧F</ContextMenuShortcut>
               </ContextMenuItem>
               <ContextMenuItem onClick={() => fitView({ padding: 0.5, duration: 800 })}>
-                Zoom to Content
+                {uiText('zoom_to_content_9d7bcbf')}
               </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
 
           <ContextMenuSeparator />
 
-          <ContextMenuLabel>Campaign Tools</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('campaign_tools_962da48')}</ContextMenuLabel>
           <ContextMenuItem inset onClick={handleValidateStructure}>
             <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
-            Validate Structure
+            {uiText('validate_structure_b3a79fd')}
           </ContextMenuItem>
           <ContextMenuItem inset onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
-            Export Schema (JSON)
+            {uiText('export_schema_json_1b4b72d')}
           </ContextMenuItem>
 
           <ContextMenuSeparator />
@@ -665,9 +696,10 @@ export const CampaignCanvas = ({
             onClick={() => setShowDeleteDialog(true)}
             disabled={selectedCount === 0}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Selected
-            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+            {uiText.rich('sentence_345ed10a1eac', {
+              v0: () => <Trash2 className="mr-2 h-4 w-4" />,
+              v1: () => <ContextMenuShortcut>⌫</ContextMenuShortcut>,
+            })}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -676,19 +708,18 @@ export const CampaignCanvas = ({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>{uiText('are_you_absolutely_sure_0c88f5e')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the selected node(s) and
-              all their associated connections.
+              {uiText('this_action_cannot_be_undone_this_will_perman_bbdbe79')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {uiText('delete_e2d0a54')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

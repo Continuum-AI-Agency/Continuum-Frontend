@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -55,7 +56,10 @@ describe('formatFreshness', () => {
 describe('DataFreshnessChip', () => {
   it('renders the fresh age and an enabled refresh control', () => {
     const onRefresh = mock(() => {});
-    const { getByText, getByRole } = renderChip({ fetchedAt: realMinutesAgo(3), onRefresh });
+    const { getByText, getByRole } = renderChip({
+      fetchedAt: realMinutesAgo(3),
+      onRefresh,
+    });
     expect(getByText('Data as of 3m ago')).toBeTruthy();
     const button = getByRole('button');
     expect(button.getAttribute('aria-disabled')).toBe('false');
@@ -78,7 +82,10 @@ describe('DataFreshnessChip', () => {
   });
 
   it('narrates the in-flight refresh and offers no button', () => {
-    const { getByText, queryByRole } = renderChip({ isRefreshing: true, canRefresh: false });
+    const { getByText, queryByRole } = renderChip({
+      isRefreshing: true,
+      canRefresh: false,
+    });
     expect(getByText('Refreshing…')).toBeTruthy();
     expect(queryByRole('button')).toBeNull();
   });

@@ -2,19 +2,30 @@
 
 import type { VideoEditorPoolAsset } from '@continuum/contracts';
 import { RefreshCw, Workflow } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
+import { useCallback, useEffect, useRef, useState, useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { libraryVersionKey } from '@/StudioCanvas/nodes/timeline/useClipPreviewUrls';
 import type { VideoStudioContext } from '../types';
 import { POOL_CHANGED_EVENT, PoolAssetCard } from './PoolAssetCard';
 
-const SECTIONS: ReadonlyArray<{ origin: VideoEditorPoolAsset['origin']; title: string }> = [
-  { origin: 'graph', title: 'On the canvas' },
-  { origin: 'generated', title: 'Generated' },
-  { origin: 'project', title: 'In this edit' },
-];
+function useLocalSectionsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: ReadonlyArray<{
+      origin: VideoEditorPoolAsset['origin'];
+      title: string;
+    }> = [
+      { origin: 'graph', title: translateConfig('on_the_canvas_ea1bed97') },
+      { origin: 'generated', title: translateConfig('generated_827ec8d9') },
+      { origin: 'project', title: translateConfig('in_this_edit_bd32b477') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 /**
  * Everything this edit can draw from (`get_pool`): media wired into its node on the canvas,
@@ -22,6 +33,8 @@ const SECTIONS: ReadonlyArray<{ origin: VideoEditorPoolAsset['origin']; title: s
  * and whenever a generation lands.
  */
 export function useEditorPool(studio: VideoStudioContext) {
+  const uiErrorText = useUiErrorMessage();
+
   const [assets, setAssets] = useState<VideoEditorPoolAsset[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,11 +48,11 @@ export function useEditorPool(studio: VideoStudioContext) {
       setAssets((await runOp.current('get_pool', {})).assets);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load the media pool.');
+      setError(uiErrorText(cause));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [uiErrorText]);
 
   const { revision } = studio.project;
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision is the intended trigger — every committed edit can change which assets the clips play.
@@ -58,13 +71,22 @@ export function useEditorPool(studio: VideoStudioContext) {
 
 // Media wired into this edit on the canvas graph (left dock, Graph tab).
 export function GraphPoolPanel({ studio }: { studio: VideoStudioContext }): React.ReactNode {
+  const SECTIONS = useLocalSectionsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const { assets, error, loading, reload } = useEditorPool(studio);
 
   return (
     <div className="flex flex-col gap-3 p-2" data-testid="graph-pool-panel">
       <div className="flex items-center gap-2">
         <p className="flex-1 text-2xs text-muted-foreground">
-          {assets ? `${assets.length} source${assets.length === 1 ? '' : 's'}` : 'Media pool'}
+          {assets
+            ? translateUi('value0_source_value1_a0fbfa09', {
+                count: Number(assets.length),
+              })
+            : translateUi('media_pool_17de02f7')}
         </p>
         <Tooltip>
           <TooltipTrigger
@@ -73,7 +95,7 @@ export function GraphPoolPanel({ studio }: { studio: VideoStudioContext }): Reac
                 size="icon"
                 variant="ghost"
                 className="size-6"
-                aria-label="Refresh the media pool"
+                aria-label={translateUi('refresh_the_media_pool_50398ca6')}
                 disabled={loading}
                 onClick={() => void reload()}
               />
@@ -81,7 +103,7 @@ export function GraphPoolPanel({ studio }: { studio: VideoStudioContext }): Reac
           >
             {loading ? <Spinner className="size-3" /> : <RefreshCw className="size-3" />}
           </TooltipTrigger>
-          <TooltipContent>Refresh</TooltipContent>
+          <TooltipContent>{uiText('refresh_0e91610')}</TooltipContent>
         </Tooltip>
       </div>
       {error ? (
@@ -93,8 +115,8 @@ export function GraphPoolPanel({ studio }: { studio: VideoStudioContext }): Reac
         <div className="flex flex-col items-center gap-2 rounded-md border border-dashed p-4 text-center">
           <Workflow className="size-5 text-muted-foreground" />
           <p className="text-2xs text-muted-foreground">
-            Nothing feeds this edit yet. Wire media into the Video Editor node's media input on the
-            canvas, or make something in Generate.
+            {' '}
+            {translateUi('nothing_feeds_this_edit_yet_wire_me_d3e3d332')}{' '}
           </p>
         </div>
       ) : null}

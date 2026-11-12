@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // "What's Working — Ads", explorer half: the win-rate category table, popped out
 // of the dashboard into a click Popover so it floats over the page and dismisses
 // on click-away, instead of a full-height slide-over. The dashboard keeps the
@@ -45,6 +47,7 @@ const ROWS_PER_GROUP = 4;
 const GENERIC_FLAG_TOOLTIP = 'Treat this win-rate with care — see the attribution note below.';
 
 function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
+  const uiText = useTranslations('scale');
   if (flags.length === 0) return null;
   return (
     <span className="flex flex-wrap gap-1">
@@ -52,9 +55,11 @@ function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
         <span
           className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400"
           key={flag}
-          title={FLAG_TOOLTIP[flag] ?? GENERIC_FLAG_TOOLTIP}
+          title={uiText(
+            flag === 'thumbnail_derived' ? 'creativeFlagThumbnailHint' : 'creativeFlagGenericHint',
+          )}
         >
-          {FLAG_LABEL[flag]}
+          {uiText('creativeFlagLabel', { flag })}
         </span>
       ))}
     </span>
@@ -62,6 +67,9 @@ function FlagPills({ flags }: { flags: CreativeWinRateFlag[] }) {
 }
 
 function WinRateLine({ row, showFunnel }: { row: CreativeWinRateRow; showFunnel: boolean }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+
   const thin = hasThinEvidence(row);
   return (
     <li
@@ -72,7 +80,9 @@ function WinRateLine({ row, showFunnel }: { row: CreativeWinRateRow; showFunnel:
     >
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-foreground text-xs">{categoryValueLabel(row)}</span>
+          <span className="truncate text-foreground text-xs">
+            {categoryValueLabel(row, uiText)}
+          </span>
           {showFunnel ? (
             <span className="shrink-0 rounded bg-muted px-1 text-xs text-muted-foreground uppercase">
               {row.funnelStage}
@@ -83,28 +93,26 @@ function WinRateLine({ row, showFunnel }: { row: CreativeWinRateRow; showFunnel:
       </span>
       <span
         className="text-right text-xs tabular-nums"
-        title={
-          thin
-            ? `Computed over ${row.eligibleAds} ad${row.eligibleAds === 1 ? '' : 's'} — too small a cohort to separate the creative from the ad.`
-            : undefined
-        }
+        title={thin ? uiText('template_055dc6f3fe53', { count: row.eligibleAds }) : undefined}
       >
-        {percent(row.winRate)}
+        {percent(row.winRate, uiLocale)}
       </span>
       <span className="text-right text-muted-foreground text-xs tabular-nums">
         {row.winners}/{row.eligibleAds}
       </span>
       <span className="text-right text-muted-foreground text-xs tabular-nums">
-        {percent(row.spendShare)}
+        {percent(row.spendShare, uiLocale)}
       </span>
       <span className="text-right text-muted-foreground text-xs tabular-nums">
-        {money(row.medianCpa, row.currency)}
+        {money(row.medianCpa, row.currency, uiLocale)}
       </span>
     </li>
   );
 }
 
 function WinRateSection({ group, showFunnel }: { group: WinRateGroup; showFunnel: boolean }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? group.rows : group.rows.slice(0, ROWS_PER_GROUP);
   const hidden = group.rows.length - visible.length;
@@ -112,10 +120,10 @@ function WinRateSection({ group, showFunnel }: { group: WinRateGroup; showFunnel
     <section className="rounded-md border border-border/60">
       <p className="flex items-center justify-between border-border/60 border-b bg-muted/30 px-2 py-1">
         <span className="font-medium text-foreground text-xs">
-          {DIMENSION_LABEL[group.dimension]}
+          {uiText('creativeDimensionLabel', { dimension: group.dimension })}
         </span>
         <span className="text-xs text-muted-foreground tabular-nums">
-          {group.rows.length} categor{group.rows.length === 1 ? 'y' : 'ies'}
+          {uiText.rich('sentence_1885731d779b', { count: group.rows.length })}
         </span>
       </p>
       <ul className="divide-y divide-border/40">
@@ -133,7 +141,9 @@ function WinRateSection({ group, showFunnel }: { group: WinRateGroup; showFunnel
           onClick={() => setExpanded((value) => !value)}
           type="button"
         >
-          {expanded ? 'Show fewer' : `Show ${hidden} more`}
+          {expanded
+            ? uiText('show_fewer_255beb6')
+            : uiText('template_a1eec0306f3f', { v0: hidden })}
         </button>
       ) : null}
     </section>
@@ -141,23 +151,27 @@ function WinRateSection({ group, showFunnel }: { group: WinRateGroup; showFunnel
 }
 
 function ExplorerEmpty() {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <div className="space-y-2 p-4 text-xs text-muted-foreground">
-      <p className="font-medium text-foreground text-sm">No labeled ads to rank yet</p>
-      <p>
-        Win-rate categories appear once this brand&apos;s ads are analysed and clear the evidence
-        floors — <span className="tabular-nums">$50 spend</span> and{' '}
-        <span className="tabular-nums">3,000 impressions</span> in the window.
+      <p className="font-medium text-foreground text-sm">
+        {uiText('no_labeled_ads_to_rank_yet_c1c0312')}
       </p>
       <p>
-        If this brand&apos;s ads were only just connected, labelling runs on the next sync. Nothing
-        to do here in the meantime.
+        {uiText.rich('sentence_0f236c1e20f8', {
+          v0: () => <span className="tabular-nums">{uiText('50_spend_37c377a')}</span>,
+          v1: () => <span className="tabular-nums">{uiText('3_000_impressions_419c7b1')}</span>,
+        })}
       </p>
+      <p>{uiText('if_this_brand_s_ads_were_only_just_connected__79d9f29')}</p>
     </div>
   );
 }
 
 function ExplorerBody({ brandId }: { brandId: string }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const { status, report, refreshedAt, isLoading } = usePaidCreativeReport(brandId);
   const [funnel, setFunnel] = useState<FunnelTab>('all');
   const [hideThinEvidence, setHideThinEvidence] = useState(false);
@@ -187,28 +201,32 @@ function ExplorerBody({ brandId }: { brandId: string }) {
           className="flex items-center gap-2 text-xs text-muted-foreground"
           htmlFor="whats-working-thin-evidence"
         >
-          <Switch
-            checked={hideThinEvidence}
-            id="whats-working-thin-evidence"
-            onCheckedChange={setHideThinEvidence}
-          />
-          Only cohorts of {MIN_TRUSTWORTHY_COHORT}+ ads
+          {uiText.rich('sentence_459a061f07f8', {
+            v0: () => (
+              <Switch
+                checked={hideThinEvidence}
+                id="whats-working-thin-evidence"
+                onCheckedChange={setHideThinEvidence}
+              />
+            ),
+            v1: MIN_TRUSTWORTHY_COHORT,
+          })}
         </label>
       </div>
 
       <div className="max-h-[60vh] min-h-0 flex-1 space-y-2 overflow-y-auto">
         <p className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_3.5rem_4.5rem] gap-2 px-2 text-xs text-muted-foreground">
-          <span>Category</span>
-          <span className="text-right">Win rate</span>
-          <span className="text-right">Ads</span>
-          <span className="text-right">Spend</span>
-          <span className="text-right">Median CPA</span>
+          <span>{uiText('category_292c06f')}</span>
+          <span className="text-right">{uiText('win_rate_4be2547')}</span>
+          <span className="text-right">{uiText('ads_9210f3b')}</span>
+          <span className="text-right">{uiText('spend_85f3d55')}</span>
+          <span className="text-right">{uiText('median_cpa_771e995')}</span>
         </p>
         {isLoading && !report ? (
-          <p className="px-2 py-3 text-muted-foreground text-xs">Loading…</p>
+          <p className="px-2 py-3 text-muted-foreground text-xs">{uiText('loading_ba3bbbe')}</p>
         ) : groups.length === 0 ? (
           <p className="px-2 py-3 text-muted-foreground text-xs">
-            No categories at this funnel stage yet.
+            {uiText('no_categories_at_this_funnel_stage_yet_518b317')}
           </p>
         ) : (
           groups.map((group) => (
@@ -225,8 +243,12 @@ function ExplorerBody({ brandId }: { brandId: string }) {
       {report ? (
         <div className="space-y-1 border-border/60 border-t pt-2">
           <p className="text-xs text-muted-foreground">
-            {report.sourceCounts.labeled} creatives labeled across {report.sourceCounts.ads} ads
-            {refreshedAt ? ` · refreshed ${new Date(refreshedAt).toLocaleString()}` : ''}
+            {uiText.rich('sentence_0f8fb9e94e69', {
+              count: report.sourceCounts.labeled,
+              ads: report.sourceCounts.ads,
+              hasDate: refreshedAt ? 'yes' : 'no',
+              date: refreshedAt ? new Date(refreshedAt).toLocaleString(uiLocale) : '',
+            })}
           </p>
           <p className="text-xs text-muted-foreground">{report.attributionNote}</p>
         </div>
@@ -236,6 +258,8 @@ function ExplorerBody({ brandId }: { brandId: string }) {
 }
 
 export function WhatsWorkingExplorerPopover({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [open, setOpen] = useState(false);
 
   return (
@@ -244,7 +268,7 @@ export function WhatsWorkingExplorerPopover({ brandId }: { brandId: string }) {
         render={
           <Button className="h-7 gap-1.5 px-2 text-xs" size="sm" type="button" variant="ghost">
             <Sparkles className="size-3.5" />
-            Win rates by category
+            {uiText('win_rates_by_category_edaecd0')}
           </Button>
         }
       />
@@ -253,10 +277,11 @@ export function WhatsWorkingExplorerPopover({ brandId }: { brandId: string }) {
         className="flex max-h-[80vh] w-[40rem] max-w-[92vw] flex-col gap-0 p-0"
       >
         <div className="space-y-1 border-border/60 border-b p-4">
-          <p className="font-medium text-foreground text-sm">Win rates by category</p>
+          <p className="font-medium text-foreground text-sm">
+            {uiText('win_rates_by_category_edaecd0')}
+          </p>
           <p className="text-muted-foreground text-xs">
-            Win rate by creative category over the last 30 days, segmented by funnel stage. The
-            kill, scale and iterate calls are under Ads.
+            {uiText('win_rate_by_creative_category_over_the_last_3_1e0acae')}
           </p>
         </div>
         {open ? <ExplorerBody brandId={brandId} /> : null}

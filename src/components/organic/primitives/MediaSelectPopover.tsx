@@ -4,6 +4,7 @@
 import type { MediaAsset, PublishFormat } from '@continuum/contracts';
 import { creativeRefFromAsset, findMultiVideoSelectionError } from '@continuum/contracts';
 import { ImageOff, Loader2, PencilRuler, Play, Search, Wand2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { Button } from '@/components/ui/button';
@@ -139,6 +140,7 @@ export function MediaSelectPopover({
   /** Explicit draft format; only a carousel can accept multiple videos. */
   format?: PublishFormat;
 }) {
+  const uiText = useTranslations('common');
   const { assets, loading, hasMore, loadMore, query, setQuery, filters, setFilters } =
     useStudioLibraryBrowser(brandProfileId, {
       ...(initialKind ? { initialFilters: { kind: initialKind } } : {}),
@@ -212,7 +214,7 @@ export function MediaSelectPopover({
       <PopoverContent side="right" align="start" sideOffset={10} className="w-[22rem] p-2.5">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Add media
+            {uiText('add_media_d5d5d26')}
           </p>
           <div className="flex items-center gap-1.5">
             {canEnrich && onEnrich && (
@@ -223,14 +225,16 @@ export function MediaSelectPopover({
                 onClick={handleEnrich}
                 disabled={isEnriching}
                 className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-                title="Sketch a low-cost blueprint first, then approve it into final media"
+                title={uiText('sketch_a_low_cost_blueprint_first_then_approv_d1d4a58')}
               >
-                {isEnriching ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <PencilRuler className="h-3.5 w-3.5" />
-                )}
-                Enrich (sketch first)
+                {uiText.rich('sentence_2ff2fbd2390b', {
+                  v0: () =>
+                    isEnriching ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <PencilRuler className="h-3.5 w-3.5" />
+                    ),
+                })}
               </Button>
             )}
             {canGenerate && onGenerate && (
@@ -242,12 +246,14 @@ export function MediaSelectPopover({
                 disabled={isGenerating}
                 className="h-7 gap-1 border-primary/40 bg-primary/10 px-2 text-xs text-primary hover:bg-primary/20"
               >
-                {isGenerating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Wand2 className="h-3.5 w-3.5" />
-                )}
-                Generate
+                {uiText.rich('sentence_c92d2db48b68', {
+                  v0: () =>
+                    isGenerating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-3.5 w-3.5" />
+                    ),
+                })}
               </Button>
             )}
           </div>
@@ -258,7 +264,7 @@ export function MediaSelectPopover({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search the library…"
+            placeholder={uiText('search_the_library_ec8e720')}
             className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-9 pr-3 text-sm outline-none focus:border-border"
           />
         </div>
@@ -282,16 +288,15 @@ export function MediaSelectPopover({
           ) : assets.length === 0 ? (
             <div className="flex min-h-[6rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-3 py-4">
               <p className="text-center text-xs text-muted-foreground/60">
-                {query.trim() ? (
-                  'No matching creatives.'
-                ) : (
-                  <>
-                    Nothing in your library yet.{' '}
-                    <span className="text-muted-foreground">
-                      Generate, or add media in AI Studio.
-                    </span>
-                  </>
-                )}
+                {query.trim()
+                  ? uiText('no_matching_creatives_5b816d3')
+                  : uiText.rich('mediaLibraryEmpty', {
+                      action: () => (
+                        <span className="text-muted-foreground">
+                          {uiText('generate_or_add_media_in_ai_studio_2986c09')}
+                        </span>
+                      ),
+                    })}
               </p>
             </div>
           ) : (
@@ -318,11 +323,11 @@ export function MediaSelectPopover({
                 role="alert"
                 className="mr-auto text-2xs font-medium text-amber-600 dark:text-amber-400"
               >
-                {multiVideoError}
+                {uiText('mediaOneVideoPerPost')}
               </p>
             )}
             <Button type="button" size="sm" disabled={!!multiVideoError} onClick={handleAttach}>
-              Attach {selectedIds.length > 1 ? `(${selectedIds.length})` : ''}
+              {uiText('mediaAttachCount', { count: selectedIds.length })}
             </Button>
           </div>
         )}

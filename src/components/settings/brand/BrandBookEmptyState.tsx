@@ -1,10 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useTranslations } from 'next-intl';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { PreviewRateLimitedError, runOnboardingPreview } from '@/lib/onboarding/agentClient';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import {
@@ -29,6 +31,10 @@ export function BrandBookEmptyState({
   brandName: string;
   payload: BrandBookGenerationPayload | null;
 }) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const router = useRouter();
   const { show } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -53,7 +59,7 @@ export function BrandBookEmptyState({
         },
       ],
     });
-  }, [brandId, router]);
+  }, [brandId, router, tUi]);
 
   // Abort an in-flight run if the user navigates away from the panel.
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -61,9 +67,8 @@ export function BrandBookEmptyState({
   const handleGenerate = async () => {
     if (!canGenerateBrandBook(payload)) {
       show({
-        title: "Can't generate yet",
-        description:
-          "We couldn't assemble this brand's profile. Finish onboarding first, then try again.",
+        title: tUi('m_8edf28bf6f'),
+        description: tUi('m_cf987fe672'),
         variant: 'error',
       });
       return;
@@ -72,20 +77,20 @@ export function BrandBookEmptyState({
     const controller = new AbortController();
     abortRef.current = controller;
     setIsGenerating(true);
-    setStatusLine('Starting analysis…');
+    setStatusLine(tUi('m_f132df62c3'));
 
     try {
       await runOnboardingPreview({
         payload,
         signal: controller.signal,
         onEvent: (event) => {
-          const line = brandBookGenerationStatus(event);
+          const line = brandBookGenerationStatus(event, tUi);
           if (line) setStatusLine(line);
         },
       });
       show({
-        title: 'Brand Book generated',
-        description: 'Your brand report is ready.',
+        title: tUi('m_a85c9517e3'),
+        description: tUi('m_06a1260092'),
         variant: 'success',
       });
       router.refresh();
@@ -93,12 +98,12 @@ export function BrandBookEmptyState({
       if (controller.signal.aborted) return;
       const description =
         error instanceof PreviewRateLimitedError
-          ? `Too many runs right now — try again in ${error.retryAfterSeconds}s.`
+          ? tUi('brandPreviewRateLimited', { seconds: error.retryAfterSeconds })
           : error instanceof Error
-            ? error.message
-            : 'Please try again.';
+            ? uiErrorMessage(error)
+            : tUi('m_83a6fd7b78');
       show({
-        title: "Couldn't generate Brand Book",
+        title: tUi('m_6e1ce07f14'),
         description,
         variant: 'error',
       });
@@ -110,28 +115,24 @@ export function BrandBookEmptyState({
   return (
     <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 px-5 py-6">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold text-foreground">No Brand Book yet</h3>
+        <h3 className="text-base font-semibold text-foreground">{tUi('m_2561490142')}</h3>
         <p className="text-sm text-muted-foreground">
-          Continuum hasn&rsquo;t generated a brand report for {brandName} yet. Run the analysis to
-          build your living brand identity — voice, audience, strategy, readiness, and more.
+          {tUi('m_f1acfdec41')}
+          {brandName}
+          {tUi('m_acff41b9b3')}
         </p>
       </div>
 
       <div className="flex items-center gap-3">
         <Button onClick={handleGenerate} disabled={isGenerating}>
-          {isGenerating ? 'Generating…' : 'Generate Brand Book'}
+          {isGenerating ? tUi('m_11edad70c1') : tUi('m_d769b99077')}
         </Button>
         {isGenerating && statusLine ? (
           <span className="text-xs text-muted-foreground">{statusLine}</span>
         ) : null}
       </div>
 
-      {isGenerating ? (
-        <p className="text-xs text-muted-foreground">
-          This runs the full brand analysis and can take a few minutes. Keep this page open while it
-          works.
-        </p>
-      ) : null}
+      {isGenerating ? <p className="text-xs text-muted-foreground">{tUi('m_220012bab5')}</p> : null}
     </div>
   );
 }

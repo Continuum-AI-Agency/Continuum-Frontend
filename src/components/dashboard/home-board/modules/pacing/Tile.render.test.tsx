@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HomeBoardTile } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { homeCtx } from './__fixtures__/ctx';
 import {
   EASY_FIT_FLIGHT,
@@ -33,7 +34,13 @@ mock.module('./usePacingReads', () => ({
 
 const { default: PacingTile } = await import('./Tile');
 
-const tile: HomeBoardTile = { id: 'pacing', size: 'm', urgency: 2, score: 37, why: null };
+const tile: HomeBoardTile = {
+  id: 'pacing',
+  size: 'm',
+  urgency: 2,
+  score: 37,
+  why: null,
+};
 const ctx = homeCtx();
 
 afterEach(() => {
@@ -45,7 +52,10 @@ afterEach(() => {
 
 describe('PacingTile', () => {
   it('leads with this period’s spend in the main currency, against plan and expected', () => {
-    portfolios = { status: 'ready', rows: [EASY_FIT_FLIGHT, NO_FLIGHT, USD_FLIGHT] };
+    portfolios = {
+      status: 'ready',
+      rows: [EASY_FIT_FLIGHT, NO_FLIGHT, USD_FLIGHT],
+    };
     runs = new Map([
       [EASY_FIT_FLIGHT.id, ready(EASY_FIT_RUN)],
       [USD_FLIGHT.id, ready(USD_RUN)],

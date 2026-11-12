@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { OptimizerLogRow } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -51,7 +52,11 @@ const DRIFT = row({
   level: 'warn',
   event: 'roster_drift_detected',
   portfolio_name: 'Retargeting',
-  fields: { seen: 8, missing: 2, adsets: [{ id: '120251', name: 'Lookalike 1%' }] },
+  fields: {
+    seen: 8,
+    missing: 2,
+    adsets: [{ id: '120251', name: 'Lookalike 1%' }],
+  },
 });
 
 const FAILED = row({
@@ -152,7 +157,11 @@ describe('OptimizerLogs — the SERVER LOG feed', () => {
   });
 
   it('says how much is loaded and offers more only when the cursor says there is more', () => {
-    logsState = { data: [COMPLETE, DRIFT], isLoading: false, hasNextPage: false };
+    logsState = {
+      data: [COMPLETE, DRIFT],
+      isLoading: false,
+      hasNextPage: false,
+    };
     const { unmount } = render(<OptimizerLogs brandId="brand-1" />);
     expect(screen.getByText('2 events — that is all of them.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();

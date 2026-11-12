@@ -1,3 +1,5 @@
+import { useTranslations as useBetaTranslations, useTranslations } from 'next-intl';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 // Guided setup checklist (IMP-001) with in-context "Connect / Assign" CTAs
 // (IMP-003). Tracked steps (connect / assign / brand book) show a done/todo
 // state; guidance-only steps render as open action items. Each row jumps to the
@@ -5,9 +7,8 @@
 // links into the existing one.
 
 import { ArrowRight, CheckCircle2, Circle } from 'lucide-react';
-import Link from 'next/link';
-
 import { buttonVariants } from '@/components/ui/button';
+import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import type { DashboardSetupState, DashboardSetupStep } from './setupState';
 
@@ -19,6 +20,7 @@ function StepIcon({ status }: { status: DashboardSetupStep['status'] }) {
 }
 
 function ChecklistRow({ step }: { step: DashboardSetupStep }) {
+  const uiText = useTranslations('dashboard');
   const isDone = step.status === 'done';
   return (
     <li className="flex items-start gap-3 py-2.5">
@@ -30,9 +32,11 @@ function ChecklistRow({ step }: { step: DashboardSetupStep }) {
             isDone ? 'text-muted-foreground line-through' : 'text-foreground',
           )}
         >
-          {step.label}
+          {localizeDashboardCopy(step.label, uiText)}
         </p>
-        <p className="text-xs text-muted-foreground">{step.description}</p>
+        <p className="text-xs text-muted-foreground">
+          {localizeDashboardCopy(step.description, uiText)}
+        </p>
       </div>
       <Link
         href={step.href}
@@ -42,7 +46,7 @@ function ChecklistRow({ step }: { step: DashboardSetupStep }) {
           'shrink-0',
         )}
       >
-        {step.cta}
+        {localizeDashboardCopy(step.cta, uiText)}
         <ArrowRight aria-hidden="true" className="size-3" />
       </Link>
     </li>
@@ -50,6 +54,10 @@ function ChecklistRow({ step }: { step: DashboardSetupStep }) {
 }
 
 export function SetupChecklist({ setup }: { setup: DashboardSetupState }) {
+  const uiText = useTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   // The count heads the steps it counts. The guidance steps are never counted (nothing records
   // them as done), so under the same count and checkbox "2 of 3 done" headed five steps
   // (PP-DT-C-setup-checklist-2-of-3-over-5-steps): they are set apart as optional.
@@ -57,14 +65,19 @@ export function SetupChecklist({ setup }: { setup: DashboardSetupState }) {
   const optional = setup.steps.filter((step) => !step.tracked);
   return (
     <section
-      aria-label="Guided setup checklist"
+      aria-label={uiText('guided_setup_checklist_c747add')}
       data-testid="dashboard-setup-checklist"
       className="p-[var(--card-pad)]"
     >
       <header className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold tracking-tight text-foreground">Finish setting up</h2>
+        <h2 className="text-sm font-semibold tracking-tight text-foreground">
+          {uiText('finish_setting_up_51eb40d')}
+        </h2>
         <span className="tabular-nums text-xs text-muted-foreground">
-          {setup.completedCount} of {setup.trackedCount} done
+          {uiText.rich('sentence_90e213d1e91e', {
+            v0: () => setup.completedCount,
+            v1: () => setup.trackedCount,
+          })}
         </span>
       </header>
       <ul className="mt-2 divide-y divide-border/60" data-testid="setup-tracked-steps">
@@ -74,7 +87,9 @@ export function SetupChecklist({ setup }: { setup: DashboardSetupState }) {
       </ul>
       {optional.length > 0 ? (
         <div className="mt-3" data-testid="setup-optional-steps">
-          <h3 className="text-xs font-medium text-muted-foreground">Optional next steps</h3>
+          <h3 className="text-xs font-medium text-muted-foreground">
+            {betaUiText('beta_1d63314c2381')}
+          </h3>
           <ul className="mt-1 divide-y divide-border/60">
             {optional.map((step) => (
               <ChecklistRow key={step.id} step={step} />

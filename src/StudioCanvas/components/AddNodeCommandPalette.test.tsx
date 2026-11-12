@@ -4,7 +4,12 @@
   SyntaxError;
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { TechniqueItem } from '@/lib/ai-studio/techniques';
 import { AddNodeCommandPalette, type PaletteTechniques } from './AddNodeCommandPalette';
@@ -23,8 +28,20 @@ function technique(
   return {
     kind: 'generation',
     inputPorts: [
-      { id: 'in-1', nodeRef: 'gen', handleId: 'ref-image', dataType: 'image', origin: 'open' },
-      { id: 'in-2', nodeRef: 'gen', handleId: 'prompt', dataType: 'text', origin: 'open' },
+      {
+        id: 'in-1',
+        nodeRef: 'gen',
+        handleId: 'ref-image',
+        dataType: 'image',
+        origin: 'open',
+      },
+      {
+        id: 'in-2',
+        nodeRef: 'gen',
+        handleId: 'prompt',
+        dataType: 'text',
+        origin: 'open',
+      },
     ],
     outputPorts: [{ id: 'out-1', nodeRef: 'gen', handleId: 'image', dataType: 'image' }],
     nodeCount: 2,
@@ -43,7 +60,11 @@ function technique(
   };
 }
 
-const BRAND_TECHNIQUE = technique({ id: 'tq-brand', name: 'Palette smash-up', tier: 'brand' });
+const BRAND_TECHNIQUE = technique({
+  id: 'tq-brand',
+  name: 'Palette smash-up',
+  tier: 'brand',
+});
 const PREMADE_TECHNIQUE = technique({
   id: 'tq-global',
   name: 'Product on plinth',
@@ -100,7 +121,11 @@ function search(query: string) {
 }
 
 /** The visible rows that stand for an ACTION op, in the order cmdk ranked them. */
-function visibleOpRows(): { element: Element; actionId: string; label: string }[] {
+function visibleOpRows(): {
+  element: Element;
+  actionId: string;
+  label: string;
+}[] {
   return Array.from(document.querySelectorAll('[data-slot="command-item"][data-action-id]'))
     .filter((el) => !el.hasAttribute('hidden') && el.getAttribute('aria-disabled') !== 'true')
     .map((el) => ({
@@ -627,7 +652,10 @@ describe('AddNodeCommandPalette', () => {
     it(
       'lists Brand and Premade rows, each with its kind and port summary',
       () => {
-        renderPalette({ items: [BRAND_TECHNIQUE, PREMADE_TECHNIQUE], isLoading: false });
+        renderPalette({
+          items: [BRAND_TECHNIQUE, PREMADE_TECHNIQUE],
+          isLoading: false,
+        });
 
         const popup = openTechniques();
         expect(techniqueRowsIn(popup)).toEqual([
@@ -711,7 +739,10 @@ describe('AddNodeCommandPalette', () => {
     it(
       'applies collapsed once Drop collapsed is ticked',
       () => {
-        const { onApplyTechnique } = renderPalette({ items: [BRAND_TECHNIQUE], isLoading: false });
+        const { onApplyTechnique } = renderPalette({
+          items: [BRAND_TECHNIQUE],
+          isLoading: false,
+        });
 
         const popup = openTechniques();
         const toggle = popup.querySelector('[data-testid="add-node-techniques-collapsed"]');
@@ -762,7 +793,11 @@ describe('AddNodeCommandPalette', () => {
       'pins a technique whose name is the query, once, above the fuzzy ranking',
       () => {
         // Named after a node label on purpose: both exact matches pin, technique first.
-        const shadow = technique({ id: 'tq-export', name: 'Export', tier: 'brand' });
+        const shadow = technique({
+          id: 'tq-export',
+          name: 'Export',
+          tier: 'brand',
+        });
         renderPalette({ items: [shadow, PREMADE_TECHNIQUE], isLoading: false });
 
         search('export');

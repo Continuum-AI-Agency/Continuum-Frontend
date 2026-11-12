@@ -3,6 +3,7 @@
 import type { ForgeRenderSet, ForgeRenderSetRevision } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,10 @@ export function SetHistoryDialog({
   onRestore: (revision: ForgeRenderSetRevision) => Promise<void>;
   onOpenChange: (open: boolean) => void;
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const [restoring, setRestoring] = useState<number | null>(null);
   const history = useQuery({
     queryKey: ['forge-render-set-revisions', brandId, set?.id],
@@ -47,27 +52,32 @@ export function SetHistoryDialog({
     <Dialog open={set !== null} onOpenChange={(open) => restoring === null && onOpenChange(open)}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Version history · {set?.name}</DialogTitle>
+          <DialogTitle>
+            {translateUi('version_history_bbf37f92')} {set?.name}
+          </DialogTitle>
           <DialogDescription>
-            Kept when you stop editing for a while, before a template update, and whenever a version
-            is rendered. Restoring one opens it as a new set.
+            {' '}
+            {translateUi('kept_when_you_stop_editing_for_a_wh_f0d0658c')}{' '}
           </DialogDescription>
         </DialogHeader>
         {history.isLoading ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden /> Loading versions…
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
+            {translateUi('loading_versions_9780e2c9')}{' '}
           </p>
         ) : history.isError ? (
           <p role="alert" className="text-xs text-destructive">
-            Could not load this set’s versions. Try again in a moment.
+            {' '}
+            {translateUi('could_not_load_this_set_s_versions__135f6155')}{' '}
           </p>
         ) : items.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No earlier versions yet. One is kept once you stop editing for two minutes.
+            {' '}
+            {translateUi('no_earlier_versions_yet_one_is_kept_2cd2430a')}{' '}
           </p>
         ) : (
           <ul
-            aria-label="Versions"
+            aria-label={translateUi('versions_f89ea270')}
             className="-mx-1 max-h-80 divide-y divide-border overflow-y-auto"
           >
             {items.map((revision) => (
@@ -76,12 +86,16 @@ export function SetHistoryDialog({
                   v{revision.revision}
                 </span>
                 <span className="min-w-0 flex-1 truncate">
-                  {formatRelativeTime(revision.savedAt)} · {revision.rows.length}{' '}
-                  {revision.rows.length === 1 ? 'row' : 'rows'}
+                  {formatRelativeTime(revision.savedAt, undefined, currentUiLocale)} ·{' '}
+                  {revision.rows.length}{' '}
+                  {revision.rows.length === 1
+                    ? translateUi('row_634768da')
+                    : translateUi('rows_bc51e9e6')}
                 </span>
                 {revision.contractHash === contractHash ? null : (
                   <Pill variant="warning" className="shrink-0 text-3xs">
-                    Older template
+                    {' '}
+                    {translateUi('older_template_631ab51f')}{' '}
                   </Pill>
                 )}
                 <Button
@@ -100,8 +114,8 @@ export function SetHistoryDialog({
                 >
                   {restoring === revision.revision ? (
                     <Loader2 className="animate-spin" data-icon="inline-start" />
-                  ) : null}
-                  Restore as new set
+                  ) : null}{' '}
+                  {translateUi('restore_as_new_set_63d4d167')}{' '}
                 </Button>
               </li>
             ))}

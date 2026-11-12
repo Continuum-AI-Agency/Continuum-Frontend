@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HeadlessBatchQuote } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ToolApprovalCard } from './ToolApprovalCard';
 
 Object.assign(global.window, {
@@ -36,7 +37,12 @@ function renderCard(batchPreview: HeadlessBatchQuote | undefined) {
         toolCallId: 'c1',
         toolName: 'headlessBatchCreate',
         input: {
-          items: [{ format: 'reel', slot: { draftId: '33333333-3333-4333-8333-333333333333' } }],
+          items: [
+            {
+              format: 'reel',
+              slot: { draftId: '33333333-3333-4333-8333-333333333333' },
+            },
+          ],
         },
         ...(batchPreview ? { batchPreview } : {}),
       }}
@@ -80,7 +86,9 @@ describe('HeadlessBatchApprovalCard', () => {
       'headless-batch-approval',
     );
     expect(
-      getByRole('button', { name: 'Approve batch of 12 pieces, first pass up to $108.60' }),
+      getByRole('button', {
+        name: 'Approve batch of 12 pieces, first pass up to $108.60',
+      }),
     ).toBeTruthy();
     expect(getByRole('button', { name: 'Deny batch of 12 pieces' })).toBeTruthy();
   });
@@ -116,7 +124,9 @@ describe('HeadlessBatchApprovalCard', () => {
       "Only $20.00 is left in the brand's 24 h window. Nothing was spent.",
     );
     expect(container.textContent).not.toContain('maxUsd');
-    const approve = getByRole('button', { name: /^Approve/ }) as HTMLButtonElement;
+    const approve = getByRole('button', {
+      name: /^Approve/,
+    }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     fireEvent.click(approve);
     fireEvent.click(getByRole('button', { name: /^Deny/ }));

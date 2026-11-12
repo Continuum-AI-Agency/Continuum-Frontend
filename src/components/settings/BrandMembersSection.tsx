@@ -1,8 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+
+import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
-import { changeMemberRoleAction, removeMemberAction } from '@/app/(post-auth)/settings/actions';
+import {
+  changeMemberRoleAction,
+  removeMemberAction,
+} from '@/app/[locale]/(post-auth)/settings/actions';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { formatMemberEmail } from '@/lib/brands/memberDisplay';
 import type { BrandRole } from '@/lib/onboarding/state';
 
@@ -38,6 +44,20 @@ type BrandMembersSectionProps = {
 };
 
 export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersSectionProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+  const roleLabels = {
+    owner: tUi('roleOwner'),
+    admin: tUi('roleAdmin'),
+    operator: tUi('roleOperator'),
+    viewer: tUi('roleViewer'),
+  };
+  const roleLabel = (role: string) =>
+    Object.hasOwn(roleLabels, role)
+      ? roleLabels[role as keyof typeof roleLabels]
+      : tUi('roleUnknown');
+
   const router = useRouter();
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -48,15 +68,18 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
       try {
         await changeMemberRoleAction(brandId, memberId, next as Exclude<BrandRole, 'owner'>);
         show({
-          title: 'Role updated',
-          description: `${formatMemberEmail(email)} is now ${next}.`,
+          title: tUi('m_e6f6a17db7'),
+          description: tUi('m_8b26439510', {
+            v0: String(formatMemberEmail(email)),
+            v1: String(next),
+          }),
           variant: 'success',
         });
         router.refresh();
       } catch (error) {
         show({
-          title: 'Could not change role',
-          description: error instanceof Error ? error.message : 'Unknown error.',
+          title: tUi('m_b6be99839f'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_3716d64264'),
           variant: 'error',
         });
       }
@@ -68,15 +91,17 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
       try {
         await removeMemberAction(brandId, memberId, email ?? undefined);
         show({
-          title: 'Member removed',
-          description: `${formatMemberEmail(email)} no longer has access.`,
+          title: tUi('m_1666974ad2'),
+          description: tUi('m_840f3c6851', {
+            v0: String(formatMemberEmail(email)),
+          }),
           variant: 'success',
         });
         router.refresh();
       } catch (error) {
         show({
-          title: 'Action failed',
-          description: error instanceof Error ? error.message : 'Unable to remove member.',
+          title: tUi('m_57af949595'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_5b847b0aca'),
           variant: 'error',
         });
       }
@@ -95,11 +120,11 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
                   <p className="break-all text-sm font-medium">{formatMemberEmail(member.email)}</p>
                   {member.isRecentlyAccepted ? (
                     <Pill variant="success" className="mt-1">
-                      New
+                      {tUi('m_6403f2b7eb')}
                     </Pill>
                   ) : null}
                 </div>
-                {!canEdit || isOwnerRow ? <Pill>{member.role}</Pill> : null}
+                {!canEdit || isOwnerRow ? <Pill>{roleLabel(member.role)}</Pill> : null}
               </div>
               {canEdit ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -116,9 +141,9 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">admin</SelectItem>
-                        <SelectItem value="operator">operator</SelectItem>
-                        <SelectItem value="viewer">viewer</SelectItem>
+                        <SelectItem value="admin">{tUi('m_d033e22ae3')}</SelectItem>
+                        <SelectItem value="operator">{tUi('m_fe96dd3975')}</SelectItem>
+                        <SelectItem value="viewer">{tUi('m_40b4f25b1f')}</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : null}
@@ -128,7 +153,7 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
                     onClick={() => handleRemove(member.id, member.email)}
                     className="min-h-10 text-destructive hover:text-destructive"
                   >
-                    Remove
+                    {tUi('m_e963907dac')}
                   </Button>
                 </div>
               ) : null}
@@ -140,8 +165,8 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
         <Table className="min-w-[36rem]">
           <TableHeader>
             <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
+              <TableHead>{tUi('m_84add5b295')}</TableHead>
+              <TableHead>{tUi('m_c3f104d136')}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -153,7 +178,9 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span>{formatMemberEmail(member.email)}</span>
-                      {member.isRecentlyAccepted ? <Pill variant="success">New</Pill> : null}
+                      {member.isRecentlyAccepted ? (
+                        <Pill variant="success">{tUi('m_6403f2b7eb')}</Pill>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -170,13 +197,13 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="admin">admin</SelectItem>
-                          <SelectItem value="operator">operator</SelectItem>
-                          <SelectItem value="viewer">viewer</SelectItem>
+                          <SelectItem value="admin">{tUi('m_d033e22ae3')}</SelectItem>
+                          <SelectItem value="operator">{tUi('m_fe96dd3975')}</SelectItem>
+                          <SelectItem value="viewer">{tUi('m_40b4f25b1f')}</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
-                      <Pill>{member.role}</Pill>
+                      <Pill>{roleLabel(member.role)}</Pill>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
@@ -188,7 +215,7 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
                         onClick={() => handleRemove(member.id, member.email)}
                         className="text-destructive hover:text-destructive"
                       >
-                        Remove
+                        {tUi('m_e963907dac')}
                       </Button>
                     )}
                   </TableCell>
@@ -199,9 +226,7 @@ export function BrandMembersSection({ brandId, members, canEdit }: BrandMembersS
         </Table>
       </div>
       {ownerEmails.length === 0 && (
-        <span className="text-xs text-warning">
-          Warning: no owners detected. Ensure at least one owner remains.
-        </span>
+        <span className="text-xs text-warning">{tUi('m_de219726d5')}</span>
       )}
     </div>
   );

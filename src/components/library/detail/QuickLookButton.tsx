@@ -9,6 +9,7 @@
 
 import type { BrandBookPieceKind, MediaAsset } from '@continuum/contracts';
 import { Loader2, Sparkles } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 import { BrandBookPiecePreview } from '@/components/brand/GenerationConfigPreview';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   BRAND_BOOK_PIECE_KINDS,
   presentBrandBookPiece,
@@ -67,6 +69,10 @@ function resultPreviewUrl(result: StudioImageResult): string | undefined {
 }
 
 export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookButtonProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [open, setOpen] = useState(false);
   const [pieces, setPieces] = useState<BrandBookPieceKind[]>(['full']);
   const [instruction, setInstruction] = useState('');
@@ -86,14 +92,19 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
     setNotice(null);
     setResult(null);
     try {
-      const request = buildQuickLookRequest({ brandId, asset, pieces, instruction });
+      const request = buildQuickLookRequest({
+        brandId,
+        asset,
+        pieces,
+        instruction,
+      });
       setResult(await generateStudioImage(request));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed');
+      setError(uiErrorText(err));
     } finally {
       setGenerating(false);
     }
-  }, [brandId, asset, pieces, instruction]);
+  }, [brandId, asset, pieces, instruction, translateUi, uiErrorText]);
 
   const handleSaveVersion = useCallback(async () => {
     if (!result) return;
@@ -111,11 +122,11 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
       setNotice(`Saved as version ${versionNumber}.`);
       onAssetChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the version');
+      setError(uiErrorText(err));
     } finally {
       setSaving(null);
     }
-  }, [result, brandId, asset.id, asset.fileName, onAssetChanged]);
+  }, [result, brandId, asset.id, asset.fileName, onAssetChanged, translateUi, uiErrorText]);
 
   const handleSaveAsset = useCallback(async () => {
     if (!result) return;
@@ -128,11 +139,11 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
       setNotice('Saved to the library as a new asset.');
       onAssetChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the asset');
+      setError(uiErrorText(err));
     } finally {
       setSaving(null);
     }
-  }, [result, brandId, asset.fileName, onAssetChanged]);
+  }, [result, brandId, asset.fileName, onAssetChanged, translateUi, uiErrorText]);
 
   if (asset.kind !== 'image') {
     return (
@@ -142,13 +153,15 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
             render={
               <span>
                 <Button variant="outline" size="sm" disabled className="pointer-events-none">
-                  <Sparkles className="size-3.5" aria-hidden />
-                  Brand quick look
+                  <Sparkles className="size-3.5" aria-hidden />{' '}
+                  {translateUi('brand_quick_look_60951b72')}{' '}
                 </Button>
               </span>
             }
           />
-          <TooltipContent>Brand quick look supports images only for now.</TooltipContent>
+          <TooltipContent>
+            {translateUi('brand_quick_look_supports_images_on_83bd122e')}
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );
@@ -157,26 +170,31 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Sparkles className="size-3.5" aria-hidden />
-        Brand quick look
+        <Sparkles className="size-3.5" aria-hidden /> {translateUi(
+          'brand_quick_look_60951b72',
+        )}{' '}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Brand quick look</DialogTitle>
+            <DialogTitle>{translateUi('brand_quick_look_60951b72')}</DialogTitle>
             <DialogDescription>
-              Re-render this image aligned to your brand book. Pick the pieces to enforce and
-              optionally tell the model what to change.
+              {' '}
+              {translateUi('re_render_this_image_aligned_to_you_97df463f')}{' '}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-2 sm:grid-cols-2">
             {isBrandBookLoading ? (
-              <p className="text-xs text-muted-foreground">Loading Brand Book…</p>
+              <p className="text-xs text-muted-foreground">
+                {translateUi('loading_brand_book_3f5b4023')}
+              </p>
             ) : null}
             {!isBrandBookLoading && brandPieces.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No Brand Book tokens available.</p>
+              <p className="text-xs text-muted-foreground">
+                {translateUi('no_brand_book_tokens_available_15152e87')}
+              </p>
             ) : null}
             {brandPieces.map((piece) => {
               const active = pieces.includes(piece.kind);
@@ -205,7 +223,7 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
           <Textarea
             value={instruction}
             onChange={(event) => setInstruction(event.target.value)}
-            placeholder='Optional instruction, e.g. "align this to our brand"'
+            placeholder={translateUi('optional_instruction_e_g_align_this_8f315eb5')}
             rows={2}
             disabled={generating}
           />
@@ -213,7 +231,9 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
           {result ? (
             <div className="grid grid-cols-2 gap-3">
               <figure className="min-w-0">
-                <figcaption className="mb-1 text-xs text-muted-foreground">Original</figcaption>
+                <figcaption className="mb-1 text-xs text-muted-foreground">
+                  {translateUi('original_88d759ea')}
+                </figcaption>
                 {asset.signedUrl ? (
                   // biome-ignore lint/performance/noImgElement: transient signed URL preview
                   <img
@@ -222,16 +242,20 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
                     className="max-h-72 w-full rounded-md border border-border object-contain"
                   />
                 ) : (
-                  <p className="text-xs text-muted-foreground">Preview unavailable</p>
+                  <p className="text-xs text-muted-foreground">
+                    {translateUi('preview_unavailable_b99fa6c0')}
+                  </p>
                 )}
               </figure>
               <figure className="min-w-0">
-                <figcaption className="mb-1 text-xs text-muted-foreground">Brand look</figcaption>
+                <figcaption className="mb-1 text-xs text-muted-foreground">
+                  {translateUi('brand_look_e23e03a8')}
+                </figcaption>
                 {resultPreviewUrl(result) ? (
                   // biome-ignore lint/performance/noImgElement: transient signed URL preview
                   <img
                     src={resultPreviewUrl(result)}
-                    alt="Brand-aligned result"
+                    alt={translateUi('brand_aligned_result_95103b2e')}
                     className="max-h-72 w-full rounded-md border border-border object-contain"
                   />
                 ) : null}
@@ -253,8 +277,8 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
                 >
                   {saving === 'version' ? (
                     <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                  ) : null}
-                  Save as new version
+                  ) : null}{' '}
+                  {translateUi('save_as_new_version_ad8907dd')}{' '}
                 </Button>
                 <Button
                   variant="outline"
@@ -264,8 +288,8 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
                 >
                   {saving === 'asset' ? (
                     <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                  ) : null}
-                  Save as new asset
+                  ) : null}{' '}
+                  {translateUi('save_as_new_asset_a42a78f2')}{' '}
                 </Button>
               </>
             ) : null}
@@ -275,7 +299,11 @@ export function QuickLookButton({ brandId, asset, onAssetChanged }: QuickLookBut
               disabled={generating || saving !== null || brandPieces.length === 0}
             >
               {generating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-              {generating ? 'Generating…' : result ? 'Regenerate' : 'Generate'}
+              {generating
+                ? translateUi('generating_d20a4476')
+                : result
+                  ? translateUi('regenerate_1651031b')
+                  : translateUi('generate_49e49bb4')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -2,6 +2,7 @@
 
 import type { TemplateFontCandidatesResponse } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +42,8 @@ export function FontSubstitutions({
   onUpload: () => void;
   onApply: (choices: FontSubstitutionChoice[]) => Promise<void>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const rows = candidates.missing;
   const [choices, setChoices] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -63,17 +66,18 @@ export function FontSubstitutions({
   return (
     <div className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning/5 p-2">
       <p className="text-muted-foreground">
-        For each missing font, pick one you already have or add the real file. Renders use your
-        pick. The template card shows it, and you can change it later.
+        {' '}
+        {translateUi('for_each_missing_font_pick_one_you__89e1459c')}{' '}
       </p>
-      <ul className="flex flex-col gap-1.5" aria-label="Missing typefaces">
+      <ul className="flex flex-col gap-1.5" aria-label={translateUi('missing_typefaces_81aa9433')}>
         {rows.map((row) => (
           <li key={row.family} className="flex flex-wrap items-center justify-between gap-2">
             <span className="min-w-0 flex-1">
               <span className="text-foreground">{row.family}</span>
               {row.candidates.length === 0 ? (
                 <span className="block text-2xs text-muted-foreground">
-                  We don&apos;t have anything close. Please add this font file.
+                  {' '}
+                  {translateUi('we_don_t_have_anything_close_please_34fbaa73')}{' '}
                 </span>
               ) : null}
             </span>
@@ -81,15 +85,21 @@ export function FontSubstitutions({
               disabled={busy || row.candidates.length === 0}
               value={choices[row.family] ?? UNRESOLVED}
               onValueChange={(value) =>
-                value && setChoices((current) => ({ ...current, [row.family]: String(value) }))
+                value &&
+                setChoices((current) => ({
+                  ...current,
+                  [row.family]: String(value),
+                }))
               }
             >
               <SelectTrigger
                 size="sm"
                 className="w-64"
-                aria-label={`Face to use for ${row.family}`}
+                aria-label={translateUi('face_to_use_for_value0_2db978ba', {
+                  value0: String(row.family),
+                })}
               >
-                <SelectValue placeholder="Skip for now">
+                <SelectValue placeholder={translateUi('skip_for_now_b58eb52c')}>
                   {(value: string) => {
                     if (value === UNRESOLVED) return 'Skip for now';
                     const hit = row.candidates.find((option) => option.fontId === value);
@@ -103,7 +113,7 @@ export function FontSubstitutions({
                     {option.family} · {option.why}
                   </SelectItem>
                 ))}
-                <SelectItem value={UNRESOLVED}>Skip for now</SelectItem>
+                <SelectItem value={UNRESOLVED}>{translateUi('skip_for_now_b58eb52c')}</SelectItem>
               </SelectContent>
             </Select>
           </li>
@@ -123,16 +133,17 @@ export function FontSubstitutions({
             )
           }
         >
-          {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-          Use these fonts
+          {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+          {translateUi('use_these_fonts_9a011288')}{' '}
         </Button>
         <Button type="button" size="xs" variant="outline" disabled={busy} onClick={onUpload}>
-          Add the real files
+          {' '}
+          {translateUi('add_the_real_files_dfa63d52')}{' '}
         </Button>
         <span className="text-muted-foreground">
           {changed.length === 0
-            ? 'Nothing to change.'
-            : `${changed.length} ${changed.length === 1 ? 'face' : 'faces'} will change.`}
+            ? translateUi('nothing_to_change_27c92226')
+            : translateUi('fontFacesWillChange', { count: changed.length })}
         </span>
       </div>
     </div>

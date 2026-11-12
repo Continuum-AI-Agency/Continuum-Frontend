@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // Pins the keyboard contract lifted verbatim out of StudioCanvas: modal scope stands
 // every key down, editable targets are never hijacked, and Delete snapshots before it
@@ -23,7 +23,12 @@ const cutSelectedNodes = mock(() => {});
 const pasteNodes = mock(() => {});
 
 type StoreShape = {
-  nodes: { id: string; position: { x: number; y: number }; data: unknown; selected?: boolean }[];
+  nodes: {
+    id: string;
+    position: { x: number; y: number };
+    data: unknown;
+    selected?: boolean;
+  }[];
   edges: { id: string; source: string; target: string; selected?: boolean }[];
   keyboardScope: string;
   takeSnapshot: typeof takeSnapshot;
@@ -286,7 +291,10 @@ describe('useCanvasKeyboardShortcuts', () => {
       press({ key: 'Delete' });
 
       expect(callOrder).toEqual(['takeSnapshot', 'deleteElements']);
-      expect(deleteElements).toHaveBeenCalledWith({ nodes: [], edges: [store.edges[0]] });
+      expect(deleteElements).toHaveBeenCalledWith({
+        nodes: [],
+        edges: [store.edges[0]],
+      });
     });
 
     it('does not snapshot or delete when nothing is selected', () => {

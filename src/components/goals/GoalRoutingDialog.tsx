@@ -6,6 +6,7 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Settings2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import type { z } from 'zod';
@@ -26,12 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useValidationErrorMap } from '@/i18n/validation';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
+import { goalControlLabel } from './goalControlLabels';
 
 const NONE = '__none__';
-
-const label = (value: string): string =>
-  value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 
 type RouteFormInput = z.input<typeof upsertGoalCapabilityRouteRequestSchema>;
 
@@ -44,10 +44,14 @@ export function GoalRoutingDialog({
   requiredCapabilities: readonly string[];
   onSave: (input: UpsertGoalCapabilityRouteRequest) => Promise<boolean>;
 }) {
+  const uiText = useTranslations('dashboard');
+  const validationErrorMap = useValidationErrorMap();
   const [open, setOpen] = useState(false);
   const people = goal.participants.filter((participant) => participant.actor.kind === 'human');
   const form = useForm<RouteFormInput, unknown, UpsertGoalCapabilityRouteRequest>({
-    resolver: zodResolver(upsertGoalCapabilityRouteRequestSchema),
+    resolver: zodResolver(upsertGoalCapabilityRouteRequestSchema, {
+      error: validationErrorMap,
+    }),
     defaultValues: {
       capability: requiredCapabilities[0] ?? 'strategy',
       primaryUserId: '',
@@ -84,16 +88,15 @@ export function GoalRoutingDialog({
         render={
           <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-2xs">
             <Settings2 className="size-3" />
-            Configure
+            {uiText('m_792c81a4cf')}
           </Button>
         }
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Route Goal stakeholders</DialogTitle>
+          <DialogTitle>{uiText('route_goal_stakeholders_eb69e14')}</DialogTitle>
           <DialogDescription>
-            Resolve each capability to one primary owner, one SLA backup, and one escalation owner.
-            Goal overrides are local; brand defaults require owner or admin authority.
+            {uiText('resolve_each_capability_to_one_primary_owner__29935c0')}
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submit}>
@@ -103,7 +106,7 @@ export function GoalRoutingDialog({
             render={({ field }) => (
               <div className="grid gap-1.5">
                 <label className="text-sm font-medium" htmlFor="goal-route-capability">
-                  Capability
+                  {uiText('capability_5faf58a')}
                 </label>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger id="goal-route-capability">
@@ -112,7 +115,7 @@ export function GoalRoutingDialog({
                   <SelectContent>
                     {requiredCapabilities.map((value) => (
                       <SelectItem key={value} value={value}>
-                        {label(value)}
+                        {goalControlLabel(value, uiText)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -129,21 +132,21 @@ export function GoalRoutingDialog({
                 <div className="grid gap-1.5">
                   <label className="text-sm font-medium" htmlFor={`goal-route-${fieldName}`}>
                     {fieldName === 'primaryUserId'
-                      ? 'Primary owner'
+                      ? uiText('m_e55cfc9e4e')
                       : fieldName === 'backupUserId'
-                        ? 'SLA backup'
-                        : 'Escalation owner'}
+                        ? uiText('m_c81353c144')
+                        : uiText('m_da98e3129d')}
                   </label>
                   <Select
                     value={field.value ?? NONE}
                     onValueChange={(value) => field.onChange(value === NONE ? undefined : value)}
                   >
                     <SelectTrigger id={`goal-route-${fieldName}`}>
-                      <SelectValue placeholder="Choose a teammate" />
+                      <SelectValue placeholder={uiText('choose_a_teammate_7c42b83')} />
                     </SelectTrigger>
                     <SelectContent>
                       {fieldName !== 'primaryUserId' ? (
-                        <SelectItem value={NONE}>None</SelectItem>
+                        <SelectItem value={NONE}>{uiText('none_dc937b5')}</SelectItem>
                       ) : null}
                       {people.map((participant) =>
                         participant.actor.kind === 'human' ? (
@@ -164,29 +167,31 @@ export function GoalRoutingDialog({
             render={({ field }) => (
               <div className="grid gap-1.5">
                 <label className="text-sm font-medium" htmlFor="goal-route-scope">
-                  Save as
+                  {uiText('save_as_60af8a3')}
                 </label>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger id="goal-route-scope">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="goal">This Goal override</SelectItem>
-                    <SelectItem value="brand">Brand default</SelectItem>
+                    <SelectItem value="goal">{uiText('this_goal_override_02de8fe')}</SelectItem>
+                    <SelectItem value="brand">{uiText('brand_default_7a0bec8')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             )}
           />
-          {form.formState.errors.root ? (
-            <p className="text-sm text-destructive">{form.formState.errors.root.message}</p>
+          {Object.keys(form.formState.errors).length > 0 ? (
+            <p className="text-sm text-destructive">{uiText('m_350350d40a')}</p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Saving…' : 'Save route'}
+              {form.formState.isSubmitting
+                ? uiText('saving_23e3929')
+                : uiText('save_route_c840788')}
             </Button>
           </DialogFooter>
         </form>

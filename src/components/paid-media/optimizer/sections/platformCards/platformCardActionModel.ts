@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The action a platform card hands to a person (frontend.html §7, feature 09): which button it
 // shows, what the approval dialog names, and Google's verdict in plain words. The action is the
 // engine's OptimizerAction, unchanged — the card words it and never rebuilds it, so what a
@@ -52,9 +57,7 @@ export function cardActionsOf(
 /** The recommendation a platform card stands for. optimizer_get_platform_cards ids each card
  *  'platform_signal:<recommendation id>'; a card with an action also names it outright. */
 export function cardRecommendationId(candidate: AccountCandidate): string {
-  return (
-    candidate.card_action?.recommendation_id ?? candidate.id.replace(/^platform_signal:/, '')
-  );
+  return candidate.card_action?.recommendation_id ?? candidate.id.replace(/^platform_signal:/, '');
 }
 
 /** A move between platforms has its own approval (crossPlatformMove); a card runs one write. */
@@ -91,10 +94,18 @@ export const TIKTOK_NOT_CONNECTED_NOTE =
 export function cardActionUnavailableNote(
   availability: CardActionAvailability,
   write: CardWrite,
+  uiTranslate?: ScaleCopy,
 ): string | null {
-  if (availability === 'tiktok_not_connected') return TIKTOK_NOT_CONNECTED_NOTE;
+  if (availability === 'tiktok_not_connected')
+    return uiTranslate
+      ? uiTranslate('platformTikTokChangesUnavailable')
+      : TIKTOK_NOT_CONNECTED_NOTE;
   if (availability === 'apply_disabled') {
-    return `Writes to ${PLATFORM_NAMES[write.ref.platform]} are switched off for this portfolio.`;
+    return uiTranslate
+      ? uiTranslate('helper_44cea9b7b34f', {
+          v0: PLATFORM_NAMES[write.ref.platform],
+        })
+      : `Writes to ${PLATFORM_NAMES[write.ref.platform]} are switched off for this portfolio.`;
   }
   return null;
 }
@@ -115,8 +126,8 @@ const SCOPE_NOUN = {
   shared_set: 'shared negative list',
 } as const;
 
-function matchWord(matchType: 'EXACT' | 'PHRASE' | 'BROAD'): string {
-  return matchType.toLowerCase();
+function matchWord(matchType: 'EXACT' | 'PHRASE' | 'BROAD', uiTranslate?: ScaleCopy): string {
+  return uiTranslate ? uiTranslate('platformMatch', { match: matchType }) : matchType.toLowerCase();
 }
 
 function entityName(write: CardWrite): string {
@@ -124,7 +135,13 @@ function entityName(write: CardWrite): string {
 }
 
 // The platform's bid setting, named so it is never read as the portfolio's CPA goal.
-function bidName(field: BidTargetField): string {
+function bidName(field: BidTargetField, uiTranslate?: ScaleCopy): string {
+  if (uiTranslate)
+    return field === 'bid_amount_minor'
+      ? uiTranslate('beta_metaCostCap')
+      : uiTranslate('platformBidName', {
+          name: field === 'target_cpa_micros' ? 'tCPA' : 'tROAS',
+        });
   switch (field) {
     case 'target_cpa_micros':
       return 'bid target (tCPA)';
@@ -154,53 +171,126 @@ function bidValueLabel(field: BidTargetField, value: number, currency: string | 
 }
 
 /** The verb on the card's button. */
-export function cardActionLabel(write: CardWrite): string {
+export function cardActionLabel(write: CardWrite, uiTranslate?: ScaleCopy): string {
   switch (write.kind) {
     case 'set_status':
-      return `Pause ${LEVEL_NOUN[write.ref.nativeLevel]}`;
+      return uiTranslate
+        ? uiTranslate('helper_e0d4fe212d85', {
+            v0: uiTranslate('platformEntityNoun', {
+              level: write.ref.nativeLevel,
+            }),
+          })
+        : `Pause ${LEVEL_NOUN[write.ref.nativeLevel]}`;
     case 'set_budget':
-      return 'Apply new budget';
+      return uiTranslate ? uiTranslate('apply_new_budget_ddf6162') : 'Apply new budget';
     case 'set_bid_target':
-      return `Apply new ${bidName(write.field)}`;
+      return uiTranslate
+        ? uiTranslate('helper_c900174f683d', {
+            v0: bidName(write.field, uiTranslate),
+          })
+        : `Apply new ${bidName(write.field, uiTranslate)}`;
     case 'add_negatives':
-      return negativesLabel(write.terms.length);
+      return negativesLabel(write.terms.length, uiTranslate);
     case 'add_keyword':
-      return `Add as ${matchWord(write.keyword.matchType)} keyword`;
+      return uiTranslate
+        ? uiTranslate('helper_ee76d8462e1b', {
+            v0: matchWord(write.keyword.matchType, uiTranslate),
+          })
+        : `Add as ${matchWord(write.keyword.matchType, uiTranslate)} keyword`;
   }
 }
 
 /** The dialog's title: the platform and the exact entity — "campaign budget", never "ad set". */
-export function cardActionTitle(write: CardWrite): string {
-  const on = `on ${PLATFORM_NAMES[write.ref.platform]}`;
-  const noun = LEVEL_NOUN[write.ref.nativeLevel];
+export function cardActionTitle(
+  write: CardWrite,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
+  const on = uiTranslate
+    ? uiTranslate('helper_961d172ff2f7', {
+        v0: PLATFORM_NAMES[write.ref.platform],
+      })
+    : `on ${PLATFORM_NAMES[write.ref.platform]}`;
+  const noun = uiTranslate
+    ? uiTranslate('platformEntityNoun', { level: write.ref.nativeLevel })
+    : LEVEL_NOUN[write.ref.nativeLevel];
   switch (write.kind) {
     case 'set_status':
-      return `Pause the ${noun} ${entityName(write)} ${on}`;
+      return uiTranslate
+        ? uiTranslate('helper_33b05e910325', {
+            v0: noun,
+            v1: entityName(write),
+            v2: on,
+          })
+        : `Pause the ${noun} ${entityName(write)} ${on}`;
     case 'set_budget': {
-      const owner = LEVEL_NOUN[write.budget.ownerRef.nativeLevel];
-      return `Change the ${owner} budget of ${entityName(write)} ${on}`;
+      const owner = uiTranslate
+        ? uiTranslate('platformEntityNoun', {
+            level: write.budget.ownerRef.nativeLevel,
+          })
+        : LEVEL_NOUN[write.budget.ownerRef.nativeLevel];
+      return uiTranslate
+        ? uiTranslate('helper_aef3ed7d7ffd', {
+            v0: owner,
+            v1: entityName(write),
+            v2: on,
+          })
+        : `Change the ${owner} budget of ${entityName(write)} ${on}`;
     }
     case 'set_bid_target':
-      return `Change the ${bidName(write.field)} of ${entityName(write)} ${on}`;
+      return uiTranslate
+        ? uiTranslate('helper_19c3c64a4a84', {
+            v0: bidName(write.field, uiTranslate),
+            v1: entityName(write),
+            v2: on,
+          })
+        : `Change the ${bidName(write.field, uiTranslate)} of ${entityName(write)} ${on}`;
     case 'add_negatives': {
       const count = write.terms.length;
-      return `Add ${countLabel(count)} ${count === 1 ? 'negative' : 'negatives'} to the ${SCOPE_NOUN[write.scope]} ${entityName(write)} ${on}`;
+      if (uiTranslate)
+        return uiTranslate('platformNegativeTitle', {
+          count,
+          scope: uiTranslate('platformEntityNoun', { level: write.scope }),
+          name: entityName(write),
+          platform: PLATFORM_NAMES[write.ref.platform],
+        });
+      return `Add ${countLabel(count, uiLocale)} ${count === 1 ? 'negative' : 'negatives'} to the ${SCOPE_NOUN[write.scope]} ${entityName(write)} ${on}`;
     }
     case 'add_keyword':
-      return `Add "${write.keyword.text}" as ${write.keyword.matchType === 'EXACT' ? 'an' : 'a'} ${matchWord(write.keyword.matchType)} keyword in the ${noun} ${entityName(write)} ${on}`;
+      if (uiTranslate)
+        return uiTranslate('platformKeywordTitle', {
+          text: write.keyword.text,
+          match: matchWord(write.keyword.matchType, uiTranslate),
+          level: noun,
+          name: entityName(write),
+          platform: PLATFORM_NAMES[write.ref.platform],
+        });
+      return `Add "${write.keyword.text}" as ${write.keyword.matchType === 'EXACT' ? 'an' : 'a'} ${matchWord(write.keyword.matchType, uiTranslate)} keyword in the ${noun} ${entityName(write)} ${on}`;
   }
 }
 
 const MICROS = 1_000_000;
 
 /** What changes, in the action's own figures. Null when the title already says it all. */
-export function cardActionChange(write: CardWrite, currency: string | null): string | null {
+export function cardActionChange(
+  write: CardWrite,
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string | null {
   switch (write.kind) {
     case 'set_status':
-      return `${write.expected === 'active' ? 'Active' : 'Paused'} → paused. It stops spending until someone turns it back on in ${PLATFORM_NAMES[write.ref.platform]}.`;
+      return uiTranslate
+        ? uiTranslate('helper_7ed4fc1a3c09', {
+            v0: write.expected === 'active' ? 'Active' : 'Paused',
+            v1: PLATFORM_NAMES[write.ref.platform],
+          })
+        : `${write.expected === 'active' ? 'Active' : 'Paused'} → paused. It stops spending until someone turns it back on in ${PLATFORM_NAMES[write.ref.platform]}.`;
     case 'set_budget': {
-      const per = write.budget.kind === 'daily' ? '/day' : '';
-      const money = (minor: number) => `${formatMinorExact(minor, write.budget.currency)}${per}`;
+      const per =
+        write.budget.kind === 'daily' ? (uiTranslate ? uiTranslate('platformPerDay') : '/day') : '';
+      const money = (minor: number) =>
+        `${formatMinorExact(minor, write.budget.currency, uiLocale)}${per}`;
       return `${money(write.expectedMinor)} → ${money(write.targetMinor)}`;
     }
     case 'set_bid_target': {
@@ -208,7 +298,9 @@ export function cardActionChange(write: CardWrite, currency: string | null): str
       return `${label(write.expected)} → ${label(write.target)}`;
     }
     case 'add_negatives':
-      return write.terms.map((term) => `"${term.text}" (${matchWord(term.matchType)})`).join(', ');
+      return write.terms
+        .map((term) => `"${term.text}" (${matchWord(term.matchType, uiTranslate)})`)
+        .join(', ');
     case 'add_keyword':
       return null;
   }
@@ -281,16 +373,32 @@ function bareReason(reason: string | undefined): string | null {
 
 /** Google's verdict, decoded from the applier's detail: its codes in words, its own message,
  *  and the minimum it names. The request id stays out; it means nothing to a person. */
-function googleDetailInWords(detail: string, currency: string | null): string | null {
+function googleDetailInWords(
+  detail: string,
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string | null {
   const codes = /google:([A-Z0-9_,]+)/.exec(detail)?.[1]?.split(',').filter(Boolean) ?? [];
   const words = codes
     .filter((code) => !code.startsWith('HTTP_'))
     .map((code) => GOOGLE_CODE_WORDS[code] ?? codeInWords(code));
   const minimum = /minimumBudgetMinor=(\d+)/.exec(detail)?.[1];
   if (minimum && currency)
-    words.push(`the lowest it accepts is ${formatMinorExact(Number(minimum), currency)}/day`);
+    words.push(
+      uiTranslate
+        ? uiTranslate('helper_46dce481afe7', {
+            v0: formatMinorExact(Number(minimum), currency, uiLocale),
+          })
+        : `the lowest it accepts is ${formatMinorExact(Number(minimum), currency, uiLocale)}/day`,
+    );
   const message = /"([^"]+)"\s+request-id/.exec(detail)?.[1];
-  if (message) words.push(`Google says: "${message}"`);
+  if (message)
+    words.push(
+      uiTranslate
+        ? uiTranslate('helper_0601f08dba47', { v0: message })
+        : `Google says: "${message}"`,
+    );
   return words.length > 0 ? words.join('; ') : null;
 }
 
@@ -324,7 +432,12 @@ function bidStrategyInWords(detail: string | undefined): string | null {
     : null;
 }
 
-function refusalInWords(result: ApplyActionResult, currency: string | null): string {
+function refusalInWords(
+  result: ApplyActionResult,
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
   const reason = bareReason(result.reason);
   const bounded =
     reason === 'guardrail'
@@ -334,20 +447,27 @@ function refusalInWords(result: ApplyActionResult, currency: string | null): str
   const why = reason ? (REFUSAL_WORDS[reason] ?? codeInWords(reason)) : 'it was not accepted';
   const google =
     reason === 'validate_only_error' && result.detail
-      ? googleDetailInWords(result.detail, currency)
+      ? googleDetailInWords(result.detail, currency, uiTranslate, uiLocale)
       : null;
   return google ? `${capitalized(why)}: ${google}.` : `${capitalized(why)}.`;
 }
 
 /** What the dry run found, before anyone confirms. */
-export function previewVerdict(
+function previewVerdictEnglish(
   response: ApplyActionsResponse | null,
   currency: string | null,
   platform: AdPlatform = 'google_ads',
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): CardActionVerdict {
   const result = response?.results[0];
   if (!result) {
-    return { tone: 'failed', text: `We could not read the platform's answer. ${NOTHING_WRITTEN}` };
+    return {
+      tone: 'failed',
+      text: uiTranslate
+        ? uiTranslate('helper_a187bf2ac5b0', { v0: NOTHING_WRITTEN })
+        : `We could not read the platform's answer. ${NOTHING_WRITTEN}`,
+    };
   }
   if (result.status === 'would_apply') {
     return {
@@ -359,16 +479,24 @@ export function previewVerdict(
     };
   }
   if (result.status === 'deduped') {
-    return { tone: 'ok', text: 'This change is already done. There is nothing to apply.' };
+    return {
+      tone: 'ok',
+      text: 'This change is already done. There is nothing to apply.',
+    };
   }
   const tone = result.status === 'refused' ? 'refused' : 'failed';
-  return { tone, text: `${refusalInWords(result, currency)} ${NOTHING_WRITTEN}` };
+  return {
+    tone,
+    text: `${refusalInWords(result, currency, uiTranslate, uiLocale)} ${NOTHING_WRITTEN}`,
+  };
 }
 
 /** What the real write did. */
-export function resultVerdict(
+function resultVerdictEnglish(
   response: ApplyActionsResponse | null,
   currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): CardActionVerdict {
   const result = response?.results[0];
   if (!result) {
@@ -379,21 +507,32 @@ export function resultVerdict(
   }
   switch (result.status) {
     case 'applied':
-      return { tone: 'ok', text: 'Done. The change is live and recorded in Activity.' };
+      return {
+        tone: 'ok',
+        text: 'Done. The change is live and recorded in Activity.',
+      };
     case 'scheduled':
       return {
         tone: 'ok',
         text: 'Scheduled. The platform applies it at its next midnight; Activity shows when it lands.',
       };
     case 'deduped':
-      return { tone: 'ok', text: 'This change was already done. Nothing new was written.' };
+      return {
+        tone: 'ok',
+        text: 'This change was already done. Nothing new was written.',
+      };
     case 'would_apply':
       return {
         tone: 'refused',
-        text: `The service only checked it and wrote nothing. ${NOTHING_WRITTEN}`,
+        text: uiTranslate
+          ? uiTranslate('helper_9d05cc83446b', { v0: NOTHING_WRITTEN })
+          : `The service only checked it and wrote nothing. ${NOTHING_WRITTEN}`,
       };
     case 'refused':
-      return { tone: 'refused', text: `${refusalInWords(result, currency)} ${NOTHING_WRITTEN}` };
+      return {
+        tone: 'refused',
+        text: `${refusalInWords(result, currency, uiTranslate, uiLocale)} ${NOTHING_WRITTEN}`,
+      };
     case 'compensated':
       return {
         tone: 'failed',
@@ -407,7 +546,11 @@ export function resultVerdict(
     default:
       return {
         tone: 'failed',
-        text: `${result.detail ? `It failed: ${result.detail}.` : 'It failed.'} Check Activity before trying again.`,
+        text: uiTranslate
+          ? uiTranslate('helper_f042fe99ac1f', {
+              v0: result.detail ? `It failed: ${result.detail}.` : 'It failed.',
+            })
+          : `${result.detail ? `It failed: ${result.detail}.` : 'It failed.'} Check Activity before trying again.`,
       };
   }
 }
@@ -428,6 +571,8 @@ export function undoRestoresText(
   restores: RevertRestores | null,
   kind: ActionRevertResult['kind'],
   currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): string | null {
   if (restores == null) return null;
   if ('minor' in restores) return `Back to ${formatMinorExact(restores.minor, restores.currency)}`;
@@ -438,12 +583,17 @@ export function undoRestoresText(
       return `${platformBidName(restores.field)} back to ${formatMinorExact(restores.value, currency)}`;
     }
     return restores.field === 'target_cpa_micros'
-      ? `Google Ads bid target back to ${bidTargetLabel(restores.value / MICROS, 'target_cpa', currency)}`
-      : `Google Ads target ROAS (bid setting) back to ${bidTargetLabel(restores.value, 'target_roas', currency)}`;
+      ? `Google Ads bid target back to ${bidTargetLabel(restores.value / MICROS, 'target_cpa', currency, uiLocale)}`
+      : `Google Ads target ROAS (bid setting) back to ${bidTargetLabel(restores.value, 'target_roas', currency, uiLocale)}`;
   }
   const count = restores.removes.length;
   const noun = kind === 'add_negatives' ? 'negative keyword' : 'keyword';
-  return `Removes ${count} ${noun}${count === 1 ? '' : 's'}`;
+  return uiTranslate
+    ? uiTranslate('platformUndoRemoves', {
+        count,
+        kind: kind === 'add_negatives' ? 'negative' : 'keyword',
+      })
+    : `Removes ${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 /** Why the service would not undo it, in a person's words (contracts ACTION_REVERT_REFUSALS
@@ -462,9 +612,14 @@ const UNDO_REFUSAL_WORDS: Readonly<Record<string, string>> = {
   unreadable_action: 'We could not read what this change did, so it cannot be undone here.',
 };
 
-function undoRefusalInWords(reason: string | undefined, detail: string | undefined): string {
+function undoRefusalInWords(
+  reason: string | undefined,
+  detail: string | undefined,
+  uiTranslate?: ScaleCopy,
+): string {
   const bare = bareReason(reason);
-  if (bare == null) return 'It was not accepted.';
+  if (bare == null)
+    return uiTranslate ? uiTranslate('it_was_not_accepted_39c7697') : 'It was not accepted.';
   const pct = bare === 'guardrail' ? boundedMovePct(detail) : null;
   if (pct != null) {
     return `Undoing it moves the ${boundedMoveBidName(detail)} more than ${pct}% in a day — not undone.`;
@@ -484,7 +639,10 @@ function undoConflictInWords(detail: string | undefined): string {
 const UNREADABLE_UNDO = "We could not read the platform's answer.";
 
 /** What the undo's dry run found, before anyone confirms. */
-export function undoPreviewVerdict(response: ActionRevertResponse | null): CardActionVerdict {
+function undoPreviewVerdictEnglish(
+  response: ActionRevertResponse | null,
+  uiTranslate?: ScaleCopy,
+): CardActionVerdict {
   const result = response?.result;
   if (!result) return { tone: 'failed', text: `${UNREADABLE_UNDO} ${NOTHING_WRITTEN}` };
   switch (result.status) {
@@ -500,7 +658,7 @@ export function undoPreviewVerdict(response: ActionRevertResponse | null): CardA
     case 'refused':
       return {
         tone: 'refused',
-        text: `${undoRefusalInWords(result.reason, result.detail)} ${NOTHING_WRITTEN}`,
+        text: `${undoRefusalInWords(result.reason, result.detail, uiTranslate)} ${NOTHING_WRITTEN}`,
       };
     case 'failed':
       return {
@@ -511,30 +669,220 @@ export function undoPreviewVerdict(response: ActionRevertResponse | null): CardA
 }
 
 /** What the real undo did. */
-export function undoResultVerdict(response: ActionRevertResponse | null): CardActionVerdict {
+function undoResultVerdictEnglish(
+  response: ActionRevertResponse | null,
+  uiTranslate?: ScaleCopy,
+): CardActionVerdict {
   const result = response?.result;
   if (!result) {
-    return { tone: 'failed', text: `${UNREADABLE_UNDO} Check Activity before trying again.` };
+    return {
+      tone: 'failed',
+      text: uiTranslate
+        ? uiTranslate('helper_f042fe99ac1f', { v0: UNREADABLE_UNDO })
+        : `${UNREADABLE_UNDO} Check Activity before trying again.`,
+    };
   }
   switch (result.status) {
     case 'reverted':
-      return { tone: 'ok', text: 'Undone. The previous value is back and recorded in Activity.' };
+      return {
+        tone: 'ok',
+        text: 'Undone. The previous value is back and recorded in Activity.',
+      };
     case 'would_revert':
       return {
         tone: 'refused',
-        text: `The service only checked the undo and wrote nothing. ${NOTHING_WRITTEN}`,
+        text: uiTranslate
+          ? uiTranslate('helper_9a64c8975dea', { v0: NOTHING_WRITTEN })
+          : `The service only checked the undo and wrote nothing. ${NOTHING_WRITTEN}`,
       };
     case 'conflict':
       return { tone: 'refused', text: undoConflictInWords(result.detail) };
     case 'refused':
       return {
         tone: 'refused',
-        text: `${undoRefusalInWords(result.reason, result.detail)} ${NOTHING_WRITTEN}`,
+        text: `${undoRefusalInWords(result.reason, result.detail, uiTranslate)} ${NOTHING_WRITTEN}`,
       };
     case 'failed':
       return {
         tone: 'failed',
-        text: `${result.detail ? `The undo did not land: ${result.detail}.` : 'The undo did not land.'} Check Activity before trying again.`,
+        text: uiTranslate
+          ? uiTranslate('helper_f042fe99ac1f', {
+              v0: result.detail
+                ? `The undo did not land: ${result.detail}.`
+                : 'The undo did not land.',
+            })
+          : `${result.detail ? `The undo did not land: ${result.detail}.` : 'The undo did not land.'} Check Activity before trying again.`,
       };
   }
+}
+
+function localizedRefusal(
+  result: ApplyActionResult,
+  currency: string | null,
+  t: ScaleCopy,
+  locale: UiLocale,
+): string {
+  const reason = bareReason(result.reason) ?? 'other',
+    bound = reason === 'guardrail' ? boundedMovePct(result.detail) : null;
+  if (bound != null) return t('platformBoundedMove', { undo: 'no', percent: bound });
+  const parts = [t('platformActionRefusal', { reason })];
+  if (reason === 'validate_only_error' && result.detail) {
+    const codes =
+      /google:([A-Z0-9_,]+)/
+        .exec(result.detail)?.[1]
+        ?.split(',')
+        .filter((code) => !code.startsWith('HTTP_')) ?? [];
+    for (const code of codes) parts.push(t('platformGoogleRefusal', { code }));
+    const minimum = /minimumBudgetMinor=(\d+)/.exec(result.detail)?.[1];
+    if (minimum && currency)
+      parts.push(
+        t('helper_46dce481afe7', {
+          v0: formatMinorExact(Number(minimum), currency, locale),
+        }),
+      );
+  }
+  if (locale === 'en' && parts.length > 1)
+    return (parts[0] ?? '').replace(/\.$/, ':') + ' ' + parts.slice(1).join(' ');
+  return parts.join(' ');
+}
+
+export function previewVerdict(
+  response: ApplyActionsResponse | null,
+  currency: string | null,
+  t?: ScaleCopy,
+  locale: UiLocale = 'en',
+  platform: AdPlatform = 'google_ads',
+): CardActionVerdict {
+  if (!t) return previewVerdictEnglish(response, currency, platform, undefined, locale);
+  const result = response?.results[0];
+  if (!result)
+    return {
+      tone: 'failed',
+      text: t('platformActionVerdict', { status: 'unreadable' }),
+    };
+  if (result.status === 'would_apply')
+    return {
+      tone: 'ok',
+      text:
+        platform === 'meta'
+          ? t('beta_metaPreviewOk')
+          : t('platformActionVerdict', { status: 'preview_ok' }),
+    };
+  if (result.status === 'deduped')
+    return {
+      tone: 'ok',
+      text: t('platformActionVerdict', { status: 'preview_deduped' }),
+    };
+  return {
+    tone: result.status === 'refused' ? 'refused' : 'failed',
+    text:
+      localizedRefusal(result, currency, t, locale) +
+      ' ' +
+      t('platformActionVerdict', { status: 'nothing' }),
+  };
+}
+
+export function resultVerdict(
+  response: ApplyActionsResponse | null,
+  currency: string | null,
+  t?: ScaleCopy,
+  locale: UiLocale = 'en',
+): CardActionVerdict {
+  if (!t) return resultVerdictEnglish(response, currency, undefined, locale);
+  const result = response?.results[0];
+  if (!result)
+    return {
+      tone: 'failed',
+      text: t('platformActionVerdict', { status: 'failed' }),
+    };
+  if (result.status === 'refused')
+    return {
+      tone: 'refused',
+      text:
+        localizedRefusal(result, currency, t, locale) +
+        ' ' +
+        t('platformActionVerdict', { status: 'nothing' }),
+    };
+  const status = result.status === 'would_apply' ? 'checked' : result.status;
+  const tone = ['applied', 'scheduled', 'deduped'].includes(result.status)
+    ? 'ok'
+    : result.status === 'would_apply'
+      ? 'refused'
+      : 'failed';
+  return {
+    tone,
+    text: t('platformActionVerdict', {
+      status: ['applied', 'scheduled', 'deduped', 'compensated', 'stranded', 'checked'].includes(
+        status,
+      )
+        ? status
+        : 'failed',
+    }),
+  };
+}
+
+function localizedUndoVerdict(
+  response: ActionRevertResponse | null,
+  t: ScaleCopy,
+  preview: boolean,
+): CardActionVerdict {
+  const result = response?.result;
+  if (!result)
+    return {
+      tone: 'failed',
+      text: t('platformActionVerdict', {
+        status: preview ? 'unreadable' : 'undo_failed',
+      }),
+    };
+  switch (result.status) {
+    case 'would_revert':
+      return {
+        tone: preview ? 'ok' : 'refused',
+        text: t('platformActionVerdict', {
+          status: preview ? 'undo_preview' : 'undo_checked',
+        }),
+      };
+    case 'reverted':
+      return {
+        tone: 'ok',
+        text: t('platformActionVerdict', {
+          status: preview ? 'undo_deduped' : 'undo_ok',
+        }),
+      };
+    case 'conflict':
+      return {
+        tone: 'refused',
+        text: t('platformActionVerdict', { status: 'undo_conflict' }),
+      };
+    case 'refused': {
+      const reason = bareReason(result.reason) ?? 'other',
+        bound = reason === 'guardrail' ? boundedMovePct(result.detail) : null;
+      return {
+        tone: 'refused',
+        text:
+          (bound != null
+            ? t('platformBoundedMove', { undo: 'yes', percent: bound })
+            : t('platformUndoRefusal', { reason })) +
+          ' ' +
+          t('platformActionVerdict', { status: 'nothing' }),
+      };
+    }
+    case 'failed':
+      return {
+        tone: 'failed',
+        text: t('platformActionVerdict', { status: 'undo_failed' }),
+      };
+  }
+}
+export function undoPreviewVerdict(
+  response: ActionRevertResponse | null,
+  t?: ScaleCopy,
+): CardActionVerdict {
+  return t ? localizedUndoVerdict(response, t, true) : undoPreviewVerdictEnglish(response);
+}
+export function undoResultVerdict(
+  response: ActionRevertResponse | null,
+  t?: ScaleCopy,
+): CardActionVerdict {
+  return t ? localizedUndoVerdict(response, t, false) : undoResultVerdictEnglish(response);
 }

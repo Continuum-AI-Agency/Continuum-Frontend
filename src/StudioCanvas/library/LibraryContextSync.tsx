@@ -1,4 +1,5 @@
 'use client';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // Keeps the room's Library context fresh and does the two writes that context enables.
 //
@@ -31,6 +32,8 @@ const text = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
 export function LibraryContextSync() {
+  const uiErrorText = useUiErrorMessage();
+
   const brandId = useStudioStore((state) => state.brandId) ?? null;
   const roomId = useStudioStore((state) => state.activeRoomId) ?? null;
   const nodes = useStudioStore((state) => state.nodes);
@@ -46,7 +49,10 @@ export function LibraryContextSync() {
       assetIds.add(ref.assetId);
       if (ref.versionId) versionIds.add(ref.versionId);
     }
-    return { assetIds: [...assetIds].sort(), versionIds: [...versionIds].sort() };
+    return {
+      assetIds: [...assetIds].sort(),
+      versionIds: [...versionIds].sort(),
+    };
   }, [nodes]);
   const pointerKey = `${pointers.assetIds.join(',')}|${pointers.versionIds.join(',')}`;
   const pointersRef = useRef(pointers);
@@ -151,11 +157,11 @@ export function LibraryContextSync() {
         .catch((error: unknown) => {
           console.warn('[canvas-library] pinned lineage not recorded', {
             nodeId: node.id,
-            error: error instanceof Error ? error.message : String(error),
+            error: uiErrorText(error),
           });
         });
     }
-  }, [brandId, roomId, nodes, edges]);
+  }, [brandId, roomId, nodes, edges, uiErrorText]);
 
   return null;
 }

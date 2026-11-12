@@ -1,7 +1,10 @@
 'use client';
 
 import type { AgentSessionListFilters } from '@continuum/contracts';
+
+import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   EMPTY_SESSION_FILTERS,
   isSessionFilterActive,
@@ -41,18 +44,32 @@ export type UseSessionSearchResult<TSession> = {
 };
 
 /** A failed search in words. A 401 is an ended session, not an empty result. */
-export function sessionSearchFailure(cause: unknown): SessionSearchFailure {
+export function sessionSearchFailure(
+  cause: unknown,
+  translate?: ReturnType<typeof useTranslations<'common'>>,
+  formatError?: (cause: unknown) => string,
+  locale = 'en',
+): SessionSearchFailure {
   const status =
     typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'status') : undefined;
   if (status === 401) {
     return {
       sessionEnded: true,
-      message: 'Your session ended — sign in again to see your conversations.',
+      message: translate
+        ? translate('sessionSearchEnded')
+        : 'Your session ended — sign in again to see your conversations.',
     };
   }
   return {
     sessionEnded: false,
-    message: `Couldn't search conversations — ${loadFailureWhy(cause) ?? 'it did not go through.'}`,
+    message: translate
+      ? translate('sessionSearchFailed', {
+          reason:
+            locale === 'en'
+              ? (loadFailureWhy(cause) ?? translate('sessionSearchFallback'))
+              : (formatError?.(cause) ?? translate('unexpectedError')),
+        })
+      : `Couldn't search conversations — ${loadFailureWhy(cause) ?? 'it did not go through.'}`,
   };
 }
 
@@ -61,11 +78,16 @@ export function useSessionSearch<TSession>(params: {
   /** Must be referentially stable (useCallback) — it is an effect dependency. */
   fetchSessions: (filters: AgentSessionListFilters) => Promise<TSession[]>;
 }): UseSessionSearchResult<TSession> {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+  const locale = useLocale();
+
   const { isEnabled, fetchSessions } = params;
   const [filters, setFilters] = useState<SessionFilterState>(EMPTY_SESSION_FILTERS);
   const [results, setResults] = useState<TSession[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [failure, setFailure] = useState<SessionSearchFailure | null>(null);
+  const [failedRead, setFailedRead] = useState<{ cause: unknown } | null>(null);
   const [attempt, setAttempt] = useState(0);
   // Monotonic request id: a slower earlier query must never overwrite a newer one.
   const requestIdRef = useRef(0);
@@ -76,7 +98,7 @@ export function useSessionSearch<TSession>(params: {
     if (!isEnabled || !isActive) {
       setResults([]);
       setIsSearching(false);
-      setFailure(null);
+      setFailedRead(null);
       return;
     }
 
@@ -84,7 +106,7 @@ export function useSessionSearch<TSession>(params: {
     void attempt;
     const requestId = ++requestIdRef.current;
     setIsSearching(true);
-    setFailure(null);
+    setFailedRead(null);
 
     void fetchSessions(toSessionListFilters(filters))
       .then((sessions) => {
@@ -94,7 +116,7 @@ export function useSessionSearch<TSession>(params: {
       .catch((cause: unknown) => {
         if (requestIdRef.current !== requestId) return;
         setResults([]);
-        setFailure(sessionSearchFailure(cause));
+        setFailedRead({ cause });
       })
       .finally(() => {
         if (requestIdRef.current !== requestId) return;
@@ -104,6 +126,18 @@ export function useSessionSearch<TSession>(params: {
 
   const clearFilters = useCallback(() => setFilters(EMPTY_SESSION_FILTERS), []);
   const retry = useCallback(() => setAttempt((count) => count + 1), []);
+  const failure = failedRead
+    ? sessionSearchFailure(failedRead.cause, tUi, getUiErrorMessage, locale)
+    : null;
 
-  return { filters, setFilters, clearFilters, isActive, isSearching, results, failure, retry };
+  return {
+    filters,
+    setFilters,
+    clearFilters,
+    isActive,
+    isSearching,
+    results,
+    failure,
+    retry,
+  };
 }

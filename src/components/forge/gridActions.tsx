@@ -21,6 +21,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import type { useTranslations } from 'next-intl';
 import type { RefObject } from 'react';
 import type { DataGridMenuTarget } from '@/components/forge/DataGrid';
 import { MAX_BATCH_ROWS, type RequestRow, rowDepth } from '@/components/forge/renderRequestRows';
@@ -70,6 +71,7 @@ export type GridAction = {
 };
 
 export type GridActionContext = {
+  translate?: ReturnType<typeof useTranslations<'forge'>>;
   rows: RequestRow[];
   selectedIds: string[];
   contract: ApiRenderTemplateContract;
@@ -121,34 +123,60 @@ function aiGenerateAction(
 ): GridAction {
   const { rows, actions } = ctx;
   const stopped =
-    (ctx.generating ? BUSY : null) ??
-    (args.ids.some((id) => rowDepth(rows, id) >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH)
-      ? TOO_DEEP
+    (ctx.generating
+      ? (ctx.translate?.('a_draft_is_already_running_0e3244ee') ?? 'A draft is already running')
       : null) ??
-    (args.ids.length > AI_ROWS_MAX ? `Generate for at most ${AI_ROWS_MAX} rows at once` : null);
+    (args.ids.some((id) => rowDepth(rows, id) >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH)
+      ? (ctx.translate?.('variations_go_at_most_value0_levels_67852798', {
+          value0: String(FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH),
+        }) ?? `Variations go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep`)
+      : null) ??
+    (args.ids.length > AI_ROWS_MAX
+      ? (ctx.translate?.('generate_for_at_most_value0_rows_at_e1156797', {
+          value0: String(AI_ROWS_MAX),
+        }) ?? `Generate for at most ${AI_ROWS_MAX} rows at once`)
+      : null);
   const presets =
     stopped ??
     args.presetsBlocked ??
-    (args.varyKeys.length ? null : 'Nothing here can be varied without a brief');
+    (args.varyKeys.length
+      ? null
+      : (ctx.translate?.('nothing_here_can_be_varied_without__8ec3540a') ??
+        'Nothing here can be varied without a brief'));
   // Checked per preset, not once: the model call and every Library read are spent before
   // `appendRows` refuses a batch that overflows, and it refuses the whole batch.
   const fits = (count: number) =>
-    rows.length + count * args.ids.length > MAX_BATCH_ROWS ? FULL : null;
+    rows.length + count * args.ids.length > MAX_BATCH_ROWS
+      ? (ctx.translate?.('a_render_set_holds_at_most_value0_r_8bc0f843', {
+          value0: String(MAX_BATCH_ROWS),
+        }) ?? `A render set holds at most ${MAX_BATCH_ROWS} rows`)
+      : null;
   const items: GridAction[] = [
     ...COUNTS.map((count) => ({
       id: `generate-ai-${count}`,
-      label: `${count} variations`,
+      label: ctx.translate?.('gridVariations', { count }) ?? `${count} variations`,
       icon: Sparkles,
       disabledReason: presets ?? fits(count),
-      run: () => actions.generateWithAi({ ids: args.ids, count, varyKeys: args.varyKeys }),
+      run: () =>
+        actions.generateWithAi({
+          ids: args.ids,
+          count,
+          varyKeys: args.varyKeys,
+        }),
     })),
     {
       id: 'generate-ai-brief',
-      label: 'With a brief…',
+      label: ctx.translate?.('with_a_brief_59daf833') ?? 'With a brief…',
       icon: Pencil,
-      hint: 'Say what should change — the only way to vary a picture',
+      hint:
+        ctx.translate?.('say_what_should_change_the_only_way_1b40d81d') ??
+        'Say what should change — the only way to vary a picture',
       disabledReason:
-        stopped ?? (args.ids.length === 1 ? null : 'Select one row to write a brief for'),
+        stopped ??
+        (args.ids.length === 1
+          ? null
+          : (ctx.translate?.('select_one_row_to_write_a_brief_for_ec2eab1e') ??
+            'Select one row to write a brief for')),
       run: () => args.ids[0] && actions.varyWithAi(args.ids[0], args.varyKeys),
     },
   ];
@@ -169,9 +197,7 @@ function aiGenerateAction(
 }
 
 export const rowNameInput = (rowId: string) =>
-  document.querySelector<HTMLInputElement>(
-    `tr[data-row-id="${rowId}"] input[aria-label="Row name"]`,
-  );
+  document.querySelector<HTMLInputElement>(`tr[data-row-id="${rowId}"] input[data-row-name-input]`);
 
 /**
  * The rows `ids` acting together — the selection bar, or a right-click on a selected row. A count
@@ -184,48 +210,77 @@ export function selectionActions(
 ): GridAction[][] {
   const { rows, actions } = ctx;
   const suffix = counted && ids.length > 1 ? ` (${ids.length})` : '';
-  const tooMany = rows.length + ids.length > MAX_BATCH_ROWS ? FULL : null;
+  const tooMany =
+    rows.length + ids.length > MAX_BATCH_ROWS
+      ? (ctx.translate?.('a_render_set_holds_at_most_value0_r_8bc0f843', {
+          value0: String(MAX_BATCH_ROWS),
+        }) ?? `A render set holds at most ${MAX_BATCH_ROWS} rows`)
+      : null;
   return [
     [
       {
         id: 'fork',
-        label: `Add variation${suffix}`,
+        label:
+          ctx.translate?.('add_variation_value0_aba3d924', {
+            value0: String(suffix),
+          }) ?? `Add variation${suffix}`,
         icon: CornerDownRight,
-        hint: 'Child rows that inherit every value until you change it',
+        hint:
+          ctx.translate?.('child_rows_that_inherit_every_value_ce57c27c') ??
+          'Child rows that inherit every value until you change it',
         disabledReason:
           tooMany ??
           (ids.some((id) => rowDepth(rows, id) >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH)
-            ? TOO_DEEP
+            ? (ctx.translate?.('variations_go_at_most_value0_levels_67852798', {
+                value0: String(FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH),
+              }) ?? `Variations go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep`)
             : null),
         run: () => actions.fork(ids),
       },
       {
         id: 'copy',
-        label: `Copy${suffix}`,
+        label:
+          ctx.translate?.('copy_value0_4394b67d', { value0: String(suffix) }) ?? `Copy${suffix}`,
         icon: Copy,
-        hint: 'Independent copies, with no delivery',
+        hint:
+          ctx.translate?.('independent_copies_with_no_delivery_079b582d') ??
+          'Independent copies, with no delivery',
         disabledReason: tooMany,
         run: () => actions.duplicate(ids),
       },
       aiGenerateAction(ctx, {
         ids,
         varyKeys: keysToVary(ctx),
-        label: `Generate with AI${suffix}`,
-        hint: 'Variations of each selected row, with no brief to write',
+        label:
+          ctx.translate?.('generate_with_ai_value0_3f071779', {
+            value0: String(suffix),
+          }) ?? `Generate with AI${suffix}`,
+        hint:
+          ctx.translate?.('variations_of_each_selected_row_wit_e8084861') ??
+          'Variations of each selected row, with no brief to write',
       }),
       {
         id: 'inputs',
-        label: 'Save as inputs',
+        label: ctx.translate?.('save_as_inputs_b47d5e52') ?? 'Save as inputs',
         icon: BookmarkPlus,
-        hint: 'Save what this row renders with as a reusable input set',
-        disabledReason: ids.length === 1 ? null : 'Select one row to save its inputs',
+        hint:
+          ctx.translate?.('save_what_this_row_renders_with_as__f7726ae6') ??
+          'Save what this row renders with as a reusable input set',
+        disabledReason:
+          ids.length === 1
+            ? null
+            : (ctx.translate?.('select_one_row_to_save_its_inputs_9ee78f76') ??
+              'Select one row to save its inputs'),
         run: () => ids[0] && actions.saveAsInputs(ids[0]),
       },
     ],
     [
       {
         id: 'delete',
-        label: `Delete${suffix}`,
+        label:
+          ctx.translate?.('delete_value0_77d113c2', {
+            value0: String(suffix),
+          }) ?? `Delete${suffix}`,
         icon: Trash2,
         destructive: true,
         run: () => actions.remove(ids),
@@ -237,7 +292,12 @@ export function selectionActions(
 /** One row's own menu: the ⋯ button and a right-click on a row that is not part of a selection. */
 export function rowActions(ctx: GridActionContext, rowId: string): GridAction[][] {
   const { rows, actions } = ctx;
-  const full = rows.length >= MAX_BATCH_ROWS ? FULL : null;
+  const full =
+    rows.length >= MAX_BATCH_ROWS
+      ? (ctx.translate?.('a_render_set_holds_at_most_value0_r_8bc0f843', {
+          value0: String(MAX_BATCH_ROWS),
+        }) ?? `A render set holds at most ${MAX_BATCH_ROWS} rows`)
+      : null;
   const [together, remove] = selectionActions(ctx, [rowId]);
   // By id, not by position: this group grows, and a positional pick silently renames an item.
   const shared = (id: string) => together!.find((action) => action.id === id)!;
@@ -248,14 +308,16 @@ export function rowActions(ctx: GridActionContext, rowId: string): GridAction[][
     ? [
         {
           id: 'keep',
-          label: 'Keep',
+          label: ctx.translate?.('keep_183f00f4') ?? 'Keep',
           icon: Check,
-          hint: 'Add this proposed row to the set',
+          hint:
+            ctx.translate?.('add_this_proposed_row_to_the_set_43e2f051') ??
+            'Add this proposed row to the set',
           run: () => actions.keepProposed([rowId]),
         },
         {
           id: 'discard',
-          label: 'Discard',
+          label: ctx.translate?.('discard_eb1a70e3') ?? 'Discard',
           icon: X,
           run: () => actions.discardProposed([rowId]),
         },
@@ -266,7 +328,7 @@ export function rowActions(ctx: GridActionContext, rowId: string): GridAction[][
     [
       {
         id: 'rename',
-        label: 'Rename',
+        label: ctx.translate?.('rename_3064d79a') ?? 'Rename',
         icon: Pencil,
         run: () => {},
         focus: () => rowNameInput(rowId),
@@ -274,19 +336,23 @@ export function rowActions(ctx: GridActionContext, rowId: string): GridAction[][
       fork,
       {
         id: 'below',
-        label: 'Add row below',
+        label: ctx.translate?.('add_row_below_3d48302e') ?? 'Add row below',
         icon: Plus,
         hint: rows.find((row) => row.id === rowId)?.parentId
-          ? 'Another variation of the same parent'
-          : 'A new row right under this one',
+          ? (ctx.translate?.('another_variation_of_the_same_paren_339bdf8b') ??
+            'Another variation of the same parent')
+          : (ctx.translate?.('a_new_row_right_under_this_one_1683afb2') ??
+            'A new row right under this one'),
         disabledReason: full,
         run: () => actions.addRowBelow(rowId),
       },
       aiGenerateAction(ctx, {
         ids: [rowId],
         varyKeys: keysToVary(ctx),
-        label: 'Generate with AI',
-        hint: 'Variations of this row, with no brief to write',
+        label: ctx.translate?.('generate_with_ai_0dbd8403') ?? 'Generate with AI',
+        hint:
+          ctx.translate?.('variations_of_this_row_with_no_brie_69210ef4') ??
+          'Variations of this row, with no brief to write',
       }),
       copy,
       inputs,
@@ -307,30 +373,43 @@ export function cellActions(
   const targets = selectedIds.filter((id) => id !== rowId);
   const variable = contract.variables.find((item) => item.key === key);
   const picture = variable ? isPictureKind(variable.kind) : false;
-  const name = variable ? readableLayerName(variable.label) : 'this value';
+  const name = variable
+    ? readableLayerName(variable.label)
+    : (ctx.translate?.('this_value_e2bcc44f') ?? 'this value');
   const cell: GridAction[] = [
     aiGenerateAction(ctx, {
       ids: [rowId],
       // One key, because that is what the cursor pointed at.
       varyKeys: [key],
-      label: `Vary ${name}`,
-      hint: `Variations of this row that change only ${name}`,
-      presetsBlocked: picture ? PICTURE_NEEDS_BRIEF : null,
+      label: ctx.translate?.('vary_value0_656a504d', { value0: String(name) }) ?? `Vary ${name}`,
+      hint:
+        ctx.translate?.('variations_of_this_row_that_change__0f6b1a8e', {
+          value0: String(name),
+        }) ?? `Variations of this row that change only ${name}`,
+      presetsBlocked: picture
+        ? (ctx.translate?.('pick_pictures_with_a_brief_b502707a') ?? 'Pick pictures with a brief')
+        : null,
     }),
     {
       id: 'apply',
-      label: `Apply to ${plural(targets.length, 'selected row')}`,
+      label:
+        ctx.translate?.('gridApplyRows', { count: targets.length }) ??
+        `Apply to ${plural(targets.length, 'selected row')}`,
       icon: Copy,
-      hint: 'Give the selected rows this cell’s value',
-      disabledReason: targets.length ? null : 'Select rows to apply to',
+      hint:
+        ctx.translate?.('give_the_selected_rows_this_cell_s__c07efde3') ??
+        'Give the selected rows this cell’s value',
+      disabledReason: targets.length
+        ? null
+        : (ctx.translate?.('select_rows_to_apply_to_28e0fbca') ?? 'Select rows to apply to'),
       run: () => actions.applyValue(key, rowId, targets),
     },
     {
       id: 'fill',
-      label: 'Fill from row above',
+      label: ctx.translate?.('fill_from_row_above_870d0dad') ?? 'Fill from row above',
       icon: ArrowDownToLine,
       shortcut: '⌘D',
-      disabledReason: above ? null : 'No row above',
+      disabledReason: above ? null : (ctx.translate?.('no_row_above_ebb66472') ?? 'No row above'),
       run: () => above && actions.applyValue(key, above, [rowId]),
     },
   ];
@@ -341,13 +420,13 @@ export function cellActions(
     own
       ? {
           id: 'reset',
-          label: 'Reset to inherited',
+          label: ctx.translate?.('reset_to_inherited_af537e74') ?? 'Reset to inherited',
           icon: RotateCcw,
           run: () => actions.resetIn(key, [rowId]),
         }
       : {
           id: 'clear',
-          label: 'Clear inherited value',
+          label: ctx.translate?.('clear_inherited_value_6a234cfc') ?? 'Clear inherited value',
           icon: X,
           run: () => actions.clearIn(key, [rowId]),
         },
@@ -359,9 +438,13 @@ export function formatsActions(ctx: GridActionContext, rowId: string): GridActio
   return [
     {
       id: 'apply-formats',
-      label: `Apply formats to ${plural(targets.length, 'selected row')}`,
+      label:
+        ctx.translate?.('gridApplyFormats', { count: targets.length }) ??
+        `Apply formats to ${plural(targets.length, 'selected row')}`,
       icon: Copy,
-      disabledReason: targets.length ? null : 'Select rows to apply to',
+      disabledReason: targets.length
+        ? null
+        : (ctx.translate?.('select_rows_to_apply_to_28e0fbca') ?? 'Select rows to apply to'),
       run: () => ctx.actions.applyFormats(rowId, targets),
     },
   ];
@@ -380,7 +463,7 @@ export function headerActions(
       ? [
           {
             id: 'hide',
-            label: 'Hide column',
+            label: ctx.translate?.('hide_column_c646b55d') ?? 'Hide column',
             icon: EyeOff,
             run: () => actions.hideColumn(columnId),
           },
@@ -388,9 +471,15 @@ export function headerActions(
       : []),
     {
       id: 'show-all',
-      label: hiddenColumns ? `Show all columns (${hiddenColumns} hidden)` : 'Show all columns',
+      label: hiddenColumns
+        ? (ctx.translate?.('show_all_columns_value0_hidden_a7dc3584', {
+            value0: String(hiddenColumns),
+          }) ?? `Show all columns (${hiddenColumns} hidden)`)
+        : (ctx.translate?.('show_all_columns_87e6b9fe') ?? 'Show all columns'),
       icon: Columns3,
-      disabledReason: hiddenColumns ? null : 'No columns are hidden',
+      disabledReason: hiddenColumns
+        ? null
+        : (ctx.translate?.('no_columns_are_hidden_85595835') ?? 'No columns are hidden'),
       run: () => actions.showAllColumns(),
     },
   ];
@@ -400,22 +489,36 @@ export function headerActions(
     const row = rows.find((item) => item.id === id);
     return row?.parentId && (variable.key in row.values || row.clearedKeys.includes(variable.key));
   });
-  const none = selectedIds.length ? null : 'Select rows first';
+  const none = selectedIds.length
+    ? null
+    : (ctx.translate?.('select_rows_first_27e93558') ?? 'Select rows first');
   return [
     [
       {
         id: 'clear-column',
-        label: `Clear ${name} in ${plural(selectedIds.length, 'selected row')}`,
+        label:
+          ctx.translate?.('gridClearColumn', {
+            name,
+            count: selectedIds.length,
+          }) ?? `Clear ${name} in ${plural(selectedIds.length, 'selected row')}`,
         icon: X,
         disabledReason: none,
         run: () => actions.clearIn(variable.key, selectedIds),
       },
       {
         id: 'reset-column',
-        label: `Reset ${name} to inherited in ${plural(variations.length, 'row')}`,
+        label:
+          ctx.translate?.('gridResetColumn', {
+            name,
+            count: variations.length,
+          }) ?? `Reset ${name} to inherited in ${plural(variations.length, 'row')}`,
         icon: RotateCcw,
         disabledReason:
-          none ?? (variations.length ? null : 'No selected variation changes this value'),
+          none ??
+          (variations.length
+            ? null
+            : (ctx.translate?.('no_selected_variation_changes_this__b091ae26') ??
+              'No selected variation changes this value')),
         run: () => actions.resetIn(variable.key, variations),
       },
     ],
@@ -437,9 +540,14 @@ export function menuFor(
       [
         {
           id: 'add',
-          label: 'Add row',
+          label: ctx.translate?.('add_row_1868a8dd') ?? 'Add row',
           icon: Plus,
-          disabledReason: ctx.rows.length >= MAX_BATCH_ROWS ? FULL : null,
+          disabledReason:
+            ctx.rows.length >= MAX_BATCH_ROWS
+              ? (ctx.translate?.('a_render_set_holds_at_most_value0_r_8bc0f843', {
+                  value0: String(MAX_BATCH_ROWS),
+                }) ?? `A render set holds at most ${MAX_BATCH_ROWS} rows`)
+              : null,
           run: () => ctx.actions.addRow(),
         },
       ],

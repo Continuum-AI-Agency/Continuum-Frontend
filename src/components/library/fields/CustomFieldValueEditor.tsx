@@ -16,12 +16,12 @@ import {
   MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH,
 } from '@continuum/contracts';
 import { CalendarIcon, ExternalLink, Star, X } from 'lucide-react';
+import { useLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { ratingMax } from '@/lib/library/customFields';
 import {
   formatDateValue,
@@ -61,6 +62,8 @@ export type CustomFieldValueEditorProps = {
 };
 
 function SingleSelectEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const selected = singleSelectOptionId(value);
   return (
     <Select
@@ -69,11 +72,12 @@ function SingleSelectEditor({ field, value, disabled, onChange }: CustomFieldVal
       onValueChange={(next) => onChange(next === CLEAR_VALUE ? null : next)}
     >
       <SelectTrigger size="sm" className="h-8 w-full text-xs" aria-label={field.name}>
-        <SelectValue placeholder="Not set" items={choiceLabels(field)} />
+        <SelectValue placeholder={translateUi('not_set_4895f731')} items={choiceLabels(field)} />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={CLEAR_VALUE} className="text-xs text-muted-foreground">
-          Not set
+          {' '}
+          {translateUi('not_set_4895f731')}{' '}
         </SelectItem>
         {customFieldChoiceOptions(field).map((option) => (
           <SelectItem key={option.id} value={option.id} className="text-xs">
@@ -124,6 +128,8 @@ function MultiSelectEditor({ field, value, disabled, onChange }: CustomFieldValu
 }
 
 function TextEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const stored = literalValue(value);
   const [draft, setDraft] = useState(stored);
 
@@ -144,7 +150,7 @@ function TextEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
       value={draft}
       disabled={disabled}
       aria-label={field.name}
-      placeholder="Not set"
+      placeholder={translateUi('not_set_4895f731')}
       className="h-8 text-xs"
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
@@ -174,6 +180,9 @@ function fromIsoDay(iso: string): Date | undefined {
 }
 
 function DateEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const dateLocale = useLocale();
+  const translateUi = useUiTranslations('library');
+
   const [open, setOpen] = useState(false);
   const iso = literalValue(value).trim();
   const selected = iso ? fromIsoDay(iso) : undefined;
@@ -195,7 +204,7 @@ function DateEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
               )}
             >
               <CalendarIcon className="size-3.5 shrink-0" />
-              {iso ? formatDateValue(iso) : 'Not set'}
+              {iso ? formatDateValue(iso, dateLocale) : translateUi('not_set_4895f731')}
             </Button>
           }
         />
@@ -206,7 +215,9 @@ function DateEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
             size="icon"
             disabled={disabled}
             className="size-7 shrink-0 text-muted-foreground"
-            aria-label={`Clear ${field.name}`}
+            aria-label={translateUi('clear_value0_9016417b', {
+              value0: String(field.name),
+            })}
             onClick={() => onChange(null)}
           >
             <X className="size-3.5" />
@@ -229,6 +240,8 @@ function DateEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
 }
 
 function StatusEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const selected = singleSelectOptionId(value);
   return (
     <Select
@@ -237,11 +250,12 @@ function StatusEditor({ field, value, disabled, onChange }: CustomFieldValueEdit
       onValueChange={(next) => onChange(next === CLEAR_VALUE ? null : next)}
     >
       <SelectTrigger size="sm" className="h-8 w-full text-xs" aria-label={field.name}>
-        <SelectValue placeholder="Not set" items={choiceLabels(field)} />
+        <SelectValue placeholder={translateUi('not_set_4895f731')} items={choiceLabels(field)} />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={CLEAR_VALUE} className="text-xs text-muted-foreground">
-          Not set
+          {' '}
+          {translateUi('not_set_4895f731')}{' '}
         </SelectItem>
         {customFieldChoiceOptions(field).map((option) => (
           <SelectItem key={option.id} value={option.id} className="text-xs">
@@ -267,6 +281,8 @@ export function StatusDot({ color }: { color: string | null | undefined }) {
 // Same commit-on-blur shape as TextEditor, parsed as a number: a half-typed "1." is
 // a draft, not a value.
 function NumberEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const stored = typeof value === 'number' ? String(value) : '';
   const [draft, setDraft] = useState(stored);
   useEffect(() => setDraft(stored), [stored]);
@@ -287,7 +303,7 @@ function NumberEditor({ field, value, disabled, onChange }: CustomFieldValueEdit
       value={draft}
       disabled={disabled}
       aria-label={field.name}
-      placeholder="Not set"
+      placeholder={translateUi('not_set_4895f731')}
       className="h-8 text-xs"
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
@@ -299,6 +315,8 @@ function NumberEditor({ field, value, disabled, onChange }: CustomFieldValueEdit
 }
 
 function CheckboxEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <label className="flex min-h-8 items-center gap-2 text-xs">
       <input
@@ -309,13 +327,17 @@ function CheckboxEditor({ field, value, disabled, onChange }: CustomFieldValueEd
         aria-label={field.name}
         onChange={(event) => onChange(event.target.checked)}
       />
-      <span className="text-muted-foreground">{value === true ? 'Yes' : 'No'}</span>
+      <span className="text-muted-foreground">
+        {value === true ? translateUi('yes_85a39ab3') : translateUi('no_1ea442a1')}
+      </span>
     </label>
   );
 }
 
 // Clicking the current rating clears it: the one way back to "not rated".
 function RatingEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const current = typeof value === 'number' ? value : 0;
   const max = ratingMax(field);
   return (
@@ -324,7 +346,10 @@ function RatingEditor({ field, value, disabled, onChange }: CustomFieldValueEdit
         <button
           key={star}
           type="button"
-          aria-label={`${star} of ${max}`}
+          aria-label={translateUi('value0_of_value1_ca6c5e5f', {
+            value0: String(star),
+            value1: String(max),
+          })}
           aria-pressed={star <= current}
           onClick={() => onChange(star === current ? null : star)}
           className="rounded p-0.5 text-muted-foreground transition-colors hover:text-amber-500 active:scale-[0.92]"
@@ -337,6 +362,8 @@ function RatingEditor({ field, value, disabled, onChange }: CustomFieldValueEdit
 }
 
 function UserEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const members = useMentionTargets(field.brandId);
   const selected = literalValue(value) || null;
   const knownSelected = selected && members?.some((member) => member.userId === selected);
@@ -348,7 +375,11 @@ function UserEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
     >
       <SelectTrigger size="sm" className="h-8 w-full text-xs" aria-label={field.name}>
         <SelectValue
-          placeholder={members === null ? 'Loading members…' : 'Unassigned'}
+          placeholder={
+            members === null
+              ? translateUi('loading_members_027c36b0')
+              : translateUi('unassigned_14d33bd0')
+          }
           items={{
             [CLEAR_VALUE]: 'Unassigned',
             ...(selected && !knownSelected ? { [selected]: 'Former member' } : {}),
@@ -358,11 +389,13 @@ function UserEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={CLEAR_VALUE} className="text-xs text-muted-foreground">
-          Unassigned
+          {' '}
+          {translateUi('unassigned_14d33bd0')}{' '}
         </SelectItem>
         {selected && !knownSelected ? (
           <SelectItem value={selected} className="text-xs text-muted-foreground">
-            Former member
+            {' '}
+            {translateUi('former_member_1ef15417')}{' '}
           </SelectItem>
         ) : null}
         {(members ?? []).map((member) => (
@@ -378,12 +411,19 @@ function UserEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
 // Several people: the members as toggle chips, like a multi-select over the brand's
 // members. A selected id that is no longer a member stays visible so it can be removed.
 function UserMultiEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const members = useMentionTargets(field.brandId);
   const selected = multiSelectOptionIds(value);
   const known = new Set((members ?? []).map((member) => member.userId));
   const people = [
-    ...(members ?? []).map((member) => ({ id: member.userId, label: member.label })),
-    ...selected.filter((id) => !known.has(id)).map((id) => ({ id, label: 'Former member' })),
+    ...(members ?? []).map((member) => ({
+      id: member.userId,
+      label: member.label,
+    })),
+    ...selected
+      .filter((id) => !known.has(id))
+      .map((id) => ({ id, label: translateUi('former_member_1ef15417') })),
   ];
   const toggle = (userId: string) => {
     const next = selected.includes(userId)
@@ -391,7 +431,10 @@ function UserMultiEditor({ field, value, disabled, onChange }: CustomFieldValueE
       : [...selected, userId];
     onChange(next.length > 0 ? next : null);
   };
-  if (members === null) return <p className="text-xs text-muted-foreground">Loading members…</p>;
+  if (members === null)
+    return (
+      <p className="text-xs text-muted-foreground">{translateUi('loading_members_027c36b0')}</p>
+    );
   return (
     <fieldset
       aria-label={field.name}
@@ -423,6 +466,8 @@ function UserMultiEditor({ field, value, disabled, onChange }: CustomFieldValueE
 
 // TextEditor's commit-on-blur, in a box that grows; Enter is a newline here, not a save.
 function LongTextEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const stored = literalValue(value);
   const [draft, setDraft] = useState(stored);
   useEffect(() => setDraft(stored), [stored]);
@@ -436,7 +481,7 @@ function LongTextEditor({ field, value, disabled, onChange }: CustomFieldValueEd
       value={draft}
       disabled={disabled}
       aria-label={field.name}
-      placeholder="Not set"
+      placeholder={translateUi('not_set_4895f731')}
       className="min-h-20 text-xs"
       maxLength={MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH}
       onChange={(event) => setDraft(event.target.value)}
@@ -446,6 +491,8 @@ function LongTextEditor({ field, value, disabled, onChange }: CustomFieldValueEd
 }
 
 function UrlEditor(props: CustomFieldValueEditorProps) {
+  const translateUi = useUiTranslations('library');
+
   const href = literalValue(props.value).trim();
   return (
     <div className="flex items-center gap-1">
@@ -457,7 +504,9 @@ function UrlEditor(props: CustomFieldValueEditorProps) {
           href={href}
           target="_blank"
           rel="noreferrer noopener"
-          aria-label={`Open ${props.field.name}`}
+          aria-label={translateUi('open_value0_3dfbdb80', {
+            value0: String(props.field.name),
+          })}
           className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
         >
           <ExternalLink className="size-3.5" />

@@ -1,4 +1,7 @@
 'use client';
+import { useTranslations } from 'next-intl';
+
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The action kinds this portfolio may execute on each platform the executor writes for (Google,
 // TikTok), one row per platform, each saved on its own as the platform limits are. A kind left
@@ -17,35 +20,45 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
-  ACTION_KIND_COPY,
   type ActionKind,
   DEFAULT_ALLOWED_ACTIONS,
   type PlatformActions,
+  platformActionCopy,
   platformActionKinds,
   usePortfolioPlatformActions,
   useSetPortfolioPlatformActions,
 } from './usePortfolioPlatformActions';
 
 export function PlatformActionsField({ portfolioId }: { portfolioId: string }) {
+  const uiText = useTranslations('scale');
   const actions = usePortfolioPlatformActions(portfolioId);
   const setActions = useSetPortfolioPlatformActions(portfolioId);
 
   if (actions.status === 'loading') {
-    return <p className="text-xs text-muted-foreground">Reading the allowed actions…</p>;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {uiText('reading_the_allowed_actions_c22477a')}
+      </p>
+    );
   }
   if (actions.status === 'unavailable') {
     return (
-      <p className="text-xs text-muted-foreground">Allowed actions aren&rsquo;t available yet.</p>
+      <p className="text-xs text-muted-foreground">
+        {uiText('allowed_actions_aren_t_available_yet_a2321e0')}
+      </p>
     );
   }
   if (actions.status === 'error') {
-    return <p className="text-xs text-destructive">The allowed actions could not be read.</p>;
+    return (
+      <p className="text-xs text-destructive">
+        {uiText('the_allowed_actions_could_not_be_read_4f5d924')}
+      </p>
+    );
   }
   if (actions.platforms.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        This portfolio holds no Google or TikTok campaigns. Meta&rsquo;s changes follow the
-        portfolio&rsquo;s mode.
+        {uiText('this_portfolio_holds_no_google_or_tiktok_camp_800338d')}
       </p>
     );
   }
@@ -73,6 +86,8 @@ function PlatformActionsRow({
   row: PlatformActions;
   save: (allowed: readonly ActionKind[]) => Promise<unknown>;
 }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const kinds = platformActionKinds(row.platform);
   const stored = kinds.filter((kind) => row.allowed?.includes(kind));
   const [chosen, setChosen] = useState<ActionKind[]>(stored);
@@ -92,7 +107,7 @@ function PlatformActionsRow({
     try {
       await save(chosen);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'The actions could not be saved.');
+      setSaveError(formatUiError(error));
     } finally {
       setSaving(false);
     }
@@ -103,15 +118,17 @@ function PlatformActionsRow({
       className="grid gap-1.5 py-2.5 @lg/sheet:grid-cols-[11rem_minmax(0,1fr)] @lg/sheet:gap-6"
       data-platform={row.platform}
     >
-      <legend className="sr-only">{name} actions</legend>
+      <legend className="sr-only">{uiText.rich('sentence_6f4adc336b07', { v0: name })}</legend>
       <p aria-hidden="true" className="self-start text-muted-foreground text-sm @lg/sheet:pt-0.5">
         {name}
       </p>
       <div className="min-w-0 space-y-2">
         {row.allowed === null ? (
           <p className="text-xs text-muted-foreground">
-            The {row.accounts} {name} accounts here allow different actions; saving sets the same
-            list on each.
+            {uiText.rich('sentence_0465d47fed1a', {
+              v0: row.accounts,
+              v1: name,
+            })}
           </p>
         ) : null}
         <ul className="space-y-2">
@@ -128,13 +145,13 @@ function PlatformActionsRow({
                 />
                 <label className="min-w-0 space-y-0.5" htmlFor={id}>
                   <span className="block text-foreground text-sm">
-                    {ACTION_KIND_COPY[kind].label}
+                    {platformActionCopy(kind, uiText).label}
                     {DEFAULT_ALLOWED_ACTIONS.includes(kind) ? (
-                      <span className="text-muted-foreground"> · default</span>
+                      <span className="text-muted-foreground">{uiText('default_45e596b')}</span>
                     ) : null}
                   </span>
                   <span className="block text-muted-foreground text-xs">
-                    {ACTION_KIND_COPY[kind].explanation}
+                    {platformActionCopy(kind, uiText).explanation}
                   </span>
                 </label>
               </li>
@@ -143,8 +160,7 @@ function PlatformActionsRow({
         </ul>
         {locked ? (
           <p className="text-xs text-muted-foreground" data-testid="platform-actions-locked">
-            Nothing may be changed on {name} for this portfolio: its account is read-only. Only
-            Continuum can change that.
+            {uiText.rich('sentence_eea88e118c5f', { v0: name })}
           </p>
         ) : (
           <div className="flex items-center gap-2">
@@ -155,12 +171,13 @@ function PlatformActionsRow({
               type="button"
               variant="outline"
             >
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              Save
+              {uiText.rich('sentence_e66795836de4', {
+                v0: () => (saving ? <Loader2 className="size-3.5 animate-spin" /> : null),
+              })}
             </Button>
             {chosen.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Keep at least one. Switching {name} off for a portfolio is Continuum&rsquo;s call.
+                {uiText.rich('sentence_543cc3f01702', { v0: name })}
               </p>
             ) : null}
           </div>

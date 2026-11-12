@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 
-const uploadBrandFont = mock(async () => ({ family: 'Heading Now', format: 'otf', bytes: 4 }));
+const uploadBrandFont = mock(async () => ({
+  family: 'Heading Now',
+  format: 'otf',
+  bytes: 4,
+}));
 mock.module('@/lib/library/templateSources', () => ({ uploadBrandFont }));
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 
 afterEach(() => {
@@ -27,9 +36,15 @@ describe('FontUploadReviewDialog', () => {
     );
 
     expect(uploadBrandFont).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText('Font family'), { target: { value: 'Heading Now' } });
-    fireEvent.change(screen.getByLabelText('Weight (optional)'), { target: { value: '700' } });
-    fireEvent.change(screen.getByLabelText('Style'), { target: { value: 'italic' } });
+    fireEvent.change(screen.getByLabelText('Font family'), {
+      target: { value: 'Heading Now' },
+    });
+    fireEvent.change(screen.getByLabelText('Weight (optional)'), {
+      target: { value: '700' },
+    });
+    fireEvent.change(screen.getByLabelText('Style'), {
+      target: { value: 'italic' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Add to engine' }));
 
     expect(await screen.findByText(/added to the engine/i)).toBeTruthy();
@@ -74,8 +89,11 @@ describe('FontUploadReviewDialog', () => {
     fireEvent.change(family, { target: { value: 'Heading Now' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add to engine' }));
     expect(
-      ((await screen.findByRole('button', { name: 'Add to engine' })) as HTMLButtonElement)
-        .disabled,
+      (
+        (await screen.findByRole('button', {
+          name: 'Add to engine',
+        })) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });

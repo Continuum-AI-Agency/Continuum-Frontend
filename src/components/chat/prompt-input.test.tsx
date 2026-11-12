@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { PromptInput } from './prompt-input';
 import { MENTION_DRAG_TYPE } from './SessionContentTray';
 import type { ChatAttachmentsController } from './useChatAttachments';
@@ -119,7 +120,11 @@ describe('PromptInput dropped references', () => {
       source: 'organic' as const,
       metadata: { draftId: 'draft-1' },
     };
-    const payload = JSON.stringify({ key: 'draft:draft-1', ...reference, reference });
+    const payload = JSON.stringify({
+      key: 'draft:draft-1',
+      ...reference,
+      reference,
+    });
     const dataTransfer = {
       types: [MENTION_DRAG_TYPE],
       files: [],
@@ -141,7 +146,11 @@ describe('PromptInput dropped references', () => {
     render(<PromptInput attachments={attachmentController()} onSubmit={onSubmit} />);
     const form = screen.getByRole('textbox').closest('form') as HTMLFormElement;
     fireEvent.drop(form, {
-      dataTransfer: { types: [MENTION_DRAG_TYPE], files: [], getData: () => '{not json' },
+      dataTransfer: {
+        types: [MENTION_DRAG_TYPE],
+        files: [],
+        getData: () => '{not json',
+      },
     });
     expect(screen.getByRole('textbox').textContent).toBe('');
   });
@@ -158,7 +167,11 @@ describe('PromptInput dropped references', () => {
       source: 'organic' as const,
       metadata: { draftId: 'draft-1' },
     };
-    const payload = JSON.stringify({ key: 'draft:draft-1', ...reference, reference });
+    const payload = JSON.stringify({
+      key: 'draft:draft-1',
+      ...reference,
+      reference,
+    });
     const dataTransfer = {
       types: [MENTION_DRAG_TYPE],
       files: [],
@@ -180,7 +193,11 @@ describe('PromptInput dropped references', () => {
     render(<PromptInput attachments={attachmentController()} onSubmit={onSubmit} />);
     const form = screen.getByRole('textbox').closest('form') as HTMLFormElement;
     fireEvent.drop(form, {
-      dataTransfer: { types: [MENTION_DRAG_TYPE], files: [], getData: () => '{not json' },
+      dataTransfer: {
+        types: [MENTION_DRAG_TYPE],
+        files: [],
+        getData: () => '{not json',
+      },
     });
     expect(screen.getByRole('textbox').textContent).toBe('');
   });

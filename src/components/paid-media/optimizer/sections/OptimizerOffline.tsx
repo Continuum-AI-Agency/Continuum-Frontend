@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Shown when the optimizer backend can't be reached (a read errored or timed
 // out). Keeps the surface honest — a clear "offline" signal with a retry, rather
 // than an infinite skeleton or a misleading empty state. Composes the shared
@@ -19,14 +21,15 @@ type OptimizerOfflineProps = {
 };
 
 export function OptimizerOffline({ onRetry }: OptimizerOfflineProps) {
+  const uiText = useTranslations('scale');
   return (
     <div className="mx-auto max-w-md p-2">
       <ErrorRetryState
-        title="Can't reach the optimizer"
-        message="Your portfolios and cycle data can't load right now. Your budgets are untouched — the optimizer never writes to Meta while it's unreachable. Try again in a moment."
+        title={uiText('can_t_reach_the_optimizer_7a9e477')}
+        message={uiText('your_portfolios_and_cycle_data_can_t_load_rig_77be253')}
         media={<ServerCrashIcon aria-hidden="true" />}
         onRetry={onRetry}
-        retryLabel="Retry"
+        retryLabel={uiText('retry_942087c')}
       />
     </div>
   );

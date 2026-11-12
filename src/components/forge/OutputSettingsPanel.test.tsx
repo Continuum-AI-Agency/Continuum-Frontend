@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { EncodeSettings } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type ReactNode, useState } from 'react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 import {
   cleanup,
   fireEvent,
@@ -8,13 +14,7 @@ import {
   screen,
   waitFor,
   within,
-} from '@testing-library/react';
-import { type ReactNode, useState } from 'react';
-import {
-  chooseOption,
-  installPickerDomGlobals,
-  openSelect,
-} from '@/components/automations/workspace/pickers/pickerTestHarness';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { forgeQueryKeys } from './queryKeys';
 
 const contract = () => ({
@@ -39,9 +39,27 @@ const contract = () => ({
   layout: null,
   divergence: [],
   outputs: [
-    { id: 'square', label: 'Square', ratio: '1:1', mediaType: 'MP4 Video (RGB)', frameRate: 59.94 },
-    { id: 'story', label: 'Story', ratio: '9:16', mediaType: 'MOV Video (RGBA)', frameRate: 25 },
-    { id: 'poster', label: 'Poster', ratio: null, mediaType: 'JPG image (RGB)', frameRate: null },
+    {
+      id: 'square',
+      label: 'Square',
+      ratio: '1:1',
+      mediaType: 'MP4 Video (RGB)',
+      frameRate: 59.94,
+    },
+    {
+      id: 'story',
+      label: 'Story',
+      ratio: '9:16',
+      mediaType: 'MOV Video (RGBA)',
+      frameRate: 25,
+    },
+    {
+      id: 'poster',
+      label: 'Poster',
+      ratio: null,
+      mediaType: 'JPG image (RGB)',
+      frameRate: null,
+    },
   ],
   encode: {
     stored: { default: { fps: 25 } },
@@ -58,7 +76,9 @@ const OTHER_BINDING = '44444444-4444-4444-8444-444444444444';
 const getContract = mock(
   async (_brandId: string, _templateKey: string, _bindingId?: string | null) => contract(),
 );
-const listEnvironments = mock(async () => ({ items: [{ bindingId: DEFAULT_BINDING }] }));
+const listEnvironments = mock(async () => ({
+  items: [{ bindingId: DEFAULT_BINDING }],
+}));
 const listTemplates = mock(async (_brandId: string, _bindingId?: string | null) => ({
   items: [] as Array<{ key: string }>,
 }));
@@ -198,7 +218,10 @@ describe('OutputSettingsPanel', () => {
         method: 'PUT',
         body: {
           brandId: 'brand-1',
-          encode: { default: { fps: 25 }, outputs: { square: { audio: { layout: 'stereo' } } } },
+          encode: {
+            default: { fps: 25 },
+            outputs: { square: { audio: { layout: 'stereo' } } },
+          },
         },
       },
     ]);
@@ -209,7 +232,10 @@ describe('OutputSettingsPanel', () => {
       encode: {
         ...contract().encode,
         stored: {
-          default: { audio: { channels: 2 }, files: { mp4: false, mov: false, mxf: true } },
+          default: {
+            audio: { channels: 2 },
+            files: { mp4: false, mov: false, mxf: true },
+          },
         },
       },
     }));
@@ -378,7 +404,10 @@ describe('OutputSettingsPanel', () => {
   test('a frame rate off the standard list stays visible and chosen', async () => {
     getContract.mockImplementationOnce(async () => ({
       ...contract(),
-      encode: { ...contract().encode, stored: { default: { fps: '2997/125' } } },
+      encode: {
+        ...contract().encode,
+        stored: { default: { fps: '2997/125' } },
+      },
     }));
     render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('23.976 fps'));
@@ -397,7 +426,10 @@ describe('OutputSettingsPanel', () => {
       {
         path: '/api/ai-studio/templates/133/encode',
         method: 'PUT',
-        body: { brandId: 'brand-1', encode: { default: { fps: '30000/1001' } } },
+        body: {
+          brandId: 'brand-1',
+          encode: { default: { fps: '30000/1001' } },
+        },
       },
     ]);
   });
@@ -526,7 +558,10 @@ describe('OutputSettingsPanel', () => {
   test('a template with no named outputs is stills-only when its comp runs one frame', async () => {
     getContract.mockImplementationOnce(async () => ({
       ...contract(),
-      template: { ...contract().template, motion: { durationSec: 1 / 25, frameRate: 25 } },
+      template: {
+        ...contract().template,
+        motion: { durationSec: 1 / 25, frameRate: 25 },
+      },
       outputs: [],
       encode: undefined,
     }));

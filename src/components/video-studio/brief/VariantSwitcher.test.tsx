@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { createEditorProjectV2 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { VideoStudioContext } from '../types';
 
 // list_variants is held open, so the test sees the switcher before and after it answers.
@@ -16,7 +22,9 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
     });
   },
 }));
-mock.module('next/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
+mock.module('next/navigation', () => ({
+  useRouter: () => ({ push: () => undefined }),
+}));
 
 const { VariantSwitcher } = await import('./VariantSwitcher');
 
@@ -42,7 +50,12 @@ describe('VariantSwitcher', () => {
   it('holds "Redraft all variants" and "Export all variants" until list_variants has answered, then redrafts every sibling', async () => {
     const redrafts: number[] = [];
     const project = {
-      ...createEditorProjectV2({ projectId: PROJECT_ID, title: 'A', width: 1080, height: 1920 }),
+      ...createEditorProjectV2({
+        projectId: PROJECT_ID,
+        title: 'A',
+        width: 1080,
+        height: 1920,
+      }),
       brief: {
         briefId: 'brief-1',
         text: 'Two hooks',
@@ -72,7 +85,9 @@ describe('VariantSwitcher', () => {
       />,
     );
     const button = screen.getByRole('button', { name: 'Redraft all variants' });
-    const exportAll = screen.getByRole('button', { name: 'Export all variants' });
+    const exportAll = screen.getByRole('button', {
+      name: 'Export all variants',
+    });
     // Before the answer the only tab is this project: a redraft now would redraft one.
     expect(button.hasAttribute('disabled')).toBe(true);
     expect(exportAll.hasAttribute('disabled')).toBe(true);
@@ -100,7 +115,12 @@ describe('VariantSwitcher', () => {
   it('a failed sibling read keeps Redraft and Export-all off, says so, and retries', async () => {
     const redrafts: number[] = [];
     const project = {
-      ...createEditorProjectV2({ projectId: PROJECT_ID, title: 'A', width: 1080, height: 1920 }),
+      ...createEditorProjectV2({
+        projectId: PROJECT_ID,
+        title: 'A',
+        width: 1080,
+        height: 1920,
+      }),
       brief: {
         briefId: 'brief-2',
         text: 'Three hooks',

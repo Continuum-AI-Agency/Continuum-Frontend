@@ -1,3 +1,7 @@
+import { createTranslator } from 'next-intl';
+import es from '../../../messages/forge/es.json';
+import pt from '../../../messages/forge/pt-BR.json';
+import { checkSummary } from './CheckTable';
 /**
  * Every state each render check can be in, and the words it uses for it. A judge that reads
  * "Judging…" forever, or a placement row that says "fits" for a slot nobody measured, is worse
@@ -69,7 +73,11 @@ const JOB: ApiRenderJob = {
   approval: null,
 };
 
-const COMP = { name: 'Producto individual con descuento 1:1', width: 1080, height: 1080 };
+const COMP = {
+  name: 'Producto individual con descuento 1:1',
+  width: 1080,
+  height: 1080,
+};
 
 const slot = (overrides: Partial<ApiRenderFitVerdict> & Pick<ApiRenderFitVerdict, 'key'>) => ({
   state: 'ok' as const,
@@ -139,7 +147,10 @@ const checksOf = (job: Partial<ApiRenderJob>) => renderJobChecks({ ...JOB, ...jo
 
 describe('renderJobChecks', () => {
   test('the ledger discloses explicit font consent and the actor', () => {
-    const checks = checksOf({ acceptMissingFonts: true, createdByEmail: 'artist@example.test' });
+    const checks = checksOf({
+      acceptMissingFonts: true,
+      createdByEmail: 'artist@example.test',
+    });
     expect(row(checks, 'Font override')).toMatchObject({
       state: 'warn',
       result: 'Missing-font check bypassed',
@@ -160,8 +171,14 @@ describe('renderJobChecks', () => {
       'Judge',
       'Delivery',
     ]);
-    expect(row(checks, 'Inputs')).toMatchObject({ state: 'pass', result: 'All inputs accepted.' });
-    expect(row(checks, 'Brand')).toMatchObject({ state: 'pass', result: 'No blocking issues' });
+    expect(row(checks, 'Inputs')).toMatchObject({
+      state: 'pass',
+      result: 'All inputs accepted.',
+    });
+    expect(row(checks, 'Brand')).toMatchObject({
+      state: 'pass',
+      result: 'No blocking issues',
+    });
     expect(row(checks, 'Placement').what).toBe(
       "Works out where each picked image lands from its size and the slot's measured position. Arithmetic, not a look at the frame.",
     );
@@ -174,11 +191,23 @@ describe('renderJobChecks', () => {
       duration: '2m 30s',
     });
     expect(
-      row(checksOf({ status: 'failed', error: 'Render fleet timed out', outputs: [] }), 'Render'),
+      row(
+        checksOf({
+          status: 'failed',
+          error: 'Render fleet timed out',
+          outputs: [],
+        }),
+        'Render',
+      ),
     ).toMatchObject({ state: 'fail', result: 'Render fleet timed out' });
     // The legacy literal every old fleet failure carries reads as a sentence, here and in the
     // tray's Running step, which reads jobSteps.
-    const legacy = { ...JOB, status: 'failed' as const, error: 'render_error', outputs: [] };
+    const legacy = {
+      ...JOB,
+      status: 'failed' as const,
+      error: 'render_error',
+      outputs: [],
+    };
     const sentence = 'The render farm reported an error and sent no file.';
     expect(row(renderJobChecks(legacy, {}, NOW), 'Render').result).toBe(sentence);
     expect(jobSteps(legacy).find((step) => step.label === 'Rendering')).toMatchObject({
@@ -241,7 +270,9 @@ describe('renderJobChecks', () => {
     test('all fit, none to place, and a render with no placement check', () => {
       expect(
         row(
-          checksOf({ fit: fit([slot({ key: 'a' }), slot({ key: 'b' }), slot({ key: 'c' })]) }),
+          checksOf({
+            fit: fit([slot({ key: 'a' }), slot({ key: 'b' }), slot({ key: 'c' })]),
+          }),
           'Placement',
         ),
       ).toMatchObject({ state: 'pass', result: '3 images fit' });
@@ -256,7 +287,9 @@ describe('renderJobChecks', () => {
       });
       expect(
         row(
-          checksOf({ fit: fit([slot({ key: 'logo', state: 'unknown', box: null, why: 'x' })]) }),
+          checksOf({
+            fit: fit([slot({ key: 'logo', state: 'unknown', box: null, why: 'x' })]),
+          }),
           'Placement',
         ).result,
       ).toBe("1 couldn't be measured");
@@ -295,7 +328,10 @@ describe('renderJobChecks', () => {
       const [halo] = skewed.verdict?.findings ?? [];
       if (halo) halo.note = 'A glow bleeds around the logo';
       const judged = row(
-        checksOf({ fit: fit([]), judge: judge({ state: 'fail', frames: [skewed] }) }),
+        checksOf({
+          fit: fit([]),
+          judge: judge({ state: 'fail', frames: [skewed] }),
+        }),
         'Judge',
       );
       expect(judged.result).toBe('1:1 ✗ 2 problems');
@@ -331,11 +367,18 @@ describe('renderJobChecks', () => {
         row(
           checksOf({
             fit: fit([]),
-            judge: judge({ state: 'unknown', why: 'no Vertex credential', frames: [] }),
+            judge: judge({
+              state: 'unknown',
+              why: 'no Vertex credential',
+              frames: [],
+            }),
           }),
           'Judge',
         ),
-      ).toMatchObject({ state: 'warn', result: "Couldn't judge: no Vertex credential" });
+      ).toMatchObject({
+        state: 'warn',
+        result: "Couldn't judge: no Vertex credential",
+      });
     });
 
     test('a verdict from before every format was judged reads as one frame', () => {
@@ -413,7 +456,12 @@ test('recorded quality warnings stay visible on successful renders', () => {
   const checks = renderJobChecks(
     {
       ...JOB,
-      warnings: [{ code: 'BRAND_COLOR_OUTSIDE_PALETTE', message: 'Review the accent color.' }],
+      warnings: [
+        {
+          code: 'BRAND_COLOR_OUTSIDE_PALETTE',
+          message: 'Review the accent color.',
+        },
+      ],
     },
     {},
   );
@@ -422,4 +470,65 @@ test('recorded quality warnings stay visible on successful renders', () => {
     lines: ['Review the accent color.'],
   });
   expect(checks.find((check) => check.name === 'Brand')?.state).toBe('warn');
+});
+
+describe('localized check display with canonical states', () => {
+  for (const [locale, messages, file, saved, warning] of [
+    ['pt-BR', pt, '1 arquivo', '1 arquivo salvo', '1 aviso'],
+    ['es', es, '1 archivo', '1 archivo guardado', '1 advertencia'],
+  ] as const) {
+    test(`${locale}: translated counts keep check states and source names intact`, () => {
+      const t = createTranslator({
+        locale,
+        messages: { forge: messages },
+        namespace: 'forge',
+      });
+      const job = { ...JOB, outputs: [{ ...FILES[0]!, assetId: JOB.id }] };
+      const ui = { t, locale };
+      const checks = renderJobChecks(job, {}, NOW, ui);
+      expect(checks.find((check) => check.kind === 'inputs')?.name).toBe('Entradas');
+      expect(checks.find((check) => check.kind === 'render')?.result).toBe(file);
+      expect(jobSteps(job, ui).some((step) => step.detail === saved)).toBe(true);
+      expect(jobSteps({ ...job, status: 'failed' }, ui)[1]?.state).toBe('error');
+      expect(checkSummary([{ state: 'warn' }], t)).toBe(warning);
+      expect(job.templateName).toBe('Producto individual');
+      expect(
+        checks
+          .map((check) => check.state)
+          .every((state) => ['pass', 'warn', 'fail', 'running', 'todo', 'skipped'].includes(state)),
+      ).toBe(true);
+    });
+  }
+});
+
+describe('localized original placement checks', () => {
+  for (const [locale, messages, singular, plural] of [
+    ['pt-BR', pt, '1 imagem cabe', '2 imagens cabem'],
+    ['es', es, '1 imagen cabe', '2 imágenes caben'],
+  ] as const) {
+    test(`${locale}: plural counts preserve placement states and authored names`, () => {
+      const t = createTranslator({
+        locale,
+        messages: { forge: messages },
+        namespace: 'forge',
+      });
+      const one = { ...JOB, fit: fit([slot({ key: 'first' })]) };
+      const two = {
+        ...JOB,
+        fit: fit([slot({ key: 'first' }), slot({ key: 'second' })]),
+      };
+      const labels = { first: 'Client image A', second: 'Client image B' };
+      const first = renderJobChecks(one, labels, NOW, { t, locale }).find(
+        (row) => row.kind === 'placement',
+      );
+      const second = renderJobChecks(two, labels, NOW, { t, locale }).find(
+        (row) => row.kind === 'placement',
+      );
+      expect(first).toMatchObject({ state: 'pass', result: singular });
+      expect(second).toMatchObject({ state: 'pass', result: plural });
+      expect(second?.lines[0]).toContain('Client image A');
+      expect(second?.lines[1]).toContain('Client image B');
+      expect(two.fit.slots.map((slot) => slot.key)).toEqual(['first', 'second']);
+    });
+  }
 });

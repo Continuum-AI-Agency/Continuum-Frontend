@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { movePlannerDraftToDay, plannerInstantFromDayTime } from '@continuum/contracts';
-import { act, renderHook } from '@testing-library/react';
-
+import { act } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useCalendarStore } from '@/lib/organic/store';
 
 type RequestOptions = {
@@ -26,14 +26,18 @@ const request = mock((opts: RequestOptions) => {
 const show = mock(() => {});
 
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show }),
+}));
 
 // The hook must never write the row from the browser: a Supabase client import is the
 // regression this mock catches.
 const supabaseClient = mock(() => {
   throw new Error('the reschedule hook wrote the row from the browser');
 });
-mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: supabaseClient }));
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: supabaseClient,
+}));
 
 // Imported AFTER the module mocks so the hook binds to them.
 const { retargetDraft, useRescheduleDraft } = await import('./useRescheduleDraft');
@@ -73,8 +77,20 @@ const FROM_DAY = '2026-08-03';
 function seedDays(slots: OrganicCalendarDraft[]): void {
   useCalendarStore.setState({
     days: [
-      { id: FROM_DAY, label: 'Mon', dateLabel: 'Aug 3', suggestedTimes: [], slots },
-      { id: '2026-08-04', label: 'Tue', dateLabel: 'Aug 4', suggestedTimes: [], slots: [] },
+      {
+        id: FROM_DAY,
+        label: 'Mon',
+        dateLabel: 'Aug 3',
+        suggestedTimes: [],
+        slots,
+      },
+      {
+        id: '2026-08-04',
+        label: 'Tue',
+        dateLabel: 'Aug 4',
+        suggestedTimes: [],
+        slots: [],
+      },
     ],
     selectedDraftId: null,
     selectedDraftIds: [],
@@ -164,7 +180,10 @@ describe('useRescheduleDraft', () => {
 
     const sentTimeOfDay = requestCalls[0]?.body?.timeOfDay;
     const backendMove = movePlannerDraftToDay({
-      fromIso: plannerInstantFromDayTime({ dayId: FROM_DAY, timeOfDay: '5:00 PM' }),
+      fromIso: plannerInstantFromDayTime({
+        dayId: FROM_DAY,
+        timeOfDay: '5:00 PM',
+      }),
       targetDayId: target,
     });
     expect(sentTimeOfDay).toBe(backendMove?.timeOfDay);
@@ -265,7 +284,10 @@ describe('retargetDraft', () => {
 
   it('keeps a chosen account when the primary platform stays', () => {
     const next = retargetDraft(
-      draft('a', { platforms: ['instagram', 'facebook'], targetAccountId: 'acct-ig-second' }),
+      draft('a', {
+        platforms: ['instagram', 'facebook'],
+        targetAccountId: 'acct-ig-second',
+      }),
       { platform: 'instagram', accountId: 'acct-ig' },
     );
     expect(next?.platforms).toEqual(['instagram']);
@@ -273,7 +295,12 @@ describe('retargetDraft', () => {
   });
 
   it('changes nothing for a drop on its own row', () => {
-    expect(retargetDraft(draft('a'), { platform: 'instagram', accountId: 'acct-ig' })).toBeNull();
+    expect(
+      retargetDraft(draft('a'), {
+        platform: 'instagram',
+        accountId: 'acct-ig',
+      }),
+    ).toBeNull();
   });
 
   // Publish reads its targets from groupMembers, so a restamp that left them would post
@@ -302,16 +329,26 @@ describe('retargetDraft', () => {
       accountId: null,
     }));
     expect(
-      retargetDraft(draft('a', { platforms: ['instagram', 'facebook'], groupMembers: members }), {
-        platform: 'tiktok',
-        accountId: undefined,
-      }),
+      retargetDraft(
+        draft('a', {
+          platforms: ['instagram', 'facebook'],
+          groupMembers: members,
+        }),
+        {
+          platform: 'tiktok',
+          accountId: undefined,
+        },
+      ),
     ).toBeNull();
   });
 });
 
 describe('useRescheduleDraft — a drop on another platform row', () => {
-  const RETARGET = { draftId: 'a', platform: 'instagram' as const, accountId: 'acct-ig' };
+  const RETARGET = {
+    draftId: 'a',
+    platform: 'instagram' as const,
+    accountId: 'acct-ig',
+  };
 
   beforeEach(() => {
     requestCalls.length = 0;
@@ -323,7 +360,11 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
   // Gating #1/#15: the platform used to be written straight to Supabase from the browser.
   it('sends the platform, its account and the day in ONE field-route PATCH', async () => {
     seedDays([
-      draft('a', { platforms: ['facebook'], targetAccountId: 'acct-fb', updatedAt: 'T0' }),
+      draft('a', {
+        platforms: ['facebook'],
+        targetAccountId: 'acct-fb',
+        updatedAt: 'T0',
+      }),
     ]);
     const target = dayIdAhead(20);
     const { result } = renderHook(() => useRescheduleDraft());
@@ -369,7 +410,10 @@ describe('useRescheduleDraft — a drop on another platform row', () => {
     const { result } = renderHook(() => useRescheduleDraft());
 
     await act(async () => {
-      await result.current.reschedule('a', FROM_DAY, { ...RETARGET, accountId: undefined });
+      await result.current.reschedule('a', FROM_DAY, {
+        ...RETARGET,
+        accountId: undefined,
+      });
     });
 
     expect(requestCalls[0]?.body?.accountId).toBeNull();
@@ -417,7 +461,12 @@ describe('useRescheduleDraft — a group moves together (C5)', () => {
       groupId: 'group-1',
       updatedAt: 'T0',
       groupMembers: [
-        { backendDraftId: 'srv-g', platform: 'instagram', status: 'draft', accountId: 'acct-ig' },
+        {
+          backendDraftId: 'srv-g',
+          platform: 'instagram',
+          status: 'draft',
+          accountId: 'acct-ig',
+        },
         {
           backendDraftId: 'srv-g-tt',
           platform: 'tiktok',

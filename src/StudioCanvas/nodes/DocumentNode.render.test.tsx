@@ -9,8 +9,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { CanvasDocument, DocumentNodeData } from '../types';
@@ -37,7 +42,9 @@ mock.module('@/lib/supabase/client', () => ({
       from: () => ({
         select: () => ({
           eq: () => ({
-            eq: () => ({ order: async () => ({ data: tableRows, error: null }) }),
+            eq: () => ({
+              order: async () => ({ data: tableRows, error: null }),
+            }),
             order: async () => ({ data: tableRows, error: null }),
           }),
         }),
@@ -132,14 +139,20 @@ describe('DocumentNode — mounted after the document reached its state', () => 
 
     renderNode(linked);
 
-    await waitFor(() => expect(screen.getByText('No extractable text found.')).toBeDefined());
+    await waitFor(() => expect(screen.getByText('No text found')).toBeDefined());
     expect(screen.queryByText('processing…')).toBeNull();
   });
 
   it('fails a document the server stopped talking about, and records it on the row', async () => {
     // The real shape of the two rows stuck since 2026-06-02: still `processing`, still
     // 'extracting', with an updated_at three months old.
-    tableRows = [row({ status: 'processing', progress_step: 'extracting', progress_percent: 0 })];
+    tableRows = [
+      row({
+        status: 'processing',
+        progress_step: 'extracting',
+        progress_percent: 0,
+      }),
+    ];
 
     renderNode(linked);
 
@@ -147,7 +160,10 @@ describe('DocumentNode — mounted after the document reached its state', () => 
     // The verdict is written back, or the row stays `processing` in the database for
     // every other reader — which is exactly how it survived three months.
     expect(writes).toHaveLength(1);
-    expect(writes[0].patch).toMatchObject({ status: 'error', progress_step: 'error' });
+    expect(writes[0].patch).toMatchObject({
+      status: 'error',
+      progress_step: 'error',
+    });
     expect(writes[0].ids).toEqual([DOC_ID]);
     expect(writes[0].guard).toEqual(['status', 'processing']);
   });
@@ -163,7 +179,7 @@ describe('DocumentNode — mounted after the document reached its state', () => 
 
     renderNode(linked);
 
-    await waitFor(() => expect(screen.getByText('embedding')).toBeDefined());
+    await waitFor(() => expect(screen.getByText('Indexing')).toBeDefined());
     expect(writes).toHaveLength(0);
   });
 
@@ -237,7 +253,14 @@ describe('DocumentNode — a document an agent attached', () => {
   it('writes the folded entry to the canvas when the node mounts', async () => {
     useStudioStore.setState({
       brandId: BRAND,
-      nodes: [{ id: 'doc-1', type: 'document', position: { x: 0, y: 0 }, data: agentAttached }],
+      nodes: [
+        {
+          id: 'doc-1',
+          type: 'document',
+          position: { x: 0, y: 0 },
+          data: agentAttached,
+        },
+      ],
       edges: [],
     });
 

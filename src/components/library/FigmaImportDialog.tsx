@@ -9,6 +9,10 @@ import {
   parseFigmaLink,
 } from '@continuum/contracts';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useUiTranslations,
+} from 'next-intl';
 import { useState } from 'react';
 import { FigmaIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
@@ -29,6 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   beginFigmaConnection,
   FigmaApiError,
@@ -52,6 +57,12 @@ export function FigmaImportDialog({
   label?: string;
   size?: 'sm' | 'default';
 }) {
+  const betaUiText = useBetaTranslations('library');
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState('');
   const [teamId, setTeamId] = useState('');
@@ -166,12 +177,14 @@ export function FigmaImportDialog({
     setBusy('import');
     setError(null);
     try {
-      const assets = await importFigmaFrames({ brandId, fileKey, nodeIds: selected });
+      const assets = await importFigmaFrames({
+        brandId,
+        fileKey,
+        nodeIds: selected,
+      });
       const created = assets.filter((asset) => asset.status !== 'exists').length;
       const unchanged = assets.length - created;
-      toast.success(
-        `${created} Figma frame${created === 1 ? '' : 's'} imported${unchanged ? ` · ${unchanged} already current` : ''}. The Forge is building ${created === 1 ? 'it' : 'them'}.`,
-      );
+      toast.success(betaUiText('figmaImportComplete', { created, unchanged }));
       onImported(assets);
       setOpen(false);
     } catch (cause) {
@@ -205,19 +218,16 @@ export function FigmaImportDialog({
       />
       <DialogContent className="flex max-h-[82dvh] flex-col overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-5 py-4">
-          <DialogTitle>Import from Figma</DialogTitle>
-          <DialogDescription>
-            Each frame becomes a design template. Its text becomes fields, and it is ready to
-            render as soon as it is imported.
-          </DialogDescription>
+          <DialogTitle>{translateUi('import_from_figma_2e559556')}</DialogTitle>
+          <DialogDescription>{betaUiText('beta_bc14614ba0ee')}</DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
           <div className="flex gap-2">
             <Input
               value={link}
               onChange={(event) => setLink(event.target.value)}
-              placeholder="Paste a Figma link (Share → Copy link)"
-              aria-label="Figma link"
+              placeholder={betaUiText('beta_105a6529168d')}
+              aria-label={betaUiText('beta_566f802ccc8d')}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void openLink();
               }}
@@ -228,21 +238,21 @@ export function FigmaImportDialog({
               disabled={!link.trim() || busy !== null}
               onClick={() => void openLink()}
             >
-              Open
+              {betaUiText('beta_ed077f3d8125')}
             </Button>
           </div>
 
           <details className="text-sm">
             <summary className="cursor-pointer text-xs text-muted-foreground">
-              Browse a team instead
+              {betaUiText('beta_e7fd9d15ddb6')}
             </summary>
             <div className="mt-2 flex flex-col gap-2">
               <div className="flex gap-2">
                 <Input
                   value={teamId}
                   onChange={(event) => setTeamId(event.target.value)}
-                  placeholder="Figma team ID (the number after /team/ in a team link)"
-                  aria-label="Figma team ID"
+                  placeholder={betaUiText('beta_edef90584cbe')}
+                  aria-label={betaUiText('beta_2932da7a5764')}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') void loadFolders();
                   }}
@@ -258,7 +268,7 @@ export function FigmaImportDialog({
                   ) : (
                     <RefreshCw className="size-4" />
                   )}
-                  Browse
+                  {betaUiText('beta_3227aa966625')}
                 </Button>
               </div>
               {folders.length ? (
@@ -267,12 +277,15 @@ export function FigmaImportDialog({
                   disabled={busy !== null}
                   onValueChange={(value) => void chooseFolder(value)}
                 >
-                  <SelectTrigger aria-label="Figma folder">
-                    <SelectValue placeholder="Choose a folder" />
+                  <SelectTrigger aria-label={betaUiText('beta_2d32f51caabd')}>
+                    <SelectValue placeholder={betaUiText('beta_5c71b8cd7822')} />
                   </SelectTrigger>
                   <SelectContent>
                     {folders
-                      .map((folder) => ({ id: folder.id, label: folderLabel(folder) }))
+                      .map((folder) => ({
+                        id: folder.id,
+                        label: folderLabel(folder),
+                      }))
                       .sort((a, b) => a.label.localeCompare(b.label))
                       .map((folder) => (
                         <SelectItem key={folder.id} value={folder.id}>
@@ -288,8 +301,8 @@ export function FigmaImportDialog({
                   disabled={busy !== null}
                   onValueChange={(value) => void chooseFile(value)}
                 >
-                  <SelectTrigger aria-label="Figma file">
-                    <SelectValue placeholder="Choose a file" />
+                  <SelectTrigger aria-label={betaUiText('beta_cbda49d36703')}>
+                    <SelectValue placeholder={betaUiText('beta_3e10c3cd6e0d')} />
                   </SelectTrigger>
                   <SelectContent>
                     {files.map((file) => (
@@ -322,7 +335,7 @@ export function FigmaImportDialog({
                   ) : (
                     <FigmaIcon className="size-4" />
                   )}
-                  Connect
+                  {betaUiText('beta_1a2303ede074')}
                 </Button>
               ) : null}
             </div>
@@ -330,23 +343,26 @@ export function FigmaImportDialog({
 
           {busy === 'files' || busy === 'frames' ? (
             <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-              <Loader2 className="mr-2 size-4 animate-spin" /> Loading from Figma…
+              <Loader2 className="mr-2 size-4 animate-spin" />{' '}
+              {translateUi('loading_from_figma_f34d9916')}{' '}
             </div>
           ) : linkedOnly ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-primary bg-primary/5 px-3 py-2 text-sm">
-              <span>The linked frame is ready to import.</span>
+              <span>{betaUiText('beta_9ac90aa22a4b')}</span>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() => void chooseFile(fileKey, selected)}
               >
-                Show all frames in this file
+                {betaUiText('beta_22dce7eaee5a')}
               </Button>
             </div>
           ) : frames.length ? (
             <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <legend className="mb-2 text-xs font-medium text-muted-foreground">Frames</legend>
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">
+                {translateUi('frames_2c447e8d')}
+              </legend>
               {frames.map((frame) => {
                 const checked = selected.includes(frame.id);
                 return (
@@ -389,19 +405,22 @@ export function FigmaImportDialog({
             </fieldset>
           ) : fileKey && busy === null && !failure ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              No frames found in this file.
+              {betaUiText('beta_82a02d496f04')}
             </p>
           ) : null}
         </div>
         <div className="flex items-center justify-between border-t border-border px-5 py-3">
           <p className="text-xs text-muted-foreground">
             {selected.length
-              ? `${selected.length} selected`
-              : `Select up to ${FIGMA_IMPORT_MAX_FRAMES} frames`}
+              ? betaUiText('beta_975acbfeba9a', { value0: selected.length })
+              : betaUiText('beta_fe9ad4705b2e', {
+                  value0: String(FIGMA_IMPORT_MAX_FRAMES),
+                })}
           </p>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
             <Button
               type="button"
@@ -413,7 +432,9 @@ export function FigmaImportDialog({
               ) : (
                 <FigmaIcon className="size-4" />
               )}
-              {busy === 'import' ? 'Importing…' : 'Import'}
+              {busy === 'import'
+                ? betaUiText('beta_c01c4324f1fa')
+                : betaUiText('beta_2cff9baabf56')}
             </Button>
           </div>
         </div>

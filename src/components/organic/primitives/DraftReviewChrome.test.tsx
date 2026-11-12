@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { createTranslator, NextIntlClientProvider } from 'next-intl';
 import type * as React from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { PublishAccount } from '@/lib/organic/publishTargets';
+import commonEn from '../../../../messages/common/en.json';
+import commonEs from '../../../../messages/common/es.json';
+import commonPt from '../../../../messages/common/pt-BR.json';
+import en from '../../../../messages/organic/en.json';
+import es from '../../../../messages/organic/es.json';
+import pt from '../../../../messages/organic/pt-BR.json';
 import { ReadinessLine, ReviewFooter, ReviewIdentityRow } from './DraftReviewChrome';
 
 afterEach(cleanup);
@@ -18,7 +26,11 @@ describe('ReadinessLine', () => {
       <ReadinessLine
         items={[
           { key: 'caption', message: 'Add a caption', fix: 'caption' },
-          { key: 'account', message: 'Connect an Instagram account', fix: 'account' },
+          {
+            key: 'account',
+            message: 'Connect an Instagram account',
+            fix: 'account',
+          },
         ]}
         readyLabel="Ready to schedule"
         onFix={onFix}
@@ -101,7 +113,12 @@ describe('ReviewFooter', () => {
     render(
       <ReviewFooter
         primary={action}
-        secondary={{ ...action, label: 'Publish now', busyLabel: 'Publishing…', onClick: publish }}
+        secondary={{
+          ...action,
+          label: 'Publish now',
+          busyLabel: 'Publishing…',
+          onClick: publish,
+        }}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Publish now' }));
@@ -193,7 +210,9 @@ describe('ReviewIdentityRow', () => {
     "names the frame's stamped account from the candidates, never an id",
     () => {
       renderRow();
-      const trigger = screen.getByRole('button', { name: 'Instagram account: @acme_b' });
+      const trigger = screen.getByRole('button', {
+        name: 'Instagram account: @acme_b',
+      });
       expect(trigger.getAttribute('data-account-id')).toBe('acct-b');
       expect(document.querySelector('[data-review-account]')?.textContent).toBe('@acme_b');
       expect(screen.getByText('Carousel · Tue Oct 13, 10:00 AM PDT')).toBeTruthy();
@@ -211,7 +230,9 @@ describe('ReviewIdentityRow', () => {
     () => {
       renderRow({ selectedAccountId: 'some-foreign-uuid' });
       expect(
-        screen.getByRole('button', { name: 'Instagram account: Choose account' }),
+        screen.getByRole('button', {
+          name: 'Instagram account: Choose account',
+        }),
       ).toBeTruthy();
       expect(document.querySelector('[data-review-account]')?.textContent).toBe('Choose account');
     },
@@ -260,7 +281,9 @@ describe('ReviewIdentityRow', () => {
     'disables the picker with a visible reason',
     () => {
       renderRow({ pickerDisabledReason: 'Published posts keep their account' });
-      const trigger = screen.getByRole('button', { name: 'Instagram account: @acme_b' });
+      const trigger = screen.getByRole('button', {
+        name: 'Instagram account: @acme_b',
+      });
       expect(
         trigger.hasAttribute('disabled') || trigger.getAttribute('aria-disabled') === 'true',
       ).toBe(true);
@@ -292,7 +315,9 @@ describe('ReviewIdentityRow', () => {
       const reauth = within(group).getByRole('radio', { name: '@acme_old' });
       const reason = document.getElementById(reauth.getAttribute('aria-describedby') ?? '');
       expect(reason?.textContent).toBe('Needs reconnecting before it can post');
-      const reconnect = within(group).getByRole('link', { name: 'Reconnect @acme_old' });
+      const reconnect = within(group).getByRole('link', {
+        name: 'Reconnect @acme_old',
+      });
       expect(reconnect.getAttribute('href')).toBe('/settings?section=integrations');
       expect(reconnect.getAttribute('target')).toBe('_blank');
     },
@@ -331,7 +356,9 @@ describe('ReviewIdentityRow', () => {
     async () => {
       const { onSelectAccount } = renderRow({ selectedAccountId: 'acct-a' });
       let group = openPicker();
-      fireEvent.keyDown(within(group).getByRole('radio', { name: '@acme_a' }), { key: 'Escape' });
+      fireEvent.keyDown(within(group).getByRole('radio', { name: '@acme_a' }), {
+        key: 'Escape',
+      });
       await act(async () => {});
       expect(onSelectAccount).not.toHaveBeenCalled();
 
@@ -340,7 +367,9 @@ describe('ReviewIdentityRow', () => {
       acmeA.focus();
       fireEvent.keyDown(acmeA, { key: 'ArrowDown' });
       await act(async () => {});
-      fireEvent.keyDown(within(group).getByRole('radio', { name: '@acme_b' }), { key: 'Escape' });
+      fireEvent.keyDown(within(group).getByRole('radio', { name: '@acme_b' }), {
+        key: 'Escape',
+      });
       await act(async () => {});
       expect(onSelectAccount).not.toHaveBeenCalled();
     },
@@ -367,3 +396,65 @@ describe('ReviewIdentityRow', () => {
     TIMEOUT_MS,
   );
 });
+
+for (const [locale, messages, common] of [
+  ['en', en, commonEn],
+  ['pt-BR', pt, commonPt],
+  ['es', es, commonEs],
+] as const) {
+  const t = createTranslator({
+    locale,
+    namespace: 'organic',
+    messages: { organic: messages },
+    onError: (error) => {
+      throw error;
+    },
+  });
+  it(`${locale}: names the account radio group in the UI language and keyboard selection preserves raw account IDs`, async () => {
+    const accounts = [ACME_A, ACME_B];
+    const before = structuredClone(accounts);
+    const onSelect = mock((_id: string) => {});
+    const view = render(
+      <NextIntlClientProvider
+        locale={locale}
+        timeZone="UTC"
+        messages={{ organic: messages, common }}
+        onError={(error) => {
+          throw error;
+        }}
+      >
+        <ReviewIdentityRow
+          platform="instagram"
+          accounts={accounts}
+          selectedAccountId="acct-a"
+          onSelectAccount={onSelect}
+          summary="Authored date and content summary"
+          menu={null}
+        />
+      </NextIntlClientProvider>,
+    );
+    const trigger = view.getByRole('button', {
+      name: t('platformAccountValue', {
+        platform: 'Instagram',
+        account: '@acme_a',
+      }),
+    });
+    expect(trigger.getAttribute('data-account-id')).toBe('acct-a');
+    fireEvent.click(trigger);
+    const group = view.getByRole('radiogroup', {
+      name: t('platformAccountGroup', { platform: 'Instagram' }),
+    });
+    expect(view.getByText('Authored date and content summary')).toBeTruthy();
+    const first = within(group).getByRole('radio', { name: '@acme_a' });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    await act(async () => {});
+    const second = within(group).getByRole('radio', { name: '@acme_b' });
+    expect(second.getAttribute('aria-checked')).toBe('true');
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.keyDown(second, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('acct-b');
+    expect(accounts).toEqual(before);
+  });
+}

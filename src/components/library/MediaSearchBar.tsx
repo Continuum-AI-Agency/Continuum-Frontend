@@ -13,7 +13,9 @@ import {
   type MediaSource,
 } from '@continuum/contracts';
 import { Loader2, Search, X } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
+import type { UiLocale } from '@/i18n/config';
 import { http } from '@/lib/api/http';
 import {
   libraryRatingField,
@@ -128,8 +130,8 @@ const KIND_LABEL: Record<MediaKind, string> = {
   file: 'Project files',
 };
 
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+function shortDate(iso: string, locale: UiLocale = 'en'): string {
+  return new Date(iso).toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
@@ -140,19 +142,26 @@ function shortDate(iso: string): string {
 export function interpretedFilterChips(
   filters: InterpretedFilters,
   fields: readonly CustomField[] = [],
+  locale: UiLocale = 'en',
 ): { key: string; label: string }[] {
   const chips: { key: string; label: string }[] = [];
   if (filters.kind) chips.push({ key: 'kind', label: KIND_LABEL[filters.kind] });
   if (filters.tags?.length) chips.push({ key: 'tags', label: `Tagged ${filters.tags.join(', ')}` });
   if (filters.source)
-    chips.push({ key: 'source', label: SOURCE_LABEL[filters.source] ?? filters.source });
+    chips.push({
+      key: 'source',
+      label: SOURCE_LABEL[filters.source] ?? filters.source,
+    });
   if (filters.reviewStatus) {
     const status = filters.reviewStatus.replaceAll('_', ' ');
-    chips.push({ key: 'reviewStatus', label: status[0].toUpperCase() + status.slice(1) });
+    chips.push({
+      key: 'reviewStatus',
+      label: status[0].toUpperCase() + status.slice(1),
+    });
   }
   if (filters.createdAfter || filters.createdBefore) {
-    const from = filters.createdAfter ? shortDate(filters.createdAfter) : 'Any time';
-    const to = filters.createdBefore ? shortDate(filters.createdBefore) : 'now';
+    const from = filters.createdAfter ? shortDate(filters.createdAfter, locale) : 'Any time';
+    const to = filters.createdBefore ? shortDate(filters.createdBefore, locale) : 'now';
     chips.push({ key: 'created', label: `${from} – ${to}` });
   }
   for (const chip of structuredFilterChips(filters, fields)) {
@@ -202,6 +211,10 @@ export function MediaSearchBar({
   onClear,
   className,
 }: Props) {
+  const calendarLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [strategy, setStrategy] = useState<SearchStrategy | null>(null);
@@ -348,13 +361,13 @@ export function MediaSearchBar({
           type="text"
           value={query}
           onChange={handleChange}
-          placeholder="Describe what you're looking for…"
+          placeholder={translateUi('describe_what_you_re_looking_for_9200ea3a')}
           className="flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground/60"
         />
         {query && (
           <button
             type="button"
-            aria-label="Clear search"
+            aria-label={translateUi('clear_search_3b7ea517')}
             onClick={clearSearch}
             className="text-muted-foreground/60 hover:text-foreground transition-colors"
           >
@@ -362,9 +375,10 @@ export function MediaSearchBar({
           </button>
         )}
       </form>
-      {interpreted && interpretedFilterChips(interpreted.filters, customFields).length > 0 ? (
+      {interpreted &&
+      interpretedFilterChips(interpreted.filters, customFields, calendarLocale).length > 0 ? (
         <div data-testid="nl-search-filters" className="flex flex-wrap items-center gap-1 px-1">
-          {interpretedFilterChips(interpreted.filters, customFields).map((chip) => (
+          {interpretedFilterChips(interpreted.filters, customFields, calendarLocale).map((chip) => (
             <span
               key={chip.key}
               data-testid="nl-search-filter"
@@ -374,7 +388,9 @@ export function MediaSearchBar({
               {chip.label}
               <button
                 type="button"
-                aria-label={`Remove filter ${chip.label}`}
+                aria-label={translateUi('remove_filter_value0_9165dc9c', {
+                  value0: String(chip.label),
+                })}
                 onClick={() => void removeInterpretedFilter(chip.key)}
                 className="rounded-full text-muted-foreground hover:text-foreground"
               >
@@ -386,7 +402,8 @@ export function MediaSearchBar({
       ) : null}
       {strategy === 'lexical' && !searching && (
         <p className="px-1 text-xs leading-tight text-muted-foreground/70">
-          Keyword results — this media hasn't been analyzed yet.
+          {' '}
+          {translateUi('keyword_results_this_media_hasn_t_b_1fa78c37')}{' '}
         </p>
       )}
     </div>

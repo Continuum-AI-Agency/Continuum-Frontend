@@ -74,10 +74,18 @@ mock.module('@/lib/library/templateSources', () => ({
   }),
   saveTemplateRevision: saves,
 }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show: shows }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show: shows }),
+}));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApplyDesignSystemButton } from './ApplyDesignSystemButton';
 
 const revision = {
@@ -87,7 +95,9 @@ const revision = {
 } as TemplateRevision;
 
 function renderButton(onCreated = mock(async (_saved: TemplateRevision) => {})) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
     <QueryClientProvider client={client}>
       <ApplyDesignSystemButton
@@ -106,7 +116,10 @@ const tap = () => fireEvent.click(screen.getByRole('button', { name: 'Apply my d
 
 beforeEach(() => {
   brand = {
-    brandKit: { typography: { primary: 'Montserrat', secondary: null }, colors: ['#E30613'] },
+    brandKit: {
+      typography: { primary: 'Montserrat', secondary: null },
+      colors: ['#E30613'],
+    },
   };
   saveFailures = 0;
 });
@@ -135,7 +148,9 @@ test('one tap branches a tagged Brand-aligned variant from the revision on scree
     },
   });
   expect(onCreated.mock.calls[0]![0].sourceAssetId).toBe(SAVED_ASSET);
-  expect(shows.mock.calls.at(-1)![0]).toMatchObject({ title: 'Brand-aligned variant created' });
+  expect(shows.mock.calls.at(-1)![0]).toMatchObject({
+    title: 'Brand-aligned variant created',
+  });
 });
 
 test('a retry after a failed save replays the same intent', async () => {
@@ -158,7 +173,9 @@ test('a brand with no colours and no held faces saves nothing', async () => {
   renderButton();
   tap();
   await waitFor(() =>
-    expect(shows.mock.calls.at(-1)?.[0]).toMatchObject({ title: 'Nothing to apply' }),
+    expect(shows.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: 'Nothing to apply',
+    }),
   );
   expect(saves).not.toHaveBeenCalled();
 });

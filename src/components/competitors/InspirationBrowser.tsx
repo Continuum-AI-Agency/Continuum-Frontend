@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The one Inspiration surface, shared by the Library tab, the Brand Spy
 // workspace, and the dashboard organic widget. Sorts competitor content by
 // source (Organic | Paid | All | Saved), scopes it to a tracked competitor via the
@@ -10,13 +12,13 @@
 // `compact` trims chrome for the dashboard widget.
 
 import { RefreshCw, Search } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { AdSnapshotGrid } from '@/components/competitor-spy/AdSnapshotGrid';
 import { CompetitorQuickSelectChips } from '@/components/competitor-spy/CompetitorQuickSelectChips';
 import { CompetitorRail } from '@/components/competitor-spy/CompetitorRail';
 import { competitorHealthChip } from '@/components/competitor-spy/competitorHealth';
 import { SaveToBoardButton } from '@/components/competitor-spy/SaveToBoardButton';
+import { useRouter } from '@/i18n/navigation';
 import {
   MAX_INSTAGRAM_POSTS,
   useAdCounts,
@@ -44,7 +46,10 @@ const SOURCE_OPTIONS: Array<{ id: Source; label: string }> = [
   { id: 'saved', label: 'Saved' },
 ];
 
-const STATUS_OPTIONS: Array<{ id: 'all' | 'active' | 'paused'; label: string }> = [
+const STATUS_OPTIONS: Array<{
+  id: 'all' | 'active' | 'paused';
+  label: string;
+}> = [
   { id: 'all', label: 'All' },
   { id: 'active', label: 'Active' },
   { id: 'paused', label: 'Paused' },
@@ -59,6 +64,7 @@ function SyncButton({
   competitorId?: string;
   size?: 'sm' | 'md';
 }) {
+  const uiText = useTranslations('competitor');
   const sync = useCompetitorSync(brandId);
   const pending = sync.isPending;
   return (
@@ -72,7 +78,7 @@ function SyncButton({
       )}
     >
       <RefreshCw className={cn('size-4', pending && 'animate-spin')} />
-      <span>{pending ? 'Syncing…' : 'Sync'}</span>
+      <span>{pending ? uiText('syncing_8a046cc') : uiText('sync_8d261a3')}</span>
     </button>
   );
 }
@@ -80,6 +86,7 @@ function SyncButton({
 // One-line "is anything actually working?" summary for the compact widget, where
 // the full health rail is hidden.
 function HealthSummary({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('competitor');
   const { data: competitors } = useCompetitors(brandId);
   const { data: adCounts } = useAdCounts(brandId);
   const list = competitors ?? [];
@@ -90,21 +97,24 @@ function HealthSummary({ brandId }: { brandId: string }) {
   }).length;
   return (
     <span className="text-xs text-muted-foreground">
-      {list.length} competitor{list.length === 1 ? '' : 's'}
-      {needsAttention > 0 ? ` · ${needsAttention} need attention` : ''}
+      {uiText('m_f2e835e7e6', {
+        count: list.length,
+        attention: needsAttention,
+      })}
     </span>
   );
 }
 
 function KeywordSearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const uiText = useTranslations('competitor');
   return (
     <div className="relative min-w-0 flex-1">
       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Search copy, hooks, themes…"
-        aria-label="Search paid ad copy"
+        placeholder={uiText('search_copy_hooks_themes_14f3d09')}
+        aria-label={uiText('search_paid_ad_copy_cb8233e')}
         className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm"
       />
     </div>
@@ -150,8 +160,15 @@ function AllFeed({
   feedLimit: number;
   gridClassName?: string;
 }) {
+  const uiText = useTranslations('competitor');
   const posts = useInstagramPosts({ brandId, competitorId, limit: feedLimit });
-  const timeline = useAdTimeline({ brandId, competitorId, status, q, limit: feedLimit });
+  const timeline = useAdTimeline({
+    brandId,
+    competitorId,
+    status,
+    q,
+    limit: feedLimit,
+  });
   const items = useMemo(
     () => buildInspirationFeed(posts.data?.items ?? [], timeline.data ?? []),
     [posts.data, timeline.data],
@@ -163,7 +180,7 @@ function AllFeed({
     <>
       {paidOnlyFailed ? (
         <p className="pb-2 text-xs text-muted-foreground">
-          Competitor paid ads failed to load. Showing organic posts only.
+          {uiText('competitor_paid_ads_failed_to_load_showing_or_fd8ea78')}
         </p>
       ) : null}
       <InspirationFeedGrid
@@ -198,6 +215,7 @@ export function InspirationBrowser({
   feedLimit?: number;
   onManageCompetitors?: () => void;
 }) {
+  const uiText = useTranslations('competitor');
   const router = useRouter();
   const [source, setSource] = useState<Source>(defaultSource);
   const [competitorId, setCompetitorId] = useState<string | undefined>(undefined);
@@ -224,7 +242,7 @@ export function InspirationBrowser({
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Segmented
-          label="Source"
+          label={uiText('source_0e570ca')}
           value={source}
           options={SOURCE_OPTIONS}
           onChange={setSource}
@@ -233,7 +251,7 @@ export function InspirationBrowser({
         {showKeyword && !compact ? <KeywordSearch value={query} onChange={setQuery} /> : null}
         {source === 'paid' && !compact ? (
           <Segmented
-            label="Ad status"
+            label={uiText('ad_status_e6d4739')}
             value={status ?? 'all'}
             options={STATUS_OPTIONS}
             onChange={(next) => setStatus(next === 'all' ? undefined : next)}

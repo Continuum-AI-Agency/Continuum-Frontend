@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The pieces the four Meta views share: their frame (with the Meta chip), the one-line states
 // a view shows when its read is not in, the headline figure a small view leads with, the
@@ -73,9 +74,11 @@ export function MetaFrame({
 
 /** The window line a view opens with, and whatever it adds about its rows. */
 export function WindowLine({ detail, testId }: { detail?: string; testId: string }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <p className="text-muted-foreground text-xs" data-testid={`${testId}-window`}>
-      {META_WINDOW_LABEL}
+      {betaUiText('metaWindow')}
       {detail ? ` · ${detail}` : ''}
     </p>
   );
@@ -111,10 +114,16 @@ export function ReadNote({
   what: string;
   testId: string;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const thing = betaUiText('metaReadThing', {
+    kind: what === 'ad sets' ? 'adsets' : what,
+    fallback: what,
+  });
+
   if (state.status === 'loading') {
     return (
       <Skeleton
-        aria-label={`Reading ${what}`}
+        aria-label={betaUiText('metaReadLoading', { thing })}
         className={cn('w-full', SKELETON_HEIGHT[size])}
         data-testid={`${testId}-loading`}
       />
@@ -122,7 +131,7 @@ export function ReadNote({
   }
   if (state.status === 'no-account') {
     return (
-      <LensNote testId={`${testId}-empty`}>Select a Meta ad account to read its {what}.</LensNote>
+      <LensNote testId={`${testId}-empty`}>{betaUiText('metaReadMissing', { thing })}</LensNote>
     );
   }
   return (
@@ -130,9 +139,9 @@ export function ReadNote({
       className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs"
       data-testid={`${testId}-error`}
     >
-      The {what} could not be read.
+      {betaUiText('metaReadFailure', { thing })}
       <Button onClick={state.retry} size="xs" variant="outline">
-        Retry
+        {betaUiText('beta_942087cc2d41')}
       </Button>
     </p>
   );
@@ -270,7 +279,12 @@ export function LegendItem({
   );
 }
 
-export type ChartTipState = { x: number; y: number; width: number; content: ReactNode } | null;
+export type ChartTipState = {
+  x: number;
+  y: number;
+  width: number;
+  content: ReactNode;
+} | null;
 
 /** A tooltip for chart marks, positioned inside `host` above the mark under the pointer (or
  *  with the keyboard focus). */
@@ -302,7 +316,11 @@ export function ChartTip({ tip }: { tip: ChartTipState }) {
     <div
       className="pointer-events-none absolute z-20 w-max max-w-[15rem] rounded-md border bg-popover px-2 py-1 text-popover-foreground text-xs shadow-sm"
       role="tooltip"
-      style={{ left: tip.x, top: tip.y, transform: `translate(${shift}, calc(-100% - 6px))` }}
+      style={{
+        left: tip.x,
+        top: tip.y,
+        transform: `translate(${shift}, calc(-100% - 6px))`,
+      }}
     >
       {tip.content}
     </div>

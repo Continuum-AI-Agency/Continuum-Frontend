@@ -49,9 +49,19 @@ const skillRow = (id: string, overrides: Partial<Skill> = {}): Skill => ({
   ...overrides,
 });
 const shortcutRow = (id: string): Skill =>
-  skillRow(id, { isTemplate: true, brandId: null, tags: ['shortcut', 'shortcut:light'] });
+  skillRow(id, {
+    isTemplate: true,
+    brandId: null,
+    tags: ['shortcut', 'shortcut:light'],
+  });
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,13 +93,19 @@ describe('effectiveDesignSections', () => {
 
   it('subtracts a wired section from the ambient row', () => {
     expect(
-      effectiveDesignSections(undefined, { autoApplied: IMAGE_ROW, wired: ['palette'] }),
+      effectiveDesignSections(undefined, {
+        autoApplied: IMAGE_ROW,
+        wired: ['palette'],
+      }),
     ).toEqual(['imagery', 'logo']);
   });
 
   it('subtracts a wired section from an explicit selection too', () => {
     expect(
-      effectiveDesignSections(['palette', 'motion'], { autoApplied: IMAGE_ROW, wired: ['motion'] }),
+      effectiveDesignSections(['palette', 'motion'], {
+        autoApplied: IMAGE_ROW,
+        wired: ['motion'],
+      }),
     ).toEqual(['palette']);
   });
 
@@ -413,7 +429,9 @@ describe('GroundingPopover — inspector sections', () => {
     renderInspector();
     fireEvent.click(screen.getByRole('button', { name: /Skills/ }));
 
-    fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 's10' } });
+    fireEvent.change(screen.getByLabelText('Search skills'), {
+      target: { value: 's10' },
+    });
     expect(screen.getAllByText(/^Skill s\d+$/).map((node) => node.textContent)).toEqual([
       'Skill s10',
     ]);

@@ -12,6 +12,7 @@ import {
   worstFitByKey,
 } from '@continuum/contracts';
 import { useQueries, useQuery } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type JSX, memo, useEffect, useMemo } from 'react';
 import type { PreviewFormat } from '@/components/forge/FormatPreview';
 import { cn } from '@/lib/utils';
@@ -61,7 +62,11 @@ export const liveKitQuery = ({ brandId, environment, templateKey, format, atSec 
         brandId,
         environment,
         templateKey,
-        format: { id: format.id, ratio: format.ratio, comp: format.comp?.name ?? null },
+        format: {
+          id: format.id,
+          ratio: format.ratio,
+          comp: format.comp?.name ?? null,
+        },
         ...(atSec !== null ? { atSec } : {}),
       },
       signal,
@@ -73,7 +78,10 @@ export const liveKitQuery = ({ brandId, environment, templateKey, format, atSec 
 });
 
 export function useLiveKit(
-  args: Omit<KitArgs, 'format'> & { format: PreviewFormat | undefined; enabled: boolean },
+  args: Omit<KitArgs, 'format'> & {
+    format: PreviewFormat | undefined;
+    enabled: boolean;
+  },
 ) {
   const { format, enabled, ...rest } = args;
   // The key and the fetch are the picked format's; with none picked the query never runs.
@@ -131,7 +139,14 @@ export function useLiveFit(args: {
   return useMemo((): LiveFit => {
     if (!active) return { state: 'unmeasured' };
     const loaded = kits.flatMap((query, i) =>
-      query.data ? [{ format: formats[i]?.ratio ?? formats[i]?.label ?? '', kit: query.data }] : [],
+      query.data
+        ? [
+            {
+              format: formats[i]?.ratio ?? formats[i]?.label ?? '',
+              kit: query.data,
+            },
+          ]
+        : [],
     );
     if (loaded.length < kits.length)
       return kits.some((query) => !query.data && query.isError)
@@ -231,7 +246,10 @@ export function LiveImage({
       className={className}
       onLoad={() => {
         if (since !== undefined)
-          performance.measure('forge-live-frame', { start: since, end: performance.now() });
+          performance.measure('forge-live-frame', {
+            start: since,
+            end: performance.now(),
+          });
       }}
     />
   );
@@ -297,16 +315,18 @@ export function VariationStrip({
   selectedId: string;
   onSelect: (rowId: string) => void;
 }): JSX.Element {
+  const translateUi = useUiTranslations('forge');
+
   return (
     <fieldset
-      aria-label="All variations"
+      aria-label={translateUi('all_variations_1023483b')}
       className="m-0 flex min-w-0 shrink-0 items-end gap-1.5 overflow-x-auto border-0 p-0 pb-1"
     >
       {rows.slice(0, STRIP_MAX).map((row) => (
         <LiveThumb
           key={row.id}
           kit={kit}
-          label={row.label.trim() || 'Untitled'}
+          label={row.label.trim() || translateUi('untitled_f59ab8d1')}
           valuesKey={JSON.stringify(row.values)}
           pictures={pictures}
           selected={row.id === selectedId}
@@ -315,7 +335,7 @@ export function VariationStrip({
       ))}
       {rows.length > STRIP_MAX ? (
         <span className="shrink-0 text-2xs text-muted-foreground">
-          +{rows.length - STRIP_MAX} more
+          +{rows.length - STRIP_MAX} {translateUi('more_187897ce')}{' '}
         </span>
       ) : null}
     </fieldset>

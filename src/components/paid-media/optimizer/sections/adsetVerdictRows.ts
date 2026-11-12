@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Joins the ads of ONE ad set to the brand-wide creative report's verdicts, so a
 // budget move on that ad set can be read next to the kill/scale/iterate call on
 // the creatives carrying it.
@@ -39,7 +43,11 @@ export function joinAdsetCreativeRows({
   const verdictByAdId = new Map(verdicts.map((verdict) => [verdict.adId, verdict]));
   return ads.map((ad) => {
     const verdict = verdictByAdId.get(ad.id) ?? null;
-    return { ad, verdict, thinEvidence: verdict ? hasThinVerdictEvidence(verdict) : false };
+    return {
+      ad,
+      verdict,
+      thinEvidence: verdict ? hasThinVerdictEvidence(verdict) : false,
+    };
   });
 }
 
@@ -73,14 +81,26 @@ export function summarizeVerdictCoverage({
  * The plain-language disclosure for a coverage state. `full` returns null — a
  * fully covered ad set needs no caveat, the rows speak for themselves.
  */
-export function verdictCoverageNotice(coverage: AdsetVerdictCoverage): string | null {
+export function verdictCoverageNotice(
+  coverage: AdsetVerdictCoverage,
+  uiTranslate?: ScaleCopy,
+): string | null {
   switch (coverage.kind) {
     case 'no_report':
-      return 'No creative report for this brand yet, so none of these ads has a verdict.';
+      return uiTranslate
+        ? uiTranslate('no_creative_report_for_this_brand_yet_so_none_0530694')
+        : 'No creative report for this brand yet, so none of these ads has a verdict.';
     case 'none_covered':
-      return 'The current creative report covers none of these ads, so there is no verdict either way.';
+      return uiTranslate
+        ? uiTranslate('the_current_creative_report_covers_none_of_th_5c39b86')
+        : 'The current creative report covers none of these ads, so there is no verdict either way.';
     case 'partial':
-      return `${coverage.total - coverage.covered} of ${coverage.total} ads are not covered by the current creative report.`;
+      return uiTranslate
+        ? uiTranslate('helper_fa662db2cade', {
+            v0: coverage.total - coverage.covered,
+            v1: coverage.total,
+          })
+        : `${coverage.total - coverage.covered} of ${coverage.total} ads are not covered by the current creative report.`;
     case 'full':
       return null;
   }

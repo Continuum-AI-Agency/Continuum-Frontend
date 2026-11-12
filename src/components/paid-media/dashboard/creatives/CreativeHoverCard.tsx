@@ -1,9 +1,10 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import { ChatMediaThumb, MediaFallbackTile } from '@/components/chat/media/ChatMedia';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { ActionLog } from '@/lib/types/dco';
 import { cn } from '@/lib/utils';
 
@@ -55,8 +56,14 @@ function ThumbTile({ url, label }: { url: string | null; label: string }) {
 }
 
 function HoverCardBody({ ad, logs, onOpenDetail }: Omit<CreativeHoverCardProps, 'children'>) {
+  const uiText = useTranslations('scale');
   const summary = React.useMemo(
-    () => summarizeCreativeRotations({ adId: ad.id, logs, currentCreative: ad.creative ?? null }),
+    () =>
+      summarizeCreativeRotations({
+        adId: ad.id,
+        logs,
+        currentCreative: ad.creative ?? null,
+      }),
     [ad.id, ad.creative, logs],
   );
   const { latestSwap, rotations } = summary;
@@ -86,35 +93,40 @@ function HoverCardBody({ ad, logs, onOpenDetail }: Omit<CreativeHoverCardProps, 
           'hover:bg-muted/40',
         )}
       >
-        {latestSwap ? 'View full history →' : 'Open details →'}
+        {latestSwap ? uiText('view_full_history_aaa90b9') : uiText('open_details_db3afa4')}
       </button>
     </div>
   );
 }
 
 function SwapReason({ swap }: { swap: RotationEvent }) {
-  const reason = swap.decisionNote ?? swap.error ?? 'No reason recorded.';
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
+  const reason =
+    swap.decisionNote ??
+    (swap.error ? formatUiError(new Error(swap.error)) : uiText('creativeNoReason'));
   return (
     <div className="rounded-md border border-border/70 bg-muted/30 p-2">
       <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-        Why it changed
+        {uiText('why_it_changed_15c6f2d')}
       </div>
       <p className="mt-1 line-clamp-3 text-sm leading-snug text-foreground">{reason}</p>
       <div className="mt-2 flex items-center justify-between gap-2">
-        <ThumbTile url={swap.beforeUrl} label="Before" />
+        <ThumbTile url={swap.beforeUrl} label={uiText('before_9bb7250')} />
         <span className="text-muted-foreground" aria-hidden>
           →
         </span>
-        <ThumbTile url={swap.afterUrl} label="After" />
+        <ThumbTile url={swap.afterUrl} label={uiText('after_7b68fe5')} />
       </div>
     </div>
   );
 }
 
 function NoSwapState() {
+  const uiText = useTranslations('scale');
   return (
     <div className="rounded-md border border-dashed border-border/70 bg-muted/20 p-2 text-xs text-muted-foreground">
-      No DCO actions in this window.
+      {uiText('no_dco_actions_in_this_window_662cda0')}
     </div>
   );
 }

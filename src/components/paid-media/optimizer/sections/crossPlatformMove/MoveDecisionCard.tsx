@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
+
 // A cross-platform move in Activity: ONE decision, its legs as sub-rows with their own platform
 // receipt, and the move's state in words (prototipo.html Activity; escenarios 18 and 19).
 //
@@ -39,12 +47,53 @@ const STATE_TONE: Record<MoveState, string> = {
   undone: 'text-muted-foreground',
 };
 
-function platforms(list: MoveDecision['from']): string {
+function platforms(
+  list: MoveDecision['from'],
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
+  if (uiTranslate)
+    return list.length
+      ? new Intl.ListFormat(uiLocale, {
+          style: 'long',
+          type: 'conjunction',
+        }).format(list.map((p) => PLATFORM_NAMES[p]))
+      : uiTranslate('moveOnePlatform');
   return list.length > 0 ? list.map((p) => PLATFORM_NAMES[p]).join(' and ') : 'one platform';
 }
 
-function legStateText(leg: MoveDecisionLeg, currency: string | null): string {
-  const money = (minor: number | null) => (minor == null ? '—' : formatMinorExact(minor, currency));
+function moveFailureReason(
+  error: string | null | undefined,
+  platform: string,
+  t: ScaleCopy,
+): string {
+  if (platform === 'google_ads' && error && /^[A-Z][A-Z0-9_]+$/.test(error))
+    return t('platformGoogleRefusal', { code: error });
+  const code =
+    error && /^OAuthException 190(?:\b|$)/.test(error)
+      ? 'auth'
+      : error && /^40001(?:\b|$)/.test(error)
+        ? 'permission'
+        : 'other';
+  return t('moveRefusalReason', { code });
+}
+
+function legStateText(
+  leg: MoveDecisionLeg,
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
+  const money = (minor: number | null) =>
+    minor == null ? '—' : formatMinorExact(minor, currency, uiLocale);
+  if (uiTranslate)
+    return uiTranslate('moveLegState', {
+      state: leg.state,
+      undone: leg.row.reverted_by ? 'yes' : 'no',
+      before: money(leg.revert?.beforeMinor ?? null),
+      after: money(leg.revert?.afterMinor ?? null),
+      reason: moveFailureReason(leg.error, leg.platform, uiTranslate),
+    });
   switch (leg.state) {
     case 'applied':
       return leg.row.reverted_by ? 'applied, then undone' : 'applied';
@@ -61,12 +110,30 @@ function legStateText(leg: MoveDecisionLeg, currency: string | null): string {
   }
 }
 
-function stateExplainer(move: MoveDecision, currency: string | null): string | null {
+function stateExplainer(
+  move: MoveDecision,
+  currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string | null {
+  if (uiTranslate)
+    return ['compensated', 'stranded', 'refused'].includes(move.state)
+      ? uiTranslate('moveExplainer', {
+          state: move.state,
+          from: platforms(move.from, uiTranslate, uiLocale),
+          to: platforms(move.to, uiTranslate, uiLocale),
+          amount: formatMinorExact(move.amountMinor, currency, uiLocale),
+          reason: (() => {
+            const failed = move.legs.find((leg) => leg.state === 'refused');
+            return moveFailureReason(failed?.error, failed?.platform ?? '', uiTranslate);
+          })(),
+        })
+      : null;
   if (move.state === 'compensated') {
     return `${move.reason ?? 'A later leg failed'}. The ${platforms(move.from)} decrease was put back, so spend is where it was.`;
   }
   if (move.state === 'stranded') {
-    const amount = formatMinorExact(move.amountMinor, currency);
+    const amount = formatMinorExact(move.amountMinor, currency, uiLocale);
     return `${move.reason ?? 'A leg failed and so did its revert'}. ${platforms(move.from)} is up to ${amount}/day lower and ${platforms(move.to)} did not go up. Autopilot is paused on this portfolio until someone checks it.`;
   }
   if (move.state === 'refused') return move.reason;
@@ -76,6 +143,7 @@ function stateExplainer(move: MoveDecision, currency: string | null): string | n
 /** One leg's Undo. The dialog that is undoing it stays mounted until it is closed: the feed
  *  re-reads the leg as undone as soon as the undo lands (ActionRevertControl, G4). */
 function LegUndo({ leg, currency }: { leg: MoveDecisionLeg; currency: string | null }) {
+  const uiText = useTranslations('scale');
   const [open, setOpen] = React.useState(false);
   const portfolioId = leg.row.portfolio_id;
   if ((leg.undo === 'available' || open) && portfolioId) {
@@ -85,14 +153,17 @@ function LegUndo({ leg, currency }: { leg: MoveDecisionLeg; currency: string | n
         currency={currency}
         onOpenChange={setOpen}
         portfolioId={portfolioId}
-        title={`${readActionChange(leg.row).label} on ${PLATFORM_NAMES[leg.platform]}`}
+        title={uiText('template_fd32956785c1', {
+          v0: readActionChange(leg.row, uiText).label,
+          v1: PLATFORM_NAMES[leg.platform],
+        })}
       />
     );
   }
   if (leg.undo === 'after_increases') {
     return (
       <span className="text-muted-foreground text-xs" data-testid="move-leg-undo-waiting">
-        Undo after the increase
+        {uiText('undo_after_the_increase_fd43e29')}
       </span>
     );
   }
@@ -108,7 +179,9 @@ export function MoveDecisionCard({
   currency: string | null;
   className?: string;
 }) {
-  const explainer = stateExplainer(move, currency);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const explainer = stateExplainer(move, currency, uiText, uiLocale);
   return (
     <li
       className={cn('space-y-2 py-3', className)}
@@ -121,7 +194,7 @@ export function MoveDecisionCard({
             className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 font-semibold text-muted-foreground`}
           >
             <GavelIcon aria-hidden="true" className="size-3.5" />
-            Decision
+            {uiText('decision_640ae4b')}
           </span>
           <ActionMeta row={{ ...move.actorRow, ts: move.ts }} />
         </div>
@@ -129,13 +202,16 @@ export function MoveDecisionCard({
           className={cn(`${typeScale.label} font-semibold`, STATE_TONE[move.state])}
           data-testid="move-state"
         >
-          {STATE_LABEL[move.state]}
+          {uiText('moveState', { state: move.state })}
         </span>
       </div>
       <div className="space-y-0.5">
         <p className="font-semibold text-sm leading-snug">
-          Move {formatMinorExact(move.amountMinor, currency)}/day from {platforms(move.from)} to{' '}
-          {platforms(move.to)}
+          {uiText.rich('sentence_dc0e3122e8ff', {
+            v0: formatMinorExact(move.amountMinor, currency, uiLocale),
+            v1: platforms(move.from, uiText, uiLocale),
+            v2: platforms(move.to, uiText, uiLocale),
+          })}
         </p>
         {move.portfolioName ? (
           <p className="text-muted-foreground text-xs">{move.portfolioName}</p>
@@ -167,8 +243,14 @@ export function MoveDecisionCard({
             testId="move-decision-leg"
           >
             <span className="text-muted-foreground text-xs" data-testid="move-leg-state">
-              {legStateText(leg, currency)}
+              {legStateText(leg, currency, uiText, uiLocale)}
             </span>
+            {leg.error || leg.revert?.error ? (
+              <details className="text-muted-foreground text-xs">
+                <summary>{uiText('capiDiagnosticDetails')}</summary>
+                <code>{[leg.error, leg.revert?.error].filter(Boolean).join(' · ')}</code>
+              </details>
+            ) : null}
             {leg.receipt ? (
               <ReceiptToken className="mt-0 text-xs" platform={leg.platform} value={leg.receipt} />
             ) : null}

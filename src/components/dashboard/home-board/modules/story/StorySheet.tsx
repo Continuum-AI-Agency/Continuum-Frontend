@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale as useHomeLocale } from 'next-intl';
 
 // The weekly story opened: one slide at a time with a numbered list beside it, composed by
 // weeklyStory from the Home's reading plus one cheap stored read (the brief, under the same
@@ -44,14 +45,21 @@ function SlideBody({ slide }: { slide: StorySlide }) {
 }
 
 export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
+  const betaUiText = useBetaTranslations('dashboard');
+  const homeLocale = useHomeLocale();
+
   const today = new Date();
   const { reads } = useBriefReads(ctx.brandId, ctx.adAccounts);
-  const brief = briefView(reads, today);
-  const slides = weeklyStory({
-    reading: ctx.reading,
-    brief: brief.state === 'ready' ? (brief.entries[0] ?? null) : null,
-    today,
-  });
+  const brief = briefView(reads, today, betaUiText, homeLocale);
+  const slides = weeklyStory(
+    {
+      reading: ctx.reading,
+      brief: brief.state === 'ready' ? (brief.entries[0] ?? null) : null,
+      today,
+    },
+    betaUiText,
+    homeLocale,
+  );
   const [index, setIndex] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const current = Math.min(index, slides.length - 1);
@@ -81,7 +89,7 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
       </article>
       <div className="flex items-center justify-between gap-2">
         <Button
-          aria-label="Previous slide"
+          aria-label={betaUiText('beta_bfb549220c60')}
           disabled={current === 0}
           onClick={() => setIndex(current - 1)}
           size="icon-sm"
@@ -91,10 +99,10 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
           <ChevronLeftIcon className="size-4" />
         </Button>
         <span className="text-muted-foreground text-xs">
-          {current + 1} of {slides.length}
+          {current + 1} {betaUiText('beta_28391d3bc64e')} {slides.length}
         </span>
         <Button
-          aria-label="Next slide"
+          aria-label={betaUiText('beta_cdc93d1c8fe9')}
           disabled={current === slides.length - 1}
           onClick={() => setIndex(current + 1)}
           size="icon-sm"
@@ -104,7 +112,7 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
           <ChevronRightIcon className="size-4" />
         </Button>
       </div>
-      <ol aria-label="Slides" className="flex flex-col gap-0.5">
+      <ol aria-label={betaUiText('beta_a0ffe3818444')} className="flex flex-col gap-0.5">
         {slides.map((item, position) => (
           <li key={item.key}>
             <button
@@ -128,11 +136,9 @@ export default function StorySheet({ ctx }: { ctx: HomeBoardContext }) {
       </ol>
       <div className="flex flex-col gap-1.5 border-t pt-4">
         <Button className="self-start" onClick={() => setReportOpen(true)} size="sm" type="button">
-          <SendIcon aria-hidden className="size-3.5" /> Send as Continuum Report
+          <SendIcon aria-hidden className="size-3.5" /> {betaUiText('beta_fc89617be199')}
         </Button>
-        <p className="text-muted-foreground text-xs">
-          Emails the brand’s Continuum Report, built from the same accounts, now or on a schedule.
-        </p>
+        <p className="text-muted-foreground text-xs">{betaUiText('beta_5a1f69e943d0')}</p>
       </div>
       <SendContinuumReportDialog
         brandId={ctx.brandId}

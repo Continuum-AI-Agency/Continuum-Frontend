@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // PP-DT-B-suspended-account-buried-as-low-card: on Easy Fit's Google tab (2026-10-31) the one
 // fact that mattered — Google showed no ad in the whole account for five days — rendered as
@@ -15,7 +16,11 @@ mock.module('motion/react', () => {
       return React.createElement(tag, { ...rest, ref });
     });
   return {
-    motion: { section: passthrough('section'), span: passthrough('span'), div: passthrough('div') },
+    motion: {
+      section: passthrough('section'),
+      span: passthrough('span'),
+      div: passthrough('div'),
+    },
     useReducedMotion: () => false,
   };
 });
@@ -23,7 +28,10 @@ const realOptimizerData = await import('../../useOptimizerData');
 mock.module('../../useOptimizerData', () => ({
   ...realOptimizerData,
   useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
-  useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
+  useRevertOptimizerAction: () => ({
+    mutateAsync: async () => null,
+    isPending: false,
+  }),
 }));
 
 import { type AccountCandidate, accountCandidateSchema } from '@continuum/contracts';

@@ -1,5 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { GalleryHorizontalEnd, Plus } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { AddPostContextMenu } from './AddPostContextMenu';
 import { AddPostMenu } from './AddPostMenu';
-import { parseTimeLabelToMinutes } from './calendar-utils';
+import { formatWallClockLabel, parseTimeLabelToMinutes } from './calendar-utils';
 import { DraggableDraftCard } from './DraggableDraftCard';
 import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import type {
@@ -77,6 +78,8 @@ const PostedCellChip = React.memo(function PostedCellChip({
   isSelected: boolean;
   onSelectPost: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const isCarousel = isCarouselMediaType(post.mediaType);
   return (
     <button
@@ -84,7 +87,11 @@ const PostedCellChip = React.memo(function PostedCellChip({
       data-post-id={post.id}
       aria-pressed={isSelected}
       // Opens with the visible "Posted", so a voice user can say what they see.
-      aria-label={`${post.timeLabel} Posted on ${postPlatformLabel(post.platform)}: ${post.title}`}
+      aria-label={uiText('postedOnPlatform', {
+        time: formatWallClockLabel(post.timeLabel, uiLocale),
+        platform: postPlatformLabel(post.platform),
+        title: post.title,
+      })}
       onClick={() => onSelectPost(post, metricsPostHref(post))}
       className={cn(
         'flex w-full min-w-0 flex-col gap-0.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
@@ -94,10 +101,10 @@ const PostedCellChip = React.memo(function PostedCellChip({
       {/* The badge wraps under the time in a narrow column rather than being clipped. */}
       <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
         <span className="shrink-0 whitespace-nowrap text-2xs font-bold uppercase tracking-wider tabular-nums text-muted-foreground/70">
-          {post.timeLabel}
+          {formatWallClockLabel(post.timeLabel, uiLocale)}
         </span>
         <Badge variant="success" className="px-1.5 py-0 text-3xs">
-          Posted
+          {uiText('posted_afd80c5')}
         </Badge>
         {isCarousel ? <GalleryHorizontalEnd aria-hidden className="size-3 shrink-0" /> : null}
       </span>
@@ -133,6 +140,7 @@ export const PlannerCell = React.memo(function PlannerCell({
   onCreatePost,
   onSelectPost,
 }: PlannerCellProps) {
+  const uiText = useTranslations('organic');
   const isComingSoon = Boolean(platform.comingSoon);
   const canCreate = platform.canCreate && !isComingSoon;
   const droppableId = `planner-cell::${dayId}::${platform.key}`;
@@ -156,7 +164,10 @@ export const PlannerCell = React.memo(function PlannerCell({
     () =>
       [
         ...drafts.map((draft) => ({ kind: 'draft' as const, item: draft })),
-        ...postedContent.map((post) => ({ kind: 'posted' as const, item: post })),
+        ...postedContent.map((post) => ({
+          kind: 'posted' as const,
+          item: post,
+        })),
       ].sort((a, b) => {
         const timeA = parseTimeLabelToMinutes(a.item.timeLabel) ?? 0;
         const timeB = parseTimeLabelToMinutes(b.item.timeLabel) ?? 0;
@@ -266,7 +277,7 @@ export const PlannerCell = React.memo(function PlannerCell({
               compact ? 'h-8 text-3xs' : 'h-16 text-xs',
             )}
           >
-            Soon
+            {uiText('soon_cf0ee35')}
           </div>
         ) : canCreate && isEmptyCell ? (
           <AddPostMenu dayId={dayId} platformKey={platform.key} onCreatePost={onCreatePost}>
@@ -275,10 +286,13 @@ export const PlannerCell = React.memo(function PlannerCell({
               variant="outline"
               size="sm"
               className="mx-auto w-full border-dashed text-muted-foreground"
-              aria-label={`Add post for ${dayId} ${platform.label}`}
+              aria-label={uiText('addPostForDayPlatform', {
+                date: dayId,
+                platform: platform.label,
+              })}
             >
               <Plus data-icon="inline-start" />
-              Create
+              {uiText('createLabel')}
             </Button>
           </AddPostMenu>
         ) : readOnlyNotice && isEmptyCell ? (
@@ -296,7 +310,10 @@ export const PlannerCell = React.memo(function PlannerCell({
             variant="outline"
             size="icon-xs"
             className="absolute right-1 bottom-0 z-20 size-6 rounded-full border-dashed bg-background text-muted-foreground opacity-80 transition-opacity duration-150 hover:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
-            aria-label={`Add post for ${dayId} ${platform.label}`}
+            aria-label={uiText('addPostForDayPlatform', {
+              date: dayId,
+              platform: platform.label,
+            })}
           >
             <Plus />
           </Button>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The one platform multi-select (end state 6). Roles the benches rely on:
 // - trigger: a button whose accessible name starts `Change platforms` and names every selected
@@ -68,14 +69,6 @@ export type PlatformSelectorProps = {
   className?: string;
 };
 
-const LAST_PLATFORM_REASON = 'A post needs at least one platform';
-
-function triggerText(labels: string[]): string {
-  if (labels.length === 0) return 'Choose platforms';
-  if (labels.length <= 2) return labels.join(' + ');
-  return `${labels.length} platforms`;
-}
-
 export function PlatformSelector({
   selected,
   verdicts,
@@ -83,6 +76,7 @@ export function PlatformSelector({
   disabledReason,
   className,
 }: PlatformSelectorProps) {
+  const uiText = useTranslations('organic');
   const reasonIdPrefix = React.useId();
   const ordered = PUBLISH_PLATFORM_ORDER.filter((platform) => selected.includes(platform));
   const labels = ordered.map((platform) => PUBLISH_PLATFORM_LABELS[platform]);
@@ -95,7 +89,9 @@ export function PlatformSelector({
           render={
             <button
               type="button"
-              aria-label={`Change platforms — ${labels.length > 0 ? labels.join(', ') : 'none'} selected`}
+              aria-label={uiText('platformSelectorAria', {
+                platforms: labels.length > 0 ? labels.join(', ') : uiText('platformSelectorNone'),
+              })}
               aria-describedby={disabledReason ? `${reasonIdPrefix}-selector` : undefined}
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -104,7 +100,11 @@ export function PlatformSelector({
                   <PlatformIcon key={platform} platform={platform} className="size-3.5" />
                 ))}
               </span>
-              {triggerText(labels)}
+              {labels.length === 0
+                ? uiText('platformChoose')
+                : labels.length <= 2
+                  ? labels.join(' + ')
+                  : uiText('platformCount', { count: labels.length })}
               <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
             </button>
           }
@@ -116,9 +116,27 @@ export function PlatformSelector({
             const verdict = verdicts[platform];
             const reason =
               checked && selected.length === 1
-                ? LAST_PLATFORM_REASON
+                ? uiText('platformLast')
                 : verdict && !verdict.available
-                  ? (verdict.reason ?? `${label} is unavailable`)
+                  ? verdict.uiReason
+                    ? verdict.uiReason.code === 'caption'
+                      ? uiText('platformCaptionTooLong', {
+                          platform: label,
+                          max: verdict.uiReason.max,
+                          length: verdict.uiReason.length,
+                        })
+                      : verdict.uiReason.code === 'format'
+                        ? uiText('platformFormatUnsupported', {
+                            platform: label,
+                            format: verdict.uiReason.format,
+                          })
+                        : uiText(
+                            verdict.uiReason.code === 'reconnect'
+                              ? 'platformReconnect'
+                              : 'platformConnect',
+                            { platform: label },
+                          )
+                    : uiText('platformUnavailable', { platform: label })
                   : null;
             const reasonId = `${reasonIdPrefix}-${platform}`;
             return (

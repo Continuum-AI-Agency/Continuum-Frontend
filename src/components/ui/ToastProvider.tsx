@@ -3,6 +3,7 @@
 import { Toast as ToastPrimitive } from '@base-ui/react/toast';
 import { CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { registerToastSink } from './toast-imperative';
@@ -144,7 +145,11 @@ function ToastBridge({ children }: { children: React.ReactNode }) {
       title: options.title,
       description: options.description,
       timeout: durationMs === Number.POSITIVE_INFINITY ? 0 : durationMs,
-      data: { variant: options.variant ?? 'success', action: options.action, durationMs },
+      data: {
+        variant: options.variant ?? 'success',
+        action: options.action,
+        durationMs,
+      },
     });
   }, []);
 
@@ -157,6 +162,8 @@ function ToastBridge({ children }: { children: React.ReactNode }) {
 }
 
 function ToastList() {
+  const tUi = useTranslations('common');
+
   const { toasts, close } = ToastPrimitive.useToastManager<ToastData>();
 
   return (
@@ -206,7 +213,7 @@ function ToastList() {
                   ) : null}
                 </div>
                 <ToastPrimitive.Close
-                  aria-label="Dismiss toast"
+                  aria-label={tUi('m_f3cd0d79dd')}
                   className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 ${paletteItem.ring}`}
                 >
                   <X className="h-4 w-4" />

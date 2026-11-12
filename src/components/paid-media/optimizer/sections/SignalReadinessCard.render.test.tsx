@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -16,7 +17,13 @@ function snap(over: {
   days?: number;
   d14?: Partial<AdSetSnapshot['windows']['d14']>;
 }): AdSetSnapshot {
-  const zeroWindow = { spend: 0, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 };
+  const zeroWindow = {
+    spend: 0,
+    purchases: 0,
+    addToCarts: 0,
+    clicks: 0,
+    impressions: 0,
+  };
   const daily = Array.from({ length: over.days ?? 0 }, (_, i) => ({
     date: `2026-07-${String(i + 1).padStart(2, '0')}`,
     ...zeroWindow,
@@ -27,7 +34,11 @@ function snap(over: {
     currentBudget: 100,
     ageDays: over.days ?? 0,
     kpiField: over.kpiField,
-    windows: { d3: { ...zeroWindow }, d7: { ...zeroWindow }, d14: { ...zeroWindow, ...over.d14 } },
+    windows: {
+      d3: { ...zeroWindow },
+      d7: { ...zeroWindow },
+      d14: { ...zeroWindow, ...over.d14 },
+    },
     daily,
   };
 }
@@ -68,8 +79,18 @@ describe('SignalReadinessCard', () => {
 
   it('names the currency mismatch and its objective KPI', () => {
     const snapshots = [
-      snap({ id: 'a', kpiField: 'linkClicks', days: 20, d14: { linkClicks: 40 } }),
-      snap({ id: 'b', kpiField: 'linkClicks', days: 20, d14: { linkClicks: 30 } }),
+      snap({
+        id: 'a',
+        kpiField: 'linkClicks',
+        days: 20,
+        d14: { linkClicks: 40 },
+      }),
+      snap({
+        id: 'b',
+        kpiField: 'linkClicks',
+        days: 20,
+        d14: { linkClicks: 30 },
+      }),
       snap({ id: 'c', kpiField: 'purchases', days: 20, d14: { purchases: 4 } }),
     ];
     const { container, getByText } = render(
@@ -106,7 +127,11 @@ describe('SignalReadinessCard — reaching the prescribed remedy', () => {
   const unmovable = [
     snap({ id: 'a', kpiField: 'purchases', days: 20, d14: { purchases: 5 } }),
     snap({ id: 'b', kpiField: 'purchases', days: 20, d14: { purchases: 5 } }),
-  ].map((snapshot) => ({ ...snapshot, currentBudget: 0, freezeReason: 'unsupported_budget' }));
+  ].map((snapshot) => ({
+    ...snapshot,
+    currentBudget: 0,
+    freezeReason: 'unsupported_budget',
+  }));
 
   it('renders the caller-supplied affordance beside the verdict', () => {
     const { getByRole, getByText } = render(

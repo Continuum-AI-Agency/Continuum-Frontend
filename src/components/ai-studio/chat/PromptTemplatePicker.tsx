@@ -1,8 +1,7 @@
 'use client';
 import { Bookmark, Plus, SquarePen, Trash2 } from 'lucide-react';
-
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
-
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type {
   PromptTemplate,
   PromptTemplateCreateInput,
@@ -53,6 +53,10 @@ export function PromptTemplatePicker({
   onUpdate,
   onDelete,
 }: PromptTemplatePickerProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -101,16 +105,20 @@ export function PromptTemplatePicker({
       if (formState.mode === 'create') {
         await onCreate({ name: formState.name, prompt: formState.prompt });
       } else if (formState.id) {
-        await onUpdate({ id: formState.id, name: formState.name, prompt: formState.prompt });
+        await onUpdate({
+          id: formState.id,
+          name: formState.name,
+          prompt: formState.prompt,
+        });
       }
       setDialogOpen(false);
       setFormState({ mode: 'create', ...EMPTY_FORM });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save template');
+      setError(uiErrorText(err));
     } finally {
       setIsSaving(false);
     }
-  }, [formState, onCreate, onUpdate]);
+  }, [formState, onCreate, onUpdate, uiErrorText]);
 
   const handleDelete = React.useCallback(
     async (template: PromptTemplate) => {
@@ -119,38 +127,47 @@ export function PromptTemplatePicker({
       try {
         await onDelete(template.id);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to delete template');
+        setError(uiErrorText(err));
       } finally {
         setIsDeleting(null);
       }
     },
-    [onDelete],
+    [onDelete, uiErrorText],
   );
 
   const handleSelect = React.useCallback(
     (template: PromptTemplate) => {
       onSelect(template);
-      show({ title: 'Template applied', description: template.name, variant: 'success' });
+      show({
+        title: translateUi('template_applied_d71a690c'),
+        description: template.name,
+        variant: 'success',
+      });
     },
-    [onSelect, show],
+    [onSelect, show, translateUi],
   );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
-          <Button size="icon-sm" variant="ghost" aria-label="Prompt templates" disabled={isLoading}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={translateUi('prompt_templates_d3a289c7')}
+            disabled={isLoading}
+          >
             <Bookmark />
           </Button>
         }
       />
       <PopoverContent className="w-80 p-3">
         <div className="mb-2 flex items-center justify-between">
-          <span className="font-medium">Prompt templates</span>
+          <span className="font-medium">{translateUi('prompt_templates_d3a289c7')}</span>
           <Button
             size="icon-sm"
             variant="secondary"
-            aria-label="Create template"
+            aria-label={translateUi('create_template_7dc9c0ad')}
             onClick={openCreate}
           >
             <Plus />
@@ -158,9 +175,9 @@ export function PromptTemplatePicker({
         </div>
 
         <Input
-          placeholder="Search templates"
+          placeholder={translateUi('search_templates_04b9835b')}
           value={query}
-          aria-label="Search templates"
+          aria-label={translateUi('search_templates_04b9835b')}
           onChange={(event) => setQuery(event.target.value)}
         />
 
@@ -168,9 +185,13 @@ export function PromptTemplatePicker({
           <ScrollArea style={{ maxHeight: 260 }}>
             <div className="flex flex-col gap-2">
               {isLoading ? (
-                <span className="text-xs text-muted-foreground">Loading templates…</span>
+                <span className="text-xs text-muted-foreground">
+                  {translateUi('loading_templates_3800ee71')}
+                </span>
               ) : filtered.length === 0 ? (
-                <span className="text-xs text-muted-foreground">No templates yet.</span>
+                <span className="text-xs text-muted-foreground">
+                  {translateUi('no_templates_yet_faeba14b')}
+                </span>
               ) : (
                 filtered.map((template) => (
                   <div
@@ -192,7 +213,9 @@ export function PromptTemplatePicker({
                       <Button
                         size="icon-sm"
                         variant="ghost"
-                        aria-label={`Edit ${template.name}`}
+                        aria-label={translateUi('edit_value0_44b87feb', {
+                          value0: String(template.name),
+                        })}
                         disabled={template.source === 'preset'}
                         onClick={() => openEdit(template)}
                       >
@@ -202,7 +225,9 @@ export function PromptTemplatePicker({
                         size="icon-sm"
                         variant="ghost"
                         className="text-destructive hover:text-destructive"
-                        aria-label={`Delete ${template.name}`}
+                        aria-label={translateUi('delete_value0_8782b778', {
+                          value0: String(template.name),
+                        })}
                         disabled={template.source === 'preset' || isDeleting === template.id}
                         onClick={() => handleDelete(template)}
                       >
@@ -220,41 +245,55 @@ export function PromptTemplatePicker({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent style={{ maxWidth: 520 }}>
           <DialogTitle>
-            {formState.mode === 'create' ? 'Create template' : 'Edit template'}
+            {formState.mode === 'create'
+              ? translateUi('create_template_7dc9c0ad')
+              : translateUi('edit_template_708c9a5c')}
           </DialogTitle>
-          <DialogDescription>Save a prompt you can reuse later in AI Studio.</DialogDescription>
+          <DialogDescription>
+            {translateUi('save_a_prompt_you_can_reuse_later_i_41294214')}
+          </DialogDescription>
 
           <div className="mt-3 flex flex-col gap-3">
             <label className="space-y-1" htmlFor="prompt-template-name">
-              <span className="text-xs text-muted-foreground">Name</span>
+              <span className="text-xs text-muted-foreground">{translateUi('name_dcd1d522')}</span>
               <Input
                 id="prompt-template-name"
                 value={formState.name}
                 onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, name: event.target.value }))
+                  setFormState((prev) => ({
+                    ...prev,
+                    name: event.target.value,
+                  }))
                 }
-                placeholder="e.g. Product glamour shot"
+                placeholder={translateUi('e_g_product_glamour_shot_9be71840')}
               />
             </label>
             <label className="space-y-1" htmlFor="prompt-template-prompt">
-              <span className="text-xs text-muted-foreground">Prompt</span>
+              <span className="text-xs text-muted-foreground">
+                {translateUi('prompt_5c391238')}
+              </span>
               <Textarea
                 id="prompt-template-prompt"
                 value={formState.prompt}
                 onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, prompt: event.target.value }))
+                  setFormState((prev) => ({
+                    ...prev,
+                    prompt: event.target.value,
+                  }))
                 }
                 rows={6}
-                placeholder="Describe the prompt"
+                placeholder={translateUi('describe_the_prompt_e382c3b2')}
               />
             </label>
             {error ? <span className="text-xs text-destructive">{error}</span> : null}
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
-            <DialogClose render={<Button variant="secondary">Cancel</Button>} />
+            <DialogClose
+              render={<Button variant="secondary">{translateUi('cancel_19766ed6')}</Button>}
+            />
             <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? 'Saving…' : 'Save'}
+              {isSaving ? translateUi('saving_23e39291') : translateUi('save_1509f561')}
             </Button>
           </div>
         </DialogContent>

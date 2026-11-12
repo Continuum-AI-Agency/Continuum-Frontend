@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // Which hand the page shows — All, Optimizer, Team, Platform — with each one's count and its
 // colour, so the filter is also the chart's legend. It narrows the markers and the list together.
@@ -8,8 +9,8 @@ import {
   ACTIVITY_SOURCES,
   type ActivitySource,
   type ActivitySourceFilter,
+  activitySourceCopy,
   SOURCE_COLOR,
-  SOURCE_COPY,
 } from './activityModel';
 
 export function ActivitySourceTabs({
@@ -21,12 +22,18 @@ export function ActivitySourceTabs({
   counts: Record<ActivitySource, number>;
   onChange: (value: ActivitySourceFilter) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const total = ACTIVITY_SOURCES.reduce((sum, source) => sum + counts[source], 0);
-  const options: { value: ActivitySourceFilter; label: string; count: number }[] = [
-    { value: 'all', label: 'All', count: total },
+  const options: {
+    value: ActivitySourceFilter;
+    label: string;
+    count: number;
+  }[] = [
+    { value: 'all', label: betaUiText('activityAll'), count: total },
     ...ACTIVITY_SOURCES.map((source) => ({
       value: source,
-      label: SOURCE_COPY[source].label,
+      label: activitySourceCopy(source, betaUiText).label,
       count: counts[source],
     })),
   ];
@@ -35,7 +42,7 @@ export function ActivitySourceTabs({
       className="hit-area-row inline-flex max-w-full shrink-0 gap-0.5 overflow-x-auto rounded-lg border-0 bg-muted/60 p-0.5 [--hit-area-gap:calc(var(--spacing)*0.5)] [scrollbar-width:none]"
       data-testid="activity-source-filter"
     >
-      <legend className="sr-only">Show changes made by</legend>
+      <legend className="sr-only">{betaUiText('beta_a3f3eabc8d45')}</legend>
       {options.map((option) => (
         <button
           aria-pressed={value === option.value}
@@ -48,7 +55,9 @@ export function ActivitySourceTabs({
           data-source-option={option.value}
           key={option.value}
           onClick={() => onChange(option.value)}
-          title={option.value === 'all' ? undefined : SOURCE_COPY[option.value].hint}
+          title={
+            option.value === 'all' ? undefined : activitySourceCopy(option.value, betaUiText).hint
+          }
           type="button"
         >
           {option.value === 'all' ? null : (

@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import type { SelectBrandResult } from '@/components/providers/ActiveBrandProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 import * as storeRegistry from '@/lib/storage/storeRegistry';
 import type { SwitchBrandOutcome } from './useSwitchBrand';
 
 const ACTIVE_BRAND_CONTEXT_PATH = '@/components/providers/ActiveBrandProvider';
-const NEXT_NAV_PATH = 'next/navigation';
+const NEXT_NAV_PATH = '@/i18n/navigation';
 
 type MockState = {
   brandSummaries: Array<{ id: string; name: string; completed?: boolean }>;
@@ -72,7 +73,10 @@ const { useSwitchBrand } = await import('./useSwitchBrand');
 describe('useSwitchBrand', () => {
   beforeEach(() => {
     storeRegistry.reset();
-    state.selectBrand = async () => ({ switched: true, prevBrandId: 'brand-a' });
+    state.selectBrand = async () => ({
+      switched: true,
+      prevBrandId: 'brand-a',
+    });
     state.brandSummaries = [
       { id: 'brand-a', name: 'Brand A', completed: true },
       { id: 'brand-b', name: 'Brand B', completed: true },
@@ -84,7 +88,10 @@ describe('useSwitchBrand', () => {
   it('returns switched=false without firing teardown when no switch occurred', async () => {
     const teardownFn = mock(() => {});
     storeRegistry.register({ name: 'test', teardown: teardownFn });
-    state.selectBrand = async () => ({ switched: false, prevBrandId: 'brand-a' });
+    state.selectBrand = async () => ({
+      switched: false,
+      prevBrandId: 'brand-a',
+    });
 
     const { result } = renderHook(() => useSwitchBrand());
 
@@ -93,7 +100,11 @@ describe('useSwitchBrand', () => {
       outcome = await result.current('brand-a');
     });
 
-    expect(outcome).toEqual({ switched: false, prevBrandId: 'brand-a', redirected: false });
+    expect(outcome).toEqual({
+      switched: false,
+      prevBrandId: 'brand-a',
+      redirected: false,
+    });
     expect(teardownFn).not.toHaveBeenCalled();
   });
 
@@ -104,7 +115,10 @@ describe('useSwitchBrand', () => {
       teardown: (id: string) => calls.push(`teardown:${id}`),
       purge: (id: string) => calls.push(`purge:${id}`),
     });
-    state.selectBrand = async () => ({ switched: true, prevBrandId: 'brand-a' });
+    state.selectBrand = async () => ({
+      switched: true,
+      prevBrandId: 'brand-a',
+    });
 
     const { result } = renderHook(() => useSwitchBrand());
 
@@ -173,7 +187,10 @@ describe('useSwitchBrand', () => {
     state.pathname = '/onboarding';
     const teardownFn = mock(() => {});
     storeRegistry.register({ name: 'store', teardown: teardownFn });
-    state.selectBrand = async () => ({ switched: false, prevBrandId: 'brand-a' });
+    state.selectBrand = async () => ({
+      switched: false,
+      prevBrandId: 'brand-a',
+    });
     const pushed: string[] = [];
     state.push = (url) => pushed.push(url);
 

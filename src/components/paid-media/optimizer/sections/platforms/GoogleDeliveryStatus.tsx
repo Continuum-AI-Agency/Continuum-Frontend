@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale } from 'next-intl';
 
 // The first thing the Google tab says when Google shows no ad in the whole account: suspended or
 // not delivering, since when, and the one place it is fixed. Absent otherwise — a block that
@@ -12,11 +13,14 @@ import * as typeScale from '../../typeScale';
 import { googleDeliveryStatusOf } from './googleDeliveryStatusModel';
 
 export function GoogleDeliveryStatus({ cards }: { cards: readonly AccountCandidate[] }) {
-  const status = googleDeliveryStatusOf(cards);
+  const betaUiText = useBetaTranslations('scale');
+
+  const locale = useLocale();
+  const status = googleDeliveryStatusOf(cards, betaUiText, locale);
   if (!status) return null;
   return (
     <section
-      aria-label="Google delivery status"
+      aria-label={betaUiText('beta_2d8453cb55b4')}
       className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3"
       data-testid="google-delivery-status"
       data-tone={status.tone}
@@ -33,7 +37,7 @@ export function GoogleDeliveryStatus({ cards }: { cards: readonly AccountCandida
         rel="noreferrer"
         target="_blank"
       >
-        Open in Google Ads
+        {betaUiText('beta_013124925a61')}
       </a>
     </section>
   );

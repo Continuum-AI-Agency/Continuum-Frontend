@@ -4,6 +4,8 @@ import type {
   PublishPlatform,
 } from '@continuum/contracts';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 
 /**
  * The saved map with `platform`'s block replaced. Undefined fields are dropped and an
@@ -37,9 +39,9 @@ export function publishesGeneratedVideo(draft: OrganicCalendarDraft): boolean {
   return Boolean(suggestion.reel?.generated || suggestion.hyperframe);
 }
 
-export function formatOffset(offsetMs: number): string {
+export function formatOffset(offsetMs: number, locale: UiLocale = 'en'): string {
   const totalSeconds = offsetMs / 1000;
   const minutes = Math.floor(totalSeconds / 60);
-  const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
+  const seconds = formatDecimal(totalSeconds % 60, 1, locale).padStart(4, '0');
   return `${minutes}:${seconds}`;
 }

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * JG-frontend-null-currency-label: every money cell a Jaina block prints follows the ONE money
  * rule (`formatMoney`, @continuum/contracts, M1 since 2026-10-13): unknown currency → the bare
@@ -8,11 +9,13 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { formatMoney } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type { DataTableBlockV2, MetricGridBlockV2 } from '@/lib/jaina/schemas';
 
 mock.module('@/lib/api/http', () => ({
-  http: { request: mock(async () => ({ thumbnail_url: null, image_url: null })) },
+  http: {
+    request: mock(async () => ({ thumbnail_url: null, image_url: null })),
+  },
 }));
 
 const { DataTableBlock } = await import('./DataTableBlock');

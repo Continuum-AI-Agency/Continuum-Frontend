@@ -31,8 +31,8 @@ describe('proxy matcher', () => {
     expect(proxyMatches('/manifest.json')).toBe(false);
   });
 
-  it('does not run for the anonymous share-link viewer', () => {
-    expect(proxyMatches('/share/tok_abc123')).toBe(false);
+  it('localizes the anonymous share-link viewer without requiring a session', () => {
+    expect(proxyMatches('/share/tok_abc123')).toBe(true);
   });
 
   it('still runs for app routes that need auth/session handling', () => {
@@ -44,10 +44,23 @@ describe('proxy matcher', () => {
     expect(proxyMatches('/shared-reports')).toBe(true);
   });
 
+  it('keeps internal locale segments out of login return URLs', () => {
+    for (const locale of ['en', 'pt-BR', 'es'])
+      expect(
+        authRedirectTarget({
+          pathname: `/${locale}/library`,
+          search: '?assetId=asset-1&view=review',
+        }),
+      ).toBe('/library?assetId=asset-1&view=review');
+  });
+
   it('preserves the complete Planner handoff through login', () => {
     expect(isProtectedRoute('/open/planner')).toBe(true);
     expect(
-      authRedirectTarget({ pathname: '/open/planner', search: '?brandId=brand-1&draftId=draft-1' }),
+      authRedirectTarget({
+        pathname: '/open/planner',
+        search: '?brandId=brand-1&draftId=draft-1',
+      }),
     ).toBe('/open/planner?brandId=brand-1&draftId=draft-1');
   });
 });

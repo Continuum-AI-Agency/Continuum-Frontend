@@ -3,7 +3,8 @@
 import { readFontNames } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -16,21 +17,25 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { uploadBrandFont } from '@/lib/library/templateSources';
 
-const rowSchema = z.object({
-  family: z.string().trim().min(1, 'Family is required').max(120),
-  weight: z
-    .string()
-    .refine(
-      (value) =>
-        value === '' || (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 1000),
-      'Use a whole number from 1 to 1000',
-    ),
-  style: z.enum(['normal', 'italic']),
-});
-const formSchema = z.object({ fonts: z.array(rowSchema).min(1) });
-type FormValues = z.infer<typeof formSchema>;
+function makeFormSchema(t: ReturnType<typeof useUiTranslations<'library'>>) {
+  const rowSchema = z.object({
+    family: z.string().trim().min(1, t('fontFamilyRequired')).max(120, t('fontFamilyTooLong')),
+    weight: z
+      .string()
+      .refine(
+        (value) =>
+          value === '' || (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 1000),
+        t('fontWeightRange'),
+      ),
+    style: z.enum(['normal', 'italic'], { error: t('fontStyleRequired') }),
+  });
+  return z.object({ fonts: z.array(rowSchema).min(1, t('fontFileRequired')) });
+}
+type FormValues = z.infer<ReturnType<typeof makeFormSchema>>;
 
 const familyFromFileName = (name: string) =>
   name
@@ -49,6 +54,12 @@ export function FontUploadReviewDialog({
   onClose: () => void;
   onUploaded: () => void;
 }) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const translateUi = useUiTranslations('library');
+  const uiErrorText = useUiErrorMessage();
+  const formSchema = useMemo(() => makeFormSchema(translateUi), [translateUi]);
+
   const [activeFiles, setActiveFiles] = useState(files);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(0);
@@ -61,7 +72,7 @@ export function FontUploadReviewDialog({
     getFieldState,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema, { error: validationErrorMap }),
     defaultValues: {
       fonts: files.map((file) => ({
         family: familyFromFileName(file.name),
@@ -112,7 +123,8 @@ export function FontUploadReviewDialog({
       } catch (error) {
         failedFiles.push(file);
         failedRows.push(row);
-        failures.push(error instanceof Error ? error.message : 'Could not be stored');
+        console.error('[FontUploadReviewDialog] upload failed', error);
+        failures.push(uiErrorText(error));
       }
     }
     setSaving(false);
@@ -132,10 +144,10 @@ export function FontUploadReviewDialog({
     <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent showCloseButton={!saving}>
         <DialogHeader>
-          <DialogTitle>Review font metadata</DialogTitle>
+          <DialogTitle>{translateUi('review_font_metadata_b6c828c5')}</DialogTitle>
           <DialogDescription>
-            Confirm the family and optional face details before these licensed files are stored
-            privately. No browser font URL or specimen is created.
+            {' '}
+            {translateUi('confirm_the_family_and_optional_fac_82837381')}{' '}
           </DialogDescription>
         </DialogHeader>
 
@@ -150,7 +162,7 @@ export function FontUploadReviewDialog({
                   {file.name}
                 </legend>
                 <label htmlFor={`font-family-${index}`} className="block space-y-1 text-xs">
-                  <span>Family</span>
+                  <span>{translateUi('family_bd2d677b')}</span>
                   <Input
                     id={`font-family-${index}`}
                     aria-invalid={Boolean(errors.fonts?.[index]?.family)}
@@ -158,7 +170,9 @@ export function FontUploadReviewDialog({
                       errors.fonts?.[index]?.family ? `font-family-error-${index}` : undefined
                     }
                     aria-label={
-                      activeFiles.length === 1 ? 'Font family' : `${file.name} font family`
+                      activeFiles.length === 1
+                        ? translateUi('font_family_119ef3fa')
+                        : translateUi('fileFontFamily', { file: file.name })
                     }
                     {...register(`fonts.${index}.family`)}
                   />
@@ -174,7 +188,7 @@ export function FontUploadReviewDialog({
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label htmlFor={`font-weight-${index}`} className="block space-y-1 text-xs">
-                    <span>Weight (optional)</span>
+                    <span>{translateUi('weight_optional_79b22a8e')}</span>
                     <Input
                       id={`font-weight-${index}`}
                       inputMode="numeric"
@@ -183,7 +197,9 @@ export function FontUploadReviewDialog({
                         errors.fonts?.[index]?.weight ? `font-weight-error-${index}` : undefined
                       }
                       aria-label={
-                        activeFiles.length === 1 ? 'Weight (optional)' : `${file.name} weight`
+                        activeFiles.length === 1
+                          ? translateUi('weight_optional_79b22a8e')
+                          : translateUi('fileFontWeight', { file: file.name })
                       }
                       placeholder="400"
                       {...register(`fonts.${index}.weight`)}
@@ -199,15 +215,19 @@ export function FontUploadReviewDialog({
                     ) : null}
                   </label>
                   <label htmlFor={`font-style-${index}`} className="block space-y-1 text-xs">
-                    <span>Style</span>
+                    <span>{translateUi('style_7e744141')}</span>
                     <select
                       id={`font-style-${index}`}
-                      aria-label={activeFiles.length === 1 ? 'Style' : `${file.name} style`}
+                      aria-label={
+                        activeFiles.length === 1
+                          ? translateUi('style_7e744141')
+                          : translateUi('fileFontStyle', { file: file.name })
+                      }
                       className="h-9 w-full rounded-md border border-input bg-background px-2"
                       {...register(`fonts.${index}.style`)}
                     >
-                      <option value="normal">Normal</option>
-                      <option value="italic">Italic</option>
+                      <option value="normal">{translateUi('normal_a7248eeb')}</option>
+                      <option value="italic">{translateUi('italic_9bf37cb5')}</option>
                     </select>
                   </label>
                 </div>
@@ -220,22 +240,24 @@ export function FontUploadReviewDialog({
             ))}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-                Cancel
+                {' '}
+                {translateUi('cancel_19766ed6')}{' '}
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                Add to engine
+                {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}{' '}
+                {translateUi('add_to_engine_a8987bd6')}{' '}
               </Button>
             </DialogFooter>
           </form>
         ) : (
           <div className="space-y-4">
             <p role="status" className="text-sm">
-              {saved} {saved === 1 ? 'face' : 'faces'} added to the engine.
+              {translateUi('fontsAdded', { count: saved })}{' '}
             </p>
             <DialogFooter>
               <Button type="button" onClick={onClose}>
-                Done
+                {' '}
+                {translateUi('done_11a6767d')}{' '}
               </Button>
             </DialogFooter>
           </div>

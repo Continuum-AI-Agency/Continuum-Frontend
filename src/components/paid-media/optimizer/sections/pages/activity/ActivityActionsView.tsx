@@ -1,4 +1,6 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 
 // The Actions view of G13: the spend line with a dot per event, then the same events as a list
 // grouped by day. Both are drawn from one set of reads and one filter — the action feed, the
@@ -47,16 +49,15 @@ import {
 import { type PlatformChangesRead, usePlatformChanges } from './usePlatformChanges';
 
 /** What the change history could not say, so the timeline never passes for complete. */
-function changeHistoryNotes(read: PlatformChangesRead): string[] {
+function changeHistoryNotes(
+  read: PlatformChangesRead,
+  t: ReturnType<typeof useBetaTranslations<'scale'>>,
+): string[] {
   if (read.failed) {
-    return [
-      "Google's change history could not be read, so changes made in Google Ads are missing.",
-    ];
+    return [t('activityHistoryFailed')];
   }
   if (read.truncated) {
-    return [
-      "Google's change history was cut short at its row limit: older changes may be missing.",
-    ];
+    return [t('activityHistoryTruncated')];
   }
   return [];
 }
@@ -73,6 +74,8 @@ function ChartAccountPicker({
   value: string;
   onChange: (accountId: string) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (accounts.length < 2) return null;
   const labelOf = (id: unknown) => {
     const account = accounts.find((candidate) => candidate.id === id);
@@ -80,7 +83,7 @@ function ChartAccountPicker({
   };
   return (
     <Select onValueChange={(next) => onChange(String(next))} value={value}>
-      <SelectTrigger aria-label="Ad account the line is drawn for" className="h-7 w-48 text-xs">
+      <SelectTrigger aria-label={betaUiText('beta_953a2fb8366d')} className="h-7 w-48 text-xs">
         <SelectValue>{labelOf}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -103,6 +106,8 @@ export function ActivityActionsView({
   windowDays: OptimizerFeedWindowDays;
   footer?: ReactNode;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const locale = useLocale() as UiLocale;
   const reduce = useReducedMotion();
   const [source, setSource] = useState<ActivitySourceFilter>('all');
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
@@ -133,7 +138,7 @@ export function ActivityActionsView({
       : accountsRead.isError && accounts.length === 0
         ? {
             status: 'error',
-            message: "the brand's ad accounts could not be read.",
+            message: betaUiText('activityAccountsFailed'),
             retry: () => void accountsRead.refetch(),
           }
         : spendRead;
@@ -155,10 +160,20 @@ export function ActivityActionsView({
   const everyHand = { source: 'all' as const, portfolio: effectivePortfolio };
 
   const counts = sourceCounts(
-    activityEvents(filterActions(actions, everyHand), filterPlatformItems(platform, everyHand)),
+    activityEvents(
+      filterActions(actions, everyHand),
+      filterPlatformItems(platform, everyHand),
+      betaUiText,
+      locale,
+    ),
   );
   const { markers, overflow } = layoutMarkers(
-    activityEvents(filterActions(actions, filter), filterPlatformItems(platform, filter)),
+    activityEvents(
+      filterActions(actions, filter),
+      filterPlatformItems(platform, filter),
+      betaUiText,
+      locale,
+    ),
     days,
   );
 
@@ -167,7 +182,10 @@ export function ActivityActionsView({
     const entry = Array.from(list.current?.querySelectorAll('[data-event-id]') ?? []).find(
       (element) => element.getAttribute('data-event-id') === id,
     );
-    entry?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    entry?.scrollIntoView({
+      block: 'nearest',
+      behavior: reduce ? 'auto' : 'smooth',
+    });
   };
 
   return (
@@ -183,7 +201,7 @@ export function ActivityActionsView({
         filter={<ActivitySourceTabs counts={counts} onChange={setSource} value={source} />}
         highlightedId={highlightedId}
         markers={markers}
-        notes={changeHistoryNotes(platformChanges)}
+        notes={changeHistoryNotes(platformChanges, betaUiText)}
         onHighlight={setHighlightedId}
         onPick={pick}
         overflow={overflow}

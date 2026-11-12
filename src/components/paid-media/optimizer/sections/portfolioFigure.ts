@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // A portfolio's headline figure — spend and cost per result against the target — from ONE
 // function, so the Portfolios list, the Overview and the portfolio hero cannot disagree.
 //
@@ -62,7 +67,10 @@ export type PortfolioFigure = PortfolioWindow & {
 };
 
 /** One platform's share of a portfolio's metrics read, priced, in that platform's currency. */
-export type PlatformFigure = PortfolioWindow & { platform: PlatformId; currency: string | null };
+export type PlatformFigure = PortfolioWindow & {
+  platform: PlatformId;
+  currency: string | null;
+};
 
 /** Sum the live read's 7-day (and the 7 days before it) over the portfolio's members.
  *  Null when the read is undated or misses ANY member. The read's fleet lists only ad sets
@@ -114,8 +122,8 @@ export function liveWindowFigures(args: {
 }
 
 /** "Oct 15", en-US, from the measurement's UTC date. */
-function monthDay(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+function monthDay(iso: string, uiLocale: UiLocale = 'en'): string {
+  return new Date(iso).toLocaleDateString(uiLocale, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
@@ -135,12 +143,16 @@ export function ageInDays(iso: string, now: number): number {
  * cycle-time snapshot only when the live one is missing. Null when neither exists (no cycle
  * yet and nothing live): the surface then says so instead of printing a zero.
  */
-export function portfolioFigure(args: {
-  portfolio: PortfolioListItem;
-  live: WindowFigures | null;
-  snapshot: WindowFigures | null;
-  now?: number;
-}): PortfolioFigure | null {
+export function portfolioFigure(
+  args: {
+    portfolio: PortfolioListItem;
+    live: WindowFigures | null;
+    snapshot: WindowFigures | null;
+    now?: number;
+  },
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): PortfolioFigure | null {
   const now = args.now ?? Date.now();
   if (args.live) {
     return {
@@ -156,7 +168,11 @@ export function portfolioFigure(args: {
   return {
     ...portfolioWindowOf(args.portfolio, args.snapshot),
     source: 'snapshot',
-    asOfLabel: `as of ${monthDay(args.snapshot.cycleTs)}`,
+    asOfLabel: uiTranslate
+      ? uiTranslate('portfolioFigureAsOf', {
+          date: monthDay(args.snapshot.cycleTs, uiLocale),
+        })
+      : `as of ${monthDay(args.snapshot.cycleTs, uiLocale)}`,
     ageDays,
     stale: ageDays > STALE_AFTER_DAYS,
   };
@@ -230,19 +246,23 @@ export function sumPlatformFigures(
  * all call THIS, so the same reads cannot price to two figures. A read still loading is passed
  * as null and simply contributes nothing.
  */
-export function portfolioFigureFromReads(args: {
-  portfolio: PortfolioListItem;
-  snapshots: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[] | null;
-  /** The same read's ad sets paused inside the window (see liveWindowFigures). */
-  inactiveWindows?: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[];
-  readAt: string | null;
-  memberIds: readonly string[] | null;
-  series: readonly EfficiencySeriesPoint[];
-  /** optimizer_get_portfolio_metrics (d7). The figure of a portfolio on another platform than
-   *  Meta comes from it alone: its Meta reads would price the Meta half as the whole. */
-  metrics?: PortfolioMetrics | null;
-  now?: number;
-}): PortfolioFigure | null {
+export function portfolioFigureFromReads(
+  args: {
+    portfolio: PortfolioListItem;
+    snapshots: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[] | null;
+    /** The same read's ad sets paused inside the window (see liveWindowFigures). */
+    inactiveWindows?: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[];
+    readAt: string | null;
+    memberIds: readonly string[] | null;
+    series: readonly EfficiencySeriesPoint[];
+    /** optimizer_get_portfolio_metrics (d7). The figure of a portfolio on another platform than
+     *  Meta comes from it alone: its Meta reads would price the Meta half as the whole. */
+    metrics?: PortfolioMetrics | null;
+    now?: number;
+  },
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): PortfolioFigure | null {
   if (holdsOtherPlatforms(args.portfolio, args.metrics)) {
     // Before the first cycle the read answers zeros, which would read as "spent nothing".
     if (!args.metrics || !args.portfolio.last_actual_cycle_at) return null;
@@ -252,12 +272,16 @@ export function portfolioFigureFromReads(args: {
     );
     if (!summed) return null;
     const { currency, ...snapshot } = summed;
-    const figure = portfolioFigure({
-      portfolio: args.portfolio,
-      live: null,
-      snapshot,
-      now: args.now,
-    });
+    const figure = portfolioFigure(
+      {
+        portfolio: args.portfolio,
+        live: null,
+        snapshot,
+        now: args.now,
+      },
+      uiLocale,
+      uiTranslate,
+    );
     return figure && { ...figure, currency };
   }
   const live =
@@ -269,12 +293,16 @@ export function portfolioFigureFromReads(args: {
           readAt: args.readAt,
         })
       : null;
-  return portfolioFigure({
-    portfolio: args.portfolio,
-    live,
-    snapshot: seriesWindowFigures(args.series),
-    now: args.now,
-  });
+  return portfolioFigure(
+    {
+      portfolio: args.portfolio,
+      live,
+      snapshot: seriesWindowFigures(args.series),
+      now: args.now,
+    },
+    uiLocale,
+    uiTranslate,
+  );
 }
 
 /** What a surface prints beside a snapshot figure: "as of Oct 15", and past the stale line
@@ -284,7 +312,15 @@ export function figureAsOfText(
     | Partial<Pick<PortfolioFigure, 'source' | 'asOfLabel' | 'ageDays' | 'stale'>>
     | null
     | undefined,
+  uiTranslate?: ScaleCopy,
 ): string | null {
   if (figure?.source !== 'snapshot' || !figure.asOfLabel) return null;
-  return figure.stale ? `${figure.asOfLabel} · ${figure.ageDays} days old` : figure.asOfLabel;
+  return figure.stale
+    ? uiTranslate
+      ? uiTranslate('portfolioFigureAge', {
+          date: figure.asOfLabel,
+          days: figure.ageDays ?? 0,
+        })
+      : `${figure.asOfLabel} · ${figure.ageDays} days old`
+    : figure.asOfLabel;
 }

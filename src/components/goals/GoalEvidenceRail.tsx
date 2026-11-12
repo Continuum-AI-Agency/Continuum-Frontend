@@ -16,6 +16,7 @@ import {
   Reply,
   Users,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ACCEPTED_ATTACHMENT_TYPES,
@@ -42,7 +43,9 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import type { UiLocale } from '@/i18n/config';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
+import { readPrice } from '@/lib/onboarding/catalog';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
@@ -64,15 +67,32 @@ type GoalEvidenceRailProps = {
   }) => Promise<string | null>;
 };
 
+export function parseGoalNumericInput(raw: string, locale: UiLocale = 'en'): number | null {
+  const parts = new Intl.NumberFormat(locale).formatToParts(12345.6);
+  const group = parts.find((p) => p.type === 'group')?.value ?? ',';
+  const decimal = parts.find((p) => p.type === 'decimal')?.value ?? '.';
+  const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(
+    '^-?(?:[0-9]+|[0-9]{1,3}(?:' + escape(group) + '[0-9]{3})+)(?:' + escape(decimal) + '[0-9]+)?$',
+  );
+  if (!pattern.test(raw.trim())) return null;
+  const parsed = Number(raw.trim().split(group).join('').replace(decimal, '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function buildStructuredGoalResponse(
   expected: GoalExpectedResponse,
   value: string,
+  locale: UiLocale = 'en',
 ): { response: string; structuredValue: GoalStructuredResponseValue } | null {
   const trimmed = value.trim();
   if (expected.kind === 'choice') {
     const option = expected.options.find((candidate) => candidate.id === trimmed);
     return option
-      ? { response: option.label, structuredValue: { kind: 'choice', optionId: option.id } }
+      ? {
+          response: option.label,
+          structuredValue: { kind: 'choice', optionId: option.id },
+        }
       : null;
   }
   if (expected.kind === 'approval') {
@@ -83,13 +103,16 @@ export function buildStructuredGoalResponse(
     };
   }
   if (expected.kind === 'money') {
-    if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return null;
-    const [whole = '0', fractional = ''] = trimmed.split('.');
-    const amountMinor = Number(whole) * 100 + Number(fractional.padEnd(2, '0'));
-    if (!Number.isSafeInteger(amountMinor)) return null;
+    const price = readPrice(trimmed, expected.currency, locale);
+    if (!price.ok || !price.price) return null;
+    const amountMinor = price.price.amountMinor;
     return {
       response: `${expected.currency} ${trimmed}`,
-      structuredValue: { kind: 'money', amountMinor, currency: expected.currency },
+      structuredValue: {
+        kind: 'money',
+        amountMinor,
+        currency: expected.currency,
+      },
     };
   }
   if (expected.kind === 'evidence') {
@@ -105,22 +128,27 @@ export function buildStructuredGoalResponse(
 function buildFormLeafValue(
   input: Extract<GoalExpectedResponse, { kind: 'form' }>['fields'][number]['input'],
   rawValue: string,
+  locale: UiLocale,
 ): GoalStructuredResponseLeafValue | null {
   const value = rawValue.trim();
   if (!value) return null;
   if (input.kind === 'money') {
-    if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
-    const [whole = '0', fractional = ''] = value.split('.');
+    const price = readPrice(value, input.currency, locale);
+    if (!price.ok || !price.price) return null;
     return {
       kind: 'money',
-      amountMinor: Number(whole) * 100 + Number(fractional.padEnd(2, '0')),
+      amountMinor: price.price.amountMinor,
       currency: input.currency,
     };
   }
   if (input.kind === 'number') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed)
-      ? { kind: 'number', value: parsed, ...(input.unit ? { unit: input.unit } : {}) }
+    const parsed = parseGoalNumericInput(value, locale);
+    return parsed !== null
+      ? {
+          kind: 'number',
+          value: parsed,
+          ...(input.unit ? { unit: input.unit } : {}),
+        }
       : null;
   }
   if (input.kind === 'choice') {
@@ -145,7 +173,11 @@ function buildFormLeafValue(
     const endsAt = new Date(`${endsOn}T00:00:00.000Z`);
     return Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())
       ? null
-      : { kind: 'date_range', startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() };
+      : {
+          kind: 'date_range',
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+        };
   }
   if (input.kind === 'boolean') {
     return value === 'true' || value === 'false'
@@ -175,9 +207,10 @@ function buildFormLeafValue(
 export function buildStructuredGoalFormResponse(
   expected: Extract<GoalExpectedResponse, { kind: 'form' }>,
   values: Record<string, string>,
+  locale: UiLocale = 'en',
 ): { response: string; structuredValue: GoalStructuredResponseValue } | null {
   const structuredValues = expected.fields.flatMap((field) => {
-    const value = buildFormLeafValue(field.input, values[field.id] ?? '');
+    const value = buildFormLeafValue(field.input, values[field.id] ?? '', locale);
     return value ? [{ fieldId: field.id, value }] : [];
   });
   const resolvedIds = new Set(structuredValues.map((entry) => entry.fieldId));
@@ -198,7 +231,13 @@ export function GoalEvidenceRail({
   onRespondToRequest,
   onRegisterEvidence,
 }: GoalEvidenceRailProps) {
-  const attachments = useChatAttachments({ brandId: goal.brandId, sessionId: goal.id });
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const attachments = useChatAttachments({
+    brandId: goal.brandId,
+    sessionId: goal.id,
+  });
   const humanTeammates = useMemo(
     () =>
       goal.participants.filter(
@@ -235,7 +274,10 @@ export function GoalEvidenceRail({
   async function submitRequest() {
     if (!targetUserId || !prompt.trim()) return;
     setIsSubmitting(true);
-    const succeeded = await onAskTeammate({ targetUserId, prompt: prompt.trim() });
+    const succeeded = await onAskTeammate({
+      targetUserId,
+      prompt: prompt.trim(),
+    });
     setIsSubmitting(false);
     if (!succeeded) return;
     setAskOpen(false);
@@ -245,20 +287,24 @@ export function GoalEvidenceRail({
 
   async function submitResponse() {
     if (!respondingRequestId || !respondingRequest) return;
+    setValidationError(null);
     const readyAttachments = attachments.files.filter(
       (attachment) => attachment.status === 'ready' && attachment.storagePath,
     );
     const structured =
       (respondingRequest.expectedResponse.kind === 'form'
-        ? buildStructuredGoalFormResponse(respondingRequest.expectedResponse, formValues)
-        : buildStructuredGoalResponse(respondingRequest.expectedResponse, response)) ??
+        ? buildStructuredGoalFormResponse(respondingRequest.expectedResponse, formValues, uiLocale)
+        : buildStructuredGoalResponse(respondingRequest.expectedResponse, response, uiLocale)) ??
       (respondingRequest.expectedResponse.kind === 'evidence' && readyAttachments.length > 0
         ? {
             response: 'Evidence attached',
             structuredValue: { kind: 'evidence' as const },
           }
         : null);
-    if (!structured) return;
+    if (!structured) {
+      setValidationError(uiText('m_7f009db25c'));
+      return;
+    }
     setIsSubmitting(true);
     const nextRegistered = { ...registeredEvidenceIds };
     for (const attachment of readyAttachments) {
@@ -296,10 +342,10 @@ export function GoalEvidenceRail({
         <div className="shrink-0 border-b border-border/70 px-3 py-2">
           <TabsList className="w-full">
             <TabsTrigger value="activity" className="flex-1">
-              Activity
+              {uiText('activity_38da150')}
             </TabsTrigger>
             <TabsTrigger value="people" className="flex-1">
-              People & review
+              {uiText('people_review_d345209')}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -307,9 +353,9 @@ export function GoalEvidenceRail({
         <TabsContent value="activity" className="min-h-0 flex-1 overflow-y-auto p-0">
           {goal.activity.length === 0 ? (
             <div className="p-4">
-              <p className="text-sm font-medium">No recorded activity</p>
+              <p className="text-sm font-medium">{uiText('no_recorded_activity_779806c')}</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Commands, agent checkpoints, and review decisions will form the evidence ledger.
+                {uiText('commands_agent_checkpoints_and_review_decisio_0f38298')}
               </p>
             </div>
           ) : (
@@ -328,7 +374,7 @@ export function GoalEvidenceRail({
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-2xs text-muted-foreground">
                         <Clock3 className="size-3" />
-                        {formatRelativeTime(event.occurredAt)}
+                        {formatRelativeTime(event.occurredAt, Date.now(), uiLocale)}
                       </p>
                     </div>
                   </div>
@@ -342,7 +388,7 @@ export function GoalEvidenceRail({
           <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2">
             <p className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wide text-muted-foreground">
               <Users className="size-3.5" />
-              Accountable team
+              {uiText('m_d91b52f015')}
             </p>
             <Button
               type="button"
@@ -353,7 +399,7 @@ export function GoalEvidenceRail({
               onClick={() => setAskOpen(true)}
             >
               <MessageSquarePlus className="size-3" />
-              Ask
+              {uiText('m_3562777bc6')}
             </Button>
           </div>
           <ul className="divide-y divide-border/60">
@@ -381,12 +427,12 @@ export function GoalEvidenceRail({
           <div className="border-y border-border/70 px-3 py-2">
             <p className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wide text-muted-foreground">
               <CheckCircle2 className="size-3.5" />
-              Review docket
+              {uiText('m_93f44becc5')}
             </p>
           </div>
           {goal.reviews.length === 0 ? (
             <p className="p-4 text-xs leading-5 text-muted-foreground">
-              No reviews are waiting. Accepted decisions will remain in the activity ledger.
+              {uiText('no_reviews_are_waiting_accepted_decisions_wil_e4e2293')}
             </p>
           ) : (
             <ul className="divide-y divide-border/60">
@@ -396,7 +442,9 @@ export function GoalEvidenceRail({
                     <div className="min-w-0">
                       <p className="text-xs font-medium">{review.title}</p>
                       <p className="mt-0.5 text-2xs text-muted-foreground">
-                        Reviewer · {review.reviewerName}
+                        {uiText.rich('sentence_06500c28493b', {
+                          v0: () => review.reviewerName,
+                        })}
                       </p>
                     </div>
                     <Pill variant="warning">{review.statusLabel}</Pill>
@@ -414,12 +462,12 @@ export function GoalEvidenceRail({
           <div className="border-y border-border/70 px-3 py-2">
             <p className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wide text-muted-foreground">
               <MessageSquarePlus className="size-3.5" />
-              Input requests
+              {uiText('m_ca02273fbb')}
             </p>
           </div>
           {goal.inputRequests.length === 0 ? (
             <p className="p-4 text-xs leading-5 text-muted-foreground">
-              No teammate input is blocking this Goal.
+              {uiText('no_teammate_input_is_blocking_this_goal_5c42720')}
             </p>
           ) : (
             <ul className="divide-y divide-border/60">
@@ -450,17 +498,16 @@ export function GoalEvidenceRail({
                       <div className="min-w-0">
                         <p className="text-xs font-medium">{request.title}</p>
                         <p className="mt-1 text-2xs leading-4 text-muted-foreground">
-                          {request.requesterName} asked {request.targetLabel}
-                          {request.responseCount > 0
-                            ? ` · ${request.responseCount} response${request.responseCount === 1 ? '' : 's'}`
-                            : ''}
-                          {(request.checklistItemIds?.length ?? 0) > 0
-                            ? ` · ${request.checklistItemIds?.length} checklist item${request.checklistItemIds?.length === 1 ? '' : 's'}`
-                            : ''}
+                          {uiText('m_6f28c2d523', {
+                            requester: request.requesterName,
+                            target: request.targetLabel,
+                            responses: request.responseCount,
+                            items: request.checklistItemIds?.length ?? 0,
+                          })}
                         </p>
                       </div>
                       <Pill variant={canRespond ? 'warning' : 'secondary'}>
-                        {canRespond ? 'Needs you' : 'Waiting'}
+                        {canRespond ? uiText('needs_you_74b6abd') : uiText('waiting_6e293a8')}
                       </Pill>
                     </div>
                     {visibleDeliveries.length > 0 ? (
@@ -513,13 +560,14 @@ export function GoalEvidenceRail({
                         variant="outline"
                         className="mt-2 h-7 px-2 text-2xs"
                         onClick={() => {
+                          setValidationError(null);
                           setRespondingRequestId(request.id);
                           setResponse('');
                           setFormValues({});
                         }}
                       >
                         <Reply className="size-3" />
-                        Respond
+                        {uiText('m_05bd566011')}
                       </Button>
                     ) : null}
                   </li>
@@ -533,20 +581,19 @@ export function GoalEvidenceRail({
       <Dialog open={askOpen} onOpenChange={setAskOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Ask a teammate</DialogTitle>
+            <DialogTitle>{uiText('ask_a_teammate_2c5bb5d')}</DialogTitle>
             <DialogDescription>
-              Route a focused question to an exact person. Their response becomes part of this
-              Goal’s durable evidence trail.
+              {uiText('route_a_focused_question_to_an_exact_person_t_feef660')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-1.5">
               <label htmlFor="goal-request-target" className="text-sm font-medium">
-                Teammate
+                {uiText('teammate_ab52c21')}
               </label>
               <Select value={targetUserId} onValueChange={setTargetUserId}>
                 <SelectTrigger id="goal-request-target" className="w-full">
-                  <SelectValue placeholder="Choose an accountable teammate" />
+                  <SelectValue placeholder={uiText('choose_an_accountable_teammate_50fff9a')} />
                 </SelectTrigger>
                 <SelectContent>
                   {humanTeammates.map((participant) =>
@@ -561,27 +608,27 @@ export function GoalEvidenceRail({
             </div>
             <div className="grid gap-1.5">
               <label htmlFor="goal-request-prompt" className="text-sm font-medium">
-                What do you need?
+                {uiText('what_do_you_need_52c6a4f')}
               </label>
               <Textarea
                 id="goal-request-prompt"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
-                placeholder="State the decision, context, or evidence needed to unblock the work."
+                placeholder={uiText('state_the_decision_context_or_evidence_needed_792ed5e')}
                 rows={5}
               />
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setAskOpen(false)}>
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button
               type="button"
               disabled={isSubmitting || !targetUserId || !prompt.trim()}
               onClick={() => void submitRequest()}
             >
-              {isSubmitting ? 'Sending…' : 'Request input'}
+              {isSubmitting ? uiText('sending_b8ed527') : uiText('request_input_e2b3337')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -595,12 +642,12 @@ export function GoalEvidenceRail({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Respond to this Goal</DialogTitle>
+            <DialogTitle>{uiText('respond_to_this_goal_0fca547')}</DialogTitle>
             <DialogDescription>{respondingRequest?.title}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">
             <label htmlFor="goal-request-response" className="text-sm font-medium">
-              Your input
+              {uiText('your_input_be241c1')}
             </label>
             {respondingRequest?.expectedResponse.kind === 'form' ? (
               <div className="grid gap-4">
@@ -617,11 +664,14 @@ export function GoalEvidenceRail({
                       <Select
                         value={formValues[field.id] ?? ''}
                         onValueChange={(value) =>
-                          setFormValues((current) => ({ ...current, [field.id]: value }))
+                          setFormValues((current) => ({
+                            ...current,
+                            [field.id]: value,
+                          }))
                         }
                       >
                         <SelectTrigger id={`goal-form-${field.id}`} className="w-full">
-                          <SelectValue placeholder="Choose one option" />
+                          <SelectValue placeholder={uiText('choose_one_option_8fb2680')} />
                         </SelectTrigger>
                         <SelectContent>
                           {field.input.options.map((option) => (
@@ -635,22 +685,27 @@ export function GoalEvidenceRail({
                       <Select
                         value={formValues[field.id] ?? ''}
                         onValueChange={(value) =>
-                          setFormValues((current) => ({ ...current, [field.id]: value }))
+                          setFormValues((current) => ({
+                            ...current,
+                            [field.id]: value,
+                          }))
                         }
                       >
                         <SelectTrigger id={`goal-form-${field.id}`} className="w-full">
-                          <SelectValue placeholder="Choose a response" />
+                          <SelectValue placeholder={uiText('choose_a_response_40850c3')} />
                         </SelectTrigger>
                         <SelectContent>
                           {field.input.kind === 'approval' ? (
                             <>
-                              <SelectItem value="approved">Approve</SelectItem>
-                              <SelectItem value="declined">Do not approve</SelectItem>
+                              <SelectItem value="approved">{uiText('approve_6007acb')}</SelectItem>
+                              <SelectItem value="declined">
+                                {uiText('do_not_approve_d1ca508')}
+                              </SelectItem>
                             </>
                           ) : (
                             <>
-                              <SelectItem value="true">Yes</SelectItem>
-                              <SelectItem value="false">No</SelectItem>
+                              <SelectItem value="true">{uiText('yes_85a39ab')}</SelectItem>
+                              <SelectItem value="false">{uiText('no_1ea442a')}</SelectItem>
                             </>
                           )}
                         </SelectContent>
@@ -673,11 +728,11 @@ export function GoalEvidenceRail({
                         }
                         placeholder={
                           field.input.kind === 'date_range'
-                            ? 'YYYY-MM-DD/YYYY-MM-DD'
+                            ? uiText('m_dc3589951b')
                             : field.input.kind === 'asset_version_ref'
-                              ? 'asset-id:version-id'
+                              ? uiText('m_7f9a59dc8c')
                               : field.input.kind === 'choice' && field.input.multiple
-                                ? 'Comma-separated option IDs'
+                                ? uiText('comma_separated_option_ids_8d01260')
                                 : undefined
                         }
                       />
@@ -688,7 +743,7 @@ export function GoalEvidenceRail({
             ) : respondingRequest?.expectedResponse.kind === 'choice' ? (
               <Select value={response} onValueChange={setResponse}>
                 <SelectTrigger id="goal-request-response" className="w-full">
-                  <SelectValue placeholder="Choose one recorded option" />
+                  <SelectValue placeholder={uiText('choose_one_recorded_option_769b7eb')} />
                 </SelectTrigger>
                 <SelectContent>
                   {respondingRequest.expectedResponse.options.map((option) => (
@@ -701,11 +756,11 @@ export function GoalEvidenceRail({
             ) : respondingRequest?.expectedResponse.kind === 'approval' ? (
               <Select value={response} onValueChange={setResponse}>
                 <SelectTrigger id="goal-request-response" className="w-full">
-                  <SelectValue placeholder="Approve or decline" />
+                  <SelectValue placeholder={uiText('approve_or_decline_2634277')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="approved">Approve</SelectItem>
-                  <SelectItem value="declined">Do not approve</SelectItem>
+                  <SelectItem value="approved">{uiText('approve_6007acb')}</SelectItem>
+                  <SelectItem value="declined">{uiText('do_not_approve_d1ca508')}</SelectItem>
                 </SelectContent>
               </Select>
             ) : respondingRequest?.expectedResponse.kind === 'money' ? (
@@ -718,7 +773,10 @@ export function GoalEvidenceRail({
                   inputMode="decimal"
                   value={response}
                   onChange={(event) => setResponse(event.target.value)}
-                  placeholder="0.00"
+                  placeholder={new Intl.NumberFormat(uiLocale, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }).format(0)}
                 />
               </div>
             ) : (
@@ -728,8 +786,8 @@ export function GoalEvidenceRail({
                 onChange={(event) => setResponse(event.target.value)}
                 placeholder={
                   respondingRequest?.expectedResponse.kind === 'evidence'
-                    ? 'Describe the source and attach evidence from the Goal evidence action.'
-                    : 'Share the decision, context, or evidence the team needs.'
+                    ? uiText('describe_the_source_and_attach_evidence_from__ea25a6d')
+                    : uiText('share_the_decision_context_or_evidence_the_te_3beb28a')
                 }
                 rows={6}
               />
@@ -738,7 +796,7 @@ export function GoalEvidenceRail({
               <div className="rounded-md border border-dashed p-3">
                 <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium">
                   <Paperclip className="size-3.5" />
-                  Add private evidence
+                  {uiText('m_7d4a697e40')}
                   <input
                     type="file"
                     className="sr-only"
@@ -767,22 +825,27 @@ export function GoalEvidenceRail({
                           className="h-6 px-1.5"
                           onClick={() => attachments.remove(attachment.id)}
                         >
-                          Remove
+                          {uiText('remove_c3812fc')}
                         </Button>
                       </li>
                     ))}
                   </ul>
                 ) : (
                   <p className="mt-1 text-2xs text-muted-foreground">
-                    Files stay private to this Goal and are retained with its audit record.
+                    {uiText('files_stay_private_to_this_goal_and_are_retai_4a1b3d0')}
                   </p>
                 )}
               </div>
             ) : null}
           </div>
+          {validationError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {validationError}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRespondingRequestId(null)}>
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button
               type="button"
@@ -800,7 +863,7 @@ export function GoalEvidenceRail({
               }
               onClick={() => void submitResponse()}
             >
-              {isSubmitting ? 'Sharing…' : 'Share response'}
+              {isSubmitting ? uiText('sharing_2e913af') : uiText('share_response_03379dc')}
             </Button>
           </DialogFooter>
         </DialogContent>

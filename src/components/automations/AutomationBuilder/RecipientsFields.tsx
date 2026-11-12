@@ -1,10 +1,12 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { Control } from 'react-hook-form';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { useRecipientCandidates } from '@/lib/automations/automations';
+import { automationControlLabel } from '../workspace/automationControlLabels';
 import type { AutomationBuilderFormValues } from './builderFormSchema';
 import { ExternalEmailChipsInput } from './ExternalEmailChipsInput';
 
@@ -14,6 +16,7 @@ type RecipientsFieldsProps = {
 };
 
 export function RecipientsFields({ brandId, control }: RecipientsFieldsProps) {
+  const uiText = useTranslations('automations');
   const { data: candidates, isLoading } = useRecipientCandidates(brandId);
 
   return (
@@ -23,7 +26,7 @@ export function RecipientsFields({ brandId, control }: RecipientsFieldsProps) {
         name="memberUserIds"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Workspace members</FormLabel>
+            <FormLabel>{uiText('workspace_members_ab95d45')}</FormLabel>
             {isLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-9 w-full bg-muted/70" />
@@ -31,7 +34,7 @@ export function RecipientsFields({ brandId, control }: RecipientsFieldsProps) {
               </div>
             ) : !candidates || candidates.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                No members with an email on this brand.
+                {uiText('no_members_with_an_email_on_this_brand_c3eb0b6')}
               </p>
             ) : (
               <div className="space-y-1">
@@ -44,11 +47,15 @@ export function RecipientsFields({ brandId, control }: RecipientsFieldsProps) {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm">{candidate.email}</p>
-                        <p className="text-xs capitalize text-muted-foreground">{candidate.role}</p>
+                        <p className="text-xs capitalize text-muted-foreground">
+                          {automationControlLabel(candidate.role, uiText)}
+                        </p>
                       </div>
                       <Switch
                         checked={checked}
-                        aria-label={`Email report to ${candidate.email}`}
+                        aria-label={uiText('m_9034f0bc9a', {
+                          email: candidate.email,
+                        })}
                         onCheckedChange={(next) =>
                           field.onChange(
                             next
@@ -72,7 +79,7 @@ export function RecipientsFields({ brandId, control }: RecipientsFieldsProps) {
         name="externalEmails"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>External stakeholders</FormLabel>
+            <FormLabel>{uiText('external_stakeholders_c3fb740')}</FormLabel>
             <FormControl>
               <ExternalEmailChipsInput value={field.value} onChange={field.onChange} />
             </FormControl>

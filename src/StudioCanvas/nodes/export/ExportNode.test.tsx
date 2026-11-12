@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { EXPORT_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../../stores/useStudioStore';
@@ -21,7 +26,9 @@ const runExportSpy = mock(async () => ({
   format: 'png' as const,
 }));
 
-mock.module('../../utils/executeWorkflow', () => ({ executeWorkflow: executeWorkflowSpy }));
+mock.module('../../utils/executeWorkflow', () => ({
+  executeWorkflow: executeWorkflowSpy,
+}));
 // Spread the real module: the node also reads `exportSourcesFromGraph` and the format
 // helpers from here, and a bare stub would make it render "nothing is connected".
 mock.module('../../utils/export/runExport', () => ({
@@ -60,7 +67,12 @@ const wire = (sources: { id: string; type: string; data: Record<string, unknown>
     updateNodeData,
     nodes: [
       ...sources,
-      { id: EXPORT_ID, type: 'export', position: { x: 0, y: 0 }, data: { format: null } },
+      {
+        id: EXPORT_ID,
+        type: 'export',
+        position: { x: 0, y: 0 },
+        data: { format: null },
+      },
     ] as never,
     edges: sources.map((source) => ({
       id: `e-${source.id}`,
@@ -73,7 +85,12 @@ const wire = (sources: { id: string; type: string; data: Record<string, unknown>
 
 describe('ExportNode', () => {
   beforeEach(() => {
-    useStudioStore.setState({ nodes: [], edges: [], brandId: 'brand-1', updateNodeData });
+    useStudioStore.setState({
+      nodes: [],
+      edges: [],
+      brandId: 'brand-1',
+      updateNodeData,
+    });
     updateNodeData.mockClear();
     executeWorkflowSpy.mockClear();
     runExportSpy.mockClear();
@@ -96,7 +113,13 @@ describe('ExportNode', () => {
   });
 
   it('offers the still formats and a single Download for one image upstream', () => {
-    wire([{ id: 'gen', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/a.png' } }]);
+    wire([
+      {
+        id: 'gen',
+        type: 'nanoGen',
+        data: { generatedImageUrl: 'https://cdn/a.png' },
+      },
+    ]);
     const { getByTestId } = renderNode({ format: null });
     expect(getByTestId('studio-export-format').textContent).toContain('PNG');
     expect(getByTestId('studio-export-download').textContent).toContain('Download');
@@ -105,8 +128,16 @@ describe('ExportNode', () => {
 
   it('switches to Download All once a second input joins the pool', () => {
     wire([
-      { id: 'gen', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/a.png' } },
-      { id: 'gen-2', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/b.png' } },
+      {
+        id: 'gen',
+        type: 'nanoGen',
+        data: { generatedImageUrl: 'https://cdn/a.png' },
+      },
+      {
+        id: 'gen-2',
+        type: 'nanoGen',
+        data: { generatedImageUrl: 'https://cdn/b.png' },
+      },
     ]);
     const { getByTestId, getByText } = renderNode({ format: null });
     expect(getByTestId('studio-export-download').textContent).toContain('Download All');
@@ -114,20 +145,38 @@ describe('ExportNode', () => {
   });
 
   it('shows a clip format, not a still one, when a video is wired in', () => {
-    wire([{ id: 'clip', type: 'videoGen', data: { generatedVideoUrl: 'https://cdn/a.mp4' } }]);
+    wire([
+      {
+        id: 'clip',
+        type: 'videoGen',
+        data: { generatedVideoUrl: 'https://cdn/a.mp4' },
+      },
+    ]);
     const { getByTestId, getByText } = renderNode({ format: null });
     expect(getByTestId('studio-export-format').textContent).toContain('MP4 (H.264)');
     expect(getByText('Video')).toBeTruthy();
   });
 
   it('ignores a stored format belonging to the other modality', () => {
-    wire([{ id: 'clip', type: 'videoGen', data: { generatedVideoUrl: 'https://cdn/a.mp4' } }]);
+    wire([
+      {
+        id: 'clip',
+        type: 'videoGen',
+        data: { generatedVideoUrl: 'https://cdn/a.mp4' },
+      },
+    ]);
     const { getByTestId } = renderNode({ format: 'webp' });
     expect(getByTestId('studio-export-format').textContent).toContain('MP4 (H.264)');
   });
 
   it('surfaces the GIF caps so the format is not a surprise', () => {
-    wire([{ id: 'clip', type: 'videoGen', data: { generatedVideoUrl: 'https://cdn/a.mp4' } }]);
+    wire([
+      {
+        id: 'clip',
+        type: 'videoGen',
+        data: { generatedVideoUrl: 'https://cdn/a.mp4' },
+      },
+    ]);
     const { getByText } = renderNode({ format: 'gif' });
     expect(getByText(/15fps and 480px/)).toBeTruthy();
   });
@@ -135,7 +184,13 @@ describe('ExportNode', () => {
   // ── Airtable #302 — exporting what exists must not re-derive it ──────────────
 
   it('makes ZERO workflow runs when every input already holds its artifact', async () => {
-    wire([{ id: 'gen', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/a.png' } }]);
+    wire([
+      {
+        id: 'gen',
+        type: 'nanoGen',
+        data: { generatedImageUrl: 'https://cdn/a.png' },
+      },
+    ]);
     const { getByTestId, findByTestId } = renderNode({ format: 'png' });
 
     fireEvent.click(getByTestId('studio-export-download'));
@@ -151,7 +206,11 @@ describe('ExportNode', () => {
     // Un-produced upstream: the node cannot offer a format, so the run is reached
     // through the same button once anything at all is on the pool.
     wire([
-      { id: 'ready', type: 'nanoGen', data: { generatedImageUrl: 'https://cdn/a.png' } },
+      {
+        id: 'ready',
+        type: 'nanoGen',
+        data: { generatedImageUrl: 'https://cdn/a.png' },
+      },
       { id: 'pending', type: 'nanoGen', data: { prompt: 'a red car' } },
     ]);
     const { getByTestId } = renderNode({ format: 'png' });

@@ -1,12 +1,17 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // The media write goes through the real field-persistence hook; only the HTTP edge is
 // faked, so the CAS token and the body it carries are the ones production would send.
-type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+type RequestOptions = {
+  path: string;
+  method?: string;
+  body?: Record<string, unknown>;
+};
 const requestCalls: RequestOptions[] = [];
 let requestImpl: (opts: RequestOptions) => Promise<unknown> = async () => ({});
 const request = mock((opts: RequestOptions) => {
@@ -121,7 +126,9 @@ describe('useDraftMediaPlacement', () => {
     requestImpl = async () => ({});
     request.mockClear();
     // The save reads the draft back from the store at send time, as production does.
-    useCalendarStore.getState = () => ({ days: [{ id: 'day-1', slots: [storedDraft] }] });
+    useCalendarStore.getState = () => ({
+      days: [{ id: 'day-1', slots: [storedDraft] }],
+    });
     storedDraft = {
       id: 'draft-1',
       mediaSuggestion: { mediaStatus: 'pending' },
@@ -165,7 +172,11 @@ describe('useDraftMediaPlacement', () => {
     });
 
     const draft = storedDraft as {
-      mediaSuggestion: { mediaStatus: string; kind: string; reel: { url: string } };
+      mediaSuggestion: {
+        mediaStatus: string;
+        kind: string;
+        reel: { url: string };
+      };
       publishingAssets: Array<{ kind: string }>;
     };
     expect(draft.mediaSuggestion.mediaStatus).toBe('user_supplied');
@@ -234,8 +245,22 @@ describe('useDraftMediaPlacement', () => {
       format: 'CAROUSEL',
       mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
       publishingAssets: [
-        { kind: 'image', slideIndex: 0, assetId: 'i1', bucket: 'media-library', storagePath: 'i1.jpg', storageUrl: 'https://cdn/i1.jpg' },
-        { kind: 'image', slideIndex: 1, assetId: 'i2', bucket: 'media-library', storagePath: 'i2.jpg', storageUrl: 'https://cdn/i2.jpg' },
+        {
+          kind: 'image',
+          slideIndex: 0,
+          assetId: 'i1',
+          bucket: 'media-library',
+          storagePath: 'i1.jpg',
+          storageUrl: 'https://cdn/i1.jpg',
+        },
+        {
+          kind: 'image',
+          slideIndex: 1,
+          assetId: 'i2',
+          bucket: 'media-library',
+          storagePath: 'i2.jpg',
+          storageUrl: 'https://cdn/i2.jpg',
+        },
       ],
     };
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
@@ -243,12 +268,18 @@ describe('useDraftMediaPlacement', () => {
 
     let err: ReturnType<typeof result.current.place> = null;
     await act(async () => {
-      err = result.current.place([video], { kind: 'carousel_slide', slideIndex: 0 });
+      err = result.current.place([video], {
+        kind: 'carousel_slide',
+        slideIndex: 0,
+      });
     });
 
     expect(err).toBeNull();
-    const assets = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const assets = (
+      storedDraft as {
+        publishingAssets: Array<{ kind: string; slideIndex: number }>;
+      }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(assets.map((asset) => asset.kind)).toEqual(['video', 'image']);
     expect(mockUpdateDraft).toHaveBeenCalledTimes(1);
   });
@@ -288,19 +319,26 @@ describe('useDraftMediaPlacement', () => {
 
     let err: ReturnType<typeof result.current.place> = null;
     await act(async () => {
-      err = result.current.place([replacement], { kind: 'carousel_slide', slideIndex: 5 });
+      err = result.current.place([replacement], {
+        kind: 'carousel_slide',
+        slideIndex: 5,
+      });
     });
 
     expect(err).toBeNull();
     const draft = storedDraft as {
       format: string;
-      publishingAssets: Array<{ assetId?: string; kind: string; slideIndex: number }>;
+      publishingAssets: Array<{
+        assetId?: string;
+        kind: string;
+        slideIndex: number;
+      }>;
     };
     expect(draft.format).toBe('CAROUSEL');
     expect(draft.publishingAssets).toHaveLength(7);
-    expect(draft.publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex).map((a) => a.assetId)).toEqual([
-      'i1', 'i2', 'i3', 'i4', 'i5', 'replacement', 'v2',
-    ]);
+    expect(
+      draft.publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex).map((a) => a.assetId),
+    ).toEqual(['i1', 'i2', 'i3', 'i4', 'i5', 'replacement', 'v2']);
   });
 
   // empty selection
@@ -359,8 +397,11 @@ describe('useDraftMediaPlacement', () => {
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
     await act(async () => result.current.reorderSlides(0, 2));
 
-    const sorted = (storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const sorted = (
+      storedDraft as {
+        publishingAssets: Array<{ slideIndex: number; storagePath: string }>;
+      }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(sorted.map((asset) => asset.storagePath)).toEqual(['b.mp4', 'c.jpg', 'a.jpg']);
     expect(sorted.map((asset) => asset.slideIndex)).toEqual([0, 1, 2]);
   });
@@ -371,7 +412,12 @@ describe('useDraftMediaPlacement', () => {
       id: 'draft-1',
       mediaSuggestion: { mediaStatus: 'user_supplied' },
       publishingAssets: [
-        { kind: 'image', slideIndex: 0, storagePath: 'only.jpg', storageUrl: 'u' },
+        {
+          kind: 'image',
+          slideIndex: 0,
+          storagePath: 'only.jpg',
+          storageUrl: 'u',
+        },
       ],
     };
 
@@ -432,8 +478,11 @@ describe('useDraftMediaPlacement', () => {
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
     await act(async () => result.current.removeSlide(1));
 
-    const sorted = (storedDraft as { publishingAssets: Array<{ slideIndex: number; storagePath: string }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const sorted = (
+      storedDraft as {
+        publishingAssets: Array<{ slideIndex: number; storagePath: string }>;
+      }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(sorted.map((asset) => asset.storagePath)).toEqual(['a.jpg', 'c.jpg']);
     expect(sorted.map((asset) => asset.slideIndex)).toEqual([0, 1]);
   });
@@ -444,8 +493,20 @@ describe('useDraftMediaPlacement', () => {
       id: 'draft-1',
       mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
       publishingAssets: [
-        { kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'a', role: 'primary' },
-        { kind: 'image', slideIndex: 1, storagePath: 'b.jpg', storageUrl: 'b', role: 'primary' },
+        {
+          kind: 'image',
+          slideIndex: 0,
+          storagePath: 'a.jpg',
+          storageUrl: 'a',
+          role: 'primary',
+        },
+        {
+          kind: 'image',
+          slideIndex: 1,
+          storagePath: 'b.jpg',
+          storageUrl: 'b',
+          role: 'primary',
+        },
       ],
     };
 
@@ -477,8 +538,20 @@ describe('useDraftMediaPlacement', () => {
       mediaSuggestion: { mediaStatus: 'user_supplied' },
       format: 'CAROUSEL',
       publishingAssets: [
-        { kind: 'image', slideIndex: 0, assetId: 'i1', storagePath: 'a.jpg', storageUrl: 'a' },
-        { kind: 'image', slideIndex: 1, assetId: 'i2', storagePath: 'b.jpg', storageUrl: 'b' },
+        {
+          kind: 'image',
+          slideIndex: 0,
+          assetId: 'i1',
+          storagePath: 'a.jpg',
+          storageUrl: 'a',
+        },
+        {
+          kind: 'image',
+          slideIndex: 1,
+          assetId: 'i2',
+          storagePath: 'b.jpg',
+          storageUrl: 'b',
+        },
       ],
     };
 
@@ -490,8 +563,11 @@ describe('useDraftMediaPlacement', () => {
     });
 
     expect(err).toBeNull();
-    const assets = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const assets = (
+      storedDraft as {
+        publishingAssets: Array<{ kind: string; slideIndex: number }>;
+      }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(assets.map((asset) => asset.kind)).toEqual(['video', 'image']);
     expect(assets).toHaveLength(2);
   });
@@ -508,10 +584,19 @@ describe('useDraftMediaPlacement', () => {
     };
 
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
-    await act(async () => result.current.addSlide(makeVideoAsset({ id: 'v3', storagePath: 'c.mp4' })));
+    await act(async () =>
+      result.current.addSlide(makeVideoAsset({ id: 'v3', storagePath: 'c.mp4' })),
+    );
 
-    const sorted = (storedDraft as { publishingAssets: Array<{ kind: string; slideIndex: number; storagePath: string }> })
-      .publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
+    const sorted = (
+      storedDraft as {
+        publishingAssets: Array<{
+          kind: string;
+          slideIndex: number;
+          storagePath: string;
+        }>;
+      }
+    ).publishingAssets.sort((a, b) => a.slideIndex - b.slideIndex);
     expect(sorted.map((asset) => [asset.kind, asset.storagePath])).toEqual([
       ['image', 'a.jpg'],
       ['video', 'b.mp4'],
@@ -542,7 +627,9 @@ describe('useDraftMediaPlacement', () => {
 
     let err: ReturnType<typeof result.current.place> = null;
     await act(async () => {
-      err = result.current.place([makeVideoAsset(), makeImageAsset()], { kind: 'video' });
+      err = result.current.place([makeVideoAsset(), makeImageAsset()], {
+        kind: 'video',
+      });
     });
 
     expect(err?.type).toBe('invalid_kind');
@@ -559,7 +646,10 @@ describe('useDraftMediaPlacement', () => {
     });
 
     const draft = storedDraft as {
-      mediaSuggestion: { reel: { thumbnailUrl: string | null }; assetUrl: string | null };
+      mediaSuggestion: {
+        reel: { thumbnailUrl: string | null };
+        assetUrl: string | null;
+      };
     };
     expect(draft.mediaSuggestion.reel.thumbnailUrl).toBe('https://cdn/vid-poster.jpg');
   });
@@ -577,7 +667,12 @@ describe('useDraftMediaPlacement', () => {
         signedUrl: 'https://cdn/old.png',
       },
       publishingAssets: [
-        { kind: 'image', slideIndex: 0, storagePath: 'old.png', storageUrl: 'https://cdn/old.png' },
+        {
+          kind: 'image',
+          slideIndex: 0,
+          storagePath: 'old.png',
+          storageUrl: 'https://cdn/old.png',
+        },
       ],
     };
 
@@ -657,7 +752,9 @@ describe('useDraftMediaPlacement', () => {
     });
 
     function sentMedia(call: RequestOptions) {
-      return call.body?.media as { publishingAssets: Array<{ storagePath: string }> };
+      return call.body?.media as {
+        publishingAssets: Array<{ storagePath: string }>;
+      };
     }
 
     // Two placements fired back to back used to race: the second PATCH carried the
@@ -793,7 +890,12 @@ describe('useDraftMediaPlacement', () => {
       storedDraft = {
         ...storedDraft,
         groupMembers: [
-          { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+          {
+            backendDraftId: 'srv-1',
+            platform: 'instagram',
+            status: 'draft',
+            accountId: null,
+          },
           member('facebook', []),
           member('linkedin', [{ kind: 'image', role: 'primary', storagePath: 'own.jpg' }]),
         ],
@@ -802,14 +904,19 @@ describe('useDraftMediaPlacement', () => {
       useCalendarStore.mockImplementation((selector: (state: unknown) => unknown) =>
         selector({
           updateDraft: (draftId: string, updater: (draft: unknown) => unknown) => {
-            const card = storedDraft as { id: string; groupMembers: Array<{ draft?: { id: string } }> };
+            const card = storedDraft as {
+              id: string;
+              groupMembers: Array<{ draft?: { id: string } }>;
+            };
             storedDraft =
               card.id === draftId
                 ? (updater(card) as Record<string, unknown>)
                 : {
                     ...card,
                     groupMembers: card.groupMembers.map((entry) =>
-                      entry.draft?.id === draftId ? { ...entry, draft: updater(entry.draft) } : entry,
+                      entry.draft?.id === draftId
+                        ? { ...entry, draft: updater(entry.draft) }
+                        : entry,
                     ),
                   };
           },
@@ -832,7 +939,12 @@ describe('useDraftMediaPlacement', () => {
         'brands/brand-1/img.jpg',
       ]);
       const facebook = (
-        storedDraft as { groupMembers: Array<{ platform: string; draft?: Record<string, unknown> }> }
+        storedDraft as {
+          groupMembers: Array<{
+            platform: string;
+            draft?: Record<string, unknown>;
+          }>;
+        }
       ).groupMembers.find((entry) => entry.platform === 'facebook')?.draft;
       expect(facebook?.mediaStage).toBe('realized');
     });
@@ -852,7 +964,13 @@ describe('useDraftMediaPlacement', () => {
         id: 'draft-1',
         mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
         publishingAssets: [
-          { role: 'primary', kind: 'image', slideIndex, storagePath: 'first.jpg', storageUrl: 'u' },
+          {
+            role: 'primary',
+            kind: 'image',
+            slideIndex,
+            storagePath: 'first.jpg',
+            storageUrl: 'u',
+          },
         ],
       };
       const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
@@ -862,7 +980,10 @@ describe('useDraftMediaPlacement', () => {
       });
 
       const draft = storedDraft as {
-        publishingAssets: Array<{ slideIndex: number | null; storagePath: string }>;
+        publishingAssets: Array<{
+          slideIndex: number | null;
+          storagePath: string;
+        }>;
       };
       expect(draft.publishingAssets.map((a) => [a.storagePath, a.slideIndex])).toEqual([
         ['first.jpg', 0],
@@ -881,7 +1002,12 @@ describe('useDraftMediaPlacement', () => {
       format: 'Post',
       mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
       publishingAssets: [
-        { role: 'primary', kind: 'image', storagePath: 'first.jpg', storageUrl: 'u' },
+        {
+          role: 'primary',
+          kind: 'image',
+          storagePath: 'first.jpg',
+          storageUrl: 'u',
+        },
       ],
     };
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
@@ -895,7 +1021,9 @@ describe('useDraftMediaPlacement', () => {
     expect(requestCalls).toHaveLength(1);
     expect(requestCalls[0]?.body).toMatchObject({
       format: 'Carousel',
-      media: { publishingAssets: [{ storagePath: 'first.jpg' }, { storagePath: 'second.jpg' }] },
+      media: {
+        publishingAssets: [{ storagePath: 'first.jpg' }, { storagePath: 'second.jpg' }],
+      },
     });
   });
 
@@ -907,8 +1035,20 @@ describe('useDraftMediaPlacement', () => {
       format: 'Carousel',
       mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
       publishingAssets: [
-        { role: 'primary', kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'u' },
-        { role: 'primary', kind: 'image', slideIndex: 1, storagePath: 'b.jpg', storageUrl: 'u' },
+        {
+          role: 'primary',
+          kind: 'image',
+          slideIndex: 0,
+          storagePath: 'a.jpg',
+          storageUrl: 'u',
+        },
+        {
+          role: 'primary',
+          kind: 'image',
+          slideIndex: 1,
+          storagePath: 'b.jpg',
+          storageUrl: 'u',
+        },
       ],
     };
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
@@ -933,7 +1073,12 @@ describe('useDraftMediaPlacement', () => {
       format: 'Post',
       mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
       publishingAssets: [
-        { role: 'primary', kind: 'image', storagePath: 'first.jpg', storageUrl: 'u' },
+        {
+          role: 'primary',
+          kind: 'image',
+          storagePath: 'first.jpg',
+          storageUrl: 'u',
+        },
       ],
     };
     const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
@@ -952,7 +1097,12 @@ describe('useDraftMediaPlacement', () => {
       id: 'draft-1',
       mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
       publishingAssets: [
-        { kind: 'image', slideIndex: null, storagePath: 'z.jpg', storageUrl: 'z' },
+        {
+          kind: 'image',
+          slideIndex: null,
+          storagePath: 'z.jpg',
+          storageUrl: 'z',
+        },
         { kind: 'image', slideIndex: 1, storagePath: 'b.jpg', storageUrl: 'b' },
         { kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'a' },
       ],
@@ -990,7 +1140,9 @@ describe('useDraftMediaPlacement', () => {
     const unsigned = { signedUrl: undefined, bucket: 'media-library' };
     const paths = () =>
       (
-        storedDraft as { publishingAssets: Array<{ storagePath: string; slideIndex: number }> }
+        storedDraft as {
+          publishingAssets: Array<{ storagePath: string; slideIndex: number }>;
+        }
       ).publishingAssets
         .slice()
         .sort((x, y) => x.slideIndex - y.slideIndex)
@@ -1018,7 +1170,11 @@ describe('useDraftMediaPlacement', () => {
 
     const assets = (
       storedDraft as {
-        publishingAssets: Array<{ storagePath: string; bucket?: string; storageUrl: string }>;
+        publishingAssets: Array<{
+          storagePath: string;
+          bucket?: string;
+          storageUrl: string;
+        }>;
       }
     ).publishingAssets;
     expect(assets.find((a) => a.storagePath === 'n.jpg')).toMatchObject({

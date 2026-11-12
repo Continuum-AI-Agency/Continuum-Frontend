@@ -78,10 +78,30 @@ const variable = (over: Partial<ApiRenderVariable>): ApiRenderVariable => ({
 });
 
 const headline = variable({ required: true, charBudget: 10, sample: 'Hola' });
-const price = variable({ key: 'price', label: 'Price', kind: 'number', sample: '9.99' });
-const onSale = variable({ key: 'on_sale', label: 'On sale', kind: 'boolean', sample: 'true' });
-const size = variable({ key: 'size', label: 'Size', kind: 'enum', options: ['S', 'M'] });
-const hero = variable({ key: 'hero', label: 'Hero', kind: 'image', required: true });
+const price = variable({
+  key: 'price',
+  label: 'Price',
+  kind: 'number',
+  sample: '9.99',
+});
+const onSale = variable({
+  key: 'on_sale',
+  label: 'On sale',
+  kind: 'boolean',
+  sample: 'true',
+});
+const size = variable({
+  key: 'size',
+  label: 'Size',
+  kind: 'enum',
+  options: ['S', 'M'],
+});
+const hero = variable({
+  key: 'hero',
+  label: 'Hero',
+  kind: 'image',
+  required: true,
+});
 const logo = variable({
   key: 'logo',
   label: 'Logo',
@@ -112,7 +132,9 @@ describe('a video slot’s clip length', () => {
       fileName: 'bg.mp4',
       signedUrl: 'https://cdn.test/bg.mp4',
     } as Parameters<typeof rowMediaOf>[0];
-    expect(rowMediaOf({ ...video, durationMs: 12_500 })).toMatchObject({ durationSec: 12.5 });
+    expect(rowMediaOf({ ...video, durationMs: 12_500 })).toMatchObject({
+      durationSec: 12.5,
+    });
     expect(rowMediaOf({ ...video, durationMs: 12_500 }).clipUrl).toBeUndefined();
     expect(rowMediaOf({ ...video, durationMs: null }).clipUrl).toBe('https://cdn.test/bg.mp4');
   });
@@ -121,7 +143,11 @@ describe('a video slot’s clip length', () => {
 describe('seedRow', () => {
   test('takes the designer’s samples, typed, and never media or reserved slots', () => {
     const row = seedRow(all);
-    expect(row.values).toEqual({ headline: 'Hola', price: 9.99, on_sale: true });
+    expect(row.values).toEqual({
+      headline: 'Hola',
+      price: 9.99,
+      on_sale: true,
+    });
   });
   test('leaves a field with a saved default empty, so the default is what it renders', () => {
     const row = seedRow(
@@ -136,8 +162,16 @@ describe('seedRow', () => {
 });
 
 describe('isDefaultValue', () => {
-  const saved = variable({ key: 'cta', label: 'CTA', defaultValue: 'GO FAST', sample: 'Hola' });
-  const savedHero = { ...hero, defaultValue: { assetId: '77777777-7777-4777-8777-777777777777' } };
+  const saved = variable({
+    key: 'cta',
+    label: 'CTA',
+    defaultValue: 'GO FAST',
+    sample: 'Hola',
+  });
+  const savedHero = {
+    ...hero,
+    defaultValue: { assetId: '77777777-7777-4777-8777-777777777777' },
+  };
   test.each([
     ['the seeded artboard copy', headline, 'Hola', true],
     ['the seeded artboard number, typed', price, 9.99, true],
@@ -170,7 +204,9 @@ describe('validateRow', () => {
     expect(validateRow([colour], { c: '#FF00FF' })).toEqual({});
   });
   test('required media needs a pin; reserved slots are never the caller’s problem', () => {
-    expect(validateRow([hero, logo], {})).toEqual({ hero: 'Pick something from the Library' });
+    expect(validateRow([hero, logo], {})).toEqual({
+      hero: 'Pick something from the Library',
+    });
     expect(validateRow([hero], { hero: { assetId: 'a' } })).toEqual({});
   });
 });
@@ -221,9 +257,27 @@ describe('reviewed spreadsheet import', () => {
     ];
     const assetId = '11111111-1111-4111-8111-111111111111';
     const source = [
-      { Name: 'Spain', Parent: 'Campaign', Formats: '9:16', Hero: assetId, 'Ad id': '' },
-      { Name: 'Campaign', Parent: '', Formats: 'Landscape, 9:16', Hero: '', 'Ad id': '' },
-      { Name: 'Sale', Parent: 'spain', Formats: '', Hero: '', 'Ad id': ' 238500 ' },
+      {
+        Name: 'Spain',
+        Parent: 'Campaign',
+        Formats: '9:16',
+        Hero: assetId,
+        'Ad id': '',
+      },
+      {
+        Name: 'Campaign',
+        Parent: '',
+        Formats: 'Landscape, 9:16',
+        Hero: '',
+        'Ad id': '',
+      },
+      {
+        Name: 'Sale',
+        Parent: 'spain',
+        Formats: '',
+        Hero: '',
+        'Ad id': ' 238500 ',
+      },
     ];
     const mappings = autoMapHeaders(Object.keys(source[0]!), all);
     expect(mappings).toEqual({
@@ -282,7 +336,10 @@ describe('reviewed spreadsheet import', () => {
   test('a fork chain past the depth cap is an error on the row that breaks it', () => {
     const names = ['L0', 'L1', 'L2', 'L3', 'L4'];
     const { errors } = rowsFromMappedImport(
-      names.map((name, index) => ({ Name: name, Parent: index ? names[index - 1]! : '' })),
+      names.map((name, index) => ({
+        Name: name,
+        Parent: index ? names[index - 1]! : '',
+      })),
       { Name: '@name', Parent: '@parent' },
       all,
     );
@@ -330,7 +387,11 @@ describe('CSV', () => {
   });
 
   test('the template spreadsheet round-trips into the rows it describes', () => {
-    const clash = variable({ key: 'name_text', label: 'Name', sample: 'Ana, "la" jefa' });
+    const clash = variable({
+      key: 'name_text',
+      label: 'Name',
+      sample: 'Ana, "la" jefa',
+    });
     const contract = {
       variables: [...all, clash],
       outputs: [
@@ -390,8 +451,16 @@ describe('CSV', () => {
   };
 
   test('a variable keyed like a field never takes over that field’s column', () => {
-    const brand = variable({ key: 'name', label: 'Brand name', sample: 'Acme' });
-    const formats = variable({ key: 'formats', label: 'Copy formats', sample: 'long' });
+    const brand = variable({
+      key: 'name',
+      label: 'Brand name',
+      sample: 'Acme',
+    });
+    const formats = variable({
+      key: 'formats',
+      label: 'Copy formats',
+      sample: 'long',
+    });
     const { headers, mappings, rows, errors } = roundTrip({
       variables: [brand, formats],
       outputs: [{ id: 'sq', label: 'Square', ratio: '1:1' }],
@@ -404,7 +473,11 @@ describe('CSV', () => {
       'Copy formats',
       'Replace ad ID',
     ]);
-    expect(mappings).toMatchObject({ Name: '@name', Formats: '@formats', 'Brand name': 'name' });
+    expect(mappings).toMatchObject({
+      Name: '@name',
+      Formats: '@formats',
+      'Brand name': 'name',
+    });
     expect(errors).toEqual([]);
     expect(rows[0]?.label).toBe('Base');
     expect(rows[0]?.outputIds).toEqual(['sq']);
@@ -412,9 +485,20 @@ describe('CSV', () => {
   });
 
   test('a key that is another variable’s label is a clash, so neither column is swapped', () => {
-    const title = variable({ key: 'title', label: 'Headline', sample: 'Big sale' });
-    const headlineKey = variable({ key: 'headline', label: 'Title', sample: 'Subtitle' });
-    const { headers, rows, errors } = roundTrip({ variables: [title, headlineKey], outputs: [] });
+    const title = variable({
+      key: 'title',
+      label: 'Headline',
+      sample: 'Big sale',
+    });
+    const headlineKey = variable({
+      key: 'headline',
+      label: 'Title',
+      sample: 'Subtitle',
+    });
+    const { headers, rows, errors } = roundTrip({
+      variables: [title, headlineKey],
+      outputs: [],
+    });
     expect(headers).toEqual([
       'Name',
       'Parent',
@@ -424,7 +508,10 @@ describe('CSV', () => {
       'Replace ad ID',
     ]);
     expect(errors).toEqual([]);
-    expect(rows[0]?.values).toEqual({ title: 'Big sale', headline: 'Subtitle' });
+    expect(rows[0]?.values).toEqual({
+      title: 'Big sale',
+      headline: 'Subtitle',
+    });
     // A hand-made sheet naming the bare key still reaches the variable with that key.
     expect(autoMapHeaders(['headline', 'title'], [title, headlineKey])).toEqual({
       headline: 'headline',
@@ -433,12 +520,21 @@ describe('CSV', () => {
   });
 
   test('a label padded with spaces still maps its own column', () => {
-    const padded = variable({ key: 'cta', label: ' Call to action ', sample: 'Buy' });
-    const { headers, rows, errors } = roundTrip({ variables: [padded], outputs: [] });
+    const padded = variable({
+      key: 'cta',
+      label: ' Call to action ',
+      sample: 'Buy',
+    });
+    const { headers, rows, errors } = roundTrip({
+      variables: [padded],
+      outputs: [],
+    });
     expect(headers).toContain('Call to action');
     expect(errors).toEqual([]);
     expect(rows[0]?.values).toEqual({ cta: 'Buy' });
-    expect(autoMapHeaders([' Call to action '], [padded])).toEqual({ ' Call to action ': 'cta' });
+    expect(autoMapHeaders([' Call to action '], [padded])).toEqual({
+      ' Call to action ': 'cta',
+    });
   });
 
   test('auto-maps accented spreadsheet headers to unaccented template variables', () => {
@@ -461,7 +557,11 @@ describe('CSV', () => {
 
   test('a media link column maps by detected type when it has one matching slot', () => {
     const image = variable({ key: 'hero', label: 'Hero asset', kind: 'image' });
-    const video = variable({ key: 'clip', label: 'Motion asset', kind: 'video' });
+    const video = variable({
+      key: 'clip',
+      label: 'Motion asset',
+      kind: 'video',
+    });
     expect(
       autoMapHeaders(
         ['Creative URL'],
@@ -476,9 +576,20 @@ describe('CSV', () => {
   test('the Formats and variable samples are only what imports back cleanly', () => {
     const { rows, errors } = roundTrip({
       variables: [
-        variable({ key: 'price', label: 'Price', kind: 'number', sample: '9,99 €' }),
+        variable({
+          key: 'price',
+          label: 'Price',
+          kind: 'number',
+          sample: '9,99 €',
+        }),
         variable({ key: 'tint', label: 'Tint', kind: 'color', sample: '#abc' }),
-        variable({ key: 'size', label: 'Size', kind: 'enum', options: ['S', 'M'], sample: 'XL' }),
+        variable({
+          key: 'size',
+          label: 'Size',
+          kind: 'enum',
+          options: ['S', 'M'],
+          sample: 'XL',
+        }),
         variable({ key: 'copy', label: 'Copy', sample: 'Hola' }),
       ],
       outputs: [
@@ -632,8 +743,17 @@ describe('names, order and parentage', () => {
 describe('toVariableMap', () => {
   test('drops blanks and keeps typed values', () => {
     const row = seedRow([]);
-    row.values = { headline: '', price: 0, on_sale: false, hero: { assetId: 'a' } };
-    expect(toVariableMap(row)).toEqual({ price: 0, on_sale: false, hero: { assetId: 'a' } });
+    row.values = {
+      headline: '',
+      price: 0,
+      on_sale: false,
+      hero: { assetId: 'a' },
+    };
+    expect(toVariableMap(row)).toEqual({
+      price: 0,
+      on_sale: false,
+      hero: { assetId: 'a' },
+    });
   });
 });
 
@@ -649,7 +769,10 @@ describe('fork rows', () => {
     offer.values = { on_sale: true };
     const rows = [root, market, offer];
 
-    expect(effectiveValues(rows, offer.id)).toEqual({ headline: 'Hola', on_sale: true });
+    expect(effectiveValues(rows, offer.id)).toEqual({
+      headline: 'Hola',
+      on_sale: true,
+    });
     expect(effectiveOutputIds(rows, offer.id)).toEqual(['square', 'story']);
     expect(rowDepth(rows, offer.id)).toBe(2);
     expect(rowBreadcrumb(rows, offer.id)).toEqual(['Campaign', 'Spain', 'Sale']);
@@ -742,7 +865,12 @@ describe('a row below', () => {
     const { a, a1, rows } = tree();
     const { rows: next, added } = addSibling(rows, a1.id, [headline, price], ['sq', 'story']);
     expect(next.map((row) => row.label)).toEqual(['A', 'A1', 'A2', 'A · B', 'B']);
-    expect(added).toMatchObject({ parentId: a.id, values: {}, clearedKeys: [], outputIds: [] });
+    expect(added).toMatchObject({
+      parentId: a.id,
+      values: {},
+      clearedKeys: [],
+      outputIds: [],
+    });
     // The rows it was added to are untouched.
     expect(rows.map((row) => row.label)).toEqual(['A', 'A1', 'A2', 'B']);
   });
@@ -794,13 +922,20 @@ describe('when a review goes stale', () => {
 });
 
 describe('how many files a row renders', () => {
-  const output = (id: string, ratio: string | null) => ({ id, label: id, ratio });
+  const output = (id: string, ratio: string | null) => ({
+    id,
+    label: id,
+    ratio,
+  });
   const threeOutputs = {
     template: { ratios: ['16:9', '1:1', '9:16'] },
     outputs: [output('wide', '16:9'), output('square', '1:1'), output('story', '9:16')],
   };
   // Template 133 publishes no outputs: its formats live only in the parse's ratios.
-  const zeroOutputs = { template: { ratios: ['16:9', '1:1', '9:16'] }, outputs: [] };
+  const zeroOutputs = {
+    template: { ratios: ['16:9', '1:1', '9:16'] },
+    outputs: [],
+  };
 
   test('its picked formats, else every published one, else every ratio the template ships', () => {
     expect(renderedRatios(threeOutputs, [])).toEqual(['16:9', '1:1', '9:16']);
@@ -814,13 +949,21 @@ describe('how many files a row renders', () => {
 
   test('an ad replacement swaps one creative, so it renders one file whatever it picked', () => {
     expect(
-      rowFileCount(threeOutputs, { outputIds: [], delivery: { action: 'replace', adId: '1201' } }),
+      rowFileCount(threeOutputs, {
+        outputIds: [],
+        delivery: { action: 'replace', adId: '1201' },
+      }),
     ).toBe(1);
   });
 });
 
 describe('a set saved for an earlier template', () => {
-  const output = (id: string) => ({ id, label: id, ratio: null, kind: 'image' as const });
+  const output = (id: string) => ({
+    id,
+    label: id,
+    ratio: null,
+    kind: 'image' as const,
+  });
 
   test('drops what the template no longer has, names it once, and keeps untouched rows', () => {
     const kept = { ...seedRow([headline], 'Kept'), outputIds: ['square'] };
@@ -876,7 +1019,10 @@ describe('editing many rows at once', () => {
   test('a variation that inherits the value keeps inheriting; one that differs gets its own', () => {
     const parent = root('Parent', { headline: 'Summer' });
     const same: RequestRow = { ...seedRow([], 'Same', parent.id) };
-    const other: RequestRow = { ...seedRow([], 'Other', parent.id), values: { headline: 'X' } };
+    const other: RequestRow = {
+      ...seedRow([], 'Other', parent.id),
+      values: { headline: 'X' },
+    };
     const source = root('Source', { headline: 'Summer' });
     const next = applyValue([parent, same, other, source], 'headline', source.id, [
       same.id,
@@ -903,7 +1049,10 @@ describe('editing many rows at once', () => {
     };
     const target = root('Target');
     const next = applyValue([picked, target], 'hero', picked.id, [target.id]);
-    expect(next[1]).toMatchObject({ values: { hero: pin }, media: { hero: { name: 'hero.png' } } });
+    expect(next[1]).toMatchObject({
+      values: { hero: pin },
+      media: { hero: { name: 'hero.png' } },
+    });
   });
 
   test('applyFormats spells out every format and skips rows already rendering them', () => {
@@ -917,7 +1066,10 @@ describe('editing many rows at once', () => {
 
   test('clearKey and resetKey: a root drops the value, a variation blanks it, then goes back to inheriting', () => {
     const parent = root('Parent', { headline: 'Summer' });
-    const child: RequestRow = { ...seedRow([], 'Child', parent.id), values: { headline: 'Own' } };
+    const child: RequestRow = {
+      ...seedRow([], 'Child', parent.id),
+      values: { headline: 'Own' },
+    };
     const cleared = clearKey([parent, child], 'headline', [parent.id, child.id]);
     expect(cleared[0]?.values).toEqual({});
     expect(cleared[1]).toMatchObject({ values: {}, clearedKeys: ['headline'] });
@@ -1016,7 +1168,10 @@ describe('resolved input snapshots', () => {
     const resolved = resolveRowInputs(rows);
     expect(resolved.get('child')?.values).toEqual({ headline: 'Offer' });
     expect(resolved.get('child')?.media).toEqual({});
-    expect(resolved.get('grandchild')?.values).toEqual({ price: 0, visible: false });
+    expect(resolved.get('grandchild')?.values).toEqual({
+      price: 0,
+      visible: false,
+    });
     expect(resolved.get('root')?.media.hero?.w).toBe(100);
     expect(resolved.get('child')?.row).toBe(child);
     expect(root.values.headline).toBe('Base');
@@ -1024,8 +1179,18 @@ describe('resolved input snapshots', () => {
   });
 
   test('keeps the existing finite resolution for missing parents and malformed cycles', () => {
-    const a: RequestRow = { ...seedRow([]), id: 'a', parentId: 'b', values: { headline: 'A' } };
-    const b: RequestRow = { ...seedRow([]), id: 'b', parentId: 'a', values: { headline: 'B' } };
+    const a: RequestRow = {
+      ...seedRow([]),
+      id: 'a',
+      parentId: 'b',
+      values: { headline: 'A' },
+    };
+    const b: RequestRow = {
+      ...seedRow([]),
+      id: 'b',
+      parentId: 'a',
+      values: { headline: 'B' },
+    };
     const orphan: RequestRow = {
       ...seedRow([]),
       id: 'orphan',
@@ -1138,9 +1303,20 @@ describe('a draft from the AI', () => {
     expect(rows[0]).toMatchObject({
       proposed: true,
       outputIds: ['square', 'story'],
-      media: { hero: { w: 800, h: 600, thumbnailUrl: 'https://cdn.test/shoe.png', name: 'Shoe' } },
+      media: {
+        hero: {
+          w: 800,
+          h: 600,
+          thumbnailUrl: 'https://cdn.test/shoe.png',
+          name: 'Shoe',
+        },
+      },
     });
-    expect(rows[1]).toMatchObject({ proposed: true, parentId: root, outputIds: [] });
+    expect(rows[1]).toMatchObject({
+      proposed: true,
+      parentId: root,
+      outputIds: [],
+    });
     expect(toRenderSetRows(rows, ['square', 'story'])).toEqual([]);
   });
 });
@@ -1175,7 +1351,10 @@ describe('applyAssistOps', () => {
       ],
       ['btts', 'halftime'],
     );
-    expect(after[0]).toMatchObject({ label: 'FBC Melgar', outputIds: ['halftime'] });
+    expect(after[0]).toMatchObject({
+      label: 'FBC Melgar',
+      outputIds: ['halftime'],
+    });
     expect(after[1]).toMatchObject({ values: { odds: '2.20' } });
     expect(after[2]).toBe(before[2]);
     expect(added).toEqual([]);
@@ -1207,7 +1386,13 @@ describe('applyAssistOps', () => {
               overrides: { odds: '2.00' },
               outputIds: [],
             },
-            { ref: 'n3', parentRef: A, label: 'Melgar · B', overrides: {}, outputIds: ['btts'] },
+            {
+              ref: 'n3',
+              parentRef: A,
+              label: 'Melgar · B',
+              overrides: {},
+              outputIds: ['btts'],
+            },
           ],
         },
       ],
@@ -1280,15 +1465,26 @@ describe('rowStatusOf: a row read with no request', () => {
 
   test('its own errors make it Invalid, whatever else is known', () => {
     const status = rowStatusOf({ headline: 'Required' }, fit(verdict({})), 'Use a brand colour.');
-    expect(status).toEqual({ state: 'invalid', errors: { headline: 'Required' } });
+    expect(status).toEqual({
+      state: 'invalid',
+      errors: { headline: 'Required' },
+    });
     expect(isRenderable(status)).toBe(false);
   });
 
   test('a refusal the confirmation found will not render; a call renders once ticked', () => {
     const refused = rowStatusOf({}, fit(verdict({})), 'Use a brand colour.');
-    expect(refused).toEqual({ state: 'refused', reason: 'Use a brand colour.' });
+    expect(refused).toEqual({
+      state: 'refused',
+      reason: 'Use a brand colour.',
+    });
     expect(isRenderable(refused)).toBe(false);
-    const calls = [{ override: 'acceptLinkedLineMismatch' as const, message: 'Two lines, three layers.' }];
+    const calls = [
+      {
+        override: 'acceptLinkedLineMismatch' as const,
+        message: 'Two lines, three layers.',
+      },
+    ];
     const call = rowStatusOf({}, undefined, undefined, calls);
     expect(call).toEqual({ state: 'call', calls });
     expect(isRenderable(call)).toBe(true);
@@ -1331,4 +1527,58 @@ describe('rowStatusOf: a row read with no request', () => {
     expect(status.state).toBe('ai-check');
     if (status.state === 'ai-check') expect(status.fit.escalate).toBe(true);
   });
+});
+
+describe('localized row validation preserves imported values', () => {
+  for (const locale of ['pt-BR', 'es'] as const) {
+    test(locale, async () => {
+      const { createTranslator } = await import('next-intl');
+      const messages =
+        locale === 'pt-BR'
+          ? (await import('../../../messages/forge/pt-BR.json')).default
+          : (await import('../../../messages/forge/es.json')).default;
+      const translate = createTranslator({
+        locale,
+        messages: { forge: messages },
+        namespace: 'forge',
+      });
+      const fields = [
+        variable({ key: 'amount', kind: 'number' }),
+        variable({ key: 'hero', kind: 'image', required: true }),
+        variable({ key: 'choice', kind: 'enum', options: ['authored option'] }),
+      ];
+      expect(validateRow(fields, { amount: 'bad', choice: 'not an option' }, translate)).toEqual({
+        amount: messages.rowNotNumber,
+        hero: messages.rowPickLibrary,
+        choice: messages.rowNotOption,
+      });
+      const result = rowsFromMappedImport(
+        [
+          {
+            Name: 'Authored campaign',
+            Amount: '12.50',
+            Choice: 'authored option',
+          },
+        ],
+        { Name: '@name', Amount: 'amount', Choice: 'choice' },
+        fields,
+        [],
+        translate,
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.rows[0]?.label).toBe('Authored campaign');
+      expect(result.rows[0]?.values).toMatchObject({
+        amount: 12.5,
+        choice: 'authored option',
+      });
+      const invalid = rowsFromMappedImport(
+        [{ Amount: 'bad' }],
+        { Amount: 'amount' },
+        fields,
+        [],
+        translate,
+      );
+      expect(invalid.errors[0]?.message).toBe(messages.rowNotNumber);
+    });
+  }
 });

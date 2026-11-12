@@ -19,6 +19,7 @@ const runtimeNodeKeys = [
   'isComplete',
   'error',
   'errorCode',
+  'uiFailure',
   'executionTime',
   'isToolbarVisible',
 ] as const;
@@ -291,7 +292,9 @@ export function serializeWorkflowSnapshot(
   edges: Edge[],
   defaultEdgeType: EdgeType,
 ): WorkflowSnapshot {
-  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType, { mode: 'persist' });
+  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType, {
+    mode: 'persist',
+  });
 }
 
 // Broadcast variant: base64 dropped (avoids WS 1009) but signed URLs kept so
@@ -301,5 +304,7 @@ export function serializeForBroadcast(
   edges: Edge[],
   defaultEdgeType: EdgeType,
 ): WorkflowSnapshot {
-  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType, { mode: 'broadcast' });
+  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType, {
+    mode: 'broadcast',
+  });
 }

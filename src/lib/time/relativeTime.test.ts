@@ -5,6 +5,12 @@ const NOW = Date.UTC(2026, 6, 6, 12, 0, 0); // 2026-07-06T12:00:00Z
 const ago = (ms: number) => NOW - ms;
 
 describe('formatRelativeTime', () => {
+  test('uses the active UI language without changing the timestamp', () => {
+    expect(formatRelativeTime(NOW, NOW, 'pt-BR')).toBe('agora mesmo');
+    expect(formatRelativeTime(NOW, NOW, 'es')).toBe('ahora mismo');
+    expect(formatRelativeTime('invalid', NOW, 'pt-BR')).toBe('desconhecido');
+    expect(formatRelativeTime(ago(5 * 60_000), NOW, 'es')).toBe('hace 5 min');
+  });
   test("under a minute reads 'just now'", () => {
     expect(formatRelativeTime(ago(30_000), NOW)).toBe('just now');
     expect(formatRelativeTime(NOW, NOW)).toBe('just now');

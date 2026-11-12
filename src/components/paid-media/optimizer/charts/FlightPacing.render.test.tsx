@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { FlightPacingModel } from './flightPacingModel';
 
 const { FlightPacing } = await import('./FlightPacing');
@@ -78,7 +79,12 @@ describe('FlightPacing', () => {
     const notStarted = render(
       <FlightPacing
         currency="USD"
-        model={{ kind: 'not_started', start: '2026-09-20', end: '2026-09-30', budget: 3000 }}
+        model={{
+          kind: 'not_started',
+          start: '2026-09-20',
+          end: '2026-09-30',
+          budget: 3000,
+        }}
       />,
     );
     expect(notStarted.container.textContent).toMatch(/Flight starts Sep 20/);

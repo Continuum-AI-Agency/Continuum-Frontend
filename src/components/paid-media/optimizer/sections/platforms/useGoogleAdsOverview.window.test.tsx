@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // The Google tab reads once, on the producer's window. While the producer is still answering it
 // reads nothing: a read on the fallback first was thrown away, and between UTC midnight and the
@@ -50,7 +51,11 @@ const invoke = async (_name: string, options: { body: Record<string, unknown> })
   return { data: null, error: null };
 };
 mock.module('@/lib/supabase/client', () => ({
-  createSupabaseBrowserClient: () => ({ rpc, schema: () => ({ rpc }), functions: { invoke } }),
+  createSupabaseBrowserClient: () => ({
+    rpc,
+    schema: () => ({ rpc }),
+    functions: { invoke },
+  }),
 }));
 
 const { useGoogleAdsOverview } = await import('./useGoogleAdsOverview');
@@ -59,7 +64,9 @@ const BRAND = '22222222-2222-4222-8222-222222222222';
 const PRODUCER = { since: '2026-10-08', until: '2026-10-14' };
 
 function wrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -75,7 +82,10 @@ describe("useGoogleAdsOverview — one read, on the producer's window", () => {
   it('reads nothing while the producer is pending, then both scopes on its window', async () => {
     const { result, rerender } = renderHook(
       ({ window }: { window: typeof PRODUCER | 'pending' }) => useGoogleAdsOverview(BRAND, window),
-      { initialProps: { window: 'pending' as typeof PRODUCER | 'pending' }, wrapper: wrapper() },
+      {
+        initialProps: { window: 'pending' as typeof PRODUCER | 'pending' },
+        wrapper: wrapper(),
+      },
     );
     await waitFor(() => expect(result.current.status).toBe('loading'));
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -83,7 +93,11 @@ describe("useGoogleAdsOverview — one read, on the producer's window", () => {
 
     rerender({ window: PRODUCER });
     await waitFor(() => expect(invoked).toHaveLength(2));
-    const range = { preset: 'custom', since: PRODUCER.since, until: PRODUCER.until };
+    const range = {
+      preset: 'custom',
+      since: PRODUCER.since,
+      until: PRODUCER.until,
+    };
     expect(invoked).toEqual(
       expect.arrayContaining([
         { scope: 'account_overview', range },
@@ -96,11 +110,17 @@ describe("useGoogleAdsOverview — one read, on the producer's window", () => {
 // Ramiro, 2026-10-28: the tab counts its portfolios' goal result, so a goal on a paused or ended
 // campaign can never turn the campaign types into "—".
 describe("useGoogleAdsOverview — the portfolios' goal result", () => {
-  const range = { preset: 'custom', since: PRODUCER.since, until: PRODUCER.until };
+  const range = {
+    preset: 'custom',
+    since: PRODUCER.since,
+    until: PRODUCER.until,
+  };
 
   it('names the lead goal on both reads', async () => {
     objectives = ['lead', 'lead'];
-    renderHook(() => useGoogleAdsOverview(BRAND, PRODUCER), { wrapper: wrapper() });
+    renderHook(() => useGoogleAdsOverview(BRAND, PRODUCER), {
+      wrapper: wrapper(),
+    });
     await waitFor(() => expect(invoked).toHaveLength(2));
     expect(invoked).toEqual(
       expect.arrayContaining([
@@ -112,7 +132,9 @@ describe("useGoogleAdsOverview — the portfolios' goal result", () => {
 
   it('names none when the portfolios disagree: the edge then counts each result apart', async () => {
     objectives = ['lead', 'purchase'];
-    renderHook(() => useGoogleAdsOverview(BRAND, PRODUCER), { wrapper: wrapper() });
+    renderHook(() => useGoogleAdsOverview(BRAND, PRODUCER), {
+      wrapper: wrapper(),
+    });
     await waitFor(() => expect(invoked).toHaveLength(2));
     expect(invoked).toEqual(
       expect.arrayContaining([

@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { type CustomField, HDR_DYNAMIC_RANGES } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { StructuredLibraryFilters } from '@/lib/media/filters';
 import { LibraryFilterBar } from './LibraryFilterBar';
 
@@ -162,7 +168,9 @@ describe('LibraryFilterBar', () => {
     }
 
     fireEvent.click(video);
-    expect(onStructuredFiltersChange).toHaveBeenLastCalledWith({ families: ['image', 'video'] });
+    expect(onStructuredFiltersChange).toHaveBeenLastCalledWith({
+      families: ['image', 'video'],
+    });
 
     // Carousels is not a file format; it stays the carousel media type.
     fireEvent.click(format.getByRole('button', { name: 'Carousels' }));
@@ -188,14 +196,18 @@ describe('LibraryFilterBar', () => {
       technical: { videoCodecs: ['prores'] },
     });
 
-    const minDuration = screen.getByRole('spinbutton', { name: 'Minimum duration in s' });
+    const minDuration = screen.getByRole('spinbutton', {
+      name: 'Minimum duration in s',
+    });
     fireEvent.change(minDuration, { target: { value: '30' } });
     fireEvent.blur(minDuration);
     expect(onStructuredFiltersChange).toHaveBeenLastCalledWith({
       ranges: { durationMs: { min: 30_000 } },
     });
 
-    const minBitRate = screen.getByRole('spinbutton', { name: 'Minimum bit rate in Mb/s' });
+    const minBitRate = screen.getByRole('spinbutton', {
+      name: 'Minimum bit rate in Mb/s',
+    });
     fireEvent.change(minBitRate, { target: { value: '1.5' } });
     fireEvent.blur(minBitRate);
     expect(onStructuredFiltersChange).toHaveBeenLastCalledWith({
@@ -209,7 +221,9 @@ describe('LibraryFilterBar', () => {
     });
     openFilters('Filter 1');
 
-    const minSize = screen.getByRole('spinbutton', { name: 'Minimum file size in MB' });
+    const minSize = screen.getByRole('spinbutton', {
+      name: 'Minimum file size in MB',
+    });
     fireEvent.change(minSize, { target: { value: '100' } });
     fireEvent.blur(minSize);
     expect(onStructuredFiltersChange).toHaveBeenLastCalledWith({
@@ -233,7 +247,10 @@ describe('LibraryFilterBar', () => {
   });
 
   it('hides the Rating control when the brand has no Rating field', () => {
-    renderPageBar({ structuredFilters: { families: ['video'] }, customFields: [USAGE_RIGHTS] });
+    renderPageBar({
+      structuredFilters: { families: ['video'] },
+      customFields: [USAGE_RIGHTS],
+    });
     openFilters('Filter 1');
 
     expect(screen.queryByRole('button', { name: 'Rated 4 or more' })).toBeNull();
@@ -244,7 +261,10 @@ describe('LibraryFilterBar', () => {
     const structuredFilters: StructuredLibraryFilters = {
       families: ['video', 'design'],
       ranges: { resolution: { min: 2160 }, durationMs: { min: 30_000 } },
-      technical: { videoCodecs: ['prores'], dynamicRanges: [...HDR_DYNAMIC_RANGES] },
+      technical: {
+        videoCodecs: ['prores'],
+        dynamicRanges: [...HDR_DYNAMIC_RANGES],
+      },
       fieldRanges: [{ fieldId: RATING_SELECT.id, min: 4 }],
     };
     const { onStructuredFiltersChange } = renderPageBar({

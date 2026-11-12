@@ -1,4 +1,6 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { googleCopy } from './googlePresentation';
 
 // The Google tab's parity sections (P6 ideas 1, 3 and 7), under the tab's own read: cost per
 // conversion by campaign type against the portfolio CPA goal, the campaign explorer with its
@@ -44,12 +46,17 @@ export function GoogleTabSections({
    *  calendar — so these sections end on the day the header does; null reads UTC days. */
   lastCompleteDay?: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const [days, setDays] = useState<WindowDays>(14);
   const window = completeDaysWindow(days, new Date(), lastCompleteDay);
   const target = { brandId, customerId, resultBucket };
   const campaigns = useGoogleCampaigns({ ...target, window });
   const goals = useGoogleCampaignGoals(brandId);
-  const historyQuery = useGoogleChangeHistory({ ...target, window: changeHistoryWindow() });
+  const historyQuery = useGoogleChangeHistory({
+    ...target,
+    window: changeHistoryWindow(),
+  });
   const cards = useOptimizerPlatformCards(brandId, 'google_ads');
   const [openId, setOpenId] = useGoogleCampaignParam();
 
@@ -60,8 +67,12 @@ export function GoogleTabSections({
         data-testid="google-sections-error"
         role="status"
       >
-        Google's campaigns could not be read:{' '}
-        {campaigns.error instanceof Error ? campaigns.error.message : 'unknown error'}
+        {uiText.rich('sentence_6464c0c01b69', {
+          v0:
+            campaigns.error instanceof Error
+              ? campaigns.error.message
+              : uiText('unknown_error_3e4443e'),
+        })}
       </p>
     );
   }
@@ -70,14 +81,14 @@ export function GoogleTabSections({
     return (
       <div className="space-y-4" data-testid="google-sections-loading">
         <p className="flex min-h-7 items-center px-1 text-muted-foreground text-xs">
-          Reading Google's campaigns…
+          {uiText('reading_google_s_campaigns_6a0fd78')}
         </p>
         {[ACCOUNT_READ_TITLE, EXPLORER_TITLE, BIDDING_TITLE].map((title) => (
           <GoogleSection
             key={title}
-            summary="Reading…"
+            summary={uiText('reading_874bfa5')}
             testId="google-section-loading"
-            title={title}
+            title={googleCopy(title, uiText)}
           >
             {null}
           </GoogleSection>
@@ -86,7 +97,7 @@ export function GoogleTabSections({
     );
   }
 
-  const views = campaignViews(campaigns.data, goals.goals, currency, goals.unknown);
+  const views = campaignViews(campaigns.data, goals.goals, currency, goals.unknown, uiText);
   const history: HistoryRead = historyQuery.isError
     ? { status: 'error' }
     : historyQuery.data
@@ -97,18 +108,25 @@ export function GoogleTabSections({
     history,
     cards.status === 'ready' ? cards.cards : [],
     new Date(),
+    uiLocale,
+    uiText,
   );
-  const range = { since: campaigns.data.range.since, until: campaigns.data.range.until };
+  const range = {
+    since: campaigns.data.range.since,
+    until: campaigns.data.range.until,
+  };
 
   return (
     <div className="space-y-4" data-testid="google-tab-sections">
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-muted-foreground text-xs" data-testid="google-sections-window">
-          Campaigns over {windowRangeLabel(range.since, range.until)} · {days} complete days ·
-          against each portfolio's CPA goal
+          {uiText.rich('sentence_ee7df5f21ec1', {
+            v0: windowRangeLabel(range.since, range.until, uiLocale),
+            v1: days,
+          })}
         </p>
         <ToggleGroup
-          aria-label="Window for the campaign read"
+          aria-label={uiText('window_for_the_campaign_read_75aa546')}
           onValueChange={(value) => {
             const next = Number(value);
             if (next === 14 || next === 30) setDays(next);
@@ -120,12 +138,12 @@ export function GoogleTabSections({
         >
           {WINDOWS.map((option) => (
             <ToggleGroupItem className="h-7 px-2 text-xs" key={option} value={String(option)}>
-              {option} days
+              {uiText.rich('sentence_f322f4af81da', { v0: option })}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
       </div>
-      <AccountReadByType currency={currency} rows={typeRows(views, currency)} />
+      <AccountReadByType currency={currency} rows={typeRows(views, currency, uiText)} />
       <CampaignExplorer currency={currency} onOpenCampaign={setOpenId} rows={views} />
       <BiddingPanel currency={currency} rows={bidding} />
       <GoogleCampaignDetail

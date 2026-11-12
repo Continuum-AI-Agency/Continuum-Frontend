@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { NarrativeBlockV2 } from '@/lib/jaina/schemas';
 import type { AnswerLanguage } from '../answerLanguage';
 import { AnswerLanguageProvider } from '../answerLanguageContext';
@@ -47,7 +48,10 @@ const THREE = {
 };
 
 /** The body the Backend ships beside the three fields: the same three paragraphs. */
-const THREE_BLOCK = { ...THREE, body: [THREE.what, THREE.so_what, THREE.now_what].join('\n\n') };
+const THREE_BLOCK = {
+  ...THREE,
+  body: [THREE.what, THREE.so_what, THREE.now_what].join('\n\n'),
+};
 
 const renderIn = (language: AnswerLanguage, block: NarrativeBlockV2) =>
   render(

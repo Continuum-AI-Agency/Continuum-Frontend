@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   createContext,
   type ReactNode,
@@ -10,8 +10,10 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import { switchActiveBrandAction } from '@/app/(post-auth)/settings/actions';
+import { switchActiveBrandAction } from '@/app/[locale]/(post-auth)/settings/actions';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import {
   isTerminalStudioRenderStatus,
   type StudioRenderJobStatus,
@@ -58,6 +60,10 @@ export function useStudioRenderQueue(): StudioRenderContextValue {
 
 export function StudioRenderProvider({ children }: { children: ReactNode }) {
   const { show } = useToast();
+  const t = useTranslations('common');
+  const uiErrorText = useUiErrorMessage();
+  const presentationRef = useRef({ t, uiErrorText });
+  presentationRef.current = { t, uiErrorText };
   const router = useRouter();
   const queueRef = useRef<QueuedTask[]>([]);
   const runningRef = useRef(false);
@@ -84,7 +90,11 @@ export function StudioRenderProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     activeControllerRef.current = controller;
     const patchJob = useStudioRenderStore.getState().patchJob;
-    patchJob(next.jobId, { status: 'preparing', progress: 0, error: undefined });
+    patchJob(next.jobId, {
+      status: 'preparing',
+      progress: 0,
+      error: undefined,
+    });
 
     try {
       const result = await next.task.execute({
@@ -92,7 +102,9 @@ export function StudioRenderProvider({ children }: { children: ReactNode }) {
         signal: controller.signal,
         setPhase: (status) => patchJob(next.jobId, { status }),
         setProgress: (progress) =>
-          patchJob(next.jobId, { progress: Math.max(0, Math.min(1, progress)) }),
+          patchJob(next.jobId, {
+            progress: Math.max(0, Math.min(1, progress)),
+          }),
       });
       patchJob(next.jobId, { status: result.status, progress: 1 });
       if (!result.silent) {
@@ -102,7 +114,10 @@ export function StudioRenderProvider({ children }: { children: ReactNode }) {
           variant: result.variant ?? (result.status === 'completed' ? 'success' : 'warning'),
           durationMs: Infinity,
           dedupeKey: `studio-render:${next.jobId}`,
-          action: { label: 'View', onClick: () => openOrigin(next.task.origin) },
+          action: {
+            label: presentationRef.current.t('m_69bd4ef9fb'),
+            onClick: () => openOrigin(next.task.origin),
+          },
         });
       }
     } catch (cause) {
@@ -110,12 +125,17 @@ export function StudioRenderProvider({ children }: { children: ReactNode }) {
       patchJob(next.jobId, { status: 'failed', error: error.message });
       next.task.onFailure?.(error);
       show({
-        title: `${next.task.origin.label} render failed`,
-        description: error.message,
+        title: presentationRef.current.t('studioRenderFailed', {
+          name: next.task.origin.label,
+        }),
+        description: presentationRef.current.uiErrorText(error),
         variant: 'error',
         durationMs: Infinity,
         dedupeKey: `studio-render:${next.jobId}`,
-        action: { label: 'View', onClick: () => openOrigin(next.task.origin) },
+        action: {
+          label: presentationRef.current.t('m_69bd4ef9fb'),
+          onClick: () => openOrigin(next.task.origin),
+        },
       });
     } finally {
       activeControllerRef.current = null;

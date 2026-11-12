@@ -12,7 +12,9 @@ import {
   type JainaToolApprovalRequiredPayload,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations as useBetaTranslations, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { useMemo } from 'react';
 import {
   AgentActions,
   AgentButton,
@@ -113,13 +115,14 @@ const formatValue = (value: unknown): string => {
 };
 
 function ProposedInput({ input }: { input: unknown }) {
+  const uiText = useTranslations('scale');
   const record = asRecord(input);
   const entries = record ? Object.entries(record) : [];
 
   if (entries.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        {record ? 'This call takes no arguments.' : formatValue(input)}
+        {record ? uiText('this_call_takes_no_arguments_750f018') : formatValue(input)}
       </p>
     );
   }
@@ -144,6 +147,7 @@ function ProposedInput({ input }: { input: unknown }) {
  * than blocking the gate.
  */
 function AudienceGroupSummary({ groupVersionId }: { groupVersionId: string }) {
+  const uiText = useTranslations('scale');
   const { data } = useQuery({
     queryKey: ['audience-group-version-summary', groupVersionId] as const,
     queryFn: () => fetchAudienceGroupVersionSummary({ groupVersionId }),
@@ -155,7 +159,10 @@ function AudienceGroupSummary({ groupVersionId }: { groupVersionId: string }) {
   if (!data) return null;
   return (
     <AgentCardSummary>
-      {data.name} — {data.memberCount} audience{data.memberCount === 1 ? '' : 's'}
+      {uiText.rich('sentence_55e9859b5a8f', {
+        name: data.name,
+        count: data.memberCount,
+      })}
     </AgentCardSummary>
   );
 }
@@ -184,12 +191,14 @@ function ChoiceConfirmation({
   input: ChangeMetaBudgetBidInput | null;
   preview: JainaApprovalPreview | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <div className="mt-3 space-y-3">
       {input ? (
         <AgentCardSummary>
-          You are about to change {input.changes.length} {changeNounOf(input)}. Nothing changes
-          until you choose below.
+          {betaUiText('beta_50d13de1ca53')} {input.changes.length} {changeNounOf(input)}
+          {betaUiText('beta_3078e391777e')}
         </AgentCardSummary>
       ) : null}
       {preview ? (
@@ -197,11 +206,17 @@ function ChoiceConfirmation({
           <Table>
             <TableHeader>
               <TableRow className="border-foreground/5 hover:bg-transparent">
-                <TableHead className="h-8 px-2 text-xs font-medium">Entity</TableHead>
-                <TableHead className="h-8 px-2 text-xs font-medium">Before</TableHead>
-                <TableHead className="h-8 px-2 text-xs font-medium">After</TableHead>
+                <TableHead className="h-8 px-2 text-xs font-medium">
+                  {betaUiText('beta_2ed3bb60c9af')}
+                </TableHead>
+                <TableHead className="h-8 px-2 text-xs font-medium">
+                  {betaUiText('beta_9bb725005055')}
+                </TableHead>
+                <TableHead className="h-8 px-2 text-xs font-medium">
+                  {betaUiText('beta_7b68fe551085')}
+                </TableHead>
                 <TableHead className="h-8 px-2 text-right text-xs font-medium">
-                  Difference
+                  {betaUiText('beta_4d280a451d04')}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -233,15 +248,13 @@ function ChoiceConfirmation({
       ) : null}
       {input ? (
         <div className={`px-3 py-2.5 text-sm ${VALUES_PANEL}`}>
-          <p className="text-muted-foreground text-xs">
-            Pausing for review changes no budget or bid. It pauses these ad sets:
-          </p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_660ca2d6c589')}</p>
           <ul className="mt-1.5 space-y-0.5">
             {input.affected_adset_ids_for_review.map((adset) => (
               <li key={adset.adset_id} className="text-xs">
                 {adset.name}
                 {adset.expected_status === 'PAUSED' ? (
-                  <span className="text-muted-foreground"> — already paused, left as it is</span>
+                  <span className="text-muted-foreground"> {betaUiText('beta_f64640bdc778')}</span>
                 ) : null}
               </li>
             ))}
@@ -264,11 +277,13 @@ function ChoiceActions({
   onChoose: (variant: JainaApprovalVariant) => void;
   onReject: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [primary, ...others] = options;
   return (
     <AgentActions className="flex-wrap px-4">
       <AgentButton variant="ghost" disabled={locked} onClick={onReject}>
-        Reject
+        {betaUiText('beta_ab604a360777')}
       </AgentButton>
       {others.map((option) => (
         <AgentButton
@@ -313,7 +328,27 @@ export function JainaToolApprovalCard({
     approvalVariant?: JainaApprovalVariant,
   ) => void;
 }) {
-  const title = TOOL_LABELS[approval.toolName] ?? approval.toolName;
+  const betaUiText = useBetaTranslations('scale');
+
+  const uiText = useTranslations('scale');
+  const TOOL_LABELS: Record<string, string> = useMemo(
+    () => ({
+      audience_group_publish: uiText('jainaApproval_audience_group_publish'),
+      pipeline_run: uiText('run_pipeline_c415e40'),
+      approve_optimizer_recommendation: uiText('jainaApproval_approve_optimizer_recommendation'),
+      request_optimizer_budget_apply: uiText('jainaApproval_request_optimizer_budget_apply'),
+      apply_approved_optimizer_pauses: uiText('jainaApproval_apply_approved_optimizer_pauses'),
+      paid_creative_slate: uiText('jainaApproval_paid_creative_slate'),
+      pause_meta_entity: uiText('jainaApproval_pause_meta_entity'),
+      rename_meta_entity: uiText('jainaApproval_rename_meta_entity'),
+      activate_meta_entity: uiText('jainaApproval_activate_meta_entity'),
+      archive_meta_entity: uiText('jainaApproval_archive_meta_entity'),
+      duplicate_meta_entity: uiText('jainaApproval_duplicate_meta_entity'),
+    }),
+    [uiText],
+  );
+
+  const title = TOOL_LABELS[approval.toolName] ?? uiText('jainaUnknownTool');
   const expired = Date.parse(approval.expiresAt) < Date.now();
   const groupVersionId =
     approval.toolName === 'audience_group_publish'
@@ -330,7 +365,7 @@ export function JainaToolApprovalCard({
     <AgentDecisionCard className={DECISION_MODULE}>
       <div className="px-4 pt-4">
         <AgentCardEyebrow
-          label="Approval required"
+          label={uiText('approval_required_ef677f5')}
           right={<ApprovalStatus decided={optimisticDecision} expired={expired} />}
         />
       </div>
@@ -358,13 +393,17 @@ export function JainaToolApprovalCard({
          */}
         {preview ? (
           <details className={`mt-2 px-3 py-2 ${VALUES_PANEL}`}>
-            <summary className="cursor-pointer text-muted-foreground text-xs">Exact input</summary>
+            <summary className="cursor-pointer text-muted-foreground text-xs">
+              {uiText('exact_input_e583d6e')}
+            </summary>
             <div className="mt-2">
+              <p className="mb-1 font-mono text-xs text-muted-foreground">{approval.toolName}</p>
               <ProposedInput input={approval.input} />
             </div>
           </details>
         ) : (
           <div className={`mt-3 px-3 py-2.5 ${VALUES_PANEL}`}>
+            <p className="mb-1 font-mono text-xs text-muted-foreground">{approval.toolName}</p>
             <ProposedInput input={approval.input} />
           </div>
         )}
@@ -377,7 +416,7 @@ export function JainaToolApprovalCard({
 
         {expired && !optimisticDecision ? (
           <p className="mt-2 text-muted-foreground text-sm">
-            This approval expired, so nothing ran. Ask Jaina to propose it again.
+            {uiText('this_approval_expired_so_nothing_ran_ask_jain_43257f7')}
           </p>
         ) : null}
       </AgentCardBody>
@@ -389,7 +428,7 @@ export function JainaToolApprovalCard({
             disabled={isStreaming}
             onClick={() => onDecide(approval, 'deny')}
           >
-            Dismiss
+            {betaUiText('beta_48845bff334a')}
           </AgentButton>
         </AgentActions>
       ) : null}
@@ -404,8 +443,8 @@ export function JainaToolApprovalCard({
       {!optimisticDecision && !expired && onDecide && !blocked && !choices ? (
         <ApproveRejectActions
           locked={isStreaming}
-          approveLabel="Approve"
-          rejectLabel="Deny"
+          approveLabel={uiText('optimizer_approve')}
+          rejectLabel={uiText('deny_05a2d73')}
           onApprove={() => onDecide(approval, 'approve')}
           onReject={() => onDecide(approval, 'deny')}
         />
@@ -421,8 +460,11 @@ function ApprovalStatus({
   decided: ToolApprovalDecision | null;
   expired: boolean;
 }) {
-  if (decided === 'deny') return <StatusLabel tone="neutral">Declined — nothing ran</StatusLabel>;
-  if (decided === 'approve') return <StatusLabel tone="running">Approved</StatusLabel>;
-  if (expired) return <StatusLabel tone="neutral">Expired</StatusLabel>;
-  return <StatusLabel tone="waiting">Awaiting your approval</StatusLabel>;
+  const uiText = useTranslations('scale');
+  if (decided === 'deny')
+    return <StatusLabel tone="neutral">{uiText('declined_nothing_ran_b457168')}</StatusLabel>;
+  if (decided === 'approve')
+    return <StatusLabel tone="running">{uiText('approved_87b42e4')}</StatusLabel>;
+  if (expired) return <StatusLabel tone="neutral">{uiText('expired_424a255')}</StatusLabel>;
+  return <StatusLabel tone="waiting">{uiText('awaiting_your_approval_9f09488')}</StatusLabel>;
 }

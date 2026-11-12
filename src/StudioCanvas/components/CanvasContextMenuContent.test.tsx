@@ -9,7 +9,7 @@
 // a hover, so this pins the top-level items and the triggers; Add Node's own contract is
 // AddNodeCommandPalette.test.tsx.
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { TechniqueItem } from '@/lib/ai-studio/techniques';

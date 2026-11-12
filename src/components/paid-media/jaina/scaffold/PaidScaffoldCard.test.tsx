@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * What a person reviewing a proposed campaign actually sees. The tree is seeded straight into the
  * query cache (the card reads Postgres, not the wire), and drawn on the canvas's own Read pieces
@@ -13,7 +14,7 @@ import {
   paidScaffoldPlanSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { seededScaffoldState } from '@/lib/jaina/uiMessageProjection';
 import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
@@ -45,7 +46,12 @@ const node = (
 });
 
 const ROWS: PaidScaffoldNodeRow[] = [
-  node({ id: 'c', level: 'campaign', pathKey: 'c0', name: 'Easy Fit | Summer' }),
+  node({
+    id: 'c',
+    level: 'campaign',
+    pathKey: 'c0',
+    name: 'Easy Fit | Summer',
+  }),
   node({
     id: 'a1',
     parentId: 'c',
@@ -65,7 +71,13 @@ const ROWS: PaidScaffoldNodeRow[] = [
     dailyBudgetMinorUnits: 3000,
   }),
   node({ id: 'd1', parentId: 'a1', level: 'ad', pathKey: 'c0/a0/ad0' }),
-  node({ id: 'd2', parentId: 'a2', level: 'ad', pathKey: 'c0/a1/ad0', creativeAssetId: 'asset-1' }),
+  node({
+    id: 'd2',
+    parentId: 'a2',
+    level: 'ad',
+    pathKey: 'c0/a1/ad0',
+    creativeAssetId: 'asset-1',
+  }),
 ];
 
 const HASH = 'a'.repeat(64);
@@ -131,7 +143,13 @@ const PLAN: PaidScaffoldPlan = paidScaffoldPlanSchema.parse({
       path_key: 'c0/a0',
       claim: 'Sized for 3 conversions a day at the account CPA.',
       metrics: [
-        { label: 'CPA', value: 20.66, unit: 'USD', window: 'last_30d', source: 'meta_insights' },
+        {
+          label: 'CPA',
+          value: 20.66,
+          unit: 'USD',
+          window: 'last_30d',
+          source: 'meta_insights',
+        },
       ],
       provenance: 'server',
       author_id: null,
@@ -162,7 +180,10 @@ const PLAN: PaidScaffoldPlan = paidScaffoldPlanSchema.parse({
 /** Every ad set targeted and every ad carrying a creative — nothing stands in Deploy's way. */
 const READY_ROWS: PaidScaffoldNodeRow[] = ROWS.map((row) =>
   row.level === 'adset'
-    ? { ...row, payload: { targeting: { geo_locations: { countries: ['US'] } } } }
+    ? {
+        ...row,
+        payload: { targeting: { geo_locations: { countries: ['US'] } } },
+      }
     : row.level === 'ad'
       ? { ...row, creativeAssetId: 'asset-1', creativeMedia: { kind: 'image' } }
       : row,
@@ -200,7 +221,9 @@ const renderCard = (
     currentVersionId = undefined as string | undefined,
   } = {},
 ) => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   // brandId '' keeps the currency read disabled, so nothing reaches for Supabase.
   client.setQueryData(['paid-scaffold-tree', VERSION], {
     versionId: VERSION,
@@ -256,7 +279,9 @@ describe('PaidScaffoldCard', () => {
     const decisions: unknown[] = [];
     const approval = { ...BUILD_APPROVAL, toolName: 'paid_scaffold_publish' };
     renderCard({ approval, onDecide: (...args) => decisions.push(args) });
-    const primary = screen.getByRole('button', { name: 'Publish & auto-enroll' });
+    const primary = screen.getByRole('button', {
+      name: 'Publish & auto-enroll',
+    });
     expect(primary.className).toContain('bg-primary');
     fireEvent.click(primary);
     fireEvent.click(screen.getByRole('button', { name: 'Publish only' }));
@@ -311,8 +336,16 @@ describe('PaidScaffoldCard', () => {
     const blocked = paidScaffoldPlanSchema.parse({
       ...PLAN,
       blockers: [
-        { code: 'page_unresolved', path_key: 'c0/a0', message: 'No single Facebook Page' },
-        { code: 'page_unresolved', path_key: 'c0/a1', message: 'No single Facebook Page' },
+        {
+          code: 'page_unresolved',
+          path_key: 'c0/a0',
+          message: 'No single Facebook Page',
+        },
+        {
+          code: 'page_unresolved',
+          path_key: 'c0/a1',
+          message: 'No single Facebook Page',
+        },
       ],
     });
     renderCard({ onDeploy: () => {} }, { rows: READY_ROWS, plan: blocked, contentHash: HASH });
@@ -337,7 +370,12 @@ describe('PaidScaffoldCard', () => {
     // In flight: a second click is not a second gate.
     expect(deploy.disabled).toBe(true);
     expect(screen.getByText('Opening the approval below…')).toBeTruthy();
-    act(() => settle?.({ ok: false, reason: 'Deploy is blocked: no single Facebook Page' }));
+    act(() =>
+      settle?.({
+        ok: false,
+        reason: 'Deploy is blocked: no single Facebook Page',
+      }),
+    );
     expect(screen.getByTestId('scaffold-deploy-error').textContent).toBe(
       'Deploy is blocked: no single Facebook Page',
     );
@@ -492,7 +530,12 @@ describe('PaidScaffoldCard', () => {
   it('the current version is not superseded', () => {
     renderCard(
       { onDeploy: () => {} },
-      { rows: READY_ROWS, plan: PLAN, contentHash: HASH, currentVersionId: VERSION },
+      {
+        rows: READY_ROWS,
+        plan: PLAN,
+        contentHash: HASH,
+        currentVersionId: VERSION,
+      },
     );
     expect(screen.queryByTestId('scaffold-superseded')).toBeNull();
     expect(screen.getByTestId('scaffold-deploy')).toBeTruthy();
@@ -559,7 +602,10 @@ describe('PaidScaffoldCard — every field, with who supplied it', () => {
       endTime: null,
       customEventType: 'PURCHASE',
       pixelId: '123456789012',
-      fieldProvenance: { start_time: 'user_gave', custom_event_type: 'jaina_filled' },
+      fieldProvenance: {
+        start_time: 'user_gave',
+        custom_event_type: 'jaina_filled',
+      },
     }),
     node({
       id: 'd1',
@@ -588,7 +634,12 @@ describe('PaidScaffoldCard — every field, with who supplied it', () => {
         budget_held_by_campaign: true,
         audience: {
           kind: 'broad',
-          targeting: { countries: ['MX'], age_min: 25, age_max: 54, genders: null },
+          targeting: {
+            countries: ['MX'],
+            age_min: 25,
+            age_max: 54,
+            genders: null,
+          },
           targeting_summary: 'MX · 25-54 · all genders',
           reach: null,
         },
@@ -596,7 +647,11 @@ describe('PaidScaffoldCard — every field, with who supplied it', () => {
     ],
     budget_mode: 'cbo',
     campaign_daily_budget_minor_units: 25_000,
-    campaign_bid: { strategy: 'COST_CAP', bid_amount_minor_units: 1_800, roas_floor: null },
+    campaign_bid: {
+      strategy: 'COST_CAP',
+      bid_amount_minor_units: 1_800,
+      roas_floor: null,
+    },
   });
 
   const line = (pathKey: string, key: string) => {
@@ -686,7 +741,14 @@ describe('PaidScaffoldCard — every field, with who supplied it', () => {
           layout: 'diff',
           partId: 'campaign-structure:scaffold-1:diff',
           title: 'Easy Fit | Summer',
-          counts: { campaigns: 1, adSets: 2, ads: 2, userGave: 0, jainaFilled: 0, jainaAsks: 0 },
+          counts: {
+            campaigns: 1,
+            adSets: 2,
+            ads: 2,
+            userGave: 0,
+            jainaFilled: 0,
+            jainaAsks: 0,
+          },
           nodes: [],
           truncated: false,
           html: null,
@@ -699,7 +761,14 @@ describe('PaidScaffoldCard — every field, with who supplied it', () => {
                 level: 'adset',
                 name: 'Prospecting',
                 change: 'changed',
-                fields: [{ key: 'status', label: 'Status', before: 'ACTIVE', after: 'PAUSED' }],
+                fields: [
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    before: 'ACTIVE',
+                    after: 'PAUSED',
+                  },
+                ],
               },
               {
                 path_key: 'c0/a1',
@@ -708,7 +777,12 @@ describe('PaidScaffoldCard — every field, with who supplied it', () => {
                 name: 'Retargeting',
                 change: 'added',
                 fields: [
-                  { key: 'name', label: 'Name', before: 'Prospecting', after: 'Retargeting' },
+                  {
+                    key: 'name',
+                    label: 'Name',
+                    before: 'Prospecting',
+                    after: 'Retargeting',
+                  },
                   {
                     key: 'advantage_audience',
                     label: 'Advantage+ audience',

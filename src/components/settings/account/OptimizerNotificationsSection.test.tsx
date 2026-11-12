@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 
 const OFF = {
@@ -40,7 +41,13 @@ const CHANNELS = {
       isMember: false,
       workspaceName: 'Agency',
     },
-    { id: 'C0LOCK', name: 'exec', isPrivate: true, isMember: false, workspaceName: 'Client Co' },
+    {
+      id: 'C0LOCK',
+      name: 'exec',
+      isPrivate: true,
+      isMember: false,
+      workspaceName: 'Client Co',
+    },
   ],
 };
 const showMock = mock(() => {});
@@ -91,7 +98,9 @@ afterEach(cleanup);
 describe('OptimizerNotificationsSection', () => {
   it('is off until the user turns it on, and does not list channels unasked', async () => {
     const { findByRole } = renderSection();
-    const toggle = await findByRole('switch', { name: 'Optimizer Slack notifications' });
+    const toggle = await findByRole('switch', {
+      name: 'Optimizer Slack notifications',
+    });
 
     expect((toggle as HTMLInputElement).getAttribute('aria-checked')).toBe('false');
     // A workspace listing is a Slack round trip; browsing settings must not pay for it.

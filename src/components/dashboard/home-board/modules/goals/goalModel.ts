@@ -52,18 +52,25 @@ const dayLabel = new Intl.DateTimeFormat('en-US', {
 });
 
 /** "Nov 1", for a `YYYY-MM-DD` day. */
-export function goalDayLabel(day: string): string {
-  return dayLabel.format(new Date(`${day}T00:00:00Z`));
+export function goalDayLabel(day: string, locale: string = 'en-US'): string {
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${day}T00:00:00Z`));
 }
 
 /** "Nov 1 – Nov 2", or "Nov 1" for a single day: the days a figure covers. */
-export function goalWindowLabel(window: GoalWindow): string {
-  const since = goalDayLabel(window.since);
-  return window.since === window.until ? since : `${since} – ${goalDayLabel(window.until)}`;
+export function goalWindowLabel(window: GoalWindow, locale: string = 'en-US'): string {
+  const since = goalDayLabel(window.since, locale);
+  return window.since === window.until ? since : `${since} – ${goalDayLabel(window.until, locale)}`;
 }
 
 /** One ad account's month to date, in the Home's words (Google already through its buckets). */
-export type GoalAccountRead = { account: HomeAdAccount; overview: HomeAccountOverview };
+export type GoalAccountRead = {
+  account: HomeAdAccount;
+  overview: HomeAccountOverview;
+};
 
 export type GoalLoad =
   /** Nothing to read: no ad account, or no complete day this month. */
@@ -71,7 +78,11 @@ export type GoalLoad =
   | { status: 'loading' }
   /** No account answered. */
   | { status: 'error'; failures: AccountReadFailure[] }
-  | { status: 'ready'; reads: GoalAccountRead[]; failures: AccountReadFailure[] };
+  | {
+      status: 'ready';
+      reads: GoalAccountRead[];
+      failures: AccountReadFailure[];
+    };
 
 export type GoalAmount = {
   /** Null for a count, which is summed across currencies. */
@@ -165,7 +176,11 @@ export function goalObjectives(input: {
   rows: HomeProfileRow[];
   reads: GoalAccountRead[];
   suggested: HomeObjective[];
-}): { primary: HomeObjective; secondaries: HomeObjective[]; source: GoalSource } {
+}): {
+  primary: HomeObjective;
+  secondaries: HomeObjective[];
+  source: GoalSource;
+} {
   const resolved = resolveHomeObjectives({
     scope: input.scope,
     rows: input.rows,
@@ -176,7 +191,12 @@ export function goalObjectives(input: {
   const primary =
     resolved.objectives.find((goal) => goal.role === 'primary') ??
     first ??
-    ({ id: 'spend', label: 'Spend', metric: 'spend', role: 'primary' } as const);
+    ({
+      id: 'spend',
+      label: 'Spend',
+      metric: 'spend',
+      role: 'primary',
+    } as const);
   const others = resolved.objectives.filter((goal) => goal !== primary);
   const pool = others.length > 0 ? others : input.suggested;
   const seen = new Set([primary.metric]);
@@ -315,7 +335,11 @@ export function goalTileView(input: {
   periodLoad: GoalLoad;
 }): GoalTileView {
   if (input.accounts.length === 0) {
-    return { state: 'missing', reason: 'no-account', sentence: NO_ACCOUNT_SENTENCE };
+    return {
+      state: 'missing',
+      reason: 'no-account',
+      sentence: NO_ACCOUNT_SENTENCE,
+    };
   }
   const { load, active } = input;
   // Until the targets are in, the figure's window is not known: it never shows and then swaps.
@@ -326,7 +350,11 @@ export function goalTileView(input: {
   const running = active?.period.readWindow ? active : null;
   const figureWindow = running?.period.readWindow ?? input.window;
   if (!figureWindow) {
-    return { state: 'missing', reason: 'month-start', sentence: MONTH_START_SENTENCE };
+    return {
+      state: 'missing',
+      reason: 'month-start',
+      sentence: MONTH_START_SENTENCE,
+    };
   }
   const source = goalPeriodReadWindow(active, input.window) ? input.periodLoad : load;
   if (source.status === 'error') return { state: 'error' };
@@ -341,7 +369,11 @@ export function goalTileView(input: {
   });
   const primary = goalFigure(goals.primary, source.reads);
   if (primary.amounts.length === 0) {
-    return { state: 'missing', reason: 'not-counted', sentence: notCountedSentence(primary) };
+    return {
+      state: 'missing',
+      reason: 'not-counted',
+      sentence: notCountedSentence(primary),
+    };
   }
   const target: GoalTargetStatus = running
     ? goalTargetComparison(running, primary.amounts)
@@ -354,7 +386,11 @@ export function goalTileView(input: {
     ? [compared, ...primary.amounts.filter((amount) => amount !== compared)]
     : primary.amounts;
   if (!first) {
-    return { state: 'missing', reason: 'not-counted', sentence: notCountedSentence(primary) };
+    return {
+      state: 'missing',
+      reason: 'not-counted',
+      sentence: notCountedSentence(primary),
+    };
   }
   return {
     state: 'ready',

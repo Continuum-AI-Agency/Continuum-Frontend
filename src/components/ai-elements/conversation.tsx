@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 import * as React from 'react';
@@ -46,7 +47,11 @@ export function Conversation({ children, className, ...props }: ConversationProp
     const observer = new MutationObserver(() => {
       if (stickRef.current) el.scrollTop = el.scrollHeight;
     });
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    observer.observe(el, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     return () => observer.disconnect();
   }, []);
 
@@ -85,13 +90,15 @@ type ConversationScrollButtonProps = {
 };
 
 export function ConversationScrollButton({ onClick }: ConversationScrollButtonProps) {
+  const tUi = useTranslations('common');
+
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center">
       <Button
         type="button"
         variant="outline"
         size="icon"
-        aria-label="Scroll to latest"
+        aria-label={tUi('m_85bc5f20e6')}
         onClick={onClick}
         className="pointer-events-auto size-8 rounded-full border-border bg-background/90 text-muted-foreground shadow-md backdrop-blur hover:bg-accent hover:text-foreground"
       >

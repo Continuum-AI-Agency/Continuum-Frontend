@@ -1,7 +1,8 @@
 // A templated answer's table and a report's data table are the same table.
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { TemplateFigure, TemplateTable } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { DataTableBlockV2 } from '@/lib/jaina/schemas';
 import { JAINA_TABLE } from '../reading';
 import { TemplateTableView } from '../templates/TemplateTableView';
@@ -18,8 +19,20 @@ const dataTable: DataTableBlockV2 = {
   provenance: null,
   grounding: null,
   columns: [
-    { key: 'campaign', label: 'Campaign', format: 'text', align: 'left', percent_basis: null },
-    { key: 'spend', label: 'Spend', format: 'currency', align: 'right', percent_basis: null },
+    {
+      key: 'campaign',
+      label: 'Campaign',
+      format: 'text',
+      align: 'left',
+      percent_basis: null,
+    },
+    {
+      key: 'spend',
+      label: 'Spend',
+      format: 'currency',
+      align: 'right',
+      percent_basis: null,
+    },
   ],
   rows: [{ campaign: 'CAÑADAS // MENSAJES', spend: 2197 }],
   notes: null,
@@ -42,7 +55,13 @@ const figure: TemplateFigure = {
 } as unknown as TemplateFigure;
 const templateTable: TemplateTable = {
   columns: [{ key: 'spend', label: 'Spend' }],
-  rows: [{ label: 'CAÑADAS // MENSAJES', entity_id: null, cells: { spend: 'spend' } }],
+  rows: [
+    {
+      label: 'CAÑADAS // MENSAJES',
+      entity_id: null,
+      cells: { spend: 'spend' },
+    },
+  ],
 } as unknown as TemplateTable;
 
 const tableClasses = (container: HTMLElement) => ({

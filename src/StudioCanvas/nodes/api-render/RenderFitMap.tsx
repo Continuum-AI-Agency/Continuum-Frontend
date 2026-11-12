@@ -1,6 +1,7 @@
 'use client';
 
 import type { ApiRenderFitVerdict, ApiRenderTemplateContract } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,6 +29,8 @@ export function RenderFitMap({
   verdicts: ApiRenderFitVerdict[];
   className?: string;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   if (!layout) return null;
   const { comp, boxes } = layout;
   // One unit of the viewBox is one comp pixel, so every number below is the real measurement and
@@ -36,8 +39,11 @@ export function RenderFitMap({
   const pad = Math.round(Math.max(comp.width, comp.height) * 0.12);
 
   const predicted = verdicts.filter(
-    (verdict): verdict is ApiRenderFitVerdict & { box: NonNullable<ApiRenderFitVerdict['box']> } =>
-      verdict.box !== null,
+    (
+      verdict,
+    ): verdict is ApiRenderFitVerdict & {
+      box: NonNullable<ApiRenderFitVerdict['box']>;
+    } => verdict.box !== null,
   );
 
   return (
@@ -47,7 +53,11 @@ export function RenderFitMap({
           viewBox={`${-pad} ${-pad} ${comp.width + pad * 2} ${comp.height + pad * 2}`}
           className="block h-auto w-full"
           role="img"
-          aria-label={`${comp.name}: ${boxes.length} measured layers, ${predicted.length} predicted placements`}
+          aria-label={translateUi('value0_value1_measured_layers_value_3ba036b5', {
+            value0: String(comp.name),
+            value1: String(boxes.length),
+            value2: String(predicted.length),
+          })}
         >
           <title>{`${comp.name} — ${comp.width}×${comp.height}`}</title>
           {/* The canvas. Everything outside this line is what the render throws away. */}
@@ -91,8 +101,13 @@ export function RenderFitMap({
             >
               <title>
                 {verdict.state === 'clipped'
-                  ? `${verdict.key}: clips ${verdict.clippedPx?.join('/')} px (l/t/r/b)`
-                  : `${verdict.key}: inside the canvas`}
+                  ? translateUi('value0_clips_value1_px_l_t_r_b_6d933bc4', {
+                      value0: String(verdict.key),
+                      value1: String(verdict.clippedPx?.join('/')),
+                    })
+                  : translateUi('value0_inside_the_canvas_45227e4d', {
+                      value0: String(verdict.key),
+                    })}
               </title>
             </rect>
           ))}
@@ -104,8 +119,8 @@ export function RenderFitMap({
           without the parse changing. So this is the design as uploaded — true of the template
           the render usually resolves to, and not a claim about the bytes the worker read. */}
       <figcaption className="text-2xs text-muted-foreground">
-        {comp.name} · {comp.width}×{comp.height} · dashed = where the chosen artwork lands
-        (estimated from the uploaded project file)
+        {comp.name} · {comp.width}×{comp.height}{' '}
+        {translateUi('dashed_where_the_chosen_artwork_lan_c87d37cf')}{' '}
       </figcaption>
     </figure>
   );

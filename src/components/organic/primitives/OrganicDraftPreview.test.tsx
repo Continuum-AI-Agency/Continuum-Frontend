@@ -1,17 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset, PublishAccountCandidate } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render as rtlRender,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { useEffect, useReducer, useState } from 'react';
+import { render as rtlRender } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDraft } from './types';
@@ -31,7 +24,11 @@ mock.module('./HyperFramePlayer', () => ({
 
 // The dry run answers who the post goes out as. Unset, it never answers — the panel then
 // shows the brand and keeps the account blocker hidden, which is the loading state.
-type HttpOptions = { path: string; method?: string; body?: Record<string, unknown> };
+type HttpOptions = {
+  path: string;
+  method?: string;
+  body?: Record<string, unknown>;
+};
 const httpCalls: HttpOptions[] = [];
 const fanOutCalls = () => httpCalls.filter((call) => call.path.endsWith('/fan-out'));
 let dryRunResponse: unknown = null;
@@ -92,7 +89,10 @@ const httpRequest = mock((opts: HttpOptions) => {
   }
   return Promise.resolve({ updated_at: 'T1' });
 });
-mock.module('@/lib/api/http', () => ({ request: httpRequest, http: { request: httpRequest } }));
+mock.module('@/lib/api/http', () => ({
+  request: httpRequest,
+  http: { request: httpRequest },
+}));
 
 const publishMock = mock();
 mock.module('@/components/organic/hooks/usePublishDraft', () => ({
@@ -123,7 +123,11 @@ const calendarStoreStub = createCalendarStoreStub({
   updateDraft: mock(),
   bulkDeleteDrafts: mock(),
   duplicateDraft: mock(),
-  accountContext: { accountIds: { tiktok: 'acct-tt' }, accountOptions: {}, brandId: null },
+  accountContext: {
+    accountIds: { tiktok: 'acct-tt' },
+    accountOptions: {},
+    brandId: null,
+  },
   get editingDraftId() {
     return editingDraftId;
   },
@@ -175,7 +179,10 @@ mock.module('./CarouselSlideStrip', () => ({
 }));
 
 mock.module('@/components/organic/hooks/useGenerateDraftMedia', () => ({
-  useGenerateDraftMedia: mock(() => ({ generateDraftMedia: mock(), isGenerating: false })),
+  useGenerateDraftMedia: mock(() => ({
+    generateDraftMedia: mock(),
+    isGenerating: false,
+  })),
 }));
 
 // The contextual children are tested in their own files. Stub them here: the
@@ -256,7 +263,11 @@ mock.module('./PostMetaChips', () => ({
 }));
 
 // The menu is tested in its own file; here it records what the panel hands it.
-type MenuAction = { label: string; onSelect: () => void; disabledReason?: string | null };
+type MenuAction = {
+  label: string;
+  onSelect: () => void;
+  disabledReason?: string | null;
+};
 let menuProps: {
   mediaAction?: MenuAction;
   renderAction?: MenuAction;
@@ -329,7 +340,11 @@ mock.module('./PreviewMediaDropZone', () => ({
     fallbackActions,
   }: {
     children?: ReactNode;
-    fallbackActions?: Array<{ key: string; label: string; onSelect: () => void }>;
+    fallbackActions?: Array<{
+      key: string;
+      label: string;
+      onSelect: () => void;
+    }>;
   }) => (
     <div data-testid="drop-zone">
       {fallbackActions?.map((action) => (
@@ -463,7 +478,9 @@ describe('OrganicDraftPreview — contextual shell', () => {
   it('keeps the inspiration source in Details and rejects unsafe links', () => {
     const { rerender } = render(
       <OrganicDraftPreview
-        draft={baseDraft({ inspirationSourceUrl: 'https://www.instagram.com/p/original/' })}
+        draft={baseDraft({
+          inspirationSourceUrl: 'https://www.instagram.com/p/original/',
+        })}
       />,
     );
     expect(screen.queryByText('Inspiration source · View original post')).toBeNull();
@@ -561,7 +578,10 @@ describe('OrganicDraftPreview — media state', () => {
       <OrganicDraftPreview
         draft={baseDraft({
           backendDraftId: 'be-1',
-          mediaSuggestion: { mediaStatus: 'pending', previewRevision: 'revision-1' },
+          mediaSuggestion: {
+            mediaStatus: 'pending',
+            previewRevision: 'revision-1',
+          },
         })}
         brandProfileId="brand-1"
       />,
@@ -620,7 +640,11 @@ describe('OrganicDraftPreview — media state', () => {
   it('shows no slide strip on a one-image post for a platform without carousels', () => {
     render(
       <OrganicDraftPreview
-        draft={baseDraft({ platforms: ['youtube'], format: 'Reel', publishingAssets: [image()] })}
+        draft={baseDraft({
+          platforms: ['youtube'],
+          format: 'Reel',
+          publishingAssets: [image()],
+        })}
         brandProfileId="brand-1"
       />,
     );
@@ -712,7 +736,10 @@ describe('OrganicDraftPreview — readiness and the primary action', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Approve & schedule' }));
     await waitFor(() => expect(onApprove).toHaveBeenCalledTimes(1));
     expect(sentBeforeApprove).toEqual([
-      expect.objectContaining({ caption: 'Typed just now', expected_updated_at: 'T0' }),
+      expect.objectContaining({
+        caption: 'Typed just now',
+        expected_updated_at: 'T0',
+      }),
     ]);
   });
 
@@ -864,7 +891,11 @@ describe('OrganicDraftPreview — readiness and the primary action', () => {
     formatChipClick.mockClear();
     const { container } = render(
       <OrganicDraftPreview
-        draft={baseDraft({ platforms: ['linkedin'], format: 'Story', publishingAssets: [image()] })}
+        draft={baseDraft({
+          platforms: ['linkedin'],
+          format: 'Story',
+          publishingAssets: [image()],
+        })}
         brandProfileId="brand-1"
       />,
     );
@@ -875,7 +906,10 @@ describe('OrganicDraftPreview — readiness and the primary action', () => {
   it('says it is ready once nothing blocks it', () => {
     render(
       <OrganicDraftPreview
-        draft={baseDraft({ captionPreview: 'Ready caption', publishingAssets: [image()] })}
+        draft={baseDraft({
+          captionPreview: 'Ready caption',
+          publishingAssets: [image()],
+        })}
         brandProfileId="brand-1"
         onApprove={mock()}
       />,
@@ -1034,7 +1068,10 @@ describe('OrganicDraftPreview — the publish plan', () => {
     dryRunResponse = dryRun([], null);
     const { container } = render(
       <OrganicDraftPreview
-        draft={baseDraft({ backendDraftId: 'be-noacct', publishingAssets: [image()] })}
+        draft={baseDraft({
+          backendDraftId: 'be-noacct',
+          publishingAssets: [image()],
+        })}
         brandProfileId="brand-1"
         onApprove={mock()}
       />,
@@ -1074,7 +1111,10 @@ describe('OrganicDraftPreview — the publish plan', () => {
   it('has its notices region in place before the first notice, so that notice is announced', () => {
     const { container, rerender } = render(
       <OrganicDraftPreview
-        draft={baseDraft({ format: 'Post', publishingAssets: [image('feed.png')] })}
+        draft={baseDraft({
+          format: 'Post',
+          publishingAssets: [image('feed.png')],
+        })}
         brandProfileId="brand-1"
       />,
     );
@@ -1084,7 +1124,10 @@ describe('OrganicDraftPreview — the publish plan', () => {
 
     rerender(
       <OrganicDraftPreview
-        draft={baseDraft({ format: 'Story', publishingAssets: [image('feed.png')] })}
+        draft={baseDraft({
+          format: 'Story',
+          publishingAssets: [image('feed.png')],
+        })}
         brandProfileId="brand-1"
       />,
     );
@@ -1096,7 +1139,10 @@ describe('OrganicDraftPreview — the publish plan', () => {
   it('notices every way what is sent differs from what was typed', () => {
     const { container } = render(
       <OrganicDraftPreview
-        draft={baseDraft({ format: 'Story', publishingAssets: [image('story.png')] })}
+        draft={baseDraft({
+          format: 'Story',
+          publishingAssets: [image('story.png')],
+        })}
         brandProfileId="brand-1"
       />,
     );
@@ -1109,7 +1155,9 @@ describe('OrganicDraftPreview — the publish plan', () => {
   // and nothing writes a platform list from the browser (K1, C2).
   const openSelector = async () => {
     // Shut while the brand's accounts load: an unloaded list would read "Connect … first".
-    const trigger = await screen.findByRole('button', { name: /^Change platforms/ });
+    const trigger = await screen.findByRole('button', {
+      name: /^Change platforms/,
+    });
     await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false));
     fireEvent.click(trigger);
     return screen.getByRole('menu');
@@ -1117,7 +1165,10 @@ describe('OrganicDraftPreview — the publish plan', () => {
 
   it('ticks a platform through the membership route, with the whole card', async () => {
     publishAccounts = [candidate('acct-fb', 'facebook', 'acme_fb')];
-    const draft = baseDraft({ backendDraftId: 'be-add', publishingAssets: [image()] });
+    const draft = baseDraft({
+      backendDraftId: 'be-add',
+      publishingAssets: [image()],
+    });
     render(<OrganicDraftPreview draft={draft} brandProfileId="brand-1" />);
     const menu = await openSelector();
     await waitFor(() =>
@@ -1277,7 +1328,10 @@ describe('OrganicDraftPreview — attached video renders', () => {
   it('renders a <video> with its poster in the read-only media area', () => {
     const { container } = render(
       <OrganicDraftPreview
-        draft={{ ...videoDraft('https://cdn.example/clip-poster.jpg'), status: 'published' }}
+        draft={{
+          ...videoDraft('https://cdn.example/clip-poster.jpg'),
+          status: 'published',
+        }}
         brandProfileId="brand-1"
       />,
     );
@@ -1919,7 +1973,9 @@ describe('OrganicDraftPreview — each frame is its own row', () => {
     fireEvent.click(screen.getByRole('button', { name: 'TikTok' }));
     expect(screen.getByLabelText('Edit TikTok caption').textContent).toContain('TikTok copy');
     fireEvent.click(screen.getByLabelText('Edit TikTok caption'));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Only for TikTok' } });
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'Only for TikTok' },
+    });
     await waitFor(() => expect(fieldCalls().length).toBe(1), { timeout: 2000 });
     expect(fieldCalls()[0]?.path).toBe('/api/organic/calendar/drafts/be-tt/fields');
     expect(fieldCalls()[0]?.body).toMatchObject({
@@ -1955,12 +2011,16 @@ describe('OrganicDraftPreview — each frame is its own row', () => {
     await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false));
     fireEvent.click(trigger);
     const tiktok = () =>
-      within(screen.getByRole('menu')).getByRole('menuitemcheckbox', { name: 'TikTok' });
+      within(screen.getByRole('menu')).getByRole('menuitemcheckbox', {
+        name: 'TikTok',
+      });
     await waitFor(() => expect(tiktok().getAttribute('aria-disabled')).not.toBe('true'));
     fireEvent.click(tiktok());
     await waitFor(() => expect(fanOutCalls()).toHaveLength(1));
     expect(fanOutCalls()[0]?.path).toBe('/api/organic/calendar/drafts/be-add/fan-out');
-    expect(fanOutCalls()[0]?.body).toEqual({ platforms: ['instagram', 'tiktok'] });
+    expect(fanOutCalls()[0]?.body).toEqual({
+      platforms: ['instagram', 'tiktok'],
+    });
   };
 
   it('(d) ticking TikTok asks the server for the member row; refused, the card never shows it', async () => {
@@ -2012,7 +2072,10 @@ describe('OrganicDraftPreview — each frame is its own row', () => {
     fireEvent.click(pick);
     await waitFor(() => expect(fieldCalls()).toHaveLength(1));
     expect(fieldCalls()[0]?.path).toBe('/api/organic/calendar/drafts/be-tt/fields');
-    expect(fieldCalls()[0]?.body).toEqual({ accountId: 'acct-tt2', expected_updated_at: 'T-tt' });
+    expect(fieldCalls()[0]?.body).toEqual({
+      accountId: 'acct-tt2',
+      expected_updated_at: 'T-tt',
+    });
   });
 
   it("(g) Apply to all platforms PATCHes every other member with this frame's caption", async () => {

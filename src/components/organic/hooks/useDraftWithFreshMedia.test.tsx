@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { render } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // happy-dom does not expose SyntaxError on its window object, which crashes
@@ -25,7 +26,11 @@ mock.module('@/lib/api/http', () => ({
 
 mock.module('@/lib/organic/store', () =>
   createCalendarStoreStub({
-    accountContext: { accountIds: {}, accountOptions: {}, brandId: 'brand-from-store' },
+    accountContext: {
+      accountIds: {},
+      accountOptions: {},
+      brandId: 'brand-from-store',
+    },
   }),
 );
 
@@ -98,7 +103,11 @@ describe('useDraftWithFreshMedia', () => {
     expect(requestMock).toHaveBeenCalledWith({
       path: '/api/organic/agent/hyperframes/sign',
       method: 'POST',
-      body: { brandId: 'brand-1', bucket: 'brand-profile-assets', path: DURABLE_PATH },
+      body: {
+        brandId: 'brand-1',
+        bucket: 'brand-profile-assets',
+        path: DURABLE_PATH,
+      },
     });
   });
 

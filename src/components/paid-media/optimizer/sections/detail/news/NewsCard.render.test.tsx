@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('motion/react', () => {
   const React = require('react');
@@ -9,7 +10,11 @@ mock.module('motion/react', () => {
       return React.createElement(tag, { ...rest, ref });
     });
   return {
-    motion: { span: passthrough('span'), div: passthrough('div'), p: passthrough('p') },
+    motion: {
+      span: passthrough('span'),
+      div: passthrough('div'),
+      p: passthrough('p'),
+    },
     useReducedMotion: () => true,
   };
 });
@@ -30,9 +35,18 @@ const card = (over: Partial<NewsCardModel> = {}): NewsCardModel => ({
   impactPerDay: 14,
   chosenOver: null,
   visual: { kind: 'budget_move', from: 120, to: 186, wanted: 240, cap: 200 },
-  figure: { value: 66, unit: 'currency_per_day', label: 'a day moved', signed: true },
+  figure: {
+    value: 66,
+    unit: 'currency_per_day',
+    label: 'a day moved',
+    signed: true,
+  },
   tone: 'primary',
-  cta: { kind: 'queue_row', rowKey: 'budget:as-1', label: 'Review the budget moves' },
+  cta: {
+    kind: 'queue_row',
+    rowKey: 'budget:as-1',
+    label: 'Review the budget moves',
+  },
   ...over,
 });
 
@@ -80,7 +94,9 @@ describe('NewsCard — the lead', () => {
   it('says why this and not the biggest number, when the brief chose one', () => {
     const { container } = render(
       <NewsCard
-        card={card({ chosenOver: 'The larger pause needs a week of data before it is safe.' })}
+        card={card({
+          chosenOver: 'The larger pause needs a week of data before it is safe.',
+        })}
         currency="USD"
         draft
         explainHref="#"
@@ -132,7 +148,12 @@ describe('InsightCard', () => {
             changePct: -30,
             costChangePct: 120,
           },
-          figure: { value: 23.17, unit: 'currency_per_day', label: 'a day', signed: false },
+          figure: {
+            value: 23.17,
+            unit: 'currency_per_day',
+            label: 'a day',
+            signed: false,
+          },
           tone: 'bad',
         })}
         currency="USD"

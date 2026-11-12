@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale, useTranslations } from 'next-intl';
 
 // The campaign page (G11), in a sheet kept in ?googleCampaign= so the link opens it again. It
 // adapts to the campaign's type: a visual header (its type, whether it serves, its budget and
@@ -106,11 +107,15 @@ function CampaignTrendSection({
   currency: string | null;
   window: { since: string; until: string };
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (daily.status === 'loading') return <ChartSkeleton className="h-40" />;
   if (daily.status === 'error') {
     return (
       <ChartError
-        message={`The campaign's days could not be read: ${daily.message}`}
+        message={betaUiText('beta_a72f8af66685', {
+          value0: String(daily.message),
+        })}
         onRetry={daily.retry}
       />
     );
@@ -143,6 +148,11 @@ export function GoogleCampaignDetailBody({
   /** The brand's Google customer, for the reads the type tabs make; null leaves them out. */
   target?: GoogleReadTarget | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const kind = campaignKind(campaign.channelType);
   const changes =
     history.status === 'ready'
@@ -180,19 +190,24 @@ export function GoogleCampaignDetailBody({
 
       <details className="group">
         <summary className={TEXT_DISCLOSURE}>
-          <span className="font-medium text-foreground">Every figure</span> · against the goal,{' '}
-          {dayLabel(window.since)} – {dayLabel(window.until)}
+          <span className="font-medium text-foreground">{betaUiText('beta_8a8b80ffeaf5')}</span>{' '}
+          {betaUiText('beta_5d0659a5b2d2')} {dayLabel(window.since)} – {dayLabel(window.until)}
         </summary>
         <dl className="mt-2" data-testid="google-campaign-figures">
-          <Row label={`Spend · ${dayLabel(window.since)} – ${dayLabel(window.until)}`}>
+          <Row
+            label={betaUiText('beta_aa363e3271b1', {
+              value0: String(dayLabel(window.since)),
+              value1: String(dayLabel(window.until)),
+            })}
+          >
             {formatCurrency(campaign.spend, currency)}
           </Row>
-          <Row label="Conversions">
+          <Row label={betaUiText('beta_236c2620e434')}>
             {campaign.conversions == null
               ? (ownResultsLabel(campaign.byResult) ?? <Missing reason={NO_SINGLE_RESULT} />)
               : formatConversions(campaign.conversions)}
           </Row>
-          <Row label="Cost per conversion">
+          <Row label={betaUiText('beta_74a26f0b6c9f')}>
             {campaign.cost != null ? (
               formatCurrency(campaign.cost, currency)
             ) : (
@@ -205,7 +220,7 @@ export function GoogleCampaignDetailBody({
               />
             )}
           </Row>
-          <Row label="Portfolio CPA goal">
+          <Row label={betaUiText('beta_8eaa12571f13')}>
             {campaign.band.goal != null ? (
               <>
                 {formatCurrency(campaign.band.goal, currency)} <BandText band={campaign.band} />
@@ -214,19 +229,19 @@ export function GoogleCampaignDetailBody({
               <BandText band={campaign.band} />
             )}
           </Row>
-          <Row label="Budget per day">
+          <Row label={betaUiText('beta_5e699cb47214')}>
             <FigureText
               figure={campaign.budgetPerDay}
               format={(v) => formatCurrency(v, currency)}
             />
           </Row>
-          <Row label="Search impression share">
+          <Row label={betaUiText('beta_cd46140042f2')}>
             <FigureText figure={campaign.impressionShare} format={share} />
           </Row>
-          <Row label="Lost to budget">
+          <Row label={betaUiText('beta_d856931d0802')}>
             <FigureText figure={campaign.budgetLost} format={share} />
           </Row>
-          <Row label="Lost to rank">
+          <Row label={betaUiText('beta_3029ccc58005')}>
             <FigureText figure={campaign.rankLost} format={share} />
           </Row>
         </dl>
@@ -234,50 +249,59 @@ export function GoogleCampaignDetailBody({
 
       {bidding ? (
         <section className="space-y-1" data-testid="google-campaign-bidding">
-          <h4 className="font-semibold text-foreground text-xs">Bidding</h4>
+          <h4 className="font-semibold text-foreground text-xs">{uiText('bidding_b8d1b91')}</h4>
           <dl>
-            <Row label="Strategy">
+            <Row label={uiText('strategy_6b27710')}>
               <FigureText figure={bidding.strategy} format={(v) => v} />
             </Row>
-            <Row label="Google target (bid setting)">
+            <Row label={uiText('google_target_bid_setting_5e10812')}>
               {bidding.target.value != null ? (
-                targetLabel(bidding.target.value, bidding.targetKind, currency)
+                targetLabel(bidding.target.value, bidding.targetKind, currency, uiLocale)
               ) : (
                 <Missing reason={bidding.target.reason} />
               )}
             </Row>
-            <Row label="Status">
+            <Row label={uiText('status_920e413')}>
               <FigureText figure={bidding.learning} format={(v) => v} />
             </Row>
-            <Row label="Last target change">{lastChangeText(bidding, currency)}</Row>
+            <Row label={uiText('last_target_change_5596c0d')}>
+              {lastChangeText(bidding, currency, uiLocale, uiText)}
+            </Row>
           </dl>
-          <p className="text-muted-foreground text-xs">{cooldownText(bidding.cooldown)}</p>
+          <p className="text-muted-foreground text-xs">
+            {cooldownText(bidding.cooldown, uiText, uiLocale)}
+          </p>
         </section>
       ) : null}
 
       <section className="space-y-1" data-testid="google-campaign-changes">
-        <h4 className="font-semibold text-foreground text-xs">What changed on it</h4>
+        <h4 className="font-semibold text-foreground text-xs">
+          {uiText('what_changed_on_it_5129a4d')}
+        </h4>
         {history.status === 'loading' ? (
-          <p className="text-muted-foreground text-xs">Reading Google's change history…</p>
+          <p className="text-muted-foreground text-xs">
+            {uiText('reading_google_s_change_history_6f925af')}
+          </p>
         ) : history.status === 'error' ? (
           <p className="text-muted-foreground text-xs">
-            Google's change history could not be read.
+            {uiText('google_s_change_history_could_not_be_read_7cfff2f')}
           </p>
         ) : changes.length === 0 ? (
           <p className="text-muted-foreground text-xs">
-            No change in Google's change history
-            {history.history.coverage.read
-              ? ` since ${dayLabel(history.history.coverage.read.since)}`
-              : ''}
-            .
+            {uiText.rich('sentence_3c0445864839', {
+              hasSince: history.history.coverage.read ? 'yes' : 'no',
+              since: history.history.coverage.read
+                ? dayLabel(history.history.coverage.read.since, uiLocale)
+                : '',
+            })}
           </p>
         ) : (
           <ul className="space-y-1">
             {changes.slice(0, MAX_CHANGES).map((change) => {
-              const line = changeLine(change);
+              const line = changeLine(change, uiText, uiLocale);
               return (
                 <li className="text-xs" key={`${change.at}-${change.resourceName ?? line.what}`}>
-                  <span className="text-muted-foreground">{dayLabel(change.at)} · </span>
+                  <span className="text-muted-foreground">{dayLabel(change.at, uiLocale)} · </span>
                   {line.what}
                   {line.detail ? `: ${line.detail}` : ''}
                   <span className="text-muted-foreground"> · {line.who}</span>
@@ -295,7 +319,7 @@ export function GoogleCampaignDetailBody({
           rel="noreferrer"
           target="_blank"
         >
-          Open in Google Ads
+          {uiText('open_in_google_ads_0131249')}
         </a>
         <a
           className="hit-area font-semibold text-primary-ink hover:underline"
@@ -305,7 +329,7 @@ export function GoogleCampaignDetailBody({
             'google_ads',
           )}
         >
-          Ask Jaina about this campaign
+          {uiText('ask_jaina_about_this_campaign_dbfae14')}
         </a>
       </div>
     </div>
@@ -333,6 +357,8 @@ export function GoogleCampaignDetail({
    *  type's tabs; without it, it shows what the host already read. */
   target?: GoogleReadTarget | null;
 }) {
+  const uiText = useTranslations('scale');
+
   const dailyQuery = useGoogleCampaignDaily(target, campaign?.id ?? null, window);
   const daily = target && campaign ? viewRead(dailyQuery) : null;
   // The header under it names the type, the status and the portfolio; the description says
@@ -344,9 +370,11 @@ export function GoogleCampaignDetail({
     <Sheet onOpenChange={(open) => (open ? undefined : onClose())} open={campaignId != null}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-md" side="right">
         <SheetHeader>
-          <SheetTitle>{campaign?.name ?? `Campaign ${campaignId ?? ''}`}</SheetTitle>
+          <SheetTitle>
+            {campaign?.name ?? uiText('template_5c38ac1ad61f', { v0: campaignId ?? '' })}
+          </SheetTitle>
           <SheetDescription>
-            {subtitle ?? 'It did not spend in this window, so there are no figures for it.'}
+            {subtitle ?? uiText('it_did_not_spend_in_this_window_so_there_are__e453a22')}
           </SheetDescription>
         </SheetHeader>
         {campaign ? (

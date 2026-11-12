@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ApiRenderDeliveryDestination } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 
 installPickerDomGlobals();
@@ -56,7 +62,13 @@ beforeEach(() => {
   channelsResult = {
     workspaceName: null,
     channels: [
-      { id: 'C0OPS', name: 'renders', isPrivate: false, isMember: true, workspaceName: 'Agency' },
+      {
+        id: 'C0OPS',
+        name: 'renders',
+        isPrivate: false,
+        isMember: true,
+        workspaceName: 'Agency',
+      },
       {
         id: 'C0CLIENT',
         name: 'review',
@@ -115,7 +127,11 @@ describe('SlackDestinationPicker', () => {
     const notConnected = render(
       <SlackDestinationPicker
         brandId={BRAND}
-        slack={{ state: 'not_connected', workspaceName: null, destinations: [] }}
+        slack={{
+          state: 'not_connected',
+          workspaceName: null,
+          destinations: [],
+        }}
         value={null}
         onChange={() => {}}
       />,
@@ -130,14 +146,20 @@ describe('SlackDestinationPicker', () => {
     const notInstalled = render(
       <SlackDestinationPicker
         brandId={BRAND}
-        slack={{ state: 'not_installed', workspaceName: null, destinations: [] }}
+        slack={{
+          state: 'not_installed',
+          workspaceName: null,
+          destinations: [],
+        }}
         value={null}
         onChange={() => {}}
       />,
     );
     expect(
       notInstalled
-        .getByRole('link', { name: 'Reinstall Slack for this brand in Settings' })
+        .getByRole('link', {
+          name: 'Reinstall Slack for this brand in Settings',
+        })
         .getAttribute('href'),
     ).toBe('/settings?section=integrations');
   });
@@ -153,9 +175,10 @@ describe('SlackDestinationPicker', () => {
     expect(listSlackChannelsMock).toHaveBeenCalledWith(BRAND);
     openSelect('Channel to add');
     // The workspace headings are what tell two same-named channels apart.
-    expect(
-      screen.getAllByRole('group').map((group) => group.textContent),
-    ).toEqual(['Agency#renders', 'Client Co#review']);
+    expect(screen.getAllByRole('group').map((group) => group.textContent)).toEqual([
+      'Agency#renders',
+      'Client Co#review',
+    ]);
 
     chooseOption('#review');
     fireEvent.click(getByRole('button', { name: 'Add channel' }));

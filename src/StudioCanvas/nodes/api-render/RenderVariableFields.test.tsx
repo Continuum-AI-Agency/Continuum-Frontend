@@ -10,9 +10,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ApiRenderInputValue, ApiRenderVariable } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { RenderVariableFields } from './RenderVariableFields';
 
 const variable = (overrides: Partial<ApiRenderVariable> = {}): ApiRenderVariable => ({
@@ -68,7 +73,12 @@ describe('RenderVariableFields — enum geometry', () => {
   // unanswered enum has nothing selected and the trigger says so.
   test('an unanswered required enum reads as unanswered', async () => {
     renderFields([
-      variable({ key: 'position', kind: 'enum', required: true, options: ['a', 'b'] }),
+      variable({
+        key: 'position',
+        kind: 'enum',
+        required: true,
+        options: ['a', 'b'],
+      }),
     ]);
 
     expect(screen.getByRole('combobox').textContent).toContain('Choose…');
@@ -76,7 +86,14 @@ describe('RenderVariableFields — enum geometry', () => {
 
   test('a required enum shows the stored value once one is chosen', () => {
     renderFields(
-      [variable({ key: 'position', kind: 'enum', required: true, options: ['a', 'b'] })],
+      [
+        variable({
+          key: 'position',
+          kind: 'enum',
+          required: true,
+          options: ['a', 'b'],
+        }),
+      ],
       { values: { position: 'b' } },
     );
 
@@ -130,7 +147,14 @@ describe('RenderVariableFields — enum geometry', () => {
   test('invents no picker when the value set never crossed the boundary', () => {
     // The legacy reflection strips the option list; a picker here would name choices the
     // renderer never did.
-    renderFields([variable({ key: 'position', label: 'Position', kind: 'enum', options: [] })]);
+    renderFields([
+      variable({
+        key: 'position',
+        label: 'Position',
+        kind: 'enum',
+        options: [],
+      }),
+    ]);
 
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.getByRole('textbox')).toBeTruthy();
@@ -179,7 +203,10 @@ describe('RenderVariableFields — text geometry', () => {
     const changes: Array<[string, ApiRenderInputValue]> = [];
     const { container } = renderFields(
       [variable({ key: 'draw_bet', label: 'Draw Bet', charBudget: 3 })],
-      { values: { draw_bet: '4.10' }, onChange: (key, value) => changes.push([key, value]) },
+      {
+        values: { draw_bet: '4.10' },
+        onChange: (key, value) => changes.push([key, value]),
+      },
     );
     const input = screen.getByDisplayValue('4.10') as HTMLInputElement;
     expect(input.hasAttribute('maxlength')).toBe(false);
@@ -219,7 +246,14 @@ describe('RenderVariableFields — text geometry', () => {
 
 describe('RenderVariableFields — media and reserved geometry', () => {
   test('a media variable is wire-only', () => {
-    renderFields([variable({ key: 'hero_image', label: 'Hero', kind: 'image', required: true })]);
+    renderFields([
+      variable({
+        key: 'hero_image',
+        label: 'Hero',
+        kind: 'image',
+        required: true,
+      }),
+    ]);
 
     expect(handleFor('hero_image')).toBeTruthy();
     expect(screen.queryByRole('textbox')).toBeNull();
@@ -246,7 +280,11 @@ describe('RenderVariableFields — media and reserved geometry', () => {
 // to say which one is winning — a picked asset silently overridden by a wire is the kind
 // of quiet disagreement that makes a render look like it ignored the user.
 describe('RenderVariableFields — a media slot fills by wire OR by pick', () => {
-  const hero = variable({ key: 'hero_image', label: 'Hero image', kind: 'image' });
+  const hero = variable({
+    key: 'hero_image',
+    label: 'Hero image',
+    kind: 'image',
+  });
   const pin = { assetId: 'asset-1', versionId: 'version-1' };
 
   test('offers the Library as well as the handle, in every state', () => {

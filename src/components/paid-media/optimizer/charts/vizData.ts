@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Pure data transforms behind the NEW optimizer visualizations (heat funnel, score
 // radar, ROAS profit/loss, CPA projection, pacing gauge). Kept separate from
 // chartData.ts so they can be unit-benched against real-shaped optimizer data
@@ -11,8 +15,9 @@ import type {
   RunConfidence,
   TimelineEvent,
 } from '@continuum/contracts';
-import { intFmt } from '@/components/charts/chart-formatters';
+import { createChartFormatters } from '@/components/charts/chart-formatters';
 import { buildProjectionPath, type ProjectionPoint } from '@/components/charts/projection-utils';
+import type { UiLocale } from '@/i18n/config';
 import { deriveEfficiency } from '../format';
 import type { CpaTrendPoint } from './chartData';
 import { stepHeatFill } from './vizTokens';
@@ -109,15 +114,18 @@ export function funnelStepsFor(objective: string | null | undefined): FunnelStep
 export function buildConversionFunnel(
   window: FunnelWindow,
   objective: string | null | undefined,
+  locale: UiLocale = 'en',
+  translateLabel: (value: string) => string = (value) => value,
 ): FunnelStageOut[] {
   const steps = funnelStepsFor(objective);
+  const { intFmt } = createChartFormatters(locale);
   const values = steps.map((step) => Math.max(0, Math.round(Number(window[step.key] ?? 0))));
 
   const top = values[0] ?? 0;
   return steps.map((step, index) => {
     if (index === 0) {
       return {
-        label: step.label,
+        label: translateLabel(step.label),
         value: values[index],
         displayValue: intFmt(values[index]),
         stepPct: null,
@@ -128,7 +136,7 @@ export function buildConversionFunnel(
     const prev = values[index - 1];
     const rate = prev > 0 ? values[index] / prev : 0;
     return {
-      label: step.label,
+      label: translateLabel(step.label),
       value: values[index],
       displayValue: intFmt(values[index]),
       stepPct: rate,
@@ -147,7 +155,11 @@ export function buildConversionFunnel(
 // the radar's 0–100 domain.
 
 export type RadarMetricT = { key: string; label: string };
-export type RadarDatumT = { label: string; color: string; values: Record<string, number> };
+export type RadarDatumT = {
+  label: string;
+  color: string;
+  values: Record<string, number>;
+};
 
 const CONFIDENCE_METRICS: RadarMetricT[] = [
   { key: 'predictiveness', label: 'Predictive' },
@@ -165,6 +177,7 @@ const clamp01to100 = (value: number | undefined): number =>
 export function buildConfidenceRadar(
   confidence: RunConfidence | null | undefined,
   color = 'var(--chart-1)',
+  uiTranslate?: ScaleCopy,
 ): { metrics: RadarMetricT[]; data: RadarDatumT[] } | null {
   if (!confidence) return null;
   const anySignal = [
@@ -179,7 +192,7 @@ export function buildConfidenceRadar(
     metrics: CONFIDENCE_METRICS,
     data: [
       {
-        label: 'This cycle',
+        label: uiTranslate ? uiTranslate('this_cycle_1521e59') : 'This cycle',
         color,
         values: {
           predictiveness: clamp01to100(confidence.predictiveness),
@@ -347,7 +360,14 @@ export function pacingSnapshot(input: PacingInput): PacingSnapshot {
       ? Math.round((spent / dayIndex) * periodDays)
       : null;
 
-  return { pctSpent, ratio, status, projectedEndSpend, periodBudget: budget, estimated };
+  return {
+    pctSpent,
+    ratio,
+    status,
+    projectedEndSpend,
+    periodBudget: budget,
+    estimated,
+  };
 }
 
 function numeric(value: number | null | undefined): number | null {
@@ -578,7 +598,10 @@ export function sumFunnelWindow(
  *  no enrolled snapshot carries a daily series, so the caller can fall back to the
  *  engine window and SAY so. */
 export function sumFunnelRange(
-  snapshots: { id: string; daily?: Array<FunnelWindow & { date: string }> | null }[],
+  snapshots: {
+    id: string;
+    daily?: Array<FunnelWindow & { date: string }> | null;
+  }[],
   enrolledIds: Iterable<string>,
   from: string,
   to: string,
@@ -614,6 +637,9 @@ export function adSetRoasSeries(trends: AdDailyTrend[]): { date: string; roas: n
     }
   }
   return [...byDate.entries()]
-    .map(([date, { spend, value }]) => ({ date, roas: spend > 0 ? value / spend : 0 }))
+    .map(([date, { spend, value }]) => ({
+      date,
+      roas: spend > 0 ? value / spend : 0,
+    }))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }

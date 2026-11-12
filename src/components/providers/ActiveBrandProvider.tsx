@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import React, {
   createContext,
   useContext,
@@ -12,6 +12,8 @@ import React, {
 import type { BrandPermission, BrandSummary } from '@/components/DashboardLayoutShell';
 import { type ToastOptions, useToastContext } from '@/components/ui/ToastProvider';
 import { useSession } from '@/hooks/useSession';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import type { AuthIdentity } from '@/lib/auth/identity';
 import { switchBrand } from '@/lib/brands/switch-brand';
 import { purgeAllForBrand } from '@/lib/storage/brandScopedStorage';
@@ -50,6 +52,10 @@ export function ActiveBrandProvider({
   user: initialUser,
   children,
 }: ActiveBrandProviderProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+
   const [selectedBrandId, setSelectedBrandId] = useState(activeBrandId);
   const [summaries, setSummaries] = useState<BrandSummary[]>(brandSummaries);
   const [perms, setPerms] = useState<BrandPermission[]>(permissions);
@@ -98,8 +104,20 @@ export function ActiveBrandProvider({
     );
   }, []);
 
-  const stateRef = React.useRef({ activeBrandId, selectedBrandId, summaries, router, showToast });
-  stateRef.current = { activeBrandId, selectedBrandId, summaries, router, showToast };
+  const stateRef = React.useRef({
+    activeBrandId,
+    selectedBrandId,
+    summaries,
+    router,
+    showToast,
+  });
+  stateRef.current = {
+    activeBrandId,
+    selectedBrandId,
+    summaries,
+    router,
+    showToast,
+  };
 
   // Tracks the most recent switch request ID so a newer click discards an older in-flight switch.
   const switchRequestRef = React.useRef<string | null>(null);
@@ -130,7 +148,11 @@ export function ActiveBrandProvider({
       if (!known.some((brand) => brand.id === nextBrandId && !brand.isPending)) return;
 
       setSelectedBrandId(nextBrandId);
-      const evt = { prevBrandId: current, nextBrandId, reason: 'cross-tab-sync' as const };
+      const evt = {
+        prevBrandId: current,
+        nextBrandId,
+        reason: 'cross-tab-sync' as const,
+      };
       try {
         storeRegistry.teardown(current, evt);
       } catch {
@@ -193,7 +215,10 @@ export function ActiveBrandProvider({
               setSelectedBrandId(previous);
             } else {
               try {
-                channelRef.current?.postMessage({ type: 'brand-switched', brandId });
+                channelRef.current?.postMessage({
+                  type: 'brand-switched',
+                  brandId,
+                });
               } catch {
                 /* cross-tab notify is best-effort */
               }
@@ -204,8 +229,8 @@ export function ActiveBrandProvider({
             if (switchRequestRef.current === requestId) {
               setSelectedBrandId(previous);
               st({
-                title: 'Switch failed',
-                description: error instanceof Error ? error.message : 'Unable to switch brand.',
+                title: tUi('m_75fe0a7b46'),
+                description: getUiErrorMessage(error),
                 variant: 'error',
               });
             }
@@ -217,7 +242,7 @@ export function ActiveBrandProvider({
           }
         });
       }),
-    [],
+    [tUi, getUiErrorMessage],
   );
 
   const isSwitching = switchingToBrandId !== null;

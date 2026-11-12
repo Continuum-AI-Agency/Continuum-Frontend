@@ -2,6 +2,7 @@
 
 import { type ChatMediaItem, type ChatMediaKind, chatMediaRefKey } from '@continuum/contracts';
 import { ExternalLink, Layers, Play } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useMemo } from 'react';
 import { SkeletonText } from '@/components/ui/skeleton';
 import {
@@ -9,6 +10,7 @@ import {
   useChatMediaTiles,
   useNearViewport,
 } from '@/lib/media/chatMediaRefs';
+import { translateControlLabel } from '@/lib/ui/controlLabels';
 import { cn } from '@/lib/utils';
 import { ChatMediaThumb, MediaFallbackTile } from './ChatMedia';
 
@@ -16,7 +18,11 @@ import { ChatMediaThumb, MediaFallbackTile } from './ChatMedia';
 // provider does not report one (Instagram). Sizes are fixed before a byte arrives, so a strip
 // filling in never moves the transcript.
 export const MEDIA_STRIP_TILE_HEIGHT = 120;
-const KIND_ASPECT: Record<ChatMediaKind, number> = { image: 1, carousel: 4 / 5, video: 9 / 16 };
+const KIND_ASPECT: Record<ChatMediaKind, number> = {
+  image: 1,
+  carousel: 4 / 5,
+  video: 9 / 16,
+};
 const MIN_ASPECT = 9 / 16;
 const MAX_ASPECT = 16 / 9;
 
@@ -57,6 +63,8 @@ function MediaStripTile({
   state: TileState;
   onRecover: () => void;
 }) {
+  const tUi = useTranslations('common');
+
   // The tile only ever shows a still: a video's poster, never its bytes. Playback is the
   // player's job, behind its own route.
   const still: ReactNode =
@@ -115,7 +123,7 @@ function MediaStripTile({
       href={item.permalink}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`${name} (opens in a new tab)`}
+      aria-label={tUi('m_6447282c66', { v0: String(name) })}
       className={cn(
         frame,
         'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
@@ -157,9 +165,13 @@ export function MediaStrip({
   stripId,
   tileHeight = MEDIA_STRIP_TILE_HEIGHT,
 }: MediaStripProps) {
+  const tUi = useTranslations('common');
+
   const refs = useMemo(() => items.map((item) => item.ref), [items]);
   const [observe, near] = useNearViewport();
-  const { tiles, settled, recover } = useChatMediaTiles(brandId, refs, { enabled: near });
+  const { tiles, settled, recover } = useChatMediaTiles(brandId, refs, {
+    enabled: near,
+  });
   const more = Math.max(0, (total ?? items.length) - items.length);
   const groupLabel = `${label ?? 'Media'}: ${items.length}${more > 0 ? ` of ${total}` : ''}`;
 
@@ -186,14 +198,18 @@ export function MediaStrip({
               ? 'empty'
               : 'pending';
           const name =
-            item.label?.trim() || `${KIND_LABEL[item.kind]} ${index + 1} of ${items.length}`;
+            item.label?.trim() ||
+            `${translateControlLabel(KIND_LABEL[item.kind], tUi)} ${index + 1} of ${items.length}`;
           return (
             <li
               key={key}
               data-media-key={key}
               data-tile-state={state}
               className="shrink-0"
-              style={{ width: mediaStripTileWidth(item, tileHeight), height: tileHeight }}
+              style={{
+                width: mediaStripTileWidth(item, tileHeight),
+                height: tileHeight,
+              }}
             >
               <MediaStripTile
                 item={item}
@@ -210,7 +226,8 @@ export function MediaStrip({
             className="flex shrink-0 items-center justify-center rounded-md border border-border/60 px-3 text-xs tabular-nums text-muted-foreground"
             style={{ height: tileHeight }}
           >
-            +{more} more
+            +{more}
+            {tUi('m_84b30f4ef3')}
           </li>
         ) : null}
       </ul>

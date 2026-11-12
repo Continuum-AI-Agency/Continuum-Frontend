@@ -14,11 +14,16 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 // state the brand never customized reads as its default.
 // Writes go through the library-review edge function (admin-only in SQL).
 
-const querySchema = z.object({ brandId: z.string().uuid() });
+const querySchema = z.object({
+  brandId: z.string().uuid(),
+  includeOrigins: z.literal('1').optional(),
+});
 
 export async function GET(request: Request) {
+  const searchParams = new URL(request.url).searchParams;
   const parsed = querySchema.safeParse({
-    brandId: new URL(request.url).searchParams.get('brandId'),
+    brandId: searchParams.get('brandId'),
+    includeOrigins: searchParams.get('includeOrigins') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
@@ -43,7 +48,8 @@ export async function GET(request: Request) {
     console.error('[library/review/labels] read failed', error);
     return NextResponse.json({ error: 'Query failed' }, { status: 500 });
   }
-  const resolved = resolveReviewStateLabels((labelsResult.data ?? []) as ReviewStateLabel[]);
+  const storedLabels = (labelsResult.data ?? []) as ReviewStateLabel[];
+  const resolved = resolveReviewStateLabels(storedLabels);
   const customStates = (
     (statesResult.data ?? []) as {
       id: string;
@@ -63,6 +69,10 @@ export async function GET(request: Request) {
     listReviewStateLabelsResponseSchema.parse({
       labels: Object.values(resolved).sort((a, b) => a.position - b.position),
       customStates,
+      // Older clients validate a strict envelope, so provenance is opt-in.
+      ...(parsed.data.includeOrigins
+        ? { customizedStates: storedLabels.map((label) => label.state) }
+        : {}),
     }),
   );
 }

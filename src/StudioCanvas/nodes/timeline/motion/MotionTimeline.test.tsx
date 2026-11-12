@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { MotionTimeline } from './MotionTimeline';
 
 const project = editorProjectV2Schema.parse({
@@ -25,7 +25,11 @@ const project = editorProjectV2Schema.parse({
           mediaKind: 'image',
           timelineStartSec: 1,
           durationSec: 2,
-          source: { sourceType: 'library_asset', assetId: 'a', renditionId: 'v' },
+          source: {
+            sourceType: 'library_asset',
+            assetId: 'a',
+            renditionId: 'v',
+          },
           keyframes: [
             {
               id: 'fade-1:transform.opacity:in',
@@ -79,7 +83,9 @@ describe('MotionTimeline', () => {
     );
     fireEvent.click(view.getByRole('button', { name: 'Save Element' }));
     expect(onSaveElement).toHaveBeenCalledTimes(1);
-    fireEvent.change(view.getByLabelText('Place motion Element'), { target: { value: 'el-1' } });
+    fireEvent.change(view.getByLabelText('Place motion Element'), {
+      target: { value: 'el-1' },
+    });
     expect(onPlaceElement).toHaveBeenCalledWith('el-1');
     expect(view.getByTestId('motion-graph')).toBeTruthy();
     fireEvent.pointerDown(view.getByLabelText('Trim style end'), {

@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type { LibraryPlayback, MediaAsset } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { clearLibraryPlaybackCache, fetchLibraryPlayback } from '@/lib/library/libraryPlayback';
 import { MediaCard } from './MediaCard';
@@ -126,7 +133,9 @@ describe('MediaCard thumbnail', () => {
     mount(
       <MediaCard
         brandId="brand-1"
-        asset={libraryAsset({ thumbnailUrl: 'https://cdn.test/render/hero-480.jpg' })}
+        asset={libraryAsset({
+          thumbnailUrl: 'https://cdn.test/render/hero-480.jpg',
+        })}
       />,
     );
     fireEvent.error(screen.getByAltText('Hero shot'));
@@ -307,7 +316,11 @@ describe('MediaCard office documents', () => {
     mount(
       <MediaCard
         brandId="brand-1"
-        asset={libraryAsset({ kind: 'file', fileName: 'deck.pdf', mimeType: 'application/pdf' })}
+        asset={libraryAsset({
+          kind: 'file',
+          fileName: 'deck.pdf',
+          mimeType: 'application/pdf',
+        })}
       />,
     );
     expect(screen.queryByTestId('card-no-preview')).toBeNull();
@@ -364,7 +377,9 @@ describe('MediaCard hover card and dragging', () => {
     );
     await hover();
     expect(hoverCardOpen()).toBe(true);
-    fireEvent.dragStart(screen.getByTestId('media-card'), { dataTransfer: dataTransfer() });
+    fireEvent.dragStart(screen.getByTestId('media-card'), {
+      dataTransfer: dataTransfer(),
+    });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
     });

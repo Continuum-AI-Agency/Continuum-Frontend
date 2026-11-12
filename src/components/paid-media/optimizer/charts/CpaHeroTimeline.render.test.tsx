@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import { Children, isValidElement, type ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -109,7 +110,12 @@ describe('CpaHeroTimeline', () => {
       <CpaHeroTimeline
         eventsByTs={{
           '2026-06-22T00:00:00.000Z': [
-            { ts: '2026-06-22T00:00:00.000Z', kind: 'applied', label: 'Budgets applied', count: 1 },
+            {
+              ts: '2026-06-22T00:00:00.000Z',
+              kind: 'applied',
+              label: 'Budgets applied',
+              count: 1,
+            },
           ],
         }}
         series={cpaSeriesTrend}

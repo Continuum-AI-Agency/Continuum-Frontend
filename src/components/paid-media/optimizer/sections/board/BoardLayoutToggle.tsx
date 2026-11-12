@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // "Adaptive · Today": the switch between the board and Today's fixed Overview. The active option
 // wears one pill that slides between the two (a shared layout, so it also travels when the
@@ -21,10 +22,12 @@ export function BoardLayoutToggle({
   value: BoardLayout;
   onChange: (next: BoardLayout) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   return (
     <ToggleGroup
-      aria-label="Overview layout"
+      aria-label={betaUiText('beta_969722f5584a')}
       className="shrink-0"
       data-testid="board-layout-toggle"
       onValueChange={(next) => {
@@ -49,7 +52,11 @@ export function BoardLayoutToggle({
               aria-hidden="true"
               className="absolute inset-0 rounded-[inherit] bg-primary/10"
               layoutId={reduce ? undefined : 'board-layout-pill'}
-              transition={{ type: 'spring', visualDuration: 0.35, bounce: 0.14 }}
+              transition={{
+                type: 'spring',
+                visualDuration: 0.35,
+                bounce: 0.14,
+              }}
             />
           ) : null}
           <span className="relative inline-flex items-center gap-1.5">

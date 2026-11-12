@@ -14,6 +14,7 @@
 
 import { elementReferenceAspectRatio, isElementProductCategory } from '@continuum/contracts';
 import { History, Loader2, Plus, RotateCw, Star, Upload, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,12 +35,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   ELEMENT_CATEGORIES,
-  ELEMENT_CATEGORY_LABEL,
-  ELEMENT_GUIDELINES_COPY,
-  ELEMENT_PREVIEW_COPY,
-  ELEMENT_RIGHTS_COPY,
   type ElementCategory,
   type ElementFact,
   type ElementRecord,
@@ -52,16 +50,16 @@ import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 import { ElementBoard } from './ElementBoard';
 import type { ElementMemberUploader } from './ElementCreateForm';
+import { elementCategoryLabel } from './elementPresentation';
 import { HeadlessElementReview } from './HeadlessElementReview';
 
 /** The measured cost of one reference generation — the Wave-2 bench run timed 16.7s.
  *  Quoted so the wait is a stated cost rather than an unexplained hang. */
-const ELEMENT_GENERATION_COPY = 'One paid image call, usually 15–20 seconds.';
+
 /** A person's reference is the continuity sheet: three image calls, two of them in parallel.
  *  `elements:character-sheet:bench` timed 54.5 s and 64.9 s on the Easy Fit actresses (10-06). */
-const CHARACTER_SHEET_GENERATION_COPY = 'Three paid image calls, usually about two minutes.';
+
 /** A product's reference is the product continuity sheet: two image calls. */
-const PRODUCT_SHEET_GENERATION_COPY = 'Two paid image calls.';
 
 /**
  * Seconds actually elapsed since the generation started.
@@ -129,6 +127,10 @@ export function ElementDetail({
   onRestore,
   onSave,
 }: ElementDetailProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const [name, setName] = React.useState(element.name);
   const [category, setCategory] = React.useState(element.category);
   const [guidelines, setGuidelines] = React.useState(element.guidelines ?? '');
@@ -159,7 +161,11 @@ export function ElementDetail({
   // The STORED category decides the sheet's framing: it is what the sheet was generated for.
   const isCharacter = isElementPersonCategory(element.category);
   const isProduct = isElementProductCategory(element.category);
-  const sheetNoun = isCharacter ? 'character sheet' : isProduct ? 'product sheet' : 'reference sheet';
+  const sheetNoun = isCharacter
+    ? 'character sheet'
+    : isProduct
+      ? 'product sheet'
+      : 'reference sheet';
   const [sheetOpen, setSheetOpen] = React.useState(false);
 
   // Newest first for reading; the version number stays the stored position.
@@ -172,7 +178,10 @@ export function ElementDetail({
     .map((line) => {
       const separator = line.indexOf(':');
       return separator > 0
-        ? { label: line.slice(0, separator).trim(), value: line.slice(separator + 1).trim() }
+        ? {
+            label: line.slice(0, separator).trim(),
+            value: line.slice(separator + 1).trim(),
+          }
         : null;
     })
     .filter((fact): fact is ElementFact => Boolean(fact?.label && fact.value))
@@ -187,7 +196,7 @@ export function ElementDetail({
       else if (target === 'motion') setMotionAssetId(result.assetId);
       else setMemberAssetIds((current) => [...current, result.assetId].slice(0, 8));
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Upload failed');
+      setUploadError(uiErrorText(error));
     } finally {
       setUploading(false);
     }
@@ -197,13 +206,14 @@ export function ElementDetail({
     <div className="flex flex-col gap-4" data-testid="element-detail">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">Edit Element</p>
+          <p className="truncate text-sm font-medium">{translateUi('edit_element_120ab216')}</p>
           <Badge variant="secondary" className="mt-1 h-5 px-2 text-2xs">
-            {ELEMENT_CATEGORY_LABEL[category]}
+            {elementCategoryLabel(category, translateUi)}
           </Badge>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={onBack}>
-          Back
+          {' '}
+          {translateUi('back_76900f1b')}{' '}
         </Button>
       </div>
 
@@ -212,7 +222,9 @@ export function ElementDetail({
         <div
           className={cn(
             'flex w-full items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30',
-            elementReferenceAspectRatio(element.category) === '3:4' ? 'aspect-[3/4]' : 'aspect-video',
+            elementReferenceAspectRatio(element.category) === '3:4'
+              ? 'aspect-[3/4]'
+              : 'aspect-video',
           )}
         >
           {referenceUrl ? (
@@ -220,7 +232,10 @@ export function ElementDetail({
               type="button"
               className="h-full w-full cursor-zoom-in"
               onClick={() => setSheetOpen(true)}
-              aria-label={`Open the ${element.name} ${sheetNoun}`}
+              aria-label={translateUi('open_the_value0_value1_285f773f', {
+                value0: String(element.name),
+                value1: String(sheetNoun),
+              })}
             >
               {/* biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset. */}
               <img
@@ -233,9 +248,11 @@ export function ElementDetail({
             <p className="px-6 text-center text-xs text-muted-foreground">
               {isCharacter
                 ? isGenerating
-                  ? `Making the character sheet… ${elapsed}s`
-                  : 'No character sheet yet — generate one from the source photos.'
-                : 'No reference sheet yet — this Element falls back to its source images.'}
+                  ? translateUi('making_the_character_sheet_value0_s_5a43bb3d', {
+                      value0: String(elapsed),
+                    })
+                  : translateUi('no_character_sheet_yet_generate_one_2b040bbc')
+                : translateUi('no_reference_sheet_yet_this_element_78f7f667')}
             </p>
           )}
         </div>
@@ -250,7 +267,8 @@ export function ElementDetail({
                 <DialogTitle>{element.name}</DialogTitle>
                 <DialogDescription>
                   <a href={referenceUrl} target="_blank" rel="noreferrer" className="underline">
-                    Open full size
+                    {' '}
+                    {translateUi('open_full_size_f7eb1c9b')}{' '}
                   </a>
                 </DialogDescription>
               </DialogHeader>
@@ -265,15 +283,15 @@ export function ElementDetail({
         ) : null}
         <p className="text-xs text-muted-foreground">
           {element.defaultReferenceAssetId
-            ? ELEMENT_PREVIEW_COPY
+            ? translateUi('elementApprovedSheetGuidance')
             : history.length > 0
-              ? 'Candidate sheet — review it, then confirm it below.'
-              : ELEMENT_PREVIEW_COPY}
+              ? translateUi('candidate_sheet_review_it_then_conf_a4ed65eb')
+              : translateUi('elementApprovedSheetGuidance')}
         </p>
         {emission?.mode === 'fallback' && emission.droppedCount > 0 ? (
           <p className="text-xs text-destructive">
-            {emission.droppedCount} of {element.members.length} images will be dropped — generate a
-            reference to send one image instead.
+            {emission.droppedCount} {translateUi('of_28391d3b')} {element.members.length}{' '}
+            {translateUi('images_will_be_dropped_generate_a_r_0c2e088c')}{' '}
           </p>
         ) : null}
         <Button
@@ -289,28 +307,31 @@ export function ElementDetail({
             <RotateCw className="mr-2 h-4 w-4" />
           )}
           {isGenerating
-            ? `Generating sheet… ${elapsed}s`
+            ? translateUi('generating_sheet_value0_s_9a39f688', {
+                value0: String(elapsed),
+              })
             : isCharacter
-              ? 'Generate character sheet'
+              ? translateUi('generate_character_sheet_a94e18cd')
               : isProduct
-                ? 'Generate product sheet — two paid image calls'
-                : 'Generate candidate sheet'}
+                ? translateUi('generate_product_sheet_two_paid_ima_f6c757c6')
+                : translateUi('generate_candidate_sheet_c1e012a3')}
         </Button>
         <p className="text-xs text-muted-foreground">
           {isGenerating
             ? isCharacter
-              ? CHARACTER_SHEET_GENERATION_COPY
+              ? translateUi('characterSheetGenerationCost')
               : isProduct
-                ? PRODUCT_SHEET_GENERATION_COPY
-                : ELEMENT_GENERATION_COPY
+                ? translateUi('productSheetGenerationCost')
+                : translateUi('elementGenerationCost')
             : isCharacter && history.length === 0
-              ? "The first sheet becomes this character's reference. Later ones wait for your confirmation."
-              : 'A generated sheet is only a candidate. Nothing changes until you confirm it.'}
+              ? translateUi('the_first_sheet_becomes_this_charac_3b707f88')
+              : translateUi('a_generated_sheet_is_only_a_candida_d36cf86f')}
         </p>
         {generateError ? (
           <p className="text-xs text-destructive" role="alert">
-            Sheet generation failed: {generateError.message}. Nothing changed — the approved
-            reference and the history are as they were. Try again.
+            {' '}
+            {translateUi('sheet_generation_failed_aa1c37ad')} {generateError.message}
+            {translateUi('nothing_changed_the_approved_refere_076322bd')}{' '}
           </p>
         ) : null}
       </div>
@@ -320,7 +341,9 @@ export function ElementDetail({
           htmlFor="element-reference-upload"
           className="inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-xs hover:bg-muted"
         >
-          <Upload className="mr-2 h-3.5 w-3.5" /> Upload existing sheet
+          <Upload className="mr-2 h-3.5 w-3.5" /> {translateUi(
+            'upload_existing_sheet_e98a19e6',
+          )}{' '}
         </Label>
         <Input
           id="element-reference-upload"
@@ -339,7 +362,7 @@ export function ElementDetail({
 
       {history.length > 0 ? (
         <div className="flex flex-col gap-1.5">
-          <Label>History</Label>
+          <Label>{translateUi('history_0e769600')}</Label>
           <div className="flex gap-2 overflow-x-auto pb-1" data-testid="element-history-strip">
             {history.map(({ assetId, version }) => {
               const isDefault = assetId === element.defaultReferenceAssetId;
@@ -363,8 +386,12 @@ export function ElementDetail({
                   }}
                   aria-label={
                     isDefault
-                      ? `Reference ${version} — current default`
-                      : `Review and approve reference ${version}`
+                      ? translateUi('reference_value0_current_default_3684040b', {
+                          value0: String(version),
+                        })
+                      : translateUi('review_and_approve_reference_value0_83cb5305', {
+                          value0: String(version),
+                        })
                   }
                   aria-pressed={isDefault}
                   className={cn(
@@ -379,7 +406,9 @@ export function ElementDetail({
                     // biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset.
                     <img
                       src={historyUrl}
-                      alt={`Reference ${version}`}
+                      alt={translateUi('reference_value0_fede3d8a', {
+                        value0: String(version),
+                      })}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -400,14 +429,15 @@ export function ElementDetail({
           </div>
           {setDefaultError ? (
             <p className="text-xs text-destructive" role="alert">
-              Could not change the default: {setDefaultError.message}
+              {' '}
+              {translateUi('could_not_change_the_default_611dc0a5')} {setDefaultError.message}
             </p>
           ) : null}
         </div>
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <Label>Source images / keyframes</Label>
+        <Label>{translateUi('source_images_keyframes_d1b9dd6d')}</Label>
         <div className="flex flex-wrap gap-2">
           {memberAssetIds.map((assetId, index) => (
             <div
@@ -418,7 +448,9 @@ export function ElementDetail({
                 // biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset.
                 <img
                   src={signedUrls[assetId]}
-                  alt={`Member ${index + 1}`}
+                  alt={translateUi('member_value0_04374420', {
+                    value0: String(index + 1),
+                  })}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -429,7 +461,9 @@ export function ElementDetail({
               <button
                 type="button"
                 className="absolute right-0 top-0 bg-background/90 p-0.5"
-                aria-label={`Remove source ${index + 1}`}
+                aria-label={translateUi('remove_source_value0_a27f9c60', {
+                  value0: String(index + 1),
+                })}
                 onClick={() =>
                   setMemberAssetIds((current) => current.filter((id) => id !== assetId))
                 }
@@ -465,7 +499,7 @@ export function ElementDetail({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="element-detail-name">Name</Label>
+          <Label htmlFor="element-detail-name">{translateUi('name_dcd1d522')}</Label>
           <Input
             id="element-detail-name"
             value={name}
@@ -473,7 +507,7 @@ export function ElementDetail({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="element-detail-category">Category</Label>
+          <Label htmlFor="element-detail-category">{translateUi('category_292c06f0')}</Label>
           <Select value={category} onValueChange={(value) => setCategory(value as ElementCategory)}>
             <SelectTrigger id="element-detail-category">
               <SelectValue />
@@ -481,7 +515,7 @@ export function ElementDetail({
             <SelectContent>
               {ELEMENT_CATEGORIES.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {ELEMENT_CATEGORY_LABEL[value]}
+                  {elementCategoryLabel(value, translateUi)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -490,40 +524,46 @@ export function ElementDetail({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="element-detail-guidelines">Guidelines</Label>
+        <Label htmlFor="element-detail-guidelines">{translateUi('guidelines_c4f9417b')}</Label>
         <Textarea
           id="element-detail-guidelines"
           rows={2}
           value={guidelines}
           onChange={(event) => setGuidelines(event.target.value)}
         />
-        <p className="text-xs text-muted-foreground">{ELEMENT_GUIDELINES_COPY}</p>
+        <p className="text-xs text-muted-foreground">{translateUi('elementGuidelinesGuidance')}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="element-detail-facts">Facts</Label>
+        <Label htmlFor="element-detail-facts">{translateUi('facts_3683709d')}</Label>
         <Textarea
           id="element-detail-facts"
           rows={3}
           value={factsText}
-          placeholder={'Height: 5 ft 6 in\nFinish: Matte pink'}
+          placeholder={translateUi('height_5_ft_6_in_finish_matte_pink_a3ddf7ad')}
           onChange={(event) => setFactsText(event.target.value)}
         />
-        <p className="text-xs text-muted-foreground">One “label: value” fact per line.</p>
+        <p className="text-xs text-muted-foreground">
+          {translateUi('one_label_value_fact_per_line_72f3e4b2')}
+        </p>
       </div>
 
       {category === 'animation' || category === 'effect' || motionAssetId ? (
         <div className="flex flex-col gap-1.5">
-          <Label>Motion clip</Label>
+          <Label>{translateUi('motion_clip_74226eaa')}</Label>
           <div className="flex items-center gap-2">
             <Label
               htmlFor="element-motion-upload"
               className="inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-xs hover:bg-muted"
             >
               <Upload className="mr-2 h-3.5 w-3.5" />{' '}
-              {motionAssetId ? 'Replace clip' : 'Upload clip'}
+              {motionAssetId
+                ? translateUi('replace_clip_a0b6e7ed')
+                : translateUi('upload_clip_95ac507d')}
             </Label>
-            {motionAssetId ? <Badge variant="outline">Clip attached</Badge> : null}
+            {motionAssetId ? (
+              <Badge variant="outline">{translateUi('clip_attached_42c32766')}</Badge>
+            ) : null}
           </div>
           <Input
             id="element-motion-upload"
@@ -542,16 +582,18 @@ export function ElementDetail({
 
       {needsRights ? (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="element-detail-rights">Rights basis</Label>
+          <Label htmlFor="element-detail-rights">{translateUi('rights_basis_c272d465')}</Label>
           <Input
             id="element-detail-rights"
             value={rightsNote}
             onChange={(event) => setRightsNote(event.target.value)}
           />
-          <p className="text-xs text-muted-foreground">{ELEMENT_RIGHTS_COPY}</p>
+          <p className="text-xs text-muted-foreground">{translateUi('elementRightsGuidance')}</p>
           {missingRights ? (
             <p className="text-xs text-destructive">
-              A {ELEMENT_CATEGORY_LABEL[element.category]} Element needs a rights basis.
+              {translateUi('elementRightsMissing', {
+                category: elementCategoryLabel(element.category, translateUi),
+              })}
             </p>
           ) : null}
         </div>
@@ -574,7 +616,7 @@ export function ElementDetail({
             if (window.confirm('Restore the previous complete Element version?')) onRestore(index);
           }}
         >
-          <History className="mr-2 h-4 w-4" /> Restore previous
+          <History className="mr-2 h-4 w-4" /> {translateUi('restore_previous_7ee9e26e')}{' '}
         </Button>
         <Button
           type="button"
@@ -593,8 +635,8 @@ export function ElementDetail({
             })
           }
         >
-          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Replace Element
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
+          {translateUi('replace_element_f7062476')}{' '}
         </Button>
       </div>
     </div>

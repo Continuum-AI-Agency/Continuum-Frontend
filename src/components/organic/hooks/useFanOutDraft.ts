@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // A post's platforms are its rows. Ticking one creates its row at once (`/fan-out`, the FULL
 // ticked set); unticking one removes its row in one server transaction (`/group/remove`), the
@@ -91,24 +94,40 @@ export function withServerMembers(
 }
 
 /** Why the server would not remove `platform`'s row, in plain words. */
-export function removalRefusal(platform: PublishPlatform, error: unknown): string {
+export function removalRefusal(
+  platform: PublishPlatform,
+  error: unknown,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+): string {
   const label = PUBLISH_PLATFORM_LABELS[platform];
-  if (!(error instanceof ApiError)) return 'Network error. Nothing changed; try again.';
+  if (!(error instanceof ApiError))
+    return translate?.('memberRemovalNetwork') ?? 'Network error. Nothing changed; try again.';
   const code =
     error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : null);
   switch (code) {
     case 'member_scheduled':
-      return `${label} is scheduled. Move it back to draft before removing it.`;
+      return (
+        translate?.('memberRemovalScheduled', { platform: label }) ??
+        `${label} is scheduled. Move it back to draft before removing it.`
+      );
     case 'already_published':
-      return `${label} is already live, so it stays part of this post.`;
+      return (
+        translate?.('memberRemovalPublished', { platform: label }) ??
+        `${label} is already live, so it stays part of this post.`
+      );
     case 'last_member':
-      return 'A post needs at least one platform. Delete the draft instead.';
+      return (
+        translate?.('memberRemovalLast', { platform: label }) ??
+        'A post needs at least one platform. Delete the draft instead.'
+      );
     case 'persist_failed':
       return error.status === 409
-        ? `${label} was scheduled or published while it was being removed. Nothing changed.`
-        : `Could not remove ${label}. Nothing changed; try again.`;
+        ? (translate?.('memberRemovalRace', { platform: label }) ??
+            `${label} was scheduled or published while it was being removed. Nothing changed.`)
+        : (translate?.('memberRemovalFailed', { platform: label }) ??
+            `Could not remove ${label}. Nothing changed; try again.`);
     default:
-      return error.message;
+      return translate?.('memberRemovalFailed', { platform: label }) ?? error.message;
   }
 }
 
@@ -171,6 +190,9 @@ export function withGroupAfterRemoval(
 }
 
 export function useDraftMembership(): UseDraftMembershipResult {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const { show } = useToast();
@@ -191,15 +213,14 @@ export function useDraftMembership(): UseDraftMembershipResult {
         });
       } catch (error) {
         show({
-          title: 'Platforms not changed',
-          description:
-            error instanceof ApiError ? error.message : 'Network error. Please try again.',
+          title: uiText('platforms_not_changed_dbc0551'),
+          description: formatUiError(error),
           variant: 'error',
         });
         return null;
       }
     },
-    [show],
+    [show, uiText, formatUiError],
   );
 
   const removeMember = React.useCallback(
@@ -212,14 +233,14 @@ export function useDraftMembership(): UseDraftMembershipResult {
         });
       } catch (error) {
         show({
-          title: 'Platform not removed',
-          description: removalRefusal(platform, error),
+          title: uiText('platform_not_removed_35d441c'),
+          description: removalRefusal(platform, error, uiText),
           variant: 'error',
         });
         return null;
       }
     },
-    [show],
+    [show, uiText, uiLocale],
   );
 
   const setPlatforms = React.useCallback(
@@ -232,8 +253,8 @@ export function useDraftMembership(): UseDraftMembershipResult {
       const next = inOrder(platforms);
       if (!card.backendDraftId || !inferPublishPlatform(card)) {
         show({
-          title: 'Not saved yet',
-          description: 'This draft is still saving — try again in a moment.',
+          title: uiText('not_saved_yet_35c5fe4'),
+          description: uiText('this_draft_is_still_saving_try_again_in_a_mom_7d46722'),
           variant: 'error',
         });
         return false;
@@ -253,8 +274,8 @@ export function useDraftMembership(): UseDraftMembershipResult {
                   ?.backendDraftId;
           if (!memberId) {
             show({
-              title: 'Platform not removed',
-              description: 'This post is still saving — try again in a moment.',
+              title: uiText('platform_not_removed_35d441c'),
+              description: uiText('this_post_is_still_saving_try_again_in_a_mome_343ca1d'),
               variant: 'error',
             });
             return false;
@@ -272,10 +293,14 @@ export function useDraftMembership(): UseDraftMembershipResult {
           // A published member is never deleted: deselecting it is refused, and said so.
           if (saved.retained.length > 0) {
             show({
-              title: 'Already published',
-              description: `${saved.retained
-                .map((member) => PUBLISH_PLATFORM_LABELS[member.platform])
-                .join(', ')} stays: that post is live.`,
+              title: uiText('already_published_5df8fe6'),
+              description: uiText('publishedMembersRetained', {
+                count: saved.retained.length,
+                platforms: new Intl.ListFormat(uiLocale, {
+                  style: 'long',
+                  type: 'conjunction',
+                }).format(saved.retained.map((member) => PUBLISH_PLATFORM_LABELS[member.platform])),
+              }),
               variant: 'error',
             });
           }
@@ -287,7 +312,7 @@ export function useDraftMembership(): UseDraftMembershipResult {
         requestCalendarRefetch();
       }
     },
-    [fanOut, removeMember, requestCalendarRefetch, show, updateDraft],
+    [fanOut, removeMember, requestCalendarRefetch, show, updateDraft, uiText, uiLocale],
   );
 
   return { setPlatforms, isSaving };

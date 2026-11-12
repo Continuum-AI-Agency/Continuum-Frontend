@@ -1,3 +1,4 @@
+import { useLocale, useTranslations } from 'next-intl';
 // The MP1 frame's headline and tiles, read from public.optimizer_get_account_platform_metrics
 // (frontend.html §2). "All" leads with the account: one sentence, then spend with each
 // platform's share, one tile per result kind naming the platform that buys it cheapest,
@@ -52,9 +53,11 @@ export function AllPlatformsHeadline({
   /** The actions queue the Review button opens; see `allPlatformsHeadlineSegments`. */
   pendingCount: number;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   return (
     <HeadlineSentence
-      segments={allPlatformsHeadlineSegments(metrics, pendingCount)}
+      segments={allPlatformsHeadlineSegments(metrics, pendingCount, uiText, uiLocale)}
       source="account-platform-metrics"
     />
   );
@@ -62,11 +65,13 @@ export function AllPlatformsHeadline({
 
 /** The sub-line's facts: the producer's window, the top-spend fact, and what was left out. */
 export function AllPlatformsSubline({ metrics }: { metrics: AccountPlatformMetrics }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const facts = [
-    windowRangeLabel(metrics.window.since, metrics.window.until),
-    topSpendLabel(metrics),
-    'attribution: what each platform reports',
-    coverageNote(metrics),
+    windowRangeLabel(metrics.window.since, metrics.window.until, uiLocale),
+    topSpendLabel(metrics, uiText),
+    uiText('platformAttribution'),
+    coverageNote(metrics, uiText, uiLocale),
   ].filter((fact): fact is string => Boolean(fact));
   return (
     <>
@@ -82,22 +87,31 @@ export function AllPlatformsSubline({ metrics }: { metrics: AccountPlatformMetri
 
 /** The spend tile's line: the move against the prior window, then how the platforms split it. */
 function SpendSub({ metrics }: { metrics: AccountPlatformMetrics }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+
   const delta = accountSpendDeltaPct(metrics);
   const prior = metrics.prior_window;
   return (
     <>
       {delta != null && prior ? (
         <>
-          <KpiDelta
-            better="neutral"
-            pct={delta}
-            testId="spend-prior-delta"
-            title={`vs ${windowRangeLabel(prior.since, prior.until)}`}
-          />{' '}
-          vs prior {windowDaysLabel(metrics)} ·{' '}
+          {uiText.rich('sentence_555db3284338', {
+            v0: () => (
+              <KpiDelta
+                better="neutral"
+                pct={delta}
+                testId="spend-prior-delta"
+                title={uiText('template_c67c180645e5', {
+                  v0: windowRangeLabel(prior.since, prior.until, uiLocale),
+                })}
+              />
+            ),
+            v1: windowDaysLabel(metrics, uiText),
+          })}{' '}
         </>
       ) : null}
-      {spendSplitLabel(metrics)}
+      {spendSplitLabel(metrics, uiText, uiLocale)}
     </>
   );
 }
@@ -110,10 +124,13 @@ function KindSub({
   metrics: AccountPlatformMetrics;
   kind: KindAcrossPlatforms;
 }) {
+  const uiText = useTranslations('scale');
+
+  const uiLocale = useLocale();
   const move = kindPriorMove(metrics, kind);
   return (
     <>
-      {kindTileSub(metrics, kind)}
+      {kindTileSub(metrics, kind, uiText, uiLocale)}
       {move ? (
         <>
           {' · '}
@@ -121,7 +138,10 @@ function KindSub({
             better="down"
             pct={move.pct}
             testId="cost-prior-delta"
-            title={`prev. ${windowDaysLabel(metrics)} ${formatCurrency(move.priorCostPerResult, kind.currency)}`}
+            title={uiText('template_3f413026d936', {
+              v0: windowDaysLabel(metrics, uiText),
+              v1: formatCurrency(move.priorCostPerResult, kind.currency, uiLocale),
+            })}
           />
         </>
       ) : null}
@@ -141,6 +161,8 @@ export function AllPlatformsTiles({
   pendingCount: number;
   onOpenActions: () => void;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const window = figureWindowOfMetrics(metrics);
   const currency = oneCurrency(metrics);
   // One spend row is one figure, whether or not the producer named its currency: the stamp
@@ -156,27 +178,29 @@ export function AllPlatformsTiles({
       <KpiTile
         emphasis="hero"
         figure={figureProps('tiles.spend', total, currency, window)}
-        label={`Spend · ${windowDaysLabel(metrics)}`}
+        label={uiText('template_d02860d6eac6', {
+          v0: windowDaysLabel(metrics, uiText),
+        })}
         sub={<SpendSub metrics={metrics} />}
         testId="tile-spend"
         value={
           metrics.spend_by_currency.length > 1
             ? metrics.spend_by_currency
-                .map((row) => formatCurrency(row.spend, row.currency))
+                .map((row) => formatCurrency(row.spend, row.currency, uiLocale))
                 .join(' · ')
-            : formatCurrency(total, currency)
+            : formatCurrency(total, currency, uiLocale)
         }
         variant="inline"
       />
       {kinds.map((kind) => (
         <KpiTile
-          breakdown={kindPlatformSplit(kind)}
+          breakdown={kindPlatformSplit(kind, uiLocale)}
           figure={figureProps(`tiles.kind.${kind.kind}`, kind.results, null, window, 'count')}
           key={`${kind.kind}|${kind.currency}`}
-          label={kindTileLabel(metrics, kind)}
+          label={kindTileLabel(metrics, kind, uiText)}
           sub={<KindSub kind={kind} metrics={metrics} />}
           testId={`tile-kind-${kind.kind}`}
-          value={formatResults(kind.results)}
+          value={formatResults(kind.results, uiLocale)}
           variant="inline"
         />
       ))}
@@ -188,42 +212,46 @@ export function AllPlatformsTiles({
               onClick={onOpenActions}
               type="button"
             >
-              Review →
+              {uiText('review_ab7681e')}
             </button>
           ) : null
         }
         emphasis={pendingCount > 0 ? 'decision' : undefined}
         figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
-        label="Decisions"
+        label={uiText('decisions_cfa6a08')}
         sub={
-          pendingCount > 0 ? 'waiting across your portfolios' : 'nothing waits for your decision'
+          pendingCount > 0
+            ? uiText('platformWaitingPortfolios')
+            : uiText('optimizer_nothingWaiting')
         }
         testId="tile-decisions"
-        value={String(pendingCount)}
+        value={formatResults(pendingCount, uiLocale)}
         variant="inline"
       />
       <KpiTile
         figure={figureProps('tiles.on-autopilot', metrics.autopilot.on, null, 'none', 'count')}
-        label="Autopilot"
+        label={uiText('autopilot_0c62cfc')}
         sub={
           metrics.autopilot.total === 0
-            ? 'no active portfolio'
+            ? uiText('platformNoActivePortfolio')
             : metrics.autopilot.on === metrics.autopilot.total
-              ? 'all apply on their own'
-              : `${metrics.autopilot.total - metrics.autopilot.on} recommend, do not apply`
+              ? uiText('platformAllAutopilot')
+              : uiText('helper_ad155f8a02cf', {
+                  v0: metrics.autopilot.total - metrics.autopilot.on,
+                })
         }
         testId="tile-autopilot"
-        value={String(metrics.autopilot.on)}
-        valueSuffix={`/${metrics.autopilot.total}`}
+        value={formatResults(metrics.autopilot.on, uiLocale)}
+        valueSuffix={`/${formatResults(metrics.autopilot.total, uiLocale)}`}
         variant="inline"
       />
       {showPlatforms ? (
         <KpiTile
           figure={figureProps('tiles.platforms', connected, null, 'none', 'count')}
-          label="Platforms"
-          sub={connected === 3 ? 'Meta, Google and TikTok read' : 'connect the rest in Settings'}
+          label={uiText('platforms_ab9bd75')}
+          sub={connected === 3 ? uiText('platformAllRead') : uiText('platformConnectOthers')}
           testId="tile-platforms"
-          value={`${connected} of 3`}
+          value={uiText('platformReadFraction', { read: connected, total: 3 })}
           variant="inline"
         />
       ) : null}
@@ -243,6 +271,8 @@ export function PlatformMetricsSection({
    *  the platform, the section says that the figures below are that read. */
   liveBelow?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const row = platformTotals(metrics, platform);
   if (!row?.connected) return null;
   const window = figureWindowOfMetrics(metrics);
@@ -273,41 +303,48 @@ export function PlatformMetricsSection({
           data-testid="platform-headline"
         >
           {row.spend == null ? (
-            `${name} is connected, but nothing has been read from it yet.`
+            uiText('template_2e4f17f8d23b', { v0: name })
           ) : (
             <>
-              {name} spent{' '}
-              <span
-                className="tabular-nums"
-                {...figureProps(`${platform}.spend`, spend, row.currency, window)}
-              >
-                {formatCurrency(spend, row.currency)}
-              </span>{' '}
-              in {windowDaysLabel(metrics)}
-              {row.share_of_spend != null
-                ? ` (${Math.round(row.share_of_spend * 100)}% of the account)`
-                : ''}
-              {lead && lead.cost_per_result != null
-                ? `: ${formatResults(lead.results)} ${kindWords(lead.kind).many} at ${formatCurrency(lead.cost_per_result, row.currency)}.`
-                : '.'}
+              {uiText.rich('sentence_cfa67d38df05', {
+                name: name,
+                spend: () => (
+                  <span
+                    className="tabular-nums"
+                    {...figureProps(`${platform}.spend`, spend, row.currency, window)}
+                  >
+                    {formatCurrency(spend, row.currency, uiLocale)}
+                  </span>
+                ),
+                window: windowDaysLabel(metrics, uiText),
+                hasShare: row.share_of_spend != null ? 'yes' : 'no',
+                share: Math.round((row.share_of_spend ?? 0) * 100),
+                hasLead: lead && lead.cost_per_result != null ? 'yes' : 'no',
+                results: lead ? formatResults(lead.results, uiLocale) : '',
+                kind: lead ? kindWords(lead.kind, uiText).many : '',
+                cost:
+                  lead && lead.cost_per_result != null
+                    ? formatCurrency(lead.cost_per_result, row.currency, uiLocale)
+                    : '',
+              })}
             </>
           )}
         </p>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
           <PlatformChip platform={platform} />
-          <span>{windowRangeLabel(metrics.window.since, metrics.window.until)}</span>
+          <span>{windowRangeLabel(metrics.window.since, metrics.window.until, uiLocale)}</span>
           <span aria-hidden="true">·</span>
-          <span>{accountsReadLabel(row)}</span>
+          <span>{accountsReadLabel(row, uiText)}</span>
           <span aria-hidden="true">·</span>
           <span>
             {row.coverage === 'portfolios'
-              ? 'counts what its portfolios hold'
-              : 'every campaign of the connected accounts'}
+              ? uiText('counts_what_its_portfolios_hold_5af164f')
+              : uiText('every_campaign_of_the_connected_accounts_4eab65b')}
           </span>
           {row.spend != null && !row.currency ? (
             <>
               <span aria-hidden="true">·</span>
-              <span>currency not reported</span>
+              <span>{uiText('currency_not_reported_e2e9e63')}</span>
             </>
           ) : null}
         </div>
@@ -319,10 +356,12 @@ export function PlatformMetricsSection({
         >
           <KpiTile
             figure={figureProps(`${platform}.tiles.spend`, spend, row.currency, window)}
-            label={`Spend · ${windowDaysLabel(metrics)}`}
-            sub={platformSpendSub(row)}
+            label={uiText('template_d02860d6eac6', {
+              v0: windowDaysLabel(metrics, uiText),
+            })}
+            sub={platformSpendSub(row, uiText, uiLocale)}
             testId="platform-tile-spend"
-            value={spend == null ? '—' : formatCurrency(spend, row.currency)}
+            value={spend == null ? '—' : formatCurrency(spend, row.currency, uiLocale)}
           />
           {kinds.map((kind) => (
             <KpiTile
@@ -334,10 +373,10 @@ export function PlatformMetricsSection({
                 'count',
               )}
               key={kind.kind}
-              label={capitalise(kindWords(kind.kind).many)}
-              sub={platformKindSub(kind, row.currency)}
+              label={capitalise(kindWords(kind.kind, uiText).many)}
+              sub={platformKindSub(kind, row.currency, uiText, uiLocale)}
               testId={`platform-tile-kind-${kind.kind}`}
-              value={formatResults(kind.results)}
+              value={formatResults(kind.results, uiLocale)}
             />
           ))}
           {row.unclassified_spend != null && row.unclassified_spend > 0 ? (
@@ -348,10 +387,10 @@ export function PlatformMetricsSection({
                 row.currency,
                 window,
               )}
-              label="No result kind"
-              sub="spend on campaigns with no declared result"
+              label={uiText('no_result_kind_14c10ae')}
+              sub={uiText('platformUnclassifiedDeclared')}
               testId="platform-tile-unclassified"
-              value={formatCurrency(row.unclassified_spend, row.currency)}
+              value={formatCurrency(row.unclassified_spend, row.currency, uiLocale)}
             />
           ) : null}
         </div>

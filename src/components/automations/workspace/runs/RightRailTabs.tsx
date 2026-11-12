@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The workspace's right rail hosts two surfaces now: the node Inspector and the
 // Runs list. They are tabs rather than a second drawer because they answer the
 // same question from two directions — "what is this step" and "what did it do".
@@ -28,6 +30,7 @@ export function RightRailTabs({
   inspector: ReactNode;
   runs: ReactNode;
 }) {
+  const uiText = useTranslations('automations');
   return (
     <TabsPrimitive.Root
       value={tab}
@@ -46,7 +49,7 @@ export function RightRailTabs({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {candidate}
+            {candidate === 'inspector' ? uiText('inspector_da188e3') : uiText('runs_848f54e')}
           </TabsPrimitive.Tab>
         ))}
       </TabsPrimitive.List>

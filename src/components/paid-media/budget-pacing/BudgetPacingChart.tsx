@@ -1,5 +1,18 @@
 'use client';
 
+import {
+  getBudgetPacingRangeOptions,
+  RANGE_OPTIONS,
+  type RangeOption,
+} from './budgetPacingPresentation';
+
+export { RANGE_OPTIONS, type RangeOption } from './budgetPacingPresentation';
+
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import type { UTCTimestamp } from 'lightweight-charts';
 import {
   type ObservabilityChartSeries,
@@ -9,19 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { BudgetPacingEntry } from '@/lib/schemas/budgetPacing';
 import { cn } from '@/lib/utils';
 
-export type RangeOption = '7d' | '14d' | '30d' | 'all';
 export type BudgetPacingTrendMode = 'spend' | 'pace';
-
-export const RANGE_OPTIONS: ReadonlyArray<{
-  value: RangeOption;
-  label: string;
-  seconds: number | null;
-}> = [
-  { value: '7d', label: '7D', seconds: 7 * 86400 },
-  { value: '14d', label: '14D', seconds: 14 * 86400 },
-  { value: '30d', label: '30D', seconds: 30 * 86400 },
-  { value: 'all', label: 'All', seconds: null },
-];
 
 type DailyPoint = { date: string; spend: number; target: number };
 
@@ -41,13 +42,14 @@ function toTimestamp(date: string): UTCTimestamp {
 function buildSeries(
   trend: DailyPoint[],
   metricMode: BudgetPacingTrendMode,
+  uiTranslate?: ScaleCopy,
 ): ObservabilityChartSeries[] {
   const sorted = [...trend].sort((a, b) => a.date.localeCompare(b.date));
   if (metricMode === 'pace') {
     return [
       {
         id: 'actual-pace',
-        label: 'Pace',
+        label: uiTranslate ? uiTranslate('pace_9582b50') : 'Pace',
         color: '#3b82f6',
         dashed: false,
         points: sorted.map((p) => ({
@@ -57,7 +59,7 @@ function buildSeries(
       },
       {
         id: 'target-pace',
-        label: 'Target Pace',
+        label: uiTranslate ? uiTranslate('target_pace_f9521ab') : 'Target Pace',
         color: '#f59e0b',
         dashed: true,
         points: sorted.map((p) => ({ time: toTimestamp(p.date), value: 100 })),
@@ -68,17 +70,23 @@ function buildSeries(
   return [
     {
       id: 'actual-spend',
-      label: 'Spend',
+      label: uiTranslate ? uiTranslate('spend_85f3d55') : 'Spend',
       color: '#3b82f6',
       dashed: false,
-      points: sorted.map((p) => ({ time: toTimestamp(p.date), value: p.spend })),
+      points: sorted.map((p) => ({
+        time: toTimestamp(p.date),
+        value: p.spend,
+      })),
     },
     {
       id: 'target-pace',
-      label: 'Target',
+      label: uiTranslate ? uiTranslate('target_978354d') : 'Target',
       color: '#f59e0b',
       dashed: true,
-      points: sorted.map((p) => ({ time: toTimestamp(p.date), value: p.target })),
+      points: sorted.map((p) => ({
+        time: toTimestamp(p.date),
+        value: p.target,
+      })),
     },
   ];
 }
@@ -143,6 +151,8 @@ export function BudgetPacingChart({
   metricMode = 'spend',
   title,
 }: Props) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const hasTrendData = campaigns.some(
     (c) => c.dailyTrend.length > 0 || c.adSets.some((a) => a.dailyTrend.length > 0),
   );
@@ -152,7 +162,7 @@ export function BudgetPacingChart({
   }
 
   const trend = resolveTrend(campaigns, focusKey);
-  const series = buildSeries(trend, metricMode);
+  const series = buildSeries(trend, metricMode, uiText);
   const focusLabel = focusKey ? resolveFocusLabel(campaigns, focusKey) : null;
   const activeWindowSeconds = RANGE_OPTIONS.find((r) => r.value === selectedRange)?.seconds ?? null;
 
@@ -166,7 +176,7 @@ export function BudgetPacingChart({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {RANGE_OPTIONS.map((opt) => (
+          {getBudgetPacingRangeOptions(uiLocale, () => uiText('all_a52ace4')).map((opt) => (
             <button
               key={opt.value}
               type="button"

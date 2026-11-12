@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { CAPTION_MAX_ANY_PLATFORM } from '@continuum/contracts';
-import { act, renderHook, waitFor } from '@testing-library/react';
-
+import { act, waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import type { DraftEditField, PendingDraftEdit } from '@/lib/organic/store';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
-type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+type RequestOptions = {
+  path: string;
+  method?: string;
+  body?: Record<string, unknown>;
+};
 
 const requestCalls: RequestOptions[] = [];
 let requestImpl: (opts: RequestOptions) => Promise<unknown> = async () => ({});
@@ -72,7 +76,9 @@ const clearDraftEditPending = (draftId: string, fields: readonly DraftEditField[
 };
 
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show }),
+}));
 mock.module('@/lib/organic/store', () =>
   createCalendarStoreStub({
     get days() {
@@ -165,7 +171,9 @@ describe('editField', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     await act(async () => {
-      await result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+      await result.current.editField({ format: 'Carousel' }, ['format'], {
+        format: 'Carousel',
+      });
     });
 
     expect(requestCalls).toHaveLength(1);
@@ -212,10 +220,19 @@ describe('editField', () => {
 
   // C5: a group is one post, so its time moves every member row, each with its own token.
   it('moves every member of a group when the time changes, each against its own row', async () => {
-    const member = draft({ id: 'local-1::tiktok', backendDraftId: 'srv-tt', updatedAt: 'T-tt' });
+    const member = draft({
+      id: 'local-1::tiktok',
+      backendDraftId: 'srv-tt',
+      updatedAt: 'T-tt',
+    });
     const target = draft({
       groupMembers: [
-        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-1',
+          platform: 'instagram',
+          status: 'draft',
+          accountId: null,
+        },
         {
           backendDraftId: 'srv-tt',
           platform: 'tiktok',
@@ -251,11 +268,20 @@ describe('editField', () => {
       if (call.path.includes('srv-tt')) throw new ApiError('boom', 500);
       return { updated_at: 'T-new' };
     };
-    const member = draft({ id: 'local-1::tiktok', backendDraftId: 'srv-tt', updatedAt: 'T-tt' });
+    const member = draft({
+      id: 'local-1::tiktok',
+      backendDraftId: 'srv-tt',
+      updatedAt: 'T-tt',
+    });
     const target = draft({
       timeLabel: '5:00 PM',
       groupMembers: [
-        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-1',
+          platform: 'instagram',
+          status: 'draft',
+          accountId: null,
+        },
         {
           backendDraftId: 'srv-tt',
           platform: 'tiktok',
@@ -288,7 +314,12 @@ describe('editField', () => {
   it('a caption edit on a group card stays on the card row', async () => {
     const target = draft({
       groupMembers: [
-        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-1',
+          platform: 'instagram',
+          status: 'draft',
+          accountId: null,
+        },
         {
           backendDraftId: 'srv-tt',
           platform: 'tiktok',
@@ -321,7 +352,12 @@ describe('editField', () => {
     const target = draft({
       captionPreview: '',
       groupMembers: [
-        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-1',
+          platform: 'instagram',
+          status: 'draft',
+          accountId: null,
+        },
         {
           backendDraftId: 'srv-fb',
           platform: 'facebook',
@@ -336,7 +372,9 @@ describe('editField', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     await act(async () => {
-      await result.current.editField({ caption: 'La' }, ['caption'], { captionPreview: 'La' });
+      await result.current.editField({ caption: 'La' }, ['caption'], {
+        captionPreview: 'La',
+      });
     });
     await act(async () => {
       await result.current.editField({ caption: 'La alineación' }, ['caption'], {
@@ -354,10 +392,17 @@ describe('editField', () => {
   });
 
   // One caption rule: the route refuses an over-limit caption and names the limit; never truncate.
-  it("shows the route's own reason for a refused edit", async () => {
-    const message = 'LinkedIn captions are at most 3000 characters — this one is 3001';
+  it('uses structured caption limits from the route for a refused edit', async () => {
+    const message =
+      'LinkedIn captions are at most 3,000 characters, hashtags included — this one is 3,001';
     requestImpl = async () => {
-      throw new ApiError(message, 422, undefined, { error: 'caption_too_long', message });
+      throw new ApiError(message, 422, undefined, {
+        error: 'caption_too_long',
+        platform: 'linkedin',
+        maxLength: 3000,
+        length: 3001,
+        message,
+      });
     };
     const target = draft();
     seed(target);
@@ -381,7 +426,9 @@ describe('editField', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     await act(async () => {
-      await result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+      await result.current.editField({ format: 'Carousel' }, ['format'], {
+        format: 'Carousel',
+      });
     });
 
     expect(storedDraft()?.format).toBe('Carousel');
@@ -400,7 +447,9 @@ describe('editField', () => {
 
     let pending: Promise<boolean> | null = null;
     act(() => {
-      pending = result.current.editField({ caption: 'x' }, ['caption'], { captionPreview: 'x' });
+      pending = result.current.editField({ caption: 'x' }, ['caption'], {
+        captionPreview: 'x',
+      });
     });
     expect(storeState.pendingDraftEdits['local-1']?.fields).toEqual(['caption']);
 
@@ -464,9 +513,15 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      result.current.queueFieldEdit({ caption: 'a' }, ['caption'], { captionPreview: 'a' });
-      result.current.queueFieldEdit({ caption: 'ab' }, ['caption'], { captionPreview: 'ab' });
-      result.current.queueFieldEdit({ caption: 'abc' }, ['caption'], { captionPreview: 'abc' });
+      result.current.queueFieldEdit({ caption: 'a' }, ['caption'], {
+        captionPreview: 'a',
+      });
+      result.current.queueFieldEdit({ caption: 'ab' }, ['caption'], {
+        captionPreview: 'ab',
+      });
+      result.current.queueFieldEdit({ caption: 'abc' }, ['caption'], {
+        captionPreview: 'abc',
+      });
     });
 
     // Every keystroke is visible at once in the editor's draft; the store and the send wait.
@@ -488,8 +543,12 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      result.current.queueFieldEdit({ caption: 'a' }, ['caption'], { captionPreview: 'a' });
-      result.current.queueFieldEdit({ caption: 'ab' }, ['caption'], { captionPreview: 'ab' });
+      result.current.queueFieldEdit({ caption: 'a' }, ['caption'], {
+        captionPreview: 'a',
+      });
+      result.current.queueFieldEdit({ caption: 'ab' }, ['caption'], {
+        captionPreview: 'ab',
+      });
     });
     await act(async () => {
       await result.current.flush();
@@ -509,7 +568,9 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      result.current.queueFieldEdit({ caption: 'kept' }, ['caption'], { captionPreview: 'kept' });
+      result.current.queueFieldEdit({ caption: 'kept' }, ['caption'], {
+        captionPreview: 'kept',
+      });
     });
     await act(async () => {
       await result.current.flush();
@@ -549,7 +610,9 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], { captionPreview: 'typed' });
+      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], {
+        captionPreview: 'typed',
+      });
     });
     expect(requestCalls).toHaveLength(0);
 
@@ -584,7 +647,9 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+      void result.current.editField({ format: 'Carousel' }, ['format'], {
+        format: 'Carousel',
+      });
     });
     let flushed: boolean | null = null;
     act(() => {
@@ -614,8 +679,12 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
-      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], { captionPreview: 'typed' });
+      void result.current.editField({ format: 'Carousel' }, ['format'], {
+        format: 'Carousel',
+      });
+      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], {
+        captionPreview: 'typed',
+      });
     });
     let flushed: boolean | null = null;
     act(() => {
@@ -631,7 +700,10 @@ describe('queueFieldEdit', () => {
     });
     await waitFor(() => expect(flushed).toBe(true));
     expect(requestCalls).toHaveLength(2);
-    expect(requestCalls[1]?.body).toMatchObject({ caption: 'typed', expected_updated_at: 'T1' });
+    expect(requestCalls[1]?.body).toMatchObject({
+      caption: 'typed',
+      expected_updated_at: 'T1',
+    });
     expect(show).not.toHaveBeenCalled();
   });
 
@@ -656,7 +728,10 @@ describe('queueFieldEdit', () => {
     release({ updated_at: 'T1' });
     expect(await first).toEqual({ ok: true, updatedAt: 'T1' });
     expect(await second).toEqual({ ok: true, updatedAt: 'T2' });
-    expect(requestCalls[1]?.body).toMatchObject({ caption: 'typed', expected_updated_at: 'T1' });
+    expect(requestCalls[1]?.body).toMatchObject({
+      caption: 'typed',
+      expected_updated_at: 'T1',
+    });
   });
 
   it('flush() waits for a burst whose coalesce timer already fired', async () => {
@@ -670,7 +745,9 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], { captionPreview: 'typed' });
+      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], {
+        captionPreview: 'typed',
+      });
     });
     await waitFor(() => expect(requestCalls).toHaveLength(1));
     let flushed: boolean | null = null;
@@ -700,7 +777,9 @@ describe('queueFieldEdit', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     act(() => {
-      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+      void result.current.editField({ format: 'Carousel' }, ['format'], {
+        format: 'Carousel',
+      });
     });
     let flushed: boolean | null = null;
     act(() => {

@@ -10,6 +10,7 @@
 
 import { MAX_BATCH_ITEMS } from '@continuum/contracts';
 import { Download, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,8 @@ function AxisHeader({ entry }: { entry: MatrixAxisEntry }) {
 }
 
 function CellBody({ preview }: { preview: CellPreview }) {
+  const translateUi = useUiTranslations('studio');
+
   if (preview.kind === 'text') {
     return (
       <p className="line-clamp-6 p-2 text-left text-xs leading-snug whitespace-pre-wrap">
@@ -78,7 +81,10 @@ function CellBody({ preview }: { preview: CellPreview }) {
       </p>
     );
   }
-  if (!preview.src) return <span className="text-xs text-muted-foreground">no preview</span>;
+  if (!preview.src)
+    return (
+      <span className="text-xs text-muted-foreground">{translateUi('no_preview_e58230c8')}</span>
+    );
   if (preview.kind === 'video') {
     return (
       <video src={preview.src} preload="metadata" muted className="size-full object-cover">
@@ -102,6 +108,8 @@ export function MatrixResultsDialog({
   title,
   layout,
 }: MatrixResultsDialogProps) {
+  const translateUi = useUiTranslations('studio');
+
   const [selected, setSelected] = useState<{ row: number; col: number } | null>(null);
 
   const columns = layout.cols.length > 0 ? layout.cols : null;
@@ -119,20 +127,30 @@ export function MatrixResultsDialog({
     if (!cell || cell.capped) {
       return (
         <span className="text-xs text-muted-foreground">
-          {cell ? `not run (${MAX_BATCH_ITEMS} cap)` : ''}
+          {cell
+            ? translateUi('not_run_value0_cap_dfaa6048', {
+                value0: String(MAX_BATCH_ITEMS),
+              })
+            : ''}
         </span>
       );
     }
-    if (!cell.output) return <span className="text-xs text-destructive">failed</span>;
+    if (!cell.output)
+      return <span className="text-xs text-destructive">{translateUi('failed_5d28a90f')}</span>;
 
     const preview = previewOf(cell.output);
-    if (!preview) return <span className="text-xs text-muted-foreground">no preview</span>;
+    if (!preview)
+      return (
+        <span className="text-xs text-muted-foreground">{translateUi('no_preview_e58230c8')}</span>
+      );
 
     return (
       <>
         <button
           type="button"
-          aria-label={`Open ${label}`}
+          aria-label={translateUi('open_value0_3dfbdb80', {
+            value0: String(label),
+          })}
           className="block size-full cursor-zoom-in"
           onClick={() => setSelected({ row, col })}
         >
@@ -143,10 +161,15 @@ export function MatrixResultsDialog({
             variant="secondary"
             size="icon"
             className="absolute top-1 right-1 z-10 size-6 border border-border/70 bg-background/90 opacity-0 shadow-sm transition-opacity group-hover/cell:opacity-90 hover:opacity-100"
-            title={`Download ${label}`}
-            aria-label={`Download ${label}`}
+            title={translateUi('download_value0_0f5a93c3', {
+              value0: String(label),
+            })}
+            aria-label={translateUi('download_value0_0f5a93c3', {
+              value0: String(label),
+            })}
             onClick={() =>
               downloadAsset({
+                translate: translateUi,
                 data: preview.src,
                 baseName: `batch-${row + 1}-${col + 1}`,
                 fallbackExtension: 'png',
@@ -169,7 +192,9 @@ export function MatrixResultsDialog({
       >
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
           <div className="flex flex-col gap-0.5">
-            <DialogTitle className="text-base">{title ?? 'Batch results'}</DialogTitle>
+            <DialogTitle className="text-base">
+              {title ?? translateUi('batch_results_a76de8a5')}
+            </DialogTitle>
             <DialogDescription className="text-xs">
               {layout.rows.length} × {columnCount} · {layout.combine}
             </DialogDescription>
@@ -178,7 +203,7 @@ export function MatrixResultsDialog({
             variant="ghost"
             size="icon"
             className="size-8"
-            aria-label="Close results"
+            aria-label={translateUi('close_results_10cea354')}
             onClick={() => onOpenChange(false)}
           >
             <X className="size-3.5" />
@@ -208,7 +233,8 @@ export function MatrixResultsDialog({
                       scope="col"
                       className="sticky top-0 z-20 border-b border-border/60 bg-background p-2 text-left text-xs font-medium"
                     >
-                      Result
+                      {' '}
+                      {translateUi('result_6e7d50e8')}{' '}
                     </th>
                   )}
                 </tr>
@@ -252,7 +278,7 @@ export function MatrixResultsDialog({
                   variant="ghost"
                   size="icon"
                   className="size-8"
-                  aria-label="Back to the grid"
+                  aria-label={translateUi('back_to_the_grid_3315752a')}
                   onClick={() => setSelected(null)}
                 >
                   <X className="size-3.5" />
@@ -271,7 +297,9 @@ export function MatrixResultsDialog({
                       className="aspect-auto! h-auto max-h-full w-auto max-w-full rounded border-0 [&_video]:h-auto [&_video]:max-h-full [&_video]:w-auto [&_video]:max-w-full [&_video]:object-contain"
                     />
                   ) : selectedPreview.kind === 'video' ? (
-                    <span className="text-sm text-muted-foreground">Nothing to show</span>
+                    <span className="text-sm text-muted-foreground">
+                      {translateUi('nothing_to_show_bf083e34')}
+                    </span>
                   ) : (
                     <img
                       src={selectedPreview.src}
@@ -280,7 +308,9 @@ export function MatrixResultsDialog({
                     />
                   )
                 ) : (
-                  <span className="text-sm text-muted-foreground">Nothing to show</span>
+                  <span className="text-sm text-muted-foreground">
+                    {translateUi('nothing_to_show_bf083e34')}
+                  </span>
                 )}
               </div>
             </div>

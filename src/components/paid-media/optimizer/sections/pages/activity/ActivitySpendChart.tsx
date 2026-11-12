@@ -1,4 +1,6 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 
 // G13's chart: the account's spend per day over the window, the days it showed no ad shaded, and
 // one dot per event above the line, coloured by the hand that made it. Pointing at a dot lights its
@@ -18,10 +20,10 @@ import { PLATFORM_NAMES } from '../../platforms/platformTabsModel';
 import {
   type ActivityDay,
   type ActivityMarker,
+  activitySourceCopy,
   dayKeyLabel,
   MARKER_STACK,
   SOURCE_COLOR,
-  SOURCE_COPY,
   type SpendSeries,
 } from './activityModel';
 import type { ChartAccount, SpendState } from './useActivitySpend';
@@ -57,25 +59,33 @@ function columnX(column: number, columns: number): number {
 }
 
 function SpendFigure({ spend }: { spend: SpendState }) {
+  const betaUiText = useBetaTranslations('scale');
+  const locale = useLocale() as UiLocale;
+
   if (spend.status !== 'ready') return null;
   const { series } = spend;
   const perDay = series.completeDays > 0 ? series.total / series.completeDays : null;
   return (
     <div className="shrink-0 sm:text-right" data-testid="activity-spend-figure">
       <p className="font-mono font-semibold text-foreground text-sm tabular-nums">
-        {formatCurrency(series.total, series.currency)}
+        {formatCurrency(series.total, series.currency, locale)}
       </p>
       <p className="text-muted-foreground text-xs tabular-nums">
-        {perDay != null ? `${formatCurrency(perDay, series.currency)}/day` : null}
-        {series.darkDays > 0
-          ? ` · ${series.darkDays} ${series.darkDays === 1 ? 'day' : 'days'} without ads`
+        {perDay != null
+          ? betaUiText('beta_a2fa02fd878f', {
+              value0: String(formatCurrency(perDay, series.currency, locale)),
+            })
           : null}
+        {series.darkDays > 0 ? betaUiText('beta_ba95b9d132e0', { value0: series.darkDays }) : null}
       </p>
     </div>
   );
 }
 
 function SpendLine({ series, columns }: { series: SpendSeries; columns: number }) {
+  const betaUiText = useBetaTranslations('scale');
+  const locale = useLocale() as UiLocale;
+
   const reduce = useReducedMotion();
   const ceiling = series.max > 0 ? series.max : 1;
   const top = pct(LINE_TOP_PX);
@@ -100,7 +110,7 @@ function SpendLine({ series, columns }: { series: SpendSeries; columns: number }
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
       >
         <svg className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-          <title>Spend per day</title>
+          <title>{betaUiText('beta_59b8da891881')}</title>
           <polygon className="text-foreground" fill="currentColor" opacity={0.05} points={area} />
           <polyline
             className="text-foreground/70"
@@ -130,7 +140,7 @@ function SpendLine({ series, columns }: { series: SpendSeries; columns: number }
             : { left: `${last.x}%`, top: `${last.y}%` }
         }
       >
-        {formatCurrency(last.day.spend, series.currency)}
+        {formatCurrency(last.day.spend, series.currency, locale)}
       </span>
     </>
   );
@@ -145,6 +155,8 @@ function MarkerLabel({
   columns: number;
   dayKey: string;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+  const locale = useLocale() as UiLocale;
   const x = columnX(marker.column, columns);
   const align = x < 28 ? 'start' : x > 72 ? 'end' : 'center';
   return (
@@ -162,7 +174,7 @@ function MarkerLabel({
       }}
     >
       <span className="text-muted-foreground">
-        {dayKeyLabel(dayKey)} · {SOURCE_COPY[marker.source].label}
+        {dayKeyLabel(dayKey, locale)} · {activitySourceCopy(marker.source, betaUiText).label}
       </span>
       <span className="block text-foreground">{marker.label}</span>
     </div>
@@ -170,12 +182,17 @@ function MarkerLabel({
 }
 
 function SpendNote({ spend }: { spend: SpendState }) {
+  const betaUiText = useBetaTranslations('scale');
+  const locale = useLocale() as UiLocale;
+
   if (spend.status === 'error') {
     return (
       <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="activity-spend-error">
-        <span className="text-destructive">Daily spend could not be read: {spend.message}</span>
+        <span className="text-destructive">
+          {betaUiText('beta_2bfda0e5f92d')} {spend.message}
+        </span>
         <Button className="h-6 px-2 text-xs" onClick={spend.retry} size="sm" variant="ghost">
-          Retry
+          {betaUiText('beta_942087cc2d41')}
         </Button>
       </div>
     );
@@ -183,14 +200,14 @@ function SpendNote({ spend }: { spend: SpendState }) {
   if (spend.status === 'unreadable') {
     return (
       <p className="text-muted-foreground text-xs" data-testid="activity-spend-unreadable">
-        The platform sent a total without its day-by-day series, so no line is drawn.
+        {betaUiText('beta_c00ea6e7e6f6')}
       </p>
     );
   }
   if (spend.status === 'none') {
     return (
       <p className="text-muted-foreground text-xs" data-testid="activity-spend-none">
-        No Meta or Google ad account is connected to this brand, so there is no spend to draw.
+        {betaUiText('beta_bedd68a89d18')}
       </p>
     );
   }
@@ -210,6 +227,9 @@ export function ActivitySpendChart({
   onPick,
   notes = [],
 }: ActivitySpendChartProps) {
+  const betaUiText = useBetaTranslations('scale');
+  const locale = useLocale() as UiLocale;
+
   const reduce = useReducedMotion();
   const columns = days.length;
   const complete = days.filter((day) => day.complete);
@@ -223,15 +243,17 @@ export function ActivitySpendChart({
 
   return (
     <section
-      aria-label="Spend per day and what changed"
+      aria-label={betaUiText('beta_55fbd9312592')}
       className="space-y-3 rounded-xl border bg-card p-4 text-card-foreground"
       data-testid="activity-chart"
     >
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
         <div className="min-w-0 space-y-0.5">
-          <h3 className="font-semibold text-sm tracking-tight">Spend per day</h3>
+          <h3 className="font-semibold text-sm tracking-tight">
+            {betaUiText('beta_59b8da891881')}
+          </h3>
           <p className="text-muted-foreground text-xs">
-            {dayKeyLabel(firstDay)} – {dayKeyLabel(lastDay)}
+            {dayKeyLabel(firstDay, locale)} – {dayKeyLabel(lastDay, locale)}
             {account
               ? ` · ${PLATFORM_NAMES[account.platform]} · ${account.name?.trim() || account.id}`
               : null}
@@ -249,7 +271,11 @@ export function ActivitySpendChart({
 
       <div>
         <figure
-          aria-label={`Spend per day from ${dayKeyLabel(firstDay)} to ${dayKeyLabel(lastDay)}, with ${markers.length} ${markers.length === 1 ? 'event' : 'events'}`}
+          aria-label={betaUiText('beta_71527f077009', {
+            value0: String(dayKeyLabel(firstDay, locale)),
+            value1: String(dayKeyLabel(lastDay, locale)),
+            value2: markers.length,
+          })}
           className="relative m-0"
           onPointerLeave={() => onHighlight(null)}
           style={{ height: PLOT_PX }}
@@ -307,7 +333,7 @@ export function ActivitySpendChart({
             const day = days[marker.column]?.key ?? '';
             return (
               <button
-                aria-label={`${dayKeyLabel(day)} · ${SOURCE_COPY[marker.source].label}: ${marker.label}`}
+                aria-label={`${dayKeyLabel(day, locale)} · ${activitySourceCopy(marker.source, betaUiText).label}: ${marker.label}`}
                 aria-pressed={on}
                 className="-translate-x-1/2 absolute z-10 flex size-4 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 data-event-id={marker.id}
@@ -378,8 +404,8 @@ export function ActivitySpendChart({
         </figure>
 
         <div className="mt-1 flex justify-between gap-2 font-mono text-muted-foreground text-xs tabular-nums">
-          <span>{dayKeyLabel(days[0]?.key ?? '')}</span>
-          <span>Today</span>
+          <span>{dayKeyLabel(days[0]?.key ?? '', locale)}</span>
+          <span>{betaUiText('beta_2b065c7c9ce4')}</span>
         </div>
       </div>
 
@@ -389,7 +415,7 @@ export function ActivitySpendChart({
             aria-hidden="true"
             className="inline-block h-2.5 w-3 rounded-[2px] bg-muted-foreground/25"
           />
-          No ads shown: nothing spent and no impression that day.
+          {betaUiText('beta_2f24926f8d72')}
         </p>
       ) : null}
       <SpendNote spend={spend} />

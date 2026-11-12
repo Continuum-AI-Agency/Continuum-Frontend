@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OptimizerAdsetRow } from '../kpiColumns';
 import { AdsetExplorerList } from './AdsetExplorerList';
 
@@ -15,8 +16,20 @@ function row(partial: Partial<OptimizerAdsetRow> & { adsetId: string }): Optimiz
 }
 
 const ROWS: OptimizerAdsetRow[] = [
-  row({ adsetId: 'as-1', name: 'Alpha set', spend: 5000, cost: 50, currentBudget: 200 }),
-  row({ adsetId: 'as-2', name: 'Beta set', spend: 1000, cost: 40, currentBudget: 150 }),
+  row({
+    adsetId: 'as-1',
+    name: 'Alpha set',
+    spend: 5000,
+    cost: 50,
+    currentBudget: 200,
+  }),
+  row({
+    adsetId: 'as-2',
+    name: 'Beta set',
+    spend: 1000,
+    cost: 40,
+    currentBudget: 150,
+  }),
 ];
 
 afterEach(cleanup);
@@ -53,7 +66,9 @@ describe('AdsetExplorerList', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Search ad sets'), { target: { value: 'beta' } });
+    fireEvent.change(screen.getByLabelText('Search ad sets'), {
+      target: { value: 'beta' },
+    });
 
     expect(screen.queryByText('Alpha set')).toBeNull();
     expect(screen.getByText('Beta set')).toBeTruthy();

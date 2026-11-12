@@ -1,0 +1,68 @@
+import { redirect } from 'next/navigation';
+import { getTranslations as getUiTranslations } from 'next-intl/server';
+import { Suspense } from 'react';
+import { ProductGate } from '@/components/billing/ProductGate';
+import { ForgeSourceHandoff } from '@/components/forge/ForgeSourceHandoff';
+import { ForgeTabs } from '@/components/forge/ForgeTabs';
+import { MetaWritesSwitch } from '@/components/forge/MetaWritesSwitch';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+export async function generateMetadata() {
+  const t = await getUiTranslations('forge');
+  return { title: 'Forge', description: t('pageDescription') };
+}
+
+export default async function ForgePage() {
+  const translateUi = await getUiTranslations('forge');
+
+  const { activeBrandId, brandSummaries, permissions } = await getActiveBrandContext();
+
+  if (!activeBrandId) {
+    redirect('/onboarding');
+  }
+
+  // The courtesy, not the boundary. Every route this page calls checks paid_media again on the
+  // server, because a redirect has never stopped anyone holding a bearer token and a brand id —
+  // and this capability provisions collections and workflows in a shared render workspace.
+  const denied = await ProductGate('forge');
+  if (denied) return denied;
+
+  // Whether this brand may publish to its own ad account. Read here, on the page that asks the
+  // question, rather than threaded through the tabs: it is one indexed row and the switch is the
+  // only thing that uses it. RLS gives the write to owner/admin, so the control matches.
+  const supabase = await createSupabaseServerClient();
+  const { data: brandRow } = await supabase
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('meta_writes_allowed')
+    .eq('id', activeBrandId)
+    .maybeSingle();
+  const role = permissions.find((entry) => entry.brand_profile_id === activeBrandId)?.role ?? null;
+
+  return (
+    // The app content pane's own height, not a column: the gallery and the render grid want every
+    // pixel of width, and each tab scrolls inside it so the tab strip stays put.
+    <div className="flex h-[var(--app-content-h)] min-h-0 w-full max-w-none flex-col overflow-hidden px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
+      <header className="mb-3 flex shrink-0 flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{translateUi('forge_8899ecd1')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{translateUi('pageIntroduction')}</p>
+        </div>
+        <MetaWritesSwitch
+          brandId={activeBrandId}
+          allowed={brandRow?.meta_writes_allowed === true}
+          canEdit={role === 'owner' || role === 'admin'}
+        />
+      </header>
+      <Suspense fallback={null}>
+        <ForgeSourceHandoff brandId={activeBrandId} />
+      </Suspense>
+      <ForgeTabs
+        brandId={activeBrandId}
+        brandName={brandSummaries.find((brand) => brand.id === activeBrandId)?.name}
+        metaWritesAllowed={brandRow?.meta_writes_allowed === true}
+      />
+    </div>
+  );
+}

@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Paid setup diagnostics (IMP-010 / BUG-003 / BUG-004). Derives the connect →
 // permission → assign → sync journey from the honest signals a blocked paid
 // surface actually has: how many ad accounts are selectable for the platform,
@@ -69,7 +73,11 @@ export function countPlatformAccounts(
   return accounts.filter((account) => !NOT_AN_AD_ACCOUNT.has(account.type ?? '')).length;
 }
 
-function deriveSyncStep(input: PaidSetupInput, hasAccounts: boolean): PaidSetupStep {
+function deriveSyncStep(
+  input: PaidSetupInput,
+  hasAccounts: boolean,
+  uiTranslate?: ScaleCopy,
+): PaidSetupStep {
   const freshness = input.freshness ?? null;
 
   if (freshness) {
@@ -77,40 +85,56 @@ function deriveSyncStep(input: PaidSetupInput, hasAccounts: boolean): PaidSetupS
       case 'error':
         return {
           id: 'sync',
-          label: 'Last sync failed',
-          description:
-            freshness.error ?? 'The last data sync failed. Retry to pull the latest campaigns.',
+          label: uiTranslate ? uiTranslate('last_sync_failed_d3f551a') : 'Last sync failed',
+          description: uiTranslate
+            ? uiTranslate('syncRetryGuidance')
+            : (freshness.error ?? 'The last data sync failed. Retry to pull the latest campaigns.'),
           status: 'attention',
-          cta: { kind: 'retry', label: 'Retry sync' },
+          cta: {
+            kind: 'retry',
+            label: uiTranslate ? uiTranslate('retry_sync_b6d7d34') : 'Retry sync',
+          },
         };
       case 'stale':
         return {
           id: 'sync',
-          label: 'Data is stale',
-          description: 'Campaign data is older than expected. Retry to refresh it.',
+          label: uiTranslate ? uiTranslate('data_is_stale_ddca06f') : 'Data is stale',
+          description: uiTranslate
+            ? uiTranslate('campaign_data_is_older_than_expected_retry_to_4043f0b')
+            : 'Campaign data is older than expected. Retry to refresh it.',
           status: 'attention',
-          cta: { kind: 'retry', label: 'Retry sync' },
+          cta: {
+            kind: 'retry',
+            label: uiTranslate ? uiTranslate('retry_sync_b6d7d34') : 'Retry sync',
+          },
         };
       case 'syncing':
         return {
           id: 'sync',
-          label: 'Syncing campaign data',
-          description: "We're pulling the latest campaigns and spend now.",
+          label: uiTranslate
+            ? uiTranslate('syncing_campaign_data_8d628bd')
+            : 'Syncing campaign data',
+          description: uiTranslate
+            ? uiTranslate('we_re_pulling_the_latest_campaigns_and_spend__d212f63')
+            : "We're pulling the latest campaigns and spend now.",
           status: 'pending',
         };
       case 'never':
         return {
           id: 'sync',
-          label: 'Sync campaign data',
-          description:
-            'No sync has run yet. It starts automatically once an ad account is assigned.',
+          label: uiTranslate ? uiTranslate('sync_campaign_data_a9698e3') : 'Sync campaign data',
+          description: uiTranslate
+            ? uiTranslate('no_sync_has_run_yet_it_starts_automatically_o_bd64973')
+            : 'No sync has run yet. It starts automatically once an ad account is assigned.',
           status: 'pending',
         };
       case 'fresh':
         return {
           id: 'sync',
-          label: 'Data is up to date',
-          description: 'Campaign data is fresh.',
+          label: uiTranslate ? uiTranslate('data_is_up_to_date_bdad57c') : 'Data is up to date',
+          description: uiTranslate
+            ? uiTranslate('campaign_data_is_fresh_38f2a97')
+            : 'Campaign data is fresh.',
           status: 'done',
         };
     }
@@ -119,19 +143,26 @@ function deriveSyncStep(input: PaidSetupInput, hasAccounts: boolean): PaidSetupS
   return hasAccounts
     ? {
         id: 'sync',
-        label: 'Data is up to date',
-        description: 'Campaign data is ready.',
+        label: uiTranslate ? uiTranslate('data_is_up_to_date_bdad57c') : 'Data is up to date',
+        description: uiTranslate
+          ? uiTranslate('campaign_data_is_ready_62ac612')
+          : 'Campaign data is ready.',
         status: 'done',
       }
     : {
         id: 'sync',
-        label: 'Sync campaign data',
-        description: 'Sync starts automatically once an ad account is assigned.',
+        label: uiTranslate ? uiTranslate('sync_campaign_data_a9698e3') : 'Sync campaign data',
+        description: uiTranslate
+          ? uiTranslate('sync_starts_automatically_once_an_ad_account__848d5ec')
+          : 'Sync starts automatically once an ad account is assigned.',
         status: 'pending',
       };
 }
 
-export function derivePaidSetupSteps(input: PaidSetupInput): PaidSetupStep[] {
+export function derivePaidSetupSteps(
+  input: PaidSetupInput,
+  uiTranslate?: ScaleCopy,
+): PaidSetupStep[] {
   const provider = providerLabel(input.platform);
   const hasAccounts = input.availableAccountCount > 0;
   const loadError = input.loadError === true;
@@ -139,58 +170,97 @@ export function derivePaidSetupSteps(input: PaidSetupInput): PaidSetupStep[] {
   const connection: PaidSetupStep = hasAccounts
     ? {
         id: 'connection',
-        label: `${provider} connected`,
-        description: `A ${provider} account is linked to Continuum.`,
+        label: uiTranslate
+          ? uiTranslate('helper_619954ff6a11', { v0: provider })
+          : `${provider} connected`,
+        description: uiTranslate
+          ? uiTranslate('helper_142f8757e99b', { v0: provider })
+          : `A ${provider} account is linked to Continuum.`,
         status: 'done',
       }
     : {
         id: 'connection',
-        label: `Connect ${provider}`,
-        description: `Link your ${provider} account so Continuum can read campaigns and spend.`,
+        label: uiTranslate
+          ? uiTranslate('helper_9db2ba6d8968', { v0: provider })
+          : `Connect ${provider}`,
+        description: uiTranslate
+          ? uiTranslate('helper_14977b7d3858', { v0: provider })
+          : `Link your ${provider} account so Continuum can read campaigns and spend.`,
         status: 'action_required',
-        cta: { kind: 'link', label: `Connect ${provider}`, href: PAID_SETUP_CONNECT_HREF },
+        cta: {
+          kind: 'link',
+          label: uiTranslate
+            ? uiTranslate('helper_9db2ba6d8968', { v0: provider })
+            : `Connect ${provider}`,
+          href: PAID_SETUP_CONNECT_HREF,
+        },
       };
 
   const permission: PaidSetupStep = loadError
     ? {
         id: 'permission',
-        label: 'Confirm ad account access',
-        description:
-          "We couldn't confirm ad account access — this is usually a permissions or session issue. Reconnect, then retry.",
+        label: uiTranslate
+          ? uiTranslate('confirm_ad_account_access_09c9631')
+          : 'Confirm ad account access',
+        description: uiTranslate
+          ? uiTranslate('we_couldn_t_confirm_ad_account_access_this_is_bbc1afd')
+          : "We couldn't confirm ad account access — this is usually a permissions or session issue. Reconnect, then retry.",
         status: 'attention',
-        cta: { kind: 'retry', label: 'Retry' },
+        cta: {
+          kind: 'retry',
+          label: uiTranslate ? uiTranslate('retry_942087c') : 'Retry',
+        },
       }
     : hasAccounts
       ? {
           id: 'permission',
-          label: 'Ad account access granted',
-          description: 'Continuum has permission to read this ad account.',
+          label: uiTranslate
+            ? uiTranslate('ad_account_access_granted_c398870')
+            : 'Ad account access granted',
+          description: uiTranslate
+            ? uiTranslate('continuum_has_permission_to_read_this_ad_acco_ca82264')
+            : 'Continuum has permission to read this ad account.',
           status: 'done',
         }
       : {
           id: 'permission',
-          label: 'Grant ad account access',
-          description: `Approve ads read and manage permissions when connecting ${provider}.`,
+          label: uiTranslate
+            ? uiTranslate('grant_ad_account_access_6f0f31f')
+            : 'Grant ad account access',
+          description: uiTranslate
+            ? uiTranslate('helper_36c939982c54', { v0: provider })
+            : `Approve ads read and manage permissions when connecting ${provider}.`,
           status: 'pending',
         };
 
   const assignment: PaidSetupStep = hasAccounts
     ? {
         id: 'assignment',
-        label: 'Ad account assigned to brand',
-        description: 'This ad account is assigned to the active brand.',
+        label: uiTranslate
+          ? uiTranslate('ad_account_assigned_to_brand_9d06ef6')
+          : 'Ad account assigned to brand',
+        description: uiTranslate
+          ? uiTranslate('this_ad_account_is_assigned_to_the_active_bra_166e06e')
+          : 'This ad account is assigned to the active brand.',
         status: 'done',
       }
     : {
         id: 'assignment',
-        label: 'Assign an ad account to this brand',
-        description:
-          'After connecting, assign the ad account to this brand so it appears in the selector.',
+        label: uiTranslate
+          ? uiTranslate('assign_an_ad_account_to_this_brand_0da359f')
+          : 'Assign an ad account to this brand',
+        description: uiTranslate
+          ? uiTranslate('after_connecting_assign_the_ad_account_to_thi_ee465e6')
+          : 'After connecting, assign the ad account to this brand so it appears in the selector.',
         status: 'pending',
-        cta: { kind: 'link', label: 'Assign account', href: PAID_SETUP_CONNECT_HREF },
+        cta: {
+          kind: 'link',
+          label: uiTranslate ? uiTranslate('assign_account_1467ed6') : 'Assign account',
+          href: PAID_SETUP_CONNECT_HREF,
+        },
       };
 
-  return [connection, permission, assignment, deriveSyncStep(input, hasAccounts)];
+  return [connection, permission, assignment, deriveSyncStep(input, hasAccounts, uiTranslate)];
 }
 
 // True when any step still needs the user. The selector auto-picks an account

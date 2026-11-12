@@ -1,10 +1,14 @@
 'use client';
 
 import type { JainaApprovalVariant, LiveChangePreviewPayload } from '@continuum/contracts';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 import * as React from 'react';
 import { type LiveChangeDecision, liveChangeConfirmBarOf } from '@/lib/campaign-canvas/liveChange';
 
-export type ConfirmVariantOption = { variant: JainaApprovalVariant; label: string };
+export type ConfirmVariantOption = {
+  variant: JainaApprovalVariant;
+  label: string;
+};
 
 /** How long "Asking Jaina…" holds before the button is offered again (the turn may be held). */
 export const IMPLEMENT_RETRY_MS = 15_000;
@@ -44,6 +48,8 @@ export function LiveChangeConfirmBar({
    */
   implementBlocked?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [asked, setAsked] = React.useState(false);
   React.useEffect(() => {
     if (!asked) return;
@@ -69,23 +75,23 @@ export function LiveChangeConfirmBar({
 
   const note =
     bar.kind === 'google_note'
-      ? 'Jaina cannot change Google Ads yet. This is the projection only; nothing can be applied from here.'
+      ? betaUiText('beta_de7643cfc7cb')
       : deciding
         ? pendingDecision === 'approve'
-          ? 'Approving…'
-          : 'Declining…'
+          ? betaUiText('beta_e99dcb0a97a2')
+          : betaUiText('beta_fb03c72b9ced')
         : bar.kind === 'confirm'
           ? preview.projection
-            ? 'A projection, not a guarantee. Confirming uses the same approval as the chat card.'
-            : 'Confirming uses the same approval as the chat card.'
-          : 'Nothing is applied yet. Jaina will ask for your approval on each change.';
+            ? betaUiText('beta_e78db4290f83')
+            : betaUiText('beta_9d60cdf969d1')
+          : betaUiText('beta_69bb060aa534');
 
   return (
     <fieldset
       className="m-0 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-2"
       data-testid="live-change-confirm"
     >
-      <legend className="sr-only">Confirm change</legend>
+      <legend className="sr-only">{betaUiText('beta_704ac1d7acd8')}</legend>
       <span className="min-w-0 text-[13px] text-muted-foreground" aria-live="polite">
         {note}
       </span>
@@ -99,7 +105,7 @@ export function LiveChangeConfirmBar({
               className={SECONDARY}
               data-testid="live-change-deny"
             >
-              Decline
+              {betaUiText('beta_a2d285b35287')}
             </button>
             {(variants ?? [{ variant: 'apply' as const, label: 'Confirm and apply' }]).map(
               (option) => (
@@ -130,10 +136,10 @@ export function LiveChangeConfirmBar({
             data-testid="live-change-implement"
           >
             {asked
-              ? 'Asking Jaina…'
+              ? betaUiText('beta_eb0bfc523238')
               : implementBlocked
-                ? 'Jaina is working…'
-                : 'Implement these changes'}
+                ? betaUiText('beta_a3d6d426fee7')
+                : betaUiText('beta_1ddceca8de78')}
           </button>
         ) : null}
       </span>

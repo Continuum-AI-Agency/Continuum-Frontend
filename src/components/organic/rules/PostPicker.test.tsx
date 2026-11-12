@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { PostPicker } from './PostPicker';
 
@@ -64,13 +65,19 @@ describe('what a tile shows', () => {
 
 describe('choosing', () => {
   it('adds a post that was not chosen', () => {
-    const onChange = renderPicker({ posts: [post({ id: 'a' })], selectedIds: [] });
+    const onChange = renderPicker({
+      posts: [post({ id: 'a' })],
+      selectedIds: [],
+    });
     fireEvent.click(screen.getByRole('button', { pressed: false }));
     expect(onChange).toHaveBeenCalledWith(['a']);
   });
 
   it('removes a post that was already chosen', () => {
-    const onChange = renderPicker({ posts: [post({ id: 'a' })], selectedIds: ['a'] });
+    const onChange = renderPicker({
+      posts: [post({ id: 'a' })],
+      selectedIds: ['a'],
+    });
     fireEvent.click(screen.getByRole('button', { pressed: true }));
     expect(onChange).toHaveBeenCalledWith([]);
   });
@@ -85,12 +92,18 @@ describe('choosing', () => {
   });
 
   it('counts what is chosen against what is offered', () => {
-    renderPicker({ posts: [post({ id: 'a' }), post({ id: 'b' })], selectedIds: ['a'] });
+    renderPicker({
+      posts: [post({ id: 'a' }), post({ id: 'b' })],
+      selectedIds: ['a'],
+    });
     expect(screen.getByText('1 chosen of 2')).toBeDefined();
   });
 
   it('clears every choice at once', () => {
-    const onChange = renderPicker({ posts: [post({ id: 'a' })], selectedIds: ['a'] });
+    const onChange = renderPicker({
+      posts: [post({ id: 'a' })],
+      selectedIds: ['a'],
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(onChange).toHaveBeenCalledWith([]);
   });
@@ -100,7 +113,10 @@ describe('a chosen post the list cannot show', () => {
   // Dropping ids the picker cannot display would silently change a rule just by
   // opening it — the rule would quietly stop watching a post nobody unticked.
   it('says how many are older than the list, and keeps them', () => {
-    renderPicker({ posts: [post({ id: 'a' })], selectedIds: ['a', 'old-1', 'old-2'] });
+    renderPicker({
+      posts: [post({ id: 'a' })],
+      selectedIds: ['a', 'old-1', 'old-2'],
+    });
     expect(screen.getByText(/2 chosen posts outside this list/i)).toBeDefined();
   });
 
@@ -110,7 +126,10 @@ describe('a chosen post the list cannot show', () => {
   });
 
   it('drops only the unshowable ones when asked', () => {
-    const onChange = renderPicker({ posts: [post({ id: 'a' })], selectedIds: ['a', 'old-1'] });
+    const onChange = renderPicker({
+      posts: [post({ id: 'a' })],
+      selectedIds: ['a', 'old-1'],
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(onChange).toHaveBeenCalledWith(['a']);
   });

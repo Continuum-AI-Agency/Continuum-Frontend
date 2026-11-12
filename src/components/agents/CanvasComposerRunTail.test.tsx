@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Regression: a canvas run used to crash the whole authenticated app to the global 500.
 //
 // CanvasComposerRunTail subscribes TWICE — once through useAgentRunStream for the durable
@@ -14,7 +15,7 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AgentRunDto } from '@continuum/contracts';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 
 type FakeChannel = {
   topic: string;

@@ -5,6 +5,7 @@ import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { PanelLeftIcon } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { isValidElement } from 'react';
 import { Button } from '@/components/ui/button';
@@ -230,6 +231,8 @@ const Sidebar = React.forwardRef<
     },
     ref,
   ) => {
+    const tUi = useTranslations('common');
+
     const { isMobile, state, pinnedOpen, openMobile, setOpenMobile, setHoverExpanded } =
       useSidebar();
     const reduce = useReducedMotion();
@@ -296,8 +299,8 @@ const Sidebar = React.forwardRef<
             side={side}
           >
             <SheetHeader className="sr-only">
-              <SheetTitle>Sidebar</SheetTitle>
-              <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+              <SheetTitle>{tUi('m_f5171c931c')}</SheetTitle>
+              <SheetDescription>{tUi('m_5800c600e6')}</SheetDescription>
             </SheetHeader>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
@@ -335,7 +338,9 @@ const Sidebar = React.forwardRef<
         <motion.div
           animate={
             useHoverWidth
-              ? { width: state === 'expanded' ? SIDEBAR_WIDTH : SIDEBAR_WIDTH_ICON }
+              ? {
+                  width: state === 'expanded' ? SIDEBAR_WIDTH : SIDEBAR_WIDTH_ICON,
+                }
               : undefined
           }
           initial={false}
@@ -375,6 +380,7 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
+  const uiText = useTranslations('common');
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -391,7 +397,7 @@ const SidebarTrigger = React.forwardRef<
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{uiText('toggle_sidebar_1d4c17d')}</span>
     </Button>
   );
 });
@@ -399,16 +405,17 @@ SidebarTrigger.displayName = 'SidebarTrigger';
 
 const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'button'>>(
   ({ className, ...props }, ref) => {
+    const uiText = useTranslations('common');
     const { toggleSidebar } = useSidebar();
 
     return (
       <button
         ref={ref}
         data-sidebar="rail"
-        aria-label="Toggle Sidebar"
+        aria-label={uiText('toggle_sidebar_1d4c17d')}
         tabIndex={-1}
         onClick={toggleSidebar}
-        title="Toggle Sidebar"
+        title={uiText('toggle_sidebar_1d4c17d')}
         className={cn(
           'hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex',
           'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',
@@ -671,7 +678,9 @@ const SidebarMenuButton = React.forwardRef<
     const button = useRender({
       defaultTagName: 'button',
       props: mergeProps<'button'>(
-        { className: cn(sidebarMenuButtonVariants({ variant, size }), className) },
+        {
+          className: cn(sidebarMenuButtonVariants({ variant, size }), className),
+        },
         asChild ? rest : props,
       ),
       // Base UI triggers (Menu, Tooltip, Popover) reach their anchor element through

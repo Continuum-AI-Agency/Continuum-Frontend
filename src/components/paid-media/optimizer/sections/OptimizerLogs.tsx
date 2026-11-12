@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // The SERVER LOG — what the optimizer's machinery did, newest first. Cycle lifecycle only:
 // a cycle completed, was skipped, or threw; a roster drifted; an ingest dropped malformed
 // rows; a persist failed. Nothing here touched the ad account.
@@ -37,6 +39,9 @@ type OptimizerLogsProps = {
 };
 
 export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: OptimizerLogsProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+
   const logsQuery = useOptimizerLogs(brandId, windowDays);
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
   const [archiveRequested, setArchiveRequested] = useState(false);
@@ -67,7 +72,7 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: Opt
         <OptimizerReadError
           error={logsQuery.error}
           onRetry={() => void logsQuery.refetch()}
-          subject="the server log"
+          subject={uiText('optimizerLoadSubject', { kind: 'log', name: '' })}
         />
         {footer}
       </div>
@@ -87,9 +92,9 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: Opt
       <div className="space-y-3">
         <FeedToolbar controls={controls} />
         <EmptyState
-          headline="The optimizer has not run yet"
+          headline={uiText('activityNoRuns')}
           media={<ScrollTextIcon aria-hidden="true" />}
-          description="Cycle results, skips and failures appear here. Anything the optimizer changed on the ad account is in Actions."
+          description={uiText('cycle_results_skips_and_failures_appear_here__027b174')}
         />
         {footer}
       </div>
@@ -111,16 +116,16 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: Opt
           names={portfolioNames}
           value={effectivePortfolio}
           onChange={setPortfolio}
-          label="Filter the server log by portfolio"
+          label={uiText('filter_the_server_log_by_portfolio_39baa04')}
         />
       </FeedToolbar>
       {visible.length === 0 && combined.length > 0 ? (
         <p className="py-6 text-center text-muted-foreground text-xs">
-          No events for this portfolio in what has loaded.
+          {uiText('no_events_for_this_portfolio_in_what_has_load_2a481ea')}
         </p>
       ) : visible.length === 0 ? null : (
         <div data-testid="server-log-timeline">
-          {groupByDay(visible, (row) => row.ts).map((day) => (
+          {groupByDay(visible, (row) => row.ts, undefined, uiLocale).map((day) => (
             <TimelineDay key={day.label} label={day.label}>
               {day.items.map((row) => (
                 <LifecycleLogRow key={`${row.id}-${row.ts}`} row={row} />
@@ -145,18 +150,18 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: Opt
             void archiveQuery.fetchNextPage();
           }
         }}
-        noun="events"
+        entryKind="events"
       />
       {showLoadOlder ? (
         <div className="flex justify-end">
           <QuietTextButton onClick={() => setArchiveRequested(true)}>
-            Load older history
+            {uiText('load_older_history_5894fff')}
           </QuietTextButton>
         </div>
       ) : null}
       {archiveRequested && archiveQuery.isError ? (
         <p className="text-xs text-destructive">
-          Older history could not be loaded. The last 30 days are still available.
+          {uiText('older_history_could_not_be_loaded_the_last_30_8de75a8')}
         </p>
       ) : null}
       {archiveRequested &&
@@ -164,7 +169,9 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: Opt
       !archiveQuery.isError &&
       archiveRows.length === 0 &&
       !archiveQuery.hasNextPage ? (
-        <p className="text-xs text-muted-foreground">No events older than 30 days.</p>
+        <p className="text-xs text-muted-foreground">
+          {uiText('no_events_older_than_30_days_529ca8a')}
+        </p>
       ) : null}
       {footer}
     </div>

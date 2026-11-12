@@ -1,13 +1,17 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AgentDelegatedFrameData, AgentRunEventDto } from '@continuum/contracts';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 
 // Full-module mocks spread over the real exports: a partial mock.module deletes the
 // module's other exports for every later test file in the process.
 const realSign = await import('@/lib/organic/hyperframeSign');
 const signMock = mock(() => Promise.resolve<string | null>('https://signed.example.com/film.mp4'));
-mock.module('@/lib/organic/hyperframeSign', () => ({ ...realSign, signHyperframeAsset: signMock }));
+mock.module('@/lib/organic/hyperframeSign', () => ({
+  ...realSign,
+  signHyperframeAsset: signMock,
+}));
 const realBrand = await import('@/components/providers/ActiveBrandProvider');
 mock.module('@/components/providers/ActiveBrandProvider', () => ({
   ...realBrand,
@@ -56,7 +60,10 @@ describe('filmOf', () => {
         rendered(5, 'b.mp4'),
         event(6, 'response.error', { message: 'late' }),
       ]),
-    ).toEqual({ state: 'ready', storage: { bucket: 'brand-profile-assets', path: 'b.mp4' } });
+    ).toEqual({
+      state: 'ready',
+      storage: { bucket: 'brand-profile-assets', path: 'b.mp4' },
+    });
   });
 
   it('fails on an error or a cancel with no film', () => {

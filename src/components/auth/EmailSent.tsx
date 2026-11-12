@@ -1,10 +1,12 @@
 'use client';
 
 import { Loader2, Mail } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { FormAlert } from '@/components/auth/FormAlert';
 import { FormInput } from '@/components/auth/FormInput';
 import { Button } from '@/components/ui/button';
+import { useValidationErrorMap } from '@/i18n/validation';
 import type { EmailCodeInput } from '@/lib/auth/schemas';
 
 type CodeFormInput = Pick<EmailCodeInput, 'token'>;
@@ -18,6 +20,9 @@ interface EmailSentProps {
 }
 
 export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: EmailSentProps) {
+  const tUi = useTranslations('auth');
+  const validationErrorMap = useValidationErrorMap();
+
   const {
     register,
     handleSubmit,
@@ -25,11 +30,18 @@ export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: E
   } = useForm<CodeFormInput>({
     // Loaded on submit, like LoginForm's, to keep zod and the resolver off /login's first load.
     resolver: async (values, context, options) => {
-      const [{ zodResolver }, { emailCodeSchema }] = await Promise.all([
+      const [{ zodResolver }, { createAuthSchemas }] = await Promise.all([
         import('@hookform/resolvers/zod'),
         import('@/lib/auth/schemas'),
       ]);
-      return zodResolver(emailCodeSchema.pick({ token: true }))(values, context, options);
+      const { emailCodeSchema } = createAuthSchemas({
+        invalidEmail: tUi('invalidEmail'),
+        requiredPassword: tUi('requiredPassword'),
+        emailCodeRequired: tUi('emailCodeRequired'),
+      });
+      return zodResolver(emailCodeSchema.pick({ token: true }), {
+        error: validationErrorMap,
+      })(values, context, options);
     },
     defaultValues: { token: '' },
   });
@@ -41,10 +53,9 @@ export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: E
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold text-foreground">Check your email</h2>
+        <h2 className="text-2xl font-bold text-foreground">{tUi('m_fab9f40578')}</h2>
         <p className="max-w-md text-secondary">
-          We sent a sign-in link and code to{' '}
-          <span className="font-semibold text-foreground">{email}</span>
+          {tUi('m_2e4505c4aa')} <span className="font-semibold text-foreground">{email}</span>
         </p>
       </div>
 
@@ -61,7 +72,7 @@ export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: E
         <FormInput
           {...register('token')}
           id="email-code"
-          label="Code from the email"
+          label={tUi('m_c5c946fabd')}
           placeholder="123456"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -79,24 +90,21 @@ export function EmailSent({ email, onVerifyCode, onResend, isPending, error }: E
           {isPending ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Signing in...
+              {tUi('m_6ca8910ee6')}
             </span>
           ) : (
-            'Sign in with code'
+            tUi('m_2091920a6a')
           )}
         </Button>
       </form>
 
       {onResend && (
         <Button onClick={onResend} disabled={isPending} variant="ghost">
-          Resend email
+          {tUi('m_55ea7b3eba')}
         </Button>
       )}
 
-      <p className="max-w-md text-sm text-secondary">
-        Open the link on any device, or type the code here to sign in on this one. Both expire in 1
-        hour, and sending a new email replaces them.
-      </p>
+      <p className="max-w-md text-sm text-secondary">{tUi('m_535d312732')}</p>
     </div>
   );
 }

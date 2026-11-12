@@ -28,7 +28,14 @@ const listJobs = spyOn(apiRendersApi, 'listJobs').mockImplementation(async () =>
 afterAll(() => listJobs.mockRestore());
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { type SharedTemplate, sharedTemplateId, TemplateHoverPreview } from './TemplateCard';
 import { TemplateGallery } from './TemplateGallery';
 
@@ -131,7 +138,9 @@ function renderGallery(
     loadingMore?: boolean;
   } = {},
 ) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   client.setQueryData(['forge', BRAND, 'template-variants'], catalog);
   if (families) client.setQueryData(['forge', BRAND, 'revision-variants', 'all'], families);
   client.setQueryData(['forge', BRAND, 'variant-defaults'], defaults);
@@ -179,10 +188,14 @@ describe('TemplateGallery', () => {
     renderGallery();
     expect(cardNames()).toEqual(['Summer promo', 'Untitled template', 'Hero offer', 'Winter sale']);
 
-    fireEvent.change(screen.getByLabelText('Search templates'), { target: { value: 'WINTER' } });
+    fireEvent.change(screen.getByLabelText('Search templates'), {
+      target: { value: 'WINTER' },
+    });
     expect(cardNames()).toEqual(['Winter sale']);
 
-    fireEvent.change(screen.getByLabelText('Search templates'), { target: { value: 'nothing' } });
+    fireEvent.change(screen.getByLabelText('Search templates'), {
+      target: { value: 'nothing' },
+    });
     expect(cardNames()).toEqual([]);
     expect(screen.getByText('No templates match.')).toBeTruthy();
   });
@@ -245,7 +258,9 @@ describe('TemplateGallery', () => {
 
     // The hover shows that same file — the 1:1 one, though the fleet listed 9:16 first.
     cleanup();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const preview = (renders: ApiRenderJob[], emptyLabel: string | null) => (
       <QueryClientProvider client={client}>
         <TemplateHoverPreview
@@ -293,13 +308,22 @@ describe('TemplateGallery', () => {
   });
 
   test('a shared template already in the brand says so and offers Remove', () => {
-    const granted = { ...SHARED[0]!, name: 'Hero offer', draft: false, granted: true };
+    const granted = {
+      ...SHARED[0]!,
+      name: 'Hero offer',
+      draft: false,
+      granted: true,
+    };
     const onToggleShared = renderGallery(undefined, { shared: [granted] });
     fireEvent.click(screen.getByRole('button', { name: /^Shared with you/ }));
     const card = screen.getByRole('button', { name: 'Open Hero offer' }).closest('tr')!;
     expect(within(card).getByText('Ready · Shared')).toBeTruthy();
     expect(within(card).queryByRole('button', { name: 'Use in StarCraft' })).toBeNull();
-    fireEvent.click(within(card).getByRole('button', { name: 'Remove Hero offer from StarCraft' }));
+    fireEvent.click(
+      within(card).getByRole('button', {
+        name: 'Remove Hero offer from StarCraft',
+      }),
+    );
     expect(onToggleShared).toHaveBeenCalledWith(granted);
   });
 
@@ -329,10 +353,15 @@ describe('TemplateGallery', () => {
     const [first, second] = [inWorkspace('workspace-a'), inWorkspace('workspace-b')];
     const logged = spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      renderGallery(undefined, { shared: [first, second], adopting: sharedTemplateId(second) });
+      renderGallery(undefined, {
+        shared: [first, second],
+        adopting: sharedTemplateId(second),
+      });
       fireEvent.click(screen.getByRole('button', { name: /^Shared with you/ }));
 
-      const buttons = screen.getAllByRole('button', { name: 'Use in StarCraft' });
+      const buttons = screen.getAllByRole('button', {
+        name: 'Use in StarCraft',
+      });
       expect(buttons.map((button) => button.hasAttribute('disabled'))).toEqual([false, true]);
       expect(logged.mock.calls.flat().join(' ')).not.toMatch(/same key/);
     } finally {
@@ -371,7 +400,11 @@ describe('TemplateGallery', () => {
       updatedAt: '2026-09-09T00:00:00Z',
       workspaceId: 'six-app',
     };
-    const unknown: SharedTemplate = { ...inyogo, templateKey: '88', name: 'Hero offer' };
+    const unknown: SharedTemplate = {
+      ...inyogo,
+      templateKey: '88',
+      name: 'Hero offer',
+    };
     jobs = [
       apiRenderJobSchema.parse({
         id: crypto.randomUUID(),
@@ -398,7 +431,10 @@ describe('TemplateGallery', () => {
         updatedAt: '2026-09-12T00:00:00Z',
       }),
     ];
-    renderGallery(undefined, { sources: [stills, card], shared: [inyogo, unknown] });
+    renderGallery(undefined, {
+      sources: [stills, card],
+      shared: [inyogo, unknown],
+    });
 
     const animated = await screen.findByRole('button', { name: 'Animated 2' });
     fireEvent.click(animated);
@@ -426,9 +462,15 @@ describe('TemplateGallery', () => {
 });
 
 test('the grouped table filters original design type and keeps child variants under their original', async () => {
-  const original = source({ displayName: 'Client Illustrator', templateKey: '401' });
+  const original = source({
+    displayName: 'Client Illustrator',
+    templateKey: '401',
+  });
   const child = source({ displayName: 'Reordered copy', templateKey: '402' });
-  const ae = source({ displayName: 'Client After Effects', templateKey: '403' });
+  const ae = source({
+    displayName: 'Client After Effects',
+    templateKey: '403',
+  });
   const meta = (item: TemplateSource, parentAssetId: string | null): TemplateVariant => ({
     assetId: item.assetId,
     rootAssetId: original.assetId,
@@ -448,7 +490,10 @@ test('the grouped table filters original design type and keeps child variants un
   });
   expect(cardNames()).toEqual(['Client Illustrator', 'Client After Effects']);
   fireEvent.click(screen.getByRole('combobox', { name: 'Filter by source type' }));
-  const option = await screen.findByRole('option', { name: 'Illustrator', exact: true });
+  const option = await screen.findByRole('option', {
+    name: 'Illustrator',
+    exact: true,
+  });
   fireEvent.pointerDown(option, { pointerType: 'mouse', button: 0 });
   fireEvent.click(option);
   await waitFor(() => expect(cardNames()).toEqual(['Client Illustrator']));
@@ -462,11 +507,20 @@ test('the grouped table filters original design type and keeps child variants un
   cleanup();
   renderGallery(undefined, {
     sources: [],
-    shared: [{ ...SHARED[0]!, name: 'Published artboard', sourceAssetId: original.assetId }],
+    shared: [
+      {
+        ...SHARED[0]!,
+        name: 'Published artboard',
+        sourceAssetId: original.assetId,
+      },
+    ],
     catalog: [meta(original, null), meta(child, original.assetId)],
   });
   fireEvent.click(screen.getByRole('combobox', { name: 'Filter by source type' }));
-  const publishedOption = await screen.findByRole('option', { name: 'Illustrator', exact: true });
+  const publishedOption = await screen.findByRole('option', {
+    name: 'Illustrator',
+    exact: true,
+  });
   fireEvent.pointerDown(publishedOption, { pointerType: 'mouse', button: 0 });
   fireEvent.click(publishedOption);
   await waitFor(() => expect(cardNames()).toEqual(['Published artboard']));
@@ -536,10 +590,17 @@ test('Figma and HyperFrames are source types of their own', async () => {
     originalFileName: 'film.zip',
     source: film,
   };
-  renderGallery(undefined, { sources: [figma, film], shared: [], catalog: [kind] });
+  renderGallery(undefined, {
+    sources: [figma, film],
+    shared: [],
+    catalog: [kind],
+  });
   const pick = async (label: string) => {
     fireEvent.click(screen.getByRole('combobox', { name: 'Filter by source type' }));
-    const option = await screen.findByRole('option', { name: label, exact: true });
+    const option = await screen.findByRole('option', {
+      name: label,
+      exact: true,
+    });
     fireEvent.pointerDown(option, { pointerType: 'mouse', button: 0 });
     fireEvent.click(option);
   };
@@ -561,7 +622,10 @@ test('an imported web component is a source type of its own, and Ready once pars
   const ae = source({ displayName: 'Summer promo', templateKey: '133' });
   renderGallery(undefined, { sources: [card, ae], shared: [] });
   fireEvent.click(screen.getByRole('combobox', { name: 'Filter by source type' }));
-  const option = await screen.findByRole('option', { name: 'Web component', exact: true });
+  const option = await screen.findByRole('option', {
+    name: 'Web component',
+    exact: true,
+  });
   fireEvent.pointerDown(option, { pointerType: 'mouse', button: 0 });
   fireEvent.click(option);
   await waitFor(() => expect(cardNames()).toEqual(['Hello card']));
@@ -571,7 +635,10 @@ test('an imported web component is a source type of its own, and Ready once pars
 });
 
 describe('template families', () => {
-  const original = source({ displayName: 'Summer promo', updatedAt: '2026-09-10T00:00:00Z' });
+  const original = source({
+    displayName: 'Summer promo',
+    updatedAt: '2026-09-10T00:00:00Z',
+  });
   const secondRevision = source({ displayName: 'Summer promo v2' });
   const squareCrop = source({ displayName: 'Square crop' });
   const revision = (
@@ -659,7 +726,12 @@ describe('template families', () => {
     const onOpen = mock((_assetId: string, _tab?: string) => undefined);
     const crop = revision(cropId, 1, squareCrop);
     crop.publications = [
-      { templateKey: '777', bindingId: BRAND, workspace: 'test', contractHash: null },
+      {
+        templateKey: '777',
+        bindingId: BRAND,
+        workspace: 'test',
+        contractHash: null,
+      },
     ];
     renderGallery(undefined, {
       sources: [original, secondRevision, squareCrop],
@@ -703,7 +775,11 @@ describe('template families', () => {
     renderGallery(undefined, { sources: [original], shared: [], onOpen });
     expect(screen.queryByRole('button', { name: /variants? of Summer promo/ })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Template settings for Summer promo' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Template settings for Summer promo',
+      }),
+    );
     expect(onOpen).toHaveBeenCalledWith(original.assetId, 'layers');
   });
 
@@ -729,7 +805,11 @@ describe('template families', () => {
       new Error('offline'),
     );
     try {
-      renderGallery(undefined, { sources: [original], shared: [], families: null });
+      renderGallery(undefined, {
+        sources: [original],
+        shared: [],
+        families: null,
+      });
       const alert = await screen.findByRole('alert');
       expect(alert.textContent).toContain('Could not read template variants');
       expect(cardNames()).toEqual(['Summer promo']);

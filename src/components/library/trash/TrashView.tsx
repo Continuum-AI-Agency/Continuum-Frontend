@@ -6,14 +6,15 @@ import {
   libraryTrashPageSchema,
 } from '@continuum/contracts';
 import { ArrowLeft, Loader2, RotateCcw, Trash2 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { restoreAssetsOperation } from '@/lib/library/creativeOperations';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { AssetThumb } from '../views/AssetThumb';
-
-const REFUSED_REASON = 'Can’t restore: stacked into another asset';
 
 async function fetchTrash(brandId: string): Promise<LibraryTrashItem[]> {
   const response = await fetch(`/api/library/assets/trash?${new URLSearchParams({ brandId })}`);
@@ -23,8 +24,8 @@ async function fetchTrash(brandId: string): Promise<LibraryTrashItem[]> {
   return parsed.data.items;
 }
 
-function deletedLabel(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function deletedLabel(iso: string, locale: UiLocale = 'en'): string {
+  return new Date(iso).toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -41,6 +42,12 @@ export function TrashView({
   onClose: () => void;
   onRestored: () => void;
 }) {
+  const calendarLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [items, setItems] = useState<LibraryTrashItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<ReadonlySet<string>>(new Set());
@@ -53,12 +60,12 @@ export function TrashView({
         if (!cancelled) setItems(next);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Loading the trash failed');
+        if (!cancelled) setError(uiErrorText(err));
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, uiErrorText]);
 
   const restore = async (item: LibraryTrashItem) => {
     const { id } = item.asset;
@@ -71,13 +78,14 @@ export function TrashView({
       });
       if (result.restoredAssetIds.includes(id)) {
         setItems((current) => current?.filter((entry) => entry.asset.id !== id) ?? null);
-        toast.success(`Restored ${name}`);
+        toast.success(translateUi('restored_value0_0645bdc5', { value0: String(name) }));
         onRestored();
       } else if (result.refusedAssetIds.includes(id)) {
         setRefused((current) => new Set(current).add(id));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Restoring ${name} failed`);
+      console.error('Restoring a Library asset failed', err);
+      toast.error(uiErrorText(err));
     } finally {
       setRestoring((current) => {
         const next = new Set(current);
@@ -88,14 +96,20 @@ export function TrashView({
   };
 
   return (
-    <section data-testid="library-trash-view" aria-label="Trash" className="flex flex-col gap-3">
+    <section
+      data-testid="library-trash-view"
+      aria-label={translateUi('trash_c560122a')}
+      className="flex flex-col gap-3"
+    >
       <div className="flex items-center gap-3">
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          <ArrowLeft className="size-3.5" />
-          Back to library
+          <ArrowLeft className="size-3.5" /> {translateUi('back_to_library_008e42d2')}{' '}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Deleted assets stay here for {LIBRARY_TRASH_RETENTION_DAYS} days.
+          {' '}
+          {translateUi('trashRetention', {
+            days: LIBRARY_TRASH_RETENTION_DAYS,
+          })}{' '}
         </p>
       </div>
 
@@ -109,8 +123,8 @@ export function TrashView({
         </div>
       ) : items.length === 0 ? (
         <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
-          <Trash2 className="size-6 text-muted-foreground/40" />
-          Trash is empty.
+          <Trash2 className="size-6 text-muted-foreground/40" />{' '}
+          {translateUi('trash_is_empty_4ff14067')}{' '}
         </div>
       ) : (
         <ul className="flex flex-col divide-y divide-border/60 rounded-lg border border-border/70">
@@ -130,7 +144,11 @@ export function TrashView({
                     {item.asset.title ?? item.asset.fileName}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {isRefused ? REFUSED_REASON : `Deleted ${deletedLabel(item.deletedAt)}`}
+                    {isRefused
+                      ? translateUi('trashCannotRestore')
+                      : translateUi('trashDeletedAt', {
+                          date: deletedLabel(item.deletedAt, calendarLocale),
+                        })}
                   </span>
                 </div>
                 <Button
@@ -145,8 +163,8 @@ export function TrashView({
                     <Loader2 className="size-3.5 animate-spin" />
                   ) : (
                     <RotateCcw className="size-3.5" />
-                  )}
-                  Restore
+                  )}{' '}
+                  {translateUi('restore_a76e13b9')}{' '}
                 </Button>
               </li>
             );

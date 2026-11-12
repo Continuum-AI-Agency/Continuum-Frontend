@@ -9,12 +9,17 @@ import {
   type VideoEditorPoolAsset,
   type VideoEditorQuickStart,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import type { VideoStudioSelection } from '../types';
 
 type GenerateInput = Omit<VideoEditorOpInput<'generate'>, 'projectId'>;
 export type SlotRole = VideoEditorOpParsedInput<'generate'>['refs'][number]['role'];
 
-export type QuickStartSlot = { role: SlotRole; label: string; required: boolean };
+export type QuickStartSlot = {
+  role: SlotRole;
+  label: string;
+  required: boolean;
+};
 
 export type QuickStartCard = {
   id: VideoEditorQuickStart;
@@ -224,29 +229,47 @@ export type QuickStartForm = {
 export function generateRequest(
   card: QuickStartCard,
   form: QuickStartForm,
+  translate?: ReturnType<typeof useTranslations<'studio'>>,
 ): { ok: true; input: GenerateInput } | { ok: false; reason: string } {
   const missing = card.slots.find((slot) => slot.required && !form.refs[slot.role]);
-  if (missing) return { ok: false, reason: `Pick the ${missing.label}.` };
+  if (missing)
+    return {
+      ok: false,
+      reason:
+        translate?.('quickStartPickSlot', { label: missing.label }) ?? `Pick the ${missing.label}.`,
+    };
   const prompt = form.prompt.trim();
   if (card.promptRequired && !prompt) {
-    return { ok: false, reason: card.promptMissing ?? 'Write a prompt.' };
+    return {
+      ok: false,
+      reason: card.promptMissing ?? translate?.('quickStartWritePrompt') ?? 'Write a prompt.',
+    };
   }
   if (card.id === 'headless_concept' && !form.concept) {
-    return { ok: false, reason: 'Pick a concept.' };
+    return {
+      ok: false,
+      reason: translate?.('quickStartPickConcept') ?? 'Pick a concept.',
+    };
   }
   if (
     card.id === 'music_bed' &&
     form.durationSec !== undefined &&
     !(form.durationSec >= 1 && form.durationSec <= 600)
   ) {
-    return { ok: false, reason: 'Length is 1 s to 10 min.' };
+    return {
+      ok: false,
+      reason: translate?.('quickStartLength') ?? 'Length is 1 s to 10 min.',
+    };
   }
   const refs = card.slots.flatMap((slot) => {
     const assetId = form.refs[slot.role];
     return assetId ? [{ assetId, role: slot.role }] : [];
   });
   if (card.id === 'create_image' && !prompt && refs.length === 0) {
-    return { ok: false, reason: 'Describe the image or pick a reference.' };
+    return {
+      ok: false,
+      reason: translate?.('quickStartDescribeImage') ?? 'Describe the image or pick a reference.',
+    };
   }
   return {
     ok: true,

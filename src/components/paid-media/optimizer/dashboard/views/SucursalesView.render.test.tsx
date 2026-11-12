@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { configFixture, payloadFixture } from '../__fixtures__/easyfitPayload';
 import { chipThresholds } from '../dashboardModel';
 import { SucursalesView } from './SucursalesView';
@@ -11,7 +12,9 @@ const thresholds = chipThresholds(configFixture);
 describe('SucursalesView', () => {
   it('orders branches by cost per Meta sign-up, cheapest first', () => {
     render(<SucursalesView payload={payloadFixture} thresholds={thresholds} />);
-    const table = screen.getByRole('table', { name: 'Altas totales, altas de Meta y costo' });
+    const table = screen.getByRole('table', {
+      name: 'Altas totales, altas de Meta y costo',
+    });
     const names = within(table)
       .getAllByRole('row')
       .slice(1)
@@ -25,7 +28,9 @@ describe('SucursalesView', () => {
 
   it('writes the ad-branch × tour-branch matrix as row percentages', () => {
     render(<SucursalesView payload={payloadFixture} thresholds={thresholds} />);
-    const matrix = screen.getByRole('table', { name: 'Anuncio de una sucursal, tour en otra' });
+    const matrix = screen.getByRole('table', {
+      name: 'Anuncio de una sucursal, tour en otra',
+    });
     const { filas, valores } = payloadFixture.cruce_sucursal;
     const firstRow = within(matrix)
       .getByRole('rowheader', { name: filas[0] })

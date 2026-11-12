@@ -1,6 +1,7 @@
 'use client';
 
 import type { TemplatePreview } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { wireframeFrames } from './TemplateWireframe';
 
@@ -38,6 +39,8 @@ export function TemplateTextRepairCanvas({
   selectedKey?: string;
   availableFonts?: string[];
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const frame =
     wireframeFrames(parse).find((item) => item.comp === comp) ??
     wireframeFrames(parse).find((item) => item.ratio === ratio);
@@ -55,9 +58,18 @@ export function TemplateTextRepairCanvas({
   if (!frame) return null;
 
   return (
-    <fieldset className="size-full border-0 p-0" aria-label={`Repair text in ${frame.comp}`}>
+    <fieldset
+      className="size-full border-0 p-0"
+      aria-label={translateUi('repair_text_in_value0_83cca7eb', {
+        value0: String(frame.comp),
+      })}
+    >
       <svg viewBox={`0 0 ${frame.width} ${frame.height}`} className="size-full bg-background">
-        <title>{`Text placement in ${frame.comp}`}</title>
+        <title>
+          {translateUi('text_placement_in_value0_a14679a5', {
+            value0: String(frame.comp),
+          })}
+        </title>
         {backgroundUrl ? (
           <image
             href={backgroundUrl}
@@ -153,7 +165,15 @@ export function TemplateTextRepairCanvas({
                 role="button"
                 tabIndex={instance ? 0 : -1}
                 aria-disabled={!instance}
-                aria-label={instance ? `Move ${label}` : `${label} cannot be moved here`}
+                aria-label={
+                  instance
+                    ? translateUi('move_value0_74d4b9e1', {
+                        value0: String(label),
+                      })
+                    : translateUi('value0_cannot_be_moved_here_16b55d43', {
+                        value0: String(label),
+                      })
+                }
                 onPointerDown={(event) => {
                   if (!instance) return;
                   onSelect?.(id);
@@ -220,7 +240,9 @@ export function TemplateTextRepairCanvas({
                   height={32}
                   role="button"
                   tabIndex={0}
-                  aria-label={`Resize ${label}`}
+                  aria-label={translateUi('resize_value0_a507e087', {
+                    value0: String(label),
+                  })}
                   className="cursor-se-resize touch-none fill-primary stroke-background focus-visible:stroke-foreground"
                   onPointerDown={(event) => {
                     event.preventDefault();

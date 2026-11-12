@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { renderHook, waitFor } from '@testing-library/react';
-
+import { waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
-type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+type RequestOptions = {
+  path: string;
+  method?: string;
+  body?: Record<string, unknown>;
+};
 const requestCalls: RequestOptions[] = [];
 let requestImpl: () => Promise<unknown> = async () => ({ updated_at: 'T1' });
 const request = mock((opts: RequestOptions) => {
@@ -23,7 +27,9 @@ const updateDraft = (
 };
 
 mock.module('@/lib/api/http', () => ({ request, http: { request } }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show }),
+}));
 mock.module('@/lib/organic/store', () => createCalendarStoreStub({ updateDraft }));
 
 const { useAttachCreative } = await import('./useAttachCreative');
@@ -102,6 +108,8 @@ describe('useAttachCreative', () => {
     await waitFor(() => expect(show).toHaveBeenCalledTimes(1));
     expect(requestCalls).toHaveLength(1);
     expect(drafts.get('a')?.publishingAssets).toEqual([]);
-    expect(drafts.get('a')?.mediaSuggestion).toEqual({ mediaStatus: 'pending' });
+    expect(drafts.get('a')?.mediaSuggestion).toEqual({
+      mediaStatus: 'pending',
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AdhocSuggestionRow } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { AskedProposalPanel } from './AskedProposalPanel';
 import { buildAskedForRows } from './askedForModel';
 import { DailyReadList } from './DailyReadList';
@@ -121,7 +122,9 @@ const idle = {
 };
 
 const panelFor = (proposals: unknown[], recRow: unknown = rec) => {
-  const [row] = buildAskedForRows([suggestion], 500, { proposals: proposals as never });
+  const [row] = buildAskedForRows([suggestion], 500, {
+    proposals: proposals as never,
+  });
   if (!row) throw new Error('no asked-for row');
   return (
     <AskedProposalPanel
@@ -183,7 +186,10 @@ describe('AskedProposalPanel — a proposal with no body', () => {
         {
           ...(failedProposal as object),
           status: 'superseded',
-          error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
+          error: {
+            code: 'signal_stopped',
+            message: 'The trigger did not fire again.',
+          },
           blocked_by: {
             code: 'no_creatives',
             message: 'No creative has enough results.',
@@ -218,7 +224,9 @@ describe('AskedProposalPanel — a proposal with no body', () => {
 
 describe('DailyReadList — an asked-for row opens its proposal under itself', () => {
   it('renders the expansion on the open row only, and the button reads as the way to close it', () => {
-    const rows = buildAskedForRows([suggestion], 500, { proposals: [failedProposal] });
+    const rows = buildAskedForRows([suggestion], 500, {
+      proposals: [failedProposal],
+    });
     const onCta = mock(() => {});
     const { container, rerender } = render(
       <DailyReadList

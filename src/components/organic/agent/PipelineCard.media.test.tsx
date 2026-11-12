@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { render } from '@/i18n/__tests__/render';
 import type { PipelineCardState } from './types';
 
 Object.assign(global.window, {
@@ -18,7 +19,10 @@ const requestMock = mock((args: { path: string; body?: unknown }) => {
     expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   });
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 // Everything with runtime imports loads AFTER the mocks: a module first loaded for real
 // and then mocked in place is not handed back by mock.restore().
@@ -32,7 +36,12 @@ const { resetSignedUrlCache } = await import('@/lib/organic/hyperframeSign');
 const { resetDraftFetches } = await import('../hooks/useDraftStoryboard');
 
 const draft = (over: Partial<OrganicCalendarDraft>): OrganicCalendarDraft =>
-  ({ id: 'fe-1', backendDraftId: 'draft-1', mediaCount: 0, ...over }) as OrganicCalendarDraft;
+  ({
+    id: 'fe-1',
+    backendDraftId: 'draft-1',
+    mediaCount: 0,
+    ...over,
+  }) as OrganicCalendarDraft;
 
 const card = (over: Partial<PipelineCardState> = {}): PipelineCardState => ({
   jobId: 'job-1',
@@ -47,7 +56,12 @@ const card = (over: Partial<PipelineCardState> = {}): PipelineCardState => ({
 const storyboardDraft = draft({
   mediaSuggestion: {
     storyboard: [
-      { role: 'primary', bucket: 'b', storagePath: 'sb/1.png', storageUrl: 'https://resigned/sb' },
+      {
+        role: 'primary',
+        bucket: 'b',
+        storagePath: 'sb/1.png',
+        storageUrl: 'https://resigned/sb',
+      },
     ],
   },
 });
@@ -63,7 +77,11 @@ describe('PipelineCard media ranking', () => {
     useCalendarStore.setState({
       days: [],
       backlogDrafts: [],
-      accountContext: { accountIds: {}, accountOptions: {}, brandId: 'brand-1' },
+      accountContext: {
+        accountIds: {},
+        accountOptions: {},
+        brandId: 'brand-1',
+      },
     } as never);
     requestMock.mockClear();
     resetSignedUrlCache();

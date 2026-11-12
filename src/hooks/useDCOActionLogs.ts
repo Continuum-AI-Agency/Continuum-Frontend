@@ -2,7 +2,9 @@
 
 import { parseRuleActionLogResponse } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { ApiError } from '@/lib/api/errors';
+import { loadFailureCause } from '@/lib/api/loadFailure';
 import { fetchWithTimeout, supabaseTimeoutPolicy } from '@/lib/api/timeout';
 import { DEFAULT_DATE_RANGE_DAYS, getDateRangeFromDays } from '@/lib/dco/dateRange';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -93,9 +95,14 @@ export function useDCOActionLogs({
 }: UseDCOActionLogsOptions): UseDCOActionLogsReturn {
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [campaignsError, setCampaignsError] = useState<string | null>(null);
-  const [adAccountsError, setAdAccountsError] = useState<string | null>(null);
+  const formatUiError = useUiErrorMessage();
+  const [errorCause, setError] = useState<{ error: unknown } | null>(null);
+  const [campaignsError, setCampaignsError] = useState<{
+    error: unknown;
+  } | null>(null);
+  const [adAccountsError, setAdAccountsError] = useState<{
+    error: unknown;
+  } | null>(null);
 
   const [pagination, setPagination] = useState({
     page: 1,
@@ -172,7 +179,7 @@ export function useDCOActionLogs({
       setCampaigns(Array.isArray(list) ? (list as CampaignOption[]) : []);
     } catch (err) {
       console.error('[useDCOActionLogs] fetch campaigns error:', err);
-      setCampaignsError(loadFailureMessage('the campaign list', err));
+      setCampaignsError({ error: err });
     } finally {
       setIsLoadingCampaigns(false);
     }
@@ -214,7 +221,7 @@ export function useDCOActionLogs({
       setAdAccounts(Array.isArray(list) ? (list as AdAccountOption[]) : []);
     } catch (err) {
       console.error('[useDCOActionLogs] fetch ad accounts error:', err);
-      setAdAccountsError(loadFailureMessage('the ad account list', err));
+      setAdAccountsError({ error: err });
     } finally {
       setIsLoadingAdAccounts(false);
     }
@@ -301,7 +308,7 @@ export function useDCOActionLogs({
         ...read.pagination,
       }));
     } catch (err) {
-      setError(loadFailureMessage('the action logs', err));
+      setError({ error: err });
       console.error('[useDCOActionLogs] fetch error:', err);
     } finally {
       setIsLoading(false);
@@ -339,8 +346,12 @@ export function useDCOActionLogs({
   return {
     logs,
     isLoading,
-    error,
-    selectorError: campaignsError ?? adAccountsError,
+    error: errorCause ? formatUiError(actionLogDisplayCause(errorCause.error)) : null,
+    selectorError: campaignsError
+      ? formatUiError(actionLogDisplayCause(campaignsError.error))
+      : adAccountsError
+        ? formatUiError(actionLogDisplayCause(adAccountsError.error))
+        : null,
     pagination,
     filters,
     sort,
@@ -353,4 +364,24 @@ export function useDCOActionLogs({
     goToPage,
     refresh,
   };
+}
+
+/** Keep provider diagnostics in state/logs; only stable transport categories reach UI copy. */
+function actionLogDisplayCause(error: unknown): unknown {
+  if (error instanceof ApiError) return error;
+  const status =
+    error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
+      ? error.status
+      : null;
+  if (status != null && status > 0) return new ApiError('', status);
+  const category = loadFailureCause(error);
+  if (category === 'offline') return new ApiError('', 0, 'network_error');
+  if (category === 'server_error') return new ApiError('', 500);
+  if (category === 'unexpected_shape') return new ApiError('', 502);
+  if (category === 'timeout') {
+    const timeout = new Error();
+    timeout.name = 'TimeoutError';
+    return timeout;
+  }
+  return error;
 }

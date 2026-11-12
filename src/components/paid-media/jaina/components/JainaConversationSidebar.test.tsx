@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('./JainaGoalsSidebarPanel', () => ({
   JainaGoalsSidebarPanel: () => <div>Goal list</div>,
@@ -37,7 +38,9 @@ describe('JainaConversationSidebar', () => {
   it('allows the Goals tab in an enabled environment', () => {
     render(<JainaConversationSidebar {...props} goalsAccessEnabled />);
 
-    const goalsTab = screen.getByRole('button', { name: 'Goals' }) as HTMLButtonElement;
+    const goalsTab = screen.getByRole('button', {
+      name: 'Goals',
+    }) as HTMLButtonElement;
     expect(goalsTab.disabled).toBe(false);
     fireEvent.click(goalsTab);
     expect(screen.getByText('Goal list')).not.toBeNull();
@@ -138,7 +141,10 @@ describe('JainaConversationSidebar list rows', () => {
         {...props}
         goalsAccessEnabled
         sessions={[
-          session('from-organic', { initiator: 'agent', initiatorAgent: 'organic' }),
+          session('from-organic', {
+            initiator: 'agent',
+            initiatorAgent: 'organic',
+          }),
           session('mine', { tags: ['q4'] }),
         ]}
       />,
@@ -230,7 +236,11 @@ describe('JainaConversationSidebar when a filter fails', () => {
 
   it('says the session ended and offers sign-in, never "no conversations match"', async () => {
     const onSearchConversations = mock(() =>
-      Promise.reject(Object.assign(new Error('Failed to search conversations.'), { status: 401 })),
+      Promise.reject(
+        Object.assign(new Error('Failed to search conversations.'), {
+          status: 401,
+        }),
+      ),
     );
     render(
       <JainaConversationSidebar
@@ -305,7 +315,9 @@ describe('JainaConversationSidebar row actions', () => {
       />,
     );
     const remove = screen.getByRole('button', { name: /^Delete conversation/ });
-    const tag = screen.getByRole('button', { name: /^Edit tags for conversation/ });
+    const tag = screen.getByRole('button', {
+      name: /^Edit tags for conversation/,
+    });
     expect(remove.className.split(/\s+/)).toContain('hit-area');
     expect(tag.className.split(/\s+/)).toContain('hit-area');
     expect(remove.parentElement?.className.split(/\s+/)).toContain('hit-area-row');

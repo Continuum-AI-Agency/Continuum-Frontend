@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // The Google tab's two reads (G2): its portfolios, selected from the ONE brand read the page
 // shell already holds, and its cards, from optimizer_get_platform_cards. The client is
@@ -66,7 +67,9 @@ const GRANTS = [
 ];
 
 function wrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -148,13 +151,18 @@ describe('useOptimizerPlatformCards', () => {
           }
         : {}),
     }));
-    answers = { optimizer_get_platform_cards: () => ({ data: withSwitch, error: null }) };
+    answers = {
+      optimizer_get_platform_cards: () => ({ data: withSwitch, error: null }),
+    };
     const { result } = renderHook(() => useOptimizerPlatformCards(BRAND, 'google_ads'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(calls).toEqual([
-      { fn: 'optimizer_get_platform_cards', args: { p_brand_id: BRAND, p_platform: 'google_ads' } },
+      {
+        fn: 'optimizer_get_platform_cards',
+        args: { p_brand_id: BRAND, p_platform: 'google_ads' },
+      },
     ]);
     if (result.current.status !== 'ready') throw new Error('not ready');
     expect(result.current.cards).toHaveLength(googleCards.length);
@@ -174,7 +182,9 @@ describe('useOptimizerPlatformCards', () => {
       const { result } = renderHook(() => useOptimizerPlatformCards(BRAND, 'google_ads'), {
         wrapper: wrapper(),
       });
-      await waitFor(() => expect(result.current.status).toBe('error'), { timeout: 5_000 });
+      await waitFor(() => expect(result.current.status).toBe('error'), {
+        timeout: 5_000,
+      });
     } finally {
       console.error = errorLog;
     }
@@ -182,16 +192,24 @@ describe('useOptimizerPlatformCards', () => {
 
   it('reads a failed RPC as an error, and a missing one as not deployed yet', async () => {
     answers = {
-      optimizer_get_platform_cards: () => ({ data: null, error: { code: '42501', message: 'no' } }),
+      optimizer_get_platform_cards: () => ({
+        data: null,
+        error: { code: '42501', message: 'no' },
+      }),
     };
     const failed = renderHook(() => useOptimizerPlatformCards(BRAND, 'google_ads'), {
       wrapper: wrapper(),
     });
-    await waitFor(() => expect(failed.result.current.status).toBe('error'), { timeout: 5_000 });
+    await waitFor(() => expect(failed.result.current.status).toBe('error'), {
+      timeout: 5_000,
+    });
     failed.unmount();
 
     answers = {
-      optimizer_get_platform_cards: () => ({ data: null, error: { code: 'PGRST202' } }),
+      optimizer_get_platform_cards: () => ({
+        data: null,
+        error: { code: 'PGRST202' },
+      }),
     };
     const missing = renderHook(() => useOptimizerPlatformCards(BRAND, 'google_ads'), {
       wrapper: wrapper(),

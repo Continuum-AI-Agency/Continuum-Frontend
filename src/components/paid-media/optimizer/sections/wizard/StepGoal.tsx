@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // Step 3 — the goal. The objective as radio rows, the metric the target is priced
 // in (with the alternative where one exists), the target itself with the account's own
 // number as a hint, and the mode said in a sentence. Scale mode opens its plan right here:
@@ -32,7 +37,7 @@ import { currencyFieldSuffix, formatCurrency, humanize, normalizeCurrency } from
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { GoalCostCapControl } from '../goalCostCap/GoalCostCapField';
 import { MODES, OBJECTIVES } from '../suggestionModel';
-import { ANALOG_LABEL, buildConversionDescriptor } from './conversionDescriptor';
+import { ANALOG_LABEL, analogLabel, buildConversionDescriptor } from './conversionDescriptor';
 import { OptionRow, questionHeading } from './OptionRow';
 import {
   DEFAULT_SCALE_CADENCE_DAYS,
@@ -41,6 +46,7 @@ import {
   MODE_COPY,
   parseTypedAmount,
   type WizardDraft,
+  wizardModeCopy,
 } from './wizardModel';
 
 type StepGoalProps = {
@@ -52,13 +58,19 @@ type StepGoalProps = {
 };
 
 export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGoalProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const symbol = normalizeCurrency(currency);
   const unit = currencyFieldSuffix(currency);
   const allowed = allowedTargetMetrics(draft.objective);
   const targetMetric = effectiveTargetMetric(draft);
-  const metric = getOptimizationMetricDefinition(targetMetric);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(targetMetric),
+    optimizerText,
+  );
   // Only meaningful for 'custom'; built every render so the note tracks what is typed.
-  const built = buildConversionDescriptor(draft.conversion);
+  const built = buildConversionDescriptor(draft.conversion, uiText);
   const descriptor = 'descriptor' in built ? built.descriptor : null;
   const patchConversion = (patch: Partial<WizardDraft['conversion']>) =>
     onChange({ conversion: { ...draft.conversion, ...patch } });
@@ -66,16 +78,16 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
   return (
     <div className="space-y-7">
       <div className="space-y-2">
-        <h3 className={questionHeading}>What is this portfolio buying?</h3>
+        <h3 className={questionHeading}>{uiText('what_is_this_portfolio_buying_41f8623')}</h3>
         <fieldset className="grid min-w-0 gap-x-6 @md:grid-cols-2 @2xl:grid-cols-3">
-          <legend className="sr-only">Objective</legend>
+          <legend className="sr-only">{uiText('objective_3b20adc')}</legend>
           {OBJECTIVES.map((objective) => (
             <OptionRow
               active={draft.objective === objective}
               disabled={disabled}
               key={objective}
               onSelect={() => onChange({ objective, targetMetric: null })}
-              title={humanize(objective)}
+              title={humanize(objective, uiText)}
             />
           ))}
         </fieldset>
@@ -85,16 +97,15 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
         <div className="space-y-2.5">
           <div>
             <h4 className="font-semibold text-sm tracking-tight">
-              Which conversion, and how does it behave?
+              {uiText('which_conversion_and_how_does_it_behave_348b968')}
             </h4>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Nobody outside your business knows what this event is. Name it, and it is measured
-              against whichever calibrated objective behaves the same way.
+              {uiText('nobody_outside_your_business_knows_what_this__14ece9a')}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-conv-event">Event id</Label>
+              <Label htmlFor="wizard-conv-event">{uiText('event_id_82e663f')}</Label>
               <Input
                 disabled={disabled}
                 id="wizard-conv-event"
@@ -104,28 +115,28 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-conv-result">What you call one</Label>
+              <Label htmlFor="wizard-conv-result">{uiText('what_you_call_one_8a89376')}</Label>
               <Input
                 disabled={disabled}
                 id="wizard-conv-result"
                 onChange={(event) => patchConversion({ result_label: event.target.value })}
-                placeholder="Demos booked"
+                placeholder={uiText('demos_booked_803091f')}
                 value={draft.conversion.result_label}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-conv-cost">What one costs</Label>
+              <Label htmlFor="wizard-conv-cost">{uiText('what_one_costs_0260258')}</Label>
               <Input
                 disabled={disabled}
                 id="wizard-conv-cost"
                 onChange={(event) => patchConversion({ cost_label: event.target.value })}
-                placeholder="Cost per demo booked"
+                placeholder={uiText('cost_per_demo_booked_3cfda2f')}
                 value={draft.conversion.cost_label}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="wizard-conv-lag">Days to arrive</Label>
+                <Label htmlFor="wizard-conv-lag">{uiText('days_to_arrive_c3a7ac7')}</Label>
                 <Input
                   disabled={disabled}
                   id="wizard-conv-lag"
@@ -136,7 +147,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="wizard-conv-volume">A week</Label>
+                <Label htmlFor="wizard-conv-volume">{uiText('a_week_a2f8103')}</Label>
                 <Input
                   disabled={disabled}
                   id="wizard-conv-volume"
@@ -148,7 +159,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
               </div>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="wizard-conv-analog">Measured like</Label>
+              <Label htmlFor="wizard-conv-analog">{uiText('measured_like_d9f7b6d')}</Label>
               <Select
                 disabled={disabled}
                 onValueChange={(value) =>
@@ -165,10 +176,14 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="inferred">Work it out from the answers above</SelectItem>
+                  <SelectItem value="inferred">
+                    {uiText('work_it_out_from_the_answers_above_eb59ad7')}
+                  </SelectItem>
                   {analogObjectiveSchema.options.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {`Like ${ANALOG_LABEL[value]}`}
+                      {uiText('template_66bd95a7ce7d', {
+                        v0: analogLabel(value, uiText),
+                      })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -187,7 +202,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="wizard-target-metric">Priced in</Label>
+          <Label htmlFor="wizard-target-metric">{uiText('priced_in_7891b79')}</Label>
           {allowed.length > 1 ? (
             <Select
               onValueChange={(value) =>
@@ -203,7 +218,12 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
               <SelectContent>
                 {allowed.map((value) => (
                   <SelectItem key={value} value={value}>
-                    {getOptimizationMetricDefinition(value).costLabel}
+                    {
+                      localizeOptimizationMetricDefinition(
+                        getOptimizationMetricDefinition(value),
+                        optimizerText,
+                      ).costLabel
+                    }
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -214,8 +234,9 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Every ad set is scored on {metric.costLabel.toLowerCase()} and the target below is set
-            in it.
+            {uiText.rich('sentence_6b2a5ab2bf72', {
+              v0: metric.costLabel.toLowerCase(),
+            })}
           </p>
         </div>
         <div className="space-y-1.5">
@@ -256,11 +277,11 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
       </div>
 
       <div className="space-y-2">
-        <h3 className={questionHeading}>How should it optimize?</h3>
+        <h3 className={questionHeading}>{uiText('how_should_it_optimize_c2b753d')}</h3>
         <fieldset className="min-w-0">
-          <legend className="sr-only">Mode</legend>
+          <legend className="sr-only">{uiText('mode_5e23ec6')}</legend>
           {MODES.map((mode) => {
-            const copy = MODE_COPY[mode];
+            const copy = wizardModeCopy(mode, uiText);
             return (
               <OptionRow
                 active={draft.mode === mode}
@@ -289,21 +310,29 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
         {draft.mode === 'scale' ? (
           <div className="space-y-2 pt-2">
             <p className="text-xs">
-              Grow the budget{' '}
-              <span className="font-medium text-foreground">{draft.scaleGrowthPct || '…'}%</span>{' '}
-              every{' '}
-              <span className="font-medium text-foreground">
-                {draft.scaleCadenceDays || '…'} days
-              </span>{' '}
-              while the portfolio beats {metric.targetLabel.toLowerCase()}
-              {draft.scaleMaxDaily
-                ? `, up to ${formatCurrency(Number(draft.scaleMaxDaily), currency)}/day`
-                : ''}
-              .
+              {uiText.rich('sentence_70de890f9f44', {
+                growth: () => (
+                  <span className="font-medium text-foreground">
+                    {draft.scaleGrowthPct || '…'}%
+                  </span>
+                ),
+                cadence: () => (
+                  <span className="font-medium text-foreground">
+                    {uiText.rich('sentence_f322f4af81da', {
+                      v0: draft.scaleCadenceDays || '…',
+                    })}
+                  </span>
+                ),
+                target: metric.targetLabel.toLowerCase(),
+                hasCeiling: draft.scaleMaxDaily ? 'yes' : 'no',
+                ceiling: draft.scaleMaxDaily
+                  ? formatCurrency(Number(draft.scaleMaxDaily), currency, uiLocale)
+                  : '',
+              })}
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label htmlFor="wizard-scale-growth">Grow by (%)</Label>
+                <Label htmlFor="wizard-scale-growth">{uiText('grow_by_4db36a8')}</Label>
                 <Input
                   disabled={disabled}
                   id="wizard-scale-growth"
@@ -313,7 +342,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="wizard-scale-cadence">Every (days)</Label>
+                <Label htmlFor="wizard-scale-cadence">{uiText('every_days_df0e6cc')}</Label>
                 <Input
                   disabled={disabled}
                   id="wizard-scale-cadence"
@@ -324,7 +353,10 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="wizard-scale-ceiling">
-                  Up to ({symbol ? `${symbol}/day` : 'per day'}, optional)
+                  {uiText.rich('sentence_795c257133b6', {
+                    hasSymbol: symbol ? 'yes' : 'no',
+                    symbol: symbol ?? '',
+                  })}
                 </Label>
                 <Input
                   disabled={disabled}

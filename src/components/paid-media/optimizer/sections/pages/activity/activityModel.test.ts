@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'bun:test';
 import type { OptimizerLogRow } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import spanish from '../../../../../../../messages/scale/es.json';
+import portuguese from '../../../../../../../messages/scale/pt-BR.json';
 import type { OptimizerActionFeedRow } from '../../../useOptimizerData';
 import { ALL_PORTFOLIOS } from '../../logFilters';
 import {
   actionSource,
   activityDays,
   activityEvents,
+  activitySourceCopy,
+  dayKeyLabel,
   dayKeyOf,
   deliveryEvents,
   deliveryWords,
@@ -94,7 +99,11 @@ describe('spendSeries', () => {
       '2026-10-31',
       '2026-11-01',
     ]);
-    expect(series?.days.at(-1)).toEqual({ key: '2026-11-02', spend: null, dark: false });
+    expect(series?.days.at(-1)).toEqual({
+      key: '2026-11-02',
+      spend: null,
+      dark: false,
+    });
   });
 
   it('keeps a day with impressions but no cost as a day with ads', () => {
@@ -111,7 +120,14 @@ describe('spendSeries', () => {
 
   it('refuses to draw a total that came without its days', () => {
     expect(
-      spendSeries({ currency: 'MXN', metrics: { spend: 500, roas: 0, ctr: 0 }, trends: [] }, days),
+      spendSeries(
+        {
+          currency: 'MXN',
+          metrics: { spend: 500, roas: 0, ctr: 0 },
+          trends: [],
+        },
+        days,
+      ),
     ).toBeNull();
   });
 
@@ -220,7 +236,11 @@ describe('platformItems — the platform’s own change history', () => {
 describe('filters', () => {
   const rows = [
     action({ id: 'a1', actor_kind: 'autopilot' }),
-    action({ id: 'a2', actor_kind: 'human', portfolio_name: 'Leads // Google Ads only' }),
+    action({
+      id: 'a2',
+      actor_kind: 'human',
+      portfolio_name: 'Leads // Google Ads only',
+    }),
   ];
   const platform = platformItems([drift()], []);
 
@@ -229,19 +249,31 @@ describe('filters', () => {
       filterActions(rows, { source: 'team', portfolio: ALL_PORTFOLIOS }).map((r) => r.id),
     ).toEqual(['a2']);
     expect(
-      filterActions(rows, { source: 'all', portfolio: 'Conversaciones Whatsapp' }).map((r) => r.id),
+      filterActions(rows, {
+        source: 'all',
+        portfolio: 'Conversaciones Whatsapp',
+      }).map((r) => r.id),
     ).toEqual(['a1']);
   });
 
   it('shows the platform events under All and Platform only', () => {
     expect(
-      filterPlatformItems(platform, { source: 'all', portfolio: ALL_PORTFOLIOS }),
+      filterPlatformItems(platform, {
+        source: 'all',
+        portfolio: ALL_PORTFOLIOS,
+      }),
     ).toHaveLength(1);
     expect(
-      filterPlatformItems(platform, { source: 'platform', portfolio: ALL_PORTFOLIOS }),
+      filterPlatformItems(platform, {
+        source: 'platform',
+        portfolio: ALL_PORTFOLIOS,
+      }),
     ).toHaveLength(1);
     expect(
-      filterPlatformItems(platform, { source: 'optimizer', portfolio: ALL_PORTFOLIOS }),
+      filterPlatformItems(platform, {
+        source: 'optimizer',
+        portfolio: ALL_PORTFOLIOS,
+      }),
     ).toHaveLength(0);
   });
 
@@ -282,12 +314,21 @@ describe('activityEvents and their markers', () => {
     ]);
     expect(events[0]?.label).toBe('Daily budget · Conversaciones Whatsapp');
     expect(events[2]?.label).toBe('Roster drift · Tours Programados - Octubre');
-    expect(sourceCounts(events)).toEqual({ optimizer: 1, team: 1, platform: 1 });
+    expect(sourceCounts(events)).toEqual({
+      optimizer: 1,
+      team: 1,
+      platform: 1,
+    });
   });
 
   it('folds a cross-platform move into one event, as the list folds it into one entry', () => {
     const leg = (id: string, leg: number) =>
-      action({ id, move_id: 'move-1', leg, outcome: 'applied' } as Partial<OptimizerActionFeedRow>);
+      action({
+        id,
+        move_id: 'move-1',
+        leg,
+        outcome: 'applied',
+      } as Partial<OptimizerActionFeedRow>);
     const events = activityEvents([leg('l1', 1), leg('l0', 0)], []);
     expect(events.map((event) => event.id)).toEqual(['move:move-1']);
   });
@@ -303,8 +344,46 @@ describe('activityEvents and their markers', () => {
   });
 
   it('drops an event outside the chart’s days instead of pinning it to an edge', () => {
-    const old = action({ id: 'old', ts: new Date(2026, 9, 1, 9).toISOString() });
+    const old = action({
+      id: 'old',
+      ts: new Date(2026, 9, 1, 9).toISOString(),
+    });
     expect(layoutMarkers(activityEvents([old], []), days).markers).toEqual([]);
     expect(dayKeyOf('not a date')).toBeNull();
   });
+});
+
+describe('localized activity chrome', () => {
+  for (const [locale, scale] of [
+    ['pt-BR', portuguese],
+    ['es', spanish],
+  ] as const) {
+    it(`localizes delivery and source labels in ${locale} without moving the calendar day`, () => {
+      const t = createTranslator({
+        locale,
+        namespace: 'scale',
+        messages: { scale },
+      });
+      const event = {
+        id: 'delivery:stopped:2026-11-01',
+        kind: 'stopped' as const,
+        key: '2026-11-01',
+        through: '2026-11-02',
+        ongoing: true,
+      };
+      const before = JSON.stringify(event);
+      const words = deliveryWords(event, t, locale);
+      expect(words.title).not.toBe('No ads shown');
+      expect(words.detail).toContain(dayKeyLabel(event.key, locale));
+      expect(activitySourceCopy('team', t).label).toBe(locale === 'es' ? 'Equipo' : 'Equipe');
+      expect(JSON.stringify(event)).toBe(before);
+      expect(dayKeyLabel(event.key, locale)).toBe(
+        new Intl.DateTimeFormat(locale, {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        }).format(new Date('2026-11-01T00:00:00Z')),
+      );
+    });
+  }
 });

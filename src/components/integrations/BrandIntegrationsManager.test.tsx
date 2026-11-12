@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 
-const startMetaSync = mock(async (_input: unknown) => ({ url: 'https://example.test/oauth' }));
+const startMetaSync = mock(async (_input: unknown) => ({
+  url: 'https://example.test/oauth',
+}));
 const unusedSync = () => ({ mutateAsync: mock(async () => ({ url: '' })) });
 
 mock.module('@/lib/api/integrations', () => ({
@@ -14,12 +17,22 @@ mock.module('@/lib/api/integrations', () => ({
   useStartLinkedInSync: unusedSync,
   useStartTikTokSync: unusedSync,
   useStartXSync: unusedSync,
-  useUserIntegrationAssets: () => ({ data: [], isLoading: false, refetch: mock(async () => ({})) }),
-  useResyncMeta: () => ({ mutateAsync: mock(async () => ({ updated: [], failed: [] })) }),
+  useUserIntegrationAssets: () => ({
+    data: [],
+    isLoading: false,
+    refetch: mock(async () => ({})),
+  }),
+  useResyncMeta: () => ({
+    mutateAsync: mock(async () => ({ updated: [], failed: [] })),
+  }),
 }));
 
 mock.module('@/hooks/useBrandIntegrations', () => ({
-  useBrandIntegrations: () => ({ integrations: null, isLoading: false, refresh: mock(() => {}) }),
+  useBrandIntegrations: () => ({
+    integrations: null,
+    isLoading: false,
+    refresh: mock(() => {}),
+  }),
 }));
 
 // A blocked popup ends the flow right after the sync call, which is all this test reads.
@@ -28,7 +41,7 @@ mock.module('@/lib/popup', () => ({
   waitForPopupClosed: mock(async () => {}),
 }));
 
-mock.module('@/app/(post-auth)/settings/integrations/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/integrations/actions', () => ({
   applyBrandIntegrationAssignmentsAction: mock(async () => ({ linked: 0 })),
 }));
 
@@ -53,7 +66,9 @@ describe('BrandIntegrationsManager Meta row', () => {
     renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Instagram only' }));
     await waitFor(() => expect(startMetaSync).toHaveBeenCalledTimes(1));
-    expect(startMetaSync.mock.calls[0]?.[0]).toMatchObject({ mode: 'instagram' });
+    expect(startMetaSync.mock.calls[0]?.[0]).toMatchObject({
+      mode: 'instagram',
+    });
   });
 
   it('keeps Sync on the Facebook login', async () => {

@@ -13,6 +13,10 @@ import {
   type HomeCreativeSpotlightData,
   homeCreativeSpotlightReadSchema,
 } from '@continuum/contracts';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+} from 'next-intl';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,13 +34,16 @@ const CreativeModule = lazy(() => import('./Module'));
 const THUMBS_BY_SIZE = { s: 0, m: 4, l: 5 } as const;
 
 function SpotlightLine({ data }: { data: HomeCreativeSpotlightData }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <p
       className="text-muted-foreground text-xs leading-snug"
       data-ads={data.ads.length}
       data-testid="home-tile-creative-spotlight"
     >
-      Top {data.ads.length} by spend: {spotlightVerdictLine(data)}
+      {betaUiText('beta_d5cdfcf7ff75')} {data.ads.length} {betaUiText('beta_fec0d380c2f2')}{' '}
+      {spotlightVerdictLine(data)}
     </p>
   );
 }
@@ -48,6 +55,8 @@ function SpotlightOnlyBody({
   data: HomeCreativeSpotlightData;
   size: 's' | 'm' | 'l';
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div
@@ -58,7 +67,9 @@ function SpotlightOnlyBody({
       >
         {data.adsWithSpend}{' '}
         <small className="font-medium text-muted-foreground text-sm tracking-normal">
-          {data.adsWithSpend === 1 ? 'ad spending' : 'ads spending'}
+          {data.adsWithSpend === 1
+            ? betaUiText('beta_b7d1ebbff38b')
+            : betaUiText('beta_820d66e4b9e4')}
         </small>
       </div>
       {THUMBS_BY_SIZE[size] > 0 ? (
@@ -88,6 +99,8 @@ function ReadyBody({
   read: HomeCreativeSpotlightData | null;
   size: 's' | 'm' | 'l';
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const thumbs = spotlight.cards.slice(0, THUMBS_BY_SIZE[size]);
   const readThumb = (adId: string) =>
     read?.ads.find((ad) => ad.adId === adId)?.thumbnailUrl ?? null;
@@ -100,7 +113,9 @@ function ReadyBody({
       >
         {spotlight.total}{' '}
         <small className="font-medium text-muted-foreground text-sm tracking-normal">
-          {spotlight.total === 1 ? 'ad judged' : 'ads judged'}
+          {spotlight.total === 1
+            ? betaUiText('beta_cb960db7f9ae')
+            : betaUiText('beta_47ae499c8bbe')}
         </small>
       </div>
       {thumbs.length > 0 ? (
@@ -124,6 +139,10 @@ function ReadyBody({
 }
 
 export default function CreativeTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const read = usePaidCreativeReport(ctx.brandId);
   const view = creativeTileState(read, ctx.adAccounts);
   const spotlightRead = readyDataOf(
@@ -138,12 +157,13 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
     const { spotlight } = view;
     return (
       <HomeTileFrame
-        badge={`${spotlight.total} ads judged · ${spotlight.counts.winning} winning`}
+        badge={betaUiText('beta_0fc2e9c9e591', {
+          value0: String(spotlight.total),
+          value1: String(spotlight.counts.winning),
+        })}
         expanded={<CreativeModule ctx={ctx} read={spotlightRead} spotlight={spotlight} />}
         expandedDescription={
-          spotlightRead
-            ? 'The brand’s top ads by spend, every ad the stored report judged, and the flywheel between organic, paid and creative.'
-            : 'Every ad the stored creative report judged, and the flywheel between organic, paid and creative.'
+          spotlightRead ? extraUiText('home_3f435ce7ff0a') : extraUiText('home_9ad712290a1b')
         }
         state="ready"
         tile={tile}
@@ -156,9 +176,11 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
   if (spotlightRead && view.state === 'missing') {
     return (
       <HomeTileFrame
-        badge={`${spotlightRead.adsWithSpend} ads spending`}
+        badge={betaUiText('beta_b6804b715526', {
+          value0: String(spotlightRead.adsWithSpend),
+        })}
         expanded={<CreativeModule ctx={ctx} read={spotlightRead} spotlight={null} />}
-        expandedDescription="The brand’s top ads by spend, and the flywheel between organic, paid and creative."
+        expandedDescription={extraUiText('home_60ac49c4d250')}
         state="ready"
         tile={tile}
       >
@@ -178,7 +200,7 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
       ) : null}
       {view.state === 'error' ? (
         <p className="text-destructive-ink text-xs" role="alert">
-          The creative report could not be read.{' '}
+          {betaUiText('beta_3ac238f5673f')}{' '}
           <Button
             className="h-5 px-1 text-xs"
             onClick={() => void read.refetch()}
@@ -186,7 +208,7 @@ export default function CreativeTile({ ctx, tile }: HomeTileProps) {
             type="button"
             variant="link"
           >
-            Retry
+            {betaUiText('beta_942087cc2d41')}
           </Button>
         </p>
       ) : null}

@@ -6,8 +6,9 @@ import {
   readAdAccount,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import { keywordQualityFixture } from '../../../google/views/__fixtures__/googleViews';
 import { easyFitKeywordQuality } from '../../../google/views/__fixtures__/lensReads';
 
@@ -54,7 +55,9 @@ const WIDTHS = [375, 1280] as const;
 
 function atWidth(width: number) {
   (
-    window as unknown as { happyDOM: { setViewport(v: { width: number; height: number }): void } }
+    window as unknown as {
+      happyDOM: { setViewport(v: { width: number; height: number }): void };
+    }
   ).happyDOM.setViewport({ width, height: 900 });
   expect(window.innerWidth).toBe(width);
 }
@@ -80,7 +83,10 @@ function view(size: BoardModuleSize, raw: unknown = easyFitKeywordQuality()) {
     <QualityLensView
       currency="MXN"
       slot={slot(size)}
-      state={{ status: 'ready', data: GoogleKeywordQualityReadSchema.parse(raw) }}
+      state={{
+        status: 'ready',
+        data: GoogleKeywordQualityReadSchema.parse(raw),
+      }}
     />,
   );
 }
@@ -181,7 +187,14 @@ describe('QualityLensView at m and l', () => {
 
 describe('QualityLensView states', () => {
   it('empty and failed reads each say what they are', () => {
-    view('m', keywordQualityFixture({ keywords: [], total_keywords: 0, scored_keywords: 0 }));
+    view(
+      'm',
+      keywordQualityFixture({
+        keywords: [],
+        total_keywords: 0,
+        scored_keywords: 0,
+      }),
+    );
     expect(text('quality-empty')).toContain('No keyword spent in this window.');
     expect(screen.getByTestId('board-module-quality').dataset.moduleState).toBe('missing');
     cleanup();
@@ -189,7 +202,10 @@ describe('QualityLensView states', () => {
       <QualityLensView
         currency="MXN"
         slot={slot('m')}
-        state={{ status: 'error', message: 'The Google Ads Quality Score read did not answer.' }}
+        state={{
+          status: 'error',
+          message: 'The Google Ads Quality Score read did not answer.',
+        }}
       />,
     );
     expect(document.body.textContent).toContain(
@@ -201,7 +217,9 @@ describe('QualityLensView states', () => {
 
 describe('QualityLens', () => {
   it("reads the brand's Google Ads customer over the reading's 30 complete days", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
@@ -231,7 +249,11 @@ describe('QualityLens', () => {
       accountId: string;
       range: { since: string; until: string };
     };
-    expect(body).toMatchObject({ scope: 'keyword_quality', accountId: '5251780631', limit: 50 });
+    expect(body).toMatchObject({
+      scope: 'keyword_quality',
+      accountId: '5251780631',
+      limit: 50,
+    });
     const days = (Date.parse(body.range.until) - Date.parse(body.range.since)) / 86_400_000 + 1;
     expect(days).toBe(30);
   });

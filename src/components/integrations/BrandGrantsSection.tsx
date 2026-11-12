@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { RevokeGrantButton } from '@/components/integrations/RevokeGrantButton';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
@@ -30,6 +31,8 @@ type BrandGrantsSectionProps = {
 };
 
 export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionProps) {
+  const tUi = await getTranslations('common');
+
   const [{ user, permissions }, grants] = await Promise.all([
     getActiveBrandContext(),
     fetchBrandIntegrationGrants(brandProfileId),
@@ -39,12 +42,9 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
     return (
       <GlassPanel className="p-[var(--card-pad)]">
         <div className="mb-2">
-          <h3 className="text-base font-semibold text-foreground">Granted integrations</h3>
+          <h3 className="text-base font-semibold text-foreground">{tUi('m_6c08cd20d5')}</h3>
         </div>
-        <p className="text-sm text-muted-foreground">
-          No integrations have been granted to this brand yet. Share a personal connection below to
-          get started.
-        </p>
+        <p className="text-sm text-muted-foreground">{tUi('m_985ab5985b')}</p>
       </GlassPanel>
     );
   }
@@ -57,10 +57,8 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
   return (
     <GlassPanel className="p-[var(--card-pad)]">
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-foreground">Granted integrations</h3>
-        <p className="text-sm text-muted-foreground">
-          Connections shared with this brand. Revoking removes access for everyone on the brand.
-        </p>
+        <h3 className="text-base font-semibold text-foreground">{tUi('m_6c08cd20d5')}</h3>
+        <p className="text-sm text-muted-foreground">{tUi('m_f3b464a3d3')}</p>
       </div>
 
       <ul className="flex flex-col gap-2">
@@ -68,7 +66,9 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
           const label = formatProvider(grant.provider);
           const isCallerGranter = callerId !== null && callerId === grant.grantedBy;
           const canRevoke = isCallerGranter || isOwner;
-          const inheritedLabel = isCallerGranter ? 'Granted by you' : 'Inherited from a teammate';
+          const inheritedLabel = isCallerGranter
+            ? tUi('integrationGrantedByYou')
+            : tUi('integrationInherited');
 
           return (
             <li

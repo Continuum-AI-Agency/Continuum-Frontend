@@ -1,3 +1,4 @@
+import { useTranslations as useBetaTranslations } from 'next-intl';
 // What a Google Ads read that cannot happen says: the reason, and the one thing that fixes it —
 // connect Google, grant the account, ask an owner, reconnect a refused login, or the API's own
 // error. The Google tab shows it in place of its read; the Home shows it when every Google read
@@ -42,41 +43,45 @@ function EmptyState({
 }
 
 export function GoogleReadNotice({ state }: { state: GoogleReadNoticeState }) {
+  const betaUiText = useBetaTranslations('scale');
+
   switch (state.status) {
     case 'no-connection':
       return (
         <EmptyState
-          body="Google Ads isn't connected. Connect a Google login with access to the Ads account, then grant that account to this brand."
+          body={betaUiText('beta_53a7dff28d74')}
           connect
           testId="google-empty-no-connection"
-          title="No Google connection"
+          title={betaUiText('beta_afe8a59981aa')}
         />
       );
     case 'no-grant':
       return (
         <EmptyState
-          body="Your Google login is connected, but no Google Ads account is granted to this brand. Grant one in Settings → Integrations."
+          body={betaUiText('beta_968e25cb93a7')}
           connect
           testId="google-empty-no-grant"
-          title="No Google Ads account granted to this brand"
+          title={betaUiText('beta_e53da3192cd0')}
         />
       );
     case 'no-role':
       return (
         <EmptyState
-          body="Reading Google Ads needs the Operator, Admin or Owner role on this brand, and yours is Viewer. Ask an owner or admin of the brand to change it."
+          body={betaUiText('beta_720c0426fa0a')}
           connect={false}
           testId="google-empty-no-role"
-          title="Your role on this brand can’t read Google Ads"
+          title={betaUiText('beta_f65f2bac3b82')}
         />
       );
     case 'no-access':
       return (
         <EmptyState
-          body="This brand lists the account, but no live Google connection grants it to the brand. Grant it again in Settings → Integrations."
+          body={betaUiText('beta_a4e4dd1e1ad7')}
           connect
           testId="google-empty-no-access"
-          title={`No live Google grant reaches ${state.account.name ?? state.account.account_id}`}
+          title={betaUiText('beta_cb401de56d6f', {
+            value0: String(state.account.name ?? state.account.account_id),
+          })}
         />
       );
     case 'error':
@@ -87,8 +92,10 @@ export function GoogleReadNotice({ state }: { state: GoogleReadNoticeState }) {
           testId="google-empty-error"
           title={
             state.account
-              ? `Google Ads could not be read for ${state.account.name ?? state.account.account_id}`
-              : 'Google Ads could not be read'
+              ? betaUiText('beta_bd04b02158fe', {
+                  value0: String(state.account.name ?? state.account.account_id),
+                })
+              : betaUiText('beta_6d8c63abbea1')
           }
         />
       );

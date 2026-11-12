@@ -39,13 +39,22 @@ describe('evidenceLine', () => {
   it('formats CTR as a percentage and reach growth as a multiple', () => {
     expect(
       evidenceLine(
-        evidence({ metric: 'ctr', value: 0.0123, comparator: 'down 40% vs 14d', window: 'd3' }),
+        evidence({
+          metric: 'ctr',
+          value: 0.0123,
+          comparator: 'down 40% vs 14d',
+          window: 'd3',
+        }),
         'USD',
       ),
     ).toBe('CTR 1.23% down 40% vs 14d · 3d');
     expect(
       evidenceLine(
-        evidence({ metric: 'reach_expansion', value: 1.08, comparator: '14d reach vs 7d' }),
+        evidence({
+          metric: 'reach_expansion',
+          value: 1.08,
+          comparator: '14d reach vs 7d',
+        }),
         null,
       ),
     ).toContain('Reach growth 1.08×');
@@ -117,12 +126,17 @@ describe('the headline a queue row leads with', () => {
   it('reads a malformed headline as no headline, rather than printing a figure nobody computed', () => {
     // A label longer than the 32 characters the schema allows, and a value that is not a number.
     expect(
-      queueHeadline({ evidence: evidence({ headline: { kind: 'efficiency', value: 'lots' } }) }),
+      queueHeadline({
+        evidence: evidence({ headline: { kind: 'efficiency', value: 'lots' } }),
+      }),
     ).toBeNull();
     expect(
       queueHeadline({
         evidence: evidence({
-          headline: { ...headline, label: 'a label far longer than the thirty-two allowed' },
+          headline: {
+            ...headline,
+            label: 'a label far longer than the thirty-two allowed',
+          },
         }),
       }),
     ).toBeNull();
@@ -246,7 +260,12 @@ describe('a real production row, before and after the engine carries a headline'
 describe('queueSummary', () => {
   it('groups pending rows by kind + trigger, sums the money, biggest first', () => {
     const rows = [
-      { kind: 'pause', trigger: 'P2_sustained_poor', status: 'pending', evidence: evidence() },
+      {
+        kind: 'pause',
+        trigger: 'P2_sustained_poor',
+        status: 'pending',
+        evidence: evidence(),
+      },
       {
         kind: 'pause',
         trigger: 'P2_sustained_poor',
@@ -265,7 +284,12 @@ describe('queueSummary', () => {
         status: 'pending',
         evidence: null,
       },
-      { kind: 'pause', trigger: 'P2_sustained_poor', status: 'expired', evidence: evidence() },
+      {
+        kind: 'pause',
+        trigger: 'P2_sustained_poor',
+        status: 'expired',
+        evidence: evidence(),
+      },
     ];
     expect(queueSummary(rows).map((g) => [g.trigger, g.count, g.impactPerDay])).toEqual([
       ['P1_zero_upper_funnel', 1, 500],
@@ -282,20 +306,22 @@ describe('words', () => {
   });
   it('asOfLine names the cycle and the next one, or nothing without a cycle', () => {
     expect(asOfLine('2026-09-17T06:10:00Z', '2026-09-20T06:00:00Z')).toMatch(
-      /^As of Sep 1[67] at .* · next cycle Sep (19|20) at /,
+      /^As of Sep 1[67](?: at |, ).* · next cycle Sep (19|20)(?: at |, )/,
     );
     expect(asOfLine(null, '2026-09-20T06:00:00Z')).toBeNull();
   });
   it("asOfLine calls a stale portfolio's next_realloc_at an attempt, never a cycle", () => {
     expect(asOfLine('2026-08-05T06:10:00Z', '2026-09-24T06:00:00Z', true)).toMatch(
-      /^As of Aug [45] at .* · next attempt Sep 2[34] at /,
+      /^As of Aug [45](?: at |, ).* · next attempt Sep 2[34](?: at |, )/,
     );
     expect(asOfLine('2026-08-05T06:10:00Z', '2026-09-24T06:00:00Z', true)).not.toContain(
       'next cycle',
     );
     // Fresh is the default, so every existing caller reads exactly as before.
     expect(asOfLine('2026-08-05T06:10:00Z', '2026-09-24T06:00:00Z', false)).toContain('next cycle');
-    expect(asOfLine('2026-08-05T06:10:00Z', null, true)).toMatch(/^As of Aug [45] at [^·]*$/);
+    expect(asOfLine('2026-08-05T06:10:00Z', null, true)).toMatch(
+      /^As of Aug [45](?: at |, )[^·]*$/,
+    );
   });
 });
 
@@ -303,11 +329,15 @@ describe('settings patch', () => {
   it('reads a well-formed patch from seed and rejects anything else', () => {
     expect(
       settingsPatchOf({
-        seed: { patch: { field: 'max_change_pct_per_cycle', from: 0.2, to: 0.3 } },
+        seed: {
+          patch: { field: 'max_change_pct_per_cycle', from: 0.2, to: 0.3 },
+        },
       }),
     ).toEqual({ field: 'max_change_pct_per_cycle', from: 0.2, to: 0.3 });
     expect(
-      settingsPatchOf({ seed: { patch: { field: 'apply_mode', from: null, to: 1 } } }),
+      settingsPatchOf({
+        seed: { patch: { field: 'apply_mode', from: null, to: 1 } },
+      }),
     ).toBeNull();
     expect(settingsPatchOf({ seed: { patch: { field: 'daily_total', to: 'x' } } })).toBeNull();
     expect(settingsPatchOf({ seed: null })).toBeNull();
@@ -336,7 +366,11 @@ describe('evidenceSeries', () => {
     currentBudget: 100,
     ageDays: 30,
     frequency7d: 3.4,
-    windows: { d3: w(300, 2, 30, 3000), d7: w(700, 10, 100, 8000), d14: w(1400, 35, 300, 20000) },
+    windows: {
+      d3: w(300, 2, 30, 3000),
+      d7: w(700, 10, 100, 8000),
+      d14: w(1400, 35, 300, 20000),
+    },
   } as never;
 
   it('turns a cost-per-result argument into the three windows against the reference', () => {
@@ -477,9 +511,14 @@ describe('withHonestCapBinding', () => {
       ...s1,
       reason:
         'The ±30% velocity cap bound on 3 of 4 moves this cycle. 1 of 4 moves went past the ±30% cap: pacing may exceed it.',
-      evidence: { ...s1.evidence, capBinding: { atCap: 3, breached: 1, moves: 4 } },
+      evidence: {
+        ...s1.evidence,
+        capBinding: { atCap: 3, breached: 1, moves: 4 },
+      },
     };
-    const items = [-0.3, 0.3, -0.3, -0.45].map((change_pct) => ({ change_pct }));
+    const items = [-0.3, 0.3, -0.3, -0.45].map((change_pct) => ({
+      change_pct,
+    }));
     expect(withHonestCapBinding(engineRow as never, items)).toBe(engineRow as never);
   });
 

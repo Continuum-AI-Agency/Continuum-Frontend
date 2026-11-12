@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { BackgroundJobsProvider, useBackgroundJobs } from './BackgroundJobsProvider';
 
 afterEach(cleanup);

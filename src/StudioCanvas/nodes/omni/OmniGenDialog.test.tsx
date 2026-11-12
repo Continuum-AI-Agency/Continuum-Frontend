@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import type { OmniVariation } from '../../types';
 import { OmniGenDialog, type OmniGenDialogProps } from './OmniGenDialog';
@@ -92,7 +98,9 @@ describe('OmniGenDialog', () => {
 
     expect(textarea.value).toBe('');
     await act(async () => {
-      fireEvent.change(textarea, { target: { value: 'make the sky sunset orange' } });
+      fireEvent.change(textarea, {
+        target: { value: 'make the sky sunset orange' },
+      });
     });
     await act(async () => {
       fireEvent.click(view.getByRole('button', { name: /send edit/i }));
@@ -127,7 +135,10 @@ describe('OmniGenDialog', () => {
       createdAt: 1,
     };
     const variations = [done('v1'), pending];
-    const { view, props } = renderDialog({ variations, activeVariation: pending });
+    const { view, props } = renderDialog({
+      variations,
+      activeVariation: pending,
+    });
 
     // The dialog renders through a portal, so it lives on baseElement, not container.
     const pendingSpinner = () => view.baseElement.querySelector('.animate-spin');
@@ -159,7 +170,12 @@ describe('OmniGenDialog', () => {
 
   it('only selects finished variations', async () => {
     const first = done('v1');
-    const broken: OmniVariation = { id: 'v2', label: 'x', status: 'error', createdAt: 1 };
+    const broken: OmniVariation = {
+      id: 'v2',
+      label: 'x',
+      status: 'error',
+      createdAt: 1,
+    };
     const { calls, view } = renderDialog({
       variations: [first, broken],
       activeVariation: first,

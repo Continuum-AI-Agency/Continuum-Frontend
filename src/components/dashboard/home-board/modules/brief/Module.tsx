@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale as useHomeLocale } from 'next-intl';
 
 // The brief opened: the numbered brief with the source of each figure when the Backend answers
 // (until it deploys the module says so), then every ad account's stored read, newest first, each
@@ -23,6 +24,9 @@ const PLATFORM_LABEL: Record<BriefEntry['platform'], string> = {
 };
 
 function FigureRow({ figure }: { figure: HomeBriefFigure }) {
+  const betaUiText = useBetaTranslations('dashboard');
+  const homeLocale = useHomeLocale();
+
   const href = briefFigureHref(figure);
   const covers = briefFigureWindow(figure);
   return (
@@ -46,7 +50,7 @@ function FigureRow({ figure }: { figure: HomeBriefFigure }) {
             <>
               {' · '}
               <Link className="text-primary-ink underline-offset-2 hover:underline" href={href}>
-                Open
+                {betaUiText('beta_ed077f3d8125')}
               </Link>
             </>
           ) : null}
@@ -86,13 +90,16 @@ export default function BriefModule({
   entries: readonly BriefEntry[];
   failed: number;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+  const homeLocale = useHomeLocale();
+
   const today = new Date();
   return (
     <div className="flex flex-col gap-4" data-testid="home-brief-module">
       {brief ? <NumberedBrief brief={brief} /> : null}
       {entries.map((entry) => {
-        const age = staleLabel(entry);
-        const readOn = readOnLabel(entry, today);
+        const age = staleLabel(entry, betaUiText);
+        const readOn = readOnLabel(entry, today, betaUiText, homeLocale);
         return (
           <article
             className="flex flex-col gap-2 rounded-lg border p-3"
@@ -116,7 +123,7 @@ export default function BriefModule({
                 className="text-primary-ink underline-offset-2 hover:underline"
                 href={optimizerHref(entry.adAccountId)}
               >
-                Open in Optimizer
+                {betaUiText('beta_c0e326aaa54f')}
               </Link>
               <Link
                 className="text-primary-ink underline-offset-2 hover:underline"
@@ -126,7 +133,7 @@ export default function BriefModule({
                   { newConversation: true },
                 )}
               >
-                Ask Jaina about this read
+                {betaUiText('beta_a56e38c8ca1d')}
               </Link>
             </div>
           </article>
@@ -134,7 +141,10 @@ export default function BriefModule({
       })}
       {failed > 0 ? (
         <p className="text-muted-foreground text-xs">
-          {failed === 1 ? 'One account’s read' : `${failed} accounts’ reads`} could not be loaded.
+          {failed === 1
+            ? betaUiText('beta_24743491e278')
+            : betaUiText('beta_fdb9f3371e30', { value0: String(failed) })}{' '}
+          {betaUiText('beta_947d0fc30a45')}
         </p>
       ) : null}
       {brief ? null : (

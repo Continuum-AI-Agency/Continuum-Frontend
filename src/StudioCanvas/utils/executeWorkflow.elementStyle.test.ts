@@ -1,3 +1,5 @@
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../../messages/studio/en.json';
 // An Element's `/slug` style defaults ride into every generator it is wired into, ahead of
 // the generator's own prompt so a slug the user typed there still wins.
 
@@ -74,7 +76,10 @@ describe('elementStyleSlugsFor', () => {
     const nodes = [
       elementNode('a', ['film-grain']),
       elementNode('b', ['matte']),
-      { ...node('img', 'image'), data: { styleSlugs: ['not-an-element'] } } as StudioNode,
+      {
+        ...node('img', 'image'),
+        data: { styleSlugs: ['not-an-element'] },
+      } as StudioNode,
       node('gen', 'nanoGen'),
       node('other', 'nanoGen'),
     ];
@@ -138,7 +143,10 @@ describe('executeWorkflow — Element style tokens', () => {
       id: 'gen',
       position: { x: 0, y: 0 },
       type: 'nanoGen',
-      data: { model: 'nano-banana', positivePrompt: 'the bottle on wet sand /noir' },
+      data: {
+        model: 'nano-banana',
+        positivePrompt: 'the bottle on wet sand /noir',
+      },
     });
     const executeGeneration = mock(async (_id: string, _payload: { prompt: string }) => ({
       success: true,
@@ -147,6 +155,11 @@ describe('executeWorkflow — Element style tokens', () => {
 
     await executeWorkflow(
       {
+        translateUi: createTranslator({
+          locale: 'en',
+          messages: { studio: studioMessages },
+          namespace: 'studio',
+        }),
         executeGeneration,
         executeVideoExtension: mock(async () => ({ success: true })),
         executeEnrichment: mock(async () => ({ success: true })),
@@ -190,6 +203,11 @@ describe('executeWorkflow — Element style tokens', () => {
 
     await executeWorkflow(
       {
+        translateUi: createTranslator({
+          locale: 'en',
+          messages: { studio: studioMessages },
+          namespace: 'studio',
+        }),
         executeGeneration: mock(async () => ({ success: true })),
         executeVideoExtension: mock(async () => ({ success: true })),
         executeEnrichment: mock(async () => ({ success: true })),

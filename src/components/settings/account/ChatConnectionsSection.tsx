@@ -9,8 +9,11 @@ import {
   Unplug,
   Users,
 } from 'lucide-react';
+
+import { useFormatter, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { AddToSlackButton } from '@/components/slack/AddToSlackButton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,19 +28,18 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   listChatConnections,
   revokeChatConnection,
   setPreferredChatConnection,
 } from '@/lib/api/chatConnections.client';
-import { AddToSlackButton } from '@/components/slack/AddToSlackButton';
 import { slackInstallStartHref } from '@/lib/api/slackWorkspaces.client';
 import {
   type ChatConnection,
   type ChatPlatform,
   orderChatConnections,
 } from '@/lib/chat/connections';
-import { formatRelativeTime } from '@/lib/time/relativeTime';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -57,6 +59,11 @@ type ChatConnectionsSectionProps = {
 };
 
 export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSectionProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+  const format = useFormatter();
+
   const { show } = useToast();
   const [state, setState] = useState<LoadState>('loading');
   const [connections, setConnections] = useState<ChatConnection[]>([]);
@@ -88,14 +95,17 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
       await setPreferredChatConnection(brandId, connection.id);
       await load();
       show({
-        title: 'Chat route updated',
-        description: `${PLATFORM_LABEL[connection.platform]} is preferred for ${brandName}.`,
+        title: tUi('m_4fe3233066'),
+        description: tUi('m_895bb82f35', {
+          v0: String(PLATFORM_LABEL[connection.platform]),
+          v1: String(brandName),
+        }),
         variant: 'success',
       });
     } catch (error) {
       show({
-        title: 'Could not update chat route',
-        description: error instanceof Error ? error.message : 'Refresh and try again.',
+        title: tUi('m_b9e7acc3b1'),
+        description: error instanceof Error ? uiErrorMessage(error) : tUi('m_41848a0e55'),
         variant: 'error',
       });
     } finally {
@@ -109,16 +119,16 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
       await revokeChatConnection(connection.id);
       await load();
       show({
-        title: 'Chat connection revoked',
-        description: `${
-          connection.displayName ?? connection.handle ?? connection.platformUserId
-        } can no longer receive Continuum requests.`,
+        title: tUi('m_a8c8b8bc08'),
+        description: tUi('m_3a9317b3f6', {
+          v0: String(connection.displayName ?? connection.handle ?? connection.platformUserId),
+        }),
         variant: 'success',
       });
     } catch (error) {
       show({
-        title: 'Could not revoke connection',
-        description: error instanceof Error ? error.message : 'Refresh and try again.',
+        title: tUi('m_d6328fd593'),
+        description: error instanceof Error ? uiErrorMessage(error) : tUi('m_41848a0e55'),
         variant: 'error',
       });
     } finally {
@@ -128,11 +138,7 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
 
   if (state === 'loading') {
     return (
-      <div
-        role="status"
-        aria-label="Loading chat connections"
-        className="divide-y divide-border/60"
-      >
+      <div role="status" aria-label={tUi('m_0ffe9dda56')} className="divide-y divide-border/60">
         {[0, 1].map((row) => (
           <div key={row} className="flex items-center gap-3 py-3">
             <Skeleton className="size-8 rounded-md" />
@@ -152,15 +158,13 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
         <div>
           <p className="flex items-center gap-2 text-sm font-medium">
             <TriangleAlert className="size-4 text-warning" />
-            Chat routes could not be loaded
+            {tUi('m_831af0a8c4')}
           </p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Goal requests still remain available in Continuum.
-          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{tUi('m_b76b952a28')}</p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
           <RefreshCw className="size-3.5" />
-          Retry
+          {tUi('m_9f5cd8a2e8')}
         </Button>
       </div>
     );
@@ -170,10 +174,9 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
     return (
       <div className="rounded-lg border border-dashed border-border/70 px-4 py-8 text-center">
         <MessageSquareText className="mx-auto size-5 text-muted-foreground" />
-        <p className="mt-2 text-sm font-medium">No chat identity linked</p>
+        <p className="mt-2 text-sm font-medium">{tUi('m_8e5a2d7d53')}</p>
         <p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-muted-foreground">
-          Add Continuum to your Slack workspace, then message the bot to link your identity. Until
-          then, teammate requests stay available in the Goal case file.
+          {tUi('m_03866c61d2')}
         </p>
         <AddToSlackButton href={slackInstallStartHref(brandId)} className="mx-auto mt-4" />
       </div>
@@ -202,23 +205,25 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
                 <p className="truncate text-sm font-medium">{displayName}</p>
                 <Pill variant={routable ? 'success' : 'warning'}>
                   <PillIndicator variant={routable ? 'success' : 'warning'} />
-                  {routable ? 'Routable' : 'Needs attention'}
+                  {routable ? tUi('m_265b0ef759') : tUi('m_a126722ec0')}
                 </Pill>
                 {preferred ? (
                   <Pill variant="violet">
                     <Radio className="size-3" />
-                    Preferred for {brandName}
+                    {tUi('m_c1d9b56abd')}
+                    {brandName}
                   </Pill>
                 ) : null}
               </div>
               <p className="mt-1 truncate font-mono text-2xs text-muted-foreground">
-                {PLATFORM_LABEL[connection.platform]} · {connection.workspaceId} · verified{' '}
-                {formatRelativeTime(connection.lastVerifiedAt)}
+                {PLATFORM_LABEL[connection.platform]} · {connection.workspaceId}
+                {tUi('m_2a7c47867f')}{' '}
+                {format.relativeTime(new Date(connection.lastVerifiedAt), {
+                  now: Date.now(),
+                })}
               </p>
               {!routable ? (
-                <p className="mt-1 text-xs leading-5 text-warning">
-                  Reopen Continuum from this workspace to restore a reply destination.
-                </p>
+                <p className="mt-1 text-xs leading-5 text-warning">{tUi('m_85149b7407')}</p>
               ) : null}
             </div>
             <div className="flex items-center gap-2 sm:justify-end">
@@ -231,7 +236,7 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
                   onClick={() => void makePreferred(connection)}
                 >
                   <ShieldCheck className="size-3.5" />
-                  Use for this brand
+                  {tUi('m_f6d96f7851')}
                 </Button>
               ) : null}
               <AlertDialog>
@@ -245,25 +250,27 @@ export function ChatConnectionsSection({ brandId, brandName }: ChatConnectionsSe
                       className="text-muted-foreground hover:text-destructive"
                     >
                       <Unplug className="size-3.5" />
-                      Revoke
+                      {tUi('m_0be720759f')}
                     </Button>
                   }
                 />
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Revoke this chat identity?</AlertDialogTitle>
+                    <AlertDialogTitle>{tUi('m_3b5e346a32')}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Continuum will stop routing Goal requests to {displayName} on{' '}
-                      {PLATFORM_LABEL[connection.platform]}. Requests will remain available in-app.
+                      {tUi('m_c416692b0d')}
+                      {displayName}
+                      {tUi('m_53474777ed')} {PLATFORM_LABEL[connection.platform]}
+                      {tUi('m_10aa0dd5e3')}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Keep connection</AlertDialogCancel>
+                    <AlertDialogCancel>{tUi('m_8c4ad0128c')}</AlertDialogCancel>
                     <AlertDialogAction
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       onClick={() => void revoke(connection)}
                     >
-                      Revoke connection
+                      {tUi('m_d6f480f9eb')}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

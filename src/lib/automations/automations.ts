@@ -1,9 +1,9 @@
+'use client';
+
 // Browser API + React Query hooks for Automations (scheduled agent prompts
 // emailed as reports). Calls the agents-ts backend directly per the FE
 // API-layer rule — no Next.js proxy route; every payload parses through
 // @continuum/contracts schemas.
-
-'use client';
 
 import {
   type Automation,
@@ -384,7 +384,9 @@ export function useUpdateAutomation(brandId?: string) {
     // low-risk flip; everything else invalidates and refetches.
     onMutate: async ({ automationId, patch }) => {
       if (patch.enabled === undefined || Object.keys(patch).length !== 1) return {};
-      await queryClient.cancelQueries({ queryKey: automationsQueryKey(brandId) });
+      await queryClient.cancelQueries({
+        queryKey: automationsQueryKey(brandId),
+      });
       const previous = queryClient.getQueryData<Automation[]>(automationsQueryKey(brandId));
       queryClient.setQueryData<Automation[]>(automationsQueryKey(brandId), (list) =>
         list?.map((a) => (a.id === automationId ? { ...a, enabled: patch.enabled as boolean } : a)),
@@ -397,8 +399,12 @@ export function useUpdateAutomation(brandId?: string) {
       }
     },
     onSettled: (_data, _err, { automationId }) => {
-      void queryClient.invalidateQueries({ queryKey: automationsQueryKey(brandId) });
-      void queryClient.invalidateQueries({ queryKey: automationQueryKey(automationId) });
+      void queryClient.invalidateQueries({
+        queryKey: automationsQueryKey(brandId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: automationQueryKey(automationId),
+      });
     },
   });
 }
@@ -408,7 +414,9 @@ export function useDeleteAutomation(brandId?: string) {
   return useMutation({
     mutationFn: deleteAutomation,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: automationsQueryKey(brandId) });
+      void queryClient.invalidateQueries({
+        queryKey: automationsQueryKey(brandId),
+      });
     },
   });
 }
@@ -418,8 +426,12 @@ export function useRunAutomationNow(brandId?: string) {
   return useMutation({
     mutationFn: runAutomationNow,
     onSuccess: (_runId, automationId) => {
-      void queryClient.invalidateQueries({ queryKey: automationRunsQueryKey(automationId) });
-      void queryClient.invalidateQueries({ queryKey: automationsQueryKey(brandId) });
+      void queryClient.invalidateQueries({
+        queryKey: automationRunsQueryKey(automationId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: automationsQueryKey(brandId),
+      });
     },
   });
 }

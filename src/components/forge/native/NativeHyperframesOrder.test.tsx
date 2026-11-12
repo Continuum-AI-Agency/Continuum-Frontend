@@ -1,7 +1,12 @@
 import { afterEach, expect, test } from 'bun:test';
 import type { HyperframesOrderView } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { NativeHyperframesOrder } from './NativeHyperframesOrder';
 import { nativeOrderDefaults } from './nativeEditorEdits';
 
@@ -20,7 +25,10 @@ const view: HyperframesOrderView = {
     {
       parentId: 'root',
       parentTag: 'div',
-      children: Array.from({ length: 21 }, (_, index) => ({ nodeId: `node-${index}`, tag: 'div' })),
+      children: Array.from({ length: 21 }, (_, index) => ({
+        nodeId: `node-${index}`,
+        tag: 'div',
+      })),
     },
   ],
 };
@@ -50,7 +58,11 @@ test('source order bounds mounted controls and moving across pages retains every
     'node-19',
   ]);
   expect(
-    (screen.getByRole('button', { name: 'Move node-19 later' }) as HTMLButtonElement).disabled,
+    (
+      screen.getByRole('button', {
+        name: 'Move node-19 later',
+      }) as HTMLButtonElement
+    ).disabled,
   ).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Move node-19 earlier' }));
   expect(screen.getAllByRole('listitem')).toHaveLength(20);

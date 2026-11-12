@@ -1,6 +1,7 @@
 'use client';
 
 import { PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -48,6 +49,8 @@ export function CollapseConversationsButton({
   onToggle: () => void;
   className?: string;
 }) {
+  const tUi = useTranslations('common');
+
   return (
     <TooltipProvider delay={150}>
       <Tooltip>
@@ -58,14 +61,14 @@ export function CollapseConversationsButton({
               size="icon-sm"
               variant="ghost"
               onClick={onToggle}
-              aria-label="Hide conversations"
+              aria-label={tUi('m_ce0c472129')}
               className={cn('shrink-0 text-muted-foreground', className)}
             >
               <PanelLeftCloseIcon className="size-4" />
             </Button>
           }
         />
-        <TooltipContent side="bottom">Hide conversations</TooltipContent>
+        <TooltipContent side="bottom">{tUi('m_ce0c472129')}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
@@ -82,6 +85,7 @@ export function CollapsedConversationsRail({
   onNewSession: () => void;
   isInteractionDisabled?: boolean;
 }) {
+  const uiText = useTranslations('common');
   return (
     <TooltipProvider delay={150}>
       <div className="flex flex-row items-center gap-1 p-2 md:h-full md:flex-col">
@@ -93,14 +97,14 @@ export function CollapsedConversationsRail({
                 size="icon-sm"
                 variant="ghost"
                 onClick={onExpand}
-                aria-label="Show conversations"
+                aria-label={uiText('m_b1934d4dd7')}
                 className="text-muted-foreground"
               >
                 <PanelLeftOpenIcon className="size-4" />
               </Button>
             }
           />
-          <TooltipContent side="right">Show conversations</TooltipContent>
+          <TooltipContent side="right">{uiText('m_b1934d4dd7')}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -111,13 +115,13 @@ export function CollapsedConversationsRail({
                 variant="secondary"
                 onClick={onNewSession}
                 disabled={isInteractionDisabled}
-                aria-label="New conversation"
+                aria-label={uiText('new_conversation_396c946')}
               >
                 <PlusIcon className="size-4" />
               </Button>
             }
           />
-          <TooltipContent side="right">New conversation</TooltipContent>
+          <TooltipContent side="right">{uiText('new_conversation_396c946')}</TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>

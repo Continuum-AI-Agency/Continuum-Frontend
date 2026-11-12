@@ -1,6 +1,7 @@
 'use client';
 
 import { motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,8 @@ interface WelcomeScreenProps {
 }
 
 export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
+  const tUi = useTranslations('onboarding');
+
   const shouldReduceMotion = useReducedMotion();
   const [revealCta, setRevealCta] = useState(shouldReduceMotion ?? false);
 
@@ -46,7 +49,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
         <h1
           id="welcome-heading"
           className="text-balance text-[1.75rem] font-semibold leading-[1.2] text-foreground sm:text-[2.25rem] md:text-[2.75rem]"
-          aria-label="Welcome to your Brand's Scaling Journey with Continuum"
+          aria-label={tUi('m_e5c9857c6a')}
         >
           <motion.span
             className="block"
@@ -58,7 +61,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
               ease: [0, 0, 0.2, 1],
             }}
           >
-            Welcome to your Brand&apos;s Scaling Journey with
+            {tUi('m_509697e9ba')}
           </motion.span>
           <motion.span
             className="mt-3 block font-extrabold tracking-tight text-primary"
@@ -81,7 +84,10 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
           animate={revealCta ? { opacity: 1, y: 0 } : undefined}
-          transition={{ duration: shouldReduceMotion ? 0 : 0.2, ease: [0, 0, 0.2, 1] }}
+          transition={{
+            duration: shouldReduceMotion ? 0 : 0.2,
+            ease: [0, 0, 0.2, 1],
+          }}
         >
           <Button
             variant="default"
@@ -90,7 +96,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
             autoFocus
             className="min-w-[12rem]"
           >
-            Get started
+            {tUi('m_90e40d5043')}
           </Button>
         </motion.div>
       </div>

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, renderHook } from '@testing-library/react';
+import { cleanup, renderHook } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import type { PlannerAiStudioHandoff } from '@/lib/organic/ai-studio-bridge';
 import type { StudioNode } from '../types';
@@ -95,7 +95,9 @@ type HydrationProps = {
 };
 
 function renderHydration(initialProps: HydrationProps) {
-  return renderHook((props: HydrationProps) => usePlannerSeedHydration(props), { initialProps });
+  return renderHook((props: HydrationProps) => usePlannerSeedHydration(props), {
+    initialProps,
+  });
 }
 
 function seededCallCounts() {
@@ -122,7 +124,9 @@ describe('usePlannerSeedHydration', () => {
   afterEach(cleanup);
 
   afterAll(() => {
-    mock.module('../stores/useStudioStore', () => ({ useStudioStore: realUseStudioStore }));
+    mock.module('../stores/useStudioStore', () => ({
+      useStudioStore: realUseStudioStore,
+    }));
     mock.module('../utils/inlineReferenceImageNodes', () => ({
       inlineReferenceImageNodes: realInlineReferenceImageNodes,
     }));
@@ -132,7 +136,11 @@ describe('usePlannerSeedHydration', () => {
   });
 
   it('waits while the canvas is still loading', () => {
-    renderHydration({ organicPlannerSeed: makeSeed(), activeRoomId: 'room-1', isLoading: true });
+    renderHydration({
+      organicPlannerSeed: makeSeed(),
+      activeRoomId: 'room-1',
+      isLoading: true,
+    });
 
     expect(seededCallCounts()).toEqual({
       takeSnapshot: 0,
@@ -144,7 +152,11 @@ describe('usePlannerSeedHydration', () => {
   });
 
   it('does nothing without a Planner seed', () => {
-    renderHydration({ organicPlannerSeed: null, activeRoomId: 'room-1', isLoading: false });
+    renderHydration({
+      organicPlannerSeed: null,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     expect(seededCallCounts()).toEqual({
       takeSnapshot: 0,
@@ -168,7 +180,11 @@ describe('usePlannerSeedHydration', () => {
     } as unknown as StudioNode;
     store.nodes = [existing];
     const seed = makeSeed();
-    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+    renderHydration({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     expect(setNodes).toHaveBeenCalledTimes(1);
     const written = setNodes.mock.calls[0]?.[0] as StudioNode[];
@@ -184,7 +200,11 @@ describe('usePlannerSeedHydration', () => {
     const existingEdge = { id: 'existing-edge', source: 'a', target: 'b' };
     store.edges = [existingEdge];
     const seed = makeSeed();
-    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+    renderHydration({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     expect(setEdges).toHaveBeenCalledTimes(1);
     const written = setEdges.mock.calls[0]?.[0] as { id: string }[];
@@ -203,7 +223,11 @@ describe('usePlannerSeedHydration', () => {
     store.nodes = [...starter.nodes];
     store.edges = [...starter.edges];
 
-    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+    renderHydration({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     expect(setNodes).not.toHaveBeenCalled();
     expect(setEdges).not.toHaveBeenCalled();
@@ -222,7 +246,11 @@ describe('usePlannerSeedHydration', () => {
       } as unknown as StudioNode,
     ];
     const seed = makeSeed();
-    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+    renderHydration({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     const written = setNodes.mock.calls[0]?.[0] as StudioNode[];
     const seededIds = new Set(buildStarterFlow(seed).nodes.map((node) => node.id));
@@ -235,7 +263,11 @@ describe('usePlannerSeedHydration', () => {
 
   it('seeds the starter flow into an empty, loaded canvas', () => {
     const seed = makeSeed();
-    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+    renderHydration({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     const starter = buildStarterFlow(seed);
     expect(seededCallCounts()).toEqual({
@@ -254,7 +286,11 @@ describe('usePlannerSeedHydration', () => {
       format: 'Reel',
       mediaSuggestion: { assetUrl: 'https://cdn.example.com/seed.png' },
     });
-    renderHydration({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+    renderHydration({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     const starter = buildStarterFlow(seed);
     expect(inlineReferenceImageNodes).toHaveBeenCalledTimes(1);
@@ -275,9 +311,17 @@ describe('usePlannerSeedHydration', () => {
       isLoading: false,
     });
 
-    rerender({ organicPlannerSeed: seed, activeRoomId: 'room-1', isLoading: false });
+    rerender({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
     // A fresh seed object with the same draftId is still the same hydration key.
-    rerender({ organicPlannerSeed: makeSeed(), activeRoomId: 'room-1', isLoading: false });
+    rerender({
+      organicPlannerSeed: makeSeed(),
+      activeRoomId: 'room-1',
+      isLoading: false,
+    });
 
     expect(seededCallCounts()).toEqual({
       takeSnapshot: 1,
@@ -295,7 +339,11 @@ describe('usePlannerSeedHydration', () => {
       isLoading: false,
     });
 
-    rerender({ organicPlannerSeed: seed, activeRoomId: 'room-2', isLoading: false });
+    rerender({
+      organicPlannerSeed: seed,
+      activeRoomId: 'room-2',
+      isLoading: false,
+    });
 
     expect(seededCallCounts()).toEqual({
       takeSnapshot: 2,

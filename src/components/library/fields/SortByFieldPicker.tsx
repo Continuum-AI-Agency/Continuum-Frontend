@@ -8,7 +8,8 @@
 
 import type { CustomField } from '@continuum/contracts';
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, ChevronDown } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,11 +17,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { usePathname, useRouter } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 
 type Direction = 'field_asc' | 'field_desc';
 
 export function SortByFieldPicker({ fields }: { fields: readonly CustomField[] }) {
+  const translateUi = useUiTranslations('library');
+
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -53,11 +57,13 @@ export function SortByFieldPicker({ fields }: { fields: readonly CustomField[] }
         render={
           <button
             type="button"
-            aria-label="Sort by field"
+            aria-label={translateUi('sort_by_field_41fa9060')}
             aria-pressed={activeField !== null}
             className={cn(
               'flex min-h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors active:scale-[0.96]',
-              activeField ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              activeField
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
             {direction === 'field_desc' ? (
@@ -65,7 +71,11 @@ export function SortByFieldPicker({ fields }: { fields: readonly CustomField[] }
             ) : (
               <ArrowUpNarrowWide className="size-3.5" />
             )}
-            {activeField ? `Sorted by ${activeField.name}` : 'Sort by field'}
+            {activeField
+              ? translateUi('sorted_by_value0_d7fb564e', {
+                  value0: String(activeField.name),
+                })
+              : translateUi('sort_by_field_41fa9060')}
             <ChevronDown className="size-3 opacity-60" />
           </button>
         }
@@ -77,7 +87,9 @@ export function SortByFieldPicker({ fields }: { fields: readonly CustomField[] }
             className="gap-1.5 text-xs"
             onSelect={() => apply(field.id, direction)}
           >
-            <Check className={cn('size-3.5', activeField?.id === field.id ? 'opacity-100' : 'opacity-0')} />
+            <Check
+              className={cn('size-3.5', activeField?.id === field.id ? 'opacity-100' : 'opacity-0')}
+            />
             {field.name}
           </DropdownMenuItem>
         ))}
@@ -90,13 +102,16 @@ export function SortByFieldPicker({ fields }: { fields: readonly CustomField[] }
                 apply(activeField.id, direction === 'field_asc' ? 'field_desc' : 'field_asc')
               }
             >
-              {direction === 'field_asc' ? 'Descending' : 'Ascending'}
+              {direction === 'field_asc'
+                ? translateUi('descending_79479a6c')
+                : translateUi('ascending_77184595')}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-xs text-muted-foreground"
               onSelect={() => apply(null, direction)}
             >
-              Clear field sort
+              {' '}
+              {translateUi('clear_field_sort_28488781')}{' '}
             </DropdownMenuItem>
           </>
         ) : null}

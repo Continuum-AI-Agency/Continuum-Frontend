@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The real popover and select are Base UI popups. Stubbing them mounts the controls
 // eagerly, which is what these assertions are about — the field descriptors turning
@@ -73,7 +73,14 @@ mock.module('../../hooks/useNodeConfigPatch', () => ({
 mock.module('../../stores/useStudioStore', () => ({
   useStudioStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      nodes: [{ id: 'node-1', type: 'action', position: { x: 500, y: 300 }, data: {} }],
+      nodes: [
+        {
+          id: 'node-1',
+          type: 'action',
+          position: { x: 500, y: 300 },
+          data: {},
+        },
+      ],
       edges: [],
       setNodes: mock(),
       setEdges: mock(),
@@ -82,7 +89,12 @@ mock.module('../../stores/useStudioStore', () => ({
     }),
 }));
 mock.module('@/lib/brands/useBrandBook.client', () => ({
-  useBrandBook: () => ({ brandTokens: null, brandBook: null, isLoading: false, isError: false }),
+  useBrandBook: () => ({
+    brandTokens: null,
+    brandBook: null,
+    isLoading: false,
+    isError: false,
+  }),
 }));
 mock.module('@/lib/creative-assets/storageClient', () => ({
   createSignedAssetUrl: mock(async () => 'https://signed.test/logo.png'),
@@ -184,7 +196,10 @@ describe('ActionConfigPopover', () => {
     fireEvent.click(container.querySelector('input[type="checkbox"]') as HTMLElement);
 
     expect(patch).toHaveBeenCalledWith('node-1', 'action', {
-      config: { ...parseActionConfig('text.findReplace', {}), caseSensitive: true },
+      config: {
+        ...parseActionConfig('text.findReplace', {}),
+        caseSensitive: true,
+      },
     });
   });
 
@@ -196,7 +211,10 @@ describe('ActionConfigPopover', () => {
     fireEvent.click(getByLabelText('Clear Max Parts'));
 
     expect(patch).toHaveBeenCalledWith('node-1', 'action', {
-      config: { ...parseActionConfig('text.split', { maxParts: 2 }), maxParts: null },
+      config: {
+        ...parseActionConfig('text.split', { maxParts: 2 }),
+        maxParts: null,
+      },
     });
   });
 
@@ -209,7 +227,10 @@ describe('ActionConfigPopover', () => {
     fireEvent.change(maxParts as HTMLInputElement, { target: { value: '' } });
 
     expect(patch).toHaveBeenCalledWith('node-1', 'action', {
-      config: { ...parseActionConfig('text.split', { maxParts: 2 }), maxParts: null },
+      config: {
+        ...parseActionConfig('text.split', { maxParts: 2 }),
+        maxParts: null,
+      },
     });
   });
 
@@ -219,7 +240,9 @@ describe('ActionConfigPopover', () => {
   // in all but name, so the panel has to honour the discriminator.
   it('offers only the knobs the selected extract mode actually reads', () => {
     const knobsFor = (mode: string) => {
-      const { container, unmount } = renderPopover('video.extractFrames', { mode });
+      const { container, unmount } = renderPopover('video.extractFrames', {
+        mode,
+      });
       const text = container.textContent ?? '';
       const labels = ['Count', 'Interval Seconds', 'At Seconds', 'Threshold'].filter((label) =>
         text.includes(label),
@@ -235,7 +258,9 @@ describe('ActionConfigPopover', () => {
   });
 
   it('keeps every extract mode reachable while gating the fields', () => {
-    const { getByTestId } = renderPopover('video.extractFrames', { mode: 'single' });
+    const { getByTestId } = renderPopover('video.extractFrames', {
+      mode: 'single',
+    });
 
     const options = Array.from(getByTestId('config-select').querySelectorAll('option')).map(
       (option) => option.getAttribute('value'),
@@ -267,7 +292,9 @@ describe('ActionConfigPopover', () => {
       },
     });
 
-    fireEvent.change(getByLabelText('Tint colour'), { target: { value: '#112233' } });
+    fireEvent.change(getByLabelText('Tint colour'), {
+      target: { value: '#112233' },
+    });
 
     const written = patch.mock.calls[0]?.[2] as {
       config: {

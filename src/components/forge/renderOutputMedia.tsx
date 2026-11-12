@@ -6,6 +6,7 @@
 // CDN, before the fleet's file: one far region, measured at 120–165 KB/s.
 
 import type { ApiRenderOutput } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Video } from '@/components/ui/video';
 
@@ -38,7 +39,7 @@ export const imageFailed = (element: HTMLImageElement | null) =>
  */
 export function OutputVideo({
   output,
-  ariaLabel = 'Render',
+  ariaLabel,
   muted,
   onBroken,
 }: {
@@ -47,6 +48,8 @@ export function OutputVideo({
   muted?: boolean;
   onBroken?: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const host = useRef<HTMLDivElement>(null);
   const full = fullSrc(output);
   const [upgraded, setUpgraded] = useState(false);
@@ -97,7 +100,7 @@ export function OutputVideo({
         src={src}
         // The frame shows at once; the video buffers behind it.
         poster={output.posterUrl}
-        ariaLabel={ariaLabel}
+        ariaLabel={ariaLabel ?? translateUi('render_6d89eb7d')}
         muted={muted}
         className="aspect-auto! size-full rounded-none border-0"
         videoClassName="object-contain"
@@ -105,7 +108,7 @@ export function OutputVideo({
       {src !== full ? (
         <span
           className="pointer-events-none absolute top-2 left-2 rounded-sm bg-background/80 px-1.5 py-0.5 text-2xs text-muted-foreground"
-          title="Playing the 720p preview. Pause to see the original."
+          title={translateUi('playing_the_720p_preview_pause_to_s_e6d05589')}
         >
           720p
         </span>
@@ -124,6 +127,8 @@ export function OutputFile({
   alt: string;
   muted?: boolean;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const markBroken = useCallback(() => setBroken(true), []);
@@ -131,8 +136,8 @@ export function OutputFile({
     return (
       <p className="m-0 flex size-full items-center justify-center bg-muted p-[var(--card-pad)] text-center text-xs text-muted-foreground">
         {output.kind === 'video'
-          ? 'This browser can’t play this file. Download it below.'
-          : 'This file can’t be shown — its link may have expired. Refresh to get a new one.'}
+          ? translateUi('this_browser_can_t_play_this_file_d_05afba74')
+          : translateUi('this_file_can_t_be_shown_its_link_m_d71fabed')}
       </p>
     );
   }

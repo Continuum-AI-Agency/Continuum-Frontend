@@ -14,7 +14,8 @@ import {
   FlipHorizontal,
   FlipVertical,
 } from 'lucide-react';
-import { memo } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { memo, useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Label } from '@/components/ui/label';
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useStudioMetadata } from '@/StudioCanvas/hooks/useStudioMetadata';
 import { ShaderEffectControls } from '../../components/ShaderEffectControls';
 import type { LayerEditorLayer } from '../../types';
 import {
@@ -53,21 +55,77 @@ const FRAME_PRESET_LABELS: Readonly<Record<string, string>> = Object.fromEntries
  * one boundary; the ×100 lives nowhere else (aep-interop §4.2.3).
  */
 
-const ALIGN_BUTTONS: { edge: AlignEdge; label: string; Icon: typeof AlignStartVertical }[] = [
-  { edge: 'left', label: 'Align left', Icon: AlignStartVertical },
-  { edge: 'center', label: 'Align horizontal centres', Icon: AlignCenterVertical },
-  { edge: 'right', label: 'Align right', Icon: AlignEndVertical },
-  { edge: 'top', label: 'Align top', Icon: AlignStartHorizontal },
-  { edge: 'middle', label: 'Align vertical centres', Icon: AlignCenterHorizontal },
-  { edge: 'bottom', label: 'Align bottom', Icon: AlignEndHorizontal },
-];
+function useLocalAlignButtonsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: {
+      edge: AlignEdge;
+      label: string;
+      Icon: typeof AlignStartVertical;
+    }[] = [
+      {
+        edge: 'left',
+        label: translateConfig('align_left_eac0f9c3'),
+        Icon: AlignStartVertical,
+      },
+      {
+        edge: 'center',
+        label: translateConfig('align_horizontal_centres_fdcadcdd'),
+        Icon: AlignCenterVertical,
+      },
+      {
+        edge: 'right',
+        label: translateConfig('align_right_8f4f8efc'),
+        Icon: AlignEndVertical,
+      },
+      {
+        edge: 'top',
+        label: translateConfig('align_top_4868688f'),
+        Icon: AlignStartHorizontal,
+      },
+      {
+        edge: 'middle',
+        label: translateConfig('align_vertical_centres_4a5319f9'),
+        Icon: AlignCenterHorizontal,
+      },
+      {
+        edge: 'bottom',
+        label: translateConfig('align_bottom_7ba097da'),
+        Icon: AlignEndHorizontal,
+      },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
-const ORDER_BUTTONS: { move: LayerMove; label: string; Icon: typeof ChevronsUp }[] = [
-  { move: 'top', label: 'Bring to front', Icon: ChevronsUp },
-  { move: 'up', label: 'Bring forward', Icon: ChevronUp },
-  { move: 'down', label: 'Send backward', Icon: ChevronDown },
-  { move: 'bottom', label: 'Send to back', Icon: ChevronsDown },
-];
+function useLocalOrderButtonsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: { move: LayerMove; label: string; Icon: typeof ChevronsUp }[] = [
+      {
+        move: 'top',
+        label: translateConfig('bring_to_front_520cdb7e'),
+        Icon: ChevronsUp,
+      },
+      {
+        move: 'up',
+        label: translateConfig('bring_forward_2a3d681d'),
+        Icon: ChevronUp,
+      },
+      {
+        move: 'down',
+        label: translateConfig('send_backward_f6cfe26a'),
+        Icon: ChevronDown,
+      },
+      {
+        move: 'bottom',
+        label: translateConfig('send_to_back_e3daa79e'),
+        Icon: ChevronsDown,
+      },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 export interface LayerInspectorProps {
   frame: Frame;
@@ -111,11 +169,19 @@ function LayerInspectorImpl({
   onOrder,
   onFlip,
 }: LayerInspectorProps) {
+  const registryText = useStudioMetadata();
+
+  const ALIGN_BUTTONS = useLocalAlignButtonsMessages();
+  const ORDER_BUTTONS = useLocalOrderButtonsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div className="flex flex-col gap-3 p-2" data-testid="layer-inspector">
       <section className="flex flex-col gap-1.5">
         <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-          Frame
+          {' '}
+          {translateUi('frame_d0b50e06')}{' '}
         </h3>
         <Select
           value={`${frame.width}x${frame.height}`}
@@ -126,8 +192,16 @@ function LayerInspectorImpl({
             onFrameCommit(width, height);
           }}
         >
-          <SelectTrigger className="h-7 text-2xs" aria-label="Frame preset">
-            <SelectValue placeholder="Custom" items={FRAME_PRESET_LABELS} />
+          <SelectTrigger className="h-7 text-2xs" aria-label={translateUi('frame_preset_4cfb9e83')}>
+            <SelectValue
+              placeholder={translateUi('custom_494ca78f')}
+              items={Object.fromEntries(
+                FRAME_PRESETS.map((preset) => [
+                  `${preset.frame.width}x${preset.frame.height}`,
+                  registryText(preset.label),
+                ]),
+              )}
+            />
           </SelectTrigger>
           <SelectContent>
             {FRAME_PRESETS.map((preset) => (
@@ -136,21 +210,21 @@ function LayerInspectorImpl({
                 value={`${preset.frame.width}x${preset.frame.height}`}
                 className="text-2xs"
               >
-                {preset.label}
+                {registryText(preset.label)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <div className="grid grid-cols-2 gap-1.5">
           <NumberScrubField
-            label="Width"
+            label={translateUi('width_3019947b')}
             value={frame.width}
             step={16}
             onChange={(width) => onFrameChange(width, frame.height)}
             onCommit={(width) => onFrameCommit(width, frame.height)}
           />
           <NumberScrubField
-            label="Height"
+            label={translateUi('height_bfe2eca4')}
             value={frame.height}
             step={16}
             onChange={(height) => onFrameChange(frame.width, height)}
@@ -158,14 +232,19 @@ function LayerInspectorImpl({
           />
         </div>
         <p className="text-3xs text-muted-foreground">
-          {FRAME_MIN_SIZE}–{FRAME_MAX_SIZE} px. Resizing the frame never moves a layer.
+          {FRAME_MIN_SIZE}–{FRAME_MAX_SIZE}{' '}
+          {translateUi('px_resizing_the_frame_never_moves_a_2f5627a8')}{' '}
         </p>
 
         {/* Transparent stays the DEFAULT — the export owes downstream an alpha channel.
             This is for the ad that wants a flat brand colour behind its elements, which
             otherwise needs a whole generated full-frame image to stand in for a fill. */}
         <div className="flex items-center gap-1">
-          <ColorField value={background} onChange={onBackgroundChange} label="Frame background" />
+          <ColorField
+            value={background}
+            onChange={onBackgroundChange}
+            label={translateUi('frame_background_44898c9d')}
+          />
           <Button
             type="button"
             size="sm"
@@ -174,14 +253,19 @@ function LayerInspectorImpl({
             disabled={!background}
             onClick={() => onBackgroundChange(null)}
           >
-            Clear
+            {' '}
+            {translateUi('clear_83b12c22')}{' '}
           </Button>
         </div>
       </section>
 
       <section className="flex flex-col gap-1.5">
         <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-          {selectionCount > 1 ? `Align ${selectionCount} layers` : 'Align to frame'}
+          {selectionCount > 1
+            ? translateUi('align_value0_layers_f2f08d13', {
+                count: Number(selectionCount),
+              })
+            : translateUi('align_to_frame_866cac55')}
         </h3>
         <div className="grid grid-cols-6 gap-1">
           {ALIGN_BUTTONS.map(({ edge, label, Icon }) => (
@@ -211,7 +295,8 @@ function LayerInspectorImpl({
         <>
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              Transform
+              {' '}
+              {translateUi('transform_d2d68041')}{' '}
             </h3>
             <div className="grid grid-cols-2 gap-1.5">
               <NumberScrubField
@@ -227,7 +312,7 @@ function LayerInspectorImpl({
                 onCommit={(y) => onLayerCommit({ position: { ...layer.position, y } })}
               />
               <NumberScrubField
-                label="Scale X"
+                label={translateUi('scale_x_9e894f3e')}
                 value={layer.scale.x * 100}
                 suffix="%"
                 onChange={(percent) =>
@@ -238,7 +323,7 @@ function LayerInspectorImpl({
                 }
               />
               <NumberScrubField
-                label="Scale Y"
+                label={translateUi('scale_y_5001e575')}
                 value={layer.scale.y * 100}
                 suffix="%"
                 onChange={(percent) =>
@@ -249,7 +334,7 @@ function LayerInspectorImpl({
                 }
               />
               <NumberScrubField
-                label="Rotation"
+                label={translateUi('rotation_57b5e2fc')}
                 value={layer.rotation}
                 suffix="°"
                 onChange={(rotation) => onLayerChange({ rotation })}
@@ -264,14 +349,16 @@ function LayerInspectorImpl({
                         size="icon"
                         variant="outline"
                         className="h-7 w-full"
-                        aria-label="Flip horizontally"
+                        aria-label={translateUi('flip_horizontally_7edc03ef')}
                         onClick={() => onFlip('x')}
                       >
                         <FlipHorizontal className="h-3 w-3" />
                       </Button>
                     }
                   />
-                  <TooltipContent>Flip horizontally (negates Scale X)</TooltipContent>
+                  <TooltipContent>
+                    {translateUi('flip_horizontally_negates_scale_x_435a4a47')}
+                  </TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger
@@ -281,14 +368,16 @@ function LayerInspectorImpl({
                         size="icon"
                         variant="outline"
                         className="h-7 w-full"
-                        aria-label="Flip vertically"
+                        aria-label={translateUi('flip_vertically_6282842c')}
                         onClick={() => onFlip('y')}
                       >
                         <FlipVertical className="h-3 w-3" />
                       </Button>
                     }
                   />
-                  <TooltipContent>Flip vertically (negates Scale Y)</TooltipContent>
+                  <TooltipContent>
+                    {translateUi('flip_vertically_negates_scale_y_c0f7a8c2')}
+                  </TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -296,17 +385,18 @@ function LayerInspectorImpl({
 
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              Anchor
+              {' '}
+              {translateUi('anchor_a4ae750b')}{' '}
             </h3>
             <div className="grid grid-cols-2 gap-1.5">
               <NumberScrubField
-                label="Anchor X"
+                label={translateUi('anchor_x_25c5e8fd')}
                 value={layer.anchor.x}
                 onChange={(x) => onLayerChange({ anchor: { ...layer.anchor, x } })}
                 onCommit={(x) => onLayerCommit({ anchor: { ...layer.anchor, x } })}
               />
               <NumberScrubField
-                label="Anchor Y"
+                label={translateUi('anchor_y_ac55e610')}
                 value={layer.anchor.y}
                 onChange={(y) => onLayerChange({ anchor: { ...layer.anchor, y } })}
                 onCommit={(y) => onLayerCommit({ anchor: { ...layer.anchor, y } })}
@@ -314,7 +404,8 @@ function LayerInspectorImpl({
             </div>
             <div className="flex items-center justify-between gap-1">
               <p className="text-3xs text-muted-foreground">
-                Source pixels. Rotation and scale pivot here.
+                {' '}
+                {translateUi('source_pixels_rotation_and_scale_pi_bab1b73a')}{' '}
               </p>
               <Button
                 type="button"
@@ -323,18 +414,23 @@ function LayerInspectorImpl({
                 className="h-6 shrink-0 text-3xs"
                 onClick={() =>
                   onLayerCommit({
-                    anchor: { x: layer.sourceWidth / 2, y: layer.sourceHeight / 2 },
+                    anchor: {
+                      x: layer.sourceWidth / 2,
+                      y: layer.sourceHeight / 2,
+                    },
                   })
                 }
               >
-                Centre
+                {' '}
+                {translateUi('centre_45c19322')}{' '}
               </Button>
             </div>
           </section>
 
           <section className="flex flex-col gap-2">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              Shader effects
+              {' '}
+              {translateUi('shader_effects_05531dd8')}{' '}
             </h3>
             <ShaderEffectControls
               idPrefix="layer"
@@ -349,12 +445,18 @@ function LayerInspectorImpl({
         <>
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              {selectionCount > 1 ? `Appearance · ${selectionCount} layers` : 'Appearance'}
+              {selectionCount > 1
+                ? translateUi('appearance_value0_layers_6fba3d7f', {
+                    count: Number(selectionCount),
+                  })
+                : translateUi('appearance_3907fa7f')}
             </h3>
             <div className="flex items-center gap-2">
-              <Label className="w-14 shrink-0 text-3xs text-muted-foreground">Opacity</Label>
+              <Label className="w-14 shrink-0 text-3xs text-muted-foreground">
+                {translateUi('opacity_6062652e')}
+              </Label>
               <Slider
-                aria-label="Opacity"
+                aria-label={translateUi('opacity_6062652e')}
                 min={0}
                 max={100}
                 step={1}
@@ -369,10 +471,15 @@ function LayerInspectorImpl({
             <Select
               value={layer.blendMode}
               onValueChange={(value) =>
-                onLayerChange({ blendMode: value as LayerEditorLayer['blendMode'] })
+                onLayerChange({
+                  blendMode: value as LayerEditorLayer['blendMode'],
+                })
               }
             >
-              <SelectTrigger className="h-7 text-2xs" aria-label="Blend mode">
+              <SelectTrigger
+                className="h-7 text-2xs"
+                aria-label={translateUi('blend_mode_15e98399')}
+              >
                 <SelectValue className="capitalize" />
               </SelectTrigger>
               <SelectContent>
@@ -387,7 +494,8 @@ function LayerInspectorImpl({
 
           <section className="flex flex-col gap-1.5">
             <h3 className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-              Order
+              {' '}
+              {translateUi('order_6be09082')}{' '}
             </h3>
             <div className="grid grid-cols-4 gap-1">
               {ORDER_BUTTONS.map(({ move, label, Icon }) => (
@@ -413,7 +521,9 @@ function LayerInspectorImpl({
           </section>
         </>
       ) : (
-        <p className="px-1 text-2xs text-muted-foreground">Select a layer to edit it.</p>
+        <p className="px-1 text-2xs text-muted-foreground">
+          {translateUi('select_a_layer_to_edit_it_7dcdc450')}
+        </p>
       )}
     </div>
   );

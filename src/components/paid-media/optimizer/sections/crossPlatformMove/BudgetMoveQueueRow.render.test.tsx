@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // Spread the real module: mock.module replaces it for the whole process.
 const realOptimizerData = await import('../../useOptimizerData');
@@ -170,7 +171,10 @@ describe('BudgetMoveQueueRow', () => {
     answerFor = (request) =>
       request.dryRun
         ? envelope('would_apply', true)
-        : envelope('compensated', false, { reason: 'write_failed', detail: 'leg 2' });
+        : envelope('compensated', false, {
+            reason: 'write_failed',
+            detail: 'leg 2',
+          });
     const { calls } = renderRow();
     fireEvent.click(screen.getByRole('button', { name: 'Approve the move' }));
     const dialog = await screen.findByTestId('budget-move-action-dialog');
@@ -183,7 +187,10 @@ describe('BudgetMoveQueueRow', () => {
 
   it('a refused dry run says why and never offers to confirm', async () => {
     answerFor = (request) =>
-      envelope('refused', request.dryRun, { reason: 'apply_disabled', detail: 'google_ads' });
+      envelope('refused', request.dryRun, {
+        reason: 'apply_disabled',
+        detail: 'google_ads',
+      });
     renderRow();
     fireEvent.click(screen.getByRole('button', { name: 'Approve the move' }));
     const dialog = await screen.findByTestId('budget-move-action-dialog');
@@ -206,7 +213,9 @@ describe('BudgetMoveQueueRow', () => {
 
   it('without a decrease-only path the button is there but says it is not available yet', () => {
     const { calls } = renderRow();
-    const button = screen.getByRole('button', { name: 'Approve the decrease only' });
+    const button = screen.getByRole('button', {
+      name: 'Approve the decrease only',
+    });
     expect(button.hasAttribute('disabled')).toBe(true);
     fireEvent.click(button);
     expect(calls).toEqual([]);

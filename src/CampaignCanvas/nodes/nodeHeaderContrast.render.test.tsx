@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentType } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { CampaignNodeProps } from '../types';
 import { AdNode } from './AdNode';
 import { AdSetNode } from './AdSetNode';
@@ -107,7 +108,13 @@ describe('Campaign canvas node header labels', () => {
       for (const [theme, vars] of Object.entries(THEMES)) {
         const ratio = contrast(vars[ink as string] as string, vars[fill as string] as string);
         // The whole reading on failure: which theme, which tokens, how far under the floor.
-        expect({ theme, ink, fill, ratio: Number(ratio.toFixed(2)), aa: ratio >= 4.5 }).toEqual({
+        expect({
+          theme,
+          ink,
+          fill,
+          ratio: Number(ratio.toFixed(2)),
+          aa: ratio >= 4.5,
+        }).toEqual({
           theme,
           ink,
           fill,

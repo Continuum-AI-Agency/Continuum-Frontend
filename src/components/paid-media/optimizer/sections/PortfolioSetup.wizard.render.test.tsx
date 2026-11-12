@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioSuggestion, SuggestResult } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import * as realData from '../useOptimizerData';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
@@ -75,7 +76,13 @@ mock.module('../useOptimizerData', () => ({
   ...realData,
   useOptimizerAdAccounts: () => ({
     data: [
-      { platform: 'meta', account_id: 'act_1', name: 'Acct', status: 'ACTIVE', currency: 'USD' },
+      {
+        platform: 'meta',
+        account_id: 'act_1',
+        name: 'Acct',
+        status: 'ACTIVE',
+        currency: 'USD',
+      },
     ],
   }),
   useOptimizerSuggestions: () => ({
@@ -83,8 +90,16 @@ mock.module('../useOptimizerData', () => ({
     isLoading: false,
     isError: false,
   }),
-  useOptimizerAccountSnapshots: () => ({ data: snapshots, isLoading: false, isError: false }),
-  useOptimizerAccountEnrollments: () => ({ data: [], isLoading: false, isError: false }),
+  useOptimizerAccountSnapshots: () => ({
+    data: snapshots,
+    isLoading: false,
+    isError: false,
+  }),
+  useOptimizerAccountEnrollments: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
   useOptimizerAdsetInventory: () => ({
     data: [],
     fetchedAt: null,
@@ -98,8 +113,16 @@ mock.module('../useOptimizerData', () => ({
   }),
   useOptimizerInsight: () => ({ data: null, isLoading: false }),
   useOptimizerMutations: () => ({
-    create: { mutate: mock(() => {}), mutateAsync: createMutateAsync, isPending: false },
-    enroll: { mutate: mock(() => {}), mutateAsync: enrollMutateAsync, isPending: false },
+    create: {
+      mutate: mock(() => {}),
+      mutateAsync: createMutateAsync,
+      isPending: false,
+    },
+    enroll: {
+      mutate: mock(() => {}),
+      mutateAsync: enrollMutateAsync,
+      isPending: false,
+    },
     // A Meta-only wizard never reaches the non-Meta writers; a call would be a regression.
     createPlatform: {
       mutateAsync: createPlatformMutateAsync,
@@ -121,8 +144,12 @@ mock.module('./SuggestionExplorer', () => ({
   SuggestionExplorer: () => <div data-testid="explorer" />,
 }));
 mock.module('./CboCampaigns', () => ({ CboCampaigns: () => null }));
-mock.module('./ProjectedConversions', () => ({ ProjectedConversions: () => null }));
-mock.module('./SignalReadinessCard', () => ({ SignalReadinessCard: () => null }));
+mock.module('./ProjectedConversions', () => ({
+  ProjectedConversions: () => null,
+}));
+mock.module('./SignalReadinessCard', () => ({
+  SignalReadinessCard: () => null,
+}));
 
 type RpcAnswer = { data: unknown; error: unknown };
 const rpcAnswers: RpcAnswer[] = [];
@@ -133,7 +160,12 @@ mock.module('@/lib/supabase/client', () => ({
     rpc: async (fn: string, args?: Record<string, unknown>) => {
       rpcCalls.push({ fn, args });
       order.push(fn);
-      return rpcAnswers.shift() ?? { data: null, error: { message: 'no answer queued' } };
+      return (
+        rpcAnswers.shift() ?? {
+          data: null,
+          error: { message: 'no answer queued' },
+        }
+      );
     },
   }),
 }));
@@ -230,7 +262,9 @@ describe('PortfolioSetup — the four-step wizard', () => {
     renderSetup();
     fireEvent.click(screen.getByRole('button', { name: /Use this/ }));
     next();
-    const box = screen.getByRole('checkbox', { name: /cost cap on the ad platforms/ });
+    const box = screen.getByRole('checkbox', {
+      name: /cost cap on the ad platforms/,
+    });
     expect(box.getAttribute('aria-checked')).toBe('false');
     expect(document.body.textContent).toContain(
       'The Optimizer measures the portfolio against this goal and never changes bid settings on the platforms.',
@@ -276,7 +310,10 @@ describe('PortfolioSetup — the four-step wizard', () => {
   });
 
   it('when the box fails to save, says the portfolio exists and lets the person open it', async () => {
-    rpcAnswers.push({ data: null, error: { code: '42501', message: 'permission denied' } });
+    rpcAnswers.push({
+      data: null,
+      error: { code: '42501', message: 'permission denied' },
+    });
     renderSetup();
     fireEvent.click(screen.getByRole('button', { name: /Use this/ }));
     next();
@@ -312,10 +349,15 @@ describe('PortfolioSetup — the four-step wizard', () => {
     expect(document.body.textContent).toContain('1 campaign · 2 ad sets');
     next();
     next();
-    fireEvent.change(screen.getByLabelText(/^Name$/), { target: { value: 'Whole campaign' } });
+    fireEvent.change(screen.getByLabelText(/^Name$/), {
+      target: { value: 'Whole campaign' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /Create & enroll/ }));
     await flush();
-    expect(enrollMutateAsync).toHaveBeenCalledWith({ portfolio_id: 'p-new', campaign_id: 'c-1' });
+    expect(enrollMutateAsync).toHaveBeenCalledWith({
+      portfolio_id: 'p-new',
+      campaign_id: 'c-1',
+    });
   });
 
   it('choosing Autopilot fills the guardrails and they reach the create request in stored units', async () => {
@@ -348,7 +390,9 @@ describe('PortfolioSetup — the four-step wizard', () => {
     next();
     fireEvent.click(screen.getByRole('button', { name: 'Next 30 days' }));
     fireEvent.click(screen.getByRole('button', { name: 'Per month' }));
-    fireEvent.change(screen.getByLabelText(/^Budget \(USD\)/), { target: { value: '60000' } });
+    fireEvent.change(screen.getByLabelText(/^Budget \(USD\)/), {
+      target: { value: '60000' },
+    });
     expect(document.body.textContent).toContain('= $60,000 USD for the flight · ≈ $2,000 USD/day');
     fireEvent.click(screen.getByRole('button', { name: /Create & enroll/ }));
     await flush();
@@ -370,7 +414,9 @@ describe('PortfolioSetup — the four-step wizard', () => {
     next();
     fireEvent.click(screen.getByRole('button', { name: /^Scale/ }));
     expect((screen.getByLabelText(/Grow by/) as HTMLInputElement).value).toBe('10');
-    fireEvent.change(screen.getByLabelText(/Every \(days\)/), { target: { value: '14' } });
+    fireEvent.change(screen.getByLabelText(/Every \(days\)/), {
+      target: { value: '14' },
+    });
     next();
     fireEvent.click(screen.getByRole('button', { name: /Create & enroll/ }));
     await flush();

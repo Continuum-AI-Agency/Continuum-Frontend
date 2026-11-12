@@ -1,4 +1,5 @@
 import { PencilSimple } from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,13 +19,19 @@ export function EditableProse({
   className,
   loading,
 }: EditableProseProps) {
+  const tUi = useTranslations('onboarding');
+
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
   if (!editing) {
     if (!value && loading) {
       return (
-        <div className={`space-y-1.5 ${className ?? ''}`} aria-label="Loading">
+        <div
+          role="status"
+          className={`space-y-1.5 ${className ?? ''}`}
+          aria-label={tUi('m_8f26c6520d')}
+        >
           <Skeleton className="h-3 w-full" />
           <Skeleton className="h-3 w-[94%]" />
           <Skeleton className="h-3 w-[80%]" />
@@ -42,7 +49,7 @@ export function EditableProse({
       >
         <span className="pr-5">
           {value || (
-            <span className="text-muted-foreground/60">{placeholder ?? 'Click to add'}</span>
+            <span className="text-muted-foreground/60">{placeholder ?? tUi('m_a133eb007d')}</span>
           )}
         </span>
         <PencilSimple

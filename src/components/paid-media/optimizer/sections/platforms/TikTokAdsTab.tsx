@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
 // The Overview's TikTok tab (frontend.html §7, feature 06). When the multi-platform producer
 // names a connected TikTok advertiser, the tab reads that advertiser's `tiktok_snapshots` — the
 // entity read the Optimizer's ingest makes — and shows its spend, its results, what each result
@@ -26,6 +29,7 @@ import { type TikTokAdsOverviewState, useTikTokAdsOverview } from './useTikTokAd
 const WINDOW = 'd7';
 
 export function TikTokAdsEmpty() {
+  const uiText = useTranslations('scale');
   return (
     <section
       className="space-y-2 rounded-lg border border-border/70 border-dashed bg-card px-4 py-5"
@@ -34,117 +38,166 @@ export function TikTokAdsEmpty() {
       <div className="flex flex-wrap items-center gap-2">
         <PlatformChip platform="tiktok_ads" />
         <p className={cn(typeScale.body, 'font-semibold text-foreground')}>
-          TikTok Ads isn't connected yet
+          {uiText('tiktok_ads_isn_t_connected_yet_4d90346')}
         </p>
       </div>
       <p className="text-muted-foreground text-sm">
-        Once a TikTok Ads advertiser is connected and granted to this brand, its spend, results and
-        decisions appear here beside Meta and Google.
+        {uiText('once_a_tiktok_ads_advertiser_is_connected_and_b06e6cc')}
       </p>
       <PlatformConnectLink platform="tiktok_ads" />
     </section>
   );
 }
 
-function costLine(kind: TikTokKind, currency: string): string {
-  const words = kindWords(kind.kind);
+function costLine(
+  kind: TikTokKind,
+  currency: string,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ReturnType<typeof useTranslations<'scale'>>,
+): string {
+  const words = kindWords(kind.kind, uiTranslate);
   return kind.costPerResult == null
-    ? `${formatCurrency(kind.spend, currency)} spent, no ${words.many}`
-    : `${formatCurrency(kind.costPerResult, currency)} per ${words.one}`;
+    ? uiTranslate
+      ? uiTranslate('platformSpentNoKind', {
+          spend: formatCurrency(kind.spend, currency, uiLocale),
+          kind: words.many,
+        })
+      : `${formatCurrency(kind.spend, currency, uiLocale)} spent, no ${words.many}`
+    : uiTranslate
+      ? uiTranslate('platformCostPerKind', {
+          cost: formatCurrency(kind.costPerResult, currency, uiLocale),
+          kind: words.one,
+        })
+      : `${formatCurrency(kind.costPerResult, currency, uiLocale)} per ${words.one}`;
 }
 
 function Headline({ overview, currency }: { overview: TikTokOverview; currency: string }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const kinds = overview.kinds;
   return (
     <p
       className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
       data-testid="tiktok-headline"
     >
-      TikTok spent{' '}
-      <span
-        className="tabular-nums"
-        {...figureProps('tiktok.spend', overview.spend, currency, WINDOW)}
-      >
-        {formatCurrency(overview.spend, currency)}
-      </span>{' '}
-      in 7 days
-      {kinds.length > 0 ? ': ' : '.'}
-      {kinds.map((kind, index) => (
-        <span key={kind.kind}>
-          {index > 0 ? (index === kinds.length - 1 ? ' and ' : ', ') : ''}
+      {uiText.rich('sentence_edb39d5bac02', {
+        v0: () => (
           <span
             className="tabular-nums"
-            {...figureProps(
-              `tiktok.kind.${kind.kind}.results`,
-              kind.results,
-              null,
-              WINDOW,
-              'count',
-            )}
+            {...figureProps('tiktok.spend', overview.spend, currency, WINDOW)}
           >
-            {formatResults(kind.results)}
-          </span>{' '}
-          {kindWords(kind.kind).many}
-          {kind.costPerResult != null ? (
-            <>
-              {' '}
-              at{' '}
+            {formatCurrency(overview.spend, currency, uiLocale)}
+          </span>
+        ),
+        v1: kinds.length > 0 ? ': ' : '.',
+        v2: () =>
+          kinds.map((kind, index) => (
+            <span key={kind.kind}>
+              {index > 0
+                ? index === kinds.length - 1
+                  ? uiText('list_final_separator')
+                  : ', '
+                : ''}
               <span
                 className="tabular-nums"
                 {...figureProps(
-                  `tiktok.kind.${kind.kind}.cost`,
-                  kind.costPerResult,
-                  currency,
+                  `tiktok.kind.${kind.kind}.results`,
+                  kind.results,
+                  null,
                   WINDOW,
+                  'count',
                 )}
               >
-                {formatCurrency(kind.costPerResult, currency)}
-              </span>
-            </>
-          ) : null}
-        </span>
-      ))}
-      {kinds.length > 0 ? '.' : ''}
+                {formatResults(kind.results, uiLocale)}
+              </span>{' '}
+              {kindWords(kind.kind, uiText).many}
+              {kind.costPerResult != null ? (
+                <>
+                  {' '}
+                  {uiText.rich('sentence_596263fd6177', {
+                    v0: () => (
+                      <span
+                        className="tabular-nums"
+                        {...figureProps(
+                          `tiktok.kind.${kind.kind}.cost`,
+                          kind.costPerResult,
+                          currency,
+                          WINDOW,
+                        )}
+                      >
+                        {formatCurrency(kind.costPerResult, currency, uiLocale)}
+                      </span>
+                    ),
+                  })}
+                </>
+              ) : null}
+            </span>
+          )),
+        v3: kinds.length > 0 ? '.' : '',
+      })}
     </p>
   );
 }
 
 function Tiles({ overview, currency }: { overview: TikTokOverview; currency: string }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [lead, ...rest] = overview.kinds;
   return (
     <div className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="tiktok-tiles">
       <KpiTile
         figure={figureProps('tiktok.tiles.spend', overview.spend, currency, WINDOW)}
-        label="Spend · 7 days"
-        sub={`${overview.campaigns} ${overview.campaigns === 1 ? 'campaign' : 'campaigns'} · ${overview.adGroups} ${overview.adGroups === 1 ? 'ad group' : 'ad groups'}`}
+        label={uiText('spend_7_days_352823b')}
+        sub={uiText('platformCampaignGroupCounts', {
+          campaigns: overview.campaigns,
+          groups: overview.adGroups,
+        })}
         testId="tiktok-tile-spend"
-        value={formatCurrency(overview.spend, currency)}
+        value={formatCurrency(overview.spend, currency, uiLocale)}
       />
       <KpiTile
         figure={figureProps('tiktok.tiles.results', lead?.results ?? null, null, WINDOW, 'count')}
-        label={lead ? capitalise(kindWords(lead.kind).many) : 'Results'}
+        label={lead ? capitalise(kindWords(lead.kind, uiText).many) : uiText('results_219c4a6')}
         sub={
           lead
             ? rest.length > 0
-              ? `also ${rest.map((kind) => `${formatResults(kind.results)} ${kindWords(kind.kind).many}`).join(', ')}`
-              : 'as TikTok counts them'
-            : 'no campaign optimizes for a result'
+              ? uiText('platformAlsoResults', {
+                  results: rest
+                    .map(
+                      (kind) =>
+                        `${formatResults(kind.results, uiLocale)} ${kindWords(kind.kind, uiText).many}`,
+                    )
+                    .join(', '),
+                })
+              : uiText('platformAsTikTokCounts')
+            : uiText('platformNoCampaignResult')
         }
         testId="tiktok-tile-results"
-        value={lead ? formatResults(lead.results) : '—'}
+        value={lead ? formatResults(lead.results, uiLocale) : '—'}
       />
       <KpiTile
         figure={figureProps('tiktok.tiles.cost', lead?.costPerResult ?? null, currency, WINDOW)}
-        label={lead ? `Cost per ${kindWords(lead.kind).one}` : 'Cost per result'}
+        label={
+          lead
+            ? uiText('template_ced2e5c5acfe', {
+                v0: kindWords(lead.kind, uiText).one,
+              })
+            : uiText('cost_per_result_a664c01')
+        }
         sub={
           rest.length > 0
-            ? rest.map((kind) => costLine(kind, currency)).join(' · ')
+            ? rest.map((kind) => costLine(kind, currency, uiLocale, uiText)).join(' · ')
             : lead && lead.costPerResult == null
-              ? `${formatCurrency(lead.spend, currency)} spent, no ${kindWords(lead.kind).many}`
-              : 'spend over results in the window'
+              ? uiText('platformSpentNoKind', {
+                  spend: formatCurrency(lead.spend, currency, uiLocale),
+                  kind: kindWords(lead.kind, uiText).many,
+                })
+              : uiText('platformSpendOverResults')
         }
         testId="tiktok-tile-cost"
-        value={lead?.costPerResult != null ? formatCurrency(lead.costPerResult, currency) : '—'}
+        value={
+          lead?.costPerResult != null ? formatCurrency(lead.costPerResult, currency, uiLocale) : '—'
+        }
       />
       {overview.unclassifiedSpend > 0 ? (
         <KpiTile
@@ -154,10 +207,10 @@ function Tiles({ overview, currency }: { overview: TikTokOverview; currency: str
             currency,
             WINDOW,
           )}
-          label="No result kind"
-          sub="spend on campaigns that optimize for no result"
+          label={uiText('no_result_kind_14c10ae')}
+          sub={uiText('platformUnclassifiedSpend')}
           testId="tiktok-tile-unclassified"
-          value={formatCurrency(overview.unclassifiedSpend, currency)}
+          value={formatCurrency(overview.unclassifiedSpend, currency, uiLocale)}
         />
       ) : null}
     </div>
@@ -165,6 +218,8 @@ function Tiles({ overview, currency }: { overview: TikTokOverview; currency: str
 }
 
 function AdGroupRow({ row, currency }: { row: TikTokAdGroupRow; currency: string }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <li
       className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-baseline gap-x-4 px-3 py-2"
@@ -183,32 +238,37 @@ function AdGroupRow({ row, currency }: { row: TikTokAdGroupRow; currency: string
         className="text-right text-sm tabular-nums"
         {...figureProps(`tiktok.adgroup.${row.id}.spend`, row.spend, currency, WINDOW)}
       >
-        {formatCurrency(row.spend, currency)}
+        {formatCurrency(row.spend, currency, uiLocale)}
       </span>
       <span
         className="text-right text-sm tabular-nums"
         {...figureProps(`tiktok.adgroup.${row.id}.results`, row.results, null, WINDOW, 'count')}
       >
         {row.results == null || row.kind == null
-          ? 'no result kind'
-          : `${formatResults(row.results)} ${kindWords(row.kind).many}`}
+          ? uiText('no_result_kind_2e3e250')
+          : `${formatResults(row.results, uiLocale)} ${kindWords(row.kind, uiText).many}`}
       </span>
       <span
         className="text-right text-muted-foreground text-sm tabular-nums"
         {...figureProps(`tiktok.adgroup.${row.id}.cost`, row.costPerResult, currency, WINDOW)}
       >
-        {row.costPerResult == null ? '—' : `${formatCurrency(row.costPerResult, currency)} each`}
+        {row.costPerResult == null
+          ? '—'
+          : uiText('template_0a3acb21a5dc', {
+              v0: formatCurrency(row.costPerResult, currency, uiLocale),
+            })}
       </span>
     </li>
   );
 }
 
 function TopAdGroups({ overview, currency }: { overview: TikTokOverview; currency: string }) {
+  const uiText = useTranslations('scale');
   if (overview.topAdGroups.length === 0) return null;
   return (
     <section className="space-y-1.5" data-testid="tiktok-top-adgroups">
       <p className={`${typeScale.label} px-1 font-semibold text-muted-foreground`}>
-        Top ad groups by spend
+        {uiText('top_ad_groups_by_spend_4e738ec')}
       </p>
       <ul className="divide-y divide-border/70 rounded-lg border border-border/70 bg-card">
         {overview.topAdGroups.map((row) => (
@@ -221,11 +281,13 @@ function TopAdGroups({ overview, currency }: { overview: TikTokOverview; currenc
 
 /** What the TikTok tab shows for one state of its read. */
 export function TikTokAdsTabView({ state }: { state: TikTokAdsOverviewState }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   if (state.status === 'not-connected') return <TikTokAdsEmpty />;
   if (state.status === 'loading') {
     return (
       <p className="px-1 text-muted-foreground text-xs" data-testid="tiktok-loading">
-        Reading TikTok Ads…
+        {uiText('reading_tiktok_ads_251a0d8')}
       </p>
     );
   }
@@ -245,14 +307,14 @@ export function TikTokAdsTabView({ state }: { state: TikTokAdsOverviewState }) {
             className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
             data-testid="tiktok-headline"
           >
-            TikTok reported no currency for this advertiser, so nothing is priced.
+            {uiText('tiktok_reported_no_currency_for_this_advertis_c7acf99')}
           </p>
         ) : overview.campaigns === 0 ? (
           <p
             className={`${typeScale.bodyLg} font-semibold leading-snug text-muted-foreground`}
             data-testid="tiktok-headline"
           >
-            This TikTok advertiser has no campaign to read yet.
+            {uiText('this_tiktok_advertiser_has_no_campaign_to_rea_9fb8495')}
           </p>
         ) : (
           <Headline currency={overview.currency} overview={overview} />
@@ -263,13 +325,15 @@ export function TikTokAdsTabView({ state }: { state: TikTokAdsOverviewState }) {
         >
           <PlatformChip platform="tiktok_ads" />
           <span>
-            Advertiser {overview.advertiserName ? `${overview.advertiserName} · ` : ''}
-            {shortAdvertiserId(overview.advertiserId)}
+            {uiText.rich('sentence_b49cbf2f3140', {
+              v0: overview.advertiserName ? `${overview.advertiserName} · ` : '',
+              v1: shortAdvertiserId(overview.advertiserId),
+            })}
           </span>
           <span aria-hidden="true">·</span>
-          <span>{windowRangeLabel(overview.window.since, overview.window.until)}</span>
+          <span>{windowRangeLabel(overview.window.since, overview.window.until, uiLocale)}</span>
           <span aria-hidden="true">·</span>
-          <span>as TikTok reports it</span>
+          <span>{uiText('as_tiktok_reports_it_3e147f9')}</span>
         </div>
       </div>
       {overview.currency != null && overview.campaigns > 0 ? (

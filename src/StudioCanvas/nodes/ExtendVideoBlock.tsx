@@ -6,6 +6,7 @@ import {
   type Node as ReactFlowNode,
 } from '@xyflow/react';
 import { Copy, Download, Play, Trash2, Video } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -35,13 +36,19 @@ import { executeWorkflow } from '../utils/executeWorkflow';
 
 // Mirrors the NodeResizer minimums below: a snap under them would produce a style
 // the node cannot actually render at, which is the ratio-lying bug this guards.
-const EXTEND_VIDEO_NODE_BOUNDS = { minWidth: 260, minHeight: 160, fallbackWidth: 400 };
+const EXTEND_VIDEO_NODE_BOUNDS = {
+  minWidth: 260,
+  minHeight: 160,
+  fallbackWidth: 400,
+};
 
 export function ExtendVideoBlock({
   id,
   data,
   selected,
 }: NodeProps<ReactFlowNode<ExtendVideoNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const [isHovered, setIsHovered] = useState(false);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -52,7 +59,11 @@ export function ExtendVideoBlock({
 
   const handleRun = useCallback(async () => {
     console.info('[studio] run extend video node', { nodeId: id });
-    await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
+    await executeWorkflow(executionControls, {
+      targetNodeId: id,
+      clearDownstream: false,
+      brandId,
+    });
   }, [executionControls, id, brandId]);
 
   const displayVideo = (data.generatedVideo as string | Blob | undefined) ?? data.generatedVideoUrl;
@@ -60,10 +71,15 @@ export function ExtendVideoBlock({
   // An extension inherits the source clip's shape, and the source is whatever was
   // wired in — so the node has no requested ratio to size itself from and must
   // learn it from the clip it produced. Bounds mirror the NodeResizer minimums.
-  useSnapToVideoAspect({ nodeId: id, src: displayVideo, bounds: EXTEND_VIDEO_NODE_BOUNDS });
+  useSnapToVideoAspect({
+    nodeId: id,
+    src: displayVideo,
+    bounds: EXTEND_VIDEO_NODE_BOUNDS,
+  });
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
+      translate: translateUi,
       data: displayVideo as string | Blob | undefined,
       baseName: `extended-video-${id}`,
       fallbackExtension: 'mp4',
@@ -71,15 +87,15 @@ export function ExtendVideoBlock({
 
     if (!success) {
       show({
-        title: 'Download unavailable',
-        description: 'Run the node to generate a video before downloading.',
+        title: translateUi('download_unavailable_2f180e49'),
+        description: translateUi('run_the_node_to_generate_a_video_be_b9d88bf3'),
         variant: 'warning',
       });
     }
-  }, [displayVideo, id, show]);
+  }, [displayVideo, id, show, translateUi]);
 
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const generatorDescription = 'Extend Video';
+  const generatorDescription = translateUi('extend_video_e4d1e89c');
 
   return (
     <TooltipProvider>
@@ -92,7 +108,11 @@ export function ExtendVideoBlock({
                 'relative group h-full w-full min-w-[260px] min-h-[160px] rounded-xl transition-shadow',
                 isSelectedByOther && 'selected-by-other',
               )}
-              style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+              style={
+                {
+                  '--other-user-color': selectingUser?.color,
+                } as React.CSSProperties
+              }
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
             >
@@ -114,7 +134,7 @@ export function ExtendVideoBlock({
                   size="icon"
                   className="h-7 w-7"
                   onClick={handleRun}
-                  title="Run Node"
+                  title={translateUi('run_node_79567976')}
                 >
                   <Play className="h-4 w-4" />
                 </Button>
@@ -148,8 +168,8 @@ export function ExtendVideoBlock({
                             event.stopPropagation();
                             handleDownload();
                           }}
-                          title="Download Output"
-                          aria-label="Download generated video"
+                          title={translateUi('download_output_b86e2324')}
+                          aria-label={translateUi('download_generated_video_d30b5aa4')}
                         >
                           <Download className="h-4 w-4" />
                         </Button>
@@ -157,7 +177,9 @@ export function ExtendVideoBlock({
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                         <Video className="h-8 w-8 opacity-20" />
-                        <span className="text-2xs opacity-50">Ready to extend video</span>
+                        <span className="text-2xs opacity-50">
+                          {translateUi('ready_to_extend_video_36be70f6')}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -167,7 +189,9 @@ export function ExtendVideoBlock({
               <div className="absolute -left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 pointer-events-none">
                 <div
                   className="relative flex flex-col items-center group/handle"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                  style={{
+                    ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                  }}
                 >
                   <Handle
                     type="target"
@@ -176,13 +200,16 @@ export function ExtendVideoBlock({
                     className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
                   />
                   <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                    Video Input
+                    {' '}
+                    {translateUi('video_input_4116f980')}{' '}
                   </span>
                 </div>
 
                 <div
                   className="relative flex flex-col items-center group/handle"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+                  style={{
+                    ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)',
+                  }}
                 >
                   <Handle
                     type="target"
@@ -191,14 +218,17 @@ export function ExtendVideoBlock({
                     className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
                   />
                   <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                    Prompt (Optional)
+                    {' '}
+                    {translateUi('prompt_optional_f2087c97')}{' '}
                   </span>
                 </div>
               </div>
 
               <div
                 className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
-                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                style={{
+                  ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)',
+                }}
               >
                 <Tooltip>
                   <TooltipTrigger
@@ -212,7 +242,7 @@ export function ExtendVideoBlock({
                     }
                   />
                   <TooltipContent>
-                    <p>Extended Video Output</p>
+                    <p>{translateUi('extended_video_output_9b1107e9')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -229,29 +259,25 @@ export function ExtendVideoBlock({
           }
         />
         <ContextMenuContent className="w-52">
-          <ContextMenuLabel>Extend Video</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('extend_video_e4d1e89c')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleRun}>
-            <Play className="mr-2 h-4 w-4" />
-            Run Node
+            <Play className="mr-2 h-4 w-4" /> {translateUi('run_node_79567976')}{' '}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" />
-            Download Output
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

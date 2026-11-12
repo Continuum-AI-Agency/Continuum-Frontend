@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The pieces the Google lenses G05 Mix, G06 Auction and G10 Signal are drawn with: the window they
 // read, the Optimizer's cards on the account, the one line a lens says when it has nothing to
@@ -67,9 +68,15 @@ export type LensBlocked = { status: 'missing' | 'error'; line: string };
 export function googleReadBlocked(state: GoogleAdsOverviewState): LensBlocked | null {
   switch (state.status) {
     case 'no-connection':
-      return { status: 'missing', line: 'Google Ads is not connected for this brand.' };
+      return {
+        status: 'missing',
+        line: 'Google Ads is not connected for this brand.',
+      };
     case 'no-grant':
-      return { status: 'missing', line: 'No Google Ads account is granted to this brand.' };
+      return {
+        status: 'missing',
+        line: 'No Google Ads account is granted to this brand.',
+      };
     case 'no-role':
       return {
         status: 'missing',
@@ -153,9 +160,11 @@ export function LensHeadline({
 
 /** The window a lens covers, beside its title, so two windows on one board never read as one. */
 export function LensWindowTag({ days, testId }: { days: number; testId: string }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <span className="whitespace-nowrap text-muted-foreground text-xs" data-testid={testId}>
-      Last {days} days
+      {betaUiText('beta_eb970eb0951c')} {days} {betaUiText('beta_ab51004e9d71')}
     </span>
   );
 }
@@ -269,7 +278,10 @@ export function TipMark({
             aria-hidden="true"
             className={cn('absolute inset-0 block rounded-[inherit]', fillClassName)}
             initial={initial}
-            style={{ background: color, transformOrigin: grow === 'y' ? '50% 100%' : '0% 50%' }}
+            style={{
+              background: color,
+              transformOrigin: grow === 'y' ? '50% 100%' : '0% 50%',
+            }}
             transition={{ duration: 0.55, ease: EASE_OUT, delay }}
           />
         ) : null}

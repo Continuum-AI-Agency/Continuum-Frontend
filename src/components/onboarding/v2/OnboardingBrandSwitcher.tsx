@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { useTranslations as useBetaTranslations, useTranslations } from 'next-intl';
 import React from 'react';
 import { BrandAvatar } from '@/components/brand/BrandAvatar';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -20,6 +21,10 @@ import { cn } from '@/lib/utils';
  * the list is read before onboarding state is ensured, so a just-created brand can be missing.
  */
 export function OnboardingBrandSwitcher({ currentBrandName }: { currentBrandName?: string }) {
+  const tUi = useTranslations('onboarding');
+
+  const betaUiText = useBetaTranslations('onboarding');
+
   const { activeBrandId, brandSummaries, isSwitching, switchingToBrandId } =
     useActiveBrandContext();
   const switchBrand = useSwitchBrand();
@@ -31,7 +36,7 @@ export function OnboardingBrandSwitcher({ currentBrandName }: { currentBrandName
   const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
   const activeBrandLabel = activeBrand
     ? getBrandMenuItemLabel(activeBrand)
-    : currentBrandName?.trim() || 'Switch brand';
+    : currentBrandName?.trim() || betaUiText('beta_9ddd1f252ebe');
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -69,7 +74,7 @@ export function OnboardingBrandSwitcher({ currentBrandName }: { currentBrandName
       >
         <div className="px-2 pt-1 pb-0">
           <span className="text-xs font-semibold uppercase tracking-wider text-[color-mix(in_srgb,var(--popover-foreground)_52%,transparent)]">
-            Switch brand
+            {tUi('m_26a9920e43')}
           </span>
         </div>
 
@@ -103,7 +108,7 @@ export function OnboardingBrandSwitcher({ currentBrandName }: { currentBrandName
                   {!brand.completed && (
                     <AlertTriangle
                       className="h-3.5 w-3.5 shrink-0 text-warning"
-                      aria-label="Onboarding incomplete"
+                      aria-label={tUi('m_c1c74b0f83')}
                     />
                   )}
                   {isRowSwitching ? (

@@ -36,6 +36,8 @@ mock.module('@/components/ui/select', () => ({
 
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type React from 'react';
+import type { ReactNode } from 'react';
 import {
   act,
   cleanup,
@@ -44,9 +46,7 @@ import {
   render,
   screen,
   waitFor,
-} from '@testing-library/react';
-import type React from 'react';
-import type { ReactNode } from 'react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ELEMENT_DRAG_TYPE, parseElementDragPayload } from '@/lib/ai-studio/referenceDrop';
 import { ElementsPanel } from './ElementsPanel';
 
@@ -153,7 +153,12 @@ describe('ElementsPanel', () => {
 
   it('drags an Element out as an element-drop payload, not as an image', async () => {
     requestMock.mockResolvedValue({
-      elements: [buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' })],
+      elements: [
+        buildElement({
+          referenceHistory: ['ref-1'],
+          defaultReferenceAssetId: 'ref-1',
+        }),
+      ],
     } as never);
 
     renderPanel();
@@ -206,7 +211,11 @@ describe('ElementsPanel', () => {
     });
     requestMock.mockImplementation((async (options: { path: string; method?: string }) => {
       if (options.method === 'POST' && options.path.endsWith('/new-1/reference'))
-        return { element: created, referenceAssetId: 'sheet-1', becameDefault: true };
+        return {
+          element: created,
+          referenceAssetId: 'sheet-1',
+          becameDefault: true,
+        };
       if (options.method === 'POST') return { element: created };
       return { elements: [created] };
     }) as never);
@@ -222,12 +231,18 @@ describe('ElementsPanel', () => {
     fireEvent.change(document.getElementById('element-images') as HTMLInputElement, {
       target: { files: [new File(['x'], 'face.png', { type: 'image/png' })] },
     });
-    fireEvent.change(await screen.findByLabelText('Category'), { target: { value: 'character' } });
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Aria' } });
+    fireEvent.change(await screen.findByLabelText('Category'), {
+      target: { value: 'character' },
+    });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Aria' },
+    });
     fireEvent.change(await screen.findByLabelText('Rights basis'), {
       target: { value: 'own employee, consent on file' },
     });
-    const submit = screen.getByRole('button', { name: 'Create and make character sheet' });
+    const submit = screen.getByRole('button', {
+      name: 'Create and make character sheet',
+    });
     await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(submit);
 

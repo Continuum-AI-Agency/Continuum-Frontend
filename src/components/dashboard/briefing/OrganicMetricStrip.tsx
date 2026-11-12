@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+
 // Home organic KPI strip: multi-platform summary over the same ingestion path
 // as Metrics Compare (loadBrandOrganicSnapshot). Within a platform with multiple
 // accounts, values are platform-blended (summable metrics only).
@@ -27,6 +31,12 @@ import {
 import { resolveOrganicAccount } from '@/lib/organic/resolve-organic-account';
 import { resolveMetricPresentation } from '@/lib/ui/metricPresentation';
 
+const METRIC_STATE_KEYS = {
+  not_connected: 'm_8b02f3de39',
+  loading: 'm_8f26c6520d',
+  error: 'm_2c9c1f7914',
+  no_data: 'm_8c48f89bdb',
+} as const;
 const RANGE_PRESET = 'last_7d' as const;
 
 const PLATFORM_ORDER: readonly OrganicMetricPlatform[] = organicMetricPlatformSchema.options;
@@ -107,20 +117,27 @@ function toAccountOptions(accounts: OrganicMetricStripAccount[] = []): Instagram
 
 // The selected account's own KPI (single-account "blend" is identity), used as
 // the hero so the value, delta, and sparkline all reflect that one account.
-function buildAccountHero(row: SnapshotAccountResult): PlatformKpi | null {
+function buildAccountHero(
+  row: SnapshotAccountResult,
+  t: ReturnType<typeof useTranslations<'dashboard'>>,
+  locale: UiLocale,
+): PlatformKpi | null {
   const headline = HEADLINE_METRIC[row.platform];
   const blended = blendMetric([row], headline.id);
-  const presentation = resolveMetricPresentation({
-    connected: true,
-    loading: false,
-    failed: false,
-    total: blended.kind === 'sum' ? blended.total : undefined,
-    deltaPct: blended.kind === 'sum' ? blended.comparison?.percentageChange : undefined,
-  });
+  const presentation = resolveMetricPresentation(
+    {
+      connected: true,
+      loading: false,
+      failed: false,
+      total: blended.kind === 'sum' ? blended.total : undefined,
+      deltaPct: blended.kind === 'sum' ? blended.comparison?.percentageChange : undefined,
+    },
+    { locale, translateState: (state) => t(METRIC_STATE_KEYS[state]) },
+  );
   if (presentation.state !== 'ready') return null;
   return {
     platform: row.platform,
-    label: `${PLATFORM_SHORT[row.platform]} ${headline.label}`,
+    label: `${PLATFORM_SHORT[row.platform]} ${localizeDashboardCopy(headline.label, t)}`,
     accountName: row.name,
     value: presentation.value,
     deltaPct: presentation.deltaPct,
@@ -136,6 +153,8 @@ type State =
   | { status: 'success'; snapshot: BrandOrganicSnapshot };
 
 export function OrganicMetricStrip(props: OrganicMetricStripProps) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
   const { brandId } = props;
   const accountKey = [
     ...(props.accounts ?? []).map((a) => `ig:${a.integrationAccountId}`),
@@ -211,17 +230,23 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
           : [];
       const blended =
         snapshotAccounts.length > 0 ? blendMetric(snapshotAccounts, headline.id) : null;
-      const presentation = resolveMetricPresentation({
-        connected,
-        loading: connected && (state.status === 'idle' || state.status === 'loading'),
-        failed: connected && state.status === 'error',
-        total: blended?.kind === 'sum' ? blended.total : undefined,
-        deltaPct: blended?.kind === 'sum' ? blended.comparison?.percentageChange : undefined,
-      });
+      const presentation = resolveMetricPresentation(
+        {
+          connected,
+          loading: connected && (state.status === 'idle' || state.status === 'loading'),
+          failed: connected && state.status === 'error',
+          total: blended?.kind === 'sum' ? blended.total : undefined,
+          deltaPct: blended?.kind === 'sum' ? blended.comparison?.percentageChange : undefined,
+        },
+        {
+          locale: uiLocale,
+          translateState: (state) => uiText(METRIC_STATE_KEYS[state]),
+        },
+      );
       const suffix = configuredAccounts.length > 1 ? ' Σ' : '';
       out.push({
         platform,
-        label: `${PLATFORM_SHORT[platform]}${suffix} ${headline.label}`,
+        label: `${PLATFORM_SHORT[platform]}${suffix} ${localizeDashboardCopy(headline.label, uiText)}`,
         value: presentation.value,
         deltaPct: presentation.deltaPct,
         ready: presentation.state === 'ready',
@@ -235,7 +260,7 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
       });
     }
     return out;
-  }, [accountRefs, state]);
+  }, [accountRefs, state, uiText, uiLocale]);
 
   if (kpis.length === 0) return null;
 
@@ -245,7 +270,7 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
         data-tour-id="organic-home-metric-strip"
         className="flex flex-col gap-2"
         role="status"
-        aria-label="Loading organic metrics"
+        aria-label={uiText('loading_organic_metrics_8562e6b')}
       >
         <Skeleton className="h-16 w-full max-w-sm rounded-lg" />
         <div className="flex flex-wrap items-center gap-3">
@@ -265,7 +290,9 @@ export function OrganicMetricStrip(props: OrganicMetricStripProps) {
   const selectedRow =
     state.status === 'success' ? selectHeroAccountRow(state.snapshot, selectedAccount) : null;
   const hero =
-    (selectedRow ? buildAccountHero(selectedRow) : null) ?? kpis.find((kpi) => kpi.ready) ?? null;
+    (selectedRow ? buildAccountHero(selectedRow, uiText, uiLocale) : null) ??
+    kpis.find((kpi) => kpi.ready) ??
+    null;
   const rest = restKpisExcludingPlatform(kpis, hero?.platform ?? null);
   const restItems: MetricStripItem[] = rest.map((kpi) => ({
     label: kpi.label,
@@ -300,12 +327,18 @@ function sparklineTone(deltaPct: number | undefined): SparklineTone {
 }
 
 function MetricHero({ kpi }: { kpi: PlatformKpi }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex w-full max-w-[22rem] items-center gap-3 rounded-lg border border-border bg-card p-3">
       <span className="size-1.5 shrink-0 rounded-full bg-success live-pulse" aria-hidden="true" />
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-2xs uppercase tracking-wide text-muted-foreground">
-          {kpi.accountName ? `${kpi.accountName} · ${kpi.label}` : kpi.label}
+          {kpi.accountName
+            ? uiText('m_c4abe46356', {
+                account: kpi.accountName,
+                metric: kpi.label,
+              })
+            : kpi.label}
         </span>
         <div className="flex items-baseline gap-2">
           <span className="font-mono text-2xl font-semibold leading-none tabular-nums text-foreground">
@@ -320,7 +353,7 @@ function MetricHero({ kpi }: { kpi: PlatformKpi }) {
         width={96}
         height={32}
         className="ml-auto shrink-0"
-        ariaLabel={`${kpi.label} trend`}
+        ariaLabel={uiText('m_87c066d7ac', { label: kpi.label })}
       />
     </div>
   );

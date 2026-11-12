@@ -4,7 +4,9 @@ import {
   type PublishAccountCandidate,
   type PublishPlatform,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import type { UiLocale } from '@/i18n/config';
 // draftReadiness reads inferPublishPlatform from here: a cycle that only resolves at call time.
 import { evaluateDraftReadiness } from './draftReadiness';
 import { groupMemberDrafts } from './groupDraft';
@@ -57,15 +59,26 @@ export function unpublishedMembers(card: OrganicCalendarDraft): OrganicCalendarD
  * own content — the card's row carries the group's platform union, and judging TikTok against
  * the Instagram row's image refused a group whose TikTok row had its video.
  */
-export function groupPublishBlocker(card: OrganicCalendarDraft): string | null {
+export function groupPublishBlocker(
+  card: OrganicCalendarDraft,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+  locale: UiLocale = 'en',
+): string | null {
   const drafts = unpublishedMembers(card);
-  if (drafts.length === 0) return 'Every platform of this post is already live.';
+  if (drafts.length === 0)
+    return translate?.('publishAllLive') ?? 'Every platform of this post is already live.';
   for (const draft of drafts) {
     const platform = inferPublishPlatform(draft);
-    if (!platform) return 'This draft has no platform we can publish to.';
-    const readiness = evaluateDraftReadiness({ ...draft, platforms: [platform] });
+    if (!platform)
+      return translate?.('publishNoPlatform') ?? 'This draft has no platform we can publish to.';
+    const readiness = evaluateDraftReadiness(
+      { ...draft, platforms: [platform] },
+      translate,
+      locale,
+    );
     if (readiness.ready) continue;
-    const reason = readiness.reason ?? 'This post is not ready to publish yet.';
+    const reason =
+      readiness.reason ?? translate?.('publishBlocked') ?? 'This post is not ready to publish yet.';
     return drafts.length > 1 ? `${PUBLISH_PLATFORM_LABELS[platform]}: ${reason}` : reason;
   }
   return null;
@@ -100,7 +113,27 @@ export const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
     'This brand is out of X API credits. Buy X credits in Billing (or turn on X auto-billing), then publish again.',
 };
 
-export function describePublishError(code: string, fallback: string): string {
+const PUBLISH_ERROR_KEYS = {
+  token_expired: 'publishErrorToken',
+  rate_limited: 'publishErrorRateLimited',
+  media_processing_error: 'publishErrorProcessing',
+  media_staging_failed: 'publishErrorStaging',
+  media_upload_failed: 'publishErrorUpload',
+  unsupported_format: 'publishErrorFormat',
+  credits_exhausted: 'publishErrorCredits',
+} as const satisfies Partial<Record<import('@continuum/contracts').PublishErrorCode, string>>;
+
+export function describePublishError(
+  code: string,
+  fallback: string,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+): string {
+  if (translate)
+    return translate(
+      Object.hasOwn(PUBLISH_ERROR_KEYS, code)
+        ? PUBLISH_ERROR_KEYS[code as keyof typeof PUBLISH_ERROR_KEYS]
+        : 'publishErrorUnknown',
+    );
   return PUBLISH_ERROR_MESSAGES[code] ?? fallback;
 }
 

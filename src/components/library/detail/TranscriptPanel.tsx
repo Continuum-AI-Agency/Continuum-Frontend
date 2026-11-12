@@ -9,6 +9,7 @@
 // lines on as SRT / WebVTT captions or plain text.
 
 import { Check, Copy, Loader2, MessageSquarePlus, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type TranscriptExportFormat, toSrt, toTxt, toVtt } from '@/lib/library/transcriptExport';
@@ -36,7 +37,11 @@ type Props = {
   renderRangeComposer?: (range: TranscriptRange) => ReactNode;
 };
 
-export type TranscriptRange = { timeMs: number; endMs: number | null; clear: () => void };
+export type TranscriptRange = {
+  timeMs: number;
+  endMs: number | null;
+  clear: () => void;
+};
 
 // timeupdate fires ~4x/second; the highlight only ever changes when the playhead
 // crosses a line boundary. Coalescing through one rAF and re-rendering only on an
@@ -75,6 +80,8 @@ function useActiveSegmentIndex(clock: PlaybackClock, view: TranscriptView): numb
 }
 
 function CopyTranscriptButton({ text }: { text: string }) {
+  const translateUi = useUiTranslations('library');
+
   const [copied, setCopied] = useState(false);
 
   return (
@@ -91,7 +98,7 @@ function CopyTranscriptButton({ text }: { text: string }) {
       }}
     >
       {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
-      {copied ? 'Copied' : 'Copy transcript'}
+      {copied ? translateUi('copied_8d525e5f') : translateUi('copy_transcript_401584c4')}
     </Button>
   );
 }
@@ -147,10 +154,15 @@ export function TranscriptPanel({
   onSeek,
   renderRangeComposer,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const activeIndex = useActiveSegmentIndex(clock, view);
   const lineRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // The last line clicked anchors a Shift+click span.
-  const [selection, setSelection] = useState<{ anchor: number; end: number } | null>(null);
+  const [selection, setSelection] = useState<{
+    anchor: number;
+    end: number;
+  } | null>(null);
   const [composing, setComposing] = useState(false);
   const clearSelection = useCallback(() => {
     setSelection(null);
@@ -159,7 +171,10 @@ export function TranscriptPanel({
 
   useEffect(() => {
     if (activeIndex < 0) return;
-    lineRefs.current[activeIndex]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    lineRefs.current[activeIndex]?.scrollIntoView({
+      block: 'nearest',
+      behavior: 'smooth',
+    });
   }, [activeIndex]);
 
   const registerLine = useCallback(
@@ -180,10 +195,10 @@ export function TranscriptPanel({
     return <EmptyState>{error}</EmptyState>;
   }
   if (view.status === 'untranscribed') {
-    return <EmptyState>This recording hasn&apos;t been transcribed yet.</EmptyState>;
+    return <EmptyState>{translateUi('this_recording_hasn_t_been_transcri_f410fb16')}</EmptyState>;
   }
   if (view.status === 'silent') {
-    return <EmptyState>Analyzed — no speech in this recording.</EmptyState>;
+    return <EmptyState>{translateUi('analyzed_no_speech_in_this_recordin_6aab47ad')}</EmptyState>;
   }
   // Captions need timecodes; a transcript without them only exports as text.
   const formats: TranscriptExportFormat[] =
@@ -194,14 +209,17 @@ export function TranscriptPanel({
   const last = view.segments[high];
   const range =
     first && last
-      ? { timeMs: first.startMs, endMs: last.endMs > first.startMs ? last.endMs : null }
+      ? {
+          timeMs: first.startMs,
+          endMs: last.endMs > first.startMs ? last.endMs : null,
+        }
       : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
         <span className="text-2xs uppercase tracking-wide text-muted-foreground/70">
-          {source ?? 'transcript'}
+          {source ?? translateUi('transcript_54e6289e')}
         </span>
         {language ? (
           <span data-testid="transcript-language" className="text-2xs text-muted-foreground">
@@ -211,9 +229,10 @@ export function TranscriptPanel({
         <CopyTranscriptButton text={transcriptClipboardText(view)} />
       </div>
       <fieldset className="flex shrink-0 items-center gap-1 border-b border-border px-3 py-1">
-        <legend className="sr-only">Export transcript</legend>
+        <legend className="sr-only">{translateUi('export_transcript_f6aee6b2')}</legend>
         <span className="text-2xs text-muted-foreground" aria-hidden="true">
-          Export
+          {' '}
+          {translateUi('export_36648955')}{' '}
         </span>
         {formats.map((format) => (
           <Button
@@ -222,7 +241,9 @@ export function TranscriptPanel({
             variant="ghost"
             size="sm"
             className="h-6 px-1.5 text-2xs uppercase text-muted-foreground"
-            aria-label={`Export transcript as ${format.toUpperCase()}`}
+            aria-label={translateUi('export_transcript_as_value0_b2d564df', {
+              value0: String(format.toUpperCase()),
+            })}
             data-testid={`transcript-export-${format}`}
             onClick={() => downloadTranscript(view, format, fileName, language)}
           >
@@ -297,7 +318,9 @@ export function TranscriptPanel({
               <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-2xs tabular-nums text-amber-700 dark:text-amber-300">
                 {formatTimecodeRange(range.timeMs, range.endMs)}
               </span>
-              <span className="text-2xs text-muted-foreground">Shift+click to extend</span>
+              <span className="text-2xs text-muted-foreground">
+                {translateUi('shift_click_to_extend_3017cc01')}
+              </span>
               <Button
                 type="button"
                 variant="outline"
@@ -306,12 +329,11 @@ export function TranscriptPanel({
                 data-testid="transcript-comment-range"
                 onClick={() => setComposing(true)}
               >
-                <MessageSquarePlus className="size-3.5" />
-                Comment
+                <MessageSquarePlus className="size-3.5" /> {translateUi('comment_44f5e3fb')}{' '}
               </Button>
               <button
                 type="button"
-                aria-label="Clear the selected lines"
+                aria-label={translateUi('clear_the_selected_lines_b20ca73b')}
                 onClick={clearSelection}
                 className="rounded-sm p-1 text-muted-foreground hover:text-foreground"
               >

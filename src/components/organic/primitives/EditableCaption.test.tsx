@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import type { TextareaHTMLAttributes } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -42,7 +43,9 @@ describe('EditableCaption', () => {
     const onChange = mock();
     render(<EditableCaption value="Hi" onChange={onChange} platform="instagram" />);
     fireEvent.click(screen.getByLabelText('Edit caption'));
-    fireEvent.change(screen.getByLabelText('Caption'), { target: { value: 'Hi there' } });
+    fireEvent.change(screen.getByLabelText('Caption'), {
+      target: { value: 'Hi there' },
+    });
     expect(onChange).toHaveBeenCalledWith('Hi there');
   });
 

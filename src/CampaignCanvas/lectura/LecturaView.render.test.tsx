@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { SCAFFOLD_COPY_WITH_TESTS } from '@/lib/campaign-canvas/columnMap.fixtures';
 import { lecturaFromCanvasGraph, lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import { LIVE_BATCH_PREVIEW, SCAFFOLD_GRAPH } from '@/lib/campaign-canvas/lectura.fixtures';

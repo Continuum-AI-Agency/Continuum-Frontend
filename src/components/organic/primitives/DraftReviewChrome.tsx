@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The review panel's identity row (which is the account picker), readiness line and footer.
 // All presentational: the preview decides what blocks the post and what each action does, these
 // decide only how it reads. A disabled action always says why in text the user can read without
@@ -89,6 +91,7 @@ export function AccountPicker({
   trigger: React.ReactElement;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('organic');
   const [open, setOpen] = React.useState(false);
   // The stamp may be a twin's id: the picker shows the candidate it belongs to as chosen.
   const selectedId = findAccount(accounts, selectedAccountId)?.id ?? selectedAccountId;
@@ -170,16 +173,18 @@ export function AccountPicker({
                 {account.needsReauth ? (
                   <>
                     <span id={`${reauthId}-${account.id}`} className="sr-only">
-                      Needs reconnecting before it can post
+                      {uiText('needs_reconnecting_before_it_can_post_259b02f')}
                     </span>
                     <a
                       href={INTEGRATIONS_SETTINGS_HREF}
                       target="_blank"
                       rel="noreferrer"
-                      aria-label={`Reconnect ${accountName(account)}`}
+                      aria-label={uiText('reconnectAccount', {
+                        account: accountName(account),
+                      })}
                       className={linkClass}
                     >
-                      Reconnect
+                      {uiText('reconnect_bf8a9ea')}
                     </a>
                   </>
                 ) : null}
@@ -231,6 +236,7 @@ export function ReviewIdentityRow({
   menu: React.ReactNode;
   onClose?: () => void;
 }) {
+  const uiText = useTranslations('organic');
   const label = PUBLISH_PLATFORM_LABELS[platform];
   const stamped = findAccount(accounts, selectedAccountId);
   const name = stamped ? accountName(stamped) : null;
@@ -248,10 +254,10 @@ export function ReviewIdentityRow({
     >
       {name ??
         (accountsLoading
-          ? 'Loading account…'
+          ? uiText('loading_account_e180208')
           : noAccounts
-            ? 'No account connected'
-            : 'Choose account')}
+            ? uiText('no_account_connected_d0381c5')
+            : uiText('choose_account_3be3203'))}
     </span>
   );
 
@@ -276,12 +282,19 @@ export function ReviewIdentityRow({
                 accounts={accounts}
                 selectedAccountId={selectedAccountId}
                 onSelect={onSelectAccount}
-                groupLabel={`${label} account`}
+                groupLabel={uiText('platformAccountGroup', { platform: label })}
                 disabled={pickerDisabledReason !== null || accountsLoading}
                 trigger={
                   <button
                     type="button"
-                    aria-label={`${label} account: ${name ?? (accountsLoading ? 'Loading account…' : 'Choose account')}`}
+                    aria-label={uiText('platformAccountValue', {
+                      platform: label,
+                      account:
+                        name ??
+                        (accountsLoading
+                          ? uiText('loading_account_e180208')
+                          : uiText('choose_account_3be3203')),
+                    })}
                     aria-describedby={pickerDisabledReason ? reasonId : undefined}
                     data-account-id={selectedAccountId ?? ''}
                     className="-mx-1 flex min-w-0 items-center gap-1.5 rounded px-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:hover:bg-transparent"
@@ -306,7 +319,7 @@ export function ReviewIdentityRow({
               rel="noreferrer"
               className={linkClass}
             >
-              Connect
+              {uiText('connect_1a2303e')}
             </a>
           ) : null}
         </div>
@@ -329,7 +342,7 @@ export function ReviewIdentityRow({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Close preview"
+          aria-label={uiText('close_preview_7d8ab36')}
           onClick={onClose}
         >
           <X className="size-4" />
@@ -342,7 +355,11 @@ export function ReviewIdentityRow({
 /** Where a readiness item jumps to. Mirrors the shared gate's `fix` targets. */
 export type ReadinessFixTarget = 'caption' | 'media' | 'account' | 'format' | 'cover' | 'options';
 
-export type ReadinessItem = { key: string; message: string; fix: ReadinessFixTarget };
+export type ReadinessItem = {
+  key: string;
+  message: string;
+  fix: ReadinessFixTarget;
+};
 
 export function ReadinessLine({
   items,
@@ -353,6 +370,8 @@ export function ReadinessLine({
   readyLabel: string;
   onFix: (target: ReadinessFixTarget) => void;
 }) {
+  const uiText = useTranslations('organic');
+
   const ready = items.length === 0;
   return (
     <div
@@ -370,7 +389,7 @@ export function ReadinessLine({
         }
       >
         {ready ? <CircleCheck className="size-3.5 shrink-0" aria-hidden /> : null}
-        {ready ? readyLabel : `${items.length} to fix`}
+        {ready ? readyLabel : uiText('issuesToFix', { count: items.length })}
       </span>
       {ready ? null : (
         <ol className="flex flex-wrap items-center gap-x-2 gap-y-1">

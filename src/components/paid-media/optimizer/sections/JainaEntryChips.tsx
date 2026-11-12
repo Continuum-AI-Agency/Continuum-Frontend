@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // "Ask Jaina": a primary-accented band with a label naming the capability and a row
 // of ghost buttons each carrying a prepared question. No commands to learn; the capability is
@@ -33,8 +34,9 @@ export type JainaEntryChipsProps = (
 };
 
 export function JainaEntryChips(props: JainaEntryChipsProps) {
-  const label = 'portfolio' in props ? 'Ask Jaina' : props.label;
-  const entries = 'portfolio' in props ? jainaEntryPrompts(props.portfolio) : props.entries;
+  const uiText = useTranslations('scale');
+  const label = 'portfolio' in props ? uiText('askJainaLabel') : props.label;
+  const entries = 'portfolio' in props ? jainaEntryPrompts(props.portfolio, uiText) : props.entries;
   const { layout = 'stack', frame = true, platform = null } = props;
   const title = (
     <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-primary-ink text-sm">

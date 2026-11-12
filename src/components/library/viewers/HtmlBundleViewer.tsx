@@ -7,6 +7,7 @@
 // storage or DOM — not the app's, not the API's.
 
 import { ExternalLink, Monitor, RotateCcw, Smartphone, Tablet } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,8 @@ function fitScale(stage: { width: number; height: number } | null, preset: HtmlB
 }
 
 export function HtmlBundleViewer({ entryUrl, label, onReload }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const [preset, setPreset] = useState<HtmlBundlePreset>('desktop');
   const [stage, setStage] = useState<{ width: number; height: number } | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -43,7 +46,11 @@ export function HtmlBundleViewer({ entryUrl, label, onReload }: Props) {
     const element = stageRef.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setStage({ width: entry.contentRect.width, height: entry.contentRect.height });
+      if (entry)
+        setStage({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -73,14 +80,20 @@ export function HtmlBundleViewer({ entryUrl, label, onReload }: Props) {
               </Button>
             );
           })}
-          <Button type="button" size="sm" variant="ghost" onClick={onReload} aria-label="Reload">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onReload}
+            aria-label={translateUi('reload_bdc090ec')}
+          >
             <RotateCcw className="size-4" />
           </Button>
           <a
             href={entryUrl}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Open in a new tab"
+            aria-label={translateUi('open_in_a_new_tab_306ef19c')}
             className={buttonVariants({ size: 'sm', variant: 'ghost' })}
           >
             <ExternalLink className="size-4" />
@@ -95,7 +108,11 @@ export function HtmlBundleViewer({ entryUrl, label, onReload }: Props) {
           className={cn(
             'absolute left-1/2 top-1/2 origin-center overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-border',
           )}
-          style={{ width, height, transform: `translate(-50%, -50%) scale(${scale})` }}
+          style={{
+            width,
+            height,
+            transform: `translate(-50%, -50%) scale(${scale})`,
+          }}
         >
           <iframe
             key={entryUrl}

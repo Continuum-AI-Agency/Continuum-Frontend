@@ -1,4 +1,8 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+} from 'next-intl';
 
 // H04 Opportunities: how many decisions wait on the brand across its Optimizer portfolios, and
 // where. One read — optimizer_list_portfolios, the Optimizer's own brand-scoped entry, which the
@@ -38,6 +42,10 @@ const Module = lazy(() => import('./Module'));
 const ROWS_AT_SIZE = { l: 4, m: 2, s: 0 } as const;
 
 export default function OppsTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const { hasAnswer, isError, refetch, brandPortfolios } = portfolios;
   const stack = readyDataOf(
@@ -56,7 +64,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
     return isError ? (
       <HomeTileFrame state="error" tile={tile}>
         <TileReadError onRetry={() => void refetch()}>
-          The Optimizer's portfolios could not be read, so this tile cannot say what waits.
+          {betaUiText('beta_fdb237b7755e')}
         </TileReadError>
       </HomeTileFrame>
     ) : (
@@ -71,7 +79,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
       <HomeTileFrame state="missing" tile={tile}>
         <TileMissing>{OPPS_MISSING}</TileMissing>
         <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
-          Create a portfolio
+          {betaUiText('beta_2283fad67e39')}
         </Link>
       </HomeTileFrame>
     );
@@ -82,9 +90,9 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
 
   return (
     <HomeTileFrame
-      badge={`${view.waiting} waiting`}
+      badge={betaUiText('beta_243a8a63a270', { value0: String(view.waiting) })}
       expanded={<Module brandId={ctx.brandId} portfolios={view.portfolios} stack={stack} />}
-      expandedDescription="The decisions waiting in each portfolio, with the Optimizer's own approve and dismiss."
+      expandedDescription={extraUiText('home_6f41cd70c508')}
       state="ready"
       tile={tile}
     >
@@ -98,7 +106,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             {view.waiting}
           </span>
           <span className="text-muted-foreground text-xs">
-            {view.waiting === 1 ? 'decision waiting' : 'decisions waiting'}
+            {view.waiting === 1 ? betaUiText('beta_bb378a404f3d') : betaUiText('beta_e9355a846dd8')}
           </span>
         </p>
         {lead ? (
@@ -116,7 +124,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
           </p>
         ) : null}
         {view.waiting === 0 ? (
-          <p className="text-muted-foreground text-xs">Nothing waits for a decision right now.</p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_e5b7556ea7de')}</p>
         ) : rows.length > 0 ? (
           <ul className={ROW_LINK_LIST} data-testid="home-tile-opps-portfolios">
             {rows.map((portfolio) => (
@@ -147,7 +155,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             data-testid="home-tile-opps-review"
             href={OPTIMIZER_LINKS.actions}
           >
-            Review decisions
+            {betaUiText('beta_5f2eb70d4993')}
           </Link>
         </div>
       </div>

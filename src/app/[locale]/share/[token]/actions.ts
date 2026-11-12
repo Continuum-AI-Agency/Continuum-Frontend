@@ -1,0 +1,306 @@
+'use server';
+
+import {
+  type CommentAnnotation,
+  commentAnnotationSchema,
+  createExternalShareCommentRequestSchema,
+  createExternalShareCommentResponseSchema,
+  decideExternalShareReviewRequestSchema,
+  externalReviewerSessionRequestSchema,
+  externalReviewerSessionResponseSchema,
+  externalShareReviewDecisionSchema,
+} from '@continuum/contracts';
+import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { publicErrorMessage } from '@/i18n/publicErrors';
+import { getPublicActionTranslations } from '@/i18n/publicErrors.server';
+import {
+  invokePublicCreativeOperation,
+  reviewerSessionCookieName,
+} from './reviewerSession.server.ts';
+import { invokeLibraryShare } from './shareEdge.server.ts';
+import { recordShareEvent, viewerContext } from './shareEvents.server.ts';
+
+async function recordReviewerEvent(
+  token: string,
+  sessionToken: string,
+  event: { kind: 'comment' | 'decision'; assetId: string; versionId?: string },
+): Promise<void> {
+  await recordShareEvent(token, { ...event, sessionToken });
+}
+
+export type ShareAccessActionState = { error: string | null };
+
+async function storeReviewerSession(token: string, sessionToken: string, expiresAt: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(reviewerSessionCookieName(token), sessionToken, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: `/share/${token}`,
+    expires: new Date(expiresAt),
+  });
+}
+
+export async function establishReviewerSession(
+  token: string,
+  _previous: ShareAccessActionState,
+  formData: FormData,
+): Promise<ShareAccessActionState> {
+  const uiText = await getPublicActionTranslations();
+  const input = externalReviewerSessionRequestSchema.safeParse({
+    token,
+    passcode: String(formData.get('passcode') ?? '').trim() || undefined,
+    displayName: String(formData.get('displayName') ?? '').trim() || undefined,
+    email: String(formData.get('email') ?? '').trim() || undefined,
+  });
+  if (!input.success) return { error: uiText('checkPublicForm') };
+
+  const result = await invokePublicCreativeOperation({
+    action: 'create_external_reviewer_session',
+    ...input.data,
+  });
+  if (!result.ok) return { error: publicErrorMessage(result.code, uiText, result.status) };
+  const session = externalReviewerSessionResponseSchema.safeParse(result.data);
+  if (!session.success) return { error: uiText('action_b7c778bd502b') };
+
+  await storeReviewerSession(token, session.data.sessionToken, session.data.expiresAt);
+  redirect(`/share/${token}`);
+}
+
+export type ExternalCommentActionState = {
+  error: string | null;
+  posted: boolean;
+};
+
+async function reviewerSessionForMutation(
+  token: string,
+  formData: FormData,
+): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+  const uiText = await getPublicActionTranslations();
+  const existing = (await cookies()).get(reviewerSessionCookieName(token))?.value ?? null;
+  const displayName = String(formData.get('displayName') ?? '').trim();
+  const email = String(formData.get('email') ?? '').trim();
+  if (!displayName && !email && existing) return { ok: true, token: existing };
+  const identity = externalReviewerSessionRequestSchema.safeParse({
+    token,
+    displayName: displayName || undefined,
+    email: email || undefined,
+    passcode: String(formData.get('passcode') ?? '').trim() || undefined,
+  });
+  if (!identity.success) {
+    return {
+      ok: false,
+      error: uiText('shareIdentityRequired'),
+    };
+  }
+  const sessionResult = await invokePublicCreativeOperation({
+    action: 'create_external_reviewer_session',
+    ...identity.data,
+  });
+  if (!sessionResult.ok)
+    return {
+      ok: false,
+      error: publicErrorMessage(sessionResult.code, uiText, sessionResult.status),
+    };
+  const session = externalReviewerSessionResponseSchema.safeParse(sessionResult.data);
+  if (!session.success) return { ok: false, error: uiText('action_c84638246ad9') };
+  await storeReviewerSession(token, session.data.sessionToken, session.data.expiresAt);
+  return { ok: true, token: session.data.sessionToken };
+}
+
+// A guest pins feedback to the player's moment or the I/O range they marked, or
+// sends the pin / marks they drew on a still (JSON, held to the contract here and
+// again by the edge function).
+function guestAnnotation(formData: FormData): CommentAnnotation | undefined | 'invalid' {
+  const timeMs = String(formData.get('timeMs') ?? '');
+  const endMs = String(formData.get('endMs') ?? '');
+  if (/^\d+$/.test(timeMs)) {
+    return {
+      kind: 'time',
+      timeMs: Number(timeMs),
+      ...(/^\d+$/.test(endMs) ? { endMs: Number(endMs) } : {}),
+    };
+  }
+  const drawn = formData.get('annotation');
+  if (typeof drawn !== 'string' || drawn === '') return undefined;
+  try {
+    const parsed = commentAnnotationSchema.safeParse(JSON.parse(drawn));
+    return parsed.success && parsed.data.kind !== 'time' ? parsed.data : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
+export async function postExternalComment(
+  token: string,
+  assetId: string,
+  versionId: string,
+  _previous: ExternalCommentActionState,
+  formData: FormData,
+): Promise<ExternalCommentActionState> {
+  const uiText = await getPublicActionTranslations();
+  const reviewerSession = await reviewerSessionForMutation(token, formData);
+  if (!reviewerSession.ok) return { error: reviewerSession.error, posted: false };
+
+  const annotation = guestAnnotation(formData);
+  if (annotation === 'invalid') {
+    return { error: uiText('action_8b1c90988e54'), posted: false };
+  }
+  const input = createExternalShareCommentRequestSchema.safeParse({
+    token,
+    sessionToken: reviewerSession.token,
+    assetId,
+    versionId,
+    body: String(formData.get('body') ?? ''),
+    ...(annotation ? { annotation } : {}),
+    idempotencyKey: crypto.randomUUID(),
+  });
+  if (!input.success) {
+    return { error: uiText('writeCommentFirst'), posted: false };
+  }
+  const result = await invokePublicCreativeOperation({
+    action: 'create_external_share_comment',
+    ...input.data,
+  });
+  if (!result.ok)
+    return {
+      error: publicErrorMessage(result.code, uiText, result.status),
+      posted: false,
+    };
+  if (!createExternalShareCommentResponseSchema.safeParse(result.data).success) {
+    return { error: uiText('action_95f091af46b1'), posted: false };
+  }
+  await recordReviewerEvent(token, reviewerSession.token, {
+    kind: 'comment',
+    assetId,
+    versionId,
+  });
+  revalidatePath(`/share/${token}`);
+  return { error: null, posted: true };
+}
+
+export type ExternalReviewActionState = {
+  error: string | null;
+  decision: 'approved' | 'needs_changes' | null;
+};
+
+export async function decideExternalReview(
+  token: string,
+  assetId: string,
+  versionId: string,
+  _previous: ExternalReviewActionState,
+  formData: FormData,
+): Promise<ExternalReviewActionState> {
+  const uiText = await getPublicActionTranslations();
+  const reviewerSession = await reviewerSessionForMutation(token, formData);
+  if (!reviewerSession.ok) return { error: reviewerSession.error, decision: null };
+  const input = decideExternalShareReviewRequestSchema.safeParse({
+    token,
+    sessionToken: reviewerSession.token,
+    assetId,
+    versionId,
+    decision: String(formData.get('decision') ?? ''),
+    note: String(formData.get('note') ?? '').trim() || undefined,
+    idempotencyKey: crypto.randomUUID(),
+  });
+  if (!input.success) {
+    return { error: uiText('chooseReviewDecision'), decision: null };
+  }
+  const result = await invokePublicCreativeOperation({
+    action: 'decide_external_share_review',
+    ...input.data,
+  });
+  if (!result.ok)
+    return {
+      error: publicErrorMessage(result.code, uiText, result.status),
+      decision: null,
+    };
+  const decision = externalShareReviewDecisionSchema.safeParse(result.data);
+  if (!decision.success) return { error: uiText('action_69efe14ab81c'), decision: null };
+  await recordReviewerEvent(token, reviewerSession.token, {
+    kind: 'decision',
+    assetId,
+    versionId,
+  });
+  revalidatePath(`/share/${token}`);
+  return { error: null, decision: decision.data.decision };
+}
+
+export type FeaturedFieldActionState = { error: string | null; saved: boolean };
+
+function formValue(type: string, raw: FormDataEntryValue | null): string | number | boolean | null {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (type === 'checkbox') return text === 'true';
+  if (text === '') return null;
+  if (type === 'number' || type === 'rating') return Number(text);
+  return text;
+}
+
+// A guest sets the one field the owner featured on this link. The library-share
+// edge function checks the link, the reviewer's identity and the asset, and
+// validates the value against the field (the asset_field_values trigger again).
+export async function editFeaturedField(
+  token: string,
+  assetId: string,
+  versionId: string,
+  fieldType: string,
+  _previous: FeaturedFieldActionState,
+  formData: FormData,
+): Promise<FeaturedFieldActionState> {
+  const uiText = await getPublicActionTranslations();
+  const reviewerSession = await reviewerSessionForMutation(token, formData);
+  if (!reviewerSession.ok) return { error: reviewerSession.error, saved: false };
+  const result = await invokeLibraryShare({
+    action: 'edit_featured_field',
+    token,
+    ...(await viewerContext(token, reviewerSession.token)),
+    sessionToken: reviewerSession.token,
+    assetId,
+    versionId,
+    value: formValue(fieldType, formData.get('value')),
+  });
+  if (!result.ok)
+    return {
+      error: publicErrorMessage(result.code, uiText, result.status),
+      saved: false,
+    };
+  revalidatePath(`/share/${token}`);
+  return { error: null, saved: true };
+}
+
+export type ViewerNameActionState = { error: string | null; saved: boolean };
+
+// Light name capture on an open link: an optional name (no email) that opens a
+// reviewer session, so this viewer's opens, views and downloads carry the name.
+export async function setViewerName(
+  token: string,
+  _previous: ViewerNameActionState,
+  formData: FormData,
+): Promise<ViewerNameActionState> {
+  const uiText = await getPublicActionTranslations();
+  const input = externalReviewerSessionRequestSchema.safeParse({
+    token,
+    // Its own field name: the identity forms beside it already use displayName.
+    displayName: String(formData.get('viewerName') ?? '').trim() || undefined,
+    passcode: String(formData.get('passcode') ?? '').trim() || undefined,
+  });
+  if (!input.success || !input.data.displayName) {
+    return { error: uiText('action_a480220a0f59'), saved: false };
+  }
+  const result = await invokePublicCreativeOperation({
+    action: 'create_external_reviewer_session',
+    ...input.data,
+  });
+  if (!result.ok)
+    return {
+      error: publicErrorMessage(result.code, uiText, result.status),
+      saved: false,
+    };
+  const session = externalReviewerSessionResponseSchema.safeParse(result.data);
+  if (!session.success) return { error: uiText('action_91bd0609b9d6'), saved: false };
+  await storeReviewerSession(token, session.data.sessionToken, session.data.expiresAt);
+  revalidatePath(`/share/${token}`);
+  return { error: null, saved: true };
+}

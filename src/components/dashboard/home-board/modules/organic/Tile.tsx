@@ -1,4 +1,10 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+  useLocale as useHomeLocale,
+  useLocale as useNumberLocale,
+} from 'next-intl';
 
 // H11 Organic week, the tile: posts this week (published + scheduled), how they spread over the
 // seven days, and how many drafts wait for approval. Approving happens in the expanded module. The
@@ -26,12 +32,15 @@ function postsLabel(count: number): string {
 }
 
 function WeekBars({ week }: { week: OrganicWeek }) {
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   const counts = week.days.map(
     (day) => day.published.length + day.scheduled.length + day.waiting.length,
   );
   const max = Math.max(1, ...counts);
   return (
-    <ol aria-label="Posts per day" className="grid grid-cols-7 items-end gap-1">
+    <ol aria-label={betaUiText('beta_b47a04a9622a')} className="grid grid-cols-7 items-end gap-1">
       {week.days.map((day, index) => {
         const count = counts[index] ?? 0;
         return (
@@ -62,24 +71,38 @@ function WeekBars({ week }: { week: OrganicWeek }) {
 }
 
 export default function OrganicTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('organic');
+  const homeLocale = useHomeLocale();
+
   const load = useOrganicWeek(ctx.brandId, ctx.organicAccounts);
   const read = useOrganicWeekRead(ctx.brandId, ctx.organicAccounts.length > 0);
-  const topPost = read.data ? topPostLine(read.data) : null;
-  const view = organicTileView({
-    hasAccounts: ctx.organicAccounts.length > 0,
-    loading: load.loading,
-    failed: load.failed,
-    week: load.week,
-  });
+  const topPost = read.data ? topPostLine(read.data, betaUiText, homeLocale) : null;
+  const view = organicTileView(
+    {
+      hasAccounts: ctx.organicAccounts.length > 0,
+      loading: load.loading,
+      failed: load.failed,
+      week: load.week,
+    },
+    betaUiText,
+  );
   const week = view.state === 'ready' ? load.week : null;
 
   return (
     <HomeTileFrame
-      badge={week ? `${formatCount(week.postsThisWeek)} ${postsLabel(week.postsThisWeek)}` : null}
+      badge={
+        week
+          ? `${formatCount(week.postsThisWeek, numberLocale)} ${betaUiText('homePosts', { count: week.postsThisWeek })}`
+          : null
+      }
       expanded={
         week ? <Module brandId={ctx.brandId} organicAccounts={ctx.organicAccounts} /> : undefined
       }
-      expandedDescription="This week's published, scheduled and waiting posts."
+      expandedDescription={extraUiText('home_7b0a64c1d707')}
       state={view.state}
       tile={tile}
     >
@@ -89,9 +112,9 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
       ) : null}
       {view.state === 'error' ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground text-xs">Couldn't read this week's posts.</p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_28c6fd9b30ed')}</p>
           <Button className="h-7 px-2 text-xs" onClick={load.retry} size="sm" variant="outline">
-            Retry
+            {betaUiText('beta_942087cc2d41')}
           </Button>
         </div>
       ) : null}
@@ -99,15 +122,15 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
         <div className="flex min-w-0 flex-col gap-2">
           <p className="font-semibold text-2xl tabular-nums leading-none tracking-tight">
             <span data-testid="home-tile-organic-headline" data-value={week.postsThisWeek}>
-              {formatCount(week.postsThisWeek)}
+              {formatCount(week.postsThisWeek, numberLocale)}
             </span>{' '}
             <span className="font-normal text-muted-foreground text-xs">
-              {postsLabel(week.postsThisWeek)}
+              {betaUiText('homePosts', { count: week.postsThisWeek })}
             </span>
           </p>
           {tile.size === 's' ? null : <WeekBars week={week} />}
           <p className="text-muted-foreground text-xs" data-testid="home-tile-organic-waiting">
-            {waitingLine(week.waiting)}
+            {betaUiText('homeWaiting', { count: week.waiting })}
           </p>
           {topPost ? (
             <p
@@ -120,7 +143,8 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
           ) : null}
           {tile.size === 'l' ? (
             <p className="text-2xs text-muted-foreground tabular-nums">
-              {formatCount(week.published)} published · {formatCount(week.scheduled)} scheduled
+              {formatCount(week.published, numberLocale)} {betaUiText('beta_7116a8bdbeb1')}{' '}
+              {formatCount(week.scheduled, numberLocale)} {betaUiText('beta_6aef76c6cb35')}
             </p>
           ) : null}
         </div>

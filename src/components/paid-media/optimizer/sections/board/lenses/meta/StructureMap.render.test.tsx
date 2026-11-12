@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import {
   ALEIRA_ADS,
   CAMPAIGN,
@@ -75,7 +76,9 @@ describe('StructureView at l (Easy Fit, Oct 3 – Nov 2)', () => {
   it('zooms a campaign on click: its ad sets below it, their ads last, and back', () => {
     render(<Zoomable />);
     fireEvent.click(
-      screen.getByRole('button', { name: spaced(`Zoom into ${CAMPAIGN.aleira.name}`) }),
+      screen.getByRole('button', {
+        name: spaced(`Zoom into ${CAMPAIGN.aleira.name}`),
+      }),
     );
     const path = screen.getByRole('navigation', { name: 'Structure path' });
     expect(path.textContent).toBe(`Easy Fit${CAMPAIGN.aleira.name}`);

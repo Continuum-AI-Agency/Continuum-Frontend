@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { renderHook } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
+
 import { useStudioStore } from '../stores/useStudioStore';
 import { useDebouncedSave } from './useDebouncedSave';
 
@@ -10,7 +11,9 @@ describe('useDebouncedSave', () => {
   beforeEach(() => {
     triggerSave = mock(() => {});
     const prior = useStudioStore.getState().triggerSave;
-    useStudioStore.setState({ triggerSave: triggerSave as unknown as () => void });
+    useStudioStore.setState({
+      triggerSave: triggerSave as unknown as () => void,
+    });
     restore = () => useStudioStore.setState({ triggerSave: prior });
   });
 

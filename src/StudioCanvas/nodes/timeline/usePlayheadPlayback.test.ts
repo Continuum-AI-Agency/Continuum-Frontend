@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import type { TimelineItem } from '../../types';
 import {
   advancePlayhead,
@@ -221,7 +222,10 @@ describe('advancePlayhead — crossing into a trimmed, sped-up clip (bug #188 st
     b: { kind: 'video', url: 'blob:b', trimStartSec: 4, speed: 2 },
   });
 
-  const enterClipB = (): { video: FakeVideoElement; frame: ReturnType<typeof advancePlayhead> } => {
+  const enterClipB = (): {
+    video: FakeVideoElement;
+    frame: ReturnType<typeof advancePlayhead>;
+  } => {
     const video = new FakeVideoElement();
     video.src = 'blob:a';
     video.setAttribute('data-clip-src', 'blob:a');
@@ -250,7 +254,11 @@ describe('advancePlayhead — crossing into a trimmed, sped-up clip (bug #188 st
   it('advances the playhead on wall-clock while the seek is pending instead of pinning it to the clip start', () => {
     const { frame } = enterClipB();
 
-    expect(frame.cue).toMatchObject({ clipId: 'b', sourceSec: 4, pending: true });
+    expect(frame.cue).toMatchObject({
+      clipId: 'b',
+      sourceSec: 4,
+      pending: true,
+    });
     expect(frame.playheadSec).toBeGreaterThan(2);
     expect(frame.playheadSec).toBeCloseTo(2 + FRAME_SEC, 5);
   });
@@ -409,7 +417,11 @@ describe('usePlayheadPlayback paused media', () => {
     rerender({
       layout: first,
       mediaFor: mediaLookup({
-        a: { kind: 'video', url: 'https://example.test/a.mp4', trimStartSec: 0.2 },
+        a: {
+          kind: 'video',
+          url: 'https://example.test/a.mp4',
+          trimStartSec: 0.2,
+        },
       }),
     });
     expect(video.src).toBe('https://example.test/a.mp4');
@@ -417,7 +429,11 @@ describe('usePlayheadPlayback paused media', () => {
     rerender({
       layout: second,
       mediaFor: mediaLookup({
-        b: { kind: 'video', url: 'https://example.test/b.mp4', trimStartSec: 0.5 },
+        b: {
+          kind: 'video',
+          url: 'https://example.test/b.mp4',
+          trimStartSec: 0.5,
+        },
       }),
     });
     expect(video.src).toBe('https://example.test/b.mp4');
@@ -610,12 +626,24 @@ describe('retimed clips — the element follows the source clock instead of play
     const video = landed(11.2);
     const media = mediaLookup({ r: ramped });
     const cue = { clipId: 'r', sourceSec: 11.2, pending: false };
-    expect(syncVideoToTimelineTime({ layout, mediaFor: media, video, timelineSec: 4, cue })).toBe(
-      cue,
-    );
+    expect(
+      syncVideoToTimelineTime({
+        layout,
+        mediaFor: media,
+        video,
+        timelineSec: 4,
+        cue,
+      }),
+    ).toBe(cue);
     expect(video.currentTime).toBe(11.2);
     video.seeking = true;
-    syncVideoToTimelineTime({ layout, mediaFor: media, video, timelineSec: 5, cue });
+    syncVideoToTimelineTime({
+      layout,
+      mediaFor: media,
+      video,
+      timelineSec: 5,
+      cue,
+    });
     expect(video.currentTime).toBe(11.2);
   });
 

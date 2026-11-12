@@ -2,10 +2,17 @@
 
 import type { EditorKeyframe, EditorProjectV2 } from '@continuum/contracts';
 import { Trash2 } from 'lucide-react';
+import {
+  useTranslations,
+  useLocale as useUiLocale,
+  useTranslations as useUiTranslations,
+} from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
+import { formatDecimal } from '@/lib/format/decimal';
 import { cn } from '@/lib/utils';
+import { useStudioMetadata } from '@/StudioCanvas/hooks/useStudioMetadata';
 import { EasingCurveEditor } from '@/StudioCanvas/nodes/timeline/motion/EasingCurveEditor';
 import { KeyframeDiamond } from '@/StudioCanvas/nodes/timeline/motion/KeyframeDiamond';
 import {
@@ -63,13 +70,20 @@ function KeyButton({
   onMove: (toSec: number) => void;
   onDelete: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const decimalLocale = useUiLocale();
+
   const [dragSec, setDragSec] = useState<number | null>(null);
   const drag = useRef<KeyDrag | null>(null);
   const shown = dragSec ?? laneKey.timeSec;
   return (
     <button
       type="button"
-      aria-label={`${channelLabel} keyframe at ${laneKey.timeSec.toFixed(2)} s`}
+      aria-label={translateUi('value0_keyframe_at_value1_s_f92fd295', {
+        value0: String(channelLabel),
+        value1: String(formatDecimal(laneKey.timeSec, 2, decimalLocale)),
+      })}
       aria-pressed={selected}
       data-keyframe-time={laneKey.timeSec.toFixed(3)}
       className={cn(
@@ -140,6 +154,7 @@ function KeyValueFields({
   onValue: (value: EditorKeyframe['value']) => void;
   onCommit: () => void;
 }) {
+  const uiText = useTranslations('common');
   const stored = keyframes[0]?.value;
   const [draft, setDraft] = useState<EditorKeyframe['value'] | undefined>(undefined);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new stored value is the trigger.
@@ -180,12 +195,12 @@ function KeyValueFields({
     <NumberScrubField
       label={
         channelId === 'scale'
-          ? 'Scale'
+          ? uiText('scale_f102986')
           : channelId === 'rotation'
-            ? 'Rotation'
+            ? uiText('rotation_57b5e2f')
             : channelId === 'volume'
-              ? 'Volume'
-              : 'Opacity'
+              ? uiText('volume_b10fb96')
+              : uiText('opacity_6062652')
       }
       value={numeric}
       {...range}
@@ -216,6 +231,12 @@ export function KeyframeLane({
   /** Applies once input settles; a newer build under the same key replaces the older. */
   onSettle: (key: string, build: Build) => void;
 }) {
+  const registryText = useStudioMetadata();
+
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const playheadSec = useSettledPlayhead(store);
   const [selected, setSelected] = useState<Selected | null>(null);
   const localSec = playheadSec - clip.timelineStartSec;
@@ -228,7 +249,10 @@ export function KeyframeLane({
   const add = (channelId: LaneChannelId) => {
     const at = Math.round((store.getSec() - clip.timelineStartSec) * 1_000) / 1_000;
     onEdit((latest) => addKeyEdit(latest, clipId, channelId, at));
-    setSelected({ channelId, timeSec: Math.min(clip.durationSec, Math.max(0, at)) });
+    setSelected({
+      channelId,
+      timeSec: Math.min(clip.durationSec, Math.max(0, at)),
+    });
   };
   const move = (channelId: LaneChannelId, fromSec: number, toSec: number) => {
     const target = Math.round(Math.min(clip.durationSec, Math.max(0, toSec)) * 1_000) / 1_000;
@@ -242,16 +266,19 @@ export function KeyframeLane({
 
   return (
     <section
-      aria-label="Keyframes"
+      aria-label={translateUi('keyframes_170414a6')}
       data-testid="keyframe-lane"
       className="flex shrink-0 flex-col gap-1.5 rounded-lg border border-border/60 p-3"
     >
       <div className="flex items-center justify-between">
         <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Keyframes
+          {' '}
+          {translateUi('keyframes_170414a6')}{' '}
         </span>
         <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-          {inside ? `${localSec.toFixed(2)} s` : 'playhead off clip'}
+          {inside
+            ? `${formatDecimal(localSec, 2, decimalLocale)} s`
+            : translateUi('playhead_off_clip_8833762d')}
         </span>
       </div>
       {channelsFor(clip)
@@ -262,15 +289,18 @@ export function KeyframeLane({
           return (
             <div key={channel.id} className="flex items-center gap-1" data-channel={channel.id}>
               <span className="w-14 shrink-0 truncate text-2xs text-muted-foreground">
-                {channel.label}
+                {registryText(channel.label)}
               </span>
               <KeyframeDiamond
-                labeled={channel.label}
+                labeled={registryText(channel.label)}
                 keyed={Boolean(atPlayhead)}
                 disabled={!inside}
                 onToggle={() =>
                   atPlayhead
-                    ? setSelected({ channelId: channel.id, timeSec: atPlayhead.timeSec })
+                    ? setSelected({
+                        channelId: channel.id,
+                        timeSec: atPlayhead.timeSec,
+                      })
                     : add(channel.id)
                 }
               />
@@ -288,7 +318,7 @@ export function KeyframeLane({
                 {keys.map((key) => (
                   <KeyButton
                     key={key.keyframes[0]?.id ?? key.timeSec}
-                    channelLabel={channel.label}
+                    channelLabel={registryText(channel.label)}
                     laneKey={key}
                     durationSec={clip.durationSec}
                     selected={
@@ -296,7 +326,10 @@ export function KeyframeLane({
                       Math.abs(selected.timeSec - key.timeSec) <= 0.002
                     }
                     onSelect={() => {
-                      setSelected({ channelId: channel.id, timeSec: key.timeSec });
+                      setSelected({
+                        channelId: channel.id,
+                        timeSec: key.timeSec,
+                      });
                       store.seek(clip.timelineStartSec + key.timeSec);
                     }}
                     onMove={(toSec) => move(channel.id, key.timeSec, toSec)}
@@ -314,14 +347,19 @@ export function KeyframeLane({
         >
           <div className="flex items-center justify-between">
             <span className="text-2xs font-medium">
-              {LANE_CHANNELS.find((channel) => channel.id === selected.channelId)?.label} ·{' '}
-              <span className="font-mono tabular-nums">{selectedKey.timeSec.toFixed(2)} s</span>
+              {registryText(
+                LANE_CHANNELS.find((channel) => channel.id === selected.channelId)?.label ?? '',
+              )}{' '}
+              ·{' '}
+              <span className="font-mono tabular-nums">
+                {formatDecimal(selectedKey.timeSec, 2, decimalLocale)} s
+              </span>
             </span>
             <Button
               size="icon"
               variant="ghost"
               className="size-6"
-              aria-label="Delete keyframe"
+              aria-label={translateUi('delete_keyframe_3148a354')}
               onClick={() => remove(selected.channelId, selectedKey.timeSec)}
             >
               <Trash2 className="size-3" />
@@ -341,7 +379,9 @@ export function KeyframeLane({
           />
           {selectedKey.keyframes[0] ? (
             <div className="flex flex-col gap-1">
-              <span className="text-2xs text-muted-foreground">Ease into the next key</span>
+              <span className="text-2xs text-muted-foreground">
+                {translateUi('ease_into_the_next_key_c1afb6e1')}
+              </span>
               <EasingCurveEditor
                 keyframe={selectedKey.keyframes[0]}
                 onChange={(patch) => {

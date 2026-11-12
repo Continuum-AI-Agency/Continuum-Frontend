@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import type { PaidMediaTimeRange } from '@/components/paid-media/dashboard/timeRange';
-import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { markFetchFailure } from '@/lib/api/errors';
 import type {
   AccountInsightsResponse,
   ComputedInsight,
@@ -106,11 +107,12 @@ function deriveBudgetInsights(pacing: BudgetPacingResponse): ComputedInsight[] {
 }
 
 export function useAccountInsights(params: UseAccountInsightsParams): UseAccountInsightsReturn {
+  const formatUiError = useUiErrorMessage();
   const { brandId, adAccountId, timeRange, enabled = true } = params;
 
   const [data, setData] = React.useState<AccountInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorCause, setError] = React.useState<{ error: unknown } | null>(null);
   const [refreshTick, setRefreshTick] = React.useState(0);
 
   const requestIdRef = React.useRef(0);
@@ -160,6 +162,9 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
       body: JSON.stringify({ brandId, adAccountId }),
       signal: pacingController.signal,
     })
+      .catch((cause) => {
+        throw markFetchFailure(cause);
+      })
       .then(async (r) => {
         if (!r.ok) return null;
         return r.json() as Promise<BudgetPacingResponse>;
@@ -179,7 +184,7 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(loadFailureMessage('account insights', err));
+        setError({ error: err });
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {
@@ -203,7 +208,7 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
     generatedAt: data?.generated_at ?? null,
     expiresAt: data?.expires_at ?? null,
     isLoading,
-    error,
+    error: errorCause ? formatUiError(errorCause.error) : null,
     refresh,
   };
 }

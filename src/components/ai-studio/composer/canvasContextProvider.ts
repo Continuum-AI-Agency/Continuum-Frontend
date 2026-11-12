@@ -6,16 +6,19 @@ import type {
   TrendSignal,
 } from '@continuum/contracts';
 import { currentWeekStartDateUtc } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import {
   type FetchMediaMentionAssetsInput,
   fetchMediaLibraryFolders,
   fetchMediaMentionAssets,
+  type MediaMentionText,
   parseMediaFolderKey,
 } from '@/lib/agent/media-mentions';
 import type { AgentMentionProvider, AgentMentionSuggestion } from '@/lib/agent-references';
 import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
 import { fetchBrandInsightsWeek } from '@/lib/api/brandInsights.client';
 import { describeSkillForGeneration } from '@/lib/brands/generationConfigPresentation';
+import { elementCategoryLabel } from '../elements/elementPresentation';
 import {
   ELEMENTS_ROOT_KEY,
   elementCategoryFolderKey,
@@ -40,7 +43,11 @@ const SIGNALS_QUESTIONS_KEY = 'canvas-context:signals-questions';
 const SIGNALS_RESOLVER_LANDED = false;
 
 type FetchAssets = (input: FetchMediaMentionAssetsInput) => Promise<AgentMentionSuggestion[]>;
-type FetchFolders = (brandId: string, source?: 'canvas') => Promise<AgentMentionSuggestion[]>;
+type FetchFolders = (
+  brandId: string,
+  source?: 'canvas',
+  uiText?: MediaMentionText,
+) => Promise<AgentMentionSuggestion[]>;
 
 /** This week's brand signals, already shaped as canvas mention suggestions. */
 export interface CanvasSignalCatalog {
@@ -51,7 +58,11 @@ export interface CanvasSignalCatalog {
 
 type FetchSignals = (brandId: string) => Promise<CanvasSignalCatalog>;
 
-const EMPTY_SIGNALS: CanvasSignalCatalog = { trends: [], events: [], questions: [] };
+const EMPTY_SIGNALS: CanvasSignalCatalog = {
+  trends: [],
+  events: [],
+  questions: [],
+};
 
 const signalSuggestion = (input: {
   id: string;
@@ -86,7 +97,10 @@ export function trendToCanvasMentionSuggestion(trend: TrendSignal): AgentMention
     group: 'Trends',
     badge: 'trend',
     description: trend.description ?? trend.relevanceToBrand,
-    metadata: { source: trend.source, relevanceToBrand: trend.relevanceToBrand },
+    metadata: {
+      source: trend.source,
+      relevanceToBrand: trend.relevanceToBrand,
+    },
   });
 }
 
@@ -112,7 +126,10 @@ export function questionToCanvasMentionSuggestion(
     group: 'Questions',
     badge: 'question',
     description: question.whyRelevant ?? question.contentTypeSuggestion,
-    metadata: { niche: question.niche, socialPlatform: question.socialPlatform },
+    metadata: {
+      niche: question.niche,
+      socialPlatform: question.socialPlatform,
+    },
   });
 }
 
@@ -129,7 +146,10 @@ const fetchCanvasSignals: FetchSignals = async (brandId) => {
   const nicheMap = insights.data.questionsByNiche.questionsByNiche ?? {};
   const questions = Object.entries(nicheMap).flatMap(([niche, entry]) =>
     (entry as { questions: QuestionSignal[] }).questions.map((question) =>
-      questionToCanvasMentionSuggestion({ ...question, niche: question.niche ?? niche }),
+      questionToCanvasMentionSuggestion({
+        ...question,
+        niche: question.niche ?? niche,
+      }),
     ),
   );
 
@@ -153,16 +173,23 @@ const isComposableSkill = (skill: Skill): boolean =>
   skill.kind === 'creative_direction' &&
   (skill.surface === 'visual' || skill.surface === 'both');
 
-export function skillToCanvasMentionSuggestion(skill: Skill): AgentMentionSuggestion {
+export function skillToCanvasMentionSuggestion(
+  skill: Skill,
+  uiText?: ReturnType<typeof useTranslations<'studio'>>,
+): AgentMentionSuggestion {
   const label = skill.slug ?? skill.name;
   return {
     key: `canvas-skill:${skill.id}`,
     label,
     type: 'skill',
     source: 'canvas',
-    group: skill.isTemplate ? 'Skill library' : 'Brand skills',
+    group: uiText
+      ? uiText(skill.isTemplate ? 'composerSkillLibrary' : 'composerBrandSkills')
+      : skill.isTemplate
+        ? 'Skill library'
+        : 'Brand skills',
     description: describeSkillForGeneration(skill),
-    badge: 'skill',
+    badge: uiText ? uiText('composerSkillBadge') : 'skill',
     reference: {
       id: skill.id,
       type: 'skill',
@@ -199,6 +226,8 @@ export function createCanvasComposerMentionProvider({
   fetchAssets = fetchMediaMentionAssets,
   fetchFolders = fetchMediaLibraryFolders,
   fetchSignals = fetchCanvasSignals,
+  uiText,
+  mediaText,
 }: {
   brandId: string;
   skills: Skill[];
@@ -207,22 +236,33 @@ export function createCanvasComposerMentionProvider({
   fetchAssets?: FetchAssets;
   fetchFolders?: FetchFolders;
   fetchSignals?: FetchSignals;
+  uiText?: ReturnType<typeof useTranslations<'studio'>>;
+  mediaText?: MediaMentionText;
 }): AgentMentionProvider {
-  const skillSuggestions = skills.filter(isComposableSkill).map(skillToCanvasMentionSuggestion);
-  const brandSkills = skillSuggestions.filter((item) => item.group === 'Brand skills');
-  const librarySkills = skillSuggestions.filter((item) => item.group === 'Skill library');
+  const composableSkills = skills.filter(isComposableSkill);
+  const skillSuggestions = composableSkills.map((skill) =>
+    skillToCanvasMentionSuggestion(skill, uiText),
+  );
+  const brandSkills = composableSkills
+    .filter((skill) => !skill.isTemplate)
+    .map((skill) => skillToCanvasMentionSuggestion(skill, uiText));
+  const librarySkills = composableSkills
+    .filter((skill) => skill.isTemplate)
+    .map((skill) => skillToCanvasMentionSuggestion(skill, uiText));
 
   // Elements are grouped by category (PRD feature 9) — and this menu's only grouping
   // affordance is the folder drill, so a category IS a folder. Empty categories are
   // not offered: a folder that opens on nothing is a dead end.
-  const elementsByCategory = elementSuggestionsByCategory(elements);
+  const elementsByCategory = elementSuggestionsByCategory(elements, uiText);
   const elementSuggestions = [...elementsByCategory.values()].flat();
   const elementCategoryFolders = [...elementsByCategory.entries()].map(([category, bucket]) =>
     folder(
       elementCategoryFolderKey(category),
-      ELEMENT_CATEGORY_LABEL[category],
+      uiText ? elementCategoryLabel(category, uiText) : ELEMENT_CATEGORY_LABEL[category],
       'media_asset',
-      `${bucket.length} element${bucket.length === 1 ? '' : 's'}`,
+      uiText
+        ? uiText('elementFolderCount', { count: bucket.length })
+        : `${bucket.length} element${bucket.length === 1 ? '' : 's'}`,
     ),
   );
 
@@ -239,18 +279,48 @@ export function createCanvasComposerMentionProvider({
     getSuggestions: async ({ query }) => {
       if (!query.trim()) {
         return [
-          folder(SKILLS_ROOT_KEY, 'Skills', 'skill', 'Brand skills & library'),
+          folder(
+            SKILLS_ROOT_KEY,
+            uiText ? uiText('skills_66d0f523') : 'Skills',
+            'skill',
+            uiText ? uiText('composerSkillsAndLibrary') : 'Brand skills & library',
+          ),
           ...(elementSuggestions.length > 0
-            ? [folder(ELEMENTS_ROOT_KEY, 'Elements', 'media_asset', 'Saved subjects by category')]
+            ? [
+                folder(
+                  ELEMENTS_ROOT_KEY,
+                  uiText ? uiText('elements_e1ff7a90') : 'Elements',
+                  'media_asset',
+                  uiText ? uiText('composerSavedSubjects') : 'Saved subjects by category',
+                ),
+              ]
             : []),
-          folder(MEDIA_ROOT_KEY, 'Media library', 'media_asset', 'Images & videos'),
+          folder(
+            MEDIA_ROOT_KEY,
+            uiText ? uiText('composerMediaLibrary') : 'Media library',
+            'media_asset',
+            uiText ? uiText('composerImagesVideos') : 'Images & videos',
+          ),
           ...(SIGNALS_RESOLVER_LANDED
-            ? [folder(SIGNALS_ROOT_KEY, 'Signals', 'trend', 'Trends, events, questions')]
+            ? [
+                folder(
+                  SIGNALS_ROOT_KEY,
+                  uiText ? uiText('composerSignals') : 'Signals',
+                  'trend',
+                  uiText ? uiText('composerSignalTypes') : 'Trends, events, questions',
+                ),
+              ]
             : []),
         ];
       }
       const [media, catalog] = await Promise.all([
-        fetchAssets({ brandId, query, limit: 8, referenceSource: 'canvas' }).catch(() => []),
+        fetchAssets({
+          brandId,
+          query,
+          limit: 8,
+          referenceSource: 'canvas',
+          ...(mediaText ? { uiText: mediaText } : {}),
+        }).catch(() => []),
         signals(),
       ]);
       return [
@@ -265,8 +335,18 @@ export function createCanvasComposerMentionProvider({
     getChildSuggestions: async (parent, query) => {
       if (parent.key === SKILLS_ROOT_KEY) {
         return [
-          folder(BRAND_SKILLS_KEY, 'Brand skills', 'skill', 'Your visual skills'),
-          folder(SKILL_LIBRARY_KEY, 'Library', 'skill', 'First-party templates'),
+          folder(
+            BRAND_SKILLS_KEY,
+            uiText ? uiText('composerBrandSkills') : 'Brand skills',
+            'skill',
+            uiText ? uiText('composerVisualSkills') : 'Your visual skills',
+          ),
+          folder(
+            SKILL_LIBRARY_KEY,
+            uiText ? uiText('library_dc20b3d5') : 'Library',
+            'skill',
+            uiText ? uiText('composerFirstPartyTemplates') : 'First-party templates',
+          ),
         ];
       }
       if (parent.key === BRAND_SKILLS_KEY)
@@ -283,9 +363,24 @@ export function createCanvasComposerMentionProvider({
       }
       if (parent.key === SIGNALS_ROOT_KEY) {
         return [
-          folder(SIGNALS_TRENDS_KEY, 'Trends', 'trend', 'This week’s trends'),
-          folder(SIGNALS_EVENTS_KEY, 'Events', 'event', 'Upcoming events'),
-          folder(SIGNALS_QUESTIONS_KEY, 'Questions', 'question', 'Audience questions'),
+          folder(
+            SIGNALS_TRENDS_KEY,
+            uiText ? uiText('composerTrends') : 'Trends',
+            'trend',
+            uiText ? uiText('composerWeekTrends') : 'This week’s trends',
+          ),
+          folder(
+            SIGNALS_EVENTS_KEY,
+            uiText ? uiText('composerEvents') : 'Events',
+            'event',
+            uiText ? uiText('composerUpcomingEvents') : 'Upcoming events',
+          ),
+          folder(
+            SIGNALS_QUESTIONS_KEY,
+            uiText ? uiText('composerQuestions') : 'Questions',
+            'question',
+            uiText ? uiText('composerAudienceQuestions') : 'Audience questions',
+          ),
         ];
       }
       if (parent.key === SIGNALS_TRENDS_KEY) {
@@ -305,9 +400,12 @@ export function createCanvasComposerMentionProvider({
                 query,
                 limit: 12,
                 referenceSource: 'canvas',
+                ...(mediaText ? { uiText: mediaText } : {}),
               }).catch(() => [])
             ).filter(isCanvasMedia)
-          : fetchFolders(brandId, 'canvas');
+          : mediaText
+            ? fetchFolders(brandId, 'canvas', mediaText)
+            : fetchFolders(brandId, 'canvas');
       }
       const mediaFolder = parseMediaFolderKey(parent.key);
       if (!mediaFolder) return [];
@@ -317,6 +415,7 @@ export function createCanvasComposerMentionProvider({
           query,
           limit: 24,
           referenceSource: 'canvas',
+          ...(mediaText ? { uiText: mediaText } : {}),
           ...mediaFolder,
         }).catch(() => [])
       ).filter(isCanvasMedia);

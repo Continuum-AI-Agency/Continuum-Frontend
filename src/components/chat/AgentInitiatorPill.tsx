@@ -3,8 +3,9 @@
 import type { AgentInitiator, AgentKind } from '@continuum/contracts';
 import { agentConversationPath, agentInitiatorLabel } from '@continuum/contracts';
 import { ArrowUpRightIcon, SparklesIcon } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Pill } from '@/components/kibo-ui/pill';
+import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 
 // "AI · Organic" — the marker on a conversation another agent started, plus the
@@ -55,6 +56,8 @@ export function ChatProvenanceBanner({
   callerRunId,
   className,
 }: ChatProvenanceBannerProps) {
+  const tUi = useTranslations('common');
+
   if (initiator !== 'agent') return null;
 
   const callerAgent = asAgentKind(initiatorAgent);
@@ -72,12 +75,15 @@ export function ChatProvenanceBanner({
       )}
     >
       <SparklesIcon className="size-3.5 text-primary" />
-      <span>Initiated by {label}</span>
+      <span>
+        {tUi('m_757532a877')}
+        {label}
+      </span>
       {href ? (
         <>
           <span aria-hidden="true">—</span>
           <Link href={href} className="inline-flex items-center gap-1 text-primary hover:underline">
-            view originating run
+            {tUi('m_151592a062')}
             <ArrowUpRightIcon className="size-3" />
           </Link>
         </>

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -25,7 +26,11 @@ const snapshot = {
   status: 'active',
   currentBudget: 100,
   ageDays: 30,
-  windows: { d3: w(300, 2, 30, 3000), d7: w(700, 10, 100, 8000), d14: w(1400, 35, 300, 20000) },
+  windows: {
+    d3: w(300, 2, 30, 3000),
+    d7: w(700, 10, 100, 8000),
+    d14: w(1400, 35, 300, 20000),
+  },
 } as never;
 
 const base = {
@@ -73,7 +78,10 @@ describe('RecEvidenceChart', () => {
         currency="USD"
         denominatorMultiplier={1}
         item={
-          { adset_id: 'a', diagnostics: { ci: { cpa: 40, lo: 30, hi: 55, events: 12 } } } as never
+          {
+            adset_id: 'a',
+            diagnostics: { ci: { cpa: 40, lo: 30, hi: 55, events: 12 } },
+          } as never
         }
         kpiField="leads"
         maxCpa={100}
@@ -126,7 +134,10 @@ describe('RecEvidenceChart — +1 type scale', () => {
         currency="USD"
         denominatorMultiplier={1}
         item={
-          { adset_id: 'a', diagnostics: { ci: { cpa: 40, lo: 30, hi: 55, events: 12 } } } as never
+          {
+            adset_id: 'a',
+            diagnostics: { ci: { cpa: 40, lo: 30, hi: 55, events: 12 } },
+          } as never
         }
         kpiField="leads"
         maxCpa={100}

@@ -13,6 +13,7 @@ import type {
 } from '@continuum/contracts';
 import { readableLayerName } from '@continuum/contracts';
 import { ChevronDown, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { type StackRow, TemplateLayerList } from '@/components/forge/TemplateLayerList';
 import { Button } from '@/components/ui/button';
@@ -69,6 +70,8 @@ export function DesignLayersPanel({
   variantId?: string;
   onSaved: (revision: TemplateRevision) => Promise<unknown> | unknown;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   // Reading the layers opens the Photoshop or Illustrator file, so it waits for the first expand.
   const [open, setOpen] = useState(false);
   const [layers, setLayers] = useState<Layers | null | undefined>(undefined);
@@ -103,9 +106,12 @@ export function DesignLayersPanel({
     >
       <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-3 py-2 text-left">
         <span>
-          <span className="block text-sm font-medium">Arrangements · extra formats</span>
+          <span className="block text-sm font-medium">
+            {translateUi('arrangements_extra_formats_605be01c')}
+          </span>
           <span className="block text-xs text-muted-foreground">
-            The same layers in another front-to-back order, each one a format a render row can pick.
+            {' '}
+            {translateUi('the_same_layers_in_another_front_to_eae399ee')}{' '}
           </span>
         </span>
         <ChevronDown
@@ -144,10 +150,13 @@ export function DesignLayersPanel({
         ) : refusal ? (
           <p className="text-xs text-muted-foreground">{refusal}</p>
         ) : layers === null ? (
-          <p className="text-xs text-muted-foreground">This template has no design arrangements.</p>
+          <p className="text-xs text-muted-foreground">
+            {translateUi('this_template_has_no_design_arrange_0399f0e7')}
+          </p>
         ) : (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden /> Reading the file’s layers…
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
+            {translateUi('reading_the_file_s_layers_46466344')}{' '}
           </p>
         )}
       </CollapsibleContent>
@@ -178,6 +187,8 @@ function Arrangements({
   save: (arrangement: DesignArrangement) => Promise<TemplateRevision>;
   onSaved: (revision: TemplateRevision) => Promise<unknown> | unknown;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [selected, setSelected] = useState(0);
   const boardOf = (arrangement: DesignArrangement) =>
     layers.artboards.find((board) => board.id === arrangement.artboardId) ?? layers.artboards[0];
@@ -200,26 +211,37 @@ function Arrangements({
   const save = async () => {
     const arrangement = draft[selected];
     if (!arrangement) {
-      toast.error('Create or select an arrangement first.');
+      toast.error(translateUi('create_or_select_an_arrangement_fir_2f6f9426'));
       return;
     }
     if (!variantId && !name.trim()) {
-      toast.error('Name the new variant.');
+      toast.error(translateUi('name_the_new_variant_b34f5bbf'));
       return;
     }
     setSaving(true);
     let saved: TemplateRevision;
     try {
-      saved = await send({ ...arrangement, name: variantId ? arrangement.name : name.trim() });
+      saved = await send({
+        ...arrangement,
+        name: variantId ? arrangement.name : name.trim(),
+      });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save the arrangement');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_save_the_arrangement_f3ad4097'),
+      );
       setSaving(false);
       return;
     } finally {
       setSaving(false);
     }
     if (!variantId) setName('');
-    toast.success(variantId ? 'Saved a new immutable revision.' : 'Created an immutable variant revision.');
+    toast.success(
+      variantId
+        ? translateUi('saved_a_new_immutable_revision_5e2e10fb')
+        : translateUi('created_an_immutable_variant_revisi_6843be4f'),
+    );
     await onSaved(saved);
   };
 
@@ -232,13 +254,15 @@ function Arrangements({
             className="flex flex-col gap-1.5 rounded-md border border-border p-2"
           >
             <h4 className="text-xs font-medium">
-              {board.name} · as the file stacks it{' '}
+              {board.name} {translateUi('as_the_file_stacks_it_422197ab')}{' '}
               <span className="font-normal text-muted-foreground">
                 {board.w}×{board.h}
               </span>
             </h4>
             <TemplateLayerList
-              label={`${board.name} as the file stacks it`}
+              label={translateUi('value0_as_the_file_stacks_it_474e1dc0', {
+                value0: String(board.name),
+              })}
               rows={rowsOf(layers, fileOrder(layers, board))}
             />
           </section>
@@ -250,12 +274,14 @@ function Arrangements({
             <section
               // biome-ignore lint/suspicious/noArrayIndexKey: an arrangement's name is what is being edited.
               key={index}
-              aria-label={`Arrangement ${arrangement.name}`}
+              aria-label={translateUi('arrangement_value0_c21d003e', {
+                value0: String(arrangement.name),
+              })}
               className="flex flex-col gap-1.5 rounded-md border border-primary/30 p-2"
             >
               <div className="flex flex-wrap items-center gap-1">
                 <Input
-                  aria-label="Arrangement name"
+                  aria-label={translateUi('arrangement_name_d7d0736a')}
                   className="h-7 min-w-0 flex-1 text-xs"
                   value={arrangement.name}
                   maxLength={60}
@@ -273,7 +299,10 @@ function Arrangements({
                         });
                     }}
                   >
-                    <SelectTrigger size="sm" aria-label="Artboard it re-stacks">
+                    <SelectTrigger
+                      size="sm"
+                      aria-label={translateUi('artboard_it_re_stacks_8e108458')}
+                    >
                       <SelectValue>{board.name}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -289,7 +318,7 @@ function Arrangements({
                   type="button"
                   size="icon-xs"
                   variant="ghost"
-                  aria-label="Reset to the file’s order"
+                  aria-label={translateUi('reset_to_the_file_s_order_30f38bdf')}
                   onClick={() => board && update(index, { order: fileOrder(layers, board) })}
                 >
                   <RotateCcw aria-hidden />
@@ -298,17 +327,23 @@ function Arrangements({
                   type="button"
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Remove ${arrangement.name}`}
+                  aria-label={translateUi('remove_value0_3028bf7d', {
+                    value0: String(arrangement.name),
+                  })}
                   onClick={() => setDraft((current) => current.filter((_, at) => at !== index))}
                 >
                   <Trash2 aria-hidden />
                 </Button>
               </div>
               <TemplateLayerList
-                label={`${arrangement.name} stack`}
+                label={translateUi('value0_stack_3e4ad0dc', {
+                  value0: String(arrangement.name),
+                })}
                 rows={rowsOf(layers, arrangement.order)}
                 onReorder={(front) =>
-                  update(index, { order: front.filter((id): id is number => typeof id === 'number').reverse() })
+                  update(index, {
+                    order: front.filter((id): id is number => typeof id === 'number').reverse(),
+                  })
                 }
               />
             </section>
@@ -318,7 +353,9 @@ function Arrangements({
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <Button type="button" size="sm" variant="outline" onClick={addArrangement}>
-          <Plus data-icon="inline-start" aria-hidden /> New arrangement
+          <Plus data-icon="inline-start" aria-hidden /> {translateUi(
+            'new_arrangement_8bf6895c',
+          )}{' '}
         </Button>
         <div className="flex-1" />
         <Select
@@ -326,19 +363,24 @@ function Arrangements({
           onValueChange={(value) => setSelected(Number(value))}
           disabled={!draft.length || saving}
         >
-          <SelectTrigger size="sm" aria-label="Arrangement to save">
-            <SelectValue>{draft[Math.min(selected, draft.length - 1)]?.name ?? 'No arrangement'}</SelectValue>
+          <SelectTrigger size="sm" aria-label={translateUi('arrangement_to_save_517f3ea4')}>
+            <SelectValue>
+              {draft[Math.min(selected, draft.length - 1)]?.name ??
+                translateUi('no_arrangement_da355f6c')}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {draft.map((item, index) => (
-              <SelectItem key={`${item.name}:${index}`} value={String(index)}>{item.name}</SelectItem>
+              <SelectItem key={`${item.name}:${index}`} value={String(index)}>
+                {item.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
         {!variantId ? (
           <Input
-            aria-label="Arrangement variant name"
-            placeholder="Name the new variant"
+            aria-label={translateUi('arrangement_variant_name_d0435853')}
+            placeholder={translateUi('name_the_new_variant_4740a0f2')}
             className="h-8 w-56 text-xs"
             value={name}
             maxLength={60}
@@ -353,7 +395,9 @@ function Arrangements({
           onClick={() => void save()}
         >
           {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
-          {variantId ? 'Save arrangement revision' : 'Save as immutable variant'}
+          {variantId
+            ? translateUi('save_arrangement_revision_e0db84d4')
+            : translateUi('save_as_immutable_variant_0ea0dbcc')}
         </Button>
       </div>
     </>

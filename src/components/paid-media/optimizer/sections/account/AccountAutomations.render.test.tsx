@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioListItem } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, within } from '@/i18n/__tests__/render';
 
 // The apply-mode pill needs a TooltipProvider ancestor and is not what these tests are about.
 mock.module('../../ApplyModePill', () => ({
@@ -27,7 +28,11 @@ const setPausedMutateAsync = mock((_input: unknown) => answered());
 const realOptimizerData = await import('../../useOptimizerData');
 mock.module('../../useOptimizerData', () => ({
   ...realOptimizerData,
-  useOptimizerAccountRead: () => ({ data: accountReadData, isLoading: false, isError: false }),
+  useOptimizerAccountRead: () => ({
+    data: accountReadData,
+    isLoading: false,
+    isError: false,
+  }),
   useAccountApprovals: () => ({
     data: { families: { budget: 'autopilot' }, insights: {} },
     isLoading: false,
@@ -35,7 +40,11 @@ mock.module('../../useOptimizerData', () => ({
   }),
   useInsightApprovalMutations: () => ({
     setInsight: { mutate: () => {}, isError: false, error: null },
-    setFamily: { mutate: setFamilyMutate, isError: Boolean(familyFailure), error: familyFailure },
+    setFamily: {
+      mutate: setFamilyMutate,
+      isError: Boolean(familyFailure),
+      error: familyFailure,
+    },
   }),
   useOptimizerMutations: () => ({
     update: { mutateAsync: updateMutateAsync, isPending: false },
@@ -74,7 +83,11 @@ const withRead = () => ({
       candidates: [],
       guards: [],
       starved: [],
-      ceiling_defaults: { budget: 'recommend', structure: 'recommend', creative_swap: 'off' },
+      ceiling_defaults: {
+        budget: 'recommend',
+        structure: 'recommend',
+        creative_swap: 'off',
+      },
       model: 'deterministic',
     },
   }).read,
@@ -126,7 +139,10 @@ describe('AccountAutomations — the account-level ceilings', () => {
     const { getByTestId } = mount([portfolio({ id: 'a', name: 'Alpha' })]);
     const structure = getByTestId('family-ceilings').querySelector('[data-family="structure"]');
     fireEvent.click(structure?.querySelector('[data-state-option="autopilot"]') as HTMLElement);
-    expect(setFamilyMutate).toHaveBeenCalledWith({ family: 'structure', state: 'autopilot' });
+    expect(setFamilyMutate).toHaveBeenCalledWith({
+      family: 'structure',
+      state: 'autopilot',
+    });
   });
 
   it('says why a change was refused, on the panel where it was asked', () => {
@@ -149,8 +165,18 @@ describe('AccountAutomations — the account-level ceilings', () => {
 describe('AccountAutomations — autonomy per portfolio', () => {
   const book = [
     portfolio({ id: 'a', name: 'Alpha', apply_mode: 'autopilot' }),
-    portfolio({ id: 'b', name: 'Beta', apply_mode: 'autopilot', autopilot_paused: true }),
-    portfolio({ id: 'c', name: 'Gamma', apply_mode: 'recommend', pending_recommendations: 3 }),
+    portfolio({
+      id: 'b',
+      name: 'Beta',
+      apply_mode: 'autopilot',
+      autopilot_paused: true,
+    }),
+    portfolio({
+      id: 'c',
+      name: 'Gamma',
+      apply_mode: 'recommend',
+      pending_recommendations: 3,
+    }),
   ];
 
   it('counts what runs on its own, and what has been stopped', () => {
@@ -192,8 +218,18 @@ describe('AccountAutomations — autopilot that has missed a cycle is counted as
         roster_absent_since: '2026-08-06T12:00:00Z',
         roster_missing_count: 12,
       }),
-      portfolio({ id: 'b', name: 'Beta', apply_mode: 'autopilot', autopilot_paused: true }),
-      portfolio({ id: 'm', name: 'MENSAJES', apply_mode: 'autopilot', stale_for_days: null }),
+      portfolio({
+        id: 'b',
+        name: 'Beta',
+        apply_mode: 'autopilot',
+        autopilot_paused: true,
+      }),
+      portfolio({
+        id: 'm',
+        name: 'MENSAJES',
+        apply_mode: 'autopilot',
+        stale_for_days: null,
+      }),
     ]);
     const meta = getByTestId('portfolio-autonomy-meta').textContent ?? '';
     expect(meta).toBe('3 of 3 on autopilot · 1 stopped · 1 stale');
@@ -280,7 +316,14 @@ describe('AccountAutomations — the autonomy dial (G14)', () => {
   });
 
   it('asks before turning autopilot on, and writes it only when the person says so', async () => {
-    mount([portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend', ...armed })]);
+    mount([
+      portfolio({
+        id: 'a',
+        name: 'Approving',
+        apply_mode: 'recommend',
+        ...armed,
+      }),
+    ]);
     fireEvent.click(step('a', 'autopilot'));
     expect(updateMutateAsync).not.toHaveBeenCalled();
     const ask = await screen.findByRole('alertdialog');
@@ -297,7 +340,12 @@ describe('AccountAutomations — the autonomy dial (G14)', () => {
 
   it('sends the person to Manage to preview the cycle instead, writing nothing', async () => {
     const { onManage } = mount([
-      portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend', ...armed }),
+      portfolio({
+        id: 'a',
+        name: 'Approving',
+        apply_mode: 'recommend',
+        ...armed,
+      }),
     ]);
     fireEvent.click(step('a', 'autopilot'));
     const ask = await screen.findByRole('alertdialog');
@@ -397,7 +445,9 @@ describe('AccountAutomations — the autonomy dial (G14)', () => {
     expect(swap().getAttribute('aria-checked')).toBe('false');
     await answerNext('ok');
     expect(swap().getAttribute('aria-checked')).toBe('true');
-    const held = within(card('a')).getByRole('switch', { name: 'Creative rotation' });
+    const held = within(card('a')).getByRole('switch', {
+      name: 'Creative rotation',
+    });
     expect(
       held.hasAttribute('data-disabled') || held.getAttribute('aria-disabled') === 'true',
     ).toBe(true);
@@ -406,7 +456,12 @@ describe('AccountAutomations — the autonomy dial (G14)', () => {
 
   it('offers the move between platforms only to a portfolio on more than one', () => {
     mount([
-      portfolio({ id: 'm', name: 'Meta only', apply_mode: 'autopilot', ...armed }),
+      portfolio({
+        id: 'm',
+        name: 'Meta only',
+        apply_mode: 'autopilot',
+        ...armed,
+      }),
       portfolio({
         id: 'x',
         name: 'Meta and Google',
@@ -417,10 +472,14 @@ describe('AccountAutomations — the autonomy dial (G14)', () => {
       }),
     ]);
     expect(
-      within(card('m')).queryByRole('switch', { name: 'Move budget between platforms' }),
+      within(card('m')).queryByRole('switch', {
+        name: 'Move budget between platforms',
+      }),
     ).toBeNull();
     expect(
-      within(card('x')).getByRole('switch', { name: 'Move budget between platforms' }),
+      within(card('x')).getByRole('switch', {
+        name: 'Move budget between platforms',
+      }),
     ).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // The HTTP client is the seam: the single-draft GET and the sign POST both go through it,
@@ -13,7 +14,10 @@ const requestMock = mock((args: { path: string; method?: string; body?: unknown 
     expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   });
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 const storeState: {
   days: { slots: OrganicCalendarDraft[] }[];
@@ -22,10 +26,19 @@ const storeState: {
 mock.module('@/lib/organic/store', () =>
   createCalendarStoreStub(
     Object.defineProperties(
-      { accountContext: { accountIds: {}, accountOptions: {}, brandId: 'brand-store' } },
+      {
+        accountContext: {
+          accountIds: {},
+          accountOptions: {},
+          brandId: 'brand-store',
+        },
+      },
       {
         days: { get: () => storeState.days, enumerable: true },
-        backlogDrafts: { get: () => storeState.backlogDrafts, enumerable: true },
+        backlogDrafts: {
+          get: () => storeState.backlogDrafts,
+          enumerable: true,
+        },
       },
     ),
   ),
@@ -59,7 +72,12 @@ const draftRow = {
       mediaSuggestion: {
         mediaStatus: 'ready',
         storyboard: [
-          { role: 'primary', bucket: 'b', storagePath: 'sb/1.png', storageUrl: 'https://old/sb' },
+          {
+            role: 'primary',
+            bucket: 'b',
+            storagePath: 'sb/1.png',
+            storageUrl: 'https://old/sb',
+          },
         ],
       },
     },
@@ -83,8 +101,18 @@ describe('selectDraftById', () => {
     id: 'fe-1',
     backendDraftId: 'be-1',
     groupMembers: [
-      { backendDraftId: 'be-1', platform: 'instagram', status: 'draft', clientKey: 'k' },
-      { backendDraftId: 'be-2', platform: 'facebook', status: 'draft', clientKey: 'k' },
+      {
+        backendDraftId: 'be-1',
+        platform: 'instagram',
+        status: 'draft',
+        clientKey: 'k',
+      },
+      {
+        backendDraftId: 'be-2',
+        platform: 'facebook',
+        status: 'draft',
+        clientKey: 'k',
+      },
     ],
   } as Partial<OrganicCalendarDraft>);
 
@@ -103,7 +131,12 @@ describe('draftStoryboardUrls', () => {
   const draft = slot({
     mediaSuggestion: {
       storyboard: [
-        { role: 'primary', bucket: 'b', storagePath: 'p1', storageUrl: 'https://signed/a' },
+        {
+          role: 'primary',
+          bucket: 'b',
+          storagePath: 'p1',
+          storageUrl: 'https://signed/a',
+        },
         {
           role: 'slide_2',
           bucket: 'b',
@@ -119,10 +152,12 @@ describe('draftStoryboardUrls', () => {
   });
 
   it('prefers a URL minted this session over the one the draft carried', () => {
-    expect(draftStoryboardUrls(draft, { p1: 'https://fresh/p1', p2: 'https://fresh/p2' })).toEqual([
-      'https://fresh/p1',
-      'https://fresh/p2',
-    ]);
+    expect(
+      draftStoryboardUrls(draft, {
+        p1: 'https://fresh/p1',
+        p2: 'https://fresh/p2',
+      }),
+    ).toEqual(['https://fresh/p1', 'https://fresh/p2']);
   });
 });
 
@@ -149,7 +184,13 @@ describe('draftRealizedMedia', () => {
           storagePath: 'p1',
           storageUrl: 'https://signed/1',
         },
-        { role: 'slide_3', kind: 'image', slideIndex: 3, storagePath: 'p3', storageUrl: 'data:x' },
+        {
+          role: 'slide_3',
+          kind: 'image',
+          slideIndex: 3,
+          storagePath: 'p3',
+          storageUrl: 'data:x',
+        },
       ],
     });
     expect(draftRealizedMedia(draft, 'd')).toEqual([
@@ -175,7 +216,10 @@ describe('draftRealizedMedia', () => {
 
     const single = slot({
       format: 'Reel',
-      mediaSuggestion: { mediaStatus: 'user_supplied', signedUrl: 'https://signed/own' },
+      mediaSuggestion: {
+        mediaStatus: 'user_supplied',
+        signedUrl: 'https://signed/own',
+      },
     });
     expect(draftRealizedMedia(single, 'd')).toEqual([
       { id: 'd:0', url: 'https://signed/own', kind: 'video' },
@@ -193,7 +237,9 @@ describe('draftRealizedMedia', () => {
       },
     });
     expect(
-      draftRealizedMedia(single, 'd', { 'img/1.png': 'https://fresh/img/1.png' })[0]?.url,
+      draftRealizedMedia(single, 'd', {
+        'img/1.png': 'https://fresh/img/1.png',
+      })[0]?.url,
     ).toBe('https://fresh/img/1.png');
     const pathOnly = slot({
       mediaSuggestion: {
@@ -208,9 +254,17 @@ describe('draftRealizedMedia', () => {
 
   it('is empty until the media is final', () => {
     const draft = slot({
-      mediaSuggestion: { mediaStatus: 'generating', signedUrl: 'https://signed/x' },
+      mediaSuggestion: {
+        mediaStatus: 'generating',
+        signedUrl: 'https://signed/x',
+      },
       publishingAssets: [
-        { role: 'primary', kind: 'image', storagePath: 'p', storageUrl: 'https://signed/p' },
+        {
+          role: 'primary',
+          kind: 'image',
+          storagePath: 'p',
+          storageUrl: 'https://signed/p',
+        },
       ],
     });
     expect(draftRealizedMedia(draft, 'd')).toEqual([]);
@@ -274,7 +328,12 @@ describe('useDraftChatMedia', () => {
             backendDraftId: 'be-1',
             mediaSuggestion: {
               storyboard: [
-                { role: 'primary', bucket: 'b', storagePath: 'p', storageUrl: 'https://signed/sb' },
+                {
+                  role: 'primary',
+                  bucket: 'b',
+                  storagePath: 'p',
+                  storageUrl: 'https://signed/sb',
+                },
               ],
             },
           }),

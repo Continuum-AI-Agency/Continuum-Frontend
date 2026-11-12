@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -18,6 +19,7 @@ export function PlannerHeader({
   onToday,
   onNextWeek,
 }: PlannerHeaderProps) {
+  const uiText = useTranslations('organic');
   return (
     <header
       data-tour-id="organic-calendar-controls"
@@ -29,19 +31,19 @@ export function PlannerHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        <ButtonGroup aria-label="Week navigation">
+        <ButtonGroup aria-label={uiText('week_navigation_f23f3ad')}>
           <Button
             type="button"
             variant="outline"
             size="icon-sm"
             onClick={onPreviousWeek}
-            aria-label="Previous week"
+            aria-label={uiText('previous_week_c0f8bbc')}
           >
             <ChevronLeft />
           </Button>
 
           <Button type="button" variant="outline" size="sm" onClick={onToday}>
-            Today
+            {uiText('today_2b065c7')}
           </Button>
 
           <Button
@@ -49,7 +51,7 @@ export function PlannerHeader({
             variant="outline"
             size="icon-sm"
             onClick={onNextWeek}
-            aria-label="Next week"
+            aria-label={uiText('next_week_21fbde1')}
           >
             <ChevronRight />
           </Button>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The campaign page's tabs (G11), by the campaign's type: Search opens on its keywords, its
 // search terms and their Quality Score; Performance Max on its asset groups and the channels
@@ -58,9 +59,11 @@ type RankedRow = {
 };
 
 function RankedRows({ rows, hidden, label }: { rows: RankedRow[]; hidden: number; label: string }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   if (rows.length === 0) {
-    return <p className="text-muted-foreground text-xs">Nothing in this read for the campaign.</p>;
+    return <p className="text-muted-foreground text-xs">{betaUiText('beta_1786eea1abe7')}</p>;
   }
   return (
     <div className="space-y-2">
@@ -82,8 +85,15 @@ function RankedRows({ rows, hidden, label }: { rows: RankedRow[]; hidden: number
                   animate={{ scaleX: 1 }}
                   className="block h-full origin-left rounded-full"
                   initial={reduce ? false : { scaleX: 0 }}
-                  style={{ width: `${Math.max(2, row.share * 100)}%`, background: row.color }}
-                  transition={{ duration: 0.55, ease: EASE_OUT, delay: index * 0.03 }}
+                  style={{
+                    width: `${Math.max(2, row.share * 100)}%`,
+                    background: row.color,
+                  }}
+                  transition={{
+                    duration: 0.55,
+                    ease: EASE_OUT,
+                    delay: index * 0.03,
+                  }}
                 />
               </span>
               {row.detail ? (
@@ -95,7 +105,7 @@ function RankedRows({ rows, hidden, label }: { rows: RankedRow[]; hidden: number
       </ul>
       {hidden > 0 ? (
         <p className="text-muted-foreground text-xs">
-          +{hidden} more in this read, by spend: open the Google tab's views for all of them.
+          +{hidden} {betaUiText('beta_b4258788cb85')}
         </p>
       ) : null}
     </div>
@@ -119,6 +129,8 @@ const conversionsText = (value: number | null) =>
 const KEYWORD_BLOCKS = ['keywords'] as const;
 
 function KeywordsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = viewRead(useGoogleSignals({ ...target, blocks: KEYWORD_BLOCKS }));
   return (
     <ReadGate read={read}>
@@ -146,7 +158,7 @@ function KeywordsPanel({ target, campaignId, currency, kind }: CampaignTabsProps
         return (
           <RankedRows
             hidden={keywords.length - rows.length}
-            label="Keywords by spend"
+            label={betaUiText('beta_54e7c5e172a7')}
             rows={rows}
           />
         );
@@ -158,6 +170,8 @@ function KeywordsPanel({ target, campaignId, currency, kind }: CampaignTabsProps
 const TERM_BLOCKS = ['search_terms'] as const;
 
 function TermsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = viewRead(useGoogleSignals({ ...target, blocks: TERM_BLOCKS }));
   return (
     <ReadGate read={read}>
@@ -188,7 +202,7 @@ function TermsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
         return (
           <RankedRows
             hidden={terms.length - rows.length}
-            label="Search terms by spend"
+            label={betaUiText('beta_080da3bc2c9a')}
             rows={rows}
           />
         );
@@ -198,6 +212,8 @@ function TermsPanel({ target, campaignId, currency, kind }: CampaignTabsProps) {
 }
 
 function QualityPanel({ target, campaignId, currency, window }: CampaignTabsProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = viewRead(useGoogleKeywordQuality({ ...target, window, campaignId }));
   const reduce = useReducedMotion();
   return (
@@ -212,15 +228,18 @@ function QualityPanel({ target, campaignId, currency, window }: CampaignTabsProp
         return (
           <div className="space-y-2" data-testid="campaign-quality">
             <p className="text-sm">
-              Average{' '}
+              {betaUiText('beta_b38ae2c5b845')}{' '}
               <span className="font-mono font-semibold tabular-nums">
                 <CellText cell={map.average} />
               </span>
               <span className="text-muted-foreground text-xs">
                 {' '}
-                · {map.scored} of {map.total} keywords scored
+                · {map.scored} {betaUiText('beta_28391d3bc64e')} {map.total}{' '}
+                {betaUiText('beta_e8763241be26')}
                 {spend > 0
-                  ? ` · ${Math.round((low / spend) * 100)}% of their spend at QS 3 or less`
+                  ? betaUiText('beta_90af4e5f3464', {
+                      value0: String(Math.round((low / spend) * 100)),
+                    })
                   : ''}
               </span>
             </p>
@@ -237,22 +256,33 @@ function QualityPanel({ target, campaignId, currency, window }: CampaignTabsProp
                     background: bucket.band === 'low' ? BOARD_COLOR.above : BOARD_COLOR.search,
                     opacity: bucket.keywords === 0 ? 0.25 : 1,
                   }}
-                  title={`QS ${bucket.score}: ${bucket.keywords} keywords, ${formatCurrency(bucket.spend, currency)}`}
-                  transition={{ duration: 0.5, ease: EASE_OUT, delay: index * 0.03 }}
+                  title={betaUiText('beta_1032fa15010a', {
+                    value0: bucket.score,
+                    value1: bucket.keywords,
+                    value2: String(formatCurrency(bucket.spend, currency)),
+                  })}
+                  transition={{
+                    duration: 0.5,
+                    ease: EASE_OUT,
+                    delay: index * 0.03,
+                  }}
                 />
               ))}
             </div>
             <div className="flex justify-between text-muted-foreground text-xs">
-              <span>QS 1</span>
-              <span>QS 10</span>
+              <span>{betaUiText('beta_d2eff90f73fa')}</span>
+              <span>{betaUiText('beta_094e74ef626f')}</span>
             </div>
             {map.waste && map.waste.keywords > 0 ? (
               <p className="text-xs">
                 <span className="font-mono font-semibold tabular-nums">
                   {formatCurrency(map.waste.spend, currency)}
                 </span>{' '}
-                on {map.waste.keywords} {map.waste.keywords === 1 ? 'keyword' : 'keywords'} at QS 3
-                or less with no conversion.
+                {betaUiText('beta_b8d31e852725')} {map.waste.keywords}{' '}
+                {map.waste.keywords === 1
+                  ? betaUiText('beta_d6d198dd68bb')
+                  : betaUiText('beta_67de0d1080d6')}{' '}
+                {betaUiText('beta_8540c91ae65c')}
               </p>
             ) : null}
           </div>
@@ -271,6 +301,8 @@ const STRENGTH_STEPS: Readonly<Record<string, number>> = {
 };
 
 function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = viewRead(useGoogleSignals({ ...target, blocks: PMAX_BLOCKS }));
   return (
     <ReadGate read={read}>
@@ -281,11 +313,7 @@ function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
         }
         const groups = health.groups.filter((group) => group.campaignId === campaignId);
         if (groups.length === 0) {
-          return (
-            <p className="text-muted-foreground text-xs">
-              Google listed no asset group for this campaign.
-            </p>
-          );
+          return <p className="text-muted-foreground text-xs">{betaUiText('beta_84c5f0493f96')}</p>;
         }
         return (
           <ul className="space-y-3" data-testid="campaign-asset-groups">
@@ -302,7 +330,7 @@ function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
                   <div className="flex min-w-0 items-baseline justify-between gap-3">
                     <span className="min-w-0 truncate text-sm">{group.name}</span>
                     <span className="shrink-0 text-xs">
-                      Ad strength{' '}
+                      {betaUiText('beta_7927af2f7898')}{' '}
                       <span className="font-semibold">
                         <CellText cell={group.strength} />
                       </span>
@@ -340,6 +368,8 @@ function GroupsPanel({ target, campaignId }: CampaignTabsProps) {
 const NETWORK = ['network'] as const;
 
 function ChannelsPanel({ target, campaignId, currency, kind, window }: CampaignTabsProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = viewRead(useGoogleBreakdown({ ...target, window, dimensions: NETWORK, campaignId }));
   return (
     <ReadGate read={read}>
@@ -357,7 +387,7 @@ function ChannelsPanel({ target, campaignId, currency, kind, window }: CampaignT
               : `${slice.costPerConversion.text} / conv.`,
           }),
         );
-        return <RankedRows hidden={0} label="Spend by channel" rows={rows} />;
+        return <RankedRows hidden={0} label={betaUiText('beta_739301a6a6a2')} rows={rows} />;
       }}
     </ReadGate>
   );

@@ -5,8 +5,10 @@ import {
   type MediaAsset,
   type ViralityGrade,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import * as React from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
@@ -59,6 +61,10 @@ const isAbort = (err: unknown): boolean => err instanceof DOMException && err.na
 // each section in the browser. Progress drives a per-card strip; nothing touches
 // the organic calendar store.
 export function useGenerateClips(): UseGenerateClipsResult {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const { show } = useToast();
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [progress, setProgress] = React.useState<ClipGenerationProgress | null>(null);
@@ -74,8 +80,8 @@ export function useGenerateClips(): UseGenerateClipsResult {
       if (asset.kind !== 'video') return;
       if (!asset.signedUrl) {
         show({
-          title: "Can't generate clips",
-          description: "This video isn't ready yet.",
+          title: translateUi('can_t_generate_clips_6bee0f77'),
+          description: translateUi('this_video_isn_t_ready_yet_afcd56ea'),
           variant: 'error',
         });
         return;
@@ -86,8 +92,10 @@ export function useGenerateClips(): UseGenerateClipsResult {
       const support = await checkSpliceSupport();
       if (!support.ok) {
         show({
-          title: "Can't generate clips here",
-          description: `${support.reason}. Try Chrome or Edge on desktop.`,
+          title: translateUi('can_t_generate_clips_here_80bb709c'),
+          description: translateUi('value0_try_chrome_or_edge_on_deskto_bda3d80b', {
+            value0: String(support.reason),
+          }),
           variant: 'error',
         });
         return;
@@ -97,7 +105,12 @@ export function useGenerateClips(): UseGenerateClipsResult {
       const controller = new AbortController();
       abortRef.current = controller;
       setIsGenerating(true);
-      setProgress({ sourceAssetId: asset.id, stageLabel: 'Preparing…', sections: [], done: false });
+      setProgress({
+        sourceAssetId: asset.id,
+        stageLabel: 'Preparing…',
+        sections: [],
+        done: false,
+      });
 
       const forThisAsset = (p: ClipGenerationProgress | null): p is ClipGenerationProgress =>
         Boolean(p && p.sourceAssetId === asset.id);
@@ -106,12 +119,17 @@ export function useGenerateClips(): UseGenerateClipsResult {
       const setSection = (index: number, status: ClipSectionStatus) =>
         setProgress((p) =>
           forThisAsset(p)
-            ? { ...p, sections: p.sections.map((s) => (s.index === index ? { ...s, status } : s)) }
+            ? {
+                ...p,
+                sections: p.sections.map((s) => (s.index === index ? { ...s, status } : s)),
+              }
             : p,
         );
 
       try {
-        const sourceBlob = await fetch(asset.signedUrl, { signal: controller.signal }).then((r) => {
+        const sourceBlob = await fetch(asset.signedUrl, {
+          signal: controller.signal,
+        }).then((r) => {
           if (!r.ok) throw new Error(`Could not download the source video (${r.status})`);
           return r.blob();
         });
@@ -141,8 +159,8 @@ export function useGenerateClips(): UseGenerateClipsResult {
         });
         if (!response.ok || !response.body) {
           show({
-            title: 'Clip generation failed',
-            description: 'Could not start clip generation.',
+            title: translateUi('clip_generation_failed_7d56011b'),
+            description: translateUi('could_not_start_clip_generation_1355d132'),
             variant: 'error',
           });
           setProgress(null);
@@ -207,14 +225,17 @@ export function useGenerateClips(): UseGenerateClipsResult {
             setProgress((p) => (forThisAsset(p) ? { ...p, done: true } : p));
             if (ready > 0) {
               show({
-                title: 'Clips generated',
-                description: `${ready} clip${ready === 1 ? '' : 's'} saved to the Clips folder${failed > 0 ? `, ${failed} failed` : ''}.`,
+                title: translateUi('clips_generated_df5ab9ea'),
+                description: translateUi('value0_clip_value1_saved_to_the_cli_ce0843e9', {
+                  count: Number(ready),
+                  details: String(failed > 0 ? `, ${failed} failed` : ''),
+                }),
                 variant: failed > 0 ? 'error' : 'success',
               });
             } else {
               show({
-                title: 'Clip generation failed',
-                description: 'No clips could be produced.',
+                title: translateUi('clip_generation_failed_7d56011b'),
+                description: translateUi('no_clips_could_be_produced_a7780060'),
                 variant: 'error',
               });
             }
@@ -226,8 +247,8 @@ export function useGenerateClips(): UseGenerateClipsResult {
           return;
         }
         show({
-          title: 'Clip generation failed',
-          description: error instanceof Error ? error.message : 'Unexpected error.',
+          title: translateUi('clip_generation_failed_7d56011b'),
+          description: uiErrorText(error),
           variant: 'error',
         });
         setProgress(null);
@@ -236,7 +257,7 @@ export function useGenerateClips(): UseGenerateClipsResult {
         setIsGenerating(false);
       }
     },
-    [show],
+    [show, translateUi, uiErrorText],
   );
 
   const dismiss = React.useCallback(() => setProgress(null), []);

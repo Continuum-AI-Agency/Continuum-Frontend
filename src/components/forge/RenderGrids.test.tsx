@@ -65,7 +65,12 @@ const batchPreflightMock = mock(
 const createBatchMock = mock(async (..._args: unknown[]) => ({ jobs: [JOB] }));
 const NO_DESTINATIONS = {
   slack: { state: 'not_connected', workspaceName: null, destinations: [] },
-  meta: { connected: false, adAccountId: null, adAccountName: null, adAccounts: [] },
+  meta: {
+    connected: false,
+    adAccountId: null,
+    adAccountName: null,
+    adAccounts: [],
+  },
 };
 const listDeliveryDestinationsMock = mock(async (): Promise<unknown> => NO_DESTINATIONS);
 const preflightMock = mock(
@@ -73,7 +78,12 @@ const preflightMock = mock(
 );
 /** A Live kit with nothing to place: every row measures, and lands. */
 const EMPTY_KIT = {
-  scene: { ok: true, comp: { name: 'Main', width: 1080, height: 1080 }, at: 0, layers: [] },
+  scene: {
+    ok: true,
+    comp: { name: 'Main', width: 1080, height: 1080 },
+    at: 0,
+    layers: [],
+  },
   variables: [],
   brandMark: null,
   comp: 'Main',
@@ -85,7 +95,10 @@ const listRenderSetsMock = mock(async (_brandId: string, _templateKey: string) =
   items: [] as unknown[],
   nextCursor: null,
 }));
-const listInputSetsMock = mock(async () => ({ items: [] as unknown[], nextCursor: null }));
+const listInputSetsMock = mock(async () => ({
+  items: [] as unknown[],
+  nextCursor: null,
+}));
 const createRenderSetMock = mock(async (input: Record<string, unknown>) => ({
   ...input,
   id: '33333333-3333-4333-8333-333333333333',
@@ -95,13 +108,22 @@ const createRenderSetMock = mock(async (input: Record<string, unknown>) => ({
 }));
 const updateRenderSetMock = mock(async (id: string, input: Record<string, unknown>) => {
   const current = SAVED_SETS.find((set) => set.id === id)!;
-  return { ...current, name: input.name ?? current.name, revision: current.revision + 1 };
+  return {
+    ...current,
+    name: input.name ?? current.name,
+    revision: current.revision + 1,
+  };
 });
 const deleteRenderSetMock = mock(async (_brandId: string, _setId: string) => undefined);
 const DRAFT_ROOT = '88888888-8888-4888-8888-888888888881';
 const suggestRowsMock = mock(async (_input: unknown) => ({
   rows: [
-    { id: DRAFT_ROOT, parentId: null, label: 'Drafted', overrides: { headline: 'Summer sale' } },
+    {
+      id: DRAFT_ROOT,
+      parentId: null,
+      label: 'Drafted',
+      overrides: { headline: 'Summer sale' },
+    },
     {
       id: '88888888-8888-4888-8888-888888888882',
       parentId: DRAFT_ROOT,
@@ -147,7 +169,12 @@ const VARIABLES = [
     sample: 'Hola mundo',
   }),
   variable({ key: 'price', label: 'Price', kind: 'number', role: 'price' }),
-  variable({ key: 'hero', label: 'Hero', kind: 'image', role: 'product_image' }),
+  variable({
+    key: 'hero',
+    label: 'Hero',
+    kind: 'image',
+    role: 'product_image',
+  }),
 ];
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
@@ -178,7 +205,10 @@ const NEWEST = savedSet('55555555-5555-4555-8555-555555555551', 'Newest', 'Newes
 const OLDER = savedSet('55555555-5555-4555-8555-555555555552', 'Older', 'Older row');
 const SAVED_SETS = [NEWEST, OLDER];
 const withSavedSets = () =>
-  listRenderSetsMock.mockImplementation(async () => ({ items: SAVED_SETS, nextCursor: null }));
+  listRenderSetsMock.mockImplementation(async () => ({
+    items: SAVED_SETS,
+    nextCursor: null,
+  }));
 
 /** Per-test additions to the one template list and contract the API mock answers with. */
 let renamedTo: string | null = null;
@@ -253,7 +283,9 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
-  createSupabaseBrowserClient: () => ({ realtime: { setAuth: async () => undefined } }),
+  createSupabaseBrowserClient: () => ({
+    realtime: { setAuth: async () => undefined },
+  }),
 }));
 mock.module('@/lib/supabase/realtime', () => ({
   subscribeToRowBroadcasts: () => () => undefined,
@@ -317,13 +349,17 @@ mock.module('@/components/providers/ActiveBrandProvider', () => ({
     try {
       return realActiveBrandContext();
     } catch {
-      return { permissions: [{ brand_profile_id: BRAND, role: brandRole }], user: { id: USER } };
+      return {
+        permissions: [{ brand_profile_id: BRAND, role: brandRole }],
+        user: { id: USER },
+      };
     }
   },
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { holdKeyOf } from './renderHold';
+import type React from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import {
   act,
   cleanup,
@@ -332,17 +368,18 @@ import {
   render as testingRender,
   waitFor,
   within,
-} from '@testing-library/react';
-import type React from 'react';
-import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
+import { holdKeyOf } from './renderHold';
 
 const render = (
   ui: React.ReactNode,
-  client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } }),
+  client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+  }),
 ) => {
   return testingRender(ui, {
     wrapper: ({ children }) => (
@@ -366,9 +403,15 @@ afterEach(() => {
   livePreviewMock.mockReset();
   livePreviewMock.mockImplementation(async () => EMPTY_KIT);
   listRenderSetsMock.mockReset();
-  listRenderSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
+  listRenderSetsMock.mockImplementation(async () => ({
+    items: [],
+    nextCursor: null,
+  }));
   listInputSetsMock.mockReset();
-  listInputSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
+  listInputSetsMock.mockImplementation(async () => ({
+    items: [],
+    nextCursor: null,
+  }));
   createRenderSetMock.mockClear();
   updateRenderSetMock.mockClear();
   deleteRenderSetMock.mockClear();
@@ -407,7 +450,9 @@ const press = async (name: string) => {
 const closeAnyMenu = async () => {
   for (let level = 0; level < 3; level += 1) {
     if (document.querySelectorAll('[role="menu"][data-open]').length === 0) break;
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
     await waitFor(() =>
       expect(document.querySelectorAll('[role="menu"][data-open]').length).toBeLessThan(3 - level),
     );
@@ -443,7 +488,10 @@ describe('RenderRequestsGrid', () => {
     listRenderSetsMock.mockImplementationOnce(async () => {
       throw new Error('render sets offline');
     });
-    listRenderSetsMock.mockImplementationOnce(async () => ({ items: [NEWEST], nextCursor: null }));
+    listRenderSetsMock.mockImplementationOnce(async () => ({
+      items: [NEWEST],
+      nextCursor: null,
+    }));
     listInputSetsMock.mockImplementationOnce(async () => {
       throw new Error('input sets offline');
     });
@@ -474,7 +522,9 @@ describe('RenderRequestsGrid', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New render set' }));
     await confirmDialog('Discard');
-    const dialog = await screen.findByRole('dialog', { name: 'New render set' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'New render set',
+    });
     fireEvent.change(within(dialog).getByLabelText('Name'), {
       target: { value: 'Recovered work' },
     });
@@ -499,8 +549,12 @@ describe('RenderRequestsGrid', () => {
     await screen.findByText('Saved render sets could not be loaded');
     fireEvent.change(headline, { target: { value: 'Keep this draft' } });
     saveNow();
-    const dialog = await screen.findByRole('dialog', { name: 'Save render set' });
-    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Named draft' } });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Save render set',
+    });
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Named draft' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save set' }));
     await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('dialog', { name: 'Save render set' })).toBeTruthy();
@@ -516,13 +570,19 @@ describe('RenderRequestsGrid', () => {
     const alert = await screen.findByText('Saved render sets could not be loaded');
     fireEvent.change(headline, { target: { value: 'Recovered empty list' } });
     fireEvent.click(
-      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+      within(alert.closest('[role="alert"]')!).getByRole('button', {
+        name: 'Retry',
+      }),
     );
 
     await flushAsyncState();
     expect(screen.queryByText('Saved render sets could not be loaded')).toBeNull();
-    await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 4_000 });
-    expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Untitled set' });
+    await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1), {
+      timeout: 4_000,
+    });
+    expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
+      name: 'Untitled set',
+    });
     expect(screen.getByDisplayValue('Recovered empty list')).toBeTruthy();
   }, 10_000);
 
@@ -530,12 +590,17 @@ describe('RenderRequestsGrid', () => {
     listRenderSetsMock.mockImplementationOnce(async () => {
       throw new Error('render sets offline');
     });
-    listRenderSetsMock.mockImplementationOnce(async () => ({ items: [NEWEST], nextCursor: null }));
+    listRenderSetsMock.mockImplementationOnce(async () => ({
+      items: [NEWEST],
+      nextCursor: null,
+    }));
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     const alert = await screen.findByText('Saved render sets could not be loaded');
     fireEvent.click(
-      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+      within(alert.closest('[role="alert"]')!).getByRole('button', {
+        name: 'Retry',
+      }),
     );
 
     expect(await screen.findByDisplayValue('Newest row')).toBeTruthy();
@@ -547,13 +612,18 @@ describe('RenderRequestsGrid', () => {
     listRenderSetsMock.mockImplementationOnce(async () => {
       throw new Error('render sets offline');
     });
-    listRenderSetsMock.mockImplementationOnce(async () => ({ items: [NEWEST], nextCursor: null }));
+    listRenderSetsMock.mockImplementationOnce(async () => ({
+      items: [NEWEST],
+      nextCursor: null,
+    }));
     render(<RenderRequestsGrid brandId={BRAND} />);
     const headline = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
     const alert = await screen.findByText('Saved render sets could not be loaded');
     fireEvent.change(headline, { target: { value: 'Typed during outage' } });
     fireEvent.click(
-      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+      within(alert.closest('[role="alert"]')!).getByRole('button', {
+        name: 'Retry',
+      }),
     );
 
     expect(
@@ -572,7 +642,9 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     const alert = await screen.findByText('Saved render sets could not be loaded');
     fireEvent.click(screen.getByRole('button', { name: 'New render set' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New render set' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'New render set',
+    });
     fireEvent.change(within(dialog).getByLabelText('Name'), {
       target: { value: 'Explicit while offline' },
     });
@@ -581,7 +653,9 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(1));
     expect(screen.getByText('Saved render sets could not be loaded')).toBeTruthy();
     expect(
-      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+      within(alert.closest('[role="alert"]')!).getByRole('button', {
+        name: 'Retry',
+      }),
     ).toBeTruthy();
   });
 
@@ -616,7 +690,9 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     const alert = await screen.findByText('Saved render sets could not be loaded');
     fireEvent.click(
-      within(alert.closest('[role="alert"]')!).getByRole('button', { name: 'Retry' }),
+      within(alert.closest('[role="alert"]')!).getByRole('button', {
+        name: 'Retry',
+      }),
     );
 
     extraTemplates = [secondTemplate];
@@ -675,12 +751,16 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     await openMenu('Add', 'Blank row');
     await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
-    fireEvent.change(screen.getAllByLabelText('Headline')[1]!, { target: { value: '' } });
+    fireEvent.change(screen.getAllByLabelText('Headline')[1]!, {
+      target: { value: '' },
+    });
     for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
     // The hint says one row stays behind; the one button renders the other.
     expect(await screen.findByText(/1 selected row can’t render and is skipped/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
-    const skipped = await screen.findByRole('list', { name: 'Rows skipped from this batch' });
+    const skipped = await screen.findByRole('list', {
+      name: 'Rows skipped from this batch',
+    });
     expect(skipped.textContent).toContain('Required');
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalled());
     expect(
@@ -698,7 +778,11 @@ describe('RenderRequestsGrid', () => {
       throw new ApiError('Missing fonts.', 422, 'render_brand_guardrail_blocked', {
         detail: 'A typeface is missing.',
         guardrails: [
-          { code: 'TEMPLATE_FONT_MISSING', severity: 'block', message: 'A typeface is missing.' },
+          {
+            code: 'TEMPLATE_FONT_MISSING',
+            severity: 'block',
+            message: 'A typeface is missing.',
+          },
         ],
       });
     });
@@ -721,7 +805,9 @@ describe('RenderRequestsGrid', () => {
     expect(preflightMock).not.toHaveBeenCalled();
     expect(tick.getAttribute('aria-checked')).toBe('false');
     expect(
-      within(dialog).getByRole<HTMLButtonElement>('button', { name: /^Render \d+ file/ }).disabled,
+      within(dialog).getByRole<HTMLButtonElement>('button', {
+        name: /^Render \d+ file/,
+      }).disabled,
     ).toBe(true);
     expect(
       batchPreflightMock.mock.calls.every(
@@ -732,12 +818,15 @@ describe('RenderRequestsGrid', () => {
 
     fireEvent.click(tick);
     await waitFor(() =>
-      expect(batchPreflightMock.mock.calls.at(-1)?.[0]).toMatchObject({ acceptMissingFonts: true }),
+      expect(batchPreflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
+        acceptMissingFonts: true,
+      }),
     );
     await waitFor(() =>
       expect(
-        within(dialog).getByRole<HTMLButtonElement>('button', { name: /^Render \d+ file/ })
-          .disabled,
+        within(dialog).getByRole<HTMLButtonElement>('button', {
+          name: /^Render \d+ file/,
+        }).disabled,
       ).toBe(false),
     );
   });
@@ -760,7 +849,9 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByLabelText('Headline');
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-    const button = screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ });
+    const button = screen.getByRole<HTMLButtonElement>('button', {
+      name: /Render 1/,
+    });
     expect(button.disabled).toBe(false);
     fireEvent.click(button);
     const dialog = await screen.findByRole('dialog', { name: /Render 1 row/ });
@@ -776,8 +867,17 @@ describe('RenderRequestsGrid', () => {
     contractOverrides = {
       variables: [
         ...VARIABLES,
-        variable({ key: 'ref_price_text', label: 'ref_price_text', kind: 'text' }),
-        variable({ key: 'watermark_logo', label: 'Logo', kind: 'image', reserved: true }),
+        variable({
+          key: 'ref_price_text',
+          label: 'ref_price_text',
+          kind: 'text',
+        }),
+        variable({
+          key: 'watermark_logo',
+          label: 'Logo',
+          kind: 'image',
+          reserved: true,
+        }),
       ],
     };
     render(<RenderRequestsGrid brandId={BRAND} />);
@@ -785,7 +885,9 @@ describe('RenderRequestsGrid', () => {
     // Raw After Effects layer names read as words in the header, never as the key.
     expect(screen.getByRole('columnheader', { name: 'Price text' })).toBeTruthy();
     expect(screen.getByText('Continuum fills this')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), {
+      timeout: 3000,
+    });
 
     fireEvent.change(headline, { target: { value: '' } });
     const status = await screen.findByText('Needs input');
@@ -848,8 +950,14 @@ describe('RenderRequestsGrid', () => {
       sourceSlotKey: 'boolean__show-carrera',
       exposed: false,
     });
-    const withSource = { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' };
-    contractOverrides = { template: withSource, layerSwitchesNotAsked: [carrera] };
+    const withSource = {
+      ...TEMPLATE,
+      sourceAssetId: '55555555-5555-4555-8555-555555555555',
+    };
+    contractOverrides = {
+      template: withSource,
+      layerSwitchesNotAsked: [carrera],
+    };
     const messages: string[] = [];
     const unsubscribe = registerToastSink(({ title }) => {
       messages.push(String(title));
@@ -882,7 +990,10 @@ describe('RenderRequestsGrid', () => {
       exposed: false,
     });
     contractOverrides = {
-      template: { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' },
+      template: {
+        ...TEMPLATE,
+        sourceAssetId: '55555555-5555-4555-8555-555555555555',
+      },
       variables: [...VARIABLES, carrera],
       layerSwitchesNotAsked: [carrera],
     };
@@ -898,11 +1009,15 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     const paste = async (text: string) => {
-      fireEvent.paste(screen.getByRole('table'), { clipboardData: { getData: () => text } });
+      fireEvent.paste(screen.getByRole('table'), {
+        clipboardData: { getData: () => text },
+      });
       return screen.findByRole('dialog', { name: 'Import render rows' });
     };
     const importButton = (dialog: HTMLElement) =>
-      within(dialog).getByRole<HTMLButtonElement>('button', { name: /^Import \d+ rows$/ });
+      within(dialog).getByRole<HTMLButtonElement>('button', {
+        name: /^Import \d+ rows$/,
+      });
 
     const rows = (count: number) =>
       ['headline', ...Array.from({ length: count }, (_, index) => `Row ${index}`)].join('\n');
@@ -945,14 +1060,18 @@ describe('RenderRequestsGrid', () => {
     );
     // Reference length must not look like an enforced character limit.
     expect(screen.queryByText('10/12')).toBeNull();
-    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), {
+      timeout: 3000,
+    });
     expect(preflightMock).not.toHaveBeenCalled();
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
   });
 
   test('a rename made on Templates reaches the kept-mounted picker when the Render tab returns', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const { rerender } = render(<RenderRequestsGrid brandId={BRAND} active />, client);
     const picker = () => screen.getByRole('button', { name: 'Template' });
     await waitFor(() => expect(picker().textContent).toContain('StarCraft Promo'));
@@ -960,7 +1079,9 @@ describe('RenderRequestsGrid', () => {
       // Renamed elsewhere while the tab was hidden; the grid stayed mounted and kept its rows.
       rerender(<RenderRequestsGrid brandId={BRAND} active={false} />);
       renamedTo = 'Protoss Promo';
-      await client.invalidateQueries({ queryKey: forgeQueryKeys.templates(BRAND) });
+      await client.invalidateQueries({
+        queryKey: forgeQueryKeys.templates(BRAND),
+      });
       rerender(<RenderRequestsGrid brandId={BRAND} active />);
       await waitFor(() => expect(picker().textContent).toContain('Protoss Promo'));
       expect((screen.getByLabelText('Headline') as HTMLInputElement).value).toBe('Hola mundo');
@@ -1028,9 +1149,13 @@ describe('RenderRequestsGrid', () => {
       expect(await screen.findByRole('menuitem', { name: item })).toBeTruthy();
     // Variations and copies are made from a row or the selection, not the toolbar.
     expect(
-      screen.queryAllByRole('menuitem', { name: /Fork|Duplicate|variation|Copy/ }),
+      screen.queryAllByRole('menuitem', {
+        name: /Fork|Duplicate|variation|Copy/,
+      }),
     ).toHaveLength(0);
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
     cleanup();
 
     render(<RenderRequestsGrid brandId={BRAND} />);
@@ -1096,7 +1221,11 @@ describe('RenderRequestsGrid', () => {
     expect((within(root).getByLabelText('Headline') as HTMLInputElement).value).toBe(
       'Parent changed',
     );
-    fireEvent.click(within(fields).getByRole('button', { name: 'Reset Headline to inherited' }));
+    fireEvent.click(
+      within(fields).getByRole('button', {
+        name: 'Reset Headline to inherited',
+      }),
+    );
     expect(headline.value).toBe('Parent changed');
   });
 
@@ -1105,10 +1234,14 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     await openMenu('Row actions for Base', 'Add variation');
     await screen.findByDisplayValue('Base · B');
-    fireEvent.change(screen.getAllByLabelText('Price')[1]!, { target: { value: '9.5' } });
+    fireEvent.change(screen.getAllByLabelText('Price')[1]!, {
+      target: { value: '9.5' },
+    });
     await openMenu('Row actions for Base · B', 'Save as inputs');
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Spain' } });
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Spain' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save inputs' }));
     await waitFor(() => expect(createInputSetMock).toHaveBeenCalledTimes(1));
     expect(createInputSetMock.mock.calls[0]?.[0]).toMatchObject({
@@ -1131,17 +1264,28 @@ describe('RenderRequestsGrid', () => {
 
       // Nothing is lost by moving on: the edits go into an "Untitled set" before the new one opens.
       fireEvent.click(screen.getByRole('button', { name: 'New render set' }));
-      const dialog = await screen.findByRole('dialog', { name: 'New render set' });
+      const dialog = await screen.findByRole('dialog', {
+        name: 'New render set',
+      });
       expect(screen.queryAllByRole('alertdialog')).toHaveLength(0);
-      expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Untitled set' });
+      expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
+        name: 'Untitled set',
+      });
       expect(
-        (createRenderSetMock.mock.calls[0]?.[0] as { rows: Array<{ overrides: unknown }> }).rows[0]
-          ?.overrides,
+        (
+          createRenderSetMock.mock.calls[0]?.[0] as {
+            rows: Array<{ overrides: unknown }>;
+          }
+        ).rows[0]?.overrides,
       ).toMatchObject({ headline: 'Edited' });
-      fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summer' } });
+      fireEvent.change(within(dialog).getByLabelText('Name'), {
+        target: { value: 'Summer' },
+      });
       fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
       await waitFor(() => expect(createRenderSetMock).toHaveBeenCalledTimes(2));
-      expect(createRenderSetMock.mock.calls[1]?.[0]).toMatchObject({ name: 'Summer' });
+      expect(createRenderSetMock.mock.calls[1]?.[0]).toMatchObject({
+        name: 'Summer',
+      });
       await waitFor(() => expect(openSetName()).toBe('Summer'));
       expect(screen.getByDisplayValue('Hola mundo')).toBeTruthy();
       expect(unsavedShown()).toBe(false);
@@ -1184,7 +1328,10 @@ describe('RenderRequestsGrid', () => {
       expect(toasts).toEqual([]);
 
       fireEvent.click(screen.getByRole('button', { name: 'Open template' }));
-      expect(onOpenTemplate).toHaveBeenCalledWith({ assetId: sourceAssetId, tab: 'variants' });
+      expect(onOpenTemplate).toHaveBeenCalledWith({
+        assetId: sourceAssetId,
+        tab: 'variants',
+      });
       // Repairing the template never costs the rows that could not be saved.
       expect(screen.getByDisplayValue('Hola de nuevo')).toBeTruthy();
     } finally {
@@ -1202,8 +1349,12 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByText('The row is ready to render')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
     // No set yet: it is saved as "Untitled set" without a question, then confirmed in one dialog.
-    const dialog = await screen.findByRole('dialog', { name: 'Render 1 row · 1 file' });
-    expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Untitled set' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Render 1 row · 1 file',
+    });
+    expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
+      name: 'Untitled set',
+    });
     // Where it goes, read back: the Library, and no Meta ad without a target.
     expect(within(dialog).getByText('Library')).toBeTruthy();
     expect(within(dialog).queryAllByRole('list', { name: 'Meta ads' })).toHaveLength(0);
@@ -1222,7 +1373,12 @@ describe('RenderRequestsGrid', () => {
   test('a web component saves and confirms its set on the nil binding, Library only, no renderer to pick', async () => {
     const webKey = 'web:99999999-9999-4999-8999-999999999999';
     extraTemplates = [
-      { ...TEMPLATE, key: webKey, bindingId: WEB_COMPONENT_BINDING_ID, displayName: 'Hello card' },
+      {
+        ...TEMPLATE,
+        key: webKey,
+        bindingId: WEB_COMPONENT_BINDING_ID,
+        displayName: 'Hello card',
+      },
     ];
     contractOverrides = {
       web: {
@@ -1250,7 +1406,9 @@ describe('RenderRequestsGrid', () => {
       expect(screen.queryAllByRole('columnheader', { name: 'Destination' })).toHaveLength(0);
       fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
       fireEvent.click(await screen.findByRole('button', { name: 'Render 1 row · 1 file' }));
-      const dialog = await screen.findByRole('dialog', { name: /Render 1 row/ });
+      const dialog = await screen.findByRole('dialog', {
+        name: /Render 1 row/,
+      });
       expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
         name: 'Untitled set',
         templateKey: webKey,
@@ -1277,7 +1435,10 @@ describe('RenderRequestsGrid', () => {
       ...NEWEST,
       rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo' } }],
     };
-    listRenderSetsMock.mockImplementation(async () => ({ items: [renderable], nextCursor: null }));
+    listRenderSetsMock.mockImplementation(async () => ({
+      items: [renderable],
+      nextCursor: null,
+    }));
     const saved: string[] = [];
     const unregister = registerToastSink(({ title }) => {
       if (String(title).startsWith('Saved')) saved.push(String(title));
@@ -1296,7 +1457,9 @@ describe('RenderRequestsGrid', () => {
           ),
         );
         fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
-        const dialog = await screen.findByRole('dialog', { name: /Render 1 row/ });
+        const dialog = await screen.findByRole('dialog', {
+          name: /Render 1 row/,
+        });
         fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
         await waitFor(() =>
           expect(screen.queryAllByRole('dialog', { name: /Render 1 row/ })).toHaveLength(0),
@@ -1308,7 +1471,9 @@ describe('RenderRequestsGrid', () => {
       await openThenCancel();
       expect(updateRenderSetMock).not.toHaveBeenCalled();
 
-      fireEvent.change(screen.getByDisplayValue('Newest row'), { target: { value: 'Edited row' } });
+      fireEvent.change(screen.getByDisplayValue('Newest row'), {
+        target: { value: 'Edited row' },
+      });
       await openThenCancel();
       expect(updateRenderSetMock).toHaveBeenCalledTimes(1);
       expect(saved).toEqual([]);
@@ -1346,7 +1511,9 @@ describe('RenderRequestsGrid', () => {
       signedUrl: 'https://cdn.test/bg-loop.mp4',
     };
     const view = render(<RenderRequestsGrid brandId={BRAND} />);
-    const choose = await screen.findByRole('button', { name: 'Choose Background' });
+    const choose = await screen.findByRole('button', {
+      name: 'Choose Background',
+    });
     // "\u226510.0s", not a bare "10.0s": the number is the minimum the clip must be, not its length.
     expect(within(choose).getByText('\u226510.0s')).toBeTruthy();
     expect(choose.getAttribute('title')).toContain('Plays 0.0s\u201310.0s of the clip');
@@ -1380,8 +1547,12 @@ describe('RenderRequestsGrid', () => {
     // A fork adds the inheritance control; it joins the same line instead of wrapping under it.
     await openMenu('Row actions for Base', 'Add variation');
     await screen.findByDisplayValue('Base · B');
-    const forkClear = screen.getByRole('button', { name: 'Clear inherited Hero' });
-    const forkChange = screen.getAllByRole('button', { name: 'Change Hero' })[1]!;
+    const forkClear = screen.getByRole('button', {
+      name: 'Clear inherited Hero',
+    });
+    const forkChange = screen.getAllByRole('button', {
+      name: 'Change Hero',
+    })[1]!;
     const cell = forkClear.parentElement!;
     expect(cell.className).toContain('flex');
     expect(cell.contains(forkChange)).toBe(true);
@@ -1430,7 +1601,12 @@ describe('RenderRequestsGrid', () => {
       rerender(
         <RenderRequestsGrid
           brandId={BRAND}
-          intent={{ templateKey: '133', renderSetId: OLDER.id, rowId, rerender: true }}
+          intent={{
+            templateKey: '133',
+            renderSetId: OLDER.id,
+            rowId,
+            rerender: true,
+          }}
         />,
       );
       expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
@@ -1460,7 +1636,11 @@ describe('RenderRequestsGrid', () => {
     expect(onIntentConsumed).toHaveBeenCalledTimes(1);
     expect(updateRenderSetMock.mock.calls[0]?.[0]).toBe(NEWEST.id);
     expect(
-      (updateRenderSetMock.mock.calls[0]?.[1] as { rows: Array<{ label: string }> }).rows[0]?.label,
+      (
+        updateRenderSetMock.mock.calls[0]?.[1] as {
+          rows: Array<{ label: string }>;
+        }
+      ).rows[0]?.label,
     ).toBe('Edited row');
   });
 
@@ -1534,7 +1714,9 @@ describe('RenderRequestsGrid', () => {
     expect(openSetName()).toBe('Older');
     expect(screen.queryAllByRole('alertdialog')).toHaveLength(0);
     expect(updateRenderSetMock).toHaveBeenCalledTimes(1);
-    expect(updateRenderSetMock.mock.calls[0]?.[1]).toMatchObject({ expectedRevision: 1 });
+    expect(updateRenderSetMock.mock.calls[0]?.[1]).toMatchObject({
+      expectedRevision: 1,
+    });
   });
 
   test('an edit saves itself once, a moment after typing stops, at the revision it was read at', async () => {
@@ -1545,10 +1727,18 @@ describe('RenderRequestsGrid', () => {
     fireEvent.change(name, { target: { value: 'Edited row' } });
     expect(updateRenderSetMock).not.toHaveBeenCalled();
     expect(screen.getByRole('status', { name: 'Save status' }).textContent).toBe('Unsaved changes');
-    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 4000 });
-    expect(updateRenderSetMock.mock.calls[0]?.[1]).toMatchObject({ expectedRevision: 1 });
+    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), {
+      timeout: 4000,
+    });
+    expect(updateRenderSetMock.mock.calls[0]?.[1]).toMatchObject({
+      expectedRevision: 1,
+    });
     expect(
-      (updateRenderSetMock.mock.calls[0]?.[1] as { rows: Array<{ label: string }> }).rows[0]?.label,
+      (
+        updateRenderSetMock.mock.calls[0]?.[1] as {
+          rows: Array<{ label: string }>;
+        }
+      ).rows[0]?.label,
     ).toBe('Edited row');
     await waitFor(() =>
       expect(screen.getByRole('status', { name: 'Save status' }).textContent).toMatch(/^Saved · /),
@@ -1631,7 +1821,9 @@ describe('RenderRequestsGrid', () => {
 
     const created = createRenderSetMock.mock.calls.length;
     await openMenu('Actions for Newest', /Duplicate/);
-    const warning = await screen.findByRole('alertdialog', { name: 'Unconfirmed render' });
+    const warning = await screen.findByRole('alertdialog', {
+      name: 'Unconfirmed render',
+    });
     expect(warning.textContent).toContain('The copy won’t remember the unconfirmed render.');
     fireEvent.click(within(warning).getByRole('button', { name: 'Cancel' }));
     expect(createRenderSetMock.mock.calls.length).toBe(created);
@@ -1654,8 +1846,12 @@ describe('RenderRequestsGrid', () => {
     });
 
     await openMenu('Actions for Newest', /Rename/);
-    const dialog = await screen.findByRole('dialog', { name: 'Rename render set' });
-    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summer' } });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Rename render set',
+    });
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Summer' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
     await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
     expect(updateRenderSetMock.mock.calls[0]).toEqual([
@@ -1698,7 +1894,9 @@ describe('RenderRequestsGrid', () => {
     fireEvent.contextMenu(screen.getByRole('tab', { name: /Autumn/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /Delete/ }));
     fireEvent.click(
-      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Delete',
+      }),
     );
     await waitFor(() => expect(deleteRenderSetMock).toHaveBeenCalledWith(BRAND, OLDER.id));
     await waitFor(() => expect(screen.queryAllByRole('tab', { name: /Autumn/ })).toHaveLength(0));
@@ -1726,15 +1924,25 @@ describe('RenderRequestsGrid', () => {
         revision: 2,
       }));
       fireEvent.click(screen.getByRole('button', { name: 'Add a description' }));
-      const field = screen.getByRole('textbox', { name: 'Description of Newest' });
-      fireEvent.change(field, { target: { value: '  Spain first, then Portugal  ' } });
+      const field = screen.getByRole('textbox', {
+        name: 'Description of Newest',
+      });
+      fireEvent.change(field, {
+        target: { value: '  Spain first, then Portugal  ' },
+      });
       fireEvent.keyDown(field, { key: 'Enter' });
       await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
       expect(updateRenderSetMock.mock.calls[0]).toEqual([
         NEWEST.id,
-        { brandId: BRAND, expectedRevision: 1, description: 'Spain first, then Portugal' },
+        {
+          brandId: BRAND,
+          expectedRevision: 1,
+          description: 'Spain first, then Portugal',
+        },
       ]);
-      const saved = await screen.findByRole('button', { name: 'Spain first, then Portugal' });
+      const saved = await screen.findByRole('button', {
+        name: 'Spain first, then Portugal',
+      });
       // Only the description moved: the rows on screen are still the unsaved edit.
       expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
       expect(unsavedShown()).toBe(true);
@@ -1743,7 +1951,9 @@ describe('RenderRequestsGrid', () => {
         throw new Error('render_set_revision_conflict');
       });
       fireEvent.click(saved);
-      const again = screen.getByRole('textbox', { name: 'Description of Newest' });
+      const again = screen.getByRole('textbox', {
+        name: 'Description of Newest',
+      });
       fireEvent.change(again, { target: { value: 'Autumn cut' } });
       fireEvent.keyDown(again, { key: 'Enter' });
       await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(2));
@@ -1756,7 +1966,9 @@ describe('RenderRequestsGrid', () => {
         expect(toasts).toContain('This set changed elsewhere. Reload it before saving again.'),
       );
       expect(
-        await screen.findByRole('button', { name: 'Spain first, then Portugal' }),
+        await screen.findByRole('button', {
+          name: 'Spain first, then Portugal',
+        }),
       ).toBeTruthy();
       expect(openSetName()).toBe('Newest');
     } finally {
@@ -1768,7 +1980,12 @@ describe('RenderRequestsGrid', () => {
     const olderTemplate = {
       ...NEWEST,
       contractHash: 'old-hash',
-      rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo', subtitle: 'Gone now' } }],
+      rows: [
+        {
+          ...NEWEST.rows[0]!,
+          overrides: { headline: 'Hola mundo', subtitle: 'Gone now' },
+        },
+      ],
     };
     listRenderSetsMock.mockImplementation(async () => ({
       items: [olderTemplate],
@@ -1782,7 +1999,9 @@ describe('RenderRequestsGrid', () => {
     }));
     render(<RenderRequestsGrid brandId={BRAND} />);
 
-    const banner = await screen.findByRole('region', { name: 'Older template' });
+    const banner = await screen.findByRole('region', {
+      name: 'Older template',
+    });
     expect(banner.textContent).toContain('subtitle field');
     expect(
       within(screen.getByRole('tablist', { name: 'Render sets' })).getByText('Older template'),
@@ -1820,13 +2039,17 @@ describe('RenderRequestsGrid', () => {
 
     saveNow();
     await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
-    expect(updateRenderSetMock.mock.calls[0]![1]).toMatchObject({ contractHash: 'hash' });
+    expect(updateRenderSetMock.mock.calls[0]![1]).toMatchObject({
+      contractHash: 'hash',
+    });
   });
 
   test('emptying a fork’s cell blanks it instead of bringing the parent’s value back', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    fireEvent.change(screen.getByLabelText('Price'), { target: { value: '9.5' } });
+    fireEvent.change(screen.getByLabelText('Price'), {
+      target: { value: '9.5' },
+    });
     await openMenu('Row actions for Base', 'Add variation');
     await screen.findByDisplayValue('Base · B');
     const forkHeadline = () => screen.getAllByLabelText('Headline')[1] as HTMLInputElement;
@@ -1886,7 +2109,9 @@ describe('RenderRequestsGrid', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Row actions for Base' }));
     const dotMenu = await labels();
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
     await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
 
     const baseRow = screen.getByDisplayValue('Base').closest('tr')!;
@@ -1901,7 +2126,9 @@ describe('RenderRequestsGrid', () => {
       'Save as inputs',
       'Delete',
     ]);
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
     await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
 
     fireEvent.contextMenu(screen.getByRole('columnheader', { name: /Price/ }));
@@ -1910,7 +2137,11 @@ describe('RenderRequestsGrid', () => {
       expect(screen.queryAllByRole('columnheader', { name: /Price/ })).toHaveLength(0),
     );
     fireEvent.contextMenu(screen.getByRole('columnheader', { name: /Headline/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Show all columns (1 hidden)' }));
+    fireEvent.click(
+      await screen.findByRole('menuitem', {
+        name: 'Show all columns (1 hidden)',
+      }),
+    );
     await waitFor(() =>
       expect(screen.getAllByRole('columnheader', { name: /Price/ })).toHaveLength(1),
     );
@@ -1998,8 +2229,12 @@ describe('RenderRequestsGrid', () => {
     await openMenu('Add', 'Blank row');
     await openMenu('Add', 'Blank row');
     await waitFor(() => expect(screen.getAllByLabelText('Headline')).toHaveLength(3));
-    fireEvent.change(screen.getAllByLabelText('Headline')[0]!, { target: { value: 'Summer' } });
-    fireEvent.change(screen.getAllByLabelText('Headline')[1]!, { target: { value: 'Winter' } });
+    fireEvent.change(screen.getAllByLabelText('Headline')[0]!, {
+      target: { value: 'Summer' },
+    });
+    fireEvent.change(screen.getAllByLabelText('Headline')[1]!, {
+      target: { value: 'Winter' },
+    });
     for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
 
     fireEvent.contextMenu(screen.getAllByLabelText('Headline')[0]!.closest('td')!);
@@ -2026,7 +2261,11 @@ describe('RenderRequestsGrid', () => {
     toastLike.setAttribute('aria-modal', 'false');
     toastLike.setAttribute('data-open', '');
     document.body.appendChild(toastLike);
-    fireEvent.keyDown(document.body, { key: 'z', metaKey: true, shiftKey: true });
+    fireEvent.keyDown(document.body, {
+      key: 'z',
+      metaKey: true,
+      shiftKey: true,
+    });
     toastLike.remove();
     await waitFor(() =>
       expect(
@@ -2060,9 +2299,13 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
-    const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Draft rows with AI',
+    });
     // With rows on the grid the button is the assistant; a brief for new rows is its second action.
-    fireEvent.change(within(dialog).getByLabelText(/^Ask/), { target: { value: 'Summer' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), {
+      target: { value: 'Summer' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Draft new rows' }));
 
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
@@ -2082,8 +2325,12 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() =>
       expect(screen.queryAllByRole('region', { name: 'Proposed rows' })).toHaveLength(0),
     );
-    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 4000 });
-    const saved = updateRenderSetMock.mock.calls[0]?.[1] as { rows: Array<{ label: string }> };
+    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), {
+      timeout: 4000,
+    });
+    const saved = updateRenderSetMock.mock.calls[0]?.[1] as {
+      rows: Array<{ label: string }>;
+    };
     expect(saved.rows.map((row) => row.label)).toEqual([
       'Newest row',
       'Drafted',
@@ -2110,7 +2357,9 @@ describe('RenderRequestsGrid', () => {
       cannot: ['Hero: pictures are chosen in the grid, not by the assistant'],
     }));
     await openMenu('Add', 'Draft with AI…');
-    const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Draft rows with AI',
+    });
     fireEvent.change(within(dialog).getByLabelText(/^Ask/), {
       target: { value: 'Titular de la fila 1: Precio loco' },
     });
@@ -2150,9 +2399,13 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
-    const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Draft rows with AI',
+    });
     // With rows on the grid the button is the assistant; a brief for new rows is its second action.
-    fireEvent.change(within(dialog).getByLabelText(/^Ask/), { target: { value: 'Summer' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Ask/), {
+      target: { value: 'Summer' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Draft new rows' }));
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
     fireEvent.click(within(banner).getByRole('button', { name: 'Discard all' }));
@@ -2194,7 +2447,9 @@ describe('RenderRequestsGrid', () => {
     expect(checked(rootRow)).toBe('true');
 
     // What the variation changes is counted as it changes.
-    fireEvent.change(within(variationRow).getByLabelText('Price'), { target: { value: '9.5' } });
+    fireEvent.change(within(variationRow).getByLabelText('Price'), {
+      target: { value: '9.5' },
+    });
     expect(within(variationRow).getByText('inherits · 1 changed')).toBeTruthy();
   });
 
@@ -2210,7 +2465,9 @@ describe('RenderRequestsGrid', () => {
     }
     const deepest = screen.getByDisplayValue(label).closest('tr')!;
     expect(deepest.querySelectorAll('[data-guide]')).toHaveLength(3);
-    const blocked = within(deepest).getByRole('button', { name: 'Add variation' });
+    const blocked = within(deepest).getByRole('button', {
+      name: 'Add variation',
+    });
     expect(blocked.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(blocked);
     expect(screen.getAllByLabelText('Row name')).toHaveLength(4);
@@ -2279,9 +2536,15 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.click(
-      screen.getByRole('button', { name: 'Formats Model in front, Headline in front' }),
+      screen.getByRole('button', {
+        name: 'Formats Model in front, Headline in front',
+      }),
     );
-    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Headline in front/ }));
+    fireEvent.click(
+      await screen.findByRole('menuitemcheckbox', {
+        name: /Headline in front/,
+      }),
+    );
     expect(await screen.findByRole('button', { name: 'Formats Model in front' })).toBeTruthy();
   });
 
@@ -2327,7 +2590,9 @@ describe('RenderRequestsGrid', () => {
     const picker = await screen.findByLabelText('Template source variant');
     expect(within(picker).getByRole('option', { name: 'Child B' })).toBeTruthy();
     expect(within(picker).queryByRole('option', { name: 'Other workspace' })).toBeNull();
-    fireEvent.change(picker, { target: { value: `${TEMPLATE.bindingId}:135` } });
+    fireEvent.change(picker, {
+      target: { value: `${TEMPLATE.bindingId}:135` },
+    });
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Template', exact: true }).textContent).toContain(
         'Child B',
@@ -2337,10 +2602,17 @@ describe('RenderRequestsGrid', () => {
 
   test('a removed variant requires review even when the contract hash stays the same', async () => {
     listRenderSetsMock.mockImplementation(async () => ({
-      items: [{ ...NEWEST, rows: [{ ...NEWEST.rows[0]!, outputIds: ['Removed variant'] }] }],
+      items: [
+        {
+          ...NEWEST,
+          rows: [{ ...NEWEST.rows[0]!, outputIds: ['Removed variant'] }],
+        },
+      ],
       nextCursor: null,
     }));
-    contractOverrides = { outputs: [{ id: 'Current', label: 'Current', ratio: '4:5' }] };
+    contractOverrides = {
+      outputs: [{ id: 'Current', label: 'Current', ratio: '4:5' }],
+    };
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
     expect(screen.getByRole('region', { name: 'Older template' }).textContent).toContain(
@@ -2373,7 +2645,9 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByText('Needs your call')).toBeTruthy();
     expect(headline.classList.contains('border-destructive')).toBe(false);
     expect(preflightMock).not.toHaveBeenCalled();
-    fireEvent.change(headline, { target: { value: 'TRAIN HARD\nFEEL STRONG' } });
+    fireEvent.change(headline, {
+      target: { value: 'TRAIN HARD\nFEEL STRONG' },
+    });
     await waitFor(() => expect(headline.getAttribute('title')).toBeNull());
     expect(screen.queryAllByText('Needs your call')).toHaveLength(0);
   });
@@ -2397,7 +2671,10 @@ describe('RenderRequestsGrid', () => {
       },
       rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo' } }],
     };
-    listRenderSetsMock.mockImplementation(async () => ({ items: [renderable], nextCursor: null }));
+    listRenderSetsMock.mockImplementation(async () => ({
+      items: [renderable],
+      nextCursor: null,
+    }));
     listDeliveryDestinationsMock.mockImplementation(async () => ({
       ...NO_DESTINATIONS,
       meta: {
@@ -2437,7 +2714,9 @@ describe('RenderRequestsGrid', () => {
     expect(screen.queryAllByRole('columnheader', { name: 'Output' })).toHaveLength(0);
     cleanup();
 
-    contractOverrides = { encode: { stored: null, defaults: { mp4: {}, mov: {} } } };
+    contractOverrides = {
+      encode: { stored: null, defaults: { mp4: {}, mov: {} } },
+    };
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     expect(screen.getByRole('columnheader', { name: 'Output' })).toBeTruthy();
@@ -2448,7 +2727,12 @@ test('published source variants select their own template key across independent
   const root = '55555555-5555-4555-8555-555555555555';
   const child = '66666666-6666-4666-8666-666666666666';
   extraTemplates = [
-    { ...TEMPLATE, key: '134', sourceAssetId: root, displayName: 'Original design' },
+    {
+      ...TEMPLATE,
+      key: '134',
+      sourceAssetId: root,
+      displayName: 'Original design',
+    },
     {
       ...TEMPLATE,
       key: '135',
@@ -2471,7 +2755,9 @@ test('published source variants select their own template key across independent
       displayName: 'Other workspace',
     },
   ];
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   client.setQueryData(forgeQueryKeys.templateVariants(BRAND), [
     { assetId: root, rootAssetId: root, parentAssetId: null },
     { assetId: child, rootAssetId: root, parentAssetId: root },
@@ -2486,10 +2772,14 @@ test('published source variants select their own template key across independent
   await screen.findByDisplayValue('Hola mundo');
   const picker = await screen.findByLabelText('Template source variant');
   expect(
-    within(picker).getByRole('option', { name: 'Reordered design · Reordered portrait' }),
+    within(picker).getByRole('option', {
+      name: 'Reordered design · Reordered portrait',
+    }),
   ).toBeTruthy();
   expect(
-    within(picker).getByRole('option', { name: 'Reordered design · Reordered square' }),
+    within(picker).getByRole('option', {
+      name: 'Reordered design · Reordered square',
+    }),
   ).toBeTruthy();
   expect(within(picker).queryByRole('option', { name: 'Other workspace' })).toBeNull();
   fireEvent.change(picker, { target: { value: `${TEMPLATE.bindingId}:135` } });

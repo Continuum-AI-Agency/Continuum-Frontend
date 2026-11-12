@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { PipelineCapabilityV2, PipelineManifest } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import {
   brandPipelineManifestsQueryKey,
   pipelineCapabilitiesQueryKey,
@@ -22,7 +27,15 @@ const capability = {
   source: 'brand',
   inputs: [],
   controls: [],
-  outputs: [{ output_id: 'hero', kind: 'asset', label: 'Hero image', media: 'image', count: 1 }],
+  outputs: [
+    {
+      output_id: 'hero',
+      kind: 'asset',
+      label: 'Hero image',
+      media: 'image',
+      count: 1,
+    },
+  ],
   execution_policy: {
     runtime: 'server',
     timeout_seconds: 300,

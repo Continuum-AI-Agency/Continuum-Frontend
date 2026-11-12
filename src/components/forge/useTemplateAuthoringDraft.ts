@@ -10,25 +10,26 @@ import type {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   LayerDraftAutosaver,
-  TemplateAuthoringDraftError,
   type LayerDraftAutosaveView,
   type LayerDraftSyncStatus,
   layerSnapshotFromCommands,
+  TemplateAuthoringDraftError,
 } from '@/components/forge/layerDraft';
 import type { LayerDraftSnapshot } from '@/components/forge/layerHistory';
+import { templateAuthoringEqual } from '@/components/forge/templateAuthoringEquality';
 import {
   listTemplateDraftRecoveries,
   removeTemplateDraftRecovery,
   saveTemplateDraftRecovery,
   type TemplateDraftRecovery,
 } from '@/components/forge/templateDraftRecovery';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   fetchTemplateAuthoringDocument,
   fetchTemplateAuthoringDraft,
   fetchTemplateAuthoringUserId,
   putTemplateAuthoringDraft,
 } from '@/lib/library/templateSources';
-import { templateAuthoringEqual } from '@/components/forge/templateAuthoringEquality';
 
 export type LocalTemplateAuthoringDraft = {
   userId: string;
@@ -87,16 +88,22 @@ export const templateAuthoringWorkspaceIdentity = (
   return `pinned_source:${workspacePackage?.packageChecksum.toLowerCase() ?? checksum}`;
 };
 
-const identityFromDraft = (draft: TemplateAuthoringDraft | null) => draft?.seed
-  ? templateAuthoringWorkspaceIdentity({
-      kind: 'hyperframes_seed',
-      artifactId: draft.seed.artifactId,
-      packageChecksum: draft.seed.packageChecksum,
-      sourceRevisionId: draft.seed.sourceRevisionId,
-      sourceHtmlSha256: draft.seed.sourceHtmlSha256,
-      extractedSceneSha256: draft.seed.extractedSceneSha256,
-    }, draft.sourceChecksum)
-  : draft ? templateAuthoringWorkspaceIdentity(undefined, draft.sourceChecksum) : null;
+const identityFromDraft = (draft: TemplateAuthoringDraft | null) =>
+  draft?.seed
+    ? templateAuthoringWorkspaceIdentity(
+        {
+          kind: 'hyperframes_seed',
+          artifactId: draft.seed.artifactId,
+          packageChecksum: draft.seed.packageChecksum,
+          sourceRevisionId: draft.seed.sourceRevisionId,
+          sourceHtmlSha256: draft.seed.sourceHtmlSha256,
+          extractedSceneSha256: draft.seed.extractedSceneSha256,
+        },
+        draft.sourceChecksum,
+      )
+    : draft
+      ? templateAuthoringWorkspaceIdentity(undefined, draft.sourceChecksum)
+      : null;
 
 const identityForLocal = (draft: LocalTemplateAuthoringDraft) =>
   draft.workspaceIdentity ?? templateAuthoringWorkspaceIdentity(undefined, draft.sourceChecksum);
@@ -108,7 +115,9 @@ export function reconcileTemplateAuthoringTabSave(
 ) {
   if (revision <= autosaver.view.revision) return;
   if (autosaver.view.dirty) {
-    autosaver.setConflict('Another tab saved a newer draft. Your local edits are preserved; reconcile before saving.');
+    autosaver.setConflict(
+      'Another tab saved a newer draft. Your local edits are preserved; reconcile before saving.',
+    );
   } else {
     refresh();
   }
@@ -118,7 +127,8 @@ export const layerDraftStorageKey = (
   userId: string,
   scope: TemplateAuthoringScope,
   workspaceIdentity = `pinned_source:${scope.baseVersionId}`,
-) => `${userId}:${scope.brandId}:${scope.assetId}:${scope.baseVersionId}:workspace:${workspaceIdentity}`;
+) =>
+  `${userId}:${scope.brandId}:${scope.assetId}:${scope.baseVersionId}:workspace:${workspaceIdentity}`;
 
 function openDraftDb(): Promise<IDBDatabase> {
   if (typeof indexedDB === 'undefined')
@@ -126,7 +136,8 @@ function openDraftDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('continuum-forge-private-drafts', 3);
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains('drafts')) request.result.createObjectStore('drafts');
+      if (!request.result.objectStoreNames.contains('drafts'))
+        request.result.createObjectStore('drafts');
       if (!request.result.objectStoreNames.contains('recoveries'))
         request.result.createObjectStore('recoveries', { keyPath: 'id' });
       if (!request.result.objectStoreNames.contains('views'))
@@ -148,11 +159,15 @@ async function readLocalDraft(key: string): Promise<LocalTemplateAuthoringDraft 
     transaction.oncomplete = () => db.close();
     transaction.onerror = () => {
       db.close();
-      reject(transaction.error ?? request.error ?? new Error('Private recovery storage is unavailable.'));
+      reject(
+        transaction.error ?? request.error ?? new Error('Private recovery storage is unavailable.'),
+      );
     };
     transaction.onabort = () => {
       db.close();
-      reject(transaction.error ?? request.error ?? new Error('Private recovery storage is unavailable.'));
+      reject(
+        transaction.error ?? request.error ?? new Error('Private recovery storage is unavailable.'),
+      );
     };
   });
 }
@@ -203,6 +218,8 @@ export function useTemplateAuthoringDraft({
   commands,
   onRestore,
 }: UseTemplateAuthoringDraftArgs): DraftState {
+  const uiErrorText = useUiErrorMessage();
+
   const [view, setView] = useState<LayerDraftAutosaveView>({
     status: scope && enabled ? 'loading' : 'saved',
     revision: 0,
@@ -230,9 +247,14 @@ export function useTemplateAuthoringDraft({
   const hydratedCommands = useRef<TemplateAuthoringCommand[]>([]);
   const generation = useRef(0);
   const tabId = useRef<string | null>(null);
-  if (!tabId.current) tabId.current = globalThis.crypto?.randomUUID?.() ?? `tab-${Date.now()}-${Math.random()}`;
+  if (!tabId.current)
+    tabId.current = globalThis.crypto?.randomUUID?.() ?? `tab-${Date.now()}-${Math.random()}`;
   const recoveryQueue = useRef<Promise<void>>(Promise.resolve());
-  const pendingRecovery = useRef<{ key: string; local: LocalTemplateAuthoringDraft; recovery: TemplateDraftRecovery } | null>(null);
+  const pendingRecovery = useRef<{
+    key: string;
+    local: LocalTemplateAuthoringDraft;
+    recovery: TemplateDraftRecovery;
+  } | null>(null);
   const activeSourceChecksum = useRef<string | null>(null);
   const activeWorkspaceIdentity = useRef<string | null>(null);
   const tabChannel = useRef<BroadcastChannel | null>(null);
@@ -277,7 +299,10 @@ export function useTemplateAuthoringDraft({
               'source_mismatch',
               'The source package changed. Your local edits are preserved for reconciliation.',
             );
-          tabChannel.current?.postMessage({ tabId: tabId.current, revision: result.revision });
+          tabChannel.current?.postMessage({
+            tabId: tabId.current,
+            revision: result.revision,
+          });
           if (key === localKeyRef.current && generation.current === autosaverGeneration)
             setPersistedDraft(result);
           return result;
@@ -289,21 +314,27 @@ export function useTemplateAuthoringDraft({
           setView(nextView);
           setDraftError(nextView.error);
           if (!nextView.dirty && nextView.status === 'saved') {
-            recoveryQueue.current = recoveryQueue.current.catch(() => undefined).then(async () => {
-              await removeLocalDraft(key);
-              // The legacy key is unscoped by workspace package. Clear it only when this is
-              // still the pinned-source workspace; a seeded draft must never erase its
-              // pre-seed recovery snapshot.
-              if (args.workspaceIdentity === `pinned_source:${args.scope.baseVersionId}`)
-                await removeLocalDraft(layerDraftStorageKey(args.userId, args.scope));
-              await removeTemplateDraftRecovery(`${key}:latest`);
-              if (key === localKeyRef.current) {
-                setRecoveryError(null);
-                setRecoveries(await listTemplateDraftRecoveries(args.userId, args.scope));
-              }
-            }).catch((error: unknown) => {
-              if (key === localKeyRef.current) setRecoveryError(error instanceof Error ? error.message : 'Could not clear private recovery.');
-            });
+            recoveryQueue.current = recoveryQueue.current
+              .catch(() => undefined)
+              .then(async () => {
+                await removeLocalDraft(key);
+                // The legacy key is unscoped by workspace package. Clear it only when this is
+                // still the pinned-source workspace; a seeded draft must never erase its
+                // pre-seed recovery snapshot.
+                if (args.workspaceIdentity === `pinned_source:${args.scope.baseVersionId}`)
+                  await removeLocalDraft(layerDraftStorageKey(args.userId, args.scope));
+                await removeTemplateDraftRecovery(`${key}:latest`);
+                if (key === localKeyRef.current) {
+                  setRecoveryError(null);
+                  setRecoveries(await listTemplateDraftRecoveries(args.userId, args.scope));
+                }
+              })
+              .catch((error: unknown) => {
+                if (key === localKeyRef.current)
+                  setRecoveryError(
+                    error instanceof Error ? error.message : 'Could not clear private recovery.',
+                  );
+              });
             return;
           }
           const localSnapshot: LocalTemplateAuthoringDraft = {
@@ -328,18 +359,24 @@ export function useTemplateAuthoringDraft({
             reason: 'local',
           };
           pendingRecovery.current = { key, local: localSnapshot, recovery };
-          recoveryQueue.current = recoveryQueue.current.catch(() => undefined).then(async () => {
-            await writeLocalDraft(key, localSnapshot);
-            await saveTemplateDraftRecovery(recovery);
-            if (key === localKeyRef.current) {
-              if (pendingRecovery.current?.recovery.id === recovery.id) pendingRecovery.current = null;
-              setRecoveryError(null);
-              setRecoveries(await listTemplateDraftRecoveries(args.userId, args.scope));
-            }
-          }).catch((error: unknown) => {
-            if (key === localKeyRef.current)
-              setRecoveryError(error instanceof Error ? error.message : 'Could not preserve private recovery.');
-          });
+          recoveryQueue.current = recoveryQueue.current
+            .catch(() => undefined)
+            .then(async () => {
+              await writeLocalDraft(key, localSnapshot);
+              await saveTemplateDraftRecovery(recovery);
+              if (key === localKeyRef.current) {
+                if (pendingRecovery.current?.recovery.id === recovery.id)
+                  pendingRecovery.current = null;
+                setRecoveryError(null);
+                setRecoveries(await listTemplateDraftRecoveries(args.userId, args.scope));
+              }
+            })
+            .catch((error: unknown) => {
+              if (key === localKeyRef.current)
+                setRecoveryError(
+                  error instanceof Error ? error.message : 'Could not preserve private recovery.',
+                );
+            });
           if (nextView.status === 'conflict' && !conflictFetchRef.current) {
             conflictFetchRef.current = true;
             void fetchTemplateAuthoringDraft(
@@ -348,7 +385,8 @@ export function useTemplateAuthoringDraft({
               args.scope.baseVersionId,
             )
               .then(async (serverCopy) => {
-                const isCurrent = () => key === localKeyRef.current && generation.current === autosaverGeneration;
+                const isCurrent = () =>
+                  key === localKeyRef.current && generation.current === autosaverGeneration;
                 if (!serverCopy || !isCurrent()) return;
                 const recoveryKey = `${key}:recovery:${crypto.randomUUID()}`;
                 recoveryKeyRef.current = recoveryKey;
@@ -364,12 +402,18 @@ export function useTemplateAuthoringDraft({
                 });
                 if (!isCurrent()) return;
                 await saveTemplateDraftRecovery({
-                  id: recoveryKey, userId: args.userId, scope: args.scope,
+                  id: recoveryKey,
+                  userId: args.userId,
+                  scope: args.scope,
                   workspaceIdentity: args.workspaceIdentity,
-                  sourceChecksum: args.sourceChecksum, revision: nextView.revision,
-                  commands: structuredClone(nextCommands), persistedCommands: structuredClone(persistedCommands),
-                  savedAt: new Date().toISOString(), reason: 'conflict',
-                  serverRevision: serverCopy.revision, serverCommands: structuredClone(serverCopy.commands),
+                  sourceChecksum: args.sourceChecksum,
+                  revision: nextView.revision,
+                  commands: structuredClone(nextCommands),
+                  persistedCommands: structuredClone(persistedCommands),
+                  savedAt: new Date().toISOString(),
+                  reason: 'conflict',
+                  serverRevision: serverCopy.revision,
+                  serverCommands: structuredClone(serverCopy.commands),
                 });
                 if (!isCurrent()) return;
                 const nextRecoveries = await listTemplateDraftRecoveries(args.userId, args.scope);
@@ -379,7 +423,11 @@ export function useTemplateAuthoringDraft({
               })
               .catch((error: unknown) => {
                 if (key === localKeyRef.current && generation.current === autosaverGeneration)
-                  setRecoveryError(error instanceof Error ? error.message : 'Could not preserve both draft copies.');
+                  setRecoveryError(
+                    error instanceof Error
+                      ? error.message
+                      : 'Could not preserve both draft copies.',
+                  );
               });
           }
         },
@@ -430,11 +478,13 @@ export function useTemplateAuthoringDraft({
       localKeyRef.current = localKey;
       let local: LocalTemplateAuthoringDraft | null = null;
       try {
-        local = (await readLocalDraft(localKey)) ?? await readLocalDraft(baseKey);
+        local = (await readLocalDraft(localKey)) ?? (await readLocalDraft(baseKey));
         setRecoveries(await listTemplateDraftRecoveries(userId, scope));
         setRecoveryError(null);
       } catch (error) {
-        setRecoveryError(error instanceof Error ? error.message : 'Private recovery storage is unavailable.');
+        setRecoveryError(
+          error instanceof Error ? error.message : 'Private recovery storage is unavailable.',
+        );
       }
       let remoteSnapshot: TemplateAuthoringDraft | null = null;
       try {
@@ -448,15 +498,16 @@ export function useTemplateAuthoringDraft({
         const remoteWorkspaceIdentity = identityFromDraft(remote);
         if (remoteWorkspaceIdentity) {
           activeWorkspaceIdentity.current = remoteWorkspaceIdentity;
-          if (!cancelled && generation.current === run) setWorkspaceIdentity(remoteWorkspaceIdentity);
+          if (!cancelled && generation.current === run)
+            setWorkspaceIdentity(remoteWorkspaceIdentity);
         }
         if (remote?.requiresReconciliation) {
           if (remoteWorkspaceIdentity) {
             activeWorkspaceIdentity.current = remoteWorkspaceIdentity;
             setWorkspaceIdentity(remoteWorkspaceIdentity);
           }
-          const localMatchesWorkspace = !!local &&
-            identityForLocal(local) === remoteWorkspaceIdentity;
+          const localMatchesWorkspace =
+            !!local && identityForLocal(local) === remoteWorkspaceIdentity;
           const localCommands =
             localMatchesWorkspace && local && equal(local.scope, scope) && local.userId === userId
               ? local.commands
@@ -473,11 +524,17 @@ export function useTemplateAuthoringDraft({
               savedAt: new Date().toISOString(),
               reason: 'source-change' as const,
             };
-            pendingRecovery.current = { key: recoveryKey, local: preserved, recovery };
+            pendingRecovery.current = {
+              key: recoveryKey,
+              local: preserved,
+              recovery,
+            };
             await writeLocalDraft(recoveryKey, preserved);
             await saveTemplateDraftRecovery(recovery);
             pendingRecovery.current = null;
-            setRecoveryError('A saved snapshot belongs to a different workspace package. It is preserved and cannot be restored into this seed automatically.');
+            setRecoveryError(
+              'A saved snapshot belongs to a different workspace package. It is preserved and cannot be restored into this seed automatically.',
+            );
             setRecoveries(await listTemplateDraftRecoveries(userId, scope));
           }
           const snapshot = layerSnapshotFromCommands(localCommands);
@@ -497,23 +554,33 @@ export function useTemplateAuthoringDraft({
               serverCopy: remote,
             });
             await saveTemplateDraftRecovery({
-              id: recoveryKey, userId, scope,
+              id: recoveryKey,
+              userId,
+              scope,
               ...(remoteWorkspaceIdentity ? { workspaceIdentity: remoteWorkspaceIdentity } : {}),
               sourceChecksum: remote.sourceChecksum,
-              revision: remote.revision, commands: structuredClone(localCommands),
-              persistedCommands: structuredClone(remote.commands), savedAt: new Date().toISOString(),
-              reason: 'source-change', serverRevision: remote.revision, serverCommands: structuredClone(remote.commands),
+              revision: remote.revision,
+              commands: structuredClone(localCommands),
+              persistedCommands: structuredClone(remote.commands),
+              savedAt: new Date().toISOString(),
+              reason: 'source-change',
+              serverRevision: remote.revision,
+              serverCommands: structuredClone(remote.commands),
             });
             setRecoveries(await listTemplateDraftRecoveries(userId, scope));
           } catch (error) {
-            setRecoveryError(error instanceof Error ? error.message : 'Could not preserve both source copies.');
+            setRecoveryError(
+              error instanceof Error ? error.message : 'Could not preserve both source copies.',
+            );
           }
           setServerDraft(remote);
           makeAutosaver({
             userId,
             scope,
             sourceChecksum: remote.sourceChecksum,
-            workspaceIdentity: remoteWorkspaceIdentity ?? templateAuthoringWorkspaceIdentity(undefined, remote.sourceChecksum),
+            workspaceIdentity:
+              remoteWorkspaceIdentity ??
+              templateAuthoringWorkspaceIdentity(undefined, remote.sourceChecksum),
             revision: remote.revision,
             persistedCommands: remote.commands,
             commands: localCommands,
@@ -525,28 +592,47 @@ export function useTemplateAuthoringDraft({
           return;
         }
         if (remote?.seed && !remote.projectedDocument)
-          throw new Error('The attached private seed has no verified editable inventory yet. Its native IDs remain unavailable.');
-        if (documentResult.status === 'rejected' && !remote?.projectedDocument) throw documentResult.reason;
-        const document = remote?.seed ? remote.projectedDocument! : documentResult.status === 'fulfilled' ? documentResult.value : null;
+          throw new Error(
+            'The attached private seed has no verified editable inventory yet. Its native IDs remain unavailable.',
+          );
+        if (documentResult.status === 'rejected' && !remote?.projectedDocument)
+          throw documentResult.reason;
+        const document = remote?.seed
+          ? remote.projectedDocument!
+          : documentResult.status === 'fulfilled'
+            ? documentResult.value
+            : null;
         if (!document) throw new Error('The private authoring document is unavailable.');
-        const activeIdentity = templateAuthoringWorkspaceIdentity(document.workspacePackage, document.sourceChecksum);
+        const activeIdentity = templateAuthoringWorkspaceIdentity(
+          document.workspacePackage,
+          document.sourceChecksum,
+        );
         activeWorkspaceIdentity.current = activeIdentity;
         setWorkspaceIdentity(activeIdentity);
         if (local && identityForLocal(local) !== activeIdentity) {
           const recoveryKey = `${localKey}:workspace-recovery:${crypto.randomUUID()}`;
-          const preserved = { ...local, workspaceIdentity: identityForLocal(local) };
+          const preserved = {
+            ...local,
+            workspaceIdentity: identityForLocal(local),
+          };
           const recovery = {
             ...preserved,
             id: recoveryKey,
             savedAt: new Date().toISOString(),
             reason: 'source-change' as const,
           };
-          pendingRecovery.current = { key: recoveryKey, local: preserved, recovery };
+          pendingRecovery.current = {
+            key: recoveryKey,
+            local: preserved,
+            recovery,
+          };
           await writeLocalDraft(recoveryKey, preserved);
           await saveTemplateDraftRecovery(recovery);
           pendingRecovery.current = null;
           local = null;
-          setRecoveryError('A saved snapshot belongs to a different workspace package. It is preserved for explicit reconciliation and will not be applied here.');
+          setRecoveryError(
+            'A saved snapshot belongs to a different workspace package. It is preserved for explicit reconciliation and will not be applied here.',
+          );
           setRecoveries(await listTemplateDraftRecoveries(userId, scope));
         }
         setSourceDocument(document);
@@ -575,9 +661,17 @@ export function useTemplateAuthoringDraft({
           } else if (local.revision === revision) {
             initial = local.commands;
           } else if (equal(local.commands, persisted)) {
-            await removeLocalDraft(localKey).catch((error: unknown) => setRecoveryError(error instanceof Error ? error.message : 'Could not clear private recovery.'));
+            await removeLocalDraft(localKey).catch((error: unknown) =>
+              setRecoveryError(
+                error instanceof Error ? error.message : 'Could not clear private recovery.',
+              ),
+            );
             if (localKey !== baseKey)
-              await removeLocalDraft(baseKey).catch((error: unknown) => setRecoveryError(error instanceof Error ? error.message : 'Could not clear private recovery.'));
+              await removeLocalDraft(baseKey).catch((error: unknown) =>
+                setRecoveryError(
+                  error instanceof Error ? error.message : 'Could not clear private recovery.',
+                ),
+              );
           } else {
             initial = local.commands;
             conflict = true;
@@ -588,16 +682,35 @@ export function useTemplateAuthoringDraft({
             setServerDraft(remote);
             const recoveryKey = `${localKey}:recovery:${crypto.randomUUID()}`;
             recoveryKeyRef.current = recoveryKey;
-            void writeLocalDraft(recoveryKey, { ...local, serverCopy: remote }).catch(
-              (error: unknown) => setRecoveryError(error instanceof Error ? error.message : 'Could not preserve both draft copies.'),
+            void writeLocalDraft(recoveryKey, {
+              ...local,
+              serverCopy: remote,
+            }).catch((error: unknown) =>
+              setRecoveryError(
+                error instanceof Error ? error.message : 'Could not preserve both draft copies.',
+              ),
             );
             void saveTemplateDraftRecovery({
-              id: recoveryKey, userId, scope, sourceChecksum: local.sourceChecksum,
+              id: recoveryKey,
+              userId,
+              scope,
+              sourceChecksum: local.sourceChecksum,
               workspaceIdentity: identityForLocal(local),
-              revision: local.revision, commands: structuredClone(local.commands),
-              persistedCommands: structuredClone(local.persistedCommands), savedAt: new Date().toISOString(),
-              reason: 'conflict', serverRevision: remote.revision, serverCommands: structuredClone(remote.commands),
-            }).then(() => listTemplateDraftRecoveries(userId, scope)).then(setRecoveries).catch((error: unknown) => setRecoveryError(error instanceof Error ? error.message : 'Could not preserve both draft copies.'));
+              revision: local.revision,
+              commands: structuredClone(local.commands),
+              persistedCommands: structuredClone(local.persistedCommands),
+              savedAt: new Date().toISOString(),
+              reason: 'conflict',
+              serverRevision: remote.revision,
+              serverCommands: structuredClone(remote.commands),
+            })
+              .then(() => listTemplateDraftRecoveries(userId, scope))
+              .then(setRecoveries)
+              .catch((error: unknown) =>
+                setRecoveryError(
+                  error instanceof Error ? error.message : 'Could not preserve both draft copies.',
+                ),
+              );
           }
         }
         const snapshot = layerSnapshotFromCommands(initial);
@@ -607,7 +720,7 @@ export function useTemplateAuthoringDraft({
           userId,
           scope,
           sourceChecksum: document.sourceChecksum,
-            workspaceIdentity: activeIdentity,
+          workspaceIdentity: activeIdentity,
           revision,
           persistedCommands: persisted,
           commands: initial,
@@ -618,16 +731,23 @@ export function useTemplateAuthoringDraft({
       } catch (error) {
         if (cancelled || generation.current !== run) return;
         if (pendingRecovery.current?.key.includes(localKey))
-          setRecoveryError(error instanceof Error ? error.message : 'Could not preserve the private recovery copy. Retry to save it locally.');
+          setRecoveryError(
+            error instanceof Error
+              ? error.message
+              : 'Could not preserve the private recovery copy. Retry to save it locally.',
+          );
         if (remoteSnapshot && equal(remoteSnapshot.scope, scope)) {
           if (!cancelled && generation.current === run) setPersistedDraft(remoteSnapshot);
           const matchingLocal =
-            local && equal(local.scope, scope) && local.userId === userId &&
+            local &&
+            equal(local.scope, scope) &&
+            local.userId === userId &&
             local.sourceChecksum === remoteSnapshot.sourceChecksum &&
             identityForLocal(local) === identityFromDraft(remoteSnapshot)
               ? local
               : null;
-          const diverged = !!matchingLocal && !equal(matchingLocal.commands, remoteSnapshot.commands);
+          const diverged =
+            !!matchingLocal && !equal(matchingLocal.commands, remoteSnapshot.commands);
           const initial = matchingLocal?.commands ?? remoteSnapshot.commands;
           restoreRef.current(layerSnapshotFromCommands(initial));
           if (diverged) {
@@ -637,28 +757,50 @@ export function useTemplateAuthoringDraft({
             await writeLocalDraft(recoveryKey, {
               userId,
               scope,
-              ...(identityFromDraft(remoteSnapshot) ? { workspaceIdentity: identityFromDraft(remoteSnapshot)! } : {}),
+              ...(identityFromDraft(remoteSnapshot)
+                ? { workspaceIdentity: identityFromDraft(remoteSnapshot)! }
+                : {}),
               sourceChecksum: remoteSnapshot.sourceChecksum,
               revision: matchingLocal?.revision ?? remoteSnapshot.revision,
               commands: initial,
               persistedCommands: remoteSnapshot.commands,
               serverCopy: remoteSnapshot,
-            }).catch((error: unknown) => setRecoveryError(error instanceof Error ? error.message : 'Could not preserve both draft copies.'));
+            }).catch((error: unknown) =>
+              setRecoveryError(
+                error instanceof Error ? error.message : 'Could not preserve both draft copies.',
+              ),
+            );
             void saveTemplateDraftRecovery({
-              id: recoveryKey, userId, scope,
-              ...(identityFromDraft(remoteSnapshot) ? { workspaceIdentity: identityFromDraft(remoteSnapshot)! } : {}),
+              id: recoveryKey,
+              userId,
+              scope,
+              ...(identityFromDraft(remoteSnapshot)
+                ? { workspaceIdentity: identityFromDraft(remoteSnapshot)! }
+                : {}),
               sourceChecksum: remoteSnapshot.sourceChecksum,
               revision: matchingLocal?.revision ?? remoteSnapshot.revision,
-              commands: structuredClone(initial), persistedCommands: structuredClone(remoteSnapshot.commands),
-              savedAt: new Date().toISOString(), reason: 'conflict',
-              serverRevision: remoteSnapshot.revision, serverCommands: structuredClone(remoteSnapshot.commands),
-            }).then(() => listTemplateDraftRecoveries(userId, scope)).then(setRecoveries).catch((error: unknown) => setRecoveryError(error instanceof Error ? error.message : 'Could not preserve both draft copies.'));
+              commands: structuredClone(initial),
+              persistedCommands: structuredClone(remoteSnapshot.commands),
+              savedAt: new Date().toISOString(),
+              reason: 'conflict',
+              serverRevision: remoteSnapshot.revision,
+              serverCommands: structuredClone(remoteSnapshot.commands),
+            })
+              .then(() => listTemplateDraftRecoveries(userId, scope))
+              .then(setRecoveries)
+              .catch((error: unknown) =>
+                setRecoveryError(
+                  error instanceof Error ? error.message : 'Could not preserve both draft copies.',
+                ),
+              );
           }
           makeAutosaver({
             userId,
             scope,
             sourceChecksum: remoteSnapshot.sourceChecksum,
-            workspaceIdentity: identityFromDraft(remoteSnapshot) ?? templateAuthoringWorkspaceIdentity(undefined, remoteSnapshot.sourceChecksum),
+            workspaceIdentity:
+              identityFromDraft(remoteSnapshot) ??
+              templateAuthoringWorkspaceIdentity(undefined, remoteSnapshot.sourceChecksum),
             revision: remoteSnapshot.revision,
             persistedCommands: remoteSnapshot.commands,
             commands: initial,
@@ -693,7 +835,7 @@ export function useTemplateAuthoringDraft({
             status: 'error',
             revision: 0,
             dirty: false,
-            error: error instanceof Error ? error.message : 'Could not load the private draft.',
+            error: uiErrorText(error),
           });
           setLoaded(true);
         }
@@ -704,25 +846,31 @@ export function useTemplateAuthoringDraft({
           status: 'error',
           revision: 0,
           dirty: false,
-          error: error instanceof Error ? error.message : 'Could not load the private draft.',
+          error: uiErrorText(error),
         });
     });
     return () => {
       cancelled = true;
       autosaverRef.current?.dispose();
     };
-  }, [scopeKey, enabled, makeAutosaver, loadAttempt]);
+  }, [scopeKey, enabled, makeAutosaver, loadAttempt, uiErrorText]);
 
   useEffect(() => {
     const Channel = globalThis.BroadcastChannel;
     if (!loaded || !scope || !userId || typeof Channel === 'undefined') return;
-    const channel = new Channel(
-      `continuum-forge-draft:${userId}:${scopeKey}`,
-    );
+    const channel = new Channel(`continuum-forge-draft:${userId}:${scopeKey}`);
     tabChannel.current = channel;
     channel.onmessage = (event: MessageEvent<unknown>) => {
-      const message = event.data as { tabId?: unknown; revision?: unknown } | null;
-      if (message?.tabId === tabId.current || typeof message?.revision !== 'number' || !Number.isInteger(message.revision)) return;
+      const message = event.data as {
+        tabId?: unknown;
+        revision?: unknown;
+      } | null;
+      if (
+        message?.tabId === tabId.current ||
+        typeof message?.revision !== 'number' ||
+        !Number.isInteger(message.revision)
+      )
+        return;
       const autosaver = autosaverRef.current;
       if (!autosaver) return;
       reconcileTemplateAuthoringTabSave(autosaver, message.revision, () =>
@@ -766,13 +914,20 @@ export function useTemplateAuthoringDraft({
   }, [scope, serverDraft]);
   const adoptAgentDraft = useCallback(async () => {
     if (!scope || !loaded) return null;
-    const remote = await fetchTemplateAuthoringDraft(scope.assetId, scope.brandId, scope.baseVersionId);
+    const remote = await fetchTemplateAuthoringDraft(
+      scope.assetId,
+      scope.brandId,
+      scope.baseVersionId,
+    );
     if (!remote || !autosaverRef.current) return null;
     autosaverRef.current.adoptServerDraft(remote.revision, remote.commands);
     hydratedCommands.current = structuredClone(remote.commands);
     skipNextCommandsUpdate.current = true;
     setPersistedDraft(remote);
-    tabChannel.current?.postMessage({ tabId: tabId.current, revision: remote.revision });
+    tabChannel.current?.postMessage({
+      tabId: tabId.current,
+      revision: remote.revision,
+    });
     return remote;
   }, [scope, loaded]);
   const retry = useCallback(async () => {
@@ -785,10 +940,14 @@ export function useTemplateAuthoringDraft({
           await writeLocalDraft(pending.key, pending.local);
           await saveTemplateDraftRecovery(pending.recovery);
           pendingRecovery.current = null;
-          setRecoveries(await listTemplateDraftRecoveries(pending.local.userId, pending.local.scope));
+          setRecoveries(
+            await listTemplateDraftRecoveries(pending.local.userId, pending.local.scope),
+          );
           setRecoveryError(null);
         } catch (error) {
-          setRecoveryError(error instanceof Error ? error.message : 'Private recovery is still unavailable.');
+          setRecoveryError(
+            error instanceof Error ? error.message : 'Private recovery is still unavailable.',
+          );
         }
       } else {
         setLoadAttempt((attempt) => attempt + 1);
@@ -802,64 +961,96 @@ export function useTemplateAuthoringDraft({
     return autosaverRef.current.retry();
   }, [loaded, recoveryError]);
 
-  const restoreRecovery = useCallback(async (id: string) => {
-    const item = recoveries.find((entry) => entry.id === id);
-    if (!item || !scope || !equal(item.scope, scope)) return false;
-    const activeIdentity = activeWorkspaceIdentity.current;
-    if (activeIdentity && identityForLocal(item) !== activeIdentity) {
-      setRecoveryError('This recovery copy belongs to a different workspace package. It is preserved and cannot be restored here.');
-      return false;
-    }
-    if (activeSourceChecksum.current && activeSourceChecksum.current !== item.sourceChecksum) {
-      setRecoveryError('This recovery copy belongs to a different source package. Open its pinned version before restoring it.');
-      return false;
-    }
-    const operation = recoveryQueue.current.catch(() => undefined).then(async () => {
-      const targetWorkspaceIdentity = activeIdentity ?? identityForLocal(item);
-      const key = `${layerDraftStorageKey(item.userId, item.scope, targetWorkspaceIdentity)}:tab:${tabId.current}`;
-      const current = await readLocalDraft(key);
-      const currentCommands = current?.commands ?? commands;
-      if (current || currentCommands.length) {
-        await saveTemplateDraftRecovery({
-          id: `${key}:before-restore:${crypto.randomUUID()}`, userId: item.userId,
-          scope: current?.scope ?? item.scope, sourceChecksum: current?.sourceChecksum ?? activeSourceChecksum.current ?? item.sourceChecksum,
-          workspaceIdentity: current?.workspaceIdentity ?? targetWorkspaceIdentity,
-          revision: current?.revision ?? autosaverRef.current?.view.revision ?? item.revision,
-          commands: structuredClone(currentCommands), persistedCommands: structuredClone(current?.persistedCommands ?? item.persistedCommands),
-          savedAt: new Date().toISOString(), reason: 'local',
-        });
+  const restoreRecovery = useCallback(
+    async (id: string) => {
+      const item = recoveries.find((entry) => entry.id === id);
+      if (!item || !scope || !equal(item.scope, scope)) return false;
+      const activeIdentity = activeWorkspaceIdentity.current;
+      if (activeIdentity && identityForLocal(item) !== activeIdentity) {
+        setRecoveryError(
+          'This recovery copy belongs to a different workspace package. It is preserved and cannot be restored here.',
+        );
+        return false;
       }
-      const restored = { ...item, workspaceIdentity: targetWorkspaceIdentity, id: key, savedAt: new Date().toISOString() };
-      await writeLocalDraft(key, restored);
-      await saveTemplateDraftRecovery(restored);
-      restoreRef.current(layerSnapshotFromCommands(item.commands));
-      if (autosaverRef.current) autosaverRef.current.update(item.commands, true);
-      else makeAutosaver({
-        userId: item.userId,
-        scope: item.scope,
-        sourceChecksum: item.sourceChecksum,
-        workspaceIdentity: targetWorkspaceIdentity,
-        revision: item.revision,
-        persistedCommands: item.persistedCommands,
-        commands: item.commands,
-        initialError: 'Recovered local changes are ready to retry against the pinned source.',
-      });
-      setRecoveryError(null);
-      setRecoveries(await listTemplateDraftRecoveries(item.userId, item.scope));
-    });
-    recoveryQueue.current = operation.then(() => undefined, () => undefined);
-    try {
-      await operation;
-      return true;
-    } catch (error) {
-      setRecoveryError(error instanceof Error ? error.message : 'Could not restore this recovery snapshot.');
-      return false;
-    }
-  }, [commands, makeAutosaver, recoveries, scope]);
+      if (activeSourceChecksum.current && activeSourceChecksum.current !== item.sourceChecksum) {
+        setRecoveryError(
+          'This recovery copy belongs to a different source package. Open its pinned version before restoring it.',
+        );
+        return false;
+      }
+      const operation = recoveryQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          const targetWorkspaceIdentity = activeIdentity ?? identityForLocal(item);
+          const key = `${layerDraftStorageKey(item.userId, item.scope, targetWorkspaceIdentity)}:tab:${tabId.current}`;
+          const current = await readLocalDraft(key);
+          const currentCommands = current?.commands ?? commands;
+          if (current || currentCommands.length) {
+            await saveTemplateDraftRecovery({
+              id: `${key}:before-restore:${crypto.randomUUID()}`,
+              userId: item.userId,
+              scope: current?.scope ?? item.scope,
+              sourceChecksum:
+                current?.sourceChecksum ?? activeSourceChecksum.current ?? item.sourceChecksum,
+              workspaceIdentity: current?.workspaceIdentity ?? targetWorkspaceIdentity,
+              revision: current?.revision ?? autosaverRef.current?.view.revision ?? item.revision,
+              commands: structuredClone(currentCommands),
+              persistedCommands: structuredClone(
+                current?.persistedCommands ?? item.persistedCommands,
+              ),
+              savedAt: new Date().toISOString(),
+              reason: 'local',
+            });
+          }
+          const restored = {
+            ...item,
+            workspaceIdentity: targetWorkspaceIdentity,
+            id: key,
+            savedAt: new Date().toISOString(),
+          };
+          await writeLocalDraft(key, restored);
+          await saveTemplateDraftRecovery(restored);
+          restoreRef.current(layerSnapshotFromCommands(item.commands));
+          if (autosaverRef.current) autosaverRef.current.update(item.commands, true);
+          else
+            makeAutosaver({
+              userId: item.userId,
+              scope: item.scope,
+              sourceChecksum: item.sourceChecksum,
+              workspaceIdentity: targetWorkspaceIdentity,
+              revision: item.revision,
+              persistedCommands: item.persistedCommands,
+              commands: item.commands,
+              initialError: 'Recovered local changes are ready to retry against the pinned source.',
+            });
+          setRecoveryError(null);
+          setRecoveries(await listTemplateDraftRecoveries(item.userId, item.scope));
+        });
+      recoveryQueue.current = operation.then(
+        () => undefined,
+        () => undefined,
+      );
+      try {
+        await operation;
+        return true;
+      } catch (error) {
+        setRecoveryError(
+          error instanceof Error ? error.message : 'Could not restore this recovery snapshot.',
+        );
+        return false;
+      }
+    },
+    [commands, makeAutosaver, recoveries, scope],
+  );
 
   return {
     ...view,
-    error: [...new Set([draftError, view.error, recoveryError].filter((message): message is string => !!message))].join(' · ') || null,
+    error:
+      [
+        ...new Set(
+          [draftError, view.error, recoveryError].filter((message): message is string => !!message),
+        ),
+      ].join(' · ') || null,
     status: loaded
       ? recoveryError && view.status !== 'conflict' && view.status !== 'source-mismatch'
         ? 'error'

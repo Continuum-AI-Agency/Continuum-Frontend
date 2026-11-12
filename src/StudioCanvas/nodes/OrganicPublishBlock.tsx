@@ -9,6 +9,7 @@ import {
   type Node as ReactFlowNode,
 } from '@xyflow/react';
 import { CalendarClock, Copy, Send, Share2, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -28,11 +29,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { describePublishError, parseSSE, publishPlatformLabel } from '@/lib/organic/publish-utils';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { OrganicPublishNodeData, PlannerDraftNodeData, StudioNode } from '../types';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import {
   fetchOrganicPublishIntent,
@@ -45,7 +48,11 @@ import {
 export function upstreamDraft(args: {
   nodeId: string;
   nodes: StudioNode[];
-  edges: Array<{ target?: string; targetHandle?: string | null; source: string }>;
+  edges: Array<{
+    target?: string;
+    targetHandle?: string | null;
+    source: string;
+  }>;
 }): {
   draftId: string;
   saved: boolean;
@@ -89,6 +96,11 @@ export function OrganicPublishBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<OrganicPublishNodeData>>) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+  const publishText = useUiTranslations('organic');
+
   const updateNode = useStudioStore((state) => state.updateNode);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -124,16 +136,20 @@ export function OrganicPublishBlock({
     try {
       const intent = await fetchOrganicPublishIntent(draft.draftId, draft.accountId ?? null);
       if (!intent) {
-        const message = 'Could not check this post before publishing. Try again.';
+        const message = translateUi('publishCheckFailed');
         patchData({ error: message });
-        show({ title: 'Publish failed', description: message, variant: 'error' });
+        show({
+          title: translateUi('publish_failed_2fe0dace'),
+          description: message,
+          variant: 'error',
+        });
         return;
       }
       setPending(intent);
     } finally {
       setBusy(false);
     }
-  }, [draft, patchData, show]);
+  }, [draft, patchData, show, translateUi]);
 
   const confirmPublish = useCallback(async () => {
     const intent = pending;
@@ -150,7 +166,10 @@ export function OrganicPublishBlock({
         ...(intent.platform ? { platform: intent.platform } : {}),
         ...(intent.account.id ? { accountId: intent.account.id } : {}),
       };
-      const stream = await publishOrganicDraft({ draftId: draft.draftId, body });
+      const stream = await publishOrganicDraft({
+        draftId: draft.draftId,
+        body,
+      });
       if (!stream) throw new Error('Empty response from the publisher.');
 
       for await (const { event, data: raw } of parseSSE(stream)) {
@@ -170,15 +189,21 @@ export function OrganicPublishBlock({
             error: undefined,
           });
           show({
-            title: 'Published',
-            description: `Live on ${publishPlatformLabel(published.platform)}.`,
+            title: translateUi('published_2ef42ec2'),
+            description: translateUi('live_on_value0_f5ddaa0f', {
+              value0: String(publishPlatformLabel(published.platform)),
+            }),
             variant: 'success',
           });
         } else if (event === 'failed') {
           const failed = parsed as Extract<PublishEvent, { type: 'failed' }>;
-          const message = describePublishError(failed.code, failed.error);
+          const message = describePublishError(failed.code, failed.error, publishText);
           patchData({ error: message });
-          show({ title: 'Publish failed', description: message, variant: 'error' });
+          show({
+            title: translateUi('publish_failed_2fe0dace'),
+            description: message,
+            variant: 'error',
+          });
         }
       }
     } catch (cause) {
@@ -186,14 +211,18 @@ export function OrganicPublishBlock({
       const message =
         cause instanceof Error && cause.message
           ? cause.message
-          : 'Publishing failed. Check the post, then try again.';
+          : translateUi('publishing_failed_check_the_post_th_389f8146');
       patchData({ error: message });
-      show({ title: 'Publish failed', description: message, variant: 'error' });
+      show({
+        title: translateUi('publish_failed_2fe0dace'),
+        description: message,
+        variant: 'error',
+      });
     } finally {
       setBusy(false);
       setStage(null);
     }
-  }, [brandId, draft, patchData, pending, show]);
+  }, [brandId, draft, patchData, pending, show, translateUi, publishText]);
 
   const armSchedule = useCallback(async () => {
     if (!draft) return;
@@ -202,23 +231,27 @@ export function OrganicPublishBlock({
       await scheduleOrganicDraft(draft.draftId);
       patchData({ publishedAt: undefined, error: undefined });
       show({
-        title: 'Scheduled',
-        description: 'The planner will publish this at its scheduled time.',
+        title: translateUi('scheduled_4724f344'),
+        description: translateUi('the_planner_will_publish_this_at_it_4dc2012f'),
         variant: 'success',
       });
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not schedule this draft.';
+      const message = uiErrorText(cause);
       patchData({ error: message });
-      show({ title: 'Could not schedule', description: message, variant: 'warning' });
+      show({
+        title: translateUi('could_not_schedule_4374e42e'),
+        description: message,
+        variant: 'warning',
+      });
     } finally {
       setBusy(false);
     }
-  }, [draft, patchData, show]);
+  }, [draft, patchData, show, translateUi, uiErrorText]);
 
   const blockedReason = !draft
-    ? 'Wire a Planner Draft into this node.'
+    ? translateUi('publishDraftRequired')
     : !draft.saved
-      ? 'Save the draft first — only a row on the planner can be published.'
+      ? translateUi('publishSavedDraftRequired')
       : null;
 
   return (
@@ -240,8 +273,8 @@ export function OrganicPublishBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeTitleBar icon={Share2} label="Post to Platform">
-          <NodeBadge>Organic</NodeBadge>
+        <NodeTitleBar icon={Share2} label={translateUi('post_to_platform_03f4afb2')}>
+          <NodeBadge>{translateUi('organic_89b8cb68')}</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5 text-xs">
           <p
@@ -249,31 +282,39 @@ export function OrganicPublishBlock({
             className="-mx-1.5 -mt-1.5 border-b border-border/60 bg-muted/50 px-2 py-1 text-2xs text-muted-foreground"
           >
             {data.publishedAt
-              ? `Published${data.platformPostId ? ` · ${data.platformPostId}` : ''}`
-              : 'A canvas run never publishes. This posts only when you confirm below.'}
+              ? translateUi('published_value0_99169b68', {
+                  value0: String(data.platformPostId ? ` · ${data.platformPostId}` : ''),
+                })
+              : translateUi('a_canvas_run_never_publishes_this_p_917a10d9')}
           </p>
 
           <p className="truncate text-2xs text-muted-foreground">
-            {draft ? (draft.title ?? draft.draftId) : 'No draft wired in'}
+            {draft ? (draft.title ?? draft.draftId) : translateUi('no_draft_wired_in_2627329e')}
           </p>
 
           <select
             className="nodrag h-8 rounded-md border border-border bg-background px-2"
             value={schedule}
             onChange={(event) =>
-              patchData({ schedule: event.target.value as OrganicPublishNodeData['schedule'] })
+              patchData({
+                schedule: event.target.value as OrganicPublishNodeData['schedule'],
+              })
             }
-            aria-label="When to post"
+            aria-label={translateUi('when_to_post_f0ada023')}
           >
-            <option value="now">Post now</option>
-            <option value="scheduled">Schedule for its planner time</option>
+            <option value="now">{translateUi('post_now_977eb1a3')}</option>
+            <option value="scheduled">
+              {translateUi('schedule_for_its_planner_time_f31c3e77')}
+            </option>
           </select>
 
           {blockedReason ? (
             <p className="rounded bg-amber-500/10 p-2 text-2xs text-amber-700">{blockedReason}</p>
           ) : null}
           {data.error ? (
-            <p className="rounded bg-destructive/10 p-2 text-2xs text-destructive">{data.error}</p>
+            <p className="rounded bg-destructive/10 p-2 text-2xs text-destructive">
+              {workflowNodeError(data, translateUi)}
+            </p>
           ) : null}
           {stage ? <p className="text-2xs text-muted-foreground">{stage}…</p> : null}
 
@@ -287,7 +328,11 @@ export function OrganicPublishBlock({
             ) : (
               <CalendarClock className="mr-1.5" />
             )}
-            {busy ? 'Working…' : schedule === 'now' ? 'Post now' : 'Schedule'}
+            {busy
+              ? translateUi('working_5474eef8')
+              : schedule === 'now'
+                ? translateUi('post_now_977eb1a3')
+                : translateUi('schedule_f4830a1d')}
           </Button>
           <div className="flex justify-end gap-1">
             <Button
@@ -310,7 +355,7 @@ export function OrganicPublishBlock({
         </NodeContent>
       </CanvasNode>
 
-      <div className="absolute -left-2 top-1/2" title="Planner draft">
+      <div className="absolute -left-2 top-1/2" title={translateUi('planner_draft_32cbb428')}>
         <Handle
           type="target"
           position={Position.Left}
@@ -323,22 +368,25 @@ export function OrganicPublishBlock({
         <AlertDialogContent className="nodrag">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Publish to {publishPlatformLabel(pending?.platform as never)}?
+              {' '}
+              {translateUi('publish_to_b7a69104')}{' '}
+              {publishPlatformLabel(pending?.platform as never)}?
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pending?.publishable === false
-                ? 'This post is not ready to publish yet.'
-                : 'This posts publicly right away and cannot be undone from Continuum. Review the caption and account below.'}
+                ? translateUi('this_post_is_not_ready_to_publish_y_be146908')
+                : translateUi('this_posts_publicly_right_away_and__f08bd5d6')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {pending ? <PublishIntentSummary intent={pending as PublishIntentSummaryData} /> : null}
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <AlertDialogAction
               disabled={!pending?.publishable || !pending?.intent_hash}
               onClick={confirmPublish}
             >
-              Publish
+              {' '}
+              {translateUi('publish_859390eb')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

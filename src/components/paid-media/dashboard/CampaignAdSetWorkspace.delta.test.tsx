@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import {
   buildAggregatedMetricsContext,
   MetricCardDelta,
@@ -48,7 +49,14 @@ describe('MetricCardDelta', () => {
 describe('Scale workspace — null CPA', () => {
   afterEach(cleanup);
 
-  const base = { spend: 79.82, roas: 0, ctr: 3, cpc: 1.25, impressions: 2100, clicks: 64 };
+  const base = {
+    spend: 79.82,
+    roas: 0,
+    ctr: 3,
+    cpc: 1.25,
+    impressions: 2100,
+    clicks: 64,
+  };
 
   it('prints "—" with the reason and stamps no figure', () => {
     render(

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { WARM_LEASE_LONG_MS, warmLeaseKey } from '@/lib/dashboard/warm-lease';
 
@@ -46,7 +47,10 @@ describe('DashboardWarmOnMount', () => {
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
     const [fnName, opts] = invokeMock.mock.calls[0];
     expect(fnName).toBe('warm-brand-now');
-    expect(opts).toMatchObject({ method: 'POST', body: { brandId: 'brand-1' } });
+    expect(opts).toMatchObject({
+      method: 'POST',
+      body: { brandId: 'brand-1' },
+    });
   });
 
   it('does not warm while a fresh lease is held', async () => {

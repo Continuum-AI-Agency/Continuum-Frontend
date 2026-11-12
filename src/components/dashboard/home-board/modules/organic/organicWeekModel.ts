@@ -1,3 +1,5 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 // The organic week the Home shows: seven day columns of what went out, what is scheduled and
 // what waits for approval, built from the two reads the Organic calendar already makes.
 //
@@ -72,10 +74,11 @@ export function buildOrganicWeek(input: {
   now: Date;
   posts: OrganicCalendarPostedContent[];
   drafts: PersistedOrganicDraftRow[];
+  locale?: UiLocale;
 }): OrganicWeek {
   const todayId = formatDayId(input.now);
   // The calendar's own scaffold: a row whose day is not one of these seven maps to null.
-  const scaffold = buildWeekDays(organicWeekStart(input.now));
+  const scaffold = buildWeekDays(organicWeekStart(input.now), input.locale);
   const days: OrganicWeekDay[] = scaffold.map((day) => ({
     dayId: day.id,
     label: day.label,
@@ -108,7 +111,10 @@ export function buildOrganicWeek(input: {
       day.scheduled.push(draft);
       scheduled += scheduledRows;
     } else if (statuses.some((status) => WAITING_STATUSES.has(status))) {
-      day.waiting.push({ card: draft, approvedNotScheduled: !statuses.includes('draft') });
+      day.waiting.push({
+        card: draft,
+        approvedNotScheduled: !statuses.includes('draft'),
+      });
       waiting += 1;
     }
   }
@@ -129,17 +135,31 @@ export const ORGANIC_NO_ACCOUNT =
 export const ORGANIC_EMPTY_WEEK =
   'Nothing published, scheduled or drafted this week — plan posts in the Organic calendar.';
 
-export type OrganicTileView = { state: ModuleFrameState; missing: string | null };
+export type OrganicTileView = {
+  state: ModuleFrameState;
+  missing: string | null;
+};
 
-export function organicTileView(input: {
-  hasAccounts: boolean;
-  loading: boolean;
-  failed: boolean;
-  week: OrganicWeek | null;
-}): OrganicTileView {
-  if (!input.hasAccounts) return { state: 'missing', missing: ORGANIC_NO_ACCOUNT };
+export function organicTileView(
+  input: {
+    hasAccounts: boolean;
+    loading: boolean;
+    failed: boolean;
+    week: OrganicWeek | null;
+  },
+  t?: ReturnType<typeof useTranslations<'organic'>>,
+): OrganicTileView {
+  if (!input.hasAccounts)
+    return {
+      state: 'missing',
+      missing: t ? t('homeNoAccount') : ORGANIC_NO_ACCOUNT,
+    };
   if (input.failed) return { state: 'error', missing: null };
   if (input.loading || !input.week) return { state: 'loading', missing: null };
-  if (input.week.isEmpty) return { state: 'missing', missing: ORGANIC_EMPTY_WEEK };
+  if (input.week.isEmpty)
+    return {
+      state: 'missing',
+      missing: t ? t('homeEmptyWeek') : ORGANIC_EMPTY_WEEK,
+    };
   return { state: 'ready', missing: null };
 }

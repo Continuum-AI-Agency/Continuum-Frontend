@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useValidationErrorMap } from '@/i18n/validation';
+
 // The rule editor, ordered the way the thing actually happens rather than the
 // way it is stored: where it listens, what fires it, what the commenter sees in
 // public, what they get in private, and when it stops. Read top to bottom, it
@@ -52,12 +55,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { ButtonReachNote } from './ButtonReachNote';
 import { CommentRulePreview } from './CommentRulePreview';
-import { PANEL_HEADER_FRAME, PANEL_TITLE } from './panelHeader';
 import { PostPicker } from './PostPicker';
-import { type RuleFormValues, ruleFormSchema } from './ruleFormSchema';
+import { PANEL_HEADER_FRAME, PANEL_TITLE } from './panelHeader';
+import { createRuleFormSchema, type RuleFormValues } from './ruleFormSchema';
 import { usePublishedPosts } from './usePublishedPosts';
 
 function KeywordField({ control }: { control: Control<RuleFormValues> }) {
+  const uiText = useTranslations('organic');
   const [pending, setPending] = React.useState('');
 
   return (
@@ -75,7 +79,7 @@ function KeywordField({ control }: { control: Control<RuleFormValues> }) {
 
         return (
           <FormItem>
-            <FormLabel className="text-xs">Trigger words</FormLabel>
+            <FormLabel className="text-xs">{uiText('trigger_words_2a5b03b')}</FormLabel>
             <FormControl>
               <div className="flex flex-wrap gap-1.5 rounded-md border p-1.5">
                 {field.value.map((keyword) => (
@@ -86,7 +90,7 @@ function KeywordField({ control }: { control: Control<RuleFormValues> }) {
                     {keyword}
                     <button
                       type="button"
-                      aria-label={`Remove ${keyword}`}
+                      aria-label={uiText('ruleRemoveKeyword', { keyword })}
                       onClick={() => field.onChange(field.value.filter((k) => k !== keyword))}
                       className="text-muted-foreground hover:text-foreground"
                     >
@@ -107,15 +111,14 @@ function KeywordField({ control }: { control: Control<RuleFormValues> }) {
                     }
                   }}
                   onBlur={add}
-                  placeholder={field.value.length === 0 ? 'price, info…' : ''}
-                  aria-label="Add a trigger word"
+                  placeholder={field.value.length === 0 ? uiText('price_info_63d893a') : ''}
+                  aria-label={uiText('add_a_trigger_word_f5ac65d')}
                   className="min-w-24 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground"
                 />
               </div>
             </FormControl>
             <FormDescription className="text-2xs">
-              Whole words only; capitals and accents are ignored. “price” fires on “PRICE?” but not
-              on “pricey”.
+              {uiText('whole_words_only_capitals_and_accents_are_ign_2d5f792')}
             </FormDescription>
             <FormMessage />
           </FormItem>
@@ -126,13 +129,14 @@ function KeywordField({ control }: { control: Control<RuleFormValues> }) {
 }
 
 function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
+  const uiText = useTranslations('organic');
   return (
     <FormField
       control={control}
       name="publicReplyMessages"
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-xs">Public replies</FormLabel>
+          <FormLabel className="text-xs">{uiText('public_replies_b06f896')}</FormLabel>
           <div className="flex flex-col gap-1.5">
             {field.value.map((message, index) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: see the note at the top of this file
@@ -145,8 +149,10 @@ function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
                       next[index] = event.target.value;
                       field.onChange(next);
                     }}
-                    placeholder="Sent you a DM!"
-                    aria-label={`Public reply ${index + 1}`}
+                    placeholder={uiText('sent_you_a_dm_4798705')}
+                    aria-label={uiText('publicReplyNumber', {
+                      number: index + 1,
+                    })}
                     className="h-8 text-xs"
                   />
                 </FormControl>
@@ -154,7 +160,9 @@ function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  aria-label={`Remove reply ${index + 1}`}
+                  aria-label={uiText('removeReplyNumber', {
+                    number: index + 1,
+                  })}
                   onClick={() => field.onChange(field.value.filter((_, i) => i !== index))}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -170,17 +178,16 @@ function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
                 onClick={() => field.onChange([...field.value, ''])}
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add a variation
+                {uiText('add_a_variation_63465df')}
               </Button>
             ) : null}
           </div>
           <FormDescription className="text-2xs">
-            Rotated between comments. Leave empty to stay silent in public.
+            {uiText('rotated_between_comments_leave_empty_to_stay__d2b30e9')}
           </FormDescription>
           {field.value.length > 0 && field.value.length < 3 ? (
             <p className="text-2xs text-amber-600 dark:text-amber-400">
-              With fewer than three, a busy post fills with the same sentence — which is what
-              platform spam detection looks for. You can save it either way.
+              {uiText('with_fewer_than_three_a_busy_post_fills_with__b76b657')}
             </p>
           ) : null}
           <FormMessage />
@@ -192,6 +199,7 @@ function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
 
 /** Shown only on a saved rule: the link is minted when the rule is saved. */
 function TrackedLinkRow({ url }: { url: string }) {
+  const uiText = useTranslations('organic');
   const [copied, setCopied] = React.useState(false);
 
   const copy = React.useCallback(() => {
@@ -206,7 +214,9 @@ function TrackedLinkRow({ url }: { url: string }) {
 
   return (
     <div className="rounded-md border bg-muted/40 px-2.5 py-2">
-      <p className="text-2xs text-muted-foreground">The link your message sends</p>
+      <p className="text-2xs text-muted-foreground">
+        {uiText('the_link_your_message_sends_490500f')}
+      </p>
       <div className="mt-1 flex items-center gap-2">
         <code className="min-w-0 flex-1 truncate font-mono text-2xs">{url}</code>
         <Button
@@ -215,10 +225,10 @@ function TrackedLinkRow({ url }: { url: string }) {
           size="sm"
           onClick={copy}
           className="h-6 shrink-0 gap-1 px-1.5 text-2xs"
-          aria-label="Copy the link"
+          aria-label={uiText('copy_the_link_53132f0')}
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? uiText('copied_8d525e5') : uiText('copy_e21f935')}
         </Button>
       </div>
     </div>
@@ -248,8 +258,11 @@ export function CommentRuleForm({
   /** Which connected account's posts the picker offers. */
   instagramAccountId?: string | null;
 }) {
+  const uiText = useTranslations('organic');
+  const validationErrorMap = useValidationErrorMap();
+  const validationSchema = React.useMemo(() => createRuleFormSchema(uiText), [uiText]);
   const form = useForm<RuleFormValues>({
-    resolver: zodResolver(ruleFormSchema),
+    resolver: zodResolver(validationSchema, { error: validationErrorMap }),
     defaultValues,
     mode: 'onChange',
   });
@@ -273,17 +286,19 @@ export function CommentRuleForm({
       <form
         onSubmit={form.handleSubmit(onSubmit)}
         className="flex h-full min-h-0 flex-col"
-        aria-label={isEditing ? 'Edit rule' : 'New rule'}
+        aria-label={isEditing ? uiText('edit_rule_29d23cb') : uiText('new_rule_99cd24e')}
       >
         <div className={`flex items-center justify-between gap-2 ${PANEL_HEADER_FRAME}`}>
-          <h2 className={PANEL_TITLE}>{isEditing ? 'Edit rule' : 'New rule'}</h2>
+          <h2 className={PANEL_TITLE}>
+            {isEditing ? uiText('edit_rule_29d23cb') : uiText('new_rule_99cd24e')}
+          </h2>
           <FormField
             control={form.control}
             name="enabled"
             render={({ field }) => (
               <FormItem className="flex items-center gap-2 space-y-0">
                 <FormLabel className="text-xs text-muted-foreground">
-                  {field.value ? 'On' : 'Off'}
+                  {field.value ? uiText('on_1300117') : uiText('off_ca7981b')}
                 </FormLabel>
                 <FormControl>
                   <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -301,7 +316,7 @@ export function CommentRuleForm({
                 name="postScope"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs">Which posts</FormLabel>
+                    <FormLabel className="text-xs">{uiText('which_posts_81e9607')}</FormLabel>
                     <FormControl>
                       <div className="flex gap-1.5">
                         {(['all_posts', 'specific_posts'] as const).map((scope) => (
@@ -313,15 +328,17 @@ export function CommentRuleForm({
                             onClick={() => field.onChange(scope)}
                             className="text-xs"
                           >
-                            {scope === 'all_posts' ? 'All posts' : 'Specific posts'}
+                            {scope === 'all_posts'
+                              ? uiText('all_posts_3a2e5c2')
+                              : uiText('specific_posts_7988e18')}
                           </Button>
                         ))}
                       </div>
                     </FormControl>
                     <FormDescription className="text-2xs">
                       {field.value === 'all_posts'
-                        ? 'Every post on the account, including ones published later.'
-                        : 'Only the posts you name.'}
+                        ? uiText('every_post_on_the_account_including_ones_publ_cd53a1a')
+                        : uiText('only_the_posts_you_name_be6a9a1')}
                     </FormDescription>
                   </FormItem>
                 )}
@@ -333,7 +350,7 @@ export function CommentRuleForm({
                   name="platformPostIds"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Posts</FormLabel>
+                      <FormLabel className="text-xs">{uiText('posts_a80811c')}</FormLabel>
                       <FormControl>
                         <PostPicker
                           posts={publishedPosts.posts}
@@ -363,12 +380,12 @@ export function CommentRuleForm({
                 name="replyMessage"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs">Direct message</FormLabel>
+                    <FormLabel className="text-xs">{uiText('direct_message_cd3e160')}</FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
                         rows={3}
-                        placeholder="Hey! Here's the guide 👇"
+                        placeholder={uiText('hey_here_s_the_guide_aa14ccc')}
                         className="text-xs"
                       />
                     </FormControl>
@@ -386,7 +403,7 @@ export function CommentRuleForm({
                   name="destinationUrl"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Link</FormLabel>
+                      <FormLabel className="text-xs">{uiText('link_a6a32db')}</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -396,8 +413,7 @@ export function CommentRuleForm({
                         />
                       </FormControl>
                       <FormDescription className="text-2xs">
-                        Shortened automatically so its clicks can be counted against the post it
-                        came from. Leave empty to send a message with no link.
+                        {uiText('shortened_automatically_so_its_clicks_can_be__74c9a09')}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -410,21 +426,23 @@ export function CommentRuleForm({
                     render={({ field }) => (
                       <FormItem>
                         <div className="flex items-center gap-1.5">
-                          <FormLabel className="text-xs">Button text</FormLabel>
+                          <FormLabel className="text-xs">{uiText('button_text_ec208ea')}</FormLabel>
                           <ButtonReachNote />
                         </div>
                         <FormControl>
                           <Input
                             {...field}
                             maxLength={MAX_LINK_BUTTON_LABEL_LENGTH}
-                            placeholder="Open the guide"
+                            placeholder={uiText('open_the_guide_5628ad3')}
                             className="h-8 text-xs"
                           />
                         </FormControl>
                         <FormDescription className="text-2xs">
                           {field.value.trim() === ''
-                            ? 'The link goes in the message. Add text to send it as a button instead.'
-                            : `The link becomes a button, up to ${MAX_LINK_BUTTON_LABEL_LENGTH} characters. Clear this to send the link in the message.`}
+                            ? uiText('ruleLinkInMessage')
+                            : uiText('ruleLinkButtonHint', {
+                                limit: MAX_LINK_BUTTON_LABEL_LENGTH,
+                              })}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -441,7 +459,7 @@ export function CommentRuleForm({
                   name="activeFrom"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Starts</FormLabel>
+                      <FormLabel className="text-xs">{uiText('starts_96dbede')}</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -458,7 +476,7 @@ export function CommentRuleForm({
                   name="activeUntil"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Ends</FormLabel>
+                      <FormLabel className="text-xs">{uiText('ends_e98982c')}</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -472,12 +490,11 @@ export function CommentRuleForm({
                 />
               </div>
               <p className="text-2xs text-muted-foreground">
-                Leave both empty to run until you switch it off. An end date is what stops a
-                finished campaign answering people months later with a dead link.
+                {uiText('leave_both_empty_to_run_until_you_switch_it_o_98af6b9')}
               </p>
               {hasWindowError ? (
                 <p className="text-2xs text-destructive" role="alert">
-                  The end date is before the start date
+                  {uiText('the_end_date_is_before_the_start_date_d384bff')}
                 </p>
               ) : null}
             </div>
@@ -497,7 +514,7 @@ export function CommentRuleForm({
               onClick={onDelete}
               className="text-xs text-destructive hover:text-destructive"
             >
-              Delete
+              {uiText('delete_e2d0a54')}
             </Button>
           ) : (
             <span />
@@ -510,10 +527,10 @@ export function CommentRuleForm({
               onClick={onCancel}
               className="text-xs"
             >
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button type="submit" size="sm" disabled={isSaving} className="text-xs">
-              {isSaving ? 'Saving…' : 'Save rule'}
+              {isSaving ? uiText('saving_23e3929') : uiText('save_rule_4e62c22')}
             </Button>
           </div>
         </div>

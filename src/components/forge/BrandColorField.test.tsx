@@ -31,9 +31,15 @@ mock.module('@/lib/brands/brandTypeInputs.client', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { BrandColorField } from './BrandColorField';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import { BrandColorField } from './BrandColorField';
 
 // Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
 // (a global shim in the shared setup drops other files' tests).
@@ -42,11 +48,20 @@ installPickerDomGlobals();
 const BRAND = '22222222-2222-4222-8222-222222222222';
 
 function token(name: string, value: string, resolvedValue: string | null = null) {
-  return { name, value, kind: 'color', resolvedValue, definedIn: null, description: null };
+  return {
+    name,
+    value,
+    kind: 'color',
+    resolvedValue,
+    definedIn: null,
+    description: null,
+  };
 }
 
 function renderField(value: string | null, onChange = mock((_hex: string) => undefined)) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
     <QueryClientProvider client={client}>
       <BrandColorField brandId={BRAND} value={value} onChange={onChange} label="Background" />
@@ -74,14 +89,18 @@ describe('BrandColorField', () => {
     // Whether the content element has been REMOVED yet depends on that animation finishing,
     // which happy-dom decides at random. So: either it is gone, or it is still mounted and
     // already marked closed. What must never hold is a palette still standing open.
-    const lingering = screen.queryByRole('button', { name: 'Background: --brand-orange' });
+    const lingering = screen.queryByRole('button', {
+      name: 'Background: --brand-orange',
+    });
     if (lingering) {
-      expect(
-        lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed'),
-      ).toBe(true);
+      expect(lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed')).toBe(
+        true,
+      );
     }
     await openPalette();
-    const orange = await screen.findByRole('button', { name: 'Background: --brand-orange' });
+    const orange = await screen.findByRole('button', {
+      name: 'Background: --brand-orange',
+    });
     expect(orange.getAttribute('title')).toBe('--brand-orange #ff6600');
     expect(screen.getByRole('button', { name: 'Background: --ink' }).getAttribute('title')).toBe(
       '--ink #aabbcc',
@@ -93,10 +112,14 @@ describe('BrandColorField', () => {
   test('picks a swatch and rings the selected one', async () => {
     const onChange = renderField('#AABBCC');
     await openPalette();
-    const ink = await screen.findByRole('button', { name: 'Background: --ink' });
+    const ink = await screen.findByRole('button', {
+      name: 'Background: --ink',
+    });
     expect(ink.getAttribute('aria-pressed')).toBe('true');
     expect(ink.className).toContain('ring-2');
-    const orange = screen.getByRole('button', { name: 'Background: --brand-orange' });
+    const orange = screen.getByRole('button', {
+      name: 'Background: --brand-orange',
+    });
     expect(orange.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(orange);
     expect(onChange).toHaveBeenCalledWith('#ff6600');
@@ -115,11 +138,13 @@ describe('BrandColorField', () => {
     // Whether the content element has been REMOVED yet depends on that animation finishing,
     // which happy-dom decides at random. So: either it is gone, or it is still mounted and
     // already marked closed. What must never hold is a palette still standing open.
-    const lingering = screen.queryByRole('button', { name: 'Background: --brand-orange' });
+    const lingering = screen.queryByRole('button', {
+      name: 'Background: --brand-orange',
+    });
     if (lingering) {
-      expect(
-        lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed'),
-      ).toBe(true);
+      expect(lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed')).toBe(
+        true,
+      );
     }
   });
 
@@ -133,7 +158,9 @@ describe('BrandColorField', () => {
   test('a hash-less imported value still rings its swatch and paints the free field', async () => {
     renderField('FF6600');
     await openPalette();
-    const orange = await screen.findByRole('button', { name: 'Background: --brand-orange' });
+    const orange = await screen.findByRole('button', {
+      name: 'Background: --brand-orange',
+    });
     expect(orange.getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Background colour' }).textContent).toContain(
       '#ff6600',
@@ -153,7 +180,10 @@ describe('BrandColorField', () => {
   test('uses the first valid palette by authority instead of mixing stale sources', async () => {
     inputs = {
       ...designSystemInputs(),
-      brandMd: { colors: [{ value: '#112233', name: 'Brand Book' }], typography: [] },
+      brandMd: {
+        colors: [{ value: '#112233', name: 'Brand Book' }],
+        typography: [],
+      },
       brandKit: { colors: ['#445566'] },
     };
     renderField(null);
@@ -190,14 +220,18 @@ describe('BrandColorField', () => {
 
   test('falls back to detected profile colours when richer sources have none', async () => {
     inputs = {
-      designSystem: { tokens: [] } as unknown as BrandTypeInputs['designSystem'],
+      designSystem: {
+        tokens: [],
+      } as unknown as BrandTypeInputs['designSystem'],
       brandMd: { colors: [], typography: [] },
       brandKit: { colors: ['778899', '#778899', 'not-a-colour'] },
     };
     renderField(null);
     await openPalette();
 
-    const stored = screen.getByRole('button', { name: 'Background: Brand color 1' });
+    const stored = screen.getByRole('button', {
+      name: 'Background: Brand color 1',
+    });
     expect(stored.getAttribute('title')).toBe('Brand color 1 #778899');
     expect(screen.getAllByRole('button', { name: /^Background: Brand color/ })).toHaveLength(1);
   });

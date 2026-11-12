@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // Step 1 — where to start. Each suggestion is a borderless row a person can read in one glance:
 // what it groups, what it spends, what a result costs, and a strip of dots showing how
 // that cost spreads across its ad sets (the spread is the reason to optimize them
@@ -33,7 +37,10 @@ import { CONVERSION_OBJECTIVES } from '../suggestionModel';
 import { questionHeading } from './OptionRow';
 import { channelTypeCounts, suggestionPlatformCounts } from './wizardModel';
 
-export type SuggestionOverride = { objective: OptimizationObjective; mode: OptimizationModeDto };
+export type SuggestionOverride = {
+  objective: OptimizationObjective;
+  mode: OptimizationModeDto;
+};
 
 /** Why the suggestions are missing: the read ran out its bound (a slow cold Meta read — the
  *  service is alive) or the service did not answer at all. Only the second is "offline". */
@@ -82,6 +89,8 @@ function SpreadStrip({
   blended: number | null;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (dots.length < 2) return null;
   const max = Math.max(...dots.map((dot) => dot.cost), blended ?? 0) * 1.1;
   const cheapest = dots[0];
@@ -107,9 +116,12 @@ function SpreadStrip({
         ))}
       </div>
       <p className="text-xs text-muted-foreground tabular-nums">
-        Cost per result spreads from {formatCpa(cheapest.cost, currency)} to{' '}
-        {formatCpa(priciest.cost, currency)} across {dots.length} ad sets
-        {priciest.cost > cheapest.cost * 1.5 ? ' — room to move money.' : '.'}
+        {uiText.rich('sentence_b5e3b12405ac', {
+          low: formatCpa(cheapest.cost, currency, uiLocale),
+          high: formatCpa(priciest.cost, currency, uiLocale),
+          count: dots.length,
+          room: priciest.cost > cheapest.cost * 1.5 ? 'yes' : 'no',
+        })}
       </p>
     </div>
   );
@@ -132,7 +144,13 @@ function SuggestionCard({
   onToggleExplore: () => void;
   onPick: () => void;
 }) {
-  const metric = getOptimizationMetricDefinition(suggestion.objective);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(suggestion.objective),
+    optimizerText,
+  );
   const blended = deriveEfficiency(
     suggestion.summary.spend14,
     suggestion.summary.conv14,
@@ -148,10 +166,10 @@ function SuggestionCard({
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <p className="min-w-0 truncate font-semibold text-sm tracking-tight">{suggestion.name}</p>
         <Badge className="text-xs" variant="secondary">
-          {humanize(suggestion.objective)}
+          {humanize(suggestion.objective, uiText)}
         </Badge>
         <Badge className="text-xs" variant="teal">
-          {humanize(suggestion.mode)}
+          {humanize(suggestion.mode, uiText)}
         </Badge>
       </div>
 
@@ -181,22 +199,24 @@ function SuggestionCard({
       <dl className="flex flex-wrap gap-x-8 gap-y-2">
         <div>
           <dt className={`${typeScale.label} text-muted-foreground`}>
-            {platformCounts ? 'Members' : 'Ad sets'}
+            {platformCounts ? uiText('members_1044a4c') : uiText('ad_sets_f59ed42')}
           </dt>
           <dd className="font-mono font-semibold text-base tabular-nums">
             {suggestion.summary.adsets}
           </dd>
         </div>
         <div>
-          <dt className={`${typeScale.label} text-muted-foreground`}>Per day</dt>
+          <dt className={`${typeScale.label} text-muted-foreground`}>
+            {uiText('per_day_5b9e193')}
+          </dt>
           <dd className="font-mono font-semibold text-base tabular-nums">
-            {formatCurrency(suggestion.daily_total, currency)}
+            {formatCurrency(suggestion.daily_total, currency, uiLocale)}
           </dd>
         </div>
         <div>
           <dt className={`${typeScale.label} text-muted-foreground`}>{metric.costLabel}</dt>
           <dd className="font-mono font-semibold text-base tabular-nums">
-            {blended != null ? formatCpa(blended, currency) : '—'}
+            {blended != null ? formatCpa(blended, currency, uiLocale) : '—'}
           </dd>
         </div>
       </dl>
@@ -204,12 +224,14 @@ function SuggestionCard({
       <SpreadStrip blended={blended} currency={currency} dots={dots} />
 
       <p className="text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Why this group:</span> {suggestion.reason}
+        <span className="font-medium text-foreground">{uiText('why_this_group_8b72295')}</span>{' '}
+        {suggestion.reason}
       </p>
       {noConversions ? (
         <p className="text-xs text-warning">
-          No tracked {metric.resultLabel.toLowerCase()} in 14 days — consider Traffic for a decisive
-          first cycle.
+          {uiText.rich('sentence_bcf9d3eeadf7', {
+            v0: metric.resultLabel.toLowerCase(),
+          })}
         </p>
       ) : null}
 
@@ -226,13 +248,13 @@ function SuggestionCard({
             <ChevronDownIcon
               className={cn('size-3.5 transition-transform', exploring && 'rotate-180')}
             />
-            Explore ad sets
+            {uiText('explore_ad_sets_1b9a75f')}
           </Button>
         ) : (
           <span />
         )}
         <Button className="h-7 gap-1.5 px-3 text-xs" onClick={onPick} size="sm" type="button">
-          Use this
+          {uiText('use_this_b291996')}
           <ArrowRightIcon aria-hidden className="size-3.5" />
         </Button>
       </div>
@@ -245,6 +267,17 @@ function SuggestionCard({
  *  The two rows used to be 7rem bordered boxes; the list that replaced them was 2.6x taller and
  *  moved everything under it (the Overview's empty-state layout shift). */
 function SuggestionCardSkeleton() {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const exampleAmount = useMemo(
+    () =>
+      new Intl.NumberFormat(uiLocale, {
+        minimumIntegerDigits: 3,
+        useGrouping: false,
+        maximumFractionDigits: 0,
+      }).format(0),
+    [uiLocale],
+  );
   return (
     <article
       aria-hidden="true"
@@ -252,19 +285,23 @@ function SuggestionCardSkeleton() {
       data-testid="suggestion-skeleton"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <SkeletonText className="font-semibold text-sm tracking-tight">Purchases</SkeletonText>
-        <SkeletonText className="rounded-full border border-transparent px-2 py-0.5 font-medium text-xs">
-          Purchase
+        <SkeletonText className="font-semibold text-sm tracking-tight">
+          {uiText('purchases_a0718ef')}
         </SkeletonText>
         <SkeletonText className="rounded-full border border-transparent px-2 py-0.5 font-medium text-xs">
-          Balanced
+          {uiText('purchase_5b5e9c6')}
+        </SkeletonText>
+        <SkeletonText className="rounded-full border border-transparent px-2 py-0.5 font-medium text-xs">
+          {uiText('balanced_5386ea5')}
         </SkeletonText>
       </div>
       <div className="flex flex-wrap gap-x-8 gap-y-2">
-        {['Ad sets', 'Per day', 'CPA'].map((label) => (
+        {[uiText('ad_sets_f59ed42'), uiText('per_day_489b7ab'), 'CPA'].map((label) => (
           <div className="flex flex-col" key={label}>
             <SkeletonText className={typeScale.label}>{label}</SkeletonText>
-            <SkeletonText className="font-mono font-semibold text-base">$000 MXN</SkeletonText>
+            <SkeletonText className="font-mono font-semibold text-base">
+              ${exampleAmount} MXN
+            </SkeletonText>
           </div>
         ))}
       </div>
@@ -272,16 +309,22 @@ function SuggestionCardSkeleton() {
         <div className="h-3" />
         <p className="text-xs">
           <SkeletonText wrap>
-            Cost per result spreads from $000 MXN to $000 MXN across 0 ad sets.
+            {uiText('cost_per_result_spreads_from_000_mxn_to_000_m_c3a0ac8')}
           </SkeletonText>
         </p>
       </div>
       <p className="text-xs">
-        <SkeletonText wrap>Why this group: 0 ad sets grouped by the same objective.</SkeletonText>
+        <SkeletonText wrap>
+          {uiText('why_this_group_0_ad_sets_grouped_by_the_same__7848f98')}
+        </SkeletonText>
       </p>
       <div className="flex items-center justify-between gap-2">
-        <SkeletonText className="h-7 px-2 text-xs leading-7">Explore ad sets</SkeletonText>
-        <SkeletonText className="h-7 px-3 text-xs leading-7">Use this</SkeletonText>
+        <SkeletonText className="h-7 px-2 text-xs leading-7">
+          {uiText('explore_ad_sets_1b9a75f')}
+        </SkeletonText>
+        <SkeletonText className="h-7 px-3 text-xs leading-7">
+          {uiText('use_this_b291996')}
+        </SkeletonText>
       </div>
     </article>
   );
@@ -317,6 +360,7 @@ export function StepStart({
   onScratch,
   extras,
 }: StepStartProps) {
+  const uiText = useTranslations('scale');
   const [exploring, setExploring] = useState<string | null>(null);
   const slow = useRunningPastReadBound(isLoading);
   const snapshotById = useMemo(
@@ -333,13 +377,15 @@ export function StepStart({
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h3 className={questionHeading}>Where should it start?</h3>
+        <h3 className={questionHeading}>{uiText('where_should_it_start_673fc8d')}</h3>
         <div className="flex items-center gap-2">
           <SparklesIcon aria-hidden className="size-4 text-primary-ink" />
-          <h4 className="font-semibold text-sm tracking-tight">Start from a suggestion</h4>
+          <h4 className="font-semibold text-sm tracking-tight">
+            {uiText('start_from_a_suggestion_0ed4aca')}
+          </h4>
           {suggestions.length > 0 ? (
             <span className="text-muted-foreground text-xs" data-testid="suggestions-subtitle">
-              grouped from this account&rsquo;s active ad sets
+              {uiText('grouped_from_this_account_s_active_ad_sets_fe54451')}
             </span>
           ) : isLoading && slow ? (
             // The subtitle's own slot, so naming the wait shifts nothing below it.
@@ -348,11 +394,11 @@ export function StepStart({
               data-testid="suggestions-slow"
               role="status"
             >
-              Still reading this account&rsquo;s ad sets&hellip;
+              {uiText('still_reading_this_account_s_ad_sets_498e3e9')}
             </span>
           ) : isLoading ? (
             <SkeletonText className="text-xs" data-testid="suggestions-subtitle" wrap>
-              grouped from this account&rsquo;s active ad sets
+              {uiText('grouped_from_this_account_s_active_ad_sets_fe54451')}
             </SkeletonText>
           ) : null}
         </div>
@@ -376,8 +422,7 @@ export function StepStart({
               role="status"
             >
               <p className="min-w-0 flex-1 text-warning text-xs">
-                Suggestions are taking longer than usual. Try again, or build a portfolio from
-                scratch.
+                {uiText('suggestions_are_taking_longer_than_usual_try__7d0a66e')}
               </p>
               <Button
                 className="h-7 shrink-0 px-2 text-xs"
@@ -385,7 +430,7 @@ export function StepStart({
                 size="sm"
                 variant="outline"
               >
-                Retry
+                {uiText('retry_942087c')}
               </Button>
             </div>
           ) : failure === 'unreachable' ? (
@@ -394,8 +439,7 @@ export function StepStart({
               data-testid="suggestions-failure"
               role="status"
             >
-              Suggestions are unavailable — the optimizer service is offline. You can still build a
-              portfolio from scratch.
+              {uiText('suggestions_are_unavailable_the_optimizer_ser_332cd7b')}
             </p>
           ) : suggestions.length === 0 ? (
             <p className="py-3 text-muted-foreground text-xs">{emptyMessage}</p>
@@ -422,14 +466,16 @@ export function StepStart({
           >
             <span className="flex items-center gap-2">
               <PencilRulerIcon aria-hidden className="size-4 text-muted-foreground" />
-              <span className="font-semibold text-sm tracking-tight">Start from scratch</span>
+              <span className="font-semibold text-sm tracking-tight">
+                {uiText('start_from_scratch_a4822ff')}
+              </span>
             </span>
             <span className="text-xs text-muted-foreground">
-              Pick the ad sets or campaigns yourself, on any connected platform, then set the goal,
-              the plan and who applies the moves.
+              {uiText('pick_the_ad_sets_or_campaigns_yourself_on_any_0a7f4fd')}
             </span>
             <span className="inline-flex items-center gap-1 text-primary-ink text-xs">
-              Build it <ArrowRightIcon aria-hidden className="size-3.5" />
+              {uiText('build_it_5e38320')}
+              <ArrowRightIcon aria-hidden className="size-3.5" />
             </span>
           </button>
         </div>

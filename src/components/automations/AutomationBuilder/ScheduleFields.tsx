@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDownIcon } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import type { Control } from 'react-hook-form';
 import { useWatch } from 'react-hook-form';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -32,6 +33,12 @@ const WEEKDAYS = [
 const MONTH_DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
 
 export function ScheduleFields({ control }: { control: Control<AutomationBuilderFormValues> }) {
+  const uiText = useTranslations('automations');
+  const uiLocale = useLocale();
+  const weekday = new Intl.DateTimeFormat(uiLocale, {
+    weekday: 'short',
+    timeZone: 'UTC',
+  });
   const values = useWatch({ control });
   const scheduleKind = values.scheduleKind ?? 'daily';
 
@@ -59,18 +66,18 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
         name="scheduleKind"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Frequency</FormLabel>
+            <FormLabel>{uiText('frequency_16b6668')}</FormLabel>
             <Select value={field.value} onValueChange={field.onChange}>
               <FormControl>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="How often" />
+                  <SelectValue placeholder={uiText('how_often_7710cdf')} />
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
-                <SelectItem value="cron">Custom (cron)</SelectItem>
+                <SelectItem value="daily">{uiText('daily_b36c261')}</SelectItem>
+                <SelectItem value="weekly">{uiText('weekly_2975132')}</SelectItem>
+                <SelectItem value="monthly">{uiText('monthly_9b11f6b')}</SelectItem>
+                <SelectItem value="cron">{uiText('custom_cron_6dc53fd')}</SelectItem>
               </SelectContent>
             </Select>
             <FormMessage />
@@ -84,7 +91,7 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
           name="dayOfWeek"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Day of week</FormLabel>
+              <FormLabel>{uiText('day_of_week_a757b22')}</FormLabel>
               <FormControl>
                 <ToggleGroup
                   type="single"
@@ -99,10 +106,10 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
                     <ToggleGroupItem
                       key={day.value}
                       value={String(day.value)}
-                      aria-label={day.label}
+                      aria-label={weekday.format(new Date(Date.UTC(2024, 0, 7 + day.value)))}
                       className="px-2.5 text-xs"
                     >
-                      {day.label}
+                      {weekday.format(new Date(Date.UTC(2024, 0, 7 + day.value)))}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
@@ -119,7 +126,7 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
           name="dayOfMonth"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Day of month</FormLabel>
+              <FormLabel>{uiText('day_of_month_d15f472')}</FormLabel>
               <Select
                 value={String(field.value)}
                 onValueChange={(value) => field.onChange(Number(value))}
@@ -149,7 +156,7 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
           name="time"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Time</FormLabel>
+              <FormLabel>{uiText('time_33b9347')}</FormLabel>
               <FormControl>
                 <Input type="time" className="w-32" {...field} />
               </FormControl>
@@ -165,7 +172,7 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
           name="cronExpr"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Cron expression</FormLabel>
+              <FormLabel>{uiText('cron_expression_9e6e7de')}</FormLabel>
               <FormControl>
                 <Input placeholder="0 9 * * 1-5" className="font-mono" {...field} />
               </FormControl>
@@ -180,7 +187,7 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
         name="timezone"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Timezone</FormLabel>
+            <FormLabel>{uiText('timezone_4ceca1d')}</FormLabel>
             <FormControl>
               <TimezoneCombobox value={field.value} onChange={field.onChange} />
             </FormControl>
@@ -193,12 +200,11 @@ export function ScheduleFields({ control }: { control: Control<AutomationBuilder
         <Collapsible>
           <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             <ChevronDownIcon className="size-3.5" />
-            Advanced: switch to a raw cron expression
+            {uiText('advanced_switch_to_a_raw_cron_expression_b8aae0b')}
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-2">
             <p className="text-xs text-muted-foreground">
-              Pick “Custom (cron)” under Frequency to enter any 5-field cron expression (minimum
-              interval 15 minutes).
+              {uiText('pick_custom_cron_under_frequency_to_enter_any_bd7ee49')}
             </p>
           </CollapsibleContent>
         </Collapsible>

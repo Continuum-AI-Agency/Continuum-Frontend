@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
+
 // A quiet, muted marker of how old the snapshot data is, plus a rate-limited Refresh
 // control. The optimizer's snapshot cache can serve rows that are hours old (it once
 // served pre-deploy rows), and nothing on the surface said so — this chip makes the age
@@ -17,22 +25,32 @@ const HOUR_MS = 60 * 60 * 1_000;
 /** The human age label. Relative under an hour ("Data as of 12m ago"), an absolute
  *  24h clock at or beyond it ("Data as of 14:32"), and an explicit unknown when the
  *  read time never came through. Pure so the render test can pin `now`. */
-export function formatFreshness(fetchedAt: string | null, now: number = Date.now()): string {
-  if (!fetchedAt) return 'cached · age unknown';
+export function formatFreshness(
+  fetchedAt: string | null,
+  now: number = Date.now(),
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
+  if (!fetchedAt) return uiTranslate ? uiTranslate('freshnessUnknown') : 'cached · age unknown';
   const readAt = Date.parse(fetchedAt);
-  if (Number.isNaN(readAt)) return 'cached · age unknown';
+  if (Number.isNaN(readAt))
+    return uiTranslate ? uiTranslate('freshnessUnknown') : 'cached · age unknown';
 
   const ageMs = Math.max(0, now - readAt);
   if (ageMs < HOUR_MS) {
     const minutes = Math.floor(ageMs / 60_000);
-    return minutes < 1 ? 'Data as of just now' : `Data as of ${minutes}m ago`;
+    return uiTranslate
+      ? uiTranslate('freshnessRecent', { minutes })
+      : minutes < 1
+        ? 'Data as of just now'
+        : `Data as of ${minutes}m ago`;
   }
-  const clock = new Date(readAt).toLocaleTimeString('en-US', {
+  const clock = new Date(readAt).toLocaleTimeString(uiLocale, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   });
-  return `Data as of ${clock}`;
+  return uiTranslate ? uiTranslate('helper_876a1b994e3f', { v0: clock }) : `Data as of ${clock}`;
 }
 
 type DataFreshnessChipProps = {
@@ -48,12 +66,14 @@ export function DataFreshnessChip({
   canRefresh,
   isRefreshing = false,
 }: DataFreshnessChipProps) {
-  const label = formatFreshness(fetchedAt);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const label = formatFreshness(fetchedAt, undefined, uiText, uiLocale);
 
   const refreshControl = isRefreshing ? (
     <span className="inline-flex items-center gap-1">
       <RotateCw className="size-3 shrink-0 animate-spin" aria-hidden="true" />
-      Refreshing…
+      {uiText('refreshing_1c0def7')}
     </span>
   ) : (
     <button
@@ -69,7 +89,7 @@ export function DataFreshnessChip({
       )}
     >
       <RotateCw className="size-3 shrink-0" aria-hidden="true" />
-      Refresh
+      {uiText('refresh_0e91610')}
     </button>
   );
 
@@ -86,7 +106,7 @@ export function DataFreshnessChip({
         <Tooltip>
           <TooltipTrigger render={refreshControl} />
           <TooltipContent className="max-w-56 text-xs">
-            Refresh paused — Meta limits how often live data can reload. Try again shortly.
+            {uiText('refresh_paused_meta_limits_how_often_live_dat_e4fde6c')}
           </TooltipContent>
         </Tooltip>
       ) : (

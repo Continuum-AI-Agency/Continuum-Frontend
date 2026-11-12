@@ -5,9 +5,10 @@ import {
   type HeadlessBatchStatus,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import type { ParsedRunEvent } from '@/hooks/useRunEventStream';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -47,7 +48,13 @@ function batch(batchId: string, draftIds: string[]): HeadlessBatchStatus {
     maxUsd: 15 * items.length,
     holdUsd: 9 * items.length,
     items,
-    counts: { queued: 0, running: items.length, needs_cast_approval: 0, ready: 0, failed: 0 },
+    counts: {
+      queued: 0,
+      running: items.length,
+      needs_cast_approval: 0,
+      ready: 0,
+      failed: 0,
+    },
     cast: { needed: false, drafts: [], approved: true },
     done: false,
   };
@@ -66,12 +73,21 @@ const requestMock = mock(async (args: { path: string }) => {
   if (args.path.startsWith('/api/organic/agent/generations')) {
     return {
       summaries: [],
-      window: { windowMinutes: 60, made: 0, completed: 0, failed: 0, running: 0 },
+      window: {
+        windowMinutes: 60,
+        made: 0,
+        completed: 0,
+        failed: 0,
+        running: 0,
+      },
     };
   }
   throw new Error(`unexpected request ${args.path}`);
 });
-mock.module('@/lib/api/http', () => ({ request: requestMock, http: { request: requestMock } }));
+mock.module('@/lib/api/http', () => ({
+  request: requestMock,
+  http: { request: requestMock },
+}));
 
 // The run's durable log, replayed: only this test's run is faked, every other run is real.
 const realRunEvents = await import('@/hooks/useRunEventStream');
@@ -135,7 +151,9 @@ describe('BulkRunPanel', () => {
     answers = [notMadeYet, planBatch];
     renderPanel();
 
-    await waitFor(() => expect(shownBatchIds()).toEqual([PLAN_BATCH]), { timeout: 4_000 });
+    await waitFor(() => expect(shownBatchIds()).toEqual([PLAN_BATCH]), {
+      timeout: 4_000,
+    });
     expect(lookups()).toEqual([
       `${HEADLESS_BATCH_STATUS_ROUTE}?${new URLSearchParams({ brandId: BRAND, planId: PLAN })}`,
       `${HEADLESS_BATCH_STATUS_ROUTE}?${new URLSearchParams({ brandId: BRAND, planId: PLAN })}`,

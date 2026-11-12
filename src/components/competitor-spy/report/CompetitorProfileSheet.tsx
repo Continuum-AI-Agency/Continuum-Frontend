@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // One competitor's profile: header stats, hook/angle bar rows from their
 // angle-map rows, and their live ad snapshots.
 
@@ -25,6 +27,8 @@ export function CompetitorProfileSheet({
   competitor: CompetitorSummary | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const uiText = useTranslations('competitor');
+  const uiLocale = useLocale();
   return (
     <Sheet onOpenChange={onOpenChange} open={Boolean(competitor)}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
@@ -33,19 +37,32 @@ export function CompetitorProfileSheet({
             <SheetHeader>
               <SheetTitle>{competitor.name}</SheetTitle>
               <SheetDescription>
-                What this competitor keeps scaling in the Meta Ad Library.
+                {uiText('what_this_competitor_keeps_scaling_in_the_met_ef0066f')}
               </SheetDescription>
             </SheetHeader>
 
             <div className="space-y-5 px-4 pb-6">
               <MetricStrip
                 items={[
-                  { label: 'Ads live', value: String(competitor.adsLive) },
+                  {
+                    label: uiText('ads_live_9dd74f2'),
+                    value: competitor.adsLive.toLocaleString(uiLocale),
+                  },
                   ...(competitor.topHook
-                    ? [{ label: 'Top hook', value: humanize(competitor.topHook) }]
+                    ? [
+                        {
+                          label: uiText('top_hook_b8a3d72'),
+                          value: humanize(competitor.topHook),
+                        },
+                      ]
                     : []),
                   ...(competitor.topAngle
-                    ? [{ label: 'Top angle', value: humanize(competitor.topAngle) }]
+                    ? [
+                        {
+                          label: uiText('top_angle_9753b83'),
+                          value: humanize(competitor.topAngle),
+                        },
+                      ]
                     : []),
                 ]}
               />
@@ -53,13 +70,17 @@ export function CompetitorProfileSheet({
               <DimensionBars
                 competitorRows={competitor.rows}
                 dimension="hook_archetype"
-                title="Hooks"
+                title={uiText('hooks_d412a06')}
               />
-              <DimensionBars competitorRows={competitor.rows} dimension="angle" title="Angles" />
+              <DimensionBars
+                competitorRows={competitor.rows}
+                dimension="angle"
+                title={uiText('angles_80e7eab')}
+              />
 
               <section className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Live ads
+                  {uiText('live_ads_bbd70de')}
                 </h3>
                 <AdSnapshotGrid
                   brandId={brandId}

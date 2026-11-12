@@ -5,10 +5,12 @@ import type {
   PresentationDocument,
   PresentationObject,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { cn } from '@/lib/utils';
 import type { PresentationEngine } from './presentationEngine';
 
@@ -31,6 +33,10 @@ export function PresentationCanvas({
   disabled?: boolean;
   thumbnail?: boolean;
 }) {
+  const translateUi = useUiTranslations('forge');
+
+  const uiErrorText = useUiErrorMessage();
+
   const [visible, setVisible] = useState(!thumbnail);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +87,12 @@ export function PresentationCanvas({
     setRendering(true);
     setError(null);
     void engine
-      .process({ operation: 'render', document, slideId, scale: thumbnail ? 0.2 : 1 })
+      .process({
+        operation: 'render',
+        document,
+        slideId,
+        scale: thumbnail ? 0.2 : 1,
+      })
       .then((result) => {
         if (cancelled) return;
         if (!result.ok || !result.artifact || result.artifact.mimeType !== 'image/png')
@@ -89,8 +100,7 @@ export function PresentationCanvas({
         setImage(`data:image/png;base64,${result.artifact.bytesBase64}`);
       })
       .catch((reason: unknown) => {
-        if (!cancelled)
-          setError(reason instanceof Error ? reason.message : 'The slide could not be rendered.');
+        if (!cancelled) setError(uiErrorText(reason));
       })
       .finally(() => {
         if (!cancelled) setRendering(false);
@@ -98,16 +108,17 @@ export function PresentationCanvas({
     return () => {
       cancelled = true;
     };
-  }, [document, slideId, engine, thumbnail, refresh, visible]);
+  }, [document, slideId, engine, thumbnail, refresh, visible, uiErrorText]);
 
   if (error)
     return (
       <Alert variant="destructive">
-        <AlertTitle>Slide preview unavailable</AlertTitle>
+        <AlertTitle>{translateUi('slide_preview_unavailable_dbfe5b50')}</AlertTitle>
         <AlertDescription>
           {error}
           <Button size="sm" variant="outline" onClick={() => setRefresh((value) => value + 1)}>
-            Retry preview
+            {' '}
+            {translateUi('retry_preview_ceba3527')}{' '}
           </Button>
         </AlertDescription>
       </Alert>
@@ -124,7 +135,7 @@ export function PresentationCanvas({
         // biome-ignore lint/performance/noImgElement: WASM produces the PNG locally; there is no remote image for Next to optimize.
         <img
           src={image}
-          alt={thumbnail ? '' : slide?.title || 'Slide preview'}
+          alt={thumbnail ? '' : slide?.title || translateUi('slide_preview_310b491e')}
           className="size-full object-contain"
           draggable={false}
         />
@@ -138,7 +149,9 @@ export function PresentationCanvas({
             key={object.id}
             variant="ghost"
             size="icon"
-            aria-label={`Select ${object.name || object.kind}`}
+            aria-label={translateUi('select_value0_b4b262ae', {
+              value0: String(object.name || object.kind),
+            })}
             aria-pressed={selectedIds.includes(object.id)}
             disabled={disabled || rendering}
             className={cn(
@@ -239,7 +252,8 @@ export function PresentationCanvas({
           role="status"
           className="absolute bottom-2 left-2 rounded bg-background px-2 py-1 text-xs"
         >
-          Updating preview…
+          {' '}
+          {translateUi('updating_preview_67e600e7')}{' '}
         </span>
       ) : null}
     </div>

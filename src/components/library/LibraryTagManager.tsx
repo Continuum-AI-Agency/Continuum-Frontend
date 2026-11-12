@@ -1,6 +1,7 @@
 'use client';
 
 import { Tags } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +37,8 @@ export function LibraryTagManager({
   options: readonly LibraryTagOption[];
   onCompleted: (sourceTags: string[], targetTag: string) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'rename' | 'merge'>('rename');
   const [sourceTag, setSourceTag] = useState('');
@@ -72,7 +75,9 @@ export function LibraryTagManager({
               targetTag: normalizedTarget,
             });
       toast.success(
-        `${result.updatedAssetCount} asset${result.updatedAssetCount === 1 ? '' : 's'} updated`,
+        translateUi('value0_asset_value1_updated_4be6df52', {
+          count: Number(result.updatedAssetCount),
+        }),
       );
       onCompleted(sourceTags, result.canonicalTag);
       setSourceTag('');
@@ -80,7 +85,9 @@ export function LibraryTagManager({
       setTargetTag('');
       setOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Updating tags failed');
+      toast.error(
+        error instanceof Error ? error.message : translateUi('updating_tags_failed_65227219'),
+      );
     } finally {
       setBusy(false);
     }
@@ -91,21 +98,20 @@ export function LibraryTagManager({
       <DialogTrigger
         render={
           <Button type="button" size="sm" variant="ghost" className="h-8 text-muted-foreground">
-            <Tags className="size-3.5" />
-            Manage tags
+            <Tags className="size-3.5" /> {translateUi('manage_tags_0b4ee559')}{' '}
           </Button>
         }
       />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Manage tags</DialogTitle>
+          <DialogTitle>{translateUi('manage_tags_0b4ee559')}</DialogTitle>
           <DialogDescription>
-            Rename one tag or merge duplicates across every asset in this brand. System tags stay
-            protected.
+            {' '}
+            {translateUi('rename_one_tag_or_merge_duplicates__22cd061c')}{' '}
           </DialogDescription>
         </DialogHeader>
         <fieldset className="flex gap-1 rounded-lg bg-muted p-1">
-          <legend className="sr-only">Tag operation</legend>
+          <legend className="sr-only">{translateUi('tag_operation_402af857')}</legend>
           {(['rename', 'merge'] as const).map((value) => (
             <button
               key={value}
@@ -122,8 +128,8 @@ export function LibraryTagManager({
         </fieldset>
         {mode === 'rename' ? (
           <Select value={sourceTag} onValueChange={setSourceTag}>
-            <SelectTrigger aria-label="Tag to rename">
-              <SelectValue placeholder="Choose a tag" />
+            <SelectTrigger aria-label={translateUi('tag_to_rename_c0572d76')}>
+              <SelectValue placeholder={translateUi('choose_a_tag_56211827')} />
             </SelectTrigger>
             <SelectContent>
               {alphabetical.map(({ tag, count }) => (
@@ -136,7 +142,8 @@ export function LibraryTagManager({
         ) : (
           <fieldset className="max-h-48 overflow-y-auto rounded-lg border border-border p-2">
             <legend className="px-1 text-xs font-medium text-muted-foreground">
-              Tags to merge
+              {' '}
+              {translateUi('tags_to_merge_8a524354')}{' '}
             </legend>
             {alphabetical.map(({ tag, count }) => (
               <label key={tag} className="flex min-h-8 items-center gap-2 rounded px-1 text-sm">
@@ -160,16 +167,29 @@ export function LibraryTagManager({
         <Input
           value={targetTag}
           onChange={(event) => setTargetTag(event.target.value)}
-          placeholder={mode === 'rename' ? 'New tag name' : 'Merge into…'}
-          aria-label={mode === 'rename' ? 'New tag name' : 'Target tag'}
+          placeholder={
+            mode === 'rename'
+              ? translateUi('new_tag_name_4f8db033')
+              : translateUi('merge_into_2eb1fd03')
+          }
+          aria-label={
+            mode === 'rename'
+              ? translateUi('new_tag_name_4f8db033')
+              : translateUi('target_tag_50da6cab')
+          }
           maxLength={80}
         />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {' '}
+            {translateUi('cancel_19766ed6')}{' '}
           </Button>
           <Button type="button" disabled={!canSubmit} onClick={() => void submit()}>
-            {busy ? 'Updating…' : mode === 'rename' ? 'Rename tag' : 'Merge tags'}
+            {busy
+              ? translateUi('updating_dfe40efe')
+              : mode === 'rename'
+                ? translateUi('rename_tag_40ab1c37')
+                : translateUi('merge_tags_c617353a')}
           </Button>
         </div>
       </DialogContent>

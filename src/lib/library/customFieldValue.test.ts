@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { type CustomField, type CustomFieldType, customFieldSchema } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import es from '../../../messages/library/es.json';
 import { MAX_FIELD_TEXT_LENGTH } from './customFields';
 import {
   formatCustomFieldValue,
@@ -111,7 +113,10 @@ describe('formatCustomFieldValue', () => {
 
 describe('validateCustomFieldValue', () => {
   it('accepts a known single_select option id', () => {
-    expect(validateCustomFieldValue(singleSelect, 'r1')).toEqual({ ok: true, value: 'r1' });
+    expect(validateCustomFieldValue(singleSelect, 'r1')).toEqual({
+      ok: true,
+      value: 'r1',
+    });
   });
 
   it('rejects a single_select option the field does not define', () => {
@@ -135,14 +140,29 @@ describe('validateCustomFieldValue', () => {
   });
 
   it('normalizes every empty edit to null so "unset" has one representation', () => {
-    expect(validateCustomFieldValue(multiSelect, [])).toEqual({ ok: true, value: null });
-    expect(validateCustomFieldValue(text, '   ')).toEqual({ ok: true, value: null });
-    expect(validateCustomFieldValue(date, '')).toEqual({ ok: true, value: null });
-    expect(validateCustomFieldValue(singleSelect, null)).toEqual({ ok: true, value: null });
+    expect(validateCustomFieldValue(multiSelect, [])).toEqual({
+      ok: true,
+      value: null,
+    });
+    expect(validateCustomFieldValue(text, '   ')).toEqual({
+      ok: true,
+      value: null,
+    });
+    expect(validateCustomFieldValue(date, '')).toEqual({
+      ok: true,
+      value: null,
+    });
+    expect(validateCustomFieldValue(singleSelect, null)).toEqual({
+      ok: true,
+      value: null,
+    });
   });
 
   it('trims a text value and rejects one past the length guard', () => {
-    expect(validateCustomFieldValue(text, ' hello ')).toEqual({ ok: true, value: 'hello' });
+    expect(validateCustomFieldValue(text, ' hello ')).toEqual({
+      ok: true,
+      value: 'hello',
+    });
     expect(validateCustomFieldValue(text, 'x'.repeat(MAX_FIELD_TEXT_LENGTH + 1)).ok).toBe(false);
   });
 
@@ -153,7 +173,10 @@ describe('validateCustomFieldValue', () => {
   });
 
   it('accepts an ISO calendar day and rejects a date that does not exist', () => {
-    expect(validateCustomFieldValue(date, '2026-07-12')).toEqual({ ok: true, value: '2026-07-12' });
+    expect(validateCustomFieldValue(date, '2026-07-12')).toEqual({
+      ok: true,
+      value: '2026-07-12',
+    });
     expect(validateCustomFieldValue(date, '2026-02-31').ok).toBe(false);
     expect(validateCustomFieldValue(date, '07/12/2026').ok).toBe(false);
   });
@@ -182,9 +205,15 @@ describe('the six Wave-1 field types', () => {
   });
 
   it('validates each new type against its declared shape', () => {
-    expect(validateCustomFieldValue(status, 'done')).toEqual({ ok: true, value: 'done' });
+    expect(validateCustomFieldValue(status, 'done')).toEqual({
+      ok: true,
+      value: 'done',
+    });
     expect(validateCustomFieldValue(status, 'nope').ok).toBe(false);
-    expect(validateCustomFieldValue(makeField('number'), 3.5)).toEqual({ ok: true, value: 3.5 });
+    expect(validateCustomFieldValue(makeField('number'), 3.5)).toEqual({
+      ok: true,
+      value: 3.5,
+    });
     expect(validateCustomFieldValue(makeField('number'), '3').ok).toBe(false);
     expect(validateCustomFieldValue(makeField('checkbox'), false)).toEqual({
       ok: true,
@@ -192,7 +221,10 @@ describe('the six Wave-1 field types', () => {
     });
     expect(validateCustomFieldValue(rating, 3)).toEqual({ ok: true, value: 3 });
     expect(validateCustomFieldValue(rating, 4).ok).toBe(false);
-    expect(validateCustomFieldValue(rating, 0)).toEqual({ ok: true, value: null });
+    expect(validateCustomFieldValue(rating, 0)).toEqual({
+      ok: true,
+      value: null,
+    });
     expect(validateCustomFieldValue(makeField('user'), member)).toEqual({
       ok: true,
       value: member,
@@ -215,4 +247,27 @@ describe('formatCustomFieldValue — user_multi', () => {
     );
     expect(formatCustomFieldValue(people, null)).toBe('');
   });
+});
+
+it('localizes validation and former-member labels while retaining authored names and raw diagnostics', () => {
+  const translate = createTranslator({
+    locale: 'es',
+    messages: { library: es },
+    namespace: 'library',
+  });
+  const display = { locale: 'es', translate };
+  const checked = validateCustomFieldValue(
+    { ...singleSelect, name: 'English field' },
+    'missing',
+    display,
+  );
+  expect(checked.ok).toBe(false);
+  if (!checked.ok) {
+    expect(checked.error).toContain('English field');
+    expect(checked.error).not.toContain('not an option');
+    expect(checked.diagnosticReason).toContain('not an option');
+  }
+  expect(
+    formatCustomFieldValue(makeField('user_multi'), ['absent'], undefined, display),
+  ).not.toContain('Former member');
 });

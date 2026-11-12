@@ -1,4 +1,5 @@
 'use client';
+
 import type {
   CreativeOutputManifest,
   CycleItemRow,
@@ -6,6 +7,7 @@ import type {
   PlatformId,
   PortfolioConfig,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Data layer for the Paid Media Optimizer surface. Every authenticated RPC and
 // Edge read is owned by React Query: the cache has deliberate freshness windows,
@@ -447,7 +449,9 @@ export const OPTIMIZER_FEED_PAGE_SIZE = 50;
  *  supabase/functions/optimizer-status/actions.test.ts). Parsing with the un-widened enum
  *  would reject the WHOLE page over one conversion, so the feed accepts any op string and
  *  the renderer labels an unrecognised one by its raw value. */
-const OptimizerActionFeedRowSchema = OptimizerActionRowSchema.extend({ op: z.string() });
+const OptimizerActionFeedRowSchema = OptimizerActionRowSchema.extend({
+  op: z.string(),
+});
 export type OptimizerActionFeedRow = z.infer<typeof OptimizerActionFeedRowSchema>;
 
 const OptimizerActionFeedPageSchema = z.object({
@@ -509,7 +513,10 @@ async function fetchActionsPage(
   }
   // The actions view DOES serve its cursor (and owns the tie handling), so it is taken
   // as given rather than recomputed.
-  return { rows: parsed.data.actions, nextBefore: parsed.data.next_before ?? null };
+  return {
+    rows: parsed.data.actions,
+    nextBefore: parsed.data.next_before ?? null,
+  };
 }
 
 async function fetchSuggestions(
@@ -552,7 +559,13 @@ async function fetchAccountSnapshots(
 
 async function fetchAdsetInventory(brandId: string, accountId: string, forceRefresh = false) {
   const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
-    body: { platform: 'meta', scope: 'adset_inventory', brandId, accountId, forceRefresh },
+    body: {
+      platform: 'meta',
+      scope: 'adset_inventory',
+      brandId,
+      accountId,
+      forceRefresh,
+    },
   });
   if (error) throw new Error('paid-media-metrics adset_inventory unreachable');
   return OptimizerAdsetInventoryEnvelopeSchema.parse(data ?? {});
@@ -599,7 +612,13 @@ export async function fetchAdsetAds(
   adsetId: string,
 ): Promise<AdsetAd[]> {
   const { data, error } = await getClient().functions.invoke('paid-media-metrics', {
-    body: { platform: 'meta', scope: 'adset_ads', brandId, accountId, adsetId },
+    body: {
+      platform: 'meta',
+      scope: 'adset_ads',
+      brandId,
+      accountId,
+      adsetId,
+    },
   });
   if (error) throw new Error('paid-media-metrics adset_ads unreachable');
   const parsed = AdsetAdsResponseSchema.safeParse(data);
@@ -880,7 +899,9 @@ async function runCycle(
   if (run.runId === null) {
     // The service's invariant is runId === null ⟺ skipped. A null runId with no reason is a
     // shape we do not understand, and guessing "it worked" would be a lie.
-    console.error('optimizer-run returned runId:null with no skip reason', { run });
+    console.error('optimizer-run returned runId:null with no skip reason', {
+      run,
+    });
     return { status: 'unavailable', kind: 'malformed' };
   }
   if (runIdOnScreen && run.runId === runIdOnScreen) {
@@ -923,7 +944,10 @@ async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboRespons
 
 /** The FE input to a cycle preview — the service-shaped engine inputs plus the brand +
  *  account the edge scopes the request to. */
-export type CyclePreviewInput = CyclePreviewRequest & { brandId: string; accountId: string };
+export type CyclePreviewInput = CyclePreviewRequest & {
+  brandId: string;
+  accountId: string;
+};
 
 /** The three honest outcomes of an as-if-converted preview. `unavailable` is the one that
  *  matters: the optimizer-cycle-preview edge (or the service behind it) is not deployed yet
@@ -1176,7 +1200,10 @@ async function archivePortfolio(portfolioId: string): Promise<void> {
  *  active portfolio already owns this name) as a clean, actionable message. */
 async function restorePortfolio(input: { portfolio_id: string; name: string }): Promise<void> {
   try {
-    await updatePortfolio({ portfolio_id: input.portfolio_id, patch: { status: 'active' } });
+    await updatePortfolio({
+      portfolio_id: input.portfolio_id,
+      patch: { status: 'active' },
+    });
   } catch (err) {
     if (err instanceof OptimizerRpcError && err.code === '23505') {
       throw new OptimizerRpcError(
@@ -1976,15 +2003,28 @@ async function implementFlashCreative(input: ImplementFlashCreativeInput): Promi
 export function useFlashCreativeMutations(brandId: string) {
   const queryClient = useQueryClient();
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.creativeSwapJobs(brandId) });
+    void queryClient.invalidateQueries({
+      queryKey: optimizerQueryKeys.creativeSwapJobs(brandId),
+    });
     void queryClient.invalidateQueries({ queryKey: ['optimizer'] });
   };
-  const request = useMutation({ mutationFn: requestFlashCreatives, onSuccess: refresh });
-  const generate = useMutation({ mutationFn: requestCreativeGeneration, onSuccess: refresh });
-  const implement = useMutation({ mutationFn: implementFlashCreative, onSuccess: refresh });
+  const request = useMutation({
+    mutationFn: requestFlashCreatives,
+    onSuccess: refresh,
+  });
+  const generate = useMutation({
+    mutationFn: requestCreativeGeneration,
+    onSuccess: refresh,
+  });
+  const implement = useMutation({
+    mutationFn: implementFlashCreative,
+    onSuccess: refresh,
+  });
   /** After a pipeline is published on the brand's behalf, the catalogue is stale. */
   const refreshPipelines = () => {
-    void queryClient.invalidateQueries({ queryKey: pipelineCapabilitiesQueryKey(brandId) });
+    void queryClient.invalidateQueries({
+      queryKey: pipelineCapabilitiesQueryKey(brandId),
+    });
   };
   const retry = useMutation({
     mutationFn: async (jobId: string) => {
@@ -2054,7 +2094,9 @@ async function rpcVoid(name: string, args: Record<string, unknown>, what: string
 export function useAudienceProposalMutations(brandId: string) {
   const queryClient = useQueryClient();
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.audienceProposals(brandId) });
+    void queryClient.invalidateQueries({
+      queryKey: optimizerQueryKeys.audienceProposals(brandId),
+    });
   };
   const request = useMutation({
     mutationFn: async (recommendationId: string) => {
@@ -2134,7 +2176,9 @@ export function useHeroBriefWatch(portfolioId: string | null, waiting: boolean) 
         clearInterval(timer);
         return;
       }
-      void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.performance(portfolioId) });
+      void queryClient.invalidateQueries({
+        queryKey: optimizerQueryKeys.performance(portfolioId),
+      });
     }, 30_000);
     return () => clearInterval(timer);
   }, [portfolioId, waiting, queryClient]);
@@ -2437,20 +2481,25 @@ export function useCurrentMoves(
   adAccountId: string,
   items: CycleItemRow[],
 ): CurrentMoves {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const enrolled = useOptimizerEnrolledAdsets(portfolio.id);
   const rosterIds = useMemo(
     () => (enrolled.isSuccess ? new Set(enrolled.data.map((row) => row.adset_id)) : null),
     [enrolled.isSuccess, enrolled.data],
   );
   const unnamed = useMemo(
-    () => currentMoves(items, portfolio, rosterIds),
-    [items, portfolio, rosterIds],
+    () => currentMoves(items, portfolio, rosterIds, undefined, uiText, uiLocale),
+    [items, portfolio, rosterIds, uiText, uiLocale],
   );
   const leftRoster = unnamed.notes.size > 0;
   const enrollments = useOptimizerAccountEnrollments(leftRoster ? brandId : null, adAccountId);
   return useMemo(
-    () => (leftRoster ? currentMoves(items, portfolio, rosterIds, enrollments.data) : unnamed),
-    [leftRoster, items, portfolio, rosterIds, enrollments.data, unnamed],
+    () =>
+      leftRoster
+        ? currentMoves(items, portfolio, rosterIds, enrollments.data, uiText, uiLocale)
+        : unnamed,
+    [leftRoster, items, portfolio, rosterIds, enrollments.data, unnamed, uiText, uiLocale],
   );
 }
 
@@ -2859,7 +2908,9 @@ export function useConvertCbo(_brandId: string) {
     mutationFn: convertCbo,
     onSuccess: (data) => {
       if (data?.ok && data.dryRun !== true) {
-        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.root,
+        });
       }
     },
   });
@@ -2886,7 +2937,9 @@ export function useApplyRun() {
         void queryClient.invalidateQueries({
           queryKey: optimizerQueryKeys.performance(request.portfolio_id),
         });
-        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.root,
+        });
       }
     },
   });
@@ -2904,7 +2957,9 @@ export function useRevertApply() {
         void queryClient.invalidateQueries({
           queryKey: optimizerQueryKeys.performance(request.portfolio_id),
         });
-        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.root,
+        });
       }
     },
   });
@@ -2920,7 +2975,9 @@ export function useApplyApproved() {
         void queryClient.invalidateQueries({
           queryKey: optimizerQueryKeys.performance(request.portfolio_id),
         });
-        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.root,
+        });
       }
     },
   });
@@ -2994,7 +3051,9 @@ export function useApplyOptimizerActions() {
     mutationFn: applyOptimizerActions,
     onSuccess: (data) => {
       if (data && data.dryRun === false) {
-        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.root,
+        });
       }
     },
   });
@@ -3025,7 +3084,9 @@ export function useRevertOptimizerAction() {
     mutationFn: revertOptimizerAction,
     onSuccess: (data) => {
       if (data?.ok && data.dryRun === false) {
-        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.root,
+        });
       }
     },
   });
@@ -3044,7 +3105,9 @@ export function useApplyAdsetStatus() {
         void queryClient.invalidateQueries({
           queryKey: optimizerQueryKeys.performance(request.portfolio_id),
         });
-        void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.root });
+        void queryClient.invalidateQueries({
+          queryKey: optimizerQueryKeys.root,
+        });
       }
     },
   });

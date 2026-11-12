@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations, useLocale as useNumberLocale } from 'next-intl';
 
 // The goal editor in the Goal tile's expanded module. Each card shows one goal's figure for the
 // month so far; a small pencil opens a popover to rename it, measure something else, make it the
@@ -42,6 +43,8 @@ function ObjectiveEditor({
   objectives: HomeObjective[];
   onChange: (next: HomeObjective[]) => void;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState(objective.label);
 
@@ -54,7 +57,9 @@ function ObjectiveEditor({
         render={
           <button
             type="button"
-            aria-label={`Edit goal ${objective.label}`}
+            aria-label={betaUiText('beta_e903550cb77e', {
+              value0: String(objective.label),
+            })}
             className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
           />
         }
@@ -75,7 +80,7 @@ function ObjectiveEditor({
             htmlFor={`goal-name-${objective.id}`}
             className="text-2xs uppercase tracking-wide text-muted-foreground"
           >
-            Name
+            {betaUiText('beta_dcd1d5223f73')}
           </label>
           <Input
             id={`goal-name-${objective.id}`}
@@ -86,7 +91,9 @@ function ObjectiveEditor({
           />
         </form>
         <div className="space-y-1">
-          <span className="text-2xs uppercase tracking-wide text-muted-foreground">Measures</span>
+          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+            {betaUiText('beta_aabaa8ff445c')}
+          </span>
           <div className="flex flex-wrap gap-1">
             {METRICS.map((metric) => (
               <button
@@ -115,7 +122,7 @@ function ObjectiveEditor({
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-border pt-2">
           {objective.role === 'primary' ? (
-            <span className="text-xs text-muted-foreground">Main goal</span>
+            <span className="text-xs text-muted-foreground">{betaUiText('beta_d846c4d0c4e5')}</span>
           ) : (
             <Button
               size="sm"
@@ -126,7 +133,7 @@ function ObjectiveEditor({
                 setOpen(false);
               }}
             >
-              <Star className="size-3" /> Make main goal
+              <Star className="size-3" /> {betaUiText('beta_4ea05f90f409')}
             </Button>
           )}
           {objectives.length > 1 ? (
@@ -144,7 +151,7 @@ function ObjectiveEditor({
                 setOpen(false);
               }}
             >
-              Remove
+              {betaUiText('beta_c3812fc4acb8')}
             </Button>
           ) : null}
         </div>
@@ -168,6 +175,10 @@ function ObjectiveTile({
   editable: boolean;
   unavailableNote: string;
 }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const { objective } = figure;
   const isPrimary = objective.role === 'primary';
   const cost = figure.cost;
@@ -200,7 +211,7 @@ function ObjectiveTile({
               isPrimary ? 'text-3xl' : 'text-2xl',
             )}
           >
-            {formatFigure(figure.value, figure.unit, currency)}
+            {formatFigure(figure.value, figure.unit, currency, numberLocale)}
           </span>
           <div className="flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground">
             {cost ? (
@@ -208,12 +219,12 @@ function ObjectiveTile({
                 <span>{costLabelFor(objective, cost.label)}</span>
                 <span className="font-mono tabular-nums text-foreground">
                   {cost.kind === 'ratio'
-                    ? formatRatio(cost.value)
-                    : formatMoney(cost.value, currency)}
+                    ? formatRatio(cost.value, numberLocale)
+                    : formatMoney(cost.value, currency, numberLocale)}
                 </span>
               </>
             ) : (
-              <span>Month to date</span>
+              <span>{betaUiText('beta_baa1edbd05c5')}</span>
             )}
           </div>
           {figure.series.length > 1 ? (
@@ -222,13 +233,15 @@ function ObjectiveTile({
               width={160}
               height={24}
               className="mt-1 w-full"
-              label={`${objective.label}, daily`}
+              label={betaUiText('beta_a27ae4a67ee8', {
+                value0: String(objective.label),
+              })}
             />
           ) : null}
         </>
       ) : (
         <p className="text-xs text-muted-foreground">
-          {figure.unreported ? 'Google Ads doesn’t count this result.' : unavailableNote}
+          {figure.unreported ? betaUiText('beta_3daef3fbd697') : unavailableNote}
         </p>
       )}
     </div>
@@ -252,6 +265,8 @@ export function ObjectiveStrip({
   /** What a goal with no figure says (no month-to-date read yet, or none counted). */
   unavailableNote?: string;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const used = new Set(objectives.map((objective) => objective.metric));
   const nextMetric: HomeObjectiveMetric | undefined = METRICS.find((metric) => !used.has(metric));
 
@@ -284,7 +299,7 @@ export function ObjectiveStrip({
           }
           className="flex min-h-24 items-center justify-center gap-1 rounded-lg border border-dashed border-border text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
         >
-          <Plus className="size-3.5" /> Add goal
+          <Plus className="size-3.5" /> {betaUiText('beta_7b9db6a36f83')}
         </button>
       ) : null}
     </div>

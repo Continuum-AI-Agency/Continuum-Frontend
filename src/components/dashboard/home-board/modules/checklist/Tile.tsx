@@ -1,4 +1,8 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+} from 'next-intl';
 
 // The client checklist (recommend mode, where the client applies the changes): how many of the
 // Optimizer's recommendations are open for the client, and in which portfolios. One read —
@@ -23,6 +27,10 @@ const Module = lazy(() => import('./Module'));
 const ROWS_AT_SIZE = { l: 4, m: 2, s: 0 } as const;
 
 export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const { hasAnswer, isError, refetch, brandPortfolios } = portfolios;
   const view = useMemo(
@@ -34,7 +42,7 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
     return isError ? (
       <HomeTileFrame state="error" tile={tile}>
         <TileReadError onRetry={() => void refetch()}>
-          The Optimizer's portfolios could not be read, so this tile cannot say what is open.
+          {betaUiText('beta_13404a7bb6a7')}
         </TileReadError>
       </HomeTileFrame>
     ) : (
@@ -49,7 +57,7 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
       <HomeTileFrame state="missing" tile={tile}>
         <TileMissing>{CHECKLIST_MISSING}</TileMissing>
         <Link className={cn(ROW_LINK, 'mt-2 inline-block text-xs')} href={OPTIMIZER_LINKS.create}>
-          Create a portfolio
+          {betaUiText('beta_2283fad67e39')}
         </Link>
       </HomeTileFrame>
     );
@@ -60,7 +68,7 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
 
   return (
     <HomeTileFrame
-      badge={`${view.open} open`}
+      badge={betaUiText('beta_f0eb8687c3fa', { value0: String(view.open) })}
       expanded={
         <Module
           adAccounts={ctx.adAccounts}
@@ -69,7 +77,7 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
           portfolios={view.portfolios}
         />
       }
-      expandedDescription="What the Optimizer recommends for the client to apply, to export or send."
+      expandedDescription={extraUiText('home_70725a414adb')}
       state="ready"
       tile={tile}
     >
@@ -82,10 +90,10 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
           >
             {view.open}
           </span>
-          <span className="text-muted-foreground text-xs">open for the client</span>
+          <span className="text-muted-foreground text-xs">{betaUiText('beta_2aa6f2aef4e0')}</span>
         </p>
         {view.open === 0 ? (
-          <p className="text-muted-foreground text-xs">Nothing is open for the client right now.</p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_1924fc9ca576')}</p>
         ) : rows.length > 0 ? (
           <ul className={ROW_LINK_LIST} data-testid="home-tile-checklist-portfolios">
             {rows.map((portfolio) => (
@@ -100,14 +108,14 @@ export default function ChecklistTile({ ctx, tile }: HomeTileProps) {
                   {portfolio.name}
                 </Link>
                 <span className="shrink-0 text-muted-foreground tabular-nums">
-                  {portfolio.open} open
+                  {portfolio.open} {betaUiText('beta_2348f9987442')}
                 </span>
               </li>
             ))}
           </ul>
         ) : first ? (
           <p className="truncate text-muted-foreground text-xs">
-            {first.name}: {first.open} open
+            {first.name}: {first.open} {betaUiText('beta_2348f9987442')}
           </p>
         ) : null}
       </div>

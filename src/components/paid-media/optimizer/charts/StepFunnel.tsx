@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // A conversion funnel scaled by RATE, not by volume.
 //
 // The volume-scaled funnel this replaces was unreadable on any real ad account, because a
@@ -19,26 +24,63 @@
 // and a 4-stage purchase funnel both fit exactly.
 
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { intFmt } from '@/components/charts/chart-formatters';
+import { useChartFormatters } from '@/components/charts/use-chart-formatters';
+import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 import { ChartEmpty } from './ChartStates';
 import { buildConversionFunnel, type FunnelStageOut, type FunnelWindow } from './vizData';
+
+const FUNNEL_LABEL_KEYS = {
+  Impressions: 'optimizer_metricImpressions',
+  Clicks: 'optimizer_metricClicks',
+  'Add to cart': 'funnel_add_cart',
+  Purchases: 'optimizer_metricPurchases',
+  Leads: 'optimizer_metricLeads',
+  'Sign-ups': 'optimizer_metricSignUps',
+  Installs: 'optimizer_metricInstalls',
+  'Landing views': 'funnel_landing_views',
+  Reach: 'funnel_reach',
+  Conversations: 'optimizer_metricConversations',
+  'Link clicks': 'optimizer_metricLinkClicks',
+  ThruPlays: 'optimizer_metricThruPlays',
+  Engagements: 'optimizer_metricEngagements',
+} as const;
 
 type StepFunnelProps = {
   window: FunnelWindow | null | undefined;
   objective: string | null | undefined;
 };
 
-const PCT = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 });
-
 /** Sub-1% rates round to "0%" and read as "nothing converted", which is wrong and alarming.
  *  Below 1% we show a decimal; above it, whole percents keep the column scannable. */
-function formatRate(rate: number): string {
-  if (rate > 0 && rate < 0.01) return PCT.format(rate);
-  return `${Math.round(rate * 100)}%`;
+const RATE_FORMATTERS = new Map<
+  UiLocale,
+  { precise: Intl.NumberFormat; rounded: Intl.NumberFormat }
+>();
+function formatRate(rate: number, locale: UiLocale): string {
+  let formatters = RATE_FORMATTERS.get(locale);
+  if (!formatters) {
+    formatters = {
+      precise: new Intl.NumberFormat(locale, {
+        style: 'percent',
+        maximumFractionDigits: 1,
+      }),
+      rounded: new Intl.NumberFormat(locale, {
+        style: 'percent',
+        maximumFractionDigits: 0,
+      }),
+    };
+    RATE_FORMATTERS.set(locale, formatters);
+  }
+  return rate > 0 && rate < 0.01
+    ? formatters.precise.format(rate)
+    : formatters.rounded.format(rate);
 }
 
 function StageRow({ stage, isFirst }: { stage: FunnelStageOut; isFirst: boolean }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const { intFmt } = useChartFormatters();
   // The baseline stage has no prior to rate against, so it anchors the scale at 100%.
   const rate = isFirst ? 1 : (stage.stepPct ?? 0);
   const widthPct = Math.max(rate * 100, rate > 0 ? 1.5 : 0);
@@ -62,12 +104,12 @@ function StageRow({ stage, isFirst }: { stage: FunnelStageOut; isFirst: boolean 
           />
         </div>
         <span className="w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-          {isFirst ? '—' : formatRate(rate)}
+          {isFirst ? '—' : formatRate(rate, uiLocale)}
         </span>
       </div>
       {!isFirst && stage.dropOff != null && stage.dropOff > 0 ? (
         <p className="text-xs text-muted-foreground tabular-nums">
-          {intFmt(stage.dropOff)} lost at this step
+          {uiText.rich('sentence_bde730ed8703', { v0: intFmt(stage.dropOff) })}
         </p>
       ) : null}
     </div>
@@ -75,13 +117,24 @@ function StageRow({ stage, isFirst }: { stage: FunnelStageOut; isFirst: boolean 
 }
 
 export function StepFunnel({ window, objective }: StepFunnelProps) {
-  const stages = window ? buildConversionFunnel(window, objective) : [];
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const { intFmt } = useChartFormatters();
+  const stages = window
+    ? buildConversionFunnel(window, objective, uiLocale, (label) =>
+        uiText(FUNNEL_LABEL_KEYS[label as keyof typeof FUNNEL_LABEL_KEYS]),
+      )
+    : [];
 
   if (stages.length === 0 || stages.every((stage) => stage.value === 0)) {
-    return <ChartEmpty message="The conversion funnel appears once this portfolio has delivery." />;
+    return <ChartEmpty message={uiText('the_conversion_funnel_appears_once_this_portf_3a07fd8')} />;
   }
 
-  const metric = getOptimizationMetricDefinition(objective);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(objective),
+    optimizerText,
+  );
   const terminal = stages.at(-1);
 
   return (
@@ -95,11 +148,16 @@ export function StepFunnel({ window, objective }: StepFunnelProps) {
       <p className="border-border/60 border-t pt-2 text-xs text-muted-foreground tabular-nums">
         {terminal ? (
           <>
-            <span className="text-foreground">{formatRate(terminal.overallPct)}</span> of{' '}
-            {stages[0].label.toLowerCase()} become {metric.resultLabel.toLowerCase()}
+            {uiText.rich('sentence_527564221e72', {
+              v0: () => (
+                <span className="text-foreground">{formatRate(terminal.overallPct, uiLocale)}</span>
+              ),
+              v1: stages[0].label.toLowerCase(),
+              v2: metric.resultLabel.toLowerCase(),
+            })}
           </>
         ) : null}
-        <span className="ml-1">· bars show step conversion, not volume</span>
+        <span className="ml-1">{uiText('bars_show_step_conversion_not_volume_4158626')}</span>
       </p>
     </div>
   );

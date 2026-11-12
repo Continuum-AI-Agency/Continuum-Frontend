@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type { CanvasTechniquePort } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useModuleFoldStore } from '../stores/useModuleFoldStore';
@@ -16,7 +16,14 @@ const port = (
   dataType: CanvasTechniquePort['dataType'],
   origin: CanvasTechniquePort['origin'],
   label?: string,
-): CanvasTechniquePort => ({ id, nodeRef: `${MODULE_ID}:g`, handleId, dataType, origin, label });
+): CanvasTechniquePort => ({
+  id,
+  nodeRef: `${MODULE_ID}:g`,
+  handleId,
+  dataType,
+  origin,
+  label,
+});
 
 const data: CollapsedModuleData = {
   moduleId: MODULE_ID,

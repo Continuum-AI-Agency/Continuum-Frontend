@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The portfolio wizard's draft and the pure functions around it: what a suggestion seeds,
 // what each step still needs, and the ONE place the draft becomes the create request.
 //
@@ -40,7 +44,11 @@ export const WIZARD_STEPS = [
   { id: 'start', label: 'Start', hint: 'From a suggestion or from scratch' },
   { id: 'assets', label: 'Assets', hint: 'Ad sets or whole campaigns' },
   { id: 'goal', label: 'Goal', hint: 'Objective, target and mode' },
-  { id: 'plan', label: 'Plan & autonomy', hint: 'Flight, budget and who applies' },
+  {
+    id: 'plan',
+    label: 'Plan & autonomy',
+    hint: 'Flight, budget and who applies',
+  },
 ] as const;
 export type WizardStep = (typeof WIZARD_STEPS)[number]['id'];
 
@@ -241,12 +249,15 @@ export function memberBlockReason(
   member: SuggestionMember,
   draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
   metaCurrency: string | null | undefined,
+  uiTranslate?: ScaleCopy,
 ): string | null {
   if (draft.memberKeys.includes(memberKey(member))) return null;
   const fixed = selectionCurrency(draft, metaCurrency);
   const own = normCurrency(member.currency);
   if (!fixed || !own || own === fixed) return null;
-  return `Bills in ${own}; this portfolio is in ${fixed}.`;
+  return uiTranslate
+    ? uiTranslate('helper_c96086b14a8a', { v0: own, v1: fixed })
+    : `Bills in ${own}; this portfolio is in ${fixed}.`;
 }
 
 /** The selection's currencies when it holds more than one — the step refuses it. */
@@ -395,7 +406,10 @@ export function selectionByPlatform(
       label: `${counted(draft.campaignIds.length, 'campaign', 'campaigns')} · ${counted(draft.adsetIds.length, 'ad set', 'ad sets')}`,
     });
   } else if (draft.adsetIds.length > 0) {
-    out.push({ platform: 'meta', label: counted(draft.adsetIds.length, 'ad set', 'ad sets') });
+    out.push({
+      platform: 'meta',
+      label: counted(draft.adsetIds.length, 'ad set', 'ad sets'),
+    });
   }
   const counts = new Map<PlatformId, number>();
   for (const member of selectedMembers(draft)) {
@@ -410,6 +424,7 @@ export function selectionByPlatform(
 /** The Create button: the Meta ad sets as before, plus each other platform's campaigns. */
 export function enrollLabel(
   draft: Pick<WizardDraft, 'adsetIds' | 'campaignIds' | 'proposedMembers' | 'memberKeys'>,
+  uiTranslate?: ScaleCopy,
 ): string {
   const parts: string[] = [];
   if (draft.adsetIds.length > 0 || draft.proposedMembers.length === 0) {
@@ -422,7 +437,9 @@ export function enrollLabel(
   for (const [platform, count] of counts) {
     parts.push(`${count} ${PLATFORM_NAMES[platform]} ${count === 1 ? 'campaign' : 'campaigns'}`);
   }
-  return `Create & enroll ${parts.join(' + ')}`;
+  return uiTranslate
+    ? uiTranslate('helper_91ec10708dae', { v0: parts.join(' + ') })
+    : `Create & enroll ${parts.join(' + ')}`;
 }
 
 /** `proposedMembers` grouped by platform account, in the order the suggestion gave them. */
@@ -431,14 +448,22 @@ export function membersByAccount(members: readonly SuggestionMember[]): {
   accountId: string;
   members: SuggestionMember[];
 }[] {
-  const groups: { platform: PlatformId; accountId: string; members: SuggestionMember[] }[] = [];
+  const groups: {
+    platform: PlatformId;
+    accountId: string;
+    members: SuggestionMember[];
+  }[] = [];
   for (const member of members) {
     const group = groups.find(
       (entry) => entry.platform === member.platform && entry.accountId === member.account_id,
     );
     if (group) group.members.push(member);
     else
-      groups.push({ platform: member.platform, accountId: member.account_id, members: [member] });
+      groups.push({
+        platform: member.platform,
+        accountId: member.account_id,
+        members: [member],
+      });
   }
   return groups;
 }
@@ -472,8 +497,10 @@ export function suggestionPlatformCounts(
 export function goalCostCapRequested(draft: WizardDraft): boolean {
   return (
     draft.goalAsPlatformCostCap &&
-    goalCostCapAvailability({ targetMetric: effectiveTargetMetric(draft), goal: num(draft.target) })
-      .available
+    goalCostCapAvailability({
+      targetMetric: effectiveTargetMetric(draft),
+      goal: num(draft.target),
+    }).available
   );
 }
 
@@ -494,29 +521,49 @@ export type StepContext = {
 };
 
 /** What still blocks leaving a step, in the operator's words. Empty = the step is complete. */
-export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContext): string[] {
+export function stepIssues(
+  draft: WizardDraft,
+  step: WizardStep,
+  ctx: StepContext,
+  uiTranslate?: ScaleCopy,
+): string[] {
   const issues: string[] = [];
   switch (step) {
     case 'start':
-      if (draft.source == null) issues.push('Pick a suggestion or start from scratch.');
+      if (draft.source == null)
+        issues.push(
+          uiTranslate
+            ? uiTranslate('wizardPickSource')
+            : 'Pick a suggestion or start from scratch.',
+        );
       break;
     case 'assets':
       // A cross-platform suggestion may become a portfolio with no Meta ad set at all.
       if (draft.proposedMembers.length === 0) {
-        if (draft.adsetIds.length === 0) issues.push('Select at least one ad set.');
+        if (draft.adsetIds.length === 0)
+          issues.push(uiTranslate ? uiTranslate('wizardPickAdset') : 'Select at least one ad set.');
       } else if (draft.adsetIds.length === 0 && selectedMembers(draft).length === 0) {
-        issues.push('Select at least one ad set or campaign.');
+        issues.push(
+          uiTranslate ? uiTranslate('wizardPickEntity') : 'Select at least one ad set or campaign.',
+        );
       }
       if (ctx.blockedCount > 0) {
         issues.push(
-          `${ctx.blockedCount} selected ${ctx.blockedCount === 1 ? 'ad set is' : 'ad sets are'} held by a portfolio you cannot edit.`,
+          uiTranslate
+            ? uiTranslate('helper_10cc2c30e589', {
+                v0: ctx.blockedCount,
+                v1: ctx.blockedCount === 1 ? 'ad set is' : 'ad sets are',
+              })
+            : `${ctx.blockedCount} selected ${ctx.blockedCount === 1 ? 'ad set is' : 'ad sets are'} held by a portfolio you cannot edit.`,
         );
       }
       {
         const mixed = mixedCurrencies(draft, ctx.metaCurrency);
         if (mixed.length > 0) {
           issues.push(
-            `A portfolio holds one currency, and this selection bills in ${mixed.join(' and ')}. Untick one side.`,
+            uiTranslate
+              ? uiTranslate('helper_3777c19ab104', { v0: mixed.join(' and ') })
+              : `A portfolio holds one currency, and this selection bills in ${mixed.join(' and ')}. Untick one side.`,
           );
         }
       }
@@ -524,22 +571,29 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
     case 'goal': {
       if (unreadableAmount(draft.target)) issues.push(digitsOnly('Target', '45.50'));
       if (draft.objective === 'custom') {
-        const built = buildConversionDescriptor(draft.conversion);
+        const built = buildConversionDescriptor(draft.conversion, uiTranslate);
         if ('error' in built) issues.push(built.error);
       }
       if (draft.mode === 'scale') {
         const growth = num(draft.scaleGrowthPct);
         const cadence = num(draft.scaleCadenceDays);
         if (growth == null || cadence == null) {
-          issues.push('Scale mode needs how much to grow by and how often.');
+          issues.push(
+            uiTranslate
+              ? uiTranslate('wizardScaleInputs')
+              : 'Scale mode needs how much to grow by and how often.',
+          );
         } else if (growth > 100) {
-          issues.push('Grow by at most 100% per step.');
+          issues.push(
+            uiTranslate ? uiTranslate('wizardScaleMaxGrowth') : 'Grow by at most 100% per step.',
+          );
         }
       }
       break;
     }
     case 'plan': {
-      if (draft.name.trim().length === 0) issues.push('Give the portfolio a name.');
+      if (draft.name.trim().length === 0)
+        issues.push(uiTranslate ? uiTranslate('wizardNameRequired') : 'Give the portfolio a name.');
       if (unreadableAmount(draft.dailyTotal)) issues.push(digitsOnly('Daily budget', '1500'));
       if (unreadableAmount(draft.budgetAmount)) issues.push(digitsOnly('Budget', '45000'));
       if (unreadableAmount(draft.maxDailyApply))
@@ -549,22 +603,45 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
       const daily =
         num(draft.dailyTotal) ?? (ctx.selectedBudgetSum > 0 ? ctx.selectedBudgetSum : null);
       if (daily == null)
-        issues.push('Set a daily budget — the selection has no live budget to match.');
+        issues.push(
+          uiTranslate
+            ? uiTranslate('wizardDailyRequired')
+            : 'Set a daily budget — the selection has no live budget to match.',
+        );
       const hasFlight = Boolean(draft.flightFrom && draft.flightTo);
       const amount = num(draft.budgetAmount);
       if (amount != null && !hasFlight && draft.budgetGranularity !== 'total') {
         // A per-day figure without a flight is just a daily total; only monthly is ambiguous.
         if (draft.budgetGranularity === 'monthly')
-          issues.push('A monthly budget needs a flight window to pace over.');
+          issues.push(
+            uiTranslate
+              ? uiTranslate('wizardMonthlyFlight')
+              : 'A monthly budget needs a flight window to pace over.',
+          );
       }
-      if (hasFlight && amount == null) issues.push('Give the flight a budget, or clear the dates.');
+      if (hasFlight && amount == null)
+        issues.push(
+          uiTranslate
+            ? uiTranslate('wizardFlightBudget')
+            : 'Give the flight a budget, or clear the dates.',
+        );
       if (draft.applyMode === 'autopilot' && platformHost(draft) != null) {
         issues.push(
           'Autopilot writes only to Meta: a portfolio with no Meta ad set runs on recommendations.',
         );
       } else if (draft.applyMode === 'autopilot') {
-        if (num(draft.maxDailyApply) == null) issues.push('Autopilot needs a daily spend ceiling.');
-        if (num(draft.maxChangePct) == null) issues.push('Autopilot needs a per-cycle change cap.');
+        if (num(draft.maxDailyApply) == null)
+          issues.push(
+            uiTranslate
+              ? uiTranslate('wizardAutopilotCeiling')
+              : 'Autopilot needs a daily spend ceiling.',
+          );
+        if (num(draft.maxChangePct) == null)
+          issues.push(
+            uiTranslate
+              ? uiTranslate('wizardAutopilotCap')
+              : 'Autopilot needs a per-cycle change cap.',
+          );
       }
       break;
     }
@@ -695,6 +772,7 @@ export function platformAccountNotes(
   accounts: NonNullable<SuggestResult['platform_accounts']>,
   suggestions: readonly PortfolioSuggestion[],
   metaCurrency: string | null | undefined,
+  uiTranslate?: ScaleCopy,
 ): string[] {
   const notes: string[] = [];
   for (const account of accounts) {
@@ -712,22 +790,39 @@ export function platformAccountNotes(
       : 'its campaigns are under Start from scratch';
     switch (account.status) {
       case 'no_shared_objective':
-        notes.push(`${name} buys different results than this Meta account, so ${where}.`);
+        notes.push(
+          uiTranslate
+            ? uiTranslate('helper_40f35efbce1c', { v0: name, v1: where })
+            : `${name} buys different results than this Meta account, so ${where}.`,
+        );
         break;
       case 'currency_mismatch':
         notes.push(
-          `${name} bills in ${account.currency ?? 'another currency'}${
-            metaCurrency ? ` and this Meta account in ${metaCurrency}` : ''
-          }, and a portfolio holds one currency, so ${where}.`,
+          uiTranslate
+            ? uiTranslate('helper_8a56a6c5b7a7', {
+                v0: name,
+                v1: account.currency ?? 'another currency',
+                v2: metaCurrency ? ` and this Meta account in ${metaCurrency}` : '',
+                v3: where,
+              })
+            : `${name} bills in ${account.currency ?? 'another currency'}${
+                metaCurrency ? ` and this Meta account in ${metaCurrency}` : ''
+              }, and a portfolio holds one currency, so ${where}.`,
         );
         break;
       case 'currency_unknown':
         notes.push(
-          `${name} or this Meta account did not report its currency, so they are not combined.`,
+          uiTranslate
+            ? uiTranslate('helper_b855e79bedaf', { v0: name })
+            : `${name} or this Meta account did not report its currency, so they are not combined.`,
         );
         break;
       case 'read_failed':
-        notes.push(`${name} could not be read just now, so its campaigns are missing here.`);
+        notes.push(
+          uiTranslate
+            ? uiTranslate('helper_ebec6bff420a', { v0: name })
+            : `${name} could not be read just now, so its campaigns are missing here.`,
+        );
         break;
     }
   }
@@ -736,4 +831,21 @@ export function platformAccountNotes(
 
 function hasMetaMembers(suggestion: PortfolioSuggestion): boolean {
   return suggestion.adset_ids.length > 0;
+}
+
+export function wizardModeCopy(
+  mode: keyof typeof MODE_COPY,
+  t: ScaleCopy,
+): { title: string; body: string } {
+  return {
+    title: t('wizardModeTitle', { mode }),
+    body: t('wizardModeBody', { mode }),
+  };
+}
+export function wizardSteps(t: ScaleCopy): Array<{ id: WizardStep; label: string; hint: string }> {
+  return WIZARD_STEPS.map((step) => ({
+    ...step,
+    label: t('wizardStepTitle', { step: step.id }),
+    hint: t('wizardStepHint', { step: step.id }),
+  }));
 }

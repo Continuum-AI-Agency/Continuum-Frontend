@@ -6,6 +6,7 @@ import {
   pipelineBlockedReason,
 } from '@continuum/contracts';
 import { CircleAlert } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,8 @@ const isV2 = (value: PipelineContractValue): value is PipelineCapabilityV2 =>
 const readableToken = (value: string): string => value.replaceAll(/[-_]/g, ' ');
 
 function LegacyPipelineContract({ manifest }: { manifest: PipelineManifest }) {
+  const translateUi = useUiTranslations('studio');
+
   const blocked = pipelineBlockedReason(manifest);
   const perAttempt = manifest.outputs.reduce((total, output) => total + output.count, 0);
   const portName = (port: { port_id: string; label?: string }) => port.label ?? port.port_id;
@@ -29,38 +32,37 @@ function LegacyPipelineContract({ manifest }: { manifest: PipelineManifest }) {
   return (
     <>
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">Takes:</span>{' '}
+        <span className="font-medium text-foreground">{translateUi('takes_6228c88a')}</span>{' '}
         {manifest.inputs.length === 0
-          ? 'nothing'
+          ? translateUi('nothing_1785cfc3')
           : manifest.inputs.map((input) => `${portName(input)} (${input.kind})`).join(', ')}
       </p>
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">Gives:</span>{' '}
+        <span className="font-medium text-foreground">{translateUi('gives_f74fc9fe')}</span>{' '}
         {manifest.outputs.length === 0
-          ? 'nothing'
+          ? translateUi('nothing_1785cfc3')
           : manifest.outputs.map((output) => `${portName(output)} (${output.media})`).join(', ')}
-        {perAttempt > manifest.outputs.length && ` · ${perAttempt} generated per attempt`}
+        {perAttempt > manifest.outputs.length &&
+          translateUi('value0_generated_per_attempt_808a07cf', {
+            count: Number(perAttempt),
+          })}
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
         <Pill variant="warning">
-          <PillIndicator variant="warning" />
-          Needs republish
+          <PillIndicator variant="warning" /> {translateUi('needs_republish_827764df')}{' '}
         </Pill>
         {blocked ? (
           <Pill variant="destructive">
-            <PillIndicator variant="error" />
-            Cannot run
+            <PillIndicator variant="error" /> {translateUi('cannot_run_0316aea2')}{' '}
           </Pill>
         ) : null}
         {manifest.headless.requires_authorisation ? (
-          <Pill variant="warning">Needs approval</Pill>
+          <Pill variant="warning">{translateUi('needs_approval_db0e960b')}</Pill>
         ) : null}
       </div>
       <p className="flex items-start gap-1.5 text-muted-foreground">
         <CircleAlert className="mt-0.5 size-3 shrink-0" aria-hidden />
-        <span>
-          This pipeline was published with the legacy V1 contract. Republish it before running.
-        </span>
+        <span> {translateUi('this_pipeline_was_published_with_th_312bc164')} </span>
       </p>
       {blocked ? (
         <p className="flex items-start gap-1.5 text-danger">
@@ -114,6 +116,8 @@ function qualityLine(policy: PipelineCapabilityV2['quality_policy']): string {
 }
 
 function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }) {
+  const translateUi = useUiTranslations('studio');
+
   const requiredInputs = capability.inputs.filter((input) => input.required);
 
   return (
@@ -124,12 +128,14 @@ function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }
       {capability.agent_guide ? (
         <div className="grid gap-1 rounded-md border border-border/70 p-2 text-muted-foreground">
           <p>
-            <span className="font-medium text-foreground">Use when:</span>{' '}
+            <span className="font-medium text-foreground">{translateUi('use_when_33afee12')}</span>{' '}
             {capability.agent_guide.use_when.join(' ')}
           </p>
           {capability.agent_guide.avoid_when.length > 0 ? (
             <p>
-              <span className="font-medium text-foreground">Avoid when:</span>{' '}
+              <span className="font-medium text-foreground">
+                {translateUi('avoid_when_054b3013')}
+              </span>{' '}
               {capability.agent_guide.avoid_when.join(' ')}
             </p>
           ) : null}
@@ -149,28 +155,30 @@ function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }
         </div>
       ) : null}
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">Required:</span>{' '}
+        <span className="font-medium text-foreground">{translateUi('required_5de693b9')}</span>{' '}
         {requiredInputs.length === 0
-          ? 'nothing'
+          ? translateUi('nothing_1785cfc3')
           : requiredInputs.map((input) => `${input.label} (${input.kind})`).join(', ')}
       </p>
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">Promised:</span>{' '}
+        <span className="font-medium text-foreground">{translateUi('promised_a77ad53c')}</span>{' '}
         {capability.outputs.map(outputPromise).join(', ')}
       </p>
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">Cost:</span> {spendCeiling(capability)}
+        <span className="font-medium text-foreground">{translateUi('cost_97c94eff')}</span>{' '}
+        {spendCeiling(capability)}
       </p>
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">Quality:</span>{' '}
+        <span className="font-medium text-foreground">{translateUi('quality_475131ae')}</span>{' '}
         {qualityLine(capability.quality_policy)}
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
         <Pill variant="success">
-          <PillIndicator variant="success" />
-          Runnable
+          <PillIndicator variant="success" /> {translateUi('runnable_c687f9d1')}{' '}
         </Pill>
-        <Pill variant="muted">Revision {capability.identity.revision}</Pill>
+        <Pill variant="muted">
+          {translateUi('revision_2e516d68')} {capability.identity.revision}
+        </Pill>
       </div>
     </>
   );

@@ -1,5 +1,14 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { matchBrowserLocale } from '@/i18n/browserLocale';
+import { isUiLocale, localeCookieName, type UiLocale } from '@/i18n/config';
+import en from '@/i18n/emergency/en.json';
+import es from '@/i18n/emergency/es.json';
+import pt from '@/i18n/emergency/pt-BR.json';
+
+const emergencyMessages = { en, 'pt-BR': pt, es };
+
 export default function GlobalError({
   error,
   reset,
@@ -7,8 +16,18 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [locale, setLocale] = useState<UiLocale>('en');
+  useEffect(() => {
+    const stored = document.cookie
+      .split(';')
+      .map((entry) => entry.trim())
+      .find((entry) => entry.startsWith(`${localeCookieName}=`))
+      ?.slice(localeCookieName.length + 1);
+    setLocale(isUiLocale(stored) ? stored : matchBrowserLocale(navigator.languages.join(',')));
+  }, []);
+  const text = emergencyMessages[locale];
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body
         style={{
           margin: 0,
@@ -32,11 +51,10 @@ export default function GlobalError({
           >
             500
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Something went wrong</h1>
-          <p style={{ fontSize: 14, color: '#a1a1aa', marginBottom: 32 }}>
-            An unexpected error occurred. Please try reloading the page.
-          </p>
+          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>{text.title}</h1>
+          <p style={{ fontSize: 14, color: '#a1a1aa', marginBottom: 32 }}>{text.description}</p>
           <button
+            type="button"
             onClick={reset}
             style={{
               height: 40,
@@ -50,7 +68,7 @@ export default function GlobalError({
               cursor: 'pointer',
             }}
           >
-            Reload
+            {text.reload}
           </button>
         </div>
       </body>

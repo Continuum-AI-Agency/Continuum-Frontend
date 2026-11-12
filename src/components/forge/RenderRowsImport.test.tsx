@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import type { ApiRenderVariable, ForgeImportMapping } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import type { RequestRow } from './renderRequestRows';
 
@@ -31,7 +37,12 @@ const uploadMediaAsset = mock(async ({ file }: { file: File }) => ({
 
 mock.module('@/lib/library/uploadMediaAsset', () => ({ uploadMediaAsset }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { importMedia, getImportMapping, saveImportMapping, suggestRows },
+  apiRendersApi: {
+    importMedia,
+    getImportMapping,
+    saveImportMapping,
+    suggestRows,
+  },
 }));
 
 const { RenderRowsImport, downloadTemplateCsv } = await import('./RenderRowsImport');
@@ -171,7 +182,11 @@ describe('RenderRowsImport', () => {
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
     const [root, spain] = onImport.mock.calls[0]?.[0] as [RequestRow, RequestRow];
     expect(root.label).toBe('Root');
-    expect(root.values).toEqual({ headline: 'Hola, mundo', price: 9.99, hero: { assetId: KNOWN } });
+    expect(root.values).toEqual({
+      headline: 'Hola, mundo',
+      price: 9.99,
+      hero: { assetId: KNOWN },
+    });
     expect(root.media.hero).toEqual({
       w: 1080,
       h: 1350,
@@ -345,7 +360,9 @@ describe('RenderRowsImport', () => {
     renderImport();
     const zone = screen.getByText(/Drop a file here or choose one/).parentElement!;
     fireEvent.dragOver(zone);
-    fireEvent.drop(zone, { dataTransfer: { files: [csv('Headline\nDropped\n')] } });
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [csv('Headline\nDropped\n')] },
+    });
     // The auto-mapped preview means the drop reached the same review path as the picker.
     await waitFor(() => expect(screen.getByText('Dropped')).toBeTruthy());
   });
@@ -355,9 +372,18 @@ describe('RenderRowsImport', () => {
     const zone = screen.getByText(/Drop a file here or choose one/).parentElement!;
     const file = csv('Headline\nBusy\n');
     let finish!: (bytes: ArrayBuffer) => void;
-    spyOn(file, 'arrayBuffer').mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    spyOn(file, 'arrayBuffer').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     chooseFile(file);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Choose XLSX or CSV' }).hasAttribute('disabled')).toBe(true));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Choose XLSX or CSV' }).hasAttribute('disabled'),
+      ).toBe(true),
+    );
     for (const type of ['dragover', 'drop']) {
       const event = new Event(type, { bubbles: true, cancelable: true });
       fireEvent(zone, event);
@@ -450,7 +476,10 @@ const CARD_B_MAPPING: ForgeImportMapping = {
     Ganarias: 'template_field_9',
   },
   label: '{Partido}',
-  outputs: { 'ambos equipos anotan': 'btts', 'mas menos 2 5 goles': 'halftime' },
+  outputs: {
+    'ambos equipos anotan': 'btts',
+    'mas menos 2 5 goles': 'halftime',
+  },
   decimals: { template_field_1: 2, template_field_2: 2 },
   kits: {},
 };
@@ -528,7 +557,7 @@ describe('RenderRowsImport: the Caliente workbook', () => {
     expect((onImport.mock.calls[0]?.[0] as RequestRow[])[4]?.values.template_field_2).toBe('2.15');
   });
 
-  test('a sheet chosen before last week\'s mapping arrives still imports with it', async () => {
+  test("a sheet chosen before last week's mapping arrives still imports with it", async () => {
     let answer!: (mapping: ForgeImportMapping) => void;
     getImportMapping.mockImplementationOnce(
       () =>
@@ -551,7 +580,10 @@ describe('RenderRowsImport: the Caliente workbook', () => {
     savedMapping = CARD_B_MAPPING;
     const web = {
       ...CARD_B,
-      template: { ...CARD_B.template, key: 'web:99999999-9999-4999-8999-999999999999' },
+      template: {
+        ...CARD_B.template,
+        key: 'web:99999999-9999-4999-8999-999999999999',
+      },
     };
     const { onImport } = renderImport({ contract: web } as never);
     chooseFile(csv('Match\nAlianza vs Cienciano\n'));
@@ -600,8 +632,12 @@ describe('RenderRowsImport: the Caliente workbook', () => {
     fireEvent.click(importButton());
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
     const [first, second] = onImport.mock.calls[0]?.[0] as [RequestRow, RequestRow];
-    expect(first.values.left_jersey).toEqual({ assetId: 'a1111111-1111-4111-8111-111111111111' });
-    expect(first.values.right_jersey).toEqual({ assetId: 'a2222222-2222-4222-8222-222222222222' });
+    expect(first.values.left_jersey).toEqual({
+      assetId: 'a1111111-1111-4111-8111-111111111111',
+    });
+    expect(first.values.right_jersey).toEqual({
+      assetId: 'a2222222-2222-4222-8222-222222222222',
+    });
     expect(second.values.left_jersey).toBeUndefined();
   });
 });

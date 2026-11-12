@@ -1,5 +1,11 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
+
 // Portfolio setup: the account context (which account, its tracking gaps, whether it can be
 // scored at all) around the four-step wizard. Shared by the empty-state OptimizerOnboarding
 // and the "New portfolio" page state.
@@ -48,6 +54,7 @@ export function suggestEmptyMessage(
     hasProjections = false,
     platform = 'meta',
   }: { hasProjections?: boolean; platform?: 'meta' | 'google_ads' } = {},
+  uiTranslate?: ScaleCopy,
 ): string {
   if (platform === 'google_ads') {
     if (reason === 'not_permitted') {
@@ -61,19 +68,29 @@ export function suggestEmptyMessage(
   switch (reason) {
     case 'all_cbo':
       if (level === 'campaign') {
-        return "Every campaign here splits its budget at the ad-set level (ABO), so there's nothing to group at the campaign level. Optimize these as an ad-set portfolio instead.";
+        return uiTranslate
+          ? uiTranslate('every_campaign_here_splits_its_budget_at_the__8ea9a64')
+          : "Every campaign here splits its budget at the ad-set level (ABO), so there's nothing to group at the campaign level. Optimize these as an ad-set portfolio instead.";
       }
       return hasProjections
         ? "Every active ad set here uses a campaign-level budget (CBO or lifetime), so there's nothing to group into a suggestion yet. Here's what each campaign would look like converted to ad-set budgets."
         : "Every active ad set here uses a campaign-level budget (CBO or lifetime), so there's nothing to group into a suggestion. Start from scratch and pick ad sets with their own daily budgets.";
     case 'no_active':
-      return 'No active ad sets found for this account yet. Once ad sets are live, suggestions will appear here.';
+      return uiTranslate
+        ? uiTranslate('no_active_ad_sets_found_for_this_account_yet__2805e68')
+        : 'No active ad sets found for this account yet. Once ad sets are live, suggestions will appear here.';
     case 'tracking_gaps':
-      return 'Ad sets are spending but none has tracked conversions yet — set up conversion tracking, or start from scratch.';
+      return uiTranslate
+        ? uiTranslate('ad_sets_are_spending_but_none_has_tracked_con_19f347a')
+        : 'Ad sets are spending but none has tracked conversions yet — set up conversion tracking, or start from scratch.';
     case 'not_permitted':
-      return "This ad account isn't assigned to this brand, so the optimizer can't read its ad sets. Assign it in Settings → Integrations, then try again.";
+      return uiTranslate
+        ? uiTranslate('this_ad_account_isn_t_assigned_to_this_brand__16c17d6')
+        : "This ad account isn't assigned to this brand, so the optimizer can't read its ad sets. Assign it in Settings → Integrations, then try again.";
     default:
-      return "No grouped suggestions yet — the optimizer groups ad sets once this account's metrics are available. Start from scratch in the meantime.";
+      return uiTranslate
+        ? uiTranslate('no_grouped_suggestions_yet_the_optimizer_grou_fbed0b8')
+        : "No grouped suggestions yet — the optimizer groups ad sets once this account's metrics are available. Start from scratch in the meantime.";
   }
 }
 
@@ -116,6 +133,7 @@ export function PortfolioSetup({
   onCreated,
   showAccountHeader = true,
 }: PortfolioSetupProps) {
+  const uiText = useTranslations('scale');
   const { data: accounts } = useOptimizerAdAccounts(brandId);
   const account = accounts.find((row) => row.account_id === adAccountId) ?? null;
   const resolvedCurrency = currency ?? account?.currency ?? null;
@@ -140,18 +158,25 @@ export function PortfolioSetup({
             suggestRead.data?.platform_accounts ?? [],
             suggestions,
             resolvedCurrency,
+            uiText,
           )
         : [],
-    [metaAvailable, suggestRead.data?.platform_accounts, suggestions, resolvedCurrency],
+    [metaAvailable, suggestRead.data?.platform_accounts, suggestions, resolvedCurrency, uiText],
   );
 
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
   const snapshots = snapshotsRead.data;
 
-  const cboSections = React.useMemo(() => buildCboCampaignSections(snapshots), [snapshots]);
+  const cboSections = React.useMemo(
+    () => buildCboCampaignSections(snapshots, uiText),
+    [snapshots, uiText],
+  );
   const cboSectionRef = React.useRef<HTMLDivElement>(null);
   const projectedConversions = React.useMemo(
-    () => buildProjectedConversions(cboSections, snapshots, { currency: resolvedCurrency }),
+    () =>
+      buildProjectedConversions(cboSections, snapshots, {
+        currency: resolvedCurrency,
+      }),
     [cboSections, snapshots, resolvedCurrency],
   );
   const accountObjective = React.useMemo(() => dominantAccountObjective(snapshots), [snapshots]);
@@ -206,14 +231,18 @@ export function PortfolioSetup({
                   <Button
                     className="h-6 px-2 text-xs"
                     onClick={() =>
-                      cboSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      cboSectionRef.current?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      })
                     }
                     size="xs"
                     type="button"
                     variant="ghost"
                   >
-                    Show {cboSections.length} CBO{' '}
-                    {cboSections.length === 1 ? 'campaign' : 'campaigns'}
+                    {uiText.rich('sentence_f8b7b0864ae6', {
+                      count: cboSections.length,
+                    })}
                   </Button>
                 ) : null
               }
@@ -245,16 +274,21 @@ export function PortfolioSetup({
                 )}
                 href={PAID_SETUP_CONNECT_HREF}
               >
-                Manage assignments
+                {uiText('manage_assignments_2b7a070')}
               </Link>
             ) : null}
           </div>
         }
         suggestions={suggestions}
-        suggestionsEmptyMessage={suggestEmptyMessage(suggestReason, level, {
-          hasProjections: projectedConversions.length > 0,
-          platform: account && accountPlatform(account) === 'google_ads' ? 'google_ads' : 'meta',
-        })}
+        suggestionsEmptyMessage={suggestEmptyMessage(
+          suggestReason,
+          level,
+          {
+            hasProjections: projectedConversions.length > 0,
+            platform: account && accountPlatform(account) === 'google_ads' ? 'google_ads' : 'meta',
+          },
+          uiText,
+        )}
         onRetrySuggestions={() => void suggestRead.refetch()}
         suggestionsFailure={
           suggestRead.isError
@@ -280,16 +314,17 @@ function AccountHeader({
   status: string | null;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-border/60 border-b pb-3">
       <p className="min-w-0 truncate text-sm">
-        <span className="text-muted-foreground">Optimizing account </span>
+        <span className="text-muted-foreground">{uiText('optimizing_account_84a3ef7')}</span>
         <span className="font-semibold tracking-tight">{name}</span>
       </p>
       <div className="flex items-center gap-1.5">
         {platform ? (
           <Badge className="text-xs" variant="outline">
-            {humanize(platform)}
+            {humanize(platform, uiText)}
           </Badge>
         ) : null}
         {currency ? (
@@ -302,7 +337,7 @@ function AccountHeader({
             className="text-xs"
             variant={status.toLowerCase() === 'active' ? 'success' : 'outline'}
           >
-            {humanize(status)}
+            {humanize(status, uiText)}
           </Badge>
         ) : null}
       </div>
@@ -319,13 +354,17 @@ function TrackingGapBanner({
   spending: number;
   samples: string[];
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex gap-2 text-warning text-xs">
       <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
       <div>
         <p>
-          <b>{gaps}</b> of {spending} spending ad sets have <b>0 tracked conversions</b> for their
-          objective — check the pixel/conversion tracking before enrolling.
+          {uiText.rich('sentence_b4f40ca56553', {
+            v0: () => <b>{gaps}</b>,
+            v1: spending,
+            v2: () => <b>{uiText('0_tracked_conversions_e6bb847')}</b>,
+          })}
         </p>
         {samples.length > 0 ? (
           <p className="mt-1 font-mono text-xs opacity-80">{samples.slice(0, 4).join(', ')}</p>

@@ -1,3 +1,4 @@
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { CanvasSyncStatus } from '@/components/ai-studio/CanvasSyncStatus';
 import type { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
@@ -37,6 +38,8 @@ export function StudioCanvasHeader({
   realtime: ReturnType<typeof useCanvasRealtime>;
   apply: ReturnType<typeof useApplyBackToPlanner>;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     // own box instead of painting outside the group that holds them.
     <div
@@ -107,7 +110,7 @@ export function StudioCanvasHeader({
               >
                 <SelectTrigger className="h-9 w-[15rem]">
                   <SelectValue
-                    placeholder="Pick one output to apply"
+                    placeholder={translateUi('pick_one_output_to_apply_705efff9')}
                     items={Object.fromEntries(
                       apply.linkedinImageCandidates.map((candidate, index) => [
                         candidate.nodeId,
@@ -119,14 +122,17 @@ export function StudioCanvasHeader({
                 <SelectContent>
                   {apply.linkedinImageCandidates.map((candidate, index) => (
                     <SelectItem key={candidate.nodeId} value={candidate.nodeId}>
-                      {`Output ${index + 1}`}
+                      {translateUi('output_value0_1956c227', {
+                        value0: String(index + 1),
+                      })}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : null}
             <Button type="button" size="sm" variant="outline" onClick={apply.onReturnToPlanner}>
-              Back to Planner
+              {' '}
+              {translateUi('back_to_planner_193ffd99')}{' '}
             </Button>
             <Button
               type="button"
@@ -136,7 +142,9 @@ export function StudioCanvasHeader({
               }}
               disabled={apply.isApplyingBack || !apply.applyReadiness?.ready}
             >
-              {apply.isApplyingBack ? 'Applying...' : 'Apply Back to Planner'}
+              {apply.isApplyingBack
+                ? translateUi('applying_dba1ddef')
+                : translateUi('apply_back_to_planner_07ca6164')}
             </Button>
           </>
         ) : null}

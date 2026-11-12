@@ -7,6 +7,10 @@ import {
   type TemplateSourceSummary,
 } from '@continuum/contracts';
 import { FileUp, FolderUp } from 'lucide-react';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useUiTranslations,
+} from 'next-intl';
 import { useRef, useState } from 'react';
 import { NewPresentationButton } from '@/components/forge/presentations/NewPresentationButton';
 import { FigmaImportDialog } from '@/components/library/FigmaImportDialog';
@@ -19,7 +23,8 @@ import {
 } from '@/lib/library/folderUpload';
 import { cn } from '@/lib/utils';
 
-export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.html,.htm,.psd,.ai,.blend,.pptx,.potx,.ttf,.otf';
+export const FORGE_PROJECT_ACCEPT =
+  '.aep,.aepx,.aet,.zip,.html,.htm,.psd,.ai,.blend,.pptx,.potx,.ttf,.otf';
 
 /** Layered Photoshop and Illustrator files the Forge turns into a template: every layer comes in,
  * text stays live. */
@@ -77,7 +82,9 @@ export function uploadRefusal(
 ): string | null {
   if (!error || !/exceeded the maximum allowed size|failed \(413\)/i.test(error)) return null;
   const megabytes = Math.max(1, Math.round(file.sizeBytes / (1024 * 1024)));
-  const limitMb = /\.(pptx|potx)$/i.test(file.name) ? LIBRARY_PRESENTATION_MAX_BYTES / (1024 * 1024) : FORGE_PROJECT_FILE_MAX_MB;
+  const limitMb = /\.(pptx|potx)$/i.test(file.name)
+    ? LIBRARY_PRESENTATION_MAX_BYTES / (1024 * 1024)
+    : FORGE_PROJECT_FILE_MAX_MB;
   return `${file.name} is ${megabytes} MB, over the ${limitMb} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`;
 }
 
@@ -134,6 +141,10 @@ export function ForgeProjectDrop({
   onPresentationCreated?: (assetId: string) => Promise<void>;
   onFigmaImported?: (assets: FigmaImportedAsset[]) => Promise<void>;
 }) {
+  const betaUiText = useBetaTranslations('forge');
+
+  const translateUi = useUiTranslations('forge');
+
   const input = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const [packing, setPacking] = useState(false);
@@ -144,7 +155,9 @@ export function ForgeProjectDrop({
       const { expandDesignArchives } = await import('./designArchive');
       files = await expandDesignArchives(files);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not open the ZIP');
+      toast.error(
+        error instanceof Error ? error.message : translateUi('could_not_open_the_zip_4b43b056'),
+      );
       return;
     }
     const { accepted, fonts, rejected } = partitionForgeProjectFiles(files);
@@ -161,7 +174,11 @@ export function ForgeProjectDrop({
       const { packageProjectFolder } = await import('./projectFolder');
       await receive([await packageProjectFolder(entries)]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not prepare the folder');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_prepare_the_folder_dac2d6de'),
+      );
     } finally {
       setPacking(false);
     }
@@ -176,7 +193,7 @@ export function ForgeProjectDrop({
         accept={FORGE_PROJECT_ACCEPT}
         className="sr-only"
         tabIndex={-1}
-        aria-label="Project files"
+        aria-label={translateUi('project_files_2a3d9a24')}
         onChange={(event) => {
           void receive(Array.from(event.target.files ?? []));
           event.target.value = '';
@@ -189,7 +206,7 @@ export function ForgeProjectDrop({
         {...{ webkitdirectory: '' }}
         className="sr-only"
         tabIndex={-1}
-        aria-label="Project folder"
+        aria-label={translateUi('project_folder_59923a31')}
         disabled={packing}
         onChange={(event) => {
           void receiveFolder(
@@ -232,18 +249,22 @@ export function ForgeProjectDrop({
             else await receive(files);
           } catch (error) {
             toast.error(
-              error instanceof Error ? error.message : 'Could not read the dropped folder',
+              error instanceof Error
+                ? error.message
+                : translateUi('could_not_read_the_dropped_folder_d467d8ff'),
             );
           }
         }}
       >
         <span className="flex items-center gap-2 text-sm">
           <FileUp aria-hidden />
-          {packing ? 'Preparing folder…' : 'New template'}
+          {packing
+            ? translateUi('preparing_folder_10c8d169')
+            : translateUi('new_template_30d87ec4')}
         </span>
         <span className="max-w-60 text-xs font-normal text-muted-foreground">
-          Drop a PowerPoint deck or template, project folder, web component folder, ZIP, After Effects project, layered Photoshop or Illustrator file,
-          or click to choose files.
+          {' '}
+          {translateUi('drop_a_powerpoint_deck_or_template__648ed68e')}{' '}
         </span>
       </Button>
       <Button
@@ -252,8 +273,7 @@ export function ForgeProjectDrop({
         disabled={packing}
         onClick={() => folderInput.current?.click()}
       >
-        <FolderUp aria-hidden />
-        Upload folder
+        <FolderUp aria-hidden /> {translateUi('upload_folder_e35182e6')}{' '}
       </Button>
       {brandId && onPresentationCreated ? (
         <NewPresentationButton brandId={brandId} onCreated={onPresentationCreated} />
@@ -261,7 +281,7 @@ export function ForgeProjectDrop({
       {brandId && onFigmaImported ? (
         <FigmaImportDialog
           brandId={brandId}
-          label="Import from Figma"
+          label={betaUiText('beta_2e559556e719')}
           size="default"
           onImported={(assets) => void onFigmaImported(assets)}
         />
@@ -270,26 +290,21 @@ export function ForgeProjectDrop({
         <>
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">
-              How to prepare an After Effects template
+              {' '}
+              {translateUi('how_to_prepare_an_after_effects_tem_4adcd62d')}{' '}
             </summary>
             <ol className="mt-2 list-decimal space-y-1 pl-4">
-              <li>
-                Use File → Dependencies → Collect Files in After Effects to gather the project and
-                linked media.
-              </li>
-              <li>
-                Upload the collected folder or ZIP without moving or renaming its contents. Include
-                linked Illustrator/Photoshop files, images, video, audio and required .ttf/.otf
-                fonts.
-              </li>
-              <li>
-                Use native AE text for editable copy and expose the intended controls in Essential
-                Properties.
-              </li>
+              <li> {translateUi('use_file_dependencies_collect_files_01e52695')} </li>
+              <li> {translateUi('upload_the_collected_folder_or_zip__bbd17f30')} </li>
+              <li> {translateUi('use_native_ae_text_for_editable_cop_e6aa7844')} </li>
             </ol>
           </details>
           <p className="text-xs text-muted-foreground">
-            PowerPoint decks and templates up to {LIBRARY_PRESENTATION_MAX_BYTES / (1024 * 1024)} MB; other projects up to {FORGE_PROJECT_FILE_MAX_MB} MB. You can add font files separately.
+            {' '}
+            {translateUi('powerpoint_decks_and_templates_up_t_7ca26b0d')}{' '}
+            {LIBRARY_PRESENTATION_MAX_BYTES / (1024 * 1024)}{' '}
+            {translateUi('mb_other_projects_up_to_eea784da')} {FORGE_PROJECT_FILE_MAX_MB}{' '}
+            {translateUi('mb_you_can_add_font_files_separatel_9deaa09a')}{' '}
           </p>
         </>
       )}

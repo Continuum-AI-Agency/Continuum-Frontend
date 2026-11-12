@@ -3,7 +3,11 @@
 import type { CompetitorSpyStreamFrame } from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { competitorApiCode } from '@/components/competitors/competitorErrorCopy';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { useCompetitorSearch, useCompetitors, useCreateCompetitor } from '@/lib/api/competitorSpy';
 import { streamCompetitorSync } from '@/lib/api/competitorSpyStream';
 import { instagramLookupErrorKind } from '@/lib/api/errors';
@@ -19,20 +23,39 @@ const PERM_SHORT =
 const RATE =
   'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.';
 
-function competitorSearchErrorCopy(error: unknown): string {
+function competitorSearchErrorCopy(
+  error: unknown,
+  uiText: ReturnType<typeof useTranslations<'competitor'>>,
+): string {
   switch (instagramLookupErrorKind(error)) {
     case 'account_required':
-      return 'Instagram account required — connect your Instagram business account to research competitors. You can still track by name below.';
+      return localizeCompetitorCopy(
+        'Instagram account required — connect your Instagram business account to research competitors. You can still track by name below.',
+        uiText,
+      );
     case 'permission_denied':
-      return `${PERM_SHORT} You can still track by name below.`;
+      return uiText('m_1bed4a3cef', {
+        guidance: localizeCompetitorCopy(PERM_SHORT, uiText),
+      });
     case 'facebook_login_required':
-      return 'Competitor research needs your Instagram connected through Facebook, not Instagram only. You can still track by name below.';
+      return localizeCompetitorCopy(
+        'Competitor research needs your Instagram connected through Facebook, not Instagram only. You can still track by name below.',
+        uiText,
+      );
     case 'rate_limited':
-      return `${RATE} You can still track by name below.`;
+      return uiText('m_1bed4a3cef', {
+        guidance: localizeCompetitorCopy(RATE, uiText),
+      });
     case 'lookup_unavailable':
-      return 'Instagram lookup is temporarily unavailable — reconnect your Instagram business account or try again shortly. You can still track by name below.';
+      return localizeCompetitorCopy(
+        'Instagram lookup is temporarily unavailable — reconnect your Instagram business account or try again shortly. You can still track by name below.',
+        uiText,
+      );
     default:
-      return 'Could not find a public Instagram business or creator account.';
+      return localizeCompetitorCopy(
+        'Could not find a public Instagram business or creator account.',
+        uiText,
+      );
   }
 }
 
@@ -46,34 +69,53 @@ const YOUTUBE_ERROR_COPY: Record<string, string> = {
     'YouTube lookup is unavailable right now. Try again shortly, or clear the YouTube field.',
 };
 
-function describeFrame(frame: CompetitorSpyStreamFrame): string {
+function describeFrame(
+  frame: CompetitorSpyStreamFrame,
+  uiText: ReturnType<typeof useTranslations<'competitor'>>,
+): string {
   switch (frame.type) {
     case 'competitor_started':
-      return `Syncing ${frame.data.competitorName} (${frame.data.index + 1}/${frame.data.total})…`;
+      return uiText('m_0e4a78ce12', {
+        name: frame.data.competitorName,
+        index: frame.data.index + 1,
+        total: frame.data.total,
+      });
     case 'snapshot_diff':
-      return `Found ${frame.data.fetched} ads (${frame.data.inserted} new)…`;
+      return uiText('m_c8dc9953f3', {
+        count: frame.data.fetched,
+        newCount: frame.data.inserted,
+      });
     case 'media_extracted':
-      return 'Fetching creatives…';
+      return localizeCompetitorCopy('Fetching creatives…', uiText);
     case 'creative_analyzed':
-      return 'Analyzing creatives…';
+      return localizeCompetitorCopy('Analyzing creatives…', uiText);
     case 'paid_page_resolved':
-      return `Resolved ${frame.data.competitorName} to ${frame.data.pageName}.`;
+      return uiText('m_58813d7d5e', {
+        name: frame.data.competitorName,
+        page: frame.data.pageName,
+      });
     case 'paid_page_needs_review':
-      return `${frame.data.competitorName} needs a Meta Page review before paid sync.`;
+      return uiText('m_a2bbacf13e', { name: frame.data.competitorName });
     case 'competitor_skipped':
-      return `${frame.data.competitorName} skipped: missing Meta Page ID.`;
+      return uiText('m_5d0a887606', { name: frame.data.competitorName });
     case 'awareness_block':
-      return 'Building report…';
+      return localizeCompetitorCopy('Building report…', uiText);
     case 'run_completed':
-      return `Done — ${frame.data.snapshotsInserted} new, ${frame.data.analysisCompleted} analyzed.`;
+      return uiText('m_45f12842d3', {
+        inserted: frame.data.snapshotsInserted,
+        analyzed: frame.data.analysisCompleted,
+      });
     case 'run_error':
-      return `Error: ${frame.data.message}`;
+      return localizeCompetitorCopy('Sync failed.', uiText);
     default:
-      return 'Working…';
+      return localizeCompetitorCopy('Working…', uiText);
   }
 }
 
 export function CompetitorTagInput({ brandId }: { brandId: string }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('competitor');
+  const formatUiError = useUiErrorMessage();
   const qc = useQueryClient();
   const { data: competitors } = useCompetitors(brandId);
   const create = useCreateCompetitor(brandId);
@@ -124,10 +166,10 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
     competitorResult && account
       ? alreadyTracked(selectedCandidate?.pageId ?? null, account.username, instagramName)
       : false;
-  const limitError =
-    create.error instanceof Error && create.error.message === 'competitor_limit_reached';
-  const youtubeError =
-    create.error instanceof Error ? (YOUTUBE_ERROR_COPY[create.error.message] ?? null) : null;
+  const limitError = competitorApiCode(create.error) === 'competitor_limit_reached';
+  const youtubeError = competitorApiCode(create.error)
+    ? (YOUTUBE_ERROR_COPY[competitorApiCode(create.error)!] ?? null)
+    : null;
   const youtubeInput = youtube.trim() || undefined;
 
   const addInstagramCompetitor = () => {
@@ -183,17 +225,17 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
   const runSync = async () => {
     if (running) return;
     setRunning(true);
-    setProgress('Starting sync…');
+    setProgress(localizeCompetitorCopy('Starting sync…', uiText));
     const ac = new AbortController();
     abortRef.current = ac;
     try {
       await streamCompetitorSync({
         brandId,
         signal: ac.signal,
-        onFrame: (frame) => setProgress(describeFrame(frame)),
+        onFrame: (frame) => setProgress(describeFrame(frame, uiText)),
       });
     } catch {
-      setProgress('Sync failed.');
+      setProgress(localizeCompetitorCopy('Sync failed.', uiText));
     } finally {
       setRunning(false);
       void qc.invalidateQueries({ queryKey: ['competitor-spy'] });
@@ -204,9 +246,9 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
     <div className="space-y-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold">Competitors</h3>
+          <h3 className="text-sm font-semibold">{uiText('competitors_e699b0b')}</h3>
           <p className="text-xs text-muted-foreground">
-            Tag up to {TAG_LIMIT}. These also drive the competitors Trends monitors.
+            {uiText.rich('sentence_0b47960cbdc8', { v0: () => TAG_LIMIT })}
           </p>
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">
@@ -221,16 +263,18 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
           disabled={atLimit}
           placeholder={
             atLimit
-              ? `Limit of ${TAG_LIMIT} reached`
-              : 'Search Instagram handle or brand (e.g. @nike)…'
+              ? uiText('m_66aeb7bc21', { count: TAG_LIMIT })
+              : uiText('search_instagram_handle_or_brand_e_g_nike_15d61e0')
           }
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          aria-label="Search competitors to tag"
+          aria-label={uiText('search_competitors_to_tag_e72e9f0')}
         />
         {!atLimit && debounced.trim().length >= 2 ? (
           <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-md">
             {isFetching ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground">Searching competitor…</div>
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                {uiText('searching_competitor_ffb723b')}
+              </div>
             ) : null}
 
             {!isFetching && competitorResult && account ? (
@@ -243,12 +287,14 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                     <div className="text-xs text-muted-foreground">
                       @{account.username}
                       {account.followersCount !== null
-                        ? ` · ${account.followersCount.toLocaleString()} followers`
+                        ? uiText('m_cf43d01572', {
+                            count: account.followersCount,
+                          })
                         : ''}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:text-emerald-300">
-                        Organic ready
+                        {uiText('organic_ready_be84257')}
                       </span>
                       <span
                         className={`rounded-full border px-2 py-0.5 text-2xs font-medium ${
@@ -260,10 +306,10 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                         }`}
                       >
                         {competitorResult.paidStatus === 'ready'
-                          ? 'Paid ready'
+                          ? uiText('paid_ready_b330cf9')
                           : competitorResult.paidStatus === 'needs_review'
-                            ? 'Paid needs review'
-                            : 'Paid unresolved'}
+                            ? uiText('paid_needs_review_f5fe1ae')
+                            : uiText('paid_unresolved_07521d6')}
                       </span>
                     </div>
                   </div>
@@ -274,7 +320,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                     className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
                   >
                     <Plus className="size-3" />
-                    Tag
+                    {uiText('tag_1503916')}
                   </button>
                 </div>
 
@@ -296,7 +342,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
 
                 <div className="space-y-1">
                   <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Meta ad Page ID
+                    {uiText('meta_ad_page_id_7ba8990')}
                   </div>
                   {competitorResult.metaPageResolution.candidates.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
@@ -311,13 +357,17 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                               : 'border-border text-muted-foreground hover:bg-muted'
                           }`}
                         >
-                          {page.pageName} · {Math.round(page.confidence * 100)}%
+                          {page.pageName} ·{' '}
+                          {new Intl.NumberFormat(uiLocale, {
+                            style: 'percent',
+                            maximumFractionDigits: 0,
+                          }).format(Math.round(page.confidence * 100) / 100)}
                         </button>
                       ))}
                     </div>
                   ) : (
                     <div className="text-xs text-muted-foreground">
-                      No Page ID candidate found. Organic preview can still be tagged.
+                      {uiText('no_page_id_candidate_found_organic_preview_ca_8bbecf4')}
                     </div>
                   )}
                 </div>
@@ -325,10 +375,10 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                 {competitorResult.warnings.length > 0 ? (
                   <div className="text-xs text-muted-foreground">
                     {competitorResult.warnings.includes('meta_page_search_failed')
-                      ? 'Ad Library Page lookup failed; Instagram lookup succeeded.'
+                      ? uiText('ad_library_page_lookup_failed_instagram_looku_ea9834f')
                       : competitorResult.warnings.includes('paid_page_needs_review')
-                        ? 'Pick the exact Meta Page before paid ad tracking runs.'
-                        : 'Some lookup data may be incomplete.'}
+                        ? uiText('pick_the_exact_meta_page_before_paid_ad_track_bb4f7da')
+                        : uiText('some_lookup_data_may_be_incomplete_b42ade6')}
                   </div>
                 ) : null}
               </div>
@@ -336,7 +386,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
 
             {!isFetching && searchError ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">
-                {competitorSearchErrorCopy(searchError)}
+                {competitorSearchErrorCopy(searchError, uiText)}
               </div>
             ) : null}
 
@@ -345,7 +395,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
               onClick={addByName}
               className="w-full border-t border-border px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
             >
-              Track “{query.trim()}” by name (less precise)
+              {uiText.rich('sentence_225ea2d9f311', { v0: () => query.trim() })}
             </button>
           </div>
         ) : null}
@@ -355,16 +405,21 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
         value={youtube}
         onChange={(e) => setYoutube(e.target.value)}
         disabled={atLimit}
-        placeholder="YouTube channel (optional): URL, @handle or channel id"
+        placeholder={uiText('youtube_channel_optional_url_handle_or_channe_766e3fe')}
         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-        aria-label="YouTube channel"
+        aria-label={uiText('youtube_channel_c048cfe')}
       />
 
-      {youtubeError ? <p className="text-xs text-destructive">{youtubeError}</p> : null}
+      {youtubeError ? (
+        <p className="text-xs text-destructive">{localizeCompetitorCopy(youtubeError, uiText)}</p>
+      ) : null}
 
+      {create.error && !limitError && !youtubeError ? (
+        <p className="text-xs text-destructive">{formatUiError(create.error)}</p>
+      ) : null}
       {limitError ? (
         <p className="text-xs text-destructive">
-          You can tag at most {TAG_LIMIT} competitors. Remove one first.
+          {uiText.rich('sentence_d6bce43427d5', { v0: () => TAG_LIMIT })}
         </p>
       ) : null}
 
@@ -376,7 +431,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
           <RefreshCw className={`size-3.5 ${running ? 'animate-spin' : ''}`} />
-          {running ? 'Syncing…' : 'Sync now'}
+          {running ? uiText('syncing_8a046cc') : uiText('sync_now_885e8f4')}
         </button>
         {progress ? <span className="text-xs text-muted-foreground">{progress}</span> : null}
       </div>

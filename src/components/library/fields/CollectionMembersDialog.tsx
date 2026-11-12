@@ -8,6 +8,7 @@
 
 import type { CollectionAccess, CollectionMember, CollectionRole } from '@continuum/contracts';
 import { Loader2, Trash2, UserLock } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -58,7 +59,9 @@ async function putMembers(body: Record<string, unknown>): Promise<void> {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
     throw new Error(payload?.error ?? `HTTP ${response.status}`);
   }
 }
@@ -74,6 +77,8 @@ export function CollectionMembersDialog({
   open,
   onOpenChange,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const brandRole = useBrandRole(brandId);
   const people = useMentionTargets(open ? brandId : null);
   const [state, setState] = useState<MembersState | null>(null);
@@ -86,11 +91,15 @@ export function CollectionMembersDialog({
       `/api/library/collections/members?collectionId=${encodeURIComponent(collectionId)}`,
     );
     if (!response.ok) {
-      toast.error(`Loading members failed · HTTP ${response.status}`);
+      toast.error(
+        translateUi('loading_members_failed_http_value0_db9aaece', {
+          value0: String(response.status),
+        }),
+      );
       return;
     }
     setState((await response.json()) as MembersState);
-  }, [collectionId]);
+  }, [collectionId, translateUi]);
 
   useEffect(() => {
     if (open) void load();
@@ -131,11 +140,11 @@ export function CollectionMembersDialog({
       <DialogContent className="sm:max-w-md" data-testid="collection-members-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UserLock className="size-4" /> Members of {collectionName}
+            <UserLock className="size-4" /> {translateUi('members_of_935f85f3')} {collectionName}
           </DialogTitle>
           <DialogDescription>
-            Each member’s role decides what they can do in this collection. Brand owners and
-            admins can always do everything.
+            {' '}
+            {translateUi('each_member_s_role_decides_what_the_930e1d39')}{' '}
           </DialogDescription>
         </DialogHeader>
 
@@ -147,7 +156,9 @@ export function CollectionMembersDialog({
           <div className="flex flex-col gap-4">
             <ul className="flex flex-col gap-1.5" data-testid="collection-members-list">
               {state.members.length === 0 ? (
-                <li className="text-xs text-muted-foreground">No members yet.</li>
+                <li className="text-xs text-muted-foreground">
+                  {translateUi('no_members_yet_12dc83c5')}
+                </li>
               ) : (
                 state.members.map((member) => (
                   <li
@@ -169,7 +180,9 @@ export function CollectionMembersDialog({
                       <SelectTrigger
                         size="sm"
                         className="h-8 w-32 text-xs"
-                        aria-label={`Role of ${labelFor(member.userId)}`}
+                        aria-label={translateUi('role_of_value0_60b791c1', {
+                          value0: String(labelFor(member.userId)),
+                        })}
                       >
                         <SelectValue items={ROLE_LABEL} />
                       </SelectTrigger>
@@ -188,7 +201,9 @@ export function CollectionMembersDialog({
                         variant="ghost"
                         className="size-8"
                         disabled={busy}
-                        aria-label={`Remove ${labelFor(member.userId)}`}
+                        aria-label={translateUi('remove_value0_3028bf7d', {
+                          value0: String(labelFor(member.userId)),
+                        })}
                         onClick={() =>
                           void change(
                             { userId: member.userId, role: null },
@@ -207,9 +222,13 @@ export function CollectionMembersDialog({
             {manage ? (
               <div className="flex items-center gap-2">
                 <Select value={addUserId} onValueChange={(next) => setAddUserId(String(next))}>
-                  <SelectTrigger size="sm" className="h-8 flex-1 text-xs" aria-label="Add member">
+                  <SelectTrigger
+                    size="sm"
+                    className="h-8 flex-1 text-xs"
+                    aria-label={translateUi('add_member_17108415')}
+                  >
                     <SelectValue
-                      placeholder="Add a teammate…"
+                      placeholder={translateUi('add_a_teammate_d105caea')}
                       items={Object.fromEntries(addable.map((p) => [p.userId, p.label]))}
                     />
                   </SelectTrigger>
@@ -228,7 +247,7 @@ export function CollectionMembersDialog({
                   <SelectTrigger
                     size="sm"
                     className="h-8 w-28 text-xs"
-                    aria-label="New member role"
+                    aria-label={translateUi('new_member_role_a2d0c7d4')}
                   >
                     <SelectValue items={ROLE_LABEL} />
                   </SelectTrigger>
@@ -252,12 +271,14 @@ export function CollectionMembersDialog({
                     ).then(() => setAddUserId(''))
                   }
                 >
-                  Add
+                  {' '}
+                  {translateUi('add_9fd728c6')}{' '}
                 </Button>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Only a brand owner, admin or this collection’s manager can change members.
+                {' '}
+                {translateUi('only_a_brand_owner_admin_or_this_co_2619c701')}{' '}
               </p>
             )}
           </div>

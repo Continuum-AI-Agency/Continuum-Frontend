@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { LibraryPlayback } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { clearLibraryPlaybackCache } from '@/lib/library/libraryPlayback';
 import { activeStageVideo } from '@/lib/library/videoPoster';
 import { VideoAnnotationPlayer } from './VideoAnnotationPlayer';
@@ -149,10 +156,15 @@ describe('VideoAnnotationPlayer — quality', () => {
     element.play = async () => {
       plays += 1;
     };
-    Object.defineProperty(element, 'paused', { configurable: true, get: () => false });
+    Object.defineProperty(element, 'paused', {
+      configurable: true,
+      get: () => false,
+    });
     element.currentTime = 4.2;
 
-    fireEvent.change(screen.getByTestId('player-quality'), { target: { value: 'proxy_1080' } });
+    fireEvent.change(screen.getByTestId('player-quality'), {
+      target: { value: 'proxy_1080' },
+    });
     expect(root().dataset.quality).toBe('proxy_1080');
     expect(root().dataset.playingRole).toBe('proxy_1080');
     expect(element.getAttribute('src')).toBe('https://storage.test/proxy_1080.mp4');
@@ -163,7 +175,9 @@ describe('VideoAnnotationPlayer — quality', () => {
     expect(element.currentTime).toBeCloseTo(4.2);
     expect(plays).toBe(1);
 
-    fireEvent.change(screen.getByTestId('player-quality'), { target: { value: 'original' } });
+    fireEvent.change(screen.getByTestId('player-quality'), {
+      target: { value: 'original' },
+    });
     expect(root().dataset.playingRole).toBe('original');
     expect(element.getAttribute('src')).toBe(ORIGINAL);
   });
@@ -186,7 +200,9 @@ describe('VideoAnnotationPlayer — speed and loop', () => {
     const element = video();
     element.play = async () => {};
 
-    fireEvent.change(screen.getByTestId('player-speed'), { target: { value: '0.5' } });
+    fireEvent.change(screen.getByTestId('player-speed'), {
+      target: { value: '0.5' },
+    });
     expect(root().dataset.playbackRate).toBe('0.5');
     expect(element.playbackRate).toBe(0.5);
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 import { ColorField } from './color-field';
 
@@ -45,7 +46,9 @@ describe('ColorField', () => {
     const { onChange, getByLabelText } = renderField('#ff0000');
     openPicker(getByLabelText);
 
-    fireEvent.change(getByLabelText('Hex colour'), { target: { value: '#0f1f43' } });
+    fireEvent.change(getByLabelText('Hex colour'), {
+      target: { value: '#0f1f43' },
+    });
 
     expect(onChange).toHaveBeenLastCalledWith('#0f1f43');
   });
@@ -54,7 +57,9 @@ describe('ColorField', () => {
     const { onChange, getByLabelText } = renderField('#ff0000');
     openPicker(getByLabelText);
 
-    fireEvent.change(getByLabelText('Hex colour'), { target: { value: '#0f1' } });
+    fireEvent.change(getByLabelText('Hex colour'), {
+      target: { value: '#0f1' },
+    });
 
     expect(onChange).not.toHaveBeenCalled();
   });

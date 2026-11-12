@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { OptimizerActionFeedRow } from '../../useOptimizerData';
 import { HISTORY, NOW } from './__fixtures__/googleTab';
 import type { HistoryRead } from './campaignExplorerModel';
@@ -26,7 +27,9 @@ const BUDGET_WRITE = {
 
 function mount(writes: WritesRead, history: HistoryRead) {
   const onOpenActivity = mock();
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const view = render(
     <QueryClientProvider client={client}>
       <GoogleRecentChangesView

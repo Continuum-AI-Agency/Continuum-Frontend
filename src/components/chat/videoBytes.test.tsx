@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { AgentMentionReference, AgentMentionSuggestion } from '@/lib/agent-references';
 import { MentionifiedText } from './mentionified-text';
 import { SessionContentTray } from './SessionContentTray';
@@ -19,7 +20,11 @@ const videoMention = (metadata: Record<string, unknown>): AgentMentionReference 
     type: 'media_asset',
     label: 'Launch reel',
     source: 'organic',
-    metadata: { kind: 'video', signedUrl: 'https://cdn.test/reel.mp4', ...metadata },
+    metadata: {
+      kind: 'video',
+      signedUrl: 'https://cdn.test/reel.mp4',
+      ...metadata,
+    },
   }) as AgentMentionReference;
 
 afterEach(() => cleanup());

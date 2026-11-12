@@ -1,6 +1,7 @@
 // What the Home already learned about the brand before anything is connected: the goal the
 // reading leads with (from the Brand Book's description when it says enough) and why.
 import type { HomeBrandReading } from '@continuum/contracts';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 export function GoalLearned({
@@ -10,10 +11,12 @@ export function GoalLearned({
   goal: HomeBrandReading['goal'];
   className?: string;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <div className={cn('min-w-0', className)} data-testid="home-setup-goal">
       <p className="truncate text-xs">
-        <span className="text-muted-foreground">Goal · </span>
+        <span className="text-muted-foreground">{betaUiText('beta_f4927f5392bb')} </span>
         <span className="font-medium">{goal.label}</span>
       </p>
       <p className="text-muted-foreground text-xs leading-snug">{goal.detail}</p>

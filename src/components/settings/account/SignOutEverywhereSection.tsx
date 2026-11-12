@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 import { useState } from 'react';
 import {
@@ -25,6 +26,8 @@ type SignOutEverywhereSectionProps = {
 // Sign out in the sidebar ends only this browser; this ends every session of the account. It
 // signs out people on other devices, so it asks first (PP-DT-C-signout-ends-every-device).
 export function SignOutEverywhereSection({ impersonating }: SignOutEverywhereSectionProps) {
+  const betaUiText = useBetaTranslations('settings');
+
   const { logoutEverywhere, isPending, error } = useAuth();
   const [confirming, setConfirming] = useState(false);
 
@@ -47,34 +50,32 @@ export function SignOutEverywhereSection({ impersonating }: SignOutEverywhereSec
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-[60ch] text-sm text-muted-foreground">
-          Sign out, in the sidebar, ends only this browser. Sign out of all devices ends every
-          session of your account, this one included.
+          {betaUiText('beta_544d763a7fbe')}
         </p>
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
           <AlertDialogTrigger
             render={
               <Button type="button" variant="outline" disabled={isPending}>
-                Sign out of all devices
+                {betaUiText('beta_8d7292e86aa0')}
               </Button>
             }
           />
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Sign out of all devices?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Every browser and device signed in to your account is signed out, this one included.
-                A page already open on another device can keep working for up to an hour.
-              </AlertDialogDescription>
+              <AlertDialogTitle>{betaUiText('beta_1583fe510801')}</AlertDialogTitle>
+              <AlertDialogDescription>{betaUiText('beta_cfbf52d8b76e')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={isPending}>
+                {betaUiText('beta_19766ed6ccb2')}
+              </AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
                 disabled={isPending}
                 aria-busy={isPending}
                 onClick={() => void signOutEverywhere()}
               >
-                {isPending ? 'Signing out…' : 'Sign out everywhere'}
+                {isPending ? betaUiText('beta_08c6bd357b7d') : betaUiText('beta_af180fca9025')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

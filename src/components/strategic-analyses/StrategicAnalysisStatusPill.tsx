@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -13,7 +14,11 @@ type Props = {
 
 const ACTIVE_STATUSES = ['queued', 'running', 'in_progress', 'pending'] as const;
 
-type ActiveRunRow = { id: string; status: string | null; started_at: string | null };
+type ActiveRunRow = {
+  id: string;
+  status: string | null;
+  started_at: string | null;
+};
 
 async function fetchActiveRun(brandId: string): Promise<ActiveRunRow | null> {
   const supabase = createSupabaseBrowserClient();
@@ -30,6 +35,7 @@ async function fetchActiveRun(brandId: string): Promise<ActiveRunRow | null> {
 }
 
 export function StrategicAnalysisStatusPill({ brandId }: Props) {
+  const uiText = useTranslations('common');
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['strategic-analysis-active', brandId] as const, [brandId]);
   const { data: activeRun } = useQuery({
@@ -66,14 +72,14 @@ export function StrategicAnalysisStatusPill({ brandId }: Props) {
         >
           <Pill variant="violet" className="gap-2 py-1 pl-2.5 pr-2 text-xs shadow-sm backdrop-blur">
             <PillIndicator variant="info" pulse />
-            <span>Refining your Brand DNA…</span>
+            <span>{uiText('m_fcd0f6698b')}</span>
             <button
               type="button"
               onClick={() => setHidden(true)}
               className="ml-1 text-2xs font-semibold uppercase tracking-wide text-primary/70 hover:text-primary"
-              aria-label="Dismiss"
+              aria-label={uiText('dismiss_48845bf')}
             >
-              Hide
+              {uiText('hide_ac20a57')}
             </button>
           </Pill>
         </motion.div>

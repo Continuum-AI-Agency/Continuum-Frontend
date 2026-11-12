@@ -8,7 +8,7 @@ import {
   render,
   screen,
   waitFor,
-} from '@testing-library/react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { parseReferenceDropPayload } from '@/lib/ai-studio/referenceDrop';
 import { ApiError } from '@/lib/api/errors';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
@@ -88,7 +88,9 @@ const search = async (handle: string) => {
   // Wait for the mount auto-load to settle so the submit button shows "Search"
   // (not the loading spinner) and the form is interactive before we type + click.
   const searchButton = await screen.findByRole('button', { name: /search/i });
-  fireEvent.change(screen.getByLabelText(/instagram username/i), { target: { value: handle } });
+  fireEvent.change(screen.getByLabelText(/instagram username/i), {
+    target: { value: handle },
+  });
   await act(async () => {
     fireEvent.click(searchButton);
   });
@@ -120,7 +122,11 @@ describe('InstagramMediaBrowser', () => {
     await search('nasa');
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole('button', { name: /import from carousel SC1/i }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: /import from carousel SC1/i,
+        }),
+      );
     });
     await act(async () => {
       fireEvent.click(await screen.findByRole('button', { name: /toggle slide 2/i }));
@@ -161,7 +167,9 @@ describe('InstagramMediaBrowser', () => {
     renderBrowser();
     await search('nasa');
 
-    const tile = await screen.findByRole('button', { name: /import from carousel SC1/i });
+    const tile = await screen.findByRole('button', {
+      name: /import from carousel SC1/i,
+    });
     const dataTransfer = dragStartWithDataTransfer(tile);
 
     // Must match the canvas dropzone's dropEffect or Chrome swallows the drop.
@@ -179,10 +187,16 @@ describe('InstagramMediaBrowser', () => {
     await search('nasa');
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole('button', { name: /import from carousel SC1/i }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: /import from carousel SC1/i,
+        }),
+      );
     });
 
-    const slide = await screen.findByRole('button', { name: /toggle slide 2/i });
+    const slide = await screen.findByRole('button', {
+      name: /toggle slide 2/i,
+    });
     const dataTransfer = dragStartWithDataTransfer(slide);
 
     expect(dataTransfer.effectAllowed).toBe(STUDIO_ASSET_DROP_EFFECT);

@@ -1,6 +1,7 @@
 'use client';
 
 import type { CreditPackOffer, CreditWallet } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   PromoCodeRedeem,
@@ -24,27 +25,33 @@ import { cn } from '@/lib/utils';
 // segment is always the next one to shrink. Overage is money, not credits, so it is a line
 // of text under the bar rather than a segment in it.
 
-const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-
 type Segment = { key: string; label: string; credits: number; swatch: string };
 
 export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+  const dateFormat = new Intl.DateTimeFormat(useLocale(), {
+    month: 'short',
+    day: 'numeric',
+  });
+
   const segments: Segment[] = [
     {
       key: 'rollover',
-      label: 'Rollover',
+      label: tUi('m_434ecbfc21'),
       credits: credits.rolloverCredits,
       swatch: 'bg-primary/45',
     },
     {
       key: 'included',
-      label: 'Included',
+      label: tUi('m_3e2c570409'),
       credits: credits.includedRemainingCredits,
       swatch: 'bg-primary',
     },
     {
       key: 'purchased',
-      label: 'Purchased',
+      label: tUi('m_8b70c504aa'),
       credits: credits.purchasedCredits,
       swatch: 'bg-secondary',
     },
@@ -59,22 +66,29 @@ export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) 
             className="font-mono text-xl font-semibold text-foreground tabular-nums"
             data-testid="canvas-credits-available"
           >
-            {formatCredits(credits.availableCredits)}
+            {formatCredits(credits.availableCredits, uiLocale)}
           </span>{' '}
-          credits available
+          {tUi('m_e379e39ff9')}
         </p>
         {credits.includedCredits > 0 ? (
           <p className="text-xs text-muted-foreground tabular-nums">
-            {formatCredits(credits.includedUsedCredits)} of {formatCredits(credits.includedCredits)}{' '}
-            included used
-            {credits.periodEnd ? ` · resets ${dateFormat.format(new Date(credits.periodEnd))}` : ''}
+            {formatCredits(credits.includedUsedCredits, uiLocale)}
+            {tUi('m_607f2de6ce')}
+            {formatCredits(credits.includedCredits, uiLocale)} {tUi('m_3c1c8da652')}
+            {credits.periodEnd
+              ? tUi('m_1d444fa9d1', {
+                  v0: String(dateFormat.format(new Date(credits.periodEnd))),
+                })
+              : ''}
           </p>
         ) : null}
       </div>
 
       <div
         role="img"
-        aria-label={segments.map((s) => `${s.label} ${formatCredits(s.credits)}`).join(', ')}
+        aria-label={segments
+          .map((s) => `${s.label} ${formatCredits(s.credits, uiLocale)}`)
+          .join(', ')}
         className="flex h-2 w-full gap-px overflow-hidden rounded-full bg-muted"
       >
         {segments
@@ -96,18 +110,19 @@ export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) 
               {segment.label}
             </dt>
             <dd className="font-mono text-sm text-foreground tabular-nums">
-              {formatCredits(segment.credits)}
+              {formatCredits(segment.credits, uiLocale)}
             </dd>
           </div>
         ))}
         <div className="min-w-0">
-          <dt className="text-xs text-muted-foreground">Billed to card this period</dt>
+          <dt className="text-xs text-muted-foreground">{tUi('m_7061ddf99d')}</dt>
           <dd className="font-mono text-sm text-foreground tabular-nums">
-            {formatUsd(credits.overageUsd)}
+            {formatUsd(credits.overageUsd, 'usd', uiLocale)}
             {credits.overageCapUsd !== null ? (
               <span className="text-xs text-muted-foreground">
                 {' '}
-                of {formatUsd(credits.overageCapUsd)}
+                {tUi('m_2449d65241')}
+                {formatUsd(credits.overageCapUsd, 'usd', uiLocale)}
               </span>
             ) : null}
           </dd>
@@ -115,15 +130,17 @@ export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) 
       </dl>
 
       <p className="max-w-[70ch] text-xs text-muted-foreground">
-        Each generation spends rollover credits first, then this month&apos;s included credits, then
-        purchased packs.{' '}
+        {tUi('m_0929d25adc')}{' '}
         {credits.billsOverageToCard
-          ? `After that, usage is billed to your card at ${formatUsd(0.01)} per credit${
-              credits.overageCapUsd !== null
-                ? `, up to ${formatUsd(credits.overageCapUsd)} a month`
-                : ''
-            }.`
-          : 'When credits run out, generation pauses until you buy a pack — or turn on auto-billing.'}
+          ? tUi('m_1ea8de0e33', {
+              v0: String(formatUsd(0.01, 'usd', uiLocale)),
+              v1: String(
+                credits.overageCapUsd !== null
+                  ? `, up to ${formatUsd(credits.overageCapUsd, 'usd', uiLocale)} a month`
+                  : '',
+              ),
+            })
+          : tUi('m_31d098c349')}
       </p>
     </div>
   );
@@ -131,6 +148,10 @@ export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) 
 
 /** The prepaid X API wallet: one balance, spent per X call at X's list price × 1.15. */
 export function XCreditsMeter({ x }: { x: XWalletView }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">
@@ -138,14 +159,17 @@ export function XCreditsMeter({ x }: { x: XWalletView }) {
           className="font-mono text-xl font-semibold text-foreground tabular-nums"
           data-testid="x-credits-available"
         >
-          {formatCredits(x.balanceCredits)}
+          {formatCredits(x.balanceCredits, uiLocale)}
         </span>{' '}
-        X API credits · about {formatCredits(x.postsLeft)} posts
+        {tUi('m_e69bc0da4b')}
+        {formatCredits(x.postsLeft, uiLocale)}
+        {tUi('m_7ddf0bf3ac')}
       </p>
       <p className="max-w-[70ch] text-xs text-muted-foreground">
-        X charges per API call, and this balance pays for it: {X_POST_CREDITS} credits a post,{' '}
-        {X_LINK_POST_CREDITS} for a post with a link, and about 1 credit per 8 posts read for analytics.
-        Canvas credits are never used for X.
+        {tUi('m_e76c9794f3')}
+        {X_POST_CREDITS}
+        {tUi('m_228bdaae57')} {X_LINK_POST_CREDITS}
+        {tUi('m_40d4712a54')}
       </p>
     </div>
   );
@@ -163,6 +187,10 @@ export function BuyCreditsControl({
   purchasedCredits: number;
   wallet?: CreditWallet;
 }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+
   const [packs, setPacks] = useState(DEFAULT_TOP_UP_PACKS);
   const { buy, redirecting } = useCreditCheckout(brandId, purchasedCredits, wallet);
 
@@ -177,8 +205,11 @@ export function BuyCreditsControl({
       <div className="flex justify-end">
         <Button disabled={redirecting} aria-busy={redirecting} onClick={() => buy(packs)}>
           {redirecting
-            ? 'Opening checkout…'
-            : `Buy ${wallet === 'x' ? 'X ' : ''}credits · ${formatUsd(packs * offer.priceUsd)}`}
+            ? tUi('m_4b149ef50a')
+            : tUi('m_c73e3d4b1e', {
+                v0: String(wallet === 'x' ? 'X ' : ''),
+                v1: String(formatUsd(packs * offer.priceUsd, 'usd', uiLocale)),
+              })}
         </Button>
       </div>
       {/* Promo codes (CONTINUUM200) are for Canvas credits only. */}

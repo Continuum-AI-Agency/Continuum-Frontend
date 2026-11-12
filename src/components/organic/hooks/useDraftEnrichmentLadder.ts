@@ -1,8 +1,8 @@
 'use client';
-
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   DraftEnrichmentConflictError,
   enqueueBlueprintExpansion,
@@ -71,6 +71,8 @@ export function useDraftEnrichmentLadder(
   draft: OrganicCalendarDraft,
   { brandProfileId, onMediaStep }: LadderOptions,
 ): DraftLadder {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorMessage();
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const { show } = useToast();
   const { requestDestructiveConfirmation } = useDestructiveConfirmation();
@@ -159,12 +161,9 @@ export function useDraftEnrichmentLadder(
           generationStage: step === 'copy' ? 'Generating copy…' : 'Building blueprint…',
         }));
       } catch (error) {
-        const description =
-          error instanceof DraftEnrichmentConflictError || error instanceof Error
-            ? error.message
-            : 'Please try again.';
+        const description = formatUiError(error);
         show({
-          title: `Could not ${ACTION_LABELS[step].toLowerCase()}`,
+          title: uiText('enrichmentActionFailed', { step }),
           description,
           variant: 'error',
         });
@@ -172,7 +171,7 @@ export function useDraftEnrichmentLadder(
         setIsBusy(false);
       }
     },
-    [brandProfileId, draft.backendDraftId, draft.id, show, updateDraft],
+    [brandProfileId, draft.backendDraftId, draft.id, show, updateDraft, formatUiError, uiText],
   );
 
   const run = React.useCallback(() => {
@@ -194,9 +193,8 @@ export function useDraftEnrichmentLadder(
     if (!canRewriteCopy || isBusy || !draft.backendDraftId) return;
     void (async () => {
       const confirmed = await requestDestructiveConfirmation({
-        title: 'Rewrite the copy?',
-        description:
-          'The current caption and hashtags are replaced by a fresh generation. This cannot be undone.',
+        title: uiText('rewrite_the_copy_62adc52'),
+        description: uiText('the_current_caption_and_hashtags_are_replaced_3cc8ff5'),
         confirmLabel: 'Rewrite copy',
       });
       if (!confirmed) return;
@@ -208,6 +206,7 @@ export function useDraftEnrichmentLadder(
     isBusy,
     requestDestructiveConfirmation,
     runLadderRequest,
+    uiText,
   ]);
 
   return {

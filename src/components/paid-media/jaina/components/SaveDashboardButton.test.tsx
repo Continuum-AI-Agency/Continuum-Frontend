@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * What a saved dashboard remembers about the report it came from.
  *
@@ -17,7 +18,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import {
   MessageScroller,
   MessageScrollerContent,
@@ -144,7 +145,11 @@ function mount(reportV2: CheckpointReportV2, regeneratePrompt?: string) {
 
 function openTheDialog() {
   saveDashboardMock.mockClear();
-  fireEvent.click(screen.getByRole('button', { name: 'Save the visible modules as a dashboard' }));
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Save the visible modules as a dashboard',
+    }),
+  );
 }
 
 async function saveTheDashboard(): Promise<Record<string, unknown>> {
@@ -194,7 +199,9 @@ describe('saving a Jaina report as a dashboard', () => {
     mount(reportWith([placements]), THE_QUESTION);
     openTheDialog();
     expect(screen.getByText(DASHBOARD_SCOPE_MISSING_MESSAGE)).toBeTruthy();
-    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    const save = screen.getByRole('button', {
+      name: 'Save',
+    }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     fireEvent.click(save);
     expect(saveDashboardMock).not.toHaveBeenCalled();

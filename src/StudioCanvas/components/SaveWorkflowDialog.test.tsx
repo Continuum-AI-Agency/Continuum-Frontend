@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
 (global as { MutationObserver?: unknown }).MutationObserver = window.MutationObserver;
@@ -34,7 +40,10 @@ const draftPipelineGuide = mock(async () => ({
     invocation_notes: [],
   },
 }));
-mock.module('@/lib/ai-studio/pipelines', () => ({ draftPipelineGuide, publishPipeline }));
+mock.module('@/lib/ai-studio/pipelines', () => ({
+  draftPipelineGuide,
+  publishPipeline,
+}));
 
 const VIDEO_PROJECT_ID = '33333333-3333-4333-8333-333333333333';
 const getVideoProject = mock(async () => ({
@@ -73,8 +82,18 @@ type StoreEdge = ReturnType<typeof useStudioStore.getState>['edges'][number];
 
 const BRAND = '868a01f9-101b-4e0e-8392-6358a127ad97';
 
-const GEN = { id: 'gen', type: 'nanoGen', position: { x: 0, y: 0 }, data: {} } as StoreNode;
-const REF = { id: 'ref', type: 'image', position: { x: 10, y: 0 }, data: {} } as StoreNode;
+const GEN = {
+  id: 'gen',
+  type: 'nanoGen',
+  position: { x: 0, y: 0 },
+  data: {},
+} as StoreNode;
+const REF = {
+  id: 'ref',
+  type: 'image',
+  position: { x: 10, y: 0 },
+  data: {},
+} as StoreNode;
 const EDGE = {
   id: 'ref->gen',
   source: 'ref',
@@ -156,7 +175,9 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
   // subgraph re-applies with wires dangling to nodes that were left behind.
   it('persists only the edges inside the selection', async () => {
     renderPanel([GEN]);
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Hero shot' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Hero shot' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
 
     await waitFor(() => expect(createWorkflow).toHaveBeenCalledTimes(1));
@@ -185,7 +206,9 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
       target: { value: 'Brand-owned fictional character.' },
     });
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Character launch' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
     await screen.findByDisplayValue('A launch needs character imagery.');
     fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
@@ -223,7 +246,9 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     fireEvent.pointerUp(pipeline);
     fireEvent.click(pipeline);
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Character launch' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
     const description = (await screen.findByLabelText(
       'What it makes and when to use it',
@@ -234,7 +259,9 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
 
     await waitFor(() => expect(publishPipeline).toHaveBeenCalledTimes(1));
-    const payload = publishPipeline.mock.calls[0]?.[0] as unknown as { description: string };
+    const payload = publishPipeline.mock.calls[0]?.[0] as unknown as {
+      description: string;
+    };
     expect(payload.description).toBe('Creates approved character launch images.');
   });
 
@@ -256,7 +283,9 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     fireEvent.pointerUp(pipeline);
     fireEvent.click(pipeline);
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Character launch' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
 
     expect(await screen.findByText(/Drafted from the pipeline's inputs and outputs/)).toBeDefined();
@@ -265,7 +294,7 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     ).toBeDefined();
   });
 
-  it('shows why a draft was refused and invents no guide in its place', async () => {
+  it('shows localized failure guidance and invents no guide in its place', async () => {
     draftPipelineGuide.mockImplementationOnce(async () => {
       throw new Error('draft unavailable');
     });
@@ -275,14 +304,20 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     fireEvent.pointerUp(pipeline);
     fireEvent.click(pipeline);
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Character launch' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
-    // The refusal is shown as-is; no generic "Supply X as text" guide is invented in its place.
-    await screen.findByText('draft unavailable');
+    // Unknown provider diagnostics stay out of the UI; a refusal never invents a guide.
+    await screen.findByText('An unexpected error occurred. Please try again.');
     expect(screen.queryByLabelText('Use when · one per line')).toBeNull();
     expect(screen.queryByText(/Supply/)).toBeNull();
     expect(
-      (screen.getByRole('button', { name: 'Publish pipeline' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Publish pipeline',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     expect(publishPipeline).not.toHaveBeenCalled();
   });
@@ -294,7 +329,9 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     fireEvent.pointerUp(pipeline);
     fireEvent.click(pipeline);
 
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Character launch' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
     const description = (await screen.findByLabelText(
       'What it makes and when to use it',
@@ -322,7 +359,11 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
       target: 'cut',
       targetHandle: 'media-in',
     } as StoreEdge;
-    useStudioStore.setState({ brandId: BRAND, nodes: [cut, REF], edges: [edge] });
+    useStudioStore.setState({
+      brandId: BRAND,
+      nodes: [cut, REF],
+      edges: [edge],
+    });
     render(
       <SaveWorkflowDialog brandProfileId={BRAND} open showTrigger={false} selection={[cut]} />,
     );
@@ -332,7 +373,9 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     fireEvent.click(pipeline);
 
     expect(await screen.findByRole('combobox', { name: /editor source slot/i })).toBeDefined();
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Product cutdown' } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Product cutdown' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
     await screen.findByDisplayValue('A launch needs character imagery.');
     fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));

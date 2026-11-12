@@ -1,7 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Rocket, Save, Send } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { PAID_SCAFFOLD_TREE_QUERY_ROOT } from '@/components/paid-media/jaina/scaffold/usePaidScaffoldTree';
@@ -51,15 +57,18 @@ import { graphFingerprint, useCampaignStore } from '../stores/useCampaignStore';
  * picker and two disabled buttons — nothing said what the page was for
  * (PP-L1-campaign-canvas-near-blank-landing).
  */
-export function recordBarEmptyState(params: {
-  /** null while the brand's proposals are still being read. */
-  scaffoldCount: number | null;
-  hydration: CanvasHydration | null;
-  nodeCount: number;
-  isLoadingGraph: boolean;
-  /** The page was opened on `?scaffold=` naming a proposal this brand's list does not hold. */
-  requestedMissing?: boolean;
-}): string | null {
+export function recordBarEmptyState(
+  params: {
+    /** null while the brand's proposals are still being read. */
+    scaffoldCount: number | null;
+    hydration: CanvasHydration | null;
+    nodeCount: number;
+    isLoadingGraph: boolean;
+    /** The page was opened on `?scaffold=` naming a proposal this brand's list does not hold. */
+    requestedMissing?: boolean;
+  },
+  uiTranslate?: ScaleCopy,
+): string | null {
   const { scaffoldCount, hydration, nodeCount, isLoadingGraph, requestedMissing = false } = params;
   if (scaffoldCount === null) return null;
   const canvasInUse = hydration !== null || nodeCount > 0 || isLoadingGraph;
@@ -69,7 +78,9 @@ export function recordBarEmptyState(params: {
       : 'The proposal this link opened is not on this brand. Pick one below, or ask Jaina to propose a campaign.';
   }
   if (scaffoldCount === 0) {
-    return 'No proposals yet — ask Jaina to propose a campaign and it will appear here.';
+    return uiTranslate
+      ? uiTranslate('no_proposals_yet_ask_jaina_to_propose_a_campa_a681317')
+      : 'No proposals yet — ask Jaina to propose a campaign and it will appear here.';
   }
   if (canvasInUse) return null;
   return 'Nothing on the canvas yet. Pick a proposal to edit it here, or ask Jaina to propose a campaign.';
@@ -156,6 +167,8 @@ export function ScaffoldRecordBar({
   /** The person picked a scaffold from the list themselves: a task they opened by hand. */
   onScaffoldPicked?: () => void;
 }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const { show: toast } = useToast();
   const queryClient = useQueryClient();
   const hydration = useCampaignStore((store) => store.hydration);
@@ -208,7 +221,7 @@ export function ScaffoldRecordBar({
           if (isCurrent()) setIsLoadingGraph(false);
         });
     },
-    [brandId, loadHydratedGraph, onAdAccountChange],
+    [brandId, loadHydratedGraph, onAdAccountChange, formatUiError],
   );
 
   /**
@@ -247,7 +260,7 @@ export function ScaffoldRecordBar({
         });
         toast({
           title: `Saved as v${saved.version} — without your latest edits`,
-          description: 'They changed while the save ran and are still on the canvas. Save again.',
+          description: uiText('they_changed_while_the_save_ran_and_are_still_49a8247'),
           variant: 'warning',
         });
         return;
@@ -257,17 +270,17 @@ export function ScaffoldRecordBar({
       setScaffolds((rows) => rows?.map((row) => (row.id === next.id ? next : row)) ?? rows);
       const reloaded = await loadScaffold(next);
       if (!reloaded) {
-        setError(
-          `Saved as v${saved.version}, but it could not be reloaded. Pick it from the list to continue.`,
-        );
+        setError(uiText('canvas_reload_saved_version', { version: saved.version }));
         return;
       }
       // The chat's card for this scaffold redraws from the saved rows. Not awaited: a slow
       // refetch must never hold the save's own spinner.
-      void queryClient.invalidateQueries({ queryKey: [PAID_SCAFFOLD_TREE_QUERY_ROOT] });
+      void queryClient.invalidateQueries({
+        queryKey: [PAID_SCAFFOLD_TREE_QUERY_ROOT],
+      });
       toast({
         title: `Saved as v${saved.version}`,
-        description: 'A new version of this scaffold. Nothing reached Meta.',
+        description: uiText('a_new_version_of_this_scaffold_nothing_reache_499397d'),
         variant: 'success',
       });
     } catch (cause: unknown) {
@@ -275,13 +288,13 @@ export function ScaffoldRecordBar({
         setError(cause.message);
         setSaveIssues(cause.issues);
       } else {
-        setError(cause instanceof Error ? cause.message : 'Could not save this canvas.');
+        setError(formatUiError(cause));
       }
     } finally {
       useCampaignStore.getState().setEditLocked(false);
       setIsSaving(false);
     }
-  }, [loadScaffold, queryClient, scaffolds, toast]);
+  }, [loadScaffold, queryClient, scaffolds, toast, formatUiError, uiText]);
 
   // Jaina changed the scaffold on screen (attached a creative): show it. Once per request, and
   // never over unsaved edits — those are the person's, and a reload would erase them.
@@ -295,7 +308,12 @@ export function ScaffoldRecordBar({
     void loadScaffold(scaffold);
   }, [loadScaffold, reloadNonce, scaffolds]);
 
-  const blockers = recordBarBlockers({ hydration, isDirty, isSaving, deployInFlight });
+  const blockers = recordBarBlockers({
+    hydration,
+    isDirty,
+    isSaving,
+    deployInFlight,
+  });
   const saveBlockedBecause = blockers.save;
   const deployBlockedBecause = blockers.deploy;
 
@@ -329,7 +347,7 @@ export function ScaffoldRecordBar({
       cancelled = true;
       readGeneration.current++;
     };
-  }, [brandId, onAdAccountChange, requestedScaffoldId, loadScaffold, readAttempt]);
+  }, [brandId, onAdAccountChange, requestedScaffoldId, loadScaffold, readAttempt, formatUiError]);
 
   const handleSelect = React.useCallback(
     (scaffoldId: string) => {
@@ -341,13 +359,16 @@ export function ScaffoldRecordBar({
     [loadScaffold, onScaffoldPicked, scaffolds],
   );
 
-  const emptyState = recordBarEmptyState({
-    scaffoldCount: scaffolds?.length ?? null,
-    hydration,
-    nodeCount,
-    isLoadingGraph,
-    requestedMissing,
-  });
+  const emptyState = recordBarEmptyState(
+    {
+      scaffoldCount: scaffolds?.length ?? null,
+      hydration,
+      nodeCount,
+      isLoadingGraph,
+      requestedMissing,
+    },
+    uiText,
+  );
 
   const proposeBlockedBecause = isLoadingGraph
     ? 'Wait for the selected proposal to finish loading.'
@@ -367,7 +388,7 @@ export function ScaffoldRecordBar({
           <SelectTrigger className="w-[260px]" data-testid="canvas-scaffold-picker">
             {/* Without `items` the closed trigger renders the raw uuid, not the name. */}
             <SelectValue
-              placeholder="Load a proposal…"
+              placeholder={uiText('load_a_proposal_9e92dbc')}
               items={Object.fromEntries(scaffolds.map((scaffold) => [scaffold.id, scaffold.name]))}
             />
           </SelectTrigger>
@@ -390,24 +411,30 @@ export function ScaffoldRecordBar({
       {isLoadingGraph ? (
         <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Loading
+          {uiText('loading_dc38088')}
         </span>
       ) : null}
 
       {hydration ? (
         <div className="flex items-center gap-1.5" data-testid="canvas-record-version">
           <Pill className="whitespace-nowrap">
-            <PillIndicator variant={lifecycleTone(hydration.lifecycle)} pulse={false} />v
-            {hydration.version} · {hydration.lifecycle}
+            {uiText.rich('sentence_e1e203de7227', {
+              v0: () => (
+                <PillIndicator variant={lifecycleTone(hydration.lifecycle)} pulse={false} />
+              ),
+              v1: hydration.version,
+              v2: hydration.lifecycle,
+            })}
           </Pill>
           {isDirty ? (
             <Pill
               className="whitespace-nowrap"
               data-testid="canvas-record-dirty"
-              title="These edits are local until you save them as a new version."
+              title={uiText('these_edits_are_local_until_you_save_them_as__66193ee')}
             >
-              <PillIndicator variant="warning" pulse={false} />
-              Unsaved edits
+              {uiText.rich('sentence_92eb1008de0c', {
+                v0: () => <PillIndicator variant="warning" pulse={false} />,
+              })}
             </Pill>
           ) : null}
         </div>
@@ -428,7 +455,7 @@ export function ScaffoldRecordBar({
             type="button"
             variant="link"
           >
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </span>
       ) : null}
@@ -452,12 +479,13 @@ export function ScaffoldRecordBar({
                   ) : (
                     <Save className="h-3.5 w-3.5" />
                   )}
-                  {isSaving ? 'Saving' : 'Save'}
+                  {isSaving ? uiText('saving_096b736') : uiText('save_1509f56')}
                 </Button>
               }
             />
             <TooltipContent side="bottom">
-              {saveBlockedBecause ?? 'Saves these edits as a new version. Nothing reaches Meta.'}
+              {saveBlockedBecause ??
+                uiText('saves_these_edits_as_a_new_version_nothing_re_e024a06')}
             </TooltipContent>
           </Tooltip>
 
@@ -476,13 +504,13 @@ export function ScaffoldRecordBar({
                     data-testid="canvas-propose-via-jaina"
                   >
                     <Send className="h-3.5 w-3.5" />
-                    Propose via Jaina
+                    {uiText('propose_via_jaina_78b1b78')}
                   </Button>
                 }
               />
               <TooltipContent side="bottom">
                 {proposeBlockedBecause ??
-                  'Sends this graph to Jaina. Building it on Meta still needs your approval.'}
+                  uiText('sends_this_graph_to_jaina_building_it_on_meta_d1f0a79')}
               </TooltipContent>
             </Tooltip>
           ) : null}
@@ -508,13 +536,13 @@ export function ScaffoldRecordBar({
                     data-testid="canvas-deploy-paused"
                   >
                     <Rocket className="h-3.5 w-3.5" />
-                    Deploy paused
+                    {uiText('deploy_paused_69832af')}
                   </Button>
                 }
               />
               <TooltipContent side="bottom">
                 {deployBlockedBecause ??
-                  'Opens the approval to create this version on Meta, all paused. Going live is a separate unpause.'}
+                  uiText('opens_the_approval_to_create_this_version_on__24d37c2')}
               </TooltipContent>
             </Tooltip>
           ) : null}

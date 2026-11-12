@@ -1,9 +1,20 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
+import createIntlMiddleware from 'next-intl/middleware';
+import { localeCookieName } from './i18n/config';
+import { externalPathname, isLocalizedPage } from './i18n/paths';
+import { resolveUiLocale, routing } from './i18n/routing';
 import { applySupabaseCookies, getSupabaseCookieOptions } from './lib/supabase/cookies';
 import { authedAuthPageDestination, authRedirectTarget, isProtectedRoute } from './proxy-config';
 
+const localize = createIntlMiddleware(routing);
+
 export async function proxy(request: NextRequest) {
+  const pathname = externalPathname(request.nextUrl.pathname);
+  // Share pages remain anonymous; adding locale routing must not introduce auth work.
+  if (pathname.startsWith('/share/')) {
+    return isLocalizedPage(pathname) ? localize(request) : NextResponse.next();
+  }
   let supabaseResponse = NextResponse.next({
     request: { headers: request.headers },
   });
@@ -53,27 +64,46 @@ export async function proxy(request: NextRequest) {
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims?.sub ? claimsData.claims : null;
 
-  const isAuthPage =
-    request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup');
+  function withAuthCookies(response: NextResponse): NextResponse {
+    for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie);
+    return response;
+  }
 
-  if (!user && isProtectedRoute(request.nextUrl.pathname)) {
+  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/signup');
+
+  if (!user && isProtectedRoute(pathname)) {
     const redirectUrl = new URL('/login', request.url);
     redirectUrl.searchParams.set('redirectTo', authRedirectTarget(request.nextUrl));
-    return NextResponse.redirect(redirectUrl);
+    return withAuthCookies(NextResponse.redirect(redirectUrl));
   }
 
   if (user && isAuthPage) {
     const destination = authedAuthPageDestination(request.nextUrl.searchParams);
-    return NextResponse.redirect(new URL(destination, request.url));
+    return withAuthCookies(NextResponse.redirect(new URL(destination, request.url)));
   }
 
-  return supabaseResponse;
+  if (!isLocalizedPage(pathname)) return supabaseResponse;
+  const metadata = user?.user_metadata as { ui_locale?: unknown } | undefined;
+  const locale = resolveUiLocale({
+    cookie: request.cookies.get(localeCookieName)?.value,
+    account: metadata?.ui_locale,
+    acceptLanguage: request.headers.get('accept-language'),
+  });
+  request.cookies.set(localeCookieName, locale);
+  const response = withAuthCookies(localize(request));
+  response.cookies.set(localeCookieName, locale, {
+    path: '/',
+    sameSite: 'lax',
+    maxAge: 31_536_000,
+    secure: process.env.NODE_ENV === 'production',
+  });
+  return response;
 }
 
 export const config = {
   // Keep this literal statically analyzable by Next.js. Its behavior is covered
   // by the equivalent pure config in proxy-config.ts.
   matcher: [
-    '/((?!_next/static|_next/image|_vercel(?:/.*)?|share/.*|favicon.ico|robots.txt|sitemap.xml|manifest.json|icon.png|apple-icon.png|socket\\.io(?:/.*)?|\\.well-known/appspecific(?:/.*)?|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|json|js|css|map)$).*)',
+    '/((?!_next/static|_next/image|_vercel(?:/.*)?|favicon.ico|robots.txt|sitemap.xml|manifest.json|icon.png|apple-icon.png|socket\\.io(?:/.*)?|\\.well-known/appspecific(?:/.*)?|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|json|js|css|map)$).*)',
   ],
 };

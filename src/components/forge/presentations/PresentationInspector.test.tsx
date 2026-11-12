@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type PresentationCommand, presentationDocumentSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { PresentationInspector } from './PresentationInspector';
 
 const document = presentationDocumentSchema.parse({
@@ -28,7 +34,12 @@ const document = presentationDocumentSchema.parse({
           name: 'Heading',
           bounds: { x: 40, y: 50, width: 300, height: 80, rotation: 0 },
           text: 'Original',
-          style: { fontFamily: 'Inter', fontSize: 32, color: '#333333', italic: true },
+          style: {
+            fontFamily: 'Inter',
+            fontSize: 32,
+            color: '#333333',
+            italic: true,
+          },
         },
       ],
     },
@@ -56,25 +67,50 @@ function mount(overrides: Partial<Parameters<typeof PresentationInspector>[0]> =
 describe('PresentationInspector', () => {
   test('text edits preserve imported style unless a style control changes', async () => {
     const { commands } = mount();
-    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Revised heading' } });
+    fireEvent.change(screen.getByLabelText('Text'), {
+      target: { value: 'Revised heading' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
     await waitFor(() => expect(commands).toHaveBeenCalledTimes(1));
     expect(commands.mock.calls[0][0]).toEqual([
-      { type: 'object.text', slideId: 'slide-a', objectId: 'text-a', text: 'Revised heading' },
+      {
+        type: 'object.text',
+        slideId: 'slide-a',
+        objectId: 'text-a',
+        text: 'Revised heading',
+      },
     ]);
   });
 
   test('geometric shape text and fill remain editable in one batch', async () => {
     const { commands } = mount({
-      object: { ...document.slides[0].objects[0], kind: 'shape', data: { shapeType: 'rect' } },
+      object: {
+        ...document.slides[0].objects[0],
+        kind: 'shape',
+        data: { shapeType: 'rect' },
+      },
     });
-    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Shape caption' } });
-    fireEvent.change(screen.getByLabelText('Fill'), { target: { value: '#ff6600' } });
+    fireEvent.change(screen.getByLabelText('Text'), {
+      target: { value: 'Shape caption' },
+    });
+    fireEvent.change(screen.getByLabelText('Fill'), {
+      target: { value: '#ff6600' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
     await waitFor(() => expect(commands).toHaveBeenCalledTimes(1));
     expect(commands.mock.calls[0][0]).toEqual([
-      { type: 'object.text', slideId: 'slide-a', objectId: 'text-a', text: 'Shape caption' },
-      { type: 'object.style', slideId: 'slide-a', objectId: 'text-a', style: { fill: '#ff6600' } },
+      {
+        type: 'object.text',
+        slideId: 'slide-a',
+        objectId: 'text-a',
+        text: 'Shape caption',
+      },
+      {
+        type: 'object.style',
+        slideId: 'slide-a',
+        objectId: 'text-a',
+        style: { fill: '#ff6600' },
+      },
     ]);
   });
 
@@ -98,11 +134,18 @@ describe('PresentationInspector', () => {
     });
     expect((screen.getByLabelText('Typeface') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('Color') as HTMLInputElement).disabled).toBe(false);
-    fireEvent.change(screen.getByLabelText('Color'), { target: { value: '#112233' } });
+    fireEvent.change(screen.getByLabelText('Color'), {
+      target: { value: '#112233' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
     await waitFor(() => expect(commands).toHaveBeenCalledTimes(1));
     expect(commands.mock.calls[0][0]).toEqual([
-      { type: 'object.style', slideId: 'slide-a', objectId: 'text-a', style: { color: '#112233' } },
+      {
+        type: 'object.style',
+        slideId: 'slide-a',
+        objectId: 'text-a',
+        style: { color: '#112233' },
+      },
     ]);
   });
 
@@ -134,8 +177,12 @@ describe('PresentationInspector', () => {
 
   test('placement and text submit as one atomic command batch', async () => {
     const { commands } = mount();
-    fireEvent.change(screen.getByLabelText('Left'), { target: { value: '90' } });
-    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Moved heading' } });
+    fireEvent.change(screen.getByLabelText('Left'), {
+      target: { value: '90' },
+    });
+    fireEvent.change(screen.getByLabelText('Text'), {
+      target: { value: 'Moved heading' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
     await waitFor(() => expect(commands).toHaveBeenCalledTimes(1));
     expect(commands.mock.calls[0][0]).toEqual([
@@ -145,20 +192,36 @@ describe('PresentationInspector', () => {
         objectId: 'text-a',
         bounds: { x: 90, y: 50, width: 300, height: 80, rotation: 0 },
       },
-      { type: 'object.text', slideId: 'slide-a', objectId: 'text-a', text: 'Moved heading' },
+      {
+        type: 'object.text',
+        slideId: 'slide-a',
+        objectId: 'text-a',
+        text: 'Moved heading',
+      },
     ]);
   });
 
   test('locked content remains disabled while unlock is available', async () => {
-    const { commands } = mount({ object: { ...document.slides[0].objects[0], locked: true } });
+    const { commands } = mount({
+      object: { ...document.slides[0].objects[0], locked: true },
+    });
     expect((screen.getByLabelText('Text') as HTMLTextAreaElement).disabled).toBe(true);
     expect(
-      (screen.getByRole('button', { name: 'Apply changes' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Apply changes',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
     await waitFor(() =>
       expect(commands).toHaveBeenCalledWith([
-        { type: 'lock.set', slideId: 'slide-a', objectId: 'text-a', locked: false },
+        {
+          type: 'lock.set',
+          slideId: 'slide-a',
+          objectId: 'text-a',
+          locked: false,
+        },
       ]),
     );
   });
@@ -217,8 +280,12 @@ describe('PresentationInspector', () => {
         data: { bytesBase64: 'AA==', mimeType: 'image/png' },
       },
     });
-    fireEvent.change(screen.getByLabelText('Crop left (%)'), { target: { value: '60' } });
-    fireEvent.change(screen.getByLabelText('Crop right (%)'), { target: { value: '60' } });
+    fireEvent.change(screen.getByLabelText('Crop left (%)'), {
+      target: { value: '60' },
+    });
+    fireEvent.change(screen.getByLabelText('Crop right (%)'), {
+      target: { value: '60' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
     await waitFor(() => expect(onError).toHaveBeenCalled());
     expect(commands).not.toHaveBeenCalled();

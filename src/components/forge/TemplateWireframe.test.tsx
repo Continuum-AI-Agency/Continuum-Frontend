@@ -7,8 +7,14 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { ApiRenderJob, TemplateParse } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 let jobs: ApiRenderJob[] = [];
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
@@ -47,14 +53,30 @@ const PARSE = {
     slot('Headline', {
       comps: ['Square', 'Story'],
       instances: [
-        { compId: 1, comp: 'Square', layerId: 1, box: [0, 0, 540, 100], compSize: [540, 540] },
-        { compId: 2, comp: 'Story', layerId: 1, box: [10, 20, 30, 40], compSize: [1080, 1920] },
+        {
+          compId: 1,
+          comp: 'Square',
+          layerId: 1,
+          box: [0, 0, 540, 100],
+          compSize: [540, 540],
+        },
+        {
+          compId: 2,
+          comp: 'Story',
+          layerId: 1,
+          box: [10, 20, 30, 40],
+          compSize: [1080, 1920],
+        },
       ],
     }),
     slot('Product', {
       kind: 'image',
       comps: ['Story'],
-      placement: { comp: 'Story', compSize: [1080, 1920], box: [100, 100, 900, 900] },
+      placement: {
+        comp: 'Story',
+        compSize: [1080, 1920],
+        box: [100, 100, 900, 900],
+      },
     }),
     // Two comps and no per-comp measurement: which one this box belongs to is unknown.
     slot('Price', { comps: ['Square', 'Story'], box: [1, 2, 3, 4] }),
@@ -73,13 +95,30 @@ describe('wireframeFrames', () => {
       width: 1080,
       height: 1080,
       // Measured in a 540 px comp, drawn on the 1080 px frame.
-      boxes: [{ key: 'Headline', kind: 'text', label: 'Headline', box: [0, 0, 1080, 200],
-        instance: { compId: 1, layerId: 1, compSize: [540, 540] } }],
+      boxes: [
+        {
+          key: 'Headline',
+          kind: 'text',
+          label: 'Headline',
+          box: [0, 0, 1080, 200],
+          instance: { compId: 1, layerId: 1, compSize: [540, 540] },
+        },
+      ],
     });
     expect(story?.boxes).toEqual([
-      { key: 'Headline', kind: 'text', label: 'Headline', box: [10, 20, 30, 40],
-        instance: { compId: 2, layerId: 1, compSize: [1080, 1920] } },
-      { key: 'Product', kind: 'image', label: 'Product', box: [100, 100, 900, 900] },
+      {
+        key: 'Headline',
+        kind: 'text',
+        label: 'Headline',
+        box: [10, 20, 30, 40],
+        instance: { compId: 2, layerId: 1, compSize: [1080, 1920] },
+      },
+      {
+        key: 'Product',
+        kind: 'image',
+        label: 'Product',
+        box: [100, 100, 900, 900],
+      },
     ]);
   });
 
@@ -133,12 +172,16 @@ test('the latest frame is the picked format’s file, never whichever file the f
     } as ApiRenderJob,
   ];
   const formats = previewFormats({ ratios: ['16:9', '1:1', '9:16'] });
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
 
-  const first = renderHook(() => useLatestRenderFrame('brand', '47', formats), { wrapper });
+  const first = renderHook(() => useLatestRenderFrame('brand', '47', formats), {
+    wrapper,
+  });
   await waitFor(() =>
     expect(first.result.current?.fileName).toBe(
       'Producto_individual_con_descuento_16_9_9w5xxwa.jpg',
@@ -150,7 +193,9 @@ test('the latest frame is the picked format’s file, never whichever file the f
       'Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
     ),
   );
-  const none = renderHook(() => useLatestRenderFrame('brand', '47'), { wrapper });
+  const none = renderHook(() => useLatestRenderFrame('brand', '47'), {
+    wrapper,
+  });
   await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(none.result.current).toBeNull();
 });

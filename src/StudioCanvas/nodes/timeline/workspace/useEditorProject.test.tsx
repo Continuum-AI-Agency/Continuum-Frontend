@@ -1,15 +1,27 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { createEditorProjectV2 } from '@continuum/contracts';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
 const ID = '22222222-2222-4222-8222-222222222222';
-let project = createEditorProjectV2({ projectId: ID, title: 'Edit', width: 640, height: 640 });
+let project = createEditorProjectV2({
+  projectId: ID,
+  title: 'Edit',
+  width: 640,
+  height: 640,
+});
 let reads = 0;
 let subscription: RowBroadcastSubscription | undefined;
 const notices: string[] = [];
 const show = (notice: { title: string }) => notices.push(notice.title);
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show }),
+}));
 mock.module('@/lib/api/videoProjects.client', () => ({
   getVideoProject: async () => {
     reads++;
@@ -26,8 +38,14 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
   runVideoEditorOp: async (_id: string, op: string) => {
     if (op === 'draft_cut') return { jobId: 'job_pending', state: 'running' };
     if (op !== 'add_text') throw new Error(`Unexpected ${op}`);
-    project = { ...project, revision: project.revision + 1, fingerprint: 'f'.repeat(64) };
-    return { commit: { revision: project.revision, fingerprint: project.fingerprint } };
+    project = {
+      ...project,
+      revision: project.revision + 1,
+      fingerprint: 'f'.repeat(64),
+    };
+    return {
+      commit: { revision: project.revision, fingerprint: project.fingerprint },
+    };
   },
 }));
 mock.module('@/lib/supabase/realtime', () => ({

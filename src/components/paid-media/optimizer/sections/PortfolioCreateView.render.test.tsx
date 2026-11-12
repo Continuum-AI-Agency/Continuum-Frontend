@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // PortfolioSetup is the heavy create body (its own React Query + Supabase reads). This
 // view's contract is only that it mounts PortfolioSetup with the account context and
@@ -33,7 +34,11 @@ describe('PortfolioCreateView', () => {
 
     expect(getByTestId('portfolio-setup')).toBeTruthy();
     expect(setupProps).toHaveBeenCalledWith(
-      expect.objectContaining({ brandId: 'b1', adAccountId: 'act_1', currency: 'USD' }),
+      expect.objectContaining({
+        brandId: 'b1',
+        adAccountId: 'act_1',
+        currency: 'USD',
+      }),
     );
   });
 

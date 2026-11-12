@@ -114,7 +114,11 @@ if (typeof globalThis.IntersectionObserver !== 'function') {
 
 const defineOnElement = (key: string, value: unknown): void => {
   if (typeof Element === 'undefined' || key in Element.prototype) return;
-  Object.defineProperty(Element.prototype, key, { configurable: true, writable: true, value });
+  Object.defineProperty(Element.prototype, key, {
+    configurable: true,
+    writable: true,
+    value,
+  });
 };
 
 // Scrolling is a no-op in a document with no viewport; callers use it only for effect.
@@ -151,10 +155,14 @@ mock.module('next/navigation', () => {
     }),
     useSearchParams: () => new URLSearchParams(),
     usePathname: () => '',
+    useParams: () => ({ locale: 'en' }),
     useSelectedLayoutSegment: () => null,
     useSelectedLayoutSegments: () => [],
     redirect: (url: string) => {
       console.log(`Redirecting to ${url}`);
+    },
+    permanentRedirect: (url: string) => {
+      console.log(`Redirecting permanently to ${url}`);
     },
     notFound: () => {
       console.log('Not found');

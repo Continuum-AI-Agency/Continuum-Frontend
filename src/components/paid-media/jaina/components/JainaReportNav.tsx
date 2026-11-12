@@ -1,16 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FrontendCheckpointReport } from '@/lib/jaina/schemas';
-
-const NAV_ITEMS = [
-  { key: 'executive-summary', label: 'Executive Summary' },
-  { key: 'performance-snapshot', label: 'Performance Snapshot' },
-  { key: 'strategic-insights', label: 'Strategic Insights' },
-  { key: 'recommendations', label: 'Recommendations' },
-  { key: 'key-trends', label: 'Key Trends' },
-  { key: 'data-tables', label: 'Data Tables' },
-];
 
 type JainaReportNavProps = {
   idPrefix?: string;
@@ -18,6 +10,25 @@ type JainaReportNavProps = {
 };
 
 export function JainaReportNav({ idPrefix = 'jaina-report', report }: JainaReportNavProps) {
+  const uiText = useTranslations('scale');
+  const NAV_ITEMS = useMemo(
+    () => [
+      { key: 'executive-summary', label: uiText('executive_summary_53d548a') },
+      {
+        key: 'performance-snapshot',
+        label: uiText('performance_snapshot_e467de5'),
+      },
+      {
+        key: 'strategic-insights',
+        label: uiText('strategic_insights_b5fe78d'),
+      },
+      { key: 'recommendations', label: uiText('recommendations_0738ee0') },
+      { key: 'key-trends', label: uiText('key_trends_fe524ca') },
+      { key: 'data-tables', label: uiText('data_tables_33c1948') },
+    ],
+    [uiText],
+  );
+
   const getSectionId = useCallback((key: string) => `${idPrefix}-${key}`, [idPrefix]);
   const [activeId, setActiveId] = useState<string>(() => getSectionId('executive-summary'));
 
@@ -60,7 +71,7 @@ export function JainaReportNav({ idPrefix = 'jaina-report', report }: JainaRepor
     <div className="sticky top-0 w-full">
       <div className="flex flex-col gap-1">
         <span className="mb-3 uppercase tracking-widest text-xs font-semibold text-muted-foreground">
-          Table of Contents
+          {uiText('table_of_contents_a9360e0')}
         </span>
         <div className="flex flex-col gap-1">
           {NAV_ITEMS.filter((item) => {

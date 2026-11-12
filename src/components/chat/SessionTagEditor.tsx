@@ -2,6 +2,7 @@
 
 import { AGENT_SESSION_MAX_TAGS, normalizeAgentSessionTags } from '@continuum/contracts';
 import { TagIcon, XIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,7 @@ export function SessionTagEditor({
   onChange,
   className,
 }: SessionTagEditorProps) {
+  const uiText = useTranslations('common');
   const [draft, setDraft] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -55,7 +57,7 @@ export function SessionTagEditor({
           <button
             type="button"
             disabled={disabled}
-            aria-label={`Edit tags for conversation ${sessionId}`}
+            aria-label={uiText('m_b139c9b9c2', { v0: String(sessionId) })}
             className={cn(
               'hit-area inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
               className,
@@ -68,14 +70,14 @@ export function SessionTagEditor({
       <PopoverContent align="start" className="w-56 space-y-2 p-2">
         <div className="flex flex-wrap gap-1">
           {tags.length === 0 ? (
-            <span className="text-2xs text-muted-foreground">No tags yet</span>
+            <span className="text-2xs text-muted-foreground">{uiText('m_26d6526eca')}</span>
           ) : (
             tags.map((tag) => (
               <Pill key={tag} variant="secondary" className="gap-1">
                 #{tag}
                 <button
                   type="button"
-                  aria-label={`Remove tag ${tag}`}
+                  aria-label={uiText('m_46168c68d6', { v0: String(tag) })}
                   disabled={isSaving}
                   onClick={() => void commit(tags.filter((item) => item !== tag))}
                   className="text-muted-foreground hover:text-destructive"
@@ -96,9 +98,9 @@ export function SessionTagEditor({
             void addDraftTag();
           }}
           placeholder={
-            tags.length >= AGENT_SESSION_MAX_TAGS ? 'Tag limit reached' : 'Add tag + Enter'
+            tags.length >= AGENT_SESSION_MAX_TAGS ? uiText('m_4dab5f5be0') : uiText('m_f737994d2d')
           }
-          aria-label="Add tag"
+          aria-label={uiText('add_tag_3e10b08')}
           className="h-7 text-xs"
         />
       </PopoverContent>

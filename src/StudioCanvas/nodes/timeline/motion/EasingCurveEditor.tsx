@@ -7,34 +7,61 @@ import {
   MOTION_SPRING_PRESETS,
   springProgress,
 } from '@continuum/contracts';
-import { useMemo } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useMemo, useMemo as useUiConfigMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 type EasingChoice =
   | { interpolation: 'linear' }
   | { interpolation: 'hold' }
-  | { interpolation: 'bezier'; easing: { x1: number; y1: number; x2: number; y2: number } }
+  | {
+      interpolation: 'bezier';
+      easing: { x1: number; y1: number; x2: number; y2: number };
+    }
   | { interpolation: 'spring'; spring: { bounce: number } };
 
-const PRESETS: Array<{ id: string; label: string; choice: EasingChoice }> = [
-  { id: 'linear', label: 'Linear', choice: { interpolation: 'linear' } },
-  { id: 'hold', label: 'Hold', choice: { interpolation: 'hold' } },
-  {
-    id: 'easeOut',
-    label: 'Ease out',
-    choice: { interpolation: 'bezier', easing: MOTION_BEZIER_PRESETS.easeOut },
-  },
-  {
-    id: 'easeOutBack',
-    label: 'Back',
-    choice: { interpolation: 'bezier', easing: MOTION_BEZIER_PRESETS.easeOutBack },
-  },
-  {
-    id: 'spring',
-    label: 'Spring',
-    choice: { interpolation: 'spring', spring: { bounce: MOTION_SPRING_PRESETS.gentle } },
-  },
-];
+function useLocalPresetsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: Array<{ id: string; label: string; choice: EasingChoice }> = [
+      {
+        id: 'linear',
+        label: translateConfig('linear_e6950b45'),
+        choice: { interpolation: 'linear' },
+      },
+      {
+        id: 'hold',
+        label: translateConfig('hold_8e685d54'),
+        choice: { interpolation: 'hold' },
+      },
+      {
+        id: 'easeOut',
+        label: translateConfig('ease_out_c0eb732d'),
+        choice: {
+          interpolation: 'bezier',
+          easing: MOTION_BEZIER_PRESETS.easeOut,
+        },
+      },
+      {
+        id: 'easeOutBack',
+        label: translateConfig('back_76900f1b'),
+        choice: {
+          interpolation: 'bezier',
+          easing: MOTION_BEZIER_PRESETS.easeOutBack,
+        },
+      },
+      {
+        id: 'spring',
+        label: translateConfig('spring_db29e82a'),
+        choice: {
+          interpolation: 'spring',
+          spring: { bounce: MOTION_SPRING_PRESETS.gentle },
+        },
+      },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 function pathFor(choice: EasingChoice): string {
   const points: string[] = [];
@@ -75,6 +102,10 @@ export function EasingCurveEditor({
     patch: Pick<EditorKeyframe, 'interpolation' | 'easing' | 'spring' | 'expression'>,
   ) => void;
 }) {
+  const PRESETS = useLocalPresetsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const current = easingChoiceFromKeyframe(keyframe);
   const d = useMemo(() => pathFor(current), [current]);
   return (
@@ -83,9 +114,9 @@ export function EasingCurveEditor({
         viewBox="0 0 140 88"
         className="h-[5.5rem] w-full text-primary"
         role="img"
-        aria-label="Easing curve"
+        aria-label={translateUi('easing_curve_33ee3c3b')}
       >
-        <title>Easing curve</title>
+        <title>{translateUi('easing_curve_33ee3c3b')}</title>
         <rect x="8" y="8" width="124" height="72" className="fill-muted/40 stroke-border" rx="4" />
         <path d={d} fill="none" stroke="currentColor" strokeWidth="1.75" />
       </svg>
@@ -137,7 +168,8 @@ export function EasingCurveEditor({
       </div>
       {current.interpolation === 'spring' ? (
         <label className="flex items-center justify-between gap-2 text-2xs text-muted-foreground">
-          Bounce
+          {' '}
+          {translateUi('bounce_24b6ed11')}{' '}
           <input
             type="range"
             min={0}
@@ -156,9 +188,10 @@ export function EasingCurveEditor({
         </label>
       ) : null}
       <label className="block text-2xs text-muted-foreground">
-        Expression
+        {' '}
+        {translateUi('expression_c67415bc')}{' '}
         <input
-          aria-label="Motion expression"
+          aria-label={translateUi('motion_expression_ac6b569b')}
           className="mt-1 h-6 w-full rounded-md border border-input bg-background px-1.5 font-mono text-2xs"
           placeholder="loop or wiggle(2, 0.1)"
           value={keyframe.expression ?? ''}

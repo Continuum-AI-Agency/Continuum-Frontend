@@ -5,7 +5,12 @@ import type {
   TemplateAuthoringDraft,
   TemplateAuthoringScope,
 } from '@continuum/contracts';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { listTemplateDraftRecoveries } from './templateDraftRecovery';
 
 const scope: TemplateAuthoringScope = {
@@ -15,19 +20,32 @@ const scope: TemplateAuthoringScope = {
 };
 const checksum = 'a'.repeat(64);
 const document: TemplateAuthoringDocument = {
-  scope, sourceChecksum: checksum, workspacePackage: { kind: 'pinned_source', packageChecksum: checksum },
+  scope,
+  sourceChecksum: checksum,
+  workspacePackage: { kind: 'pinned_source', packageChecksum: checksum },
 } as TemplateAuthoringDocument;
-const draft = (revision: number, commands: TemplateAuthoringCommand[] = []): TemplateAuthoringDraft => ({
-  scope, sourceChecksum: checksum, revision, commands, updatedAt: new Date().toISOString(),
+const draft = (
+  revision: number,
+  commands: TemplateAuthoringCommand[] = [],
+): TemplateAuthoringDraft => ({
+  scope,
+  sourceChecksum: checksum,
+  revision,
+  commands,
+  updatedAt: new Date().toISOString(),
   requiresReconciliation: false,
   currentSource: {
-    templateSourceVersionId: scope.baseVersionId, templateSourceChecksum: checksum,
-    assetHeadVersionId: scope.baseVersionId, assetHeadChecksum: checksum,
+    templateSourceVersionId: scope.baseVersionId,
+    templateSourceChecksum: checksum,
+    assetHeadVersionId: scope.baseVersionId,
+    assetHeadChecksum: checksum,
   },
   projectedDocument: document,
 });
 const edit: TemplateAuthoringCommand = {
-  type: 'layer.edit', nodeId: 'aep:7:31', edit: { compId: 7, layerId: 31, rotation: 15 },
+  type: 'layer.edit',
+  nodeId: 'aep:7:31',
+  edit: { compId: 7, layerId: 31, rotation: 15 },
 };
 const emptyCommands: TemplateAuthoringCommand[] = [];
 const noopRestore = () => {};
@@ -38,10 +56,18 @@ mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateAuthoringDocument: mock(async () => document),
   fetchTemplateAuthoringDraft: fetchDraft,
   fetchTemplateAuthoringUserId: mock(async () => 'actor-a'),
-  putTemplateAuthoringDraft: mock(async (_assetId: string, request: { expectedRevision: number; commands: TemplateAuthoringCommand[] }) => {
-    currentDraft = draft(request.expectedRevision + 1, request.commands);
-    return currentDraft;
-  }),
+  putTemplateAuthoringDraft: mock(
+    async (
+      _assetId: string,
+      request: {
+        expectedRevision: number;
+        commands: TemplateAuthoringCommand[];
+      },
+    ) => {
+      currentDraft = draft(request.expectedRevision + 1, request.commands);
+      return currentDraft;
+    },
+  ),
 }));
 const { useTemplateAuthoringDraft } = await import('./useTemplateAuthoringDraft');
 
@@ -49,20 +75,28 @@ class FakeBroadcastChannel {
   static instances: FakeBroadcastChannel[] = [];
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   closed = false;
-  constructor(readonly name: string) { FakeBroadcastChannel.instances.push(this); }
+  constructor(readonly name: string) {
+    FakeBroadcastChannel.instances.push(this);
+  }
   postMessage(data: unknown) {
     for (const peer of FakeBroadcastChannel.instances) {
-      if (!peer.closed && peer !== this && peer.name === this.name) peer.onmessage?.({ data } as MessageEvent<unknown>);
+      if (!peer.closed && peer !== this && peer.name === this.name)
+        peer.onmessage?.({ data } as MessageEvent<unknown>);
     }
   }
-  close() { this.closed = true; }
+  close() {
+    this.closed = true;
+  }
 }
 
 function installIndexedDb() {
   const stores = new Map<string, Map<IDBValidKey, unknown>>();
   const database = {
     objectStoreNames: { contains: (name: string) => stores.has(name) },
-    createObjectStore(name: string) { stores.set(name, new Map()); return {}; },
+    createObjectStore(name: string) {
+      stores.set(name, new Map());
+      return {};
+    },
     close() {},
     transaction(name: string) {
       const store = stores.get(name)!;
@@ -78,12 +112,23 @@ function installIndexedDb() {
             if (id !== undefined) store.set(id, structuredClone(value));
             return request(id);
           },
-          delete: (key: IDBValidKey) => { store.delete(key); return request(undefined); },
+          delete: (key: IDBValidKey) => {
+            store.delete(key);
+            return request(undefined);
+          },
         }),
       };
       function request<T>(result: T) {
-        const req = { result, error: null, onsuccess: null as (() => void) | null, onerror: null };
-        queueMicrotask(() => { req.onsuccess?.(); tx.oncomplete?.(); });
+        const req = {
+          result,
+          error: null,
+          onsuccess: null as (() => void) | null,
+          onerror: null,
+        };
+        queueMicrotask(() => {
+          req.onsuccess?.();
+          tx.oncomplete?.();
+        });
         return req;
       }
       return tx;
@@ -91,30 +136,61 @@ function installIndexedDb() {
   };
   return {
     open() {
-      const req = { result: database, error: null, onupgradeneeded: null as (() => void) | null, onsuccess: null as (() => void) | null, onerror: null };
-      queueMicrotask(() => { req.onupgradeneeded?.(); req.onsuccess?.(); });
+      const req = {
+        result: database,
+        error: null,
+        onupgradeneeded: null as (() => void) | null,
+        onsuccess: null as (() => void) | null,
+        onerror: null,
+      };
+      queueMicrotask(() => {
+        req.onupgradeneeded?.();
+        req.onsuccess?.();
+      });
       return req;
     },
   } as unknown as IDBFactory;
 }
 
-const originals = { indexedDB: globalThis.indexedDB, BroadcastChannel: globalThis.BroadcastChannel };
+const originals = {
+  indexedDB: globalThis.indexedDB,
+  BroadcastChannel: globalThis.BroadcastChannel,
+};
 beforeEach(() => {
   currentDraft = null;
   fetchDraft.mockClear();
   FakeBroadcastChannel.instances = [];
-  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: installIndexedDb() });
-  Object.defineProperty(globalThis, 'BroadcastChannel', { configurable: true, value: FakeBroadcastChannel });
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    value: installIndexedDb(),
+  });
+  Object.defineProperty(globalThis, 'BroadcastChannel', {
+    configurable: true,
+    value: FakeBroadcastChannel,
+  });
 });
 afterEach(() => {
   cleanup();
-  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: originals.indexedDB });
-  Object.defineProperty(globalThis, 'BroadcastChannel', { configurable: true, value: originals.BroadcastChannel });
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    value: originals.indexedDB,
+  });
+  Object.defineProperty(globalThis, 'BroadcastChannel', {
+    configurable: true,
+    value: originals.BroadcastChannel,
+  });
 });
 
 describe('mounted authoring draft tab sync', () => {
   test('a clean tab reloads the server draft after a peer save message', async () => {
-    const { result } = renderHook(() => useTemplateAuthoringDraft({ scope, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    const { result } = renderHook(() =>
+      useTemplateAuthoringDraft({
+        scope,
+        enabled: true,
+        commands: emptyCommands,
+        onRestore: noopRestore,
+      }),
+    );
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(result.current.userId).toBe('actor-a');
     expect(globalThis.BroadcastChannel).toBe(FakeBroadcastChannel);
@@ -130,7 +206,14 @@ describe('mounted authoring draft tab sync', () => {
   });
 
   test('a dirty tab records its command and stays in explicit conflict after a peer save', async () => {
-    const { result } = renderHook(() => useTemplateAuthoringDraft({ scope, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    const { result } = renderHook(() =>
+      useTemplateAuthoringDraft({
+        scope,
+        enabled: true,
+        commands: emptyCommands,
+        onRestore: noopRestore,
+      }),
+    );
     await waitFor(() => expect(FakeBroadcastChannel.instances).toHaveLength(1));
     const tab = FakeBroadcastChannel.instances[0]!;
     const peer = new FakeBroadcastChannel(tab.name);
@@ -139,7 +222,11 @@ describe('mounted authoring draft tab sync', () => {
 
     await waitFor(() => expect(result.current.status).toBe('conflict'));
     const recoveries = await listTemplateDraftRecoveries('actor-a', scope);
-    expect(recoveries.some((recovery) => recovery.commands.some((command) => JSON.stringify(command) === JSON.stringify(edit)))).toBe(true);
+    expect(
+      recoveries.some((recovery) =>
+        recovery.commands.some((command) => JSON.stringify(command) === JSON.stringify(edit)),
+      ),
+    ).toBe(true);
     expect(fetchDraft).toHaveBeenCalledTimes(2);
     expect(result.current.error).toContain('Another tab saved a newer draft');
   });

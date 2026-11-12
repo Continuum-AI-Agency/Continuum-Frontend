@@ -9,6 +9,7 @@
 // the same action already lives.
 import type { HomeMode, OrganicWinner } from '@continuum/contracts';
 import Link from 'next/link';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -71,6 +72,8 @@ function WinnerItem({ winner, action }: { winner: OrganicWinner; action: ReactNo
 }
 
 function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refreshCandidates'>) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const winners = useOrganicWinners(brandId);
   const [promoting, setPromoting] = useState<OrganicWinner | null>(null);
 
@@ -86,7 +89,7 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
           type="button"
           variant="link"
         >
-          Retry
+          {betaUiText('beta_942087cc2d41')}
         </Button>
       </p>
     );
@@ -96,7 +99,9 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
 
   const actionFor = (winner: OrganicWinner): ReactNode => {
     if (winner.promotion !== null) {
-      return <span className="text-muted-foreground text-xs">Running as ad</span>;
+      return (
+        <span className="text-muted-foreground text-xs">{betaUiText('beta_9e284f5cc45c')}</span>
+      );
     }
     if (mode === 'operate') {
       return (
@@ -107,7 +112,7 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
     }
     return (
       <Link className="text-primary text-xs hover:underline" href={CREATIVE_LINKS.organicWinners}>
-        Open in Organic
+        {betaUiText('beta_f91ae7624cc8')}
       </Link>
     );
   };
@@ -131,6 +136,8 @@ function OrganicToPaid({ brandId, mode, verbLabel }: Omit<FlywheelProps, 'refres
 }
 
 function PaidToCreative({ candidates }: { candidates: CreativeCard[] }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   return (
     <div className="space-y-2">
       {candidates.length === 0 ? (
@@ -160,7 +167,7 @@ function PaidToCreative({ candidates }: { candidates: CreativeCard[] }) {
                     className="text-primary text-xs hover:underline"
                     href={CREATIVE_LINKS.optimizer}
                   >
-                    Variants in the Optimizer
+                    {betaUiText('beta_175c5bc29a0a')}
                   </Link>
                 ) : null}
               </div>
@@ -172,13 +179,15 @@ function PaidToCreative({ candidates }: { candidates: CreativeCard[] }) {
         className={buttonVariants({ variant: 'outline', size: 'sm' })}
         href={CREATIVE_LINKS.studio}
       >
-        Open AI Studio
+        {betaUiText('beta_a71e73726a76')}
       </Link>
     </div>
   );
 }
 
 export default function Flywheel({ brandId, mode, verbLabel, refreshCandidates }: FlywheelProps) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const [laneId, setLaneId] = useState<FlywheelLaneId>('organic-to-paid');
   const winners = useOrganicWinners(brandId);
   const counts: Record<FlywheelLaneId, number | null> = {
@@ -190,8 +199,12 @@ export default function Flywheel({ brandId, mode, verbLabel, refreshCandidates }
 
   return (
     <section className="flex min-w-0 flex-col gap-3 rounded-xl border p-3" data-testid="flywheel">
-      <h4 className="font-semibold text-sm">Flywheel</h4>
-      <div aria-label="Flywheel lanes" className="flex flex-wrap gap-1" role="tablist">
+      <h4 className="font-semibold text-sm">{betaUiText('beta_9ecaa1f12f13')}</h4>
+      <div
+        aria-label={betaUiText('beta_2ab1c22af2d0')}
+        className="flex flex-wrap gap-1"
+        role="tablist"
+      >
         {FLYWHEEL_LANES.map((candidate) => (
           <button
             aria-selected={candidate.id === laneId}
@@ -208,7 +221,9 @@ export default function Flywheel({ brandId, mode, verbLabel, refreshCandidates }
           >
             {candidate.label}
             <span className="tabular-nums">
-              {candidate.available ? (counts[candidate.id] ?? '…') : '· Not available yet'}
+              {candidate.available
+                ? (counts[candidate.id] ?? '…')
+                : betaUiText('beta_d4c8bb83e473')}
             </span>
           </button>
         ))}

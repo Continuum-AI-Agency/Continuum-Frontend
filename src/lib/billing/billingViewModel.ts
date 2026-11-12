@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type BillingTranslator = ReturnType<typeof useTranslations<'settings'>>;
+
 import {
   type BillingOverview,
   type CreditPackOffer,
@@ -14,14 +18,14 @@ import {
 
 const LIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
-const PRODUCT_FEATURES: Record<ProductCode, string> = {
-  studio: 'AI Canvas',
-  organic_agent: 'Organic agent, calendar and posting',
-  paid_media: 'Jaina, Forge ad creation, approvals and optimizer',
-  trends: 'Trends',
-  mcp: 'MCP connections',
-  listening: 'Brand listening: mentions of your brand and competitors',
-};
+const PRODUCT_FEATURES = {
+  studio: 'billingStudio',
+  organic_agent: 'billingOrganic',
+  paid_media: 'billingPaidMedia',
+  trends: 'billingTrends',
+  mcp: 'billingMcp',
+  listening: 'billingListening',
+} as const satisfies Record<ProductCode, string>;
 
 /** `payment_failed`: on the subscription, but Stripe is retrying a declined renewal. */
 export type PlanStatus = 'active' | 'activating' | 'payment_failed' | 'available';
@@ -130,8 +134,8 @@ export type ContractBillingView = {
 
 export type BillingView = SelfServeBillingView | ContractBillingView;
 
-export function formatUsd(amount: number, currency = 'usd'): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatUsd(amount: number, currency = 'usd', locale = 'en-US'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: currency.toUpperCase(),
     minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
@@ -139,16 +143,20 @@ export function formatUsd(amount: number, currency = 'usd'): string {
   }).format(amount);
 }
 
-export function formatCredits(credits: number): string {
-  return credits.toLocaleString('en-US');
+export function formatCredits(credits: number, locale = 'en-US'): string {
+  return credits.toLocaleString(locale);
 }
 
-function featuresFor(products: readonly ProductCode[], includedCanvasCredits = 0): string[] {
+function featuresFor(
+  products: readonly ProductCode[],
+  includedCanvasCredits: number,
+  t: BillingTranslator,
+): string[] {
   const features = [...products]
     .sort((a, b) => PRODUCT_CODES.indexOf(a) - PRODUCT_CODES.indexOf(b))
-    .map((product) => PRODUCT_FEATURES[product]);
+    .map((product) => t(PRODUCT_FEATURES[product]));
   if (includedCanvasCredits > 0) {
-    features.push(`${formatCredits(includedCanvasCredits)} Canvas credits included every month`);
+    features.push(t('billingIncludedCredits', { count: includedCanvasCredits }));
   }
   return features;
 }
@@ -212,25 +220,34 @@ export function isBrandOwner(
 }
 
 /** What a highlighted plan says it unlocks, per `?need=` product. */
-export const NEED_LABEL: Record<ProductCode, string> = {
-  studio: 'AI Canvas',
-  organic_agent: 'Organic',
-  paid_media: 'paid media',
-  trends: 'Trends',
-  mcp: 'MCP connections',
-  listening: 'brand listening',
-};
+const NEED_LABEL_KEYS = {
+  studio: 'billingStudio',
+  organic_agent: 'billingNeedOrganic',
+  paid_media: 'billingNeedPaidMedia',
+  trends: 'billingTrends',
+  mcp: 'billingMcp',
+  listening: 'billingNeedListening',
+} as const;
+
+export function getBillingNeedLabel(product: ProductCode, t: BillingTranslator): string {
+  return t(NEED_LABEL_KEYS[product]);
+}
 
 export function toBillingView(
   overview: BillingOverview,
-  need: ProductCode | null = null,
+  need: ProductCode | null,
+  { locale, t }: { locale: string; t: BillingTranslator },
 ): BillingView {
   const { entitlements, subscription } = overview;
   if (entitlements.billingModel === 'contract') {
     return {
       kind: 'contract',
-      features: featuresFor(entitlements.products),
-      autoBilling: { enabled: false, capUsd: null, disabledReason: AUTO_BILLING_CONTRACT },
+      features: featuresFor(entitlements.products, 0, t),
+      autoBilling: {
+        enabled: false,
+        capUsd: null,
+        disabledReason: t('billingContractReason'),
+      },
     };
   }
 
@@ -246,8 +263,8 @@ export function toBillingView(
       planCode: plan.planCode,
       name: plan.displayName,
       monthlyPriceUsd: plan.monthlyPriceUsd,
-      priceLabel: formatUsd(plan.monthlyPriceUsd),
-      features: featuresFor(plan.products, plan.includedCanvasCredits),
+      priceLabel: formatUsd(plan.monthlyPriceUsd, 'usd', locale),
+      features: featuresFor(plan.products, plan.includedCanvasCredits, t),
       status: !livePlans?.includes(plan.planCode)
         ? entitlements.plans.includes(plan.planCode)
           ? 'active'
@@ -282,7 +299,7 @@ export function toBillingView(
     autoBilling: {
       enabled: overview.overageEnabled,
       capUsd: overview.overageCapUsd,
-      disabledReason: liveSubscription ? null : AUTO_BILLING_NEEDS_PLAN,
+      disabledReason: liveSubscription ? null : t('billingNeedsPlanReason'),
     },
     creditPack: overview.catalog.creditPack,
     // X credits pay for X publishing, so they are sold where the brand can publish organically
@@ -292,22 +309,22 @@ export function toBillingView(
       (liveSubscription !== null ||
         entitlements.products.includes('organic_agent') ||
         overview.x.balanceUsd > 0)
-      ? {
-          balanceCredits: usdToCredits(overview.x.balanceUsd),
-          postsLeft: Math.floor(usdToCredits(overview.x.balanceUsd) / X_POST_CREDITS),
-          autoBilling: {
-            enabled: overview.x.overageEnabled,
-            capUsd: overview.x.overageCapUsd,
-            disabledReason: liveSubscription ? null : AUTO_BILLING_NEEDS_PLAN,
-          },
-          creditPack: overview.catalog.xCreditPack ?? overview.catalog.creditPack,
-        }
-      : null,
+        ? {
+            balanceCredits: usdToCredits(overview.x.balanceUsd),
+            postsLeft: Math.floor(usdToCredits(overview.x.balanceUsd) / X_POST_CREDITS),
+            autoBilling: {
+              enabled: overview.x.overageEnabled,
+              capUsd: overview.x.overageCapUsd,
+              disabledReason: liveSubscription ? null : t('billingNeedsPlanReason'),
+            },
+            creditPack: overview.catalog.xCreditPack ?? overview.catalog.creditPack,
+          }
+        : null,
     invoices: overview.invoices.map((invoice) => ({
       id: invoice.id,
       label: invoice.number ?? invoice.id,
       createdAt: invoice.createdAt,
-      amountLabel: formatUsd(invoice.total / 100, invoice.currency),
+      amountLabel: formatUsd(invoice.total / 100, invoice.currency, locale),
       status: invoice.status ?? 'unknown',
       href: invoice.hostedInvoiceUrl,
     })),
@@ -334,7 +351,11 @@ export type PendingBillingChange =
 export type CheckoutReturn =
   | { outcome: 'cancel' }
   /** `sessionId` is Stripe's substituted `{CHECKOUT_SESSION_ID}`; null on an older return link. */
-  | { outcome: 'success'; change: PendingBillingChange; sessionId: string | null };
+  | {
+      outcome: 'success';
+      change: PendingBillingChange;
+      sessionId: string | null;
+    };
 
 const CHECKOUT_SESSION_ID = /^cs_(test|live)_[A-Za-z0-9]+$/;
 
@@ -346,13 +367,20 @@ export function checkoutReturnParams(
     { kind: 'plan_added' | 'credits_added' | 'x_credits_added' }
   >,
 ): { success: string; cancel: string } {
-  const success = new URLSearchParams({ section: 'billing', checkout: 'success' });
+  const success = new URLSearchParams({
+    section: 'billing',
+    checkout: 'success',
+  });
   if (change.kind === 'plan_added') success.set('plan', change.plan);
-  else if (change.kind === 'x_credits_added') success.set('xbalance', String(change.xCreditsBefore));
+  else if (change.kind === 'x_credits_added')
+    success.set('xbalance', String(change.xCreditsBefore));
   else success.set('balance', String(change.purchasedCreditsBefore));
   return {
     success: success.toString(),
-    cancel: new URLSearchParams({ section: 'billing', checkout: 'cancel' }).toString(),
+    cancel: new URLSearchParams({
+      section: 'billing',
+      checkout: 'cancel',
+    }).toString(),
   };
 }
 
@@ -366,7 +394,11 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
 
   const plan = planCodeSchema.safeParse(params.get('plan'));
   if (plan.success) {
-    return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data }, sessionId };
+    return {
+      outcome: 'success',
+      change: { kind: 'plan_added', plan: plan.data },
+      sessionId,
+    };
   }
 
   const rawXBalance = params.get('xbalance');

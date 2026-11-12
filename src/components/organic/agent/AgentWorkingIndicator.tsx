@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 
 type AgentWorkingIndicatorProps = {
   // 'inline'  — transient three-dot cue inside a pending assistant bubble, shown before
@@ -17,8 +18,10 @@ type AgentWorkingIndicatorProps = {
 // of a silent, empty card.
 export function AgentWorkingIndicator({
   variant = 'inline',
-  label = 'Continuum is working…',
+  label: providedLabel,
 }: AgentWorkingIndicatorProps) {
+  const uiText = useTranslations('organic');
+  const label = providedLabel ?? uiText('agentWorkingDefault');
   if (variant === 'pinned') {
     return (
       <motion.div
@@ -70,7 +73,7 @@ export function AgentWorkingIndicator({
           />
         ))}
       </span>
-      <span>Working…</span>
+      <span>{uiText('working_5474eef')}</span>
     </div>
   );
 }

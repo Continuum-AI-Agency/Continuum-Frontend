@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // One decision: a stripe in its tier's colour, the tier and the group, the Optimizer's title,
 // the line that names the figures, the bars its own figures compare, then what acting is
@@ -88,6 +89,8 @@ export function DecisionCardView({
   onSelectPortfolio,
   onCreatePortfolio,
 }: DecisionCardViewProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [stepsOpen, setStepsOpen] = useState(false);
   const stepsId = useId();
   const hasSteps = card.steps.length > 0;
@@ -120,7 +123,7 @@ export function DecisionCardView({
               </Badge>
               {card.doubted ? (
                 <span className="text-warning text-xs" data-testid="decision-doubted">
-                  Affected by the guard
+                  {betaUiText('beta_c90101e4b474')}
                 </span>
               ) : null}
             </div>
@@ -155,7 +158,10 @@ export function DecisionCardView({
                   className="hit-area inline-flex items-center gap-1 font-medium text-primary-ink text-xs hover:underline"
                   data-testid="decision-steps-toggle"
                 >
-                  {clientExecutes ? 'What the client does' : 'Steps'} · {card.steps.length}
+                  {clientExecutes
+                    ? betaUiText('beta_79974c1c285e')
+                    : betaUiText('beta_1de3df70ddf4')}{' '}
+                  · {card.steps.length}
                   <ChevronDownIcon
                     aria-hidden="true"
                     className={cn(
@@ -195,7 +201,7 @@ export function DecisionCardView({
                 onClick={() => onSelectPortfolio(portfolioId)}
                 type="button"
               >
-                <span className="truncate">{portfolioName ?? 'Open portfolio'}</span>
+                <span className="truncate">{portfolioName ?? betaUiText('beta_4f22ccf7eb27')}</span>
                 <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
               </button>
             ) : null}
@@ -216,7 +222,7 @@ export function DecisionCardView({
                 data-testid="decision-dismissed"
                 role="status"
               >
-                Dismissed
+                {betaUiText('beta_9d74727714db')}
               </span>
             ) : (
               <div className="flex flex-wrap items-center gap-1.5 @lg/decision:justify-end">

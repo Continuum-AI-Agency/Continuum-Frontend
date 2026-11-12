@@ -10,14 +10,24 @@ import {
   parseMotionOp,
   readMotionFromHtml,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 import { commitHyperframesMotion, getHyperframesRevision } from '@/lib/api/hyperframesAgent.client';
 import { HyperframesMotionPanel } from './HyperframesMotionPanel';
 import { withPlayerRuntime } from './playerClock';
 
-type PlayerInput = { html: string; width: number; height: number; aspectRatio: string };
-type PlayerElement = HTMLElement & { seek(timeInSeconds: number): void; currentTime: number };
+type PlayerInput = {
+  html: string;
+  width: number;
+  height: number;
+  aspectRatio: string;
+};
+type PlayerElement = HTMLElement & {
+  seek(timeInSeconds: number): void;
+  currentTime: number;
+};
 
 export function HyperframesInteractivePlayer({
   html,
@@ -27,6 +37,8 @@ export function HyperframesInteractivePlayer({
   startAtSec = 0,
   onTime,
 }: PlayerInput & { startAtSec?: number; onTime?: (seconds: number) => void }) {
+  const uiErrorText = useUiErrorMessage();
+
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   // Read at mount only: a new playhead must not remount the player, a new composition must.
@@ -63,14 +75,13 @@ export function HyperframesInteractivePlayer({
       host.current.append(element);
     }
     void mount().catch((cause: unknown) => {
-      if (!cancelled)
-        setError(cause instanceof Error ? cause.message : 'Interactive preview failed.');
+      if (!cancelled) setError(uiErrorText(cause));
     });
     return () => {
       cancelled = true;
       player?.remove();
     };
-  }, [aspectRatio, height, html, width]);
+  }, [aspectRatio, height, html, width, uiErrorText]);
 
   return (
     <div ref={host} className="size-full">
@@ -124,11 +135,12 @@ async function commitOn(composition: Composition, op: MotionOp): Promise<Composi
   };
 }
 
-function readMotion(html: string): { doc: MotionDoc } | { error: string } {
+function readMotion(html: string): { doc: MotionDoc } | { error: true } {
   try {
     return { doc: readMotionFromHtml(html) };
   } catch (cause) {
-    return { error: cause instanceof Error ? cause.message : 'Unreadable motion data.' };
+    console.error('Reading Hyperframes motion data failed', cause);
+    return { error: true };
   }
 }
 
@@ -139,6 +151,10 @@ export function InteractiveHyperframesPreview({
   runId: string;
   onMotionTargetChange: (target: MotionTarget | null) => void;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const [composition, setComposition] = useState<Composition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playheadSec, setPlayheadSec] = useState(0);
@@ -155,13 +171,12 @@ export function InteractiveHyperframesPreview({
         if (!cancelled) setComposition(loaded);
       })
       .catch((cause: unknown) => {
-        if (!cancelled)
-          setError(cause instanceof Error ? cause.message : 'Interactive preview failed.');
+        if (!cancelled) setError(uiErrorText(cause));
       });
     return () => {
       cancelled = true;
     };
-  }, [runId]);
+  }, [runId, uiErrorText]);
 
   const motion = useMemo(() => (composition ? readMotion(composition.html) : null), [composition]);
   const revisionId = composition?.revision.revisionId;
@@ -196,10 +211,11 @@ export function InteractiveHyperframesPreview({
         fallback = await loadComposition(runId);
         setComposition(await commitOn(fallback, op));
       }
-      setStatus('Saved');
+      setStatus(translateUi('motionSaved'));
     } catch (cause) {
       setComposition(fallback);
-      setStatus(cause instanceof Error ? cause.message : 'The motion edit failed.');
+      console.error('Applying a Hyperframes motion edit failed', cause);
+      setStatus(uiErrorText(cause));
     } finally {
       setBusy(false);
     }
@@ -212,7 +228,11 @@ export function InteractiveHyperframesPreview({
       </p>
     );
   if (!composition || !motion)
-    return <p className="p-3 text-xs text-muted-foreground">Loading interactive composition…</p>;
+    return (
+      <p className="p-3 text-xs text-muted-foreground">
+        {translateUi('loading_interactive_composition_decc4752')}
+      </p>
+    );
   const { revision } = composition;
   return (
     <div className="flex size-full flex-col">
@@ -229,7 +249,7 @@ export function InteractiveHyperframesPreview({
       <div className="nodrag nopan nowheel max-h-56 shrink-0 overflow-y-auto border-t border-border/60">
         {'error' in motion ? (
           <p role="alert" className="p-2 text-2xs text-destructive">
-            {motion.error}
+            {translateUi('motionDataUnreadable')}
           </p>
         ) : (
           <HyperframesMotionPanel

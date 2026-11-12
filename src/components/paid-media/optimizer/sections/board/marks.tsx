@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from 'next-intl';
 
 // The board's three marks, drawn from marksModel: a bullet (a cost against its goal), a ring (a
 // count against what it should be) and a trend line with its goal. Marks are thin, their data
@@ -49,7 +50,11 @@ export function BulletMark({
           <span
             className="absolute top-1/2 left-0 h-1.5 -translate-y-1/2 rounded-full"
             data-testid={`${testId}-band`}
-            style={{ width: `${scale.goalPct}%`, background: BOARD_COLOR.below, opacity: 0.22 }}
+            style={{
+              width: `${scale.goalPct}%`,
+              background: BOARD_COLOR.below,
+              opacity: 0.22,
+            }}
           />
           <span
             className="absolute inset-y-0 border-foreground/55 border-l-[1.5px] border-dashed"
@@ -148,6 +153,7 @@ export function TrendLine({
   className?: string;
 }) {
   const reduce = useReducedMotion();
+  const uiLocale = useLocale();
   const geometry = trendGeometry(points, goal, TREND_W, TREND_H);
   const first = points[0];
   const lastDay = points[points.length - 1];
@@ -214,13 +220,18 @@ export function TrendLine({
         ) : null}
       </div>
       <figcaption className="flex items-center justify-between gap-2 text-muted-foreground text-xs">
-        <span>{first ? dayLabel(first.day) : ''}</span>
+        <span>{first ? dayLabel(first.day, uiLocale) : ''}</span>
         {geometry.last ? (
           <span className="font-medium text-foreground tabular-nums" data-testid="board-trend-last">
             {formatValue(geometry.last.value)}
             <span className="font-normal text-muted-foreground">
               {' '}
-              · {lastDay ? lastLabel(lastDay.day) : ''}
+              ·{' '}
+              {lastDay
+                ? lastLabel === dayLabel
+                  ? dayLabel(lastDay.day, uiLocale)
+                  : lastLabel(lastDay.day)
+                : ''}
             </span>
           </span>
         ) : null}
@@ -230,10 +241,10 @@ export function TrendLine({
 }
 
 /** "Oct 31", from a YYYY-MM-DD day read as UTC. */
-export function dayLabel(day: string): string {
+export function dayLabel(day: string, locale: string = 'en-US'): string {
   const ms = Date.parse(`${day}T00:00:00Z`);
   if (Number.isNaN(ms)) return day;
-  return new Date(ms).toLocaleDateString('en-US', {
+  return new Date(ms).toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',

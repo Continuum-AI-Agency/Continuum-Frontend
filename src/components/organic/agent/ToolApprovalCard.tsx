@@ -3,6 +3,7 @@
 import { findStampedCandidate, publishAccountLabel } from '@continuum/contracts';
 import { Check, X } from 'lucide-react';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   AgentButton,
   AgentDecisionCard,
@@ -86,13 +87,12 @@ function ApprovalAccount({
   accountId?: string;
   platform?: string;
 }) {
+  const uiText = useTranslations('organic');
   const { accounts } = usePublishAccountsState(brandId);
   if (account.trim().startsWith('unavailable')) {
-    const why = /\((.*)\)/.exec(account)?.[1]?.replace(UUID, '').trim();
     return (
       <div data-slot="approval-account" className="text-xs text-amber-700 dark:text-amber-300">
-        <p className="font-medium">Account unavailable</p>
-        {why && !why.includes('_') ? <p className="leading-relaxed">{why}</p> : null}
+        <p className="font-medium">{uiText('account_unavailable_7283040')}</p>
       </div>
     );
   }
@@ -100,7 +100,7 @@ function ApprovalAccount({
   const name = match
     ? publishAccountLabel(match.candidate)
     : isUuid(account)
-      ? 'Unknown account'
+      ? uiText('publishUnknownAccount')
       : account.trim();
   return (
     <div
@@ -118,12 +118,12 @@ function ApprovalAccount({
         <p className="truncate text-xs font-medium text-foreground">{name}</p>
         {match?.needsReauth ? (
           <p className="text-2xs text-amber-700 dark:text-amber-300">
-            Needs reconnecting ·{' '}
+            {uiText('needsReconnecting')} ·{' '}
             <Link
               href="/settings?section=integrations"
               className="underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Reconnect
+              {uiText('reconnect_bf8a9ea')}
             </Link>
           </p>
         ) : null}
@@ -137,10 +137,13 @@ function parseContentInput(input: unknown): ContentInput {
   return input as ContentInput;
 }
 
-function formatScheduledAt(raw: string | undefined): string | null {
+function formatScheduledAt(
+  raw: string | undefined,
+  locale: import('@/i18n/config').UiLocale,
+): string | null {
   if (!raw) return null;
   try {
-    return new Date(raw).toLocaleString('en-US', {
+    return new Date(raw).toLocaleString(locale, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -195,11 +198,14 @@ function GenericToolApprovalCard({
   onDenyAction,
   disabled,
 }: ToolApprovalCardProps) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const content = parseContentInput(approval.input);
   const platform = content.platform;
   const format = content.format;
   const scheduledAt = formatScheduledAt(
     content.scheduledFor ?? content.scheduledAt ?? content.scheduled_at,
+    uiLocale,
   );
   const caption = content.finalCaption;
   const angle = content.angle ?? content.topic ?? content.description;
@@ -237,7 +243,7 @@ function GenericToolApprovalCard({
                     {caption ? (
                       <div>
                         <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Caption
+                          {uiText('caption_87d296e')}
                         </p>
                         <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-1.5 text-xs leading-relaxed text-foreground/90">
                           {caption}
@@ -251,7 +257,9 @@ function GenericToolApprovalCard({
                     )}
                     {batchSize > 0 && (
                       <p className="text-sm leading-relaxed text-foreground/80">
-                        {`Generate the creative for ${batchSize} draft${batchSize === 1 ? '' : 's'}.`}
+                        {uiText('generate_batch_creative', {
+                          count: batchSize,
+                        })}
                       </p>
                     )}
                     {!platform && !angle && !caption && batchSize === 0 && (
@@ -266,7 +274,7 @@ function GenericToolApprovalCard({
                       className="h-7 min-h-0 gap-1 px-2.5 text-xs"
                     >
                       <X className="h-3 w-3" />
-                      Deny
+                      {uiText('deny_05a2d73')}
                     </AgentButton>
                     <AgentButton
                       variant="primary"
@@ -275,7 +283,7 @@ function GenericToolApprovalCard({
                       className="h-7 min-h-0 gap-1 px-2.5 text-xs"
                     >
                       <Check className="h-3 w-3" />
-                      Approve
+                      {uiText('approve_6007acb')}
                     </AgentButton>
                   </CardFooter>
                 </AgentDecisionCard>
@@ -305,7 +313,7 @@ function GenericToolApprovalCard({
           className="gap-2 text-emerald-600 focus:text-emerald-600 dark:text-emerald-400"
         >
           <Check className="h-3.5 w-3.5" />
-          Approve
+          {uiText('approve_6007acb')}
         </ContextMenuItem>
         <ContextMenuItem
           disabled={disabled}
@@ -313,7 +321,7 @@ function GenericToolApprovalCard({
           className="gap-2 text-destructive focus:text-destructive"
         >
           <X className="h-3.5 w-3.5" />
-          Deny
+          {uiText('deny_05a2d73')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

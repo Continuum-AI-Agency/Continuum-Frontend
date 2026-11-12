@@ -1,17 +1,13 @@
 'use client';
 
 import { ChevronDown, SearchCheck } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { AgentReceipt } from '@/components/shared/agent-cards/agentCardKit';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import type { UiLocale } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 import type { UiTrendChart } from './types';
-
-const SIGNAL_TYPE_LABELS: Record<string, string> = {
-  trend: 'Trend',
-  event: 'Event',
-  question: 'Question',
-};
 
 const SERIES_LABELS = ['Trends', 'Events', 'Questions'] as const;
 
@@ -26,8 +22,25 @@ type TrendScanSummary = {
   counts: Array<{ label: SeriesLabel; value: number }>;
 };
 
-function formatWindowDays(days: number): string {
-  return days >= 365 && days % 365 === 0 ? `${days / 365}y` : `${days}d`;
+const windowFormatters = new Map<string, Intl.NumberFormat>();
+const percentFormatters = new Map<UiLocale, Intl.NumberFormat>();
+
+export function formatTrendWindowDays(days: number, locale?: UiLocale): string {
+  if (!Number.isFinite(days)) return '';
+  const years = days >= 365 && days % 365 === 0;
+  if (!locale) return years ? `${days / 365}y` : `${days}d`;
+  const unit = years ? 'year' : 'day';
+  const key = `${locale}:${unit}`;
+  let formatter = windowFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'unit',
+      unit,
+      unitDisplay: 'narrow',
+    });
+    windowFormatters.set(key, formatter);
+  }
+  return formatter.format(years ? days / 365 : days);
 }
 
 function formatPlatform(platform: string | null): string | null {
@@ -35,11 +48,20 @@ function formatPlatform(platform: string | null): string | null {
   return platform.replace(/[_-]+/g, ' ');
 }
 
-function formatConfidence(confidence: number | null): string | null {
+function formatConfidence(confidence: number | null, locale: UiLocale): string | null {
   if (confidence == null || !Number.isFinite(confidence)) return null;
   const normalized = confidence <= 1 ? confidence * 100 : confidence;
   const clamped = Math.max(0, Math.min(100, normalized));
-  return `${Math.round(clamped)}%`;
+  let formatter = percentFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+      useGrouping: false,
+    });
+    percentFormatters.set(locale, formatter);
+  }
+  return formatter.format(Math.round(clamped) / 100);
 }
 
 function collectWindows(chart: UiTrendChart): number[] {
@@ -58,8 +80,17 @@ function collectWindows(chart: UiTrendChart): number[] {
   return [...windows].sort((a, b) => a - b);
 }
 
-export function getTrendScanSummary(chart: UiTrendChart): TrendScanSummary {
-  const title = typeof chart?.title === 'string' && chart.title.trim() ? chart.title : 'Trend scan';
+export function getTrendScanSummary(
+  chart: UiTrendChart,
+  presentation: {
+    translate?: ReturnType<typeof useTranslations<'organic'>>;
+    locale?: UiLocale;
+  } = {},
+): TrendScanSummary {
+  const title =
+    typeof chart?.title === 'string' && chart.title.trim()
+      ? chart.title
+      : (presentation.translate?.('trendScanTitle') ?? 'Trend scan');
   const windows = collectWindows(chart);
   const counts = SERIES_LABELS.map((label) => {
     const value = chart.series
@@ -72,16 +103,24 @@ export function getTrendScanSummary(chart: UiTrendChart): TrendScanSummary {
 
   return {
     title,
-    windowLabel: windows.length > 0 ? windows.map(formatWindowDays).join(' / ') : 'current',
+    windowLabel:
+      windows.length > 0
+        ? windows.map((days) => formatTrendWindowDays(days, presentation.locale)).join(' / ')
+        : (presentation.translate?.('trendWindowCurrent') ?? 'current'),
     totalSignals: chart.topSignals.length,
     counts,
   };
 }
 
 export function TrendChartCard({ chart }: Props) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const [open, setOpen] = useState(false);
   const topSignals = Array.isArray(chart?.topSignals) ? chart.topSignals : [];
-  const summary = getTrendScanSummary(chart);
+  const summary = getTrendScanSummary(chart, {
+    translate: uiText,
+    locale: uiLocale,
+  });
 
   if (topSignals.length === 0) return null;
 
@@ -103,7 +142,9 @@ export function TrendChartCard({ chart }: Props) {
                   · {summary.windowLabel}
                 </span>
                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
-                  · {summary.totalSignals} signal{summary.totalSignals === 1 ? '' : 's'}
+                  {uiText.rich('sentence_659ee1ea1cdb', {
+                    count: summary.totalSignals,
+                  })}
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-1.5">
@@ -112,7 +153,10 @@ export function TrendChartCard({ chart }: Props) {
                     key={count.label}
                     className="hidden rounded-md bg-background/45 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground/80 tabular-nums md:inline"
                   >
-                    {count.label} {count.value}
+                    {uiText('trendSeriesCount', {
+                      series: count.label,
+                      count: count.value,
+                    })}
                   </span>
                 ))}
                 <ChevronDown
@@ -136,14 +180,14 @@ export function TrendChartCard({ chart }: Props) {
               </span>
               <span className="flex min-w-0 flex-wrap items-center text-2xs leading-snug text-muted-foreground/70">
                 {[
-                  SIGNAL_TYPE_LABELS[signal.type] ?? signal.type,
+                  uiText('trendSignalType', { kind: signal.type }),
                   formatPlatform(signal.platform),
-                  formatConfidence(signal.confidence),
-                  formatWindowDays(signal.windowDays),
+                  formatConfidence(signal.confidence, uiLocale),
+                  formatTrendWindowDays(signal.windowDays, uiLocale),
                 ]
                   .filter((part): part is string => Boolean(part))
                   .map((part, i) => (
-                    <span key={`${signal.id}-${part}`}>
+                    <span key={`${signal.id}:${i}`}>
                       {i > 0 && <span className="px-1 text-muted-foreground/35">·</span>}
                       <span className={cn(i === 0 && 'font-medium text-muted-foreground/85')}>
                         {part}

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { type AccountCandidate, accountCandidateSchema } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { GoogleDeliveryStatus } from './GoogleDeliveryStatus';
 
 // The status block the Google tab leads with when Google shows no ad in the whole account
@@ -19,7 +20,10 @@ const g12 = (over: Record<string, unknown> = {}): AccountCandidate =>
     impact_basis: 'This account has 2 campaigns that should be serving…',
     evidence: { rule: 'G12', severity: 'high' },
     result_label: 'results',
-    cta: { kind: 'portfolio', target_id: 'b9cebbcf-2832-440a-b326-3af20c19be37' },
+    cta: {
+      kind: 'portfolio',
+      target_id: 'b9cebbcf-2832-440a-b326-3af20c19be37',
+    },
     platform_card: {
       variant: 'google_delivery_issue',
       campaign_name: 'Search | Octubre | Easy Fit',

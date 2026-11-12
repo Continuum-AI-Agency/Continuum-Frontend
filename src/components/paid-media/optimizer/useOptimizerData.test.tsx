@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, jest, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const rpc = mock(async () => ({ data: [], error: null }));
 
@@ -25,7 +26,9 @@ const {
 const { isRequestTimeout } = await import('@/lib/api/timeout');
 
 function createWrapper() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };
@@ -106,7 +109,10 @@ describe('optimizer React Query reads', () => {
     rpc.mockResolvedValueOnce({
       data: [
         portfolioRow({ ad_account_id: 'act_999' }),
-        portfolioRow({ id: '33333333-3333-4333-8333-333333333333', ad_account_id: 'act_999' }),
+        portfolioRow({
+          id: '33333333-3333-4333-8333-333333333333',
+          ad_account_id: 'act_999',
+        }),
       ],
       error: null,
     });
@@ -155,7 +161,9 @@ describe('optimizer React Query reads', () => {
     });
 
     // The read retries with a ~1s backoff, so the error state lands after the default wait.
-    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5_000 });
+    await waitFor(() => expect(result.current.isError).toBe(true), {
+      timeout: 5_000,
+    });
     expect(result.current.data).toEqual([]);
   });
 
@@ -210,7 +218,9 @@ describe('optimizer React Query reads', () => {
     rpc.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
     await result.current.refetch();
 
-    await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 5_000 });
+    await waitFor(() => expect(result.current.isError).toBe(true), {
+      timeout: 5_000,
+    });
     expect(result.current.hasAnswer).toBe(true);
     expect(result.current.data).toHaveLength(1);
   });
@@ -260,7 +270,9 @@ describe('portfolio read critical path (fake timers)', () => {
           ),
       );
       const wrapper = createWrapper();
-      const shell = renderHook(() => useOptimizerPortfolios(BRAND, null), { wrapper });
+      const shell = renderHook(() => useOptimizerPortfolios(BRAND, null), {
+        wrapper,
+      });
       const shellMs = await advanceUntil(() => shell.result.current.isSuccess);
 
       const tab = renderHook(
@@ -322,7 +334,11 @@ describe('suggestions read (fake timers)', () => {
   it('keeps waiting for a cold read that answers after the 8 s read bound', async () => {
     jest.useFakeTimers();
     try {
-      answerAfter(13_000, { suggestions: [], reason: 'all_cbo', diagnostics: null });
+      answerAfter(13_000, {
+        suggestions: [],
+        reason: 'all_cbo',
+        diagnostics: null,
+      });
       const { result } = renderHook(() => useOptimizerSuggestions(BRAND, 'act_1'), {
         wrapper: createWrapper(),
       });
@@ -395,41 +411,73 @@ describe('runCycle outcomes', () => {
 
   it('reports a persisted cycle as ran — the exact body the old schema rejected', async () => {
     rpc.mockResolvedValueOnce({ data: RAN, error: null } as never);
-    expect(await runOnce()).toEqual({ status: 'ran', run: expect.objectContaining(RAN) });
+    expect(await runOnce()).toEqual({
+      status: 'ran',
+      run: expect.objectContaining(RAN),
+    });
   });
 
   it('reports an empty portfolio as SKIPPED, not as an offline service', async () => {
-    rpc.mockResolvedValueOnce({ data: skip('no_adsets'), error: null } as never);
+    rpc.mockResolvedValueOnce({
+      data: skip('no_adsets'),
+      error: null,
+    } as never);
     const outcome = await runOnce();
     expect(outcome).toMatchObject({ status: 'skipped', reason: 'no_adsets' });
   });
 
   it('reports a cycle with no live Meta data as SKIPPED', async () => {
-    rpc.mockResolvedValueOnce({ data: skip('no_snapshots'), error: null } as never);
-    expect(await runOnce()).toMatchObject({ status: 'skipped', reason: 'no_snapshots' });
+    rpc.mockResolvedValueOnce({
+      data: skip('no_snapshots'),
+      error: null,
+    } as never);
+    expect(await runOnce()).toMatchObject({
+      status: 'skipped',
+      reason: 'no_snapshots',
+    });
   });
 
   it('maps a 501 to not_configured (OPTIMIZER_SERVICE_URL unset on the edge)', async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: { context: { status: 501 } } } as never);
-    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'not_configured' });
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { context: { status: 501 } },
+    } as never);
+    expect(await runOnce()).toEqual({
+      status: 'unavailable',
+      kind: 'not_configured',
+    });
   });
 
   it('maps a 403 to forbidden — a refusal, never an outage', async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: { context: { status: 403 } } } as never);
-    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'forbidden' });
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { context: { status: 403 } },
+    } as never);
+    expect(await runOnce()).toEqual({
+      status: 'unavailable',
+      kind: 'forbidden',
+    });
   });
 
   it('flags contract drift as malformed rather than silently returning null', async () => {
     // recommendations as an ARRAY: precisely the shape the old schema demanded.
-    rpc.mockResolvedValueOnce({ data: { ...RAN, recommendations: [{}] }, error: null } as never);
-    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
+    rpc.mockResolvedValueOnce({
+      data: { ...RAN, recommendations: [{}] },
+      error: null,
+    } as never);
+    expect(await runOnce()).toEqual({
+      status: 'unavailable',
+      kind: 'malformed',
+    });
   });
 
   // optimizer_record_cycle is `on conflict (portfolio_id, utc_day) do nothing` and returns the
   // run already recorded today. A second Run now the same day therefore gets back the id that is
   // ALREADY on screen: nothing new was scored, and the notice has to say so.
   async function runWithLatestOnScreen(latestRunId: string | null) {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     queryClient.setQueryData(optimizerQueryKeys.performance(RAN.portfolioId), {
       portfolio: null,
       latest_run: latestRunId ? { id: latestRunId } : null,
@@ -471,7 +519,10 @@ describe('runCycle outcomes', () => {
     try {
       const body = { ...RAN, recommendations: [{}] };
       rpc.mockResolvedValueOnce({ data: body, error: null } as never);
-      expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
+      expect(await runOnce()).toEqual({
+        status: 'unavailable',
+        kind: 'malformed',
+      });
       expect(JSON.stringify(logged)).toContain('"recommendations":[{}]');
     } finally {
       console.error = error;
@@ -479,8 +530,14 @@ describe('runCycle outcomes', () => {
   });
 
   it('treats runId:null with no skip reason as malformed, not as success', async () => {
-    rpc.mockResolvedValueOnce({ data: { ...RAN, runId: null }, error: null } as never);
-    expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
+    rpc.mockResolvedValueOnce({
+      data: { ...RAN, runId: null },
+      error: null,
+    } as never);
+    expect(await runOnce()).toEqual({
+      status: 'unavailable',
+      kind: 'malformed',
+    });
   });
 });
 
@@ -502,17 +559,24 @@ describe('useRevertOptimizerAction', () => {
   });
 
   function renderRevert() {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
-    const { result } = renderHook(() => useRevertOptimizerAction(), { wrapper });
+    const { result } = renderHook(() => useRevertOptimizerAction(), {
+      wrapper,
+    });
     return { result, invalidate };
   }
 
   it('previews through the revert edge and never names who authorized it', async () => {
-    rpc.mockResolvedValueOnce({ data: envelope('would_revert', true), error: null } as never);
+    rpc.mockResolvedValueOnce({
+      data: envelope('would_revert', true),
+      error: null,
+    } as never);
     const { result, invalidate } = renderRevert();
     let answer: unknown;
     await act(async () => {
@@ -530,34 +594,55 @@ describe('useRevertOptimizerAction', () => {
   });
 
   it('re-reads the optimizer after a real undo lands', async () => {
-    rpc.mockResolvedValueOnce({ data: envelope('reverted', false), error: null } as never);
+    rpc.mockResolvedValueOnce({
+      data: envelope('reverted', false),
+      error: null,
+    } as never);
     const { result, invalidate } = renderRevert();
     await act(async () => {
-      await result.current.mutateAsync({ portfolio_id: PORTFOLIO, audit_id: AUDIT, dryRun: false });
+      await result.current.mutateAsync({
+        portfolio_id: PORTFOLIO,
+        audit_id: AUDIT,
+        dryRun: false,
+      });
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: optimizerQueryKeys.root });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: optimizerQueryKeys.root,
+    });
   });
 
   it('reads an undecodable reply as null and an edge error as unreachable', async () => {
-    rpc.mockResolvedValueOnce({ data: { result: { status: 'undone' } }, error: null } as never);
+    rpc.mockResolvedValueOnce({
+      data: { result: { status: 'undone' } },
+      error: null,
+    } as never);
     const { result } = renderRevert();
     let answer: unknown = 'unset';
     await act(async () => {
-      answer = await result.current.mutateAsync({ portfolio_id: PORTFOLIO, audit_id: AUDIT });
+      answer = await result.current.mutateAsync({
+        portfolio_id: PORTFOLIO,
+        audit_id: AUDIT,
+      });
     });
     expect(answer).toBeNull();
 
     rpc.mockResolvedValueOnce({ data: null, error: new Error('500') } as never);
     await act(async () => {
       await expect(
-        result.current.mutateAsync({ portfolio_id: PORTFOLIO, audit_id: AUDIT }),
+        result.current.mutateAsync({
+          portfolio_id: PORTFOLIO,
+          audit_id: AUDIT,
+        }),
       ).rejects.toThrow('optimizer-apply-action-revert unreachable');
     });
   });
 });
 
 describe('useCurrentMoves fails closed on the roster read', () => {
-  const PORTFOLIO = { id: '44444444-4444-4444-8444-444444444444', last_cycle_current: true };
+  const PORTFOLIO = {
+    id: '44444444-4444-4444-8444-444444444444',
+    last_cycle_current: true,
+  };
   const move = (adset_id: string) => ({
     adset_id,
     current_budget: 100,
@@ -613,9 +698,16 @@ describe('useConvertCbo — the real convert carries the approved preview', () =
   ];
   const convertOnce = async (request: Record<string, unknown>, answer: unknown) => {
     rpc.mockResolvedValueOnce({ data: answer, error: null } as never);
-    const { result } = renderHook(() => useConvertCbo(BRAND), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useConvertCbo(BRAND), {
+      wrapper: createWrapper(),
+    });
     act(() => {
-      result.current.mutate({ brandId: BRAND, accountId: 'act_1', campaignId: 'c1', ...request });
+      result.current.mutate({
+        brandId: BRAND,
+        accountId: 'act_1',
+        campaignId: 'c1',
+        ...request,
+      });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const [fn, options] = rpc.mock.calls.at(-1) as unknown as [string, { body: object }];
@@ -661,7 +753,12 @@ describe('useConvertCbo — the real convert carries the approved preview', () =
       { dryRun: true },
       { ok: true, dryRun: true, adset_budgets: [] },
     );
-    expect(body).toEqual({ brandId: BRAND, accountId: 'act_1', campaignId: 'c1', dryRun: true });
+    expect(body).toEqual({
+      brandId: BRAND,
+      accountId: 'act_1',
+      campaignId: 'c1',
+      dryRun: true,
+    });
     expect('expectedAdsetBudgets' in body).toBe(false);
   });
 });

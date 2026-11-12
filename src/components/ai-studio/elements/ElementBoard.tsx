@@ -11,11 +11,14 @@ import {
   ELEMENT_STYLE_SLUG_LIMIT,
   type ElementMemberRole,
   type ElementMemberRoles,
+  elementErrorResponseSchema,
   elementStyleSlugSchema,
   isElementBoardCategory,
 } from '@continuum/contracts';
 import { Loader2, Plus, X } from 'lucide-react';
+import { useLocale, useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
+import { elementCategoryLabel } from '@/components/ai-studio/elements/elementPresentation';
 import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,7 +32,6 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  ELEMENT_CATEGORY_LABEL,
   type ElementRecord,
   useElementMutations,
   useElements,
@@ -38,28 +40,27 @@ import {
 import { ApiError } from '@/lib/api/errors';
 import { useBrandSkills } from '@/lib/organic/skills';
 
-const ROLE_LABEL: Record<ElementMemberRole, string> = {
-  identity: 'Identity',
-  front: 'Front',
-  back: 'Back',
-  side: 'Side',
-  three_quarter: 'Three-quarter',
-  top: 'Top',
-  detail: 'Detail',
-  label: 'Label',
-  packaging: 'Packaging',
-  in_hand: 'In hand',
-  wardrobe: 'Wardrobe',
-  pose: 'Pose',
-};
+const ROLE_KEYS = {
+  identity: 'elementRoleIdentity',
+  front: 'elementRoleFront',
+  back: 'elementRoleBack',
+  side: 'elementRoleSide',
+  three_quarter: 'elementRoleThreeQuarter',
+  top: 'elementRoleTop',
+  detail: 'elementRoleDetail',
+  label: 'elementRoleLabel',
+  packaging: 'elementRolePackaging',
+  in_hand: 'elementRoleInHand',
+  wardrobe: 'elementRoleWardrobe',
+  pose: 'elementRolePose',
+} as const satisfies Record<ElementMemberRole, string>;
 const NO_ROLE = 'none';
-const ROLE_ITEMS: Record<string, string> = { [NO_ROLE]: 'No role', ...ROLE_LABEL };
-
-/** What the 422s mean to the person fixing them; the Backend's own message follows. */
-const SAVE_ERROR_COPY: Partial<Record<string, string>> = {
-  element_style_unknown: 'One of these styles is not a style this brand has.',
-  element_style_conflict: 'Two of these styles contradict each other — remove one.',
-  element_board_invalid: 'A linked board is no longer one of this brand’s board Elements.',
+const SAVE_ERROR_KEYS: Readonly<
+  Partial<Record<string, 'elementStyleUnknown' | 'elementStyleConflict' | 'elementBoardInvalid'>>
+> = {
+  element_style_unknown: 'elementStyleUnknown',
+  element_style_conflict: 'elementStyleConflict',
+  element_board_invalid: 'elementBoardInvalid',
 };
 
 const SLASH_TOKEN = /\/([a-z0-9][a-z0-9:-]*)/gi;
@@ -75,6 +76,17 @@ export interface ElementBoardProps {
 }
 
 export function ElementBoard({ element, brandId }: ElementBoardProps) {
+  const translateUi = useUiTranslations('studio');
+  const locale = useLocale();
+  const roleItems = React.useMemo(
+    () =>
+      Object.fromEntries([
+        [NO_ROLE, translateUi('elementNoRole')],
+        ...ELEMENT_MEMBER_ROLES.map((role) => [role, translateUi(ROLE_KEYS[role])]),
+      ]),
+    [translateUi],
+  );
+
   const { elements } = useElements(brandId);
   const { update } = useElementMutations(brandId);
   const { all: skills } = useBrandSkills(brandId);
@@ -106,7 +118,7 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
     setStyleDraft('');
     const picked = [...text.matchAll(SLASH_TOKEN)].map((match) => match[1] ?? '');
     const refused = picked.find((slug) => !styleSlugSet.has(slug));
-    setStyleHint(refused ? `/${refused} is not one of this brand’s styles.` : null);
+    setStyleHint(refused ? translateUi('elementStyleNotInBrand', { slug: refused }) : null);
     setStyleSlugs((current) =>
       [...new Set([...current, ...picked.filter((slug) => styleSlugSet.has(slug))])].slice(
         0,
@@ -125,16 +137,24 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
   );
 
   const saveError = update.error;
-  const saveErrorCopy =
-    saveError instanceof ApiError && saveError.code ? SAVE_ERROR_COPY[saveError.code] : undefined;
+  const failureContext =
+    saveError instanceof ApiError ? elementErrorResponseSchema.safeParse(saveError.payload) : null;
+  const failureStyleSlugs = failureContext?.success ? (failureContext.data.styleSlugs ?? []) : [];
+
+  const saveErrorCode = failureContext?.success
+    ? failureContext.data.error
+    : saveError instanceof ApiError
+      ? saveError.code
+      : undefined;
+  const saveErrorCopy = saveErrorCode ? SAVE_ERROR_KEYS[saveErrorCode] : undefined;
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-3" data-testid="element-board">
-      <p className="text-sm font-medium">Reference board</p>
+      <p className="text-sm font-medium">{translateUi('reference_board_8512e842')}</p>
 
       {members.length > 0 ? (
         <div className="flex flex-col gap-1.5">
-          <Label>What each image shows</Label>
+          <Label>{translateUi('what_each_image_shows_8cef31d4')}</Label>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {members.map((member, index) => {
               const url = signedUrls[member.assetId];
@@ -145,7 +165,9 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
                       // biome-ignore lint/performance/noImgElement: signed storage URL, not a build-time asset.
                       <img
                         src={url}
-                        alt={`Source ${index + 1}`}
+                        alt={translateUi('source_value0_2ba9d9c9', {
+                          value0: String(index + 1),
+                        })}
                         className="h-full w-full object-cover"
                       />
                     ) : (
@@ -161,21 +183,26 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
                         const { [member.assetId]: _previous, ...rest } = current;
                         return value === NO_ROLE
                           ? rest
-                          : { ...rest, [member.assetId]: value as ElementMemberRole };
+                          : {
+                              ...rest,
+                              [member.assetId]: value as ElementMemberRole,
+                            };
                       })
                     }
                   >
                     <SelectTrigger
-                      aria-label={`Role of source ${index + 1}`}
+                      aria-label={translateUi('role_of_source_value0_786b0aa1', {
+                        value0: String(index + 1),
+                      })}
                       className="h-7 w-full px-2 text-xs"
                     >
-                      <SelectValue items={ROLE_ITEMS} />
+                      <SelectValue items={roleItems} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={NO_ROLE}>No role</SelectItem>
+                      <SelectItem value={NO_ROLE}>{translateUi('no_role_784a7208')}</SelectItem>
                       {ELEMENT_MEMBER_ROLES.map((role) => (
                         <SelectItem key={role} value={role}>
-                          {ROLE_LABEL[role]}
+                          {translateUi(ROLE_KEYS[role])}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -188,14 +215,16 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <Label>Linked boards</Label>
+        <Label>{translateUi('linked_boards_36bd25d8')}</Label>
         <div className="flex flex-wrap gap-1.5">
           {boardIds.map((id) => (
             <Badge key={id} variant="secondary" className="h-6 gap-1 pl-2 pr-1 text-xs">
               {boardName(id)}
               <button
                 type="button"
-                aria-label={`Unlink ${boardName(id)}`}
+                aria-label={translateUi('unlink_value0_fbe997c9', {
+                  value0: String(boardName(id)),
+                })}
                 onClick={() => setBoardIds((current) => current.filter((value) => value !== id))}
               >
                 <X className="h-3 w-3" />
@@ -215,7 +244,7 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
                   <Plus className="mr-1 h-3 w-3" />
                   {candidate.name}
                   <span className="ml-1 text-muted-foreground">
-                    {ELEMENT_CATEGORY_LABEL[candidate.category]}
+                    {elementCategoryLabel(candidate.category, translateUi)}
                   </span>
                 </Button>
               ))
@@ -223,13 +252,15 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
         </div>
         <p className="text-xs text-muted-foreground">
           {boardIds.length === 0 && boardCandidates.length === 0
-            ? 'Save a moodboard, style, palette, setting or location Element to link it here.'
-            : `The look this Element is shot in. Up to ${ELEMENT_BOARD_LIMIT}.`}
+            ? translateUi('save_a_moodboard_style_palette_sett_6f8e16a3')
+            : translateUi('the_look_this_element_is_shot_in_up_639997a0', {
+                value0: String(ELEMENT_BOARD_LIMIT),
+              })}
         </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`element-${element.id}-styles`}>Styles</Label>
+        <Label htmlFor={`element-${element.id}-styles`}>{translateUi('styles_3626e7fd')}</Label>
         {styleSlugs.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {styleSlugs.map((slug) => (
@@ -237,7 +268,9 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
                 /{slug}
                 <button
                   type="button"
-                  aria-label={`Remove /${slug}`}
+                  aria-label={translateUi('remove_value0_e459697f', {
+                    value0: String(slug),
+                  })}
                   onClick={() =>
                     setStyleSlugs((current) => current.filter((value) => value !== slug))
                   }
@@ -259,8 +292,10 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
             disabled={styleSlugs.length >= ELEMENT_STYLE_SLUG_LIMIT}
             placeholder={
               styleSlugs.length >= ELEMENT_STYLE_SLUG_LIMIT
-                ? `Up to ${ELEMENT_STYLE_SLUG_LIMIT} styles`
-                : 'Type / to add a style'
+                ? translateUi('up_to_value0_styles_fdbb7aa8', {
+                    value0: String(ELEMENT_STYLE_SLUG_LIMIT),
+                  })
+                : translateUi('type_to_add_a_style_76e95708')
             }
             onChange={(event) => setStyleDraft(event.target.value)}
             onSelect={slash.onSelect}
@@ -269,7 +304,8 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          Sent with every generation this Element feeds. A style typed in the prompt wins.
+          {' '}
+          {translateUi('sent_with_every_generation_this_ele_6b3c9aaa')}{' '}
         </p>
         {styleHint ? <p className="text-xs text-destructive">{styleHint}</p> : null}
       </div>
@@ -292,17 +328,28 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
             })
           }
         >
-          {update.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Save board
+          {update.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{' '}
+          {translateUi('save_board_3bbd889c')}{' '}
         </Button>
         {saveError ? (
           <p className="text-xs text-destructive" role="alert">
-            {saveErrorCopy ? `${saveErrorCopy} ` : 'Could not save the board: '}
-            {saveError.message}
+            {saveErrorCopy
+              ? translateUi(saveErrorCopy)
+              : translateUi('could_not_save_the_board_4bd81b52')}
+            {failureStyleSlugs.length
+              ? ' ' +
+                translateUi('elementErrorStyles', {
+                  styles: new Intl.ListFormat(locale, {
+                    style: 'long',
+                    type: 'conjunction',
+                  }).format(failureStyleSlugs.map((slug) => '/' + slug)),
+                })
+              : ''}
           </p>
         ) : update.isSuccess ? (
           <p className="text-xs text-muted-foreground" role="status">
-            Board saved.
+            {' '}
+            {translateUi('board_saved_60a975e3')}{' '}
           </p>
         ) : null}
       </div>

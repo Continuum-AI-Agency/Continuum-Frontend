@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ReadinessTranslator = ReturnType<typeof useTranslations<'onboarding'>>;
+
 import type { ReadinessEvidenceSource } from '@continuum/contracts';
 import type { ReadinessAnalysis, ReadinessDimension } from '@/lib/onboarding/agentClient';
 
@@ -10,6 +14,23 @@ export const DIMENSION_LABELS: Record<ReadinessDimension, string> = {
   messaging_coherence: 'Messaging',
   brand_identity: 'Identity',
 };
+
+const DIMENSION_KEYS = {
+  value_proposition: 'dimensionValue',
+  icp_clarity: 'dimensionIcp',
+  customer_pains: 'dimensionPains',
+  success_metrics: 'dimensionOutcomes',
+  positioning: 'dimensionPositioning',
+  messaging_coherence: 'dimensionMessaging',
+  brand_identity: 'dimensionIdentity',
+} as const;
+export function getDimensionLabels(
+  translate: ReadinessTranslator,
+): Record<ReadinessDimension, string> {
+  return Object.fromEntries(
+    Object.entries(DIMENSION_KEYS).map(([key, message]) => [key, translate(message)]),
+  ) as Record<ReadinessDimension, string>;
+}
 
 export function scoreFor(
   readiness: ReadinessAnalysis | null,
@@ -90,9 +111,20 @@ export function hostOf(url: string | null | undefined): string | null {
 export function sourceChipLabel(
   source: ReadinessEvidenceSource,
   url: string | null | undefined,
+  translate?: ReadinessTranslator,
 ): string {
   const host = source === 'search' ? hostOf(url) : null;
-  return host ? `web: ${host}` : SOURCE_LABELS[source];
+  const keys = {
+    homepage: 'sourceHomepage',
+    about: 'sourceAbout',
+    pricing: 'sourcePricing',
+    customers: 'sourceCustomers',
+    instagram_bio: 'sourceInstagram',
+    instagram_post: 'sourceInstagram',
+    search: 'sourceSearch',
+    brand_md: 'sourceBrandBook',
+  } as const;
+  return host ? `web: ${host}` : translate ? translate(keys[source]) : SOURCE_LABELS[source];
 }
 
 const EVIDENCE_SOURCE_NAMES = {
@@ -103,15 +135,38 @@ const EVIDENCE_SOURCE_NAMES = {
 } as const;
 
 /** The evidence sources that could not be read, in words, for the partial banner. */
-export function failedEvidenceSources(readiness: ReadinessAnalysis): string[] {
+export function failedEvidenceSources(
+  readiness: ReadinessAnalysis,
+  translate?: ReadinessTranslator,
+): string[] {
   const sources = readiness.evidence_sources;
   if (!sources) return [];
   return (Object.keys(EVIDENCE_SOURCE_NAMES) as (keyof typeof EVIDENCE_SOURCE_NAMES)[])
     .filter((key) => sources[key] === 'failed')
-    .map((key) => EVIDENCE_SOURCE_NAMES[key]);
+    .map((key) =>
+      translate
+        ? translate(
+            (
+              {
+                homepage: 'evidenceHomepage',
+                subpages: 'evidenceSubpages',
+                instagram: 'evidenceInstagram',
+                search: 'evidenceSearch',
+              } as const
+            )[key],
+          )
+        : EVIDENCE_SOURCE_NAMES[key],
+    );
 }
 
-export function listInWords(items: readonly string[], conjunction: 'and' | 'or'): string {
+export function listInWords(
+  items: readonly string[],
+  conjunction: 'and' | 'or',
+  locale = 'en',
+): string {
   if (items.length <= 1) return items[0] ?? '';
-  return `${items.slice(0, -1).join(', ')} ${conjunction} ${items[items.length - 1]}`;
+  return new Intl.ListFormat(locale, {
+    style: 'long',
+    type: conjunction === 'or' ? 'disjunction' : 'conjunction',
+  }).format(items);
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { pie as d3Pie } from 'd3-shape';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PieCenter, type PieCenterProps } from './pie-center';
 import {
@@ -39,6 +40,8 @@ export function PieCenterShell({
   animateEntrance = true,
   ...pieCenterProps
 }: PieCenterShellProps) {
+  const tUi = useTranslations('common');
+
   const containerRef = useRef<HTMLDivElement>(null);
   const introStartedRef = useRef(false);
 

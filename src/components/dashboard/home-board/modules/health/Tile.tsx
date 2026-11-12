@@ -1,4 +1,9 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useTranslations as useExtraTranslations,
+  useLocale,
+} from 'next-intl';
 
 // H13 Account doctor: how many of the brand's readable checks pass, and the ones to fix first,
 // each with the place it is fixed. No 0–100 score (there are no agreed weights). The expanded
@@ -20,24 +25,39 @@ import { useDoctorReads } from './useDoctorReads';
 
 const Module = lazy(() => import('./Module'));
 
-const FAILING_SHOWN: Record<HomeTileProps['tile']['size'], number> = { s: 1, m: 2, l: 4 };
+const FAILING_SHOWN: Record<HomeTileProps['tile']['size'], number> = {
+  s: 1,
+  m: 2,
+  l: 4,
+};
 
 export default function HealthTile({ ctx, tile }: HomeTileProps) {
+  const extraUiText = useExtraTranslations('dashboard');
+
+  const betaUiText = useBetaTranslations('dashboard');
+  const scaleCopy = useBetaTranslations('scale');
+  const uiLocale = useLocale();
+
   const reads = useDoctorReads(ctx.brandId, ctx.adAccounts);
   const hygiene = useHomeRead<HomeAccountHygieneData>({
     name: 'accountHygiene',
     brandId: ctx.brandId,
     schema: homeAccountHygieneReadSchema,
   });
-  const view = doctorView({
-    issues: ctx.reading.issues,
-    portfolios: reads.portfolios,
-    adAccounts: ctx.adAccounts,
-    accountReads: reads.accountReads,
-    googleCards: reads.googleCards,
-    setup: ctx.setup,
-    hygiene,
-  });
+  const view = doctorView(
+    {
+      issues: ctx.reading.issues,
+      portfolios: reads.portfolios,
+      adAccounts: ctx.adAccounts,
+      accountReads: reads.accountReads,
+      googleCards: reads.googleCards,
+      setup: ctx.setup,
+      hygiene,
+    },
+    betaUiText,
+    scaleCopy,
+    uiLocale,
+  );
 
   if (view.state === 'loading') {
     return (
@@ -54,9 +74,9 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
     return (
       <HomeTileFrame state="error" tile={tile}>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground text-xs">The account checks could not be read.</p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_c57b5bcdbf81')}</p>
           <Button onClick={reads.retry} size="sm" type="button" variant="outline">
-            Retry
+            {betaUiText('beta_942087cc2d41')}
           </Button>
         </div>
       </HomeTileFrame>
@@ -75,9 +95,13 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
   const passShare = view.total > 0 ? (view.passing / view.total) * 100 : 0;
   return (
     <HomeTileFrame
-      badge={view.failing === 0 ? 'Nothing to fix' : `${view.failing} to fix`}
+      badge={
+        view.failing === 0
+          ? betaUiText('beta_b4f3c1ee72c3')
+          : betaUiText('beta_aad8d67f307a', { value0: String(view.failing) })
+      }
       expanded={<Module view={view} />}
-      expandedDescription="Every check Continuum can read for this brand, and where each one is fixed."
+      expandedDescription={extraUiText('home_f63fe9c5475f')}
       state="ready"
       tile={tile}
     >
@@ -89,11 +113,16 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
           data-total={view.total}
           data-value={view.passing}
         >
-          {view.passing} of {view.total}{' '}
-          <span className="font-normal text-muted-foreground text-xs">checks pass</span>
+          {view.passing} {betaUiText('beta_28391d3bc64e')} {view.total}{' '}
+          <span className="font-normal text-muted-foreground text-xs">
+            {betaUiText('beta_c392feddc4f4')}
+          </span>
         </p>
         <div
-          aria-label={`${view.passing} of ${view.total} checks pass`}
+          aria-label={betaUiText('beta_2920655323c4', {
+            value0: String(view.passing),
+            value1: String(view.total),
+          })}
           className="h-2 w-full overflow-hidden rounded-full bg-muted"
           role="img"
         >
@@ -113,7 +142,7 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
             ))}
           </ul>
         ) : (
-          <p className="text-muted-foreground text-xs">Every check that can be read passes.</p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_970bf116958d')}</p>
         )}
       </div>
     </HomeTileFrame>

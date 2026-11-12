@@ -3,6 +3,7 @@
 
 import {
   type ListReviewEventsResponse,
+  type ListReviewStateLabelsResponse,
   listReviewEventsResponseSchema,
   listReviewStateLabelsResponseSchema,
   REVIEW_EDGE_FUNCTION,
@@ -48,7 +49,10 @@ export async function listReviewEvents(params: {
   brandId: string;
   assetId: string;
 }): Promise<ListReviewEventsResponse> {
-  const query = new URLSearchParams({ brandId: params.brandId, assetId: params.assetId });
+  const query = new URLSearchParams({
+    brandId: params.brandId,
+    assetId: params.assetId,
+  });
   const response = await fetch(`/api/library/review?${query.toString()}`);
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Loading review history failed'));
@@ -58,10 +62,12 @@ export async function listReviewEvents(params: {
   return parsed.data;
 }
 
-export type BrandReviewStates = { labels: ReviewStateLabel[]; customStates: ReviewCustomState[] };
+export type BrandReviewStates = ListReviewStateLabelsResponse;
 
 export async function fetchReviewStateLabels(brandId: string): Promise<BrandReviewStates> {
-  const response = await fetch(`/api/library/review/labels?${new URLSearchParams({ brandId })}`);
+  const response = await fetch(
+    `/api/library/review/labels?${new URLSearchParams({ brandId, includeOrigins: '1' })}`,
+  );
   if (!response.ok)
     throw new Error(await readErrorMessage(response, 'Loading status labels failed'));
   return listReviewStateLabelsResponseSchema.parse(await response.json());

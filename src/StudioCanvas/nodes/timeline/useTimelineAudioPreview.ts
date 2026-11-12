@@ -1,7 +1,9 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { TimelineInputSource, TimelineTrack } from '../../types';
 import type { TimelineEditorAdapter } from './adapter';
 import {
@@ -43,6 +45,10 @@ export function useTimelineAudioPreview(input: {
   sourceDurations: ReadonlyMap<string, number>;
   revisionKey: string;
 }): TimelineAudioPreviewController {
+  const translateUi = useUiTranslations('studio');
+
+  const uiErrorText = useUiErrorMessage();
+
   const { adapter, layout, sourceDurations, revisionKey } = input;
   const { show } = useToast();
   const engineRef = useRef<TimelineWebAudioPreviewEngine | null>(null);
@@ -112,21 +118,20 @@ export function useTimelineAudioPreview(input: {
         return started;
       } catch (cause) {
         if (request !== requestRef.current) return false;
-        const message =
-          cause instanceof Error
-            ? cause.message
-            : 'The synchronized audio preview could not start.';
+        const message = uiErrorText(cause);
         setStatus('failed');
         setError(message);
         show({
-          title: 'Audio preview unavailable',
-          description: `${message} Video playback will continue with its source audio.`,
+          title: translateUi('audio_preview_unavailable_50b16803'),
+          description: translateUi('value0_video_playback_will_continue_3323155e', {
+            value0: String(message),
+          }),
           variant: 'warning',
         });
         return false;
       }
     },
-    [ensureEngine, loadPlan, show],
+    [ensureEngine, loadPlan, show, uiErrorText, translateUi],
   );
 
   const pause = useCallback((): number | null => {

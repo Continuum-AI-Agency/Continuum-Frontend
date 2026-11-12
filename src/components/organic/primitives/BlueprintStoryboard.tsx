@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The "Blueprint ready" state shown in an otherwise-empty (pending) media slot.
 // The AI has conceptualized N storyboard frames + a caption but no final media
 // exists yet. This surface makes the honest state explicit AND makes the single
@@ -57,6 +59,8 @@ function FrameTile({
   alt: string;
   onEnlarge: (index: number) => void;
 }) {
+  const uiText = useTranslations('organic');
+
   // A storyboard panel is 9:16 and exists to be JUDGED on framing. The square tile with
   // object-cover this used to render cropped ~44% of every frame vertically — cutting
   // away the exact thing a contact sheet is for, and hiding the copy-safe zone entirely.
@@ -67,12 +71,15 @@ function FrameTile({
         stop(event);
         onEnlarge(index);
       }}
-      aria-label={`Enlarge storyboard frame ${index + 1}${hasText(frame.role) ? ` — ${frame.role}` : ''}`}
+      aria-label={uiText('enlargeStoryboardFrame', {
+        number: index + 1,
+        role: hasText(frame.role) ? ` — ${frame.role}` : '',
+      })}
       className="group relative aspect-[9/16] h-32 w-auto shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/40 transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Image
         src={frame.storageUrl}
-        alt={`${alt} — storyboard frame ${index + 1}`}
+        alt={uiText('storyboardFrameAlt', { alt: alt, number: index + 1 })}
         fill
         unoptimized
         sizes="72px"
@@ -106,16 +113,17 @@ export function BlueprintStoryboard({
   onUseOwn: () => void;
   onEnlargeFrame: (index: number) => void;
 }) {
+  const uiText = useTranslations('organic');
   const visible = frames.slice(0, MAX_VISIBLE_FRAMES);
   const overflow = frames.length - visible.length;
 
   return (
     <div className="flex w-full flex-col items-center gap-3 px-4 py-5 text-center">
       <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider text-primary">
-        Blueprint ready
+        {uiText('blueprint_ready_e153264')}
       </span>
       <p className="text-2xs font-medium text-muted-foreground/70">
-        Concept preview — {frames.length} frame{frames.length === 1 ? '' : 's'}. No final media yet.
+        {uiText.rich('sentence_ce3de8e81fac', { count: frames.length })}
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
@@ -153,12 +161,12 @@ export function BlueprintStoryboard({
           {isGenerating ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Generating final media…
+              {uiText('generating_final_media_fda0be7')}
             </>
           ) : (
             <>
               <Wand2 className="h-4 w-4" />
-              Generate final media
+              {uiText('generate_final_media_9e103cc')}
             </>
           )}
         </button>
@@ -171,13 +179,13 @@ export function BlueprintStoryboard({
           className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
         >
           <Library className="h-4 w-4" />
-          Use your own creative
+          {uiText('use_your_own_creative_f6c4cb6')}
         </button>
       </div>
 
       {!canGenerate && !isGenerating && (
         <p className="text-3xs text-muted-foreground/60">
-          Finishing setup — generation available in a moment.
+          {uiText('finishing_setup_generation_available_in_a_mom_138403e')}
         </p>
       )}
     </div>

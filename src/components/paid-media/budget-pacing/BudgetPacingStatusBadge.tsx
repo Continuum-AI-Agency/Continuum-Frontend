@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { cn } from '@/lib/utils';
 
@@ -9,23 +10,28 @@ type Props = {
   className?: string;
 };
 
-const statusConfig: Record<PaceStatus, { label: string; className: string }> = {
+const statusConfig: Record<PaceStatus, { className: string }> = {
   on_pace: {
-    label: 'On Pace',
     className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   },
   underspending: {
-    label: 'Underspending',
     className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   },
   overspending: {
-    label: 'Overspending',
     className: 'bg-red-500/15 text-red-500 dark:text-red-400',
   },
 };
 
 export function BudgetPacingStatusBadge({ status, className }: Props) {
+  const uiText = useTranslations('scale');
   const config = statusConfig[status];
+  const label = uiText(
+    status === 'on_pace'
+      ? 'on_pace_740901e'
+      : status === 'underspending'
+        ? 'budgetUnderspending'
+        : 'budgetOverspending',
+  );
 
   return (
     <span
@@ -36,7 +42,7 @@ export function BudgetPacingStatusBadge({ status, className }: Props) {
       )}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      {config.label}
+      {label}
     </span>
   );
 }

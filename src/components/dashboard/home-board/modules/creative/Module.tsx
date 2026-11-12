@@ -11,6 +11,7 @@
 // takes an ad, so AI Studio is linked as itself.
 import type { HomeCreativeSpotlightData } from '@continuum/contracts';
 import Link from 'next/link';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 import { lazy, Suspense, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -44,6 +45,8 @@ const STANDING_BADGE: Record<CreativeStanding, 'success' | 'destructive' | 'warn
 type Filter = 'all' | CreativeStanding;
 
 function Card({ card }: { card: CreativeCard }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const reworks = card.standing === 'losing' || card.standing === 'iterate';
   return (
     <li
@@ -66,7 +69,7 @@ function Card({ card }: { card: CreativeCard }) {
       <p className="line-clamp-4 px-1 text-2xs text-muted-foreground leading-snug">{card.reason}</p>
       {card.briefTitle ? (
         <p className="px-1 text-2xs leading-snug">
-          <span className="text-muted-foreground">Brief: </span>
+          <span className="text-muted-foreground">{betaUiText('beta_cf6b4739ae37')} </span>
           {card.briefTitle}
         </p>
       ) : null}
@@ -78,12 +81,12 @@ function Card({ card }: { card: CreativeCard }) {
             rel="noreferrer"
             target="_blank"
           >
-            View post
+            {betaUiText('beta_fe9715bcd31d')}
           </a>
         ) : null}
         {reworks && card.optimizerRecommendationId ? (
           <Link className="text-2xs text-primary hover:underline" href={CREATIVE_LINKS.optimizer}>
-            Make variants in the Optimizer
+            {betaUiText('beta_db4c0dda996c')}
           </Link>
         ) : null}
       </div>
@@ -92,6 +95,8 @@ function Card({ card }: { card: CreativeCard }) {
 }
 
 function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const [filter, setFilter] = useState<Filter>('all');
   const filters: Filter[] = [
     'all',
@@ -105,19 +110,25 @@ function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
       <p className="text-muted-foreground text-xs leading-snug">
         {spotlight.adAccountName ? `${spotlight.adAccountName} · ` : ''}
         {spotlight.currency
-          ? `Cost per result in ${spotlight.currency}, last 30 days.`
-          : 'This brand’s Meta accounts use more than one currency, so each ad shows its cost against the cohort median instead of a money figure.'}
+          ? betaUiText('beta_2718aeac3f6f', {
+              value0: String(spotlight.currency),
+            })
+          : betaUiText('beta_cbbab5bea26c')}
       </p>
       {spotlight.refreshFailed ? (
         <p
           className="text-amber-800 text-xs dark:text-amber-300"
           data-testid="creative-refresh-failed"
         >
-          The latest refresh of this report failed; this is the last report stored.
+          {betaUiText('beta_3ff3e59e6f1f')}
         </p>
       ) : null}
 
-      <div aria-label="Filter ads by standing" className="flex flex-wrap gap-1" role="tablist">
+      <div
+        aria-label={betaUiText('beta_498ebbda1bbf')}
+        className="flex flex-wrap gap-1"
+        role="tablist"
+      >
         {filters.map((key) => (
           <button
             aria-selected={filter === key}
@@ -132,7 +143,7 @@ function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
             role="tab"
             type="button"
           >
-            {key === 'all' ? 'All' : STANDING_LABEL[key]}{' '}
+            {key === 'all' ? betaUiText('beta_a52ace420f21') : STANDING_LABEL[key]}{' '}
             <span className="tabular-nums">
               {key === 'all' ? spotlight.total : spotlight.counts[key]}
             </span>
@@ -148,7 +159,7 @@ function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
 
       {spotlight.themes.length > 0 ? (
         <section className="space-y-1.5">
-          <h4 className="font-semibold text-xs">What the report sees</h4>
+          <h4 className="font-semibold text-xs">{betaUiText('beta_548510b40639')}</h4>
           <ul className="list-disc space-y-1 pl-4 text-xs leading-snug">
             {spotlight.themes.map((theme) => (
               <li key={theme}>{theme}</li>
@@ -171,6 +182,8 @@ export default function CreativeModule({
   /** The Backend's Creative Spotlight; null until it is deployed or when it holds nothing. */
   read?: HomeCreativeSpotlightData | null;
 }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const reportThumbs = new Map(
     (spotlight?.cards ?? []).map((card) => [card.adId, card.thumbnailUrl]),
   );
@@ -180,7 +193,7 @@ export default function CreativeModule({
       {spotlight ? <ReportSection spotlight={spotlight} /> : null}
       {read ? null : (
         <p className="text-muted-foreground text-xs" data-testid="creative-not-readable">
-          {SPOTLIGHT_NOT_READABLE}
+          {betaUiText('spotlightUnavailable')}
         </p>
       )}
 
@@ -189,7 +202,7 @@ export default function CreativeModule({
           className={buttonVariants({ variant: 'outline', size: 'sm' })}
           href={CREATIVE_LINKS.insights}
         >
-          Open Creative Insights
+          {betaUiText('beta_fcbecd8a03ed')}
         </Link>
       </div>
 
@@ -198,7 +211,7 @@ export default function CreativeModule({
           brandId={ctx.brandId}
           mode={ctx.board.mode}
           refreshCandidates={spotlight ? needsNewCreative(spotlight) : []}
-          verbLabel={ctx.board.verb.label}
+          verbLabel={betaUiText('homeVerbLabel', { mode: ctx.board.mode })}
         />
       </Suspense>
     </div>

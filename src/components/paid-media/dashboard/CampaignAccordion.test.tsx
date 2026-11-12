@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 import { CampaignAccordion } from './CampaignAccordion';
 
@@ -44,7 +45,15 @@ describe('CampaignAccordion', () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            metrics: { spend: 0, roas: 0, ctr: 0, cpc: 0, cpa: 0, impressions: 0, clicks: 0 },
+            metrics: {
+              spend: 0,
+              roas: 0,
+              ctr: 0,
+              cpc: 0,
+              cpa: 0,
+              impressions: 0,
+              clicks: 0,
+            },
           }),
       } as Response),
     );

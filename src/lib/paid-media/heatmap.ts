@@ -1,3 +1,6 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import type { CampaignPerformanceMetricKey } from '@/lib/paid-media/performance-types';
 
 export type MatrixMetricDirection = 'higher' | 'lower' | 'neutral';
@@ -15,9 +18,34 @@ export const MATRIX_METRICS: MatrixMetric[] = [
   { key: 'ctr', label: 'CTR', shortLabel: 'CTR', direction: 'higher' },
   { key: 'cpc', label: 'CPC', shortLabel: 'CPC', direction: 'lower' },
   { key: 'cpa', label: 'CPA', shortLabel: 'CPA', direction: 'lower' },
-  { key: 'impressions', label: 'Impressions', shortLabel: 'Impr.', direction: 'neutral' },
-  { key: 'clicks', label: 'Clicks', shortLabel: 'Clicks', direction: 'neutral' },
+  {
+    key: 'impressions',
+    label: 'Impressions',
+    shortLabel: 'Impr.',
+    direction: 'neutral',
+  },
+  {
+    key: 'clicks',
+    label: 'Clicks',
+    shortLabel: 'Clicks',
+    direction: 'neutral',
+  },
 ];
+
+const metricLabelKeys = {
+  Spend: 'spend_85f3d55',
+  Impressions: 'impressions_c6310e9',
+  Clicks: 'clicks_921fc98',
+} as const;
+
+export function localizeHeatmapLabel(
+  source: string,
+  translate: ReturnType<typeof useTranslations<'scale'>>,
+): string {
+  return Object.hasOwn(metricLabelKeys, source)
+    ? translate(metricLabelKeys[source as keyof typeof metricLabelKeys])
+    : source;
+}
 
 export type HeatmapPaint = { light: string; dark: string };
 
@@ -65,60 +93,94 @@ export function paintToStyle(paint: HeatmapPaint): {
   return { '--hm-bg-light': paint.light, '--hm-bg-dark': paint.dark };
 }
 
-const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
-
-const CURRENCY_FORMATTER_PRECISE = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 2,
-});
-
-const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
-
-const STANDARD_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-  maximumFractionDigits: 1,
-});
-
-export function formatCurrency(value: number): string {
-  return value >= 100 ? CURRENCY_FORMATTER.format(value) : CURRENCY_FORMATTER_PRECISE.format(value);
+const formatters = new Map<string, Intl.NumberFormat>();
+function numberFormatter(
+  locale: UiLocale,
+  kind:
+    | 'currency'
+    | 'preciseCurrency'
+    | 'compact'
+    | 'standard'
+    | 'percent0'
+    | 'percent1'
+    | 'percent2',
+): Intl.NumberFormat {
+  const key = `${locale}:${kind}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    const options: Intl.NumberFormatOptions =
+      kind === 'currency' || kind === 'preciseCurrency'
+        ? {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: kind === 'currency' ? 0 : 2,
+          }
+        : kind.startsWith('percent')
+          ? {
+              style: 'percent',
+              minimumFractionDigits: Number(kind.at(-1)),
+              maximumFractionDigits: Number(kind.at(-1)),
+            }
+          : {
+              ...(kind === 'compact' ? { notation: 'compact' as const } : {}),
+              maximumFractionDigits: 1,
+            };
+    formatter = new Intl.NumberFormat(locale, options);
+    formatters.set(key, formatter);
+  }
+  return formatter;
 }
 
-export function formatCompactNumber(value: number): string {
+export function formatCurrency(value: number, locale: UiLocale = 'en'): string {
+  return numberFormatter(locale, value >= 100 ? 'currency' : 'preciseCurrency').format(value);
+}
+
+export function formatCompactNumber(value: number, locale: UiLocale = 'en'): string {
   return value >= 100_000
-    ? COMPACT_NUMBER_FORMATTER.format(value)
-    : STANDARD_NUMBER_FORMATTER.format(value);
+    ? numberFormatter(locale, 'compact').format(value)
+    : numberFormatter(locale, 'standard').format(value);
 }
 
 export function formatMetric(
   metric: CampaignPerformanceMetricKey,
   value: number | null | undefined,
+  locale: UiLocale = 'en',
 ): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  if (metric === 'spend' || metric === 'cpc' || metric === 'cpa') return formatCurrency(value);
-  if (metric === 'roas') return value.toFixed(2);
-  if (metric === 'ctr') return `${value.toFixed(2)}%`;
-  return formatCompactNumber(value);
+  if (metric === 'spend' || metric === 'cpc' || metric === 'cpa')
+    return formatCurrency(value, locale);
+  if (metric === 'roas') return formatDecimal(value, 2, locale);
+  if (metric === 'ctr')
+    return numberFormatter(locale, 'percent2').format(Number(value.toFixed(2)) / 100);
+  return formatCompactNumber(value, locale);
 }
 
-export function formatDeltaPct(value: number | undefined): string {
+export function formatDeltaPct(value: number | undefined, locale: UiLocale = 'en'): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   const rounded = Math.abs(value) >= 10 ? value.toFixed(0) : value.toFixed(1);
-  return `${value > 0 ? '+' : ''}${rounded}%`;
+  return `${value > 0 ? '+' : ''}${numberFormatter(locale, Math.abs(value) >= 10 ? 'percent0' : 'percent1').format(Number(rounded) / 100)}`;
 }
 
-export function getMetric(key: CampaignPerformanceMetricKey): MatrixMetric {
+export function getMetric(
+  key: CampaignPerformanceMetricKey,
+  translateLabel?: (source: string) => string,
+): MatrixMetric {
   const found = MATRIX_METRICS.find((metric) => metric.key === key);
   if (!found) {
-    return { key, label: key.toUpperCase(), shortLabel: key.toUpperCase(), direction: 'neutral' };
+    return {
+      key,
+      label: key.toUpperCase(),
+      shortLabel: key.toUpperCase(),
+      direction: 'neutral',
+    };
   }
-  return found;
+  return translateLabel
+    ? {
+        ...found,
+        label: translateLabel(found.label),
+        shortLabel: translateLabel(found.shortLabel),
+      }
+    : found;
 }
 
 export function deltaTone(

@@ -2,6 +2,7 @@
 
 import type { Skill } from '@continuum/contracts';
 import { Archive, Lock, Pencil, Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
@@ -22,7 +23,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function SurfaceBadge({ surface }: { surface: Skill['surface'] }) {
-  const label = surface === 'visual' ? 'Visual' : surface === 'both' ? 'Both' : 'Copy';
+  const tUi = useTranslations('common');
+
+  const label =
+    surface === 'visual'
+      ? tUi('m_770d690e6d')
+      : surface === 'both'
+        ? tUi('m_1f46983828')
+        : tUi('copy_e21f935');
   return (
     <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
       {label}
@@ -39,6 +47,7 @@ export function SkillList({
   onEditAction,
   onArchiveAction,
 }: Props) {
+  const uiText = useTranslations('common');
   const [archivingId, setArchivingId] = useState<string | null>(null);
 
   async function archive(skill: Skill) {
@@ -54,15 +63,13 @@ export function SkillList({
     <div className="flex flex-col gap-3">
       <Button variant="default" size="sm" className="w-full justify-center" onClick={onNewAction}>
         <Plus className="h-3.5 w-3.5" />
-        New skill
+        {uiText('m_a7b4904c57')}
       </Button>
 
       <div className="flex flex-col gap-1.5">
-        <SectionLabel>Your skills</SectionLabel>
+        <SectionLabel>{uiText('m_541f836df7')}</SectionLabel>
         {skills.length === 0 ? (
-          <p className="px-0.5 text-sm text-muted-foreground">
-            No skills yet — create one or ask the agent to save one.
-          </p>
+          <p className="px-0.5 text-sm text-muted-foreground">{uiText('m_ca8f24a268')}</p>
         ) : (
           skills.map((skill) => (
             <div
@@ -87,7 +94,9 @@ export function SkillList({
               <div className="flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
-                  aria-label={`Edit ${skill.name}`}
+                  aria-label={uiText('m_a9abc6a7cc', {
+                    v0: String(skill.name),
+                  })}
                   onClick={() => onEditAction(skill)}
                   className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 >
@@ -95,7 +104,9 @@ export function SkillList({
                 </button>
                 <button
                   type="button"
-                  aria-label={`Archive ${skill.name}`}
+                  aria-label={uiText('m_d1d13bc9f9', {
+                    v0: String(skill.name),
+                  })}
                   disabled={archivingId === skill.id}
                   onClick={() => archive(skill)}
                   className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
@@ -110,7 +121,7 @@ export function SkillList({
 
       {templates.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <SectionLabel>Library</SectionLabel>
+          <SectionLabel>{uiText('library_dc20b3d')}</SectionLabel>
           {templates.map((skill) => (
             <button
               key={skill.id}

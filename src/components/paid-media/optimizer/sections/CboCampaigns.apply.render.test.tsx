@@ -4,8 +4,9 @@
 // the real convert. Apply carries exactly the previewed budgets, so the edge writes what the
 // person approved or nothing at all (preview_changed).
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -70,11 +71,22 @@ function section(): CampaignSection {
 
 const SHOWN = [
   { adset_id: 'as1', adset_name: 'Broad', daily_budget: 4200, daily_major: 42 },
-  { adset_id: 'as2', adset_name: 'Lookalike', daily_budget: 1500, daily_major: 15 },
+  {
+    adset_id: 'as2',
+    adset_name: 'Lookalike',
+    daily_budget: 1500,
+    daily_major: 15,
+  },
 ];
 
 /** A dryRun preview with two per-ad-set budgets on screen. */
-const PREVIEW = { ok: true, dryRun: true, campaignId: 'c1', currency: 'USD', adset_budgets: SHOWN };
+const PREVIEW = {
+  ok: true,
+  dryRun: true,
+  campaignId: 'c1',
+  currency: 'USD',
+  adset_budgets: SHOWN,
+};
 
 /** What Apply must send back for PREVIEW: the previewed budgets, MINOR units, nothing else. */
 const APPROVED = [
@@ -135,7 +147,11 @@ describe('CboCampaigns — Apply is the approval', () => {
   });
 
   it('stays off while the preview computes', () => {
-    convertState = { ...IDLE, isPending: true, variables: { ...REAL_CONVERT, dryRun: true } };
+    convertState = {
+      ...IDLE,
+      isPending: true,
+      variables: { ...REAL_CONVERT, dryRun: true },
+    };
     expect(applyOf(renderRow()).disabled).toBe(true);
   });
 
@@ -207,7 +223,11 @@ describe('CboCampaigns — what Apply did', () => {
     for (const verdict of ['mismatch', 'unreadable']) {
       convertState = {
         ...IDLE,
-        data: { ...CONVERTED, verified: false, read_back: { ...CONVERTED.read_back, verdict } },
+        data: {
+          ...CONVERTED,
+          verified: false,
+          read_back: { ...CONVERTED.read_back, verdict },
+        },
         variables: REAL_CONVERT,
       };
       const text = renderRow().container.textContent ?? '';
@@ -222,7 +242,13 @@ describe('CboCampaigns — what Apply did', () => {
     // The ledger's deduped answer carries no dryRun flag: it must not read as a fresh preview.
     convertState = {
       ...IDLE,
-      data: { ok: true, deduped: true, campaignId: 'c1', currency: 'USD', adset_budgets: SHOWN },
+      data: {
+        ok: true,
+        deduped: true,
+        campaignId: 'c1',
+        currency: 'USD',
+        adset_budgets: SHOWN,
+      },
       variables: REAL_CONVERT,
     };
     const view = renderRow();
@@ -265,7 +291,12 @@ describe('CboCampaigns — what Apply did', () => {
   });
 
   it('a real convert that did not come back says to check Meta before trying again', () => {
-    convertState = { ...IDLE, data: undefined, isError: true, variables: REAL_CONVERT };
+    convertState = {
+      ...IDLE,
+      data: undefined,
+      isError: true,
+      variables: REAL_CONVERT,
+    };
     const view = renderRow();
     const text = view.container.textContent ?? '';
     expect(text).toContain('confirm the conversion');

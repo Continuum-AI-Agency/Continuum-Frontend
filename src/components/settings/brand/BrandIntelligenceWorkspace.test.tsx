@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { BrandIntelligenceOverview } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { BrandIntelligenceWorkspace, scoreBandColor } from './BrandIntelligenceWorkspace';
 
 const overview = {
@@ -60,7 +61,9 @@ const overview = {
 describe('BrandIntelligenceWorkspace', () => {
   test('renders explainable scores and keeps simulated visibility unmeasured', () => {
     const queryClient = new QueryClient({
-      defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY, retry: false } },
+      defaultOptions: {
+        queries: { staleTime: Number.POSITIVE_INFINITY, retry: false },
+      },
     });
     render(
       <QueryClientProvider client={queryClient}>

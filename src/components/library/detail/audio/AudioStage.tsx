@@ -14,14 +14,23 @@
 // through registerSeek, exactly as it does for video.
 
 import { AudioLines, MessageSquarePlus, SquareDashedBottom, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatTimecode, formatTimecodeRange, seekFraction } from '../annotationGeometry';
 import { TimelineMarkerStrip, type TimeMarker } from '../TimelineMarkerStrip';
 import { useWaveform } from './useWaveform';
 
-export type AudioDraft = { timeMs: number; endMs: number | null; clear: () => void };
-export type AudioPlayhead = { timeMs: number; inMs: number | null; outMs: number | null };
+export type AudioDraft = {
+  timeMs: number;
+  endMs: number | null;
+  clear: () => void;
+};
+export type AudioPlayhead = {
+  timeMs: number;
+  inMs: number | null;
+  outMs: number | null;
+};
 
 type Range = { inMs: number; outMs: number | null };
 
@@ -58,6 +67,8 @@ export function AudioStage({
   renderComposer,
   hotkeys = 'hover',
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const audioRef = useRef<HTMLAudioElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const hoveredRef = useRef(false);
@@ -87,7 +98,11 @@ export function AudioStage({
   }, [registerSeek, seekTo]);
 
   useEffect(() => {
-    onPlayhead?.({ timeMs: currentMs, inMs: range?.inMs ?? null, outMs: range?.outMs ?? null });
+    onPlayhead?.({
+      timeMs: currentMs,
+      inMs: range?.inMs ?? null,
+      outMs: range?.outMs ?? null,
+    });
   }, [onPlayhead, currentMs, range]);
 
   const playheadMs = useCallback(
@@ -105,7 +120,10 @@ export function AudioStage({
 
   const markIn = useCallback(() => {
     const at = playheadMs();
-    setRange((prev) => ({ inMs: at, outMs: prev?.outMs && prev.outMs > at ? prev.outMs : null }));
+    setRange((prev) => ({
+      inMs: at,
+      outMs: prev?.outMs && prev.outMs > at ? prev.outMs : null,
+    }));
   }, [playheadMs]);
 
   // The contract requires endMs > timeMs: an out-point at or before the in-point
@@ -189,7 +207,8 @@ export function AudioStage({
   if (!playSrc) {
     return (
       <div className="flex size-full items-center justify-center text-xs text-muted-foreground">
-        This audio file has no playable URL.
+        {' '}
+        {translateUi('this_audio_file_has_no_playable_url_808de2e1')}{' '}
       </div>
     );
   }
@@ -236,7 +255,7 @@ export function AudioStage({
         </div>
         <button
           type="button"
-          aria-label="Seek in waveform"
+          aria-label={translateUi('seek_in_waveform_dec8f48a')}
           onClick={seekFromWaveform}
           className="relative block h-32 w-full rounded-md bg-background/60 text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -265,7 +284,9 @@ export function AudioStage({
         </button>
       </div>
       {failed ? (
-        <p className="text-xs text-muted-foreground">Waveform unavailable for this file.</p>
+        <p className="text-xs text-muted-foreground">
+          {translateUi('waveform_unavailable_for_this_file_a040cc38')}
+        </p>
       ) : null}
       {/* biome-ignore lint/a11y/useMediaCaption: the transcript panel is this audio's text track */}
       <audio
@@ -287,26 +308,32 @@ export function AudioStage({
         onSeeked={followPlayhead}
       />
       <div className="flex w-full max-w-3xl flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={markIn} title="Mark in (I)">
-          In
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={markIn}
+          title={translateUi('mark_in_i_8334ffcc')}
+        >
+          {' '}
+          {translateUi('in_8bc1d53c')}{' '}
         </Button>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={markOut}
-          title="Mark out (O)"
+          title={translateUi('mark_out_o_8072f874')}
           disabled={(range?.inMs ?? pointMs) === null}
         >
-          <SquareDashedBottom className="size-3.5" />
-          Out
+          <SquareDashedBottom className="size-3.5" /> {translateUi('out_9a3c5460')}{' '}
         </Button>
         {range ? (
           <span className="flex items-center gap-1 rounded bg-amber-400/15 px-1.5 py-0.5 text-xs tabular-nums text-amber-700 dark:text-amber-300">
             {formatTimecodeRange(range.inMs, range.outMs)}
             <button
               type="button"
-              aria-label="Clear the range"
+              aria-label={translateUi('clear_the_range_391a2d21')}
               onClick={() => setRange(null)}
               className="rounded-sm p-0.5 hover:text-foreground"
             >
@@ -322,18 +349,26 @@ export function AudioStage({
             className="ml-auto"
             data-testid="audio-comment"
             onClick={openComposer}
-            title="Comment (C) — mark a range first with I and O"
+            title={translateUi('comment_c_mark_a_range_first_with_i_c4b17425')}
           >
             <MessageSquarePlus className="size-3.5" />
             {range
-              ? `Comment on ${formatTimecodeRange(range.inMs, range.outMs)}`
-              : `Comment at ${formatTimecode(currentMs)}`}
+              ? translateUi('comment_on_value0_6337c8a1', {
+                  value0: String(formatTimecodeRange(range.inMs, range.outMs)),
+                })
+              : translateUi('comment_at_value0_a86e186d', {
+                  value0: String(formatTimecode(currentMs)),
+                })}
           </Button>
         ) : null}
       </div>
       {renderComposer && composerOpen && draftInMs !== null ? (
         <div className="w-full max-w-3xl rounded-lg border border-border bg-muted/30 p-2.5">
-          {renderComposer({ timeMs: draftInMs, endMs: draftOutMs, clear: clearDraft })}
+          {renderComposer({
+            timeMs: draftInMs,
+            endMs: draftOutMs,
+            clear: clearDraft,
+          })}
         </div>
       ) : null}
     </div>

@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { FORGE_PROJECT_FILE_MAX_MB } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { unzipSync, zipSync } from 'fflate';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const preview = mock(async () => ({
   assetId: '11111111-1111-4111-8111-111111111111',
@@ -9,7 +16,14 @@ const preview = mock(async () => ({
   versionId: '33333333-3333-4333-8333-333333333333',
   checksum: 'a'.repeat(64),
   requiresReview: true,
-  slots: [{ slotKey: 'headline', name: 'Headline', kind: 'text', status: 'missing' as const }],
+  slots: [
+    {
+      slotKey: 'headline',
+      name: 'Headline',
+      kind: 'text',
+      status: 'missing' as const,
+    },
+  ],
 }));
 const confirm = mock(async () => preview());
 const uploadNewAssetVersion = mock(async (_input: { file: File; baseVersionId?: string }) => ({
@@ -116,7 +130,9 @@ describe('SourceRebindPanel', () => {
       );
       const input = view.container.querySelector<HTMLInputElement>('input[id^="repair-media-"]');
       expect(input).not.toBeNull();
-      fireEvent.change(input!, { target: { files: [new File(['logo'], 'logo.png')] } });
+      fireEvent.change(input!, {
+        target: { files: [new File(['logo'], 'logo.png')] },
+      });
       await waitFor(() => expect(refreshed).toHaveBeenCalledTimes(1));
       const uploaded = uploadNewAssetVersion.mock.calls[0]?.[0].file;
       expect(uploaded).toBeDefined();
@@ -148,7 +164,9 @@ describe('SourceRebindPanel', () => {
         />,
       );
       const input = view.container.querySelector<HTMLInputElement>('input[id^="repair-media-"]');
-      fireEvent.change(input!, { target: { files: [new File(['logo'], 'logo.png')] } });
+      fireEvent.change(input!, {
+        target: { files: [new File(['logo'], 'logo.png')] },
+      });
       await waitFor(() =>
         expect(onNeedsReview).toHaveBeenCalledWith('33333333-3333-4333-8333-333333333333'),
       );
@@ -183,7 +201,14 @@ describe('SourceRebindPanel', () => {
         versionId: '33333333-3333-4333-8333-333333333333',
         checksum: 'a'.repeat(64),
         requiresReview: true,
-        slots: [{ slotKey: 'headline', name: 'Headline', kind: 'text', status: 'missing' }],
+        slots: [
+          {
+            slotKey: 'headline',
+            name: 'Headline',
+            kind: 'text',
+            status: 'missing',
+          },
+        ],
       }),
     );
     expect(screen.queryByRole('button', { name: 'Use this revision' })).toBeNull();
@@ -204,7 +229,9 @@ describe('SourceRebindPanel', () => {
     });
     expect(await screen.findByText('missing')).toBeTruthy();
     expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Use this revision' }).disabled,
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Use this revision',
+      }).disabled,
     ).toBe(true);
     fireEvent.click(screen.getByText('Accept missing slots in this revision'));
     fireEvent.click(screen.getByRole('button', { name: 'Use this revision' }));
@@ -238,7 +265,9 @@ describe('SourceRebindPanel', () => {
     });
     expect(await screen.findByText(/Ambiguous slots must be resolved/)).toBeTruthy();
     expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Use this revision' }).disabled,
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Use this revision',
+      }).disabled,
     ).toBe(true);
   });
 

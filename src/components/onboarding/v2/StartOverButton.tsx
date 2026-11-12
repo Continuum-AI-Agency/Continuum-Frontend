@@ -1,4 +1,5 @@
 import { Trash } from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,8 @@ type StartOverButtonProps = {
 };
 
 export function StartOverButton({ onConfirm, disabled }: StartOverButtonProps) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <AlertDialog>
       <AlertDialogTrigger
@@ -29,24 +32,22 @@ export function StartOverButton({ onConfirm, disabled }: StartOverButtonProps) {
             className="gap-1.5 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash className="h-3.5 w-3.5" />
-            Start over
+            {tUi('m_51dd91dc98')}
           </Button>
         }
       />
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Start over?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Clears your Brand DNA and disconnects any linked accounts.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{tUi('m_8b82a80f36')}</AlertDialogTitle>
+          <AlertDialogDescription>{tUi('m_576d1135f0')}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{tUi('m_77dfd2135f')}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className="bg-destructive text-white hover:bg-destructive/90"
           >
-            Yes, start over
+            {tUi('m_ebb72de392')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -1,4 +1,5 @@
 import { Building2, Check, Clock, Lock, RotateCw, TriangleAlert } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,15 +32,18 @@ function StateBlock({
 }
 
 export function BillingLockedState({ brandName }: { brandName: string }) {
+  const tUi = useTranslations('settings');
+
   return (
     <StateBlock
       testId="billing-locked"
       icon={<Lock className="size-4" aria-hidden />}
-      title="Only the brand owner manages billing"
+      title={tUi('m_6bd78cd0b2')}
     >
       <p className="max-w-[65ch] text-sm text-muted-foreground">
-        Plans, payment details and invoices for {brandName} are managed by its owner. Ask them to
-        change a plan or buy Canvas credits.
+        {tUi('m_92476bcdb3')}
+        {brandName}
+        {tUi('m_524c259db5')}
       </p>
     </StateBlock>
   );
@@ -48,33 +52,31 @@ export function BillingLockedState({ brandName }: { brandName: string }) {
 // billing-cutover: shown while PostgREST does not expose `billing`. Nothing here calls
 // billing-api, which is not deployed until the same cutover.
 export function BillingNotLiveState() {
+  const tUi = useTranslations('settings');
+
   return (
     <StateBlock
       testId="billing-not-live"
       icon={<Clock className="size-4" aria-hidden />}
-      title="Billing isn't available yet"
+      title={tUi('m_4eab5bf51c')}
     >
-      <p className="max-w-[65ch] text-sm text-muted-foreground">
-        Plans, payment details and invoices will appear here once self-serve billing opens.
-        Nothing about your current access changes in the meantime.
-      </p>
+      <p className="max-w-[65ch] text-sm text-muted-foreground">{tUi('m_3afd720053')}</p>
     </StateBlock>
   );
 }
 
 export function BillingContractState({ features }: { features: string[] }) {
+  const tUi = useTranslations('settings');
+
   return (
     <StateBlock
       testId="billing-contract"
       icon={<Building2 className="size-4" aria-hidden />}
-      title="Managed by Continuum"
+      title={tUi('m_1e251f9a73')}
     >
-      <p className="max-w-[65ch] text-sm text-muted-foreground">
-        This brand is billed through its agreement with Continuum, so there is nothing to buy or
-        change here. Contact your Continuum team to adjust what it includes.
-      </p>
+      <p className="max-w-[65ch] text-sm text-muted-foreground">{tUi('m_795c0cd199')}</p>
       {features.length > 0 ? (
-        <ul aria-label="Included" className="space-y-1.5">
+        <ul aria-label={tUi('m_3e2c570409')} className="space-y-1.5">
           {features.map((feature) => (
             <li key={feature} className="flex gap-2 text-sm text-muted-foreground">
               <Check className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
@@ -88,29 +90,31 @@ export function BillingContractState({ features }: { features: string[] }) {
 }
 
 export function BillingErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const tUi = useTranslations('settings');
+
   return (
     <StateBlock
       testId="billing-error"
       icon={<TriangleAlert className="size-4 text-destructive" aria-hidden />}
-      title="Billing did not load"
+      title={tUi('m_cba734e072')}
     >
-      <p className="max-w-[65ch] text-sm text-muted-foreground">
-        Nothing about your plan changed. Retry, and if it keeps failing, send this error to support:
-      </p>
+      <p className="max-w-[65ch] text-sm text-muted-foreground">{tUi('m_ddcdda31a9')}</p>
       <pre className="max-w-full overflow-x-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-all text-foreground">
         {message}
       </pre>
       <Button variant="outline" size="sm" onClick={onRetry}>
         <RotateCw aria-hidden />
-        Retry
+        {tUi('m_9f5cd8a2e8')}
       </Button>
     </StateBlock>
   );
 }
 
 export function BillingSkeleton() {
+  const tUi = useTranslations('settings');
+
   return (
-    <div role="status" aria-label="Loading billing" className="divide-y divide-border">
+    <div role="status" aria-label={tUi('m_e6428db5c5')} className="divide-y divide-border">
       <div className="grid gap-6 pb-4 @[36rem]/settings-section:grid-cols-2">
         {[0, 1].map((column) => (
           <div key={column} className="space-y-3">

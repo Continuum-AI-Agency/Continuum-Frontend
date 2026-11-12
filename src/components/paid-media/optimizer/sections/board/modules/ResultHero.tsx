@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // O02 Result hero (rResult in docs/optimizer-redesign/adaptive-15/app.js): the result that counts
 // against its goal. A ring of the results against what the spend would buy at the goal (or, with
@@ -55,7 +56,10 @@ import {
 } from './resultHeroModel';
 
 const FIVE_MINUTES = 5 * 60 * 1000;
-const PLATFORM_NAME: Record<BoardPlatform, string> = { meta: 'Meta', google_ads: 'Google' };
+const PLATFORM_NAME: Record<BoardPlatform, string> = {
+  meta: 'Meta',
+  google_ads: 'Google',
+};
 
 export default function ResultHero(props: BoardModuleProps) {
   return props.ctx.platform === 'google_ads' ? (
@@ -111,7 +115,11 @@ function MetaResultHero({ ctx, slot }: BoardModuleProps) {
   const kinds = resultKinds(ctx.portfolios, figures);
   const kind = reading.kind ?? kinds[0]?.kind ?? null;
   const counting = countingOf(ctx.portfolios, figures, kind);
-  const counted = resultFromPortfolios({ kinds, reading, currency: ctx.currency });
+  const counted = resultFromPortfolios({
+    kinds,
+    reading,
+    currency: ctx.currency,
+  });
   const points = trendFromSeries(
     counting.portfolios.map((portfolio) => efficiency.series[ids.indexOf(portfolio.id)] ?? []),
     counting.portfolios[0] ? kpiOf(counting.portfolios[0]).denominatorMultiplier : 1,
@@ -143,7 +151,12 @@ function MetaResultHero({ ctx, slot }: BoardModuleProps) {
         lastLabel: (day) => `cycle of ${dayLabel(day)}`,
       }}
       windowLabel={
-        counted ? resultWindowLabel(counted, { portfolios: counting.figures, google: null }) : ''
+        counted
+          ? resultWindowLabel(counted, {
+              portfolios: counting.figures,
+              google: null,
+            })
+          : ''
       }
     />
   );
@@ -159,13 +172,25 @@ export function googleReadMissing(state: GoogleAdsOverviewState): {
     case 'ready':
       return null;
     case 'no-connection':
-      return { line: "Google Ads isn't connected, so no result is counted.", error: false };
+      return {
+        line: "Google Ads isn't connected, so no result is counted.",
+        error: false,
+      };
     case 'no-grant':
-      return { line: 'No Google Ads account is granted to this brand yet.', error: false };
+      return {
+        line: 'No Google Ads account is granted to this brand yet.',
+        error: false,
+      };
     case 'no-role':
-      return { line: 'Reading Google Ads needs the Operator, Admin or Owner role.', error: false };
+      return {
+        line: 'Reading Google Ads needs the Operator, Admin or Owner role.',
+        error: false,
+      };
     case 'no-access':
-      return { line: 'No live Google grant reaches this account.', error: false };
+      return {
+        line: 'No live Google grant reaches this account.',
+        error: false,
+      };
     case 'error':
       return {
         line: state.reconnect
@@ -215,7 +240,11 @@ function GoogleResultHero({ ctx, slot }: BoardModuleProps) {
     ? resultFromReading(reading)
     : (fromPortfolios ??
       (ready
-        ? resultFromGoogle({ overview: ready.overview, reading, currency: ready.account.currency })
+        ? resultFromGoogle({
+            overview: ready.overview,
+            reading,
+            currency: ready.account.currency,
+          })
         : null));
 
   const bucket = realCount ? null : (ready?.resultBucket ?? null);
@@ -259,7 +288,12 @@ function GoogleResultHero({ ctx, slot }: BoardModuleProps) {
           note: 'Google counts no single result here: no portfolio names one, so there is no cost to follow.',
         }
       : daily.isError
-        ? { points, state: 'missing', caption, note: "Google's daily read did not answer." }
+        ? {
+            points,
+            state: 'missing',
+            caption,
+            note: "Google's daily read did not answer.",
+          }
         : daily.isPending
           ? { points, state: 'loading', caption, note: '' }
           : {
@@ -319,6 +353,8 @@ function ResultHeroView({
   missing: string | null;
   error?: boolean;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [showReported, setShowReported] = useState(false);
   const reportedLabelId = useId();
   const frame = (state: ModuleFrameState, body: ReactNode) => (
@@ -328,7 +364,7 @@ function ResultHeroView({
       size={slot.size}
       state={state}
       testId="board-module-result"
-      title={BOARD_MODULE_TITLES.result}
+      title={betaUiText('boardModuleTitle', { id: 'result' })}
     >
       {body}
     </ModuleFrame>
@@ -385,32 +421,40 @@ function ResultHeroView({
           {ring && figure ? (
             <RingMark
               color={ring.basis === 'goal' ? tone : BOARD_COLOR.search}
-              label={`${formatResultCount(ring.part)} ${unit} of ${formatResultCount(ring.whole)} ${
-                ring.basis === 'goal' ? 'the spend buys at the goal' : `${reportedBy} reports`
-              }`}
+              label={betaUiText('beta_8ebd5ceb4f56', {
+                value0: String(formatResultCount(ring.part)),
+                value1: String(unit),
+                value2: String(formatResultCount(ring.whole)),
+                value3: ring.basis,
+                value4: reportedBy,
+              })}
               part={ring.part}
               whole={ring.whole}
             >
               {figure}
               <span className="max-w-[6.5rem] text-muted-foreground text-xs leading-snug">
-                of {formatResultCount(ring.whole)}{' '}
+                {betaUiText('beta_28391d3bc64e')} {formatResultCount(ring.whole)}{' '}
                 {ring.basis === 'goal'
-                  ? `at the ${formatCpa(goal, currency)} goal`
-                  : `${reportedBy} counts`}
+                  ? betaUiText('beta_8f08cfacdac8', {
+                      value0: String(formatCpa(goal, currency)),
+                    })
+                  : betaUiText('beta_0ba031dc7e8f', {
+                      value0: String(reportedBy),
+                    })}
               </span>
             </RingMark>
           ) : figure ? (
             <div className="flex flex-col items-center gap-0.5 py-2 text-center">{figure}</div>
           ) : (
             <p className="text-muted-foreground text-xs" data-testid="board-result-uncounted">
-              {reportedBy} counts no single result here.
+              {reportedBy} {betaUiText('beta_d5ee22b32c1d')}
             </p>
           )}
         </div>
         <div className="min-w-0 space-y-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-              <span className="text-muted-foreground">Cost per result</span>
+              <span className="text-muted-foreground">{betaUiText('beta_a664c01479f0')}</span>
               <span
                 className="font-semibold tabular-nums"
                 {...figureProps('board.result.cost', cost, currency, window)}
@@ -422,18 +466,21 @@ function ResultHeroView({
               <BulletMark
                 color={tone}
                 goal={goal}
-                label={`${formatCpa(cost, currency)} against a goal of ${formatCpa(goal, currency)}`}
+                label={betaUiText('beta_ea26c96bdc69', {
+                  value0: String(formatCpa(cost, currency)),
+                  value1: String(formatCpa(goal, currency)),
+                })}
                 testId="board-result-bullet"
                 value={cost}
               />
             ) : null}
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
               {goal != null ? (
-                <span>goal {formatCpa(goal, currency)}</span>
-              ) : (
-                <span data-testid="board-result-no-goal">
-                  No portfolio sets a goal for this result.
+                <span>
+                  {betaUiText('beta_0304523efff5')} {formatCpa(goal, currency)}
                 </span>
+              ) : (
+                <span data-testid="board-result-no-goal">{betaUiText('beta_9eb1290d59ae')}</span>
               )}
               {side !== 'none' ? (
                 <Badge
@@ -447,13 +494,13 @@ function ResultHeroView({
                   data-testid="board-result-distance"
                   variant="outline"
                 >
-                  {goalDistanceLabel(cost, goal)}
+                  {goalDistanceLabel(cost, goal, betaUiText)}
                 </Badge>
               ) : null}
             </div>
           </div>
           <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-            <span className="text-muted-foreground">Spend</span>
+            <span className="text-muted-foreground">{betaUiText('beta_85f3d558db12')}</span>
             <span
               className="font-semibold tabular-nums"
               {...figureProps('board.result.spend', pricedSpend, currency, window)}
@@ -471,7 +518,9 @@ function ResultHeroView({
                   onCheckedChange={(checked) => setShowReported(checked)}
                   size="sm"
                 />
-                <span id={reportedLabelId}>{reportedBy} reports</span>
+                <span id={reportedLabelId}>
+                  {reportedBy} {betaUiText('beta_7f26104f77a7')}
+                </span>
               </div>
               {showReported ? (
                 <p className="text-xs" data-testid="board-result-reported">
@@ -482,11 +531,15 @@ function ResultHeroView({
                     {formatResultCount(reported)}
                   </span>{' '}
                   <span className="text-muted-foreground">
-                    as {reportedBy} counts them
+                    {betaUiText('beta_f4bf9f7fcbed')} {reportedBy} {betaUiText('beta_a0786a446600')}
                     {pricedSpend != null && reported > 0
-                      ? `, ${formatCpa(pricedSpend / reported, currency)} each`
+                      ? betaUiText('beta_743e5cf46c42', {
+                          value0: String(formatCpa(pricedSpend / reported, currency)),
+                        })
                       : ''}
-                    , against {count != null ? formatResultCount(count) : '—'} counted
+                    {betaUiText('beta_020d58338b6f')}{' '}
+                    {count != null ? formatResultCount(count) : '—'}{' '}
+                    {betaUiText('beta_8898e2a85524')}
                   </span>
                 </p>
               ) : null}
@@ -494,7 +547,7 @@ function ResultHeroView({
           ) : null}
           {counted.others.length > 0 ? (
             <p className="text-muted-foreground text-xs" data-testid="board-result-others">
-              Also bought:{' '}
+              {betaUiText('beta_d45d55a37249')}{' '}
               {counted.others
                 .map(
                   (other) =>

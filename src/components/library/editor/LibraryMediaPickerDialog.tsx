@@ -8,6 +8,7 @@
 import type { MediaAsset } from '@continuum/contracts';
 import { mediaSearchResponseSchema } from '@continuum/contracts';
 import { ImageIcon, Loader2, Music2, Plus, Search, Trash2, Video } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { cn } from '@/lib/utils';
 import type { LibraryPoolSource } from './timelineDraftMapping';
 
@@ -79,7 +81,9 @@ function formatDuration(durationMs: number | null | undefined): string | null {
 
 async function fetchRecent(brandId: string, signal: AbortSignal): Promise<MediaAsset[]> {
   const query = new URLSearchParams({ brandId, limit: String(RECENT_LIMIT) });
-  const response = await fetch(`/api/library/assets?${query.toString()}`, { signal });
+  const response = await fetch(`/api/library/assets?${query.toString()}`, {
+    signal,
+  });
   if (!response.ok) throw new Error(`Could not load the library (${response.status})`);
   const body = (await response.json()) as { items?: MediaAsset[] };
   return (body.items ?? []).filter(isPlaceable);
@@ -113,6 +117,8 @@ function MediaTile({
   disabled: boolean;
   onToggle: () => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const duration = formatDuration(asset.durationMs);
   const preview = asset.thumbnailUrl ?? (asset.kind === 'image' ? asset.signedUrl : null);
   return (
@@ -153,7 +159,9 @@ function MediaTile({
           </span>
         )}
         <span className="absolute bottom-1 left-1 rounded bg-background/80 px-1 text-2xs uppercase text-muted-foreground">
-          {asset.mimeType.toLowerCase().startsWith('audio/') ? 'audio' : asset.kind}
+          {asset.mimeType.toLowerCase().startsWith('audio/')
+            ? translateUi('audio_6ed8919c')
+            : asset.kind}
         </span>
         {duration ? (
           <span className="absolute right-1 bottom-1 rounded bg-background/80 px-1 text-2xs tabular-nums text-muted-foreground">
@@ -176,6 +184,10 @@ export function LibraryMediaPickerDialog({
   open: controlledOpen,
   onOpenChange,
 }: LibraryMediaPickerDialogProps) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const controlled = controlledOpen !== undefined;
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlled ? controlledOpen : uncontrolledOpen;
@@ -216,7 +228,7 @@ export function LibraryMediaPickerDialog({
         })
         .catch((err: unknown) => {
           if (controller.signal.aborted) return;
-          setError(err instanceof Error ? err.message : 'Could not load media');
+          setError(uiErrorText(err));
           setAssets([]);
         })
         .finally(() => {
@@ -235,7 +247,7 @@ export function LibraryMediaPickerDialog({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       controller.abort();
     };
-  }, [open, query, brandId]);
+  }, [open, query, brandId, uiErrorText]);
 
   const toggle = useCallback((assetId: string) => {
     setSelected((current) => {
@@ -268,8 +280,7 @@ export function LibraryMediaPickerDialog({
     <>
       {controlled ? null : (
         <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
-          <Plus className="size-3.5" aria-hidden />
-          Add media
+          <Plus className="size-3.5" aria-hidden /> {translateUi('add_media_d5d5d266')}{' '}
         </Button>
       )}
 
@@ -278,13 +289,15 @@ export function LibraryMediaPickerDialog({
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-medium">
               {copy?.title ??
-                (accept === 'image' ? 'Add an image from the Library' : 'Add media from the Library')}
+                (accept === 'image'
+                  ? translateUi('add_an_image_from_the_library_57b735cf')
+                  : translateUi('add_media_from_the_library_0f02d3c4'))}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               {copy?.description ??
                 (accept === 'image'
-                  ? 'Pick images to place as layers.'
-                  : 'Pick images, videos, or audio to place on the timeline.')}
+                  ? translateUi('pick_images_to_place_as_layers_bdff2683')
+                  : translateUi('pick_images_videos_or_audio_to_plac_5bfa1404'))}
             </DialogDescription>
           </DialogHeader>
 
@@ -297,8 +310,8 @@ export function LibraryMediaPickerDialog({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search the library..."
-                aria-label="Search the library"
+                placeholder={translateUi('search_the_library_84e05b7f')}
+                aria-label={translateUi('search_the_library_99b9aee2')}
                 className="h-8 pl-7 text-sm"
               />
             </div>
@@ -308,12 +321,14 @@ export function LibraryMediaPickerDialog({
             {error ? <p className="mb-2 text-xs text-destructive">{error}</p> : null}
             {loading ? (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                Loading media...
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
+                {translateUi('loading_media_035a75ff')}{' '}
               </p>
             ) : visible.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                {query.trim() ? 'No media matched that search.' : 'No placeable media yet.'}
+                {query.trim()
+                  ? translateUi('no_media_matched_that_search_4dd9e622')
+                  : translateUi('no_placeable_media_yet_4aff29ad')}
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -332,10 +347,14 @@ export function LibraryMediaPickerDialog({
 
           <DialogFooter className="shrink-0 border-t border-border px-4 py-3">
             <Button type="button" variant="ghost" size="sm" onClick={() => handleOpenChange(false)}>
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
             <Button type="button" size="sm" disabled={selected.size === 0} onClick={confirm}>
-              {copy?.confirm ?? `Add ${selected.size > 0 ? selected.size : ''}`}
+              {copy?.confirm ??
+                translateUi('add_value0_641cf336', {
+                  value0: String(selected.size > 0 ? selected.size : ''),
+                })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -359,6 +378,8 @@ export function LibraryBinActions({
   hasDraft,
   onDiscard,
 }: LibraryBinActionsProps) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <div className="flex items-center gap-2">
       <LibraryMediaPickerDialog brandId={brandId} excludeAssetIds={excludeAssetIds} onAdd={onAdd} />
@@ -370,8 +391,7 @@ export function LibraryBinActions({
           onClick={onDiscard}
           className="text-muted-foreground"
         >
-          <Trash2 className="size-3.5" aria-hidden />
-          Discard draft
+          <Trash2 className="size-3.5" aria-hidden /> {translateUi('discard_draft_cb30147e')}{' '}
         </Button>
       ) : null}
     </div>

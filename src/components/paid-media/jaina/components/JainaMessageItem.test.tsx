@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * The migration's whole claim, in one assertion: a turn rendered from the AI SDK's `message.parts`
  * is the SAME DOM as the equivalent persisted message.
@@ -14,7 +15,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { buildImplementProposalTurn, type JainaUIMessage } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 import {
@@ -114,13 +115,28 @@ const streamedMessage = (): JainaUIMessage =>
         input: APPROVAL.input,
         approval: { id: 'appr_1' },
       },
-      { type: 'data-jaina-approval', id: 'run_1:approval:appr_1', data: APPROVAL },
-      { type: 'data-jaina-objective', id: 'run_1:objective:o1', data: OBJECTIVE },
-      { type: 'data-jaina-delegation', id: 'run_1:delegation:d1', data: DELEGATION },
+      {
+        type: 'data-jaina-approval',
+        id: 'run_1:approval:appr_1',
+        data: APPROVAL,
+      },
+      {
+        type: 'data-jaina-objective',
+        id: 'run_1:objective:o1',
+        data: OBJECTIVE,
+      },
+      {
+        type: 'data-jaina-delegation',
+        id: 'run_1:delegation:d1',
+        data: DELEGATION,
+      },
       {
         type: 'data-jaina-clarification',
         id: 'run_1:clarification',
-        data: { id: 'clar_1', question: 'Which ad account should I pause it in?' },
+        data: {
+          id: 'clar_1',
+          question: 'Which ad account should I pause it in?',
+        },
       },
     ],
   }) as unknown as JainaUIMessage;
@@ -144,12 +160,34 @@ const persistedMessage = (): JainaChatMessage =>
         data: { stage: 'thinking' },
       },
     ],
-    toolCalls: [{ id: 'call_1', name: 'get_key_metrics', args: { ad_id: '9' }, metadata: {} }],
+    toolCalls: [
+      {
+        id: 'call_1',
+        name: 'get_key_metrics',
+        args: { ad_id: '9' },
+        metadata: {},
+      },
+    ],
     toolResults: [
-      { id: 'call_1', name: 'get_key_metrics', ok: true, cached: false, output: TOOL_OUTPUT },
-      { id: 'call_gate', name: 'pause_meta_entity', ok: true, cached: false, output: undefined },
+      {
+        id: 'call_1',
+        name: 'get_key_metrics',
+        ok: true,
+        cached: false,
+        output: TOOL_OUTPUT,
+      },
+      {
+        id: 'call_gate',
+        name: 'pause_meta_entity',
+        ok: true,
+        cached: false,
+        output: undefined,
+      },
     ].slice(0, 1),
-    pendingClarification: { id: 'clar_1', question: 'Which ad account should I pause it in?' },
+    pendingClarification: {
+      id: 'clar_1',
+      question: 'Which ad account should I pause it in?',
+    },
     objectives: [OBJECTIVE],
     delegations: [DELEGATION],
     pendingToolApprovals: [APPROVAL],
@@ -347,7 +385,9 @@ describe('a build gate asked for a turn after the proposal', () => {
   const VERSION = '66666666-6666-4666-8666-666666666666';
 
   const withTree = ({ children }: { children: ReactNode }) => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     client.setQueryData(['paid-scaffold-tree', VERSION], {
       versionId: VERSION,
       rows: [],
@@ -438,7 +478,10 @@ describe('a live change at chat size', () => {
     } as unknown as JainaChatMessage;
     render(
       <ScaffoldThreadContext.Provider
-        value={{ sessionId: 's1', onLiveChangeOpen: (partId) => opened.push(partId) }}
+        value={{
+          sessionId: 's1',
+          onLiveChangeOpen: (partId) => opened.push(partId),
+        }}
       >
         <JainaMessageItem message={message} />
       </ScaffoldThreadContext.Provider>,
@@ -474,7 +517,10 @@ describe('a turn that changes several campaigns', () => {
     } as unknown as JainaChatMessage;
     render(
       <ScaffoldThreadContext.Provider
-        value={{ sessionId: 's1', onPortfolioOpen: (messageId) => opened.push(messageId) }}
+        value={{
+          sessionId: 's1',
+          onPortfolioOpen: (messageId) => opened.push(messageId),
+        }}
       >
         <JainaMessageItem message={message} />
       </ScaffoldThreadContext.Provider>,

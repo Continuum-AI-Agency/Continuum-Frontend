@@ -37,12 +37,26 @@ const batchPreflightMock = mock(
   async (_input: Record<string, unknown>): Promise<unknown> => signed(),
 );
 const JOBS = [
-  { id: '11111111-1111-4111-8111-111111111111', status: 'queued', taskUid: 't1' },
-  { id: '11111111-1111-4111-8111-111111111112', status: 'queued', taskUid: 't2' },
+  {
+    id: '11111111-1111-4111-8111-111111111111',
+    status: 'queued',
+    taskUid: 't1',
+  },
+  {
+    id: '11111111-1111-4111-8111-111111111112',
+    status: 'queued',
+    taskUid: 't2',
+  },
 ] as unknown as ApiRenderJob[];
-const createBatchMock = mock(async (_input: unknown) => ({ batchId: 'b', jobs: JOBS }));
+const createBatchMock = mock(async (_input: unknown) => ({
+  batchId: 'b',
+  jobs: JOBS,
+}));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { batchPreflight: batchPreflightMock, createBatch: createBatchMock },
+  apiRendersApi: {
+    batchPreflight: batchPreflightMock,
+    createBatch: createBatchMock,
+  },
 }));
 const ROOM = {
   id: '77777777-7777-4777-8777-777777777771',
@@ -56,8 +70,15 @@ mock.module('@/lib/library/renderApprovals', () => ({
   fetchApprovalDestinations: async () => ({ destinations: [ROOM] }),
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { MetaPickerState, RenderPreflightRow } from './DeliveryTargetPicker';
 import { type FiredRow, RenderConfirmDialog } from './RenderConfirmDialog';
 
@@ -72,7 +93,10 @@ const SCOPE = {
   templateKey: '133',
   renderSetId: SET,
 };
-const OPS = { id: '66666666-6666-4666-8666-666666666661', channelName: 'renders' };
+const OPS = {
+  id: '66666666-6666-4666-8666-666666666661',
+  channelName: 'renders',
+};
 
 const CONTRACT = {
   template: {
@@ -84,8 +108,20 @@ const CONTRACT = {
   },
   variables: [{ key: 'headline', label: 'Headline' }],
   outputs: [
-    { id: 'square', label: 'Square', ratio: '1:1', mediaType: 'image/png', encode: null },
-    { id: 'story', label: 'Story', ratio: '9:16', mediaType: 'image/png', encode: null },
+    {
+      id: 'square',
+      label: 'Square',
+      ratio: '1:1',
+      mediaType: 'image/png',
+      encode: null,
+    },
+    {
+      id: 'story',
+      label: 'Story',
+      ratio: '9:16',
+      mediaType: 'image/png',
+      encode: null,
+    },
   ],
 } as unknown as ApiRenderTemplateContract;
 
@@ -130,7 +166,12 @@ const ROWS: RenderPreflightRow[] = [
     outputIds: ['square'],
     delivery: REPLACE,
   },
-  { rowId: 'spain', label: 'Spain', labelPath: ['Root', 'Spain'], outputIds: ['story'] },
+  {
+    rowId: 'spain',
+    label: 'Spain',
+    labelPath: ['Root', 'Spain'],
+    outputIds: ['story'],
+  },
 ];
 const RECORDS: ApiRenderBatchRecord[] = ROWS.map((row) => ({
   label: row.label,
@@ -151,7 +192,9 @@ function setup(
   const onFired = mock((_fired: FiredRow[]) => undefined);
   const onOpenChange = mock((_open: boolean) => undefined);
   const rows = over.rows ?? ROWS;
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   // The set's hold, read live as the grid reads it.
   function Held(props: Omit<Parameters<typeof RenderConfirmDialog>[0], 'holdScope' | 'held'>) {
     return <RenderConfirmDialog {...props} holdScope={SCOPE} held={useRenderHold(SCOPE)} />;
@@ -169,7 +212,11 @@ function setup(
         settings={over.settings ?? SETTINGS}
         calls={[]}
         meta={over.meta ?? CONNECTED}
-        slack={{ state: 'ready', workspaceName: 'Continuum', destinations: [OPS as never] }}
+        slack={{
+          state: 'ready',
+          workspaceName: 'Continuum',
+          destinations: [OPS as never],
+        }}
         outputs={CONTRACT.outputs}
         finalBlocked={over.finalBlocked ?? null}
         onDeliveryChange={() => undefined}
@@ -182,7 +229,9 @@ function setup(
 }
 
 const renderButton = () =>
-  screen.getByRole<HTMLButtonElement>('button', { name: /^Render \d+ files?$/ });
+  screen.getByRole<HTMLButtonElement>('button', {
+    name: /^Render \d+ files?$/,
+  });
 
 beforeEach(() => {
   batchPreflightMock.mockReset();
@@ -210,7 +259,10 @@ describe('RenderConfirmDialog', () => {
       final: true,
     });
     // The replacing row carries its own ad and its one file; the other takes the set's default.
-    expect(sent.records[0]).toMatchObject({ delivery: REPLACE, outputIds: ['square'] });
+    expect(sent.records[0]).toMatchObject({
+      delivery: REPLACE,
+      outputIds: ['square'],
+    });
     expect(sent.records[1]?.delivery).toBeUndefined();
     expect(sent.acceptMissingFonts).toBeUndefined();
 
@@ -222,7 +274,9 @@ describe('RenderConfirmDialog', () => {
 
     fireEvent.click(renderButton());
     await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(1));
-    expect(createBatchMock.mock.calls[0]?.[0]).toEqual({ confirmationToken: 'batch-token' });
+    expect(createBatchMock.mock.calls[0]?.[0]).toEqual({
+      confirmationToken: 'batch-token',
+    });
     // Signed once, spent once.
     expect(batchPreflightMock).toHaveBeenCalledTimes(1);
     expect(onFired.mock.calls[0]?.[0].map((item) => [item.rowId, item.job.id])).toEqual([
@@ -276,7 +330,12 @@ describe('RenderConfirmDialog', () => {
   test('a brand with no ad account renders to the Library, whatever the set says', async () => {
     const { dialog } = setup({
       rows: [ROWS[1]!],
-      meta: { connected: false, adAccountId: null, adAccountName: null, adAccounts: [] },
+      meta: {
+        connected: false,
+        adAccountId: null,
+        adAccountName: null,
+        adAccounts: [],
+      },
     });
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls[0]![0].delivery).toBeUndefined();
@@ -284,7 +343,9 @@ describe('RenderConfirmDialog', () => {
   });
 
   test('someone who cannot render a Final gets a Proof, even when the set says Final', async () => {
-    const { dialog } = setup({ finalBlocked: 'Only a brand owner or admin can render a Final.' });
+    const { dialog } = setup({
+      finalBlocked: 'Only a brand owner or admin can render a Final.',
+    });
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls[0]![0].final).toBeUndefined();
     expect(within(dialog).getByRole('radio', { name: 'Final' }).hasAttribute('data-disabled')).toBe(
@@ -333,6 +394,8 @@ describe('RenderConfirmDialog', () => {
     await waitFor(() => expect(renderButton().disabled).toBe(false));
     fireEvent.click(renderButton());
     await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(1));
-    expect(createBatchMock.mock.calls[0]?.[0]).toEqual({ confirmationToken: 'fresh-token' });
+    expect(createBatchMock.mock.calls[0]?.[0]).toEqual({
+      confirmationToken: 'fresh-token',
+    });
   });
 });

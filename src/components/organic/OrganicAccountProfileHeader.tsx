@@ -1,5 +1,7 @@
 'use client';
+
 import { CircleCheck, ExternalLink } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { OrganicAccountProfile } from '@/lib/schemas/organicMetrics';
@@ -26,6 +28,7 @@ export function OrganicAccountProfileHeader({
   profile,
   platformLabel,
 }: OrganicAccountProfileHeaderProps) {
+  const uiText = useTranslations('organic');
   const { displayName, username, avatarUrl, bio, profileUrl, isVerified } = profile;
 
   const hasIdentity = Boolean(displayName || username || avatarUrl);
@@ -33,7 +36,7 @@ export function OrganicAccountProfileHeader({
 
   return (
     <section
-      aria-label={`${platformLabel} account profile`}
+      aria-label={uiText('accountProfile', { platform: platformLabel })}
       className="mb-2 flex items-start gap-3 rounded-xl border border-border bg-card/50 p-3"
     >
       <Avatar className="h-12 w-12 shrink-0">
@@ -47,7 +50,10 @@ export function OrganicAccountProfileHeader({
             <span className="truncate font-semibold text-foreground">{displayName}</span>
           ) : null}
           {isVerified ? (
-            <CircleCheck className="h-4 w-4 shrink-0 text-sky-500" aria-label="Verified account" />
+            <CircleCheck
+              className="h-4 w-4 shrink-0 text-sky-500"
+              aria-label={uiText('verified_account_7ca9d36')}
+            />
           ) : null}
         </div>
 
@@ -67,7 +73,7 @@ export function OrganicAccountProfileHeader({
           rel="noopener noreferrer"
           className="flex shrink-0 items-center gap-1 self-center rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
         >
-          View on {platformLabel}
+          {uiText('viewOnPlatform', { platform: platformLabel })}
           <ExternalLink className="h-3 w-3" aria-hidden="true" />
         </a>
       ) : null}

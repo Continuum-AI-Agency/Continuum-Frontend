@@ -1,3 +1,4 @@
+import type { OptimizerDisplayTranslate } from '@/lib/paid-media/optimizationMetricPresentation';
 // What the thing a portfolio moves is called, on the platform it lives on: an ad set on Meta,
 // a campaign on Google Ads, an ad group on TikTok. Mirrors the engine's entityNoun
 // (packages/optimization-engine/src/entityNoun.ts), whose sentences this page reads back, so a
@@ -18,36 +19,61 @@ const PLATFORM_NAME: Readonly<Record<string, string>> = {
   tiktok_ads: 'TikTok Ads',
 };
 
-/** The platform's own name for an entity whose level the row did not say. */
-const PLATFORM_UNIT: Readonly<Record<string, string>> = {
-  google_ads: 'campaign',
-  tiktok_ads: 'ad group',
-};
-
 export function isMetaEntity(entity: EntityNounSource | null | undefined): boolean {
   const platform = entity?.platform;
   return platform == null || platform === '' || platform === 'meta';
 }
 
 /** "ad set" on Meta; "campaign" or "ad group" elsewhere, by the entity's neutral level. */
-export function entityNoun(entity: EntityNounSource | null | undefined): string {
+function canonicalEntityNoun(
+  entity: EntityNounSource | null | undefined,
+): 'ad set' | 'campaign' | 'ad group' {
   if (isMetaEntity(entity)) return 'ad set';
   if (entity?.level === 'campaign') return 'campaign';
   if (entity?.level === 'group') return 'ad group';
-  return PLATFORM_UNIT[entity?.platform ?? ''] ?? 'campaign';
+  return entity?.platform === 'tiktok_ads' ? 'ad group' : 'campaign';
 }
 
 /** The plural for a collection. Entities at two levels (TikTok campaigns and ad groups) name
  *  both rather than guess one. An empty collection reads as Meta, as before. */
-export function collectionPlural(entities: readonly EntityNounSource[]): string {
-  const nouns = [...new Set((entities.length ? entities : [null]).map(entityNoun))];
-  return nouns.map((noun) => `${noun}s`).join(' / ');
+export function entityNoun(
+  entity: EntityNounSource | null | undefined,
+  translate?: OptimizerDisplayTranslate,
+): string {
+  const noun = canonicalEntityNoun(entity);
+  const keys = {
+    'ad set': 'entityAdSet',
+    campaign: 'entityCampaign',
+    'ad group': 'entityAdGroup',
+  } as const;
+  return translate ? translate(keys[noun]) : noun;
+}
+
+export function collectionPlural(
+  entities: readonly EntityNounSource[],
+  translate?: OptimizerDisplayTranslate,
+): string {
+  const nouns = [
+    ...new Set((entities.length ? entities : [null]).map((entity) => canonicalEntityNoun(entity))),
+  ];
+  const keys = {
+    'ad set': 'entityAdSets',
+    campaign: 'entityCampaigns',
+    'ad group': 'entityAdGroups',
+  } as const;
+  return nouns.map((noun) => (translate ? translate(keys[noun]) : `${noun}s`)).join(' / ');
 }
 
 /** "Meta", "Google Ads", "TikTok Ads" — for the sentence that says where to fix something. */
-export function platformName(entity: EntityNounSource | null | undefined): string {
+export function platformName(
+  entity: EntityNounSource | null | undefined,
+  translate?: OptimizerDisplayTranslate,
+): string {
   if (isMetaEntity(entity)) return 'Meta';
-  return PLATFORM_NAME[entity?.platform ?? ''] ?? 'the ad platform';
+  return (
+    PLATFORM_NAME[entity?.platform ?? ''] ??
+    (translate ? translate('entityPlatform') : 'the ad platform')
+  );
 }
 
 const textOf = (value: unknown): string | null =>

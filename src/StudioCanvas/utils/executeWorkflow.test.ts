@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Edge } from '@xyflow/react';
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../../messages/studio/en.json';
+import esMessages from '../../../messages/studio/es.json';
+import ptMessages from '../../../messages/studio/pt-BR.json';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import * as spliceWorkerClientModule from '../workers/spliceWorkerClient';
@@ -10,6 +14,7 @@ import {
   executeWorkflow,
 } from './executeWorkflow';
 import { computeGenerationSignature } from './generationSignature';
+import { workflowNodeError } from './workflowUiFailure';
 
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
 
@@ -57,6 +62,11 @@ describe('executeWorkflow', () => {
       return { success: true, output: { type: 'text', value: 'enriched' } };
     }),
   ) => ({
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration,
     executeVideoExtension,
     executeEnrichment,
@@ -68,10 +78,67 @@ describe('executeWorkflow', () => {
     error: null,
   });
 
+  it('localizes real preflight guidance and reformats the same node failure after a locale change', async () => {
+    for (const locale of ['pt-BR', 'es'] as const) {
+      useStudioStore.setState({
+        nodes: [
+          {
+            id: 'generator',
+            type: 'nanoGen',
+            position: { x: 0, y: 0 },
+            data: { model: 'nano-banana', positivePrompt: '' },
+          },
+        ],
+        edges: [],
+        brandId: 'brand-test',
+      });
+      const generate = mock(async () => ({ success: true }));
+      const show = mock();
+      const translateUi = createTranslator({
+        locale,
+        messages: { studio: locale === 'pt-BR' ? ptMessages : esMessages },
+        namespace: 'studio',
+      });
+      await executeWorkflow({
+        ...buildControls(generate),
+        translateUi,
+        show,
+      } as never);
+      expect(generate).not.toHaveBeenCalled();
+      expect(show).toHaveBeenCalledTimes(1);
+      expect(show.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          title: locale === 'pt-BR' ? 'O fluxo precisa de entrada.' : 'El flujo necesita entrada',
+        }),
+      );
+      const node = useStudioStore.getState().nodes[0];
+      expect(node.data.error).toBe('Missing required prompt');
+      expect(workflowNodeError(node.data, translateUi)).toBe(
+        locale === 'pt-BR' ? 'Falta o prompt obrigatório' : 'Falta el prompt obligatorio',
+      );
+      const other = createTranslator({
+        locale: 'es',
+        messages: { studio: esMessages },
+        namespace: 'studio',
+      });
+      expect(workflowNodeError(node.data, other)).toBe('Falta el prompt obligatorio');
+    }
+  });
+
   it('should execute a linear workflow', async () => {
     const nodes: StudioNode[] = [
-      { id: '1', position: { x: 0, y: 0 }, data: { value: 'prompt' }, type: 'string' },
-      { id: '2', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+      {
+        id: '1',
+        position: { x: 0, y: 0 },
+        data: { value: 'prompt' },
+        type: 'string',
+      },
+      {
+        id: '2',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana' },
+        type: 'nanoGen',
+      },
     ];
 
     const edges: Edge[] = [{ id: 'e1', source: '1', target: '2', targetHandle: 'prompt' }];
@@ -259,7 +326,10 @@ describe('executeWorkflow', () => {
         {
           id: `generate-image-${index}`,
           position: { x: 200, y: 0 },
-          data: { model: 'nano-banana', positivePrompt: 'Use the reference image' },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'Use the reference image',
+          },
           type: 'nanoGen',
         },
       ]);
@@ -278,7 +348,10 @@ describe('executeWorkflow', () => {
       }));
       const show = mock();
 
-      await executeWorkflow({ ...buildControls(executeGeneration), show } as any);
+      await executeWorkflow({
+        ...buildControls(executeGeneration),
+        show,
+      } as any);
 
       expect(executeGeneration).toHaveBeenCalledTimes(0);
       expect(show).toHaveBeenCalledWith({
@@ -300,7 +373,10 @@ describe('executeWorkflow', () => {
       {
         id: 'generate-image',
         position: { x: 0, y: 0 },
-        data: { model: 'nano-banana', positivePrompt: 'Generate a launch image' },
+        data: {
+          model: 'nano-banana',
+          positivePrompt: 'Generate a launch image',
+        },
         type: 'nanoGen',
       },
     ]);
@@ -311,7 +387,11 @@ describe('executeWorkflow', () => {
     });
     const executeGeneration = mock(
       (_nodeId: string, _payload: unknown, onOutputAvailable: (output: unknown) => void) => {
-        onOutputAvailable({ type: 'image', base64: 'preview', mimeType: 'image/png' });
+        onOutputAvailable({
+          type: 'image',
+          base64: 'preview',
+          mimeType: 'image/png',
+        });
         return request;
       },
     );
@@ -346,8 +426,18 @@ describe('executeWorkflow', () => {
 
   it('should handle dependencies', async () => {
     const nodes: StudioNode[] = [
-      { id: '1', position: { x: 0, y: 0 }, data: { value: 'prompt' }, type: 'string' },
-      { id: '2', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+      {
+        id: '1',
+        position: { x: 0, y: 0 },
+        data: { value: 'prompt' },
+        type: 'string',
+      },
+      {
+        id: '2',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana' },
+        type: 'nanoGen',
+      },
       {
         id: '3',
         position: { x: 0, y: 0 },
@@ -358,7 +448,13 @@ describe('executeWorkflow', () => {
 
     const edges: Edge[] = [
       { id: 'e1', source: '1', target: '2', targetHandle: 'prompt' },
-      { id: 'e2', source: '2', target: '3', sourceHandle: 'image', targetHandle: 'ref-images' },
+      {
+        id: 'e2',
+        source: '2',
+        target: '3',
+        sourceHandle: 'image',
+        targetHandle: 'ref-images',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -410,13 +506,29 @@ describe('executeWorkflow', () => {
         },
         type: 'image',
       },
-      { id: 'txt', position: { x: 0, y: 0 }, data: { value: 'prompt' }, type: 'string' },
-      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+      {
+        id: 'txt',
+        position: { x: 0, y: 0 },
+        data: { value: 'prompt' },
+        type: 'string',
+      },
+      {
+        id: 'nano',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana' },
+        type: 'nanoGen',
+      },
     ];
 
     const edges: Edge[] = [
       { id: 'e1', source: 'txt', target: 'nano', targetHandle: 'prompt' },
-      { id: 'e2', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+      {
+        id: 'e2',
+        source: 'img',
+        sourceHandle: 'image',
+        target: 'nano',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -455,7 +567,13 @@ describe('executeWorkflow', () => {
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'img',
+        sourceHandle: 'image',
+        target: 'nano',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -499,7 +617,10 @@ describe('executeWorkflow', () => {
       maxRunning = Math.max(maxRunning, running);
       await new Promise((resolve) => setTimeout(resolve, 5));
       running -= 1;
-      return { success: true, output: { type: 'image', base64: 'out', mimeType: 'image/png' } };
+      return {
+        success: true,
+        output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      };
     });
 
     const controls = buildControls(executeGeneration);
@@ -530,7 +651,11 @@ describe('executeWorkflow', () => {
     const executeGeneration = mock(async (nodeId) => {
       return {
         success: true,
-        output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' },
+        output: {
+          type: 'image',
+          base64: `out-${nodeId}`,
+          mimeType: 'image/png',
+        },
       };
     });
 
@@ -599,11 +724,17 @@ describe('executeWorkflow', () => {
 
     const controls = buildControls(
       executeGeneration,
-      mock(async () => ({ success: true, output: { type: 'video', url: 'video_url' } })),
+      mock(async () => ({
+        success: true,
+        output: { type: 'video', url: 'video_url' },
+      })),
       executeEnrichment,
     );
 
-    await executeWorkflow(controls as any, { targetNodeId: 'video-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'video-1',
+      clearDownstream: false,
+    });
 
     expect(executeEnrichment).toHaveBeenCalledTimes(0);
     expect(executeGeneration).toHaveBeenCalledTimes(1);
@@ -628,14 +759,24 @@ describe('executeWorkflow', () => {
     // generated. Targeting img-b (node "Run") must execute img-a first, then img-b
     // — previously only img-b ran, so it failed with a missing reference input.
     const nodes: StudioNode[] = [
-      { id: 'prompt-1', position: { x: 0, y: 0 }, data: { value: 'a cat' }, type: 'string' },
+      {
+        id: 'prompt-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'a cat' },
+        type: 'string',
+      },
       {
         id: 'img-a',
         position: { x: 0, y: 0 },
         data: { model: 'nano-banana', positivePrompt: 'first image' },
         type: 'nanoGen',
       },
-      { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+      {
+        id: 'img-b',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana' },
+        type: 'nanoGen',
+      },
     ];
 
     const edges: Edge[] = [
@@ -665,7 +806,10 @@ describe('executeWorkflow', () => {
 
     const controls = buildControls(executeGeneration);
 
-    await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'img-b',
+      clearDownstream: false,
+    });
 
     expect(executeGeneration).toHaveBeenCalledTimes(2);
     // img-a (the upstream dependency) runs before the target img-b.
@@ -719,7 +863,10 @@ describe('executeWorkflow', () => {
 
     const controls = buildControls(executeGeneration);
 
-    await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'img-b',
+      clearDownstream: false,
+    });
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     expect(executeGeneration.mock.calls[0][0]).toBe('img-b');
@@ -739,7 +886,12 @@ describe('executeWorkflow', () => {
         data: { value: 'persistent prompt' },
         type: 'string',
       },
-      { id: 'nano-1', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+      {
+        id: 'nano-1',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana' },
+        type: 'nanoGen',
+      },
     ];
 
     const edges: Edge[] = [
@@ -764,7 +916,10 @@ describe('executeWorkflow', () => {
     const executeEnrichment = mock(async () => ({ success: true }));
     const controls = buildControls(
       executeGeneration,
-      mock(async () => ({ success: true, output: { type: 'video', url: 'video_url' } })),
+      mock(async () => ({
+        success: true,
+        output: { type: 'video', url: 'video_url' },
+      })),
       executeEnrichment,
     );
 
@@ -834,7 +989,10 @@ describe('executeWorkflow', () => {
       executeEnrichment,
     );
 
-    await executeWorkflow(controls as any, { targetNodeId: 'video-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'video-1',
+      clearDownstream: false,
+    });
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     expect(executeEnrichment).toHaveBeenCalledTimes(0);
@@ -849,7 +1007,12 @@ describe('executeWorkflow', () => {
         data: { video: 'data:video/mp4;base64,base64_video' },
         type: 'video',
       },
-      { id: 'extend-1', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+      {
+        id: 'extend-1',
+        position: { x: 0, y: 0 },
+        data: {},
+        type: 'extendVideo',
+      },
     ];
 
     const edges: Edge[] = [
@@ -866,7 +1029,10 @@ describe('executeWorkflow', () => {
     useStudioStore.getState().setEdges(edges);
 
     const executeGeneration = mock(async () => {
-      return { success: true, output: { type: 'image', base64: 'out', mimeType: 'image/png' } };
+      return {
+        success: true,
+        output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      };
     });
 
     const executeVideoExtension = mock(async (_nodeId, payload) => {
@@ -902,7 +1068,12 @@ describe('executeWorkflow', () => {
           generatedVideo: 'data:video/mp4;base64,veo_output_base64',
         },
       },
-      { id: 'extend-1', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+      {
+        id: 'extend-1',
+        position: { x: 0, y: 0 },
+        data: {},
+        type: 'extendVideo',
+      },
     ];
 
     const edges: Edge[] = [
@@ -928,7 +1099,10 @@ describe('executeWorkflow', () => {
     }));
     const controls = buildControls(executeGeneration, executeVideoExtension);
 
-    await executeWorkflow(controls as any, { targetNodeId: 'extend-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'extend-1',
+      clearDownstream: false,
+    });
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
     const payload = executeVideoExtension.mock.calls[0][1];
@@ -946,7 +1120,12 @@ describe('executeWorkflow', () => {
           generatedVideo: 'https://cdn.continuum.test/videos/veo-output.mp4',
         },
       },
-      { id: 'extend-1', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+      {
+        id: 'extend-1',
+        position: { x: 0, y: 0 },
+        data: {},
+        type: 'extendVideo',
+      },
     ];
 
     const edges: Edge[] = [
@@ -968,7 +1147,10 @@ describe('executeWorkflow', () => {
     }));
     const executeVideoExtension = mock(async () => ({
       success: true,
-      output: { type: 'video', url: 'data:video/mp4;base64,extended_from_veo_uri' },
+      output: {
+        type: 'video',
+        url: 'data:video/mp4;base64,extended_from_veo_uri',
+      },
     }));
     const controls = buildControls(executeGeneration, executeVideoExtension);
     // The endpoint takes BYTES on `reference_video` and has no URL field, so a clip
@@ -980,7 +1162,10 @@ describe('executeWorkflow', () => {
       return new Response(new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'video/mp4' }));
     }) as unknown as typeof fetch;
 
-    await executeWorkflow(controls as any, { targetNodeId: 'extend-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'extend-1',
+      clearDownstream: false,
+    });
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
     expect(fetched).toContain('https://cdn.continuum.test/videos/veo-output.mp4');
@@ -994,7 +1179,12 @@ describe('executeWorkflow', () => {
     globalThis.fetch = fetchMock as typeof fetch;
 
     const nodes: StudioNode[] = [
-      { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
+      {
+        id: 'text-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'draft prompt' },
+        type: 'string',
+      },
       {
         id: 'nano-1',
         position: { x: 0, y: 0 },
@@ -1018,7 +1208,10 @@ describe('executeWorkflow', () => {
     }));
     const controls = buildControls(executeGeneration, undefined, executeEnrichment);
 
-    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'text-1',
+      clearDownstream: false,
+    });
 
     // No direct edge-function fetch — enrichment now flows through the Backend service.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -1056,7 +1249,10 @@ describe('executeWorkflow', () => {
       executeEnrichment,
     );
 
-    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'text-1',
+      clearDownstream: false,
+    });
 
     expect(executeEnrichment).toHaveBeenCalledTimes(1);
     expect(useStudioStore.getState().nodes.find((n) => n.id === 'text-1')?.data.value).toBe(
@@ -1080,9 +1276,14 @@ describe('executeWorkflow', () => {
       },
     ];
     useStudioStore.getState().setNodes(nodes);
-    useStudioStore
-      .getState()
-      .setEdges([{ id: 'e1', source: 'text-1', target: 'nano-1', targetHandle: 'prompt' }] as any);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e1',
+        source: 'text-1',
+        target: 'nano-1',
+        targetHandle: 'prompt',
+      },
+    ] as any);
 
     const executeEnrichment = mock(async () => ({
       success: true,
@@ -1107,7 +1308,12 @@ describe('executeWorkflow', () => {
 
   it('reports a failure when enrichment returns no text instead of silently completing', async () => {
     const nodes: StudioNode[] = [
-      { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
+      {
+        id: 'text-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'draft prompt' },
+        type: 'string',
+      },
     ];
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges([]);
@@ -1121,7 +1327,10 @@ describe('executeWorkflow', () => {
       executeEnrichment,
     );
 
-    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'text-1',
+      clearDownstream: false,
+    });
 
     const updated = useStudioStore.getState().nodes.find((n) => n.id === 'text-1');
     expect(updated?.data.error).toBe('Enrichment returned no text');
@@ -1158,7 +1367,12 @@ describe('executeWorkflow', () => {
 
   it('should fail string node when enrichment returns an error', async () => {
     const nodes: StudioNode[] = [
-      { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
+      {
+        id: 'text-1',
+        position: { x: 0, y: 0 },
+        data: { value: 'draft prompt' },
+        type: 'string',
+      },
     ];
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges([]);
@@ -1170,7 +1384,10 @@ describe('executeWorkflow', () => {
     }));
     const controls = buildControls(executeGeneration, undefined, executeEnrichment);
 
-    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'text-1',
+      clearDownstream: false,
+    });
 
     const finalNodes = useStudioStore.getState().nodes;
     const updatedNode = finalNodes.find((n) => n.id === 'text-1');
@@ -1323,7 +1540,13 @@ describe('executeWorkflow', () => {
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'img',
+        sourceHandle: 'image',
+        target: 'nano',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -1352,7 +1575,12 @@ describe('executeWorkflow', () => {
     const signedUrl =
       'https://x.supabase.co/storage/v1/object/sign/media-library/c.jpg?token=fresh';
     const nodes: StudioNode[] = [
-      { id: 'img', position: { x: 0, y: 0 }, data: { sourceUrl: signedUrl }, type: 'image' },
+      {
+        id: 'img',
+        position: { x: 0, y: 0 },
+        data: { sourceUrl: signedUrl },
+        type: 'image',
+      },
       {
         id: 'nano',
         position: { x: 0, y: 0 },
@@ -1361,7 +1589,13 @@ describe('executeWorkflow', () => {
       },
     ];
     const edges: Edge[] = [
-      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'img',
+        sourceHandle: 'image',
+        target: 'nano',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -1374,7 +1608,10 @@ describe('executeWorkflow', () => {
     }));
     const controls = buildControls(executeGeneration);
 
-    await executeWorkflow(controls as any, { targetNodeId: 'nano', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'nano',
+      clearDownstream: false,
+    });
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     const payload = executeGeneration.mock.calls[0][1];
@@ -1394,7 +1631,11 @@ describe('executeWorkflow', () => {
         node.type === 'image'
           ? {
               ...node,
-              data: { ...node.data, image: freshBase64, sourceUrl: 'https://x/fresh.jpg' },
+              data: {
+                ...node.data,
+                image: freshBase64,
+                sourceUrl: 'https://x/fresh.jpg',
+              },
             }
           : node,
       ),
@@ -1423,7 +1664,13 @@ describe('executeWorkflow', () => {
       },
     ];
     const edges: Edge[] = [
-      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+      {
+        id: 'e1',
+        source: 'img',
+        sourceHandle: 'image',
+        target: 'nano',
+        targetHandle: 'ref-image',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -1436,7 +1683,10 @@ describe('executeWorkflow', () => {
     }));
     const controls = buildControls(executeGeneration);
 
-    await executeWorkflow(controls as any, { targetNodeId: 'nano', clearDownstream: false });
+    await executeWorkflow(controls as any, {
+      targetNodeId: 'nano',
+      clearDownstream: false,
+    });
 
     expect(hydrateDurableReference).toHaveBeenCalledTimes(1);
     expect(executeGeneration).toHaveBeenCalledTimes(1);
@@ -1452,10 +1702,16 @@ describe('executeWorkflow', () => {
     const hydrateAction = mock(async (input: StudioNode[]) =>
       input.map((node) => ({
         ...node,
-        data: { ...node.data, generatedImage: freshUrl, generatedImageUrl: freshUrl },
+        data: {
+          ...node.data,
+          generatedImage: freshUrl,
+          generatedImageUrl: freshUrl,
+        },
       })),
     );
-    mock.module('./rehydrateWorkflowMedia', () => ({ rehydrateWorkflowMediaNodes: hydrateAction }));
+    mock.module('./rehydrateWorkflowMedia', () => ({
+      rehydrateWorkflowMediaNodes: hydrateAction,
+    }));
 
     useStudioStore.getState().setNodes([
       {
@@ -1488,7 +1744,9 @@ describe('executeWorkflow', () => {
       },
     ]);
 
-    await executeWorkflow(buildControls(mock()) as never, { targetNodeId: 'filter' });
+    await executeWorkflow(buildControls(mock()) as never, {
+      targetNodeId: 'filter',
+    });
 
     expect(hydrateAction).toHaveBeenCalledTimes(1);
     expect(hydrateAction.mock.calls[0][0].map((node) => node.id)).toEqual(['saved-action']);
@@ -1514,8 +1772,20 @@ describe('executeWorkflow', () => {
       { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
     ];
     const edges: Edge[] = [
-      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-in' },
-      { id: 'e2', source: 'edit', sourceHandle: 'video', target: 'ext', targetHandle: 'video' },
+      {
+        id: 'e1',
+        source: 'vid',
+        sourceHandle: 'video',
+        target: 'edit',
+        targetHandle: 'media-in',
+      },
+      {
+        id: 'e2',
+        source: 'edit',
+        sourceHandle: 'video',
+        target: 'ext',
+        targetHandle: 'video',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -1569,8 +1839,20 @@ describe('executeWorkflow', () => {
       { id: 'ext', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
     ];
     const edges: Edge[] = [
-      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'edit', targetHandle: 'media-in' },
-      { id: 'e2', source: 'edit', sourceHandle: 'video', target: 'ext', targetHandle: 'video' },
+      {
+        id: 'e1',
+        source: 'vid',
+        sourceHandle: 'video',
+        target: 'edit',
+        targetHandle: 'media-in',
+      },
+      {
+        id: 'e2',
+        source: 'edit',
+        sourceHandle: 'video',
+        target: 'ext',
+        targetHandle: 'video',
+      },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -1623,7 +1905,11 @@ describe('executeWorkflow', () => {
           id: 'gen',
           position: { x: 0, y: 0 },
           type: 'nanoGen',
-          data: { model: 'nano-banana', positivePrompt: 'a cat', aspectRatio: '1:1' },
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'a cat',
+            aspectRatio: '1:1',
+          },
         },
       ];
       useStudioStore.getState().setNodes(nodes);
@@ -1826,7 +2112,10 @@ describe('executeWorkflow', () => {
       const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
       const controls = buildControls(executeGeneration);
 
-      await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+      await executeWorkflow(controls as any, {
+        targetNodeId: 'img-b',
+        clearDownstream: false,
+      });
 
       expect(executeGeneration).toHaveBeenCalledTimes(1);
       expect(executeGeneration.mock.calls[0][0]).toBe('img-b');
@@ -1962,7 +2251,13 @@ describe('executeWorkflow', () => {
         },
       ];
       const edges: Edge[] = [
-        { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
+        {
+          id: 'e1',
+          source: 'a',
+          sourceHandle: 'image',
+          target: 'b',
+          targetHandle: 'ref-image',
+        },
       ];
       useStudioStore.getState().setNodes(nodes);
       useStudioStore.getState().setEdges(edges);
@@ -1995,7 +2290,13 @@ describe('executeWorkflow', () => {
         },
       ];
       const edges: Edge[] = [
-        { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
+        {
+          id: 'e1',
+          source: 'a',
+          sourceHandle: 'image',
+          target: 'b',
+          targetHandle: 'ref-image',
+        },
       ];
       useStudioStore.getState().setNodes(nodes);
       useStudioStore.getState().setEdges(edges);
@@ -2105,7 +2406,10 @@ describe('executeWorkflow', () => {
       const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
       const controls = buildControls(executeGeneration);
 
-      await executeWorkflow(controls as any, { targetNodeId: 'img-b', clearDownstream: false });
+      await executeWorkflow(controls as any, {
+        targetNodeId: 'img-b',
+        clearDownstream: false,
+      });
 
       expect(executeGeneration).toHaveBeenCalledTimes(1);
       expect(executeGeneration.mock.calls[0][0]).toBe('img-b');
@@ -2156,7 +2460,10 @@ describe('executeWorkflow', () => {
       );
       const controls = buildControls(executeGeneration);
 
-      await executeWorkflow(controls as any, { targetNodeId: 'vid', clearDownstream: false });
+      await executeWorkflow(controls as any, {
+        targetNodeId: 'vid',
+        clearDownstream: false,
+      });
 
       expect(executeGeneration.mock.calls.map((call) => call[0])).toEqual(['vid']);
       const imgA = useStudioStore.getState().nodes.find((n) => n.id === 'img-a');
@@ -2187,7 +2494,13 @@ describe('executeWorkflow', () => {
         },
       ];
       const edges: Edge[] = [
-        { id: 'e1', source: 'a', sourceHandle: 'image', target: 'b', targetHandle: 'ref-image' },
+        {
+          id: 'e1',
+          source: 'a',
+          sourceHandle: 'image',
+          target: 'b',
+          targetHandle: 'ref-image',
+        },
       ];
       useStudioStore.getState().setNodes(nodes);
       useStudioStore.getState().setEdges(edges);
@@ -2216,7 +2529,10 @@ describe('executeWorkflow', () => {
       const executeGeneration = mock(async (nodeId: string) => imgOutput(nodeId));
       const controls = buildControls(executeGeneration);
 
-      await executeWorkflow(controls as any, { targetNodeId: 'solo', clearDownstream: false });
+      await executeWorkflow(controls as any, {
+        targetNodeId: 'solo',
+        clearDownstream: false,
+      });
 
       const solo = useStudioStore.getState().nodes.find((n) => n.id === 'solo');
       const sig = (solo?.data as Record<string, unknown>).generationSignature;
@@ -2258,18 +2574,35 @@ describe('collectPublisherHandoffs', () => {
       { id: 'draft', position: { x: 0, y: 0 }, data: {}, type: 'plannerDraft' },
       { id: 'pub', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
-    const edges: Edge[] = [{ id: 'e1', source: 'draft', sourceHandle: 'draft', target: 'pub', targetHandle: 'draft-in' }];
+    const edges: Edge[] = [
+      {
+        id: 'e1',
+        source: 'draft',
+        sourceHandle: 'draft',
+        target: 'pub',
+        targetHandle: 'draft-in',
+      },
+    ];
 
     const handoffs = collectPublisherHandoffs(nodes, edges, ['draft']);
     expect(handoffs).toEqual([
-      { nodeId: 'pub', kind: 'organic', state: 'handoff — deliver via studio_deliver' },
+      {
+        nodeId: 'pub',
+        kind: 'organic',
+        state: 'handoff — deliver via studio_deliver',
+      },
     ]);
   });
 
   it('classifies a paid publisher sink', () => {
     const nodes: StudioNode[] = [
       { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
-      { id: 'pub', position: { x: 0, y: 0 }, data: { format: 'video' }, type: 'paidPublisher' },
+      {
+        id: 'pub',
+        position: { x: 0, y: 0 },
+        data: { format: 'video' },
+        type: 'paidPublisher',
+      },
     ];
     const edges: Edge[] = [{ id: 'e1', source: 'gen', target: 'pub', targetHandle: 'video-in' }];
     expect(collectPublisherHandoffs(nodes, edges, ['gen'])[0]?.kind).toBe('paid');
@@ -2278,7 +2611,12 @@ describe('collectPublisherHandoffs', () => {
   it('ignores a publisher not reachable from the run scope', () => {
     const nodes: StudioNode[] = [
       { id: 'gen', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
-      { id: 'orphan', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
+      {
+        id: 'orphan',
+        position: { x: 0, y: 0 },
+        data: {},
+        type: 'organicPublish',
+      },
     ];
     // No edge from gen → orphan, so a run of `gen` never feeds it.
     expect(collectPublisherHandoffs(nodes, [], ['gen'])).toEqual([]);
@@ -2291,7 +2629,10 @@ describe('collectPublisherHandoffs', () => {
       { id: 'c', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
       { id: 'd', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
-    expect(collectPublisherHandoffs(nodes, []).map((handoff) => handoff.nodeId)).toEqual(['b', 'd']);
+    expect(collectPublisherHandoffs(nodes, []).map((handoff) => handoff.nodeId)).toEqual([
+      'b',
+      'd',
+    ]);
   });
 });
 
@@ -2299,12 +2640,20 @@ describe('Canvas V3 runtime branches', () => {
   // The action branch registers a real AbortController so a long re-encode can be
   // cancelled, so the stub has to provide those two.
   const controls = () => ({
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration: mock(async () => ({
       success: true,
       output: { type: 'image', base64: 'gen', mimeType: 'image/png' },
     })),
     executeVideoExtension: mock(async () => ({ success: true })),
-    executeEnrichment: mock(async () => ({ success: true, output: { type: 'text', value: '' } })),
+    executeEnrichment: mock(async () => ({
+      success: true,
+      output: { type: 'text', value: '' },
+    })),
     registerController: () => new AbortController(),
     releaseController: () => {},
     show: () => {},
@@ -2316,15 +2665,29 @@ describe('Canvas V3 runtime branches', () => {
     // The router IS the fan-out mechanism: it republishes its upstream as its own
     // output, so many edges leaving it all read one already-computed result.
     const nodes: StudioNode[] = [
-      { id: 'src', position: { x: 0, y: 0 }, type: 'string', data: { value: 'hello' } },
-      { id: 'route', position: { x: 0, y: 0 }, type: 'router', data: { lockedType: null } },
+      {
+        id: 'src',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'hello' },
+      },
+      {
+        id: 'route',
+        position: { x: 0, y: 0 },
+        type: 'router',
+        data: { lockedType: null },
+      },
     ];
     useStudioStore.getState().setNodes(nodes);
-    useStudioStore
-      .getState()
-      .setEdges([
-        { id: 'e', source: 'src', target: 'route', sourceHandle: 'text', targetHandle: 'in' },
-      ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e',
+        source: 'src',
+        target: 'route',
+        sourceHandle: 'text',
+        targetHandle: 'in',
+      },
+    ]);
 
     await executeWorkflow(controls() as never, { targetNodeId: 'route' });
 
@@ -2335,11 +2698,14 @@ describe('Canvas V3 runtime branches', () => {
   });
 
   it('fails a router with nothing connected instead of completing empty', async () => {
-    useStudioStore
-      .getState()
-      .setNodes([
-        { id: 'route', position: { x: 0, y: 0 }, type: 'router', data: { lockedType: null } },
-      ]);
+    useStudioStore.getState().setNodes([
+      {
+        id: 'route',
+        position: { x: 0, y: 0 },
+        type: 'router',
+        data: { lockedType: null },
+      },
+    ]);
     useStudioStore.getState().setEdges([]);
 
     await executeWorkflow(controls() as never, { targetNodeId: 'route' });
@@ -2376,19 +2742,31 @@ describe('Canvas V3 runtime branches', () => {
 
   it('runs a text action on its connected input', async () => {
     useStudioStore.getState().setNodes([
-      { id: 'src', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a fast fox' } },
+      {
+        id: 'src',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'a fast fox' },
+      },
       {
         id: 'act',
         position: { x: 0, y: 0 },
         type: 'action',
-        data: { actionId: 'text.findReplace', config: { find: 'fast', replace: 'slow' } },
+        data: {
+          actionId: 'text.findReplace',
+          config: { find: 'fast', replace: 'slow' },
+        },
       },
     ]);
-    useStudioStore
-      .getState()
-      .setEdges([
-        { id: 'e', source: 'src', target: 'act', sourceHandle: 'text', targetHandle: 'in' },
-      ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e',
+        source: 'src',
+        target: 'act',
+        sourceHandle: 'text',
+        targetHandle: 'in',
+      },
+    ]);
 
     await executeWorkflow(controls() as never, { targetNodeId: 'act' });
 
@@ -2421,14 +2799,21 @@ describe('Canvas V3 runtime branches', () => {
         id: 'act',
         position: { x: 0, y: 0 },
         type: 'action',
-        data: { actionId: 'text.findReplace', config: { find: 'red', replace: 'green' } },
+        data: {
+          actionId: 'text.findReplace',
+          config: { find: 'red', replace: 'green' },
+        },
       },
     ]);
-    useStudioStore
-      .getState()
-      .setEdges([
-        { id: 'e', source: 'bat', target: 'act', sourceHandle: 'collection', targetHandle: 'in' },
-      ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e',
+        source: 'bat',
+        target: 'act',
+        sourceHandle: 'collection',
+        targetHandle: 'in',
+      },
+    ]);
 
     await executeWorkflow(controls() as never, { targetNodeId: 'act' });
 
@@ -2492,8 +2877,18 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
       output: { type: 'image', base64: 'generated', mimeType: 'image/png' },
     }));
     return {
+      translateUi: createTranslator({
+        locale: 'en',
+        messages: { studio: studioMessages },
+        namespace: 'studio',
+      }),
       executeGeneration,
       controls: {
+        translateUi: createTranslator({
+          locale: 'en',
+          messages: { studio: studioMessages },
+          namespace: 'studio',
+        }),
         executeGeneration,
         executeVideoExtension: mock(async () => ({ success: true })),
         executeEnrichment: mock(async () => ({
@@ -2511,7 +2906,12 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
 
   const seed = (imageEdge: Partial<Edge>) => {
     const nodes: StudioNode[] = [
-      { id: 'bench-prompt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a prompt' } },
+      {
+        id: 'bench-prompt',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'a prompt' },
+      },
       {
         id: 'bench-image',
         position: { x: 0, y: 0 },
@@ -2548,7 +2948,11 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
   };
 
   it('runs on a whole-graph run with explicit handles', async () => {
-    seed({ source: 'bench-image', sourceHandle: 'image', targetHandle: 'ref-image' });
+    seed({
+      source: 'bench-image',
+      sourceHandle: 'image',
+      targetHandle: 'ref-image',
+    });
     const { executeGeneration, controls: c } = controls();
 
     await executeWorkflow(c as never, {});
@@ -2565,7 +2969,11 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
   it('runs when the stored edge carries a null sourceHandle', async () => {
     // MCP writes handles as nullable columns; the FE normalizes null to undefined on
     // load. Reference resolution must not depend on the source handle being named.
-    seed({ source: 'bench-image', sourceHandle: null, targetHandle: 'ref-image' });
+    seed({
+      source: 'bench-image',
+      sourceHandle: null,
+      targetHandle: 'ref-image',
+    });
     const { executeGeneration, controls: c } = controls();
 
     await executeWorkflow(c as never, {});
@@ -2574,7 +2982,11 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
   });
 
   it('runs on the plural ref-images alias too', async () => {
-    seed({ source: 'bench-image', sourceHandle: 'image', targetHandle: 'ref-images' });
+    seed({
+      source: 'bench-image',
+      sourceHandle: 'image',
+      targetHandle: 'ref-images',
+    });
     const { executeGeneration, controls: c } = controls();
 
     await executeWorkflow(c as never, {});
@@ -2583,7 +2995,11 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
   });
 
   it('runs when targeted directly rather than as a whole graph', async () => {
-    seed({ source: 'bench-image', sourceHandle: 'image', targetHandle: 'ref-image' });
+    seed({
+      source: 'bench-image',
+      sourceHandle: 'image',
+      targetHandle: 'ref-image',
+    });
     const { executeGeneration, controls: c } = controls();
 
     await executeWorkflow(c as never, { targetNodeId: 'bench-gen' });
@@ -2597,7 +3013,12 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
     // be refreshed (the canvas origin was not on the backend's CORS allowlist), so the
     // node carried a path and no readable media. Say THAT.
     useStudioStore.getState().setNodes([
-      { id: 'bench-prompt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a prompt' } },
+      {
+        id: 'bench-prompt',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'a prompt' },
+      },
       {
         id: 'bench-image',
         position: { x: 0, y: 0 },
@@ -2659,6 +3080,11 @@ describe('executeWorkflow — omniGen payload', () => {
       };
     });
     const controls = {
+      translateUi: createTranslator({
+        locale: 'en',
+        messages: { studio: studioMessages },
+        namespace: 'studio',
+      }),
       executeGeneration: mock(async () => ({ success: true })),
       executeVideoExtension: mock(async () => ({ success: true })),
       executeEnrichment: mock(async () => ({ success: true })),
@@ -2669,7 +3095,10 @@ describe('executeWorkflow — omniGen payload', () => {
       error: null,
     };
 
-    await executeWorkflow(controls as never, { targetNodeId: 'omni', brandId: 'brand-1' });
+    await executeWorkflow(controls as never, {
+      targetNodeId: 'omni',
+      brandId: 'brand-1',
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
     return captured;
   };
@@ -2729,7 +3158,11 @@ describe('executeWorkflow — omniGen payload', () => {
           id: 'omni',
           position: { x: 0, y: 0 },
           type: 'omniGen',
-          data: { model: 'gemini-omni-flash', prompt: 'a marble', aspectRatio: '16:9' },
+          data: {
+            model: 'gemini-omni-flash',
+            prompt: 'a marble',
+            aspectRatio: '16:9',
+          },
         } as unknown as StudioNode,
       ],
       [],
@@ -2789,7 +3222,11 @@ describe('executeWorkflow — omniGen payload', () => {
           id: 'omni',
           position: { x: 0, y: 0 },
           type: 'omniGen',
-          data: { model: 'gemini-omni-flash', prompt: 'warmer light', aspectRatio: '16:9' },
+          data: {
+            model: 'gemini-omni-flash',
+            prompt: 'warmer light',
+            aspectRatio: '16:9',
+          },
         } as unknown as StudioNode,
       ],
       [
@@ -2862,6 +3299,11 @@ describe('an edge that exists is never reported as missing', () => {
     ).filter((input) => input.handle === handle).length;
 
   const controls = () => ({
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration: mock(async () => ({
       success: true,
       output: { type: 'image', base64: 'gen', mimeType: 'image/png' },
@@ -2870,7 +3312,10 @@ describe('an edge that exists is never reported as missing', () => {
       success: true,
       output: { type: 'video', url: 'https://cdn.example.com/extended.mp4' },
     })),
-    executeEnrichment: mock(async () => ({ success: true, output: { type: 'text', value: '' } })),
+    executeEnrichment: mock(async () => ({
+      success: true,
+      output: { type: 'text', value: '' },
+    })),
     registerController: () => new AbortController(),
     releaseController: () => {},
     show: () => {},
@@ -2889,7 +3334,9 @@ describe('an edge that exists is never reported as missing', () => {
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/library/sign')) {
-        return Response.json({ signedUrl: 'https://cdn.example.com/current-sheet.png' });
+        return Response.json({
+          signedUrl: 'https://cdn.example.com/current-sheet.png',
+        });
       }
       return Response.json({
         element: {
@@ -2915,12 +3362,34 @@ describe('an edge that exists is never reported as missing', () => {
         type: 'element',
         data: { elementId, previewUrl: 'https://cdn.example.com/stale.png' },
       },
-      { id: 'txt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'make a person' } },
-      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+      {
+        id: 'txt',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'make a person' },
+      },
+      {
+        id: 'gen',
+        position: { x: 0, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana' },
+      },
     ] as unknown as StudioNode[]);
     useStudioStore.getState().setEdges([
-      { id: 'e1', source: 'el', target: 'gen', sourceHandle: 'image', targetHandle: 'ref-image' },
-      { id: 'e2', source: 'txt', target: 'gen', sourceHandle: 'text', targetHandle: 'prompt' },
+      {
+        id: 'e1',
+        source: 'el',
+        target: 'gen',
+        sourceHandle: 'image',
+        targetHandle: 'ref-image',
+      },
+      {
+        id: 'e2',
+        source: 'txt',
+        target: 'gen',
+        sourceHandle: 'text',
+        targetHandle: 'prompt',
+      },
     ]);
 
     const c = controls();
@@ -2946,7 +3415,10 @@ describe('an edge that exists is never reported as missing', () => {
         id: 'clip',
         position: { x: 0, y: 0 },
         type: 'video',
-        data: { video: 'https://cdn.example.com/clip.mp4', fileName: 'clip.mp4' },
+        data: {
+          video: 'https://cdn.example.com/clip.mp4',
+          fileName: 'clip.mp4',
+        },
       },
       {
         id: 'ext',
@@ -2955,11 +3427,15 @@ describe('an edge that exists is never reported as missing', () => {
         data: { prompt: 'keep it going' },
       },
     ] as unknown as StudioNode[]);
-    useStudioStore
-      .getState()
-      .setEdges([
-        { id: 'e1', source: 'clip', target: 'ext', sourceHandle: 'video', targetHandle: 'video' },
-      ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e1',
+        source: 'clip',
+        target: 'ext',
+        sourceHandle: 'video',
+        targetHandle: 'video',
+      },
+    ]);
 
     const c = controls();
     await executeWorkflow(c as never, { targetNodeId: 'ext' });
@@ -2990,7 +3466,12 @@ describe('an edge that exists is never reported as missing', () => {
           ],
         },
       },
-      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+      {
+        id: 'gen',
+        position: { x: 0, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana' },
+      },
     ] as unknown as StudioNode[]);
     useStudioStore.getState().setEdges([
       {
@@ -3032,19 +3513,22 @@ describe('an edge that exists is never reported as missing', () => {
           ],
         },
       },
-      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+      {
+        id: 'gen',
+        position: { x: 0, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana' },
+      },
     ] as unknown as StudioNode[]);
-    useStudioStore
-      .getState()
-      .setEdges([
-        {
-          id: 'e1',
-          source: 'bat',
-          target: 'gen',
-          sourceHandle: 'collection',
-          targetHandle: 'prompt',
-        },
-      ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e1',
+        source: 'bat',
+        target: 'gen',
+        sourceHandle: 'collection',
+        targetHandle: 'prompt',
+      },
+    ]);
 
     const c = controls();
     c.executeGeneration.mockImplementation(async () => ({
@@ -3062,13 +3546,40 @@ describe('an edge that exists is never reported as missing', () => {
   // router that had never been run described itself as unconnected.
   it('routes a Text Block through and drives the node downstream (#301)', async () => {
     useStudioStore.getState().setNodes([
-      { id: 'txt', position: { x: 0, y: 0 }, type: 'string', data: { value: 'a hero shot' } },
-      { id: 'route', position: { x: 0, y: 0 }, type: 'router', data: { lockedType: null } },
-      { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
+      {
+        id: 'txt',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'a hero shot' },
+      },
+      {
+        id: 'route',
+        position: { x: 0, y: 0 },
+        type: 'router',
+        data: { lockedType: null },
+      },
+      {
+        id: 'gen',
+        position: { x: 0, y: 0 },
+        type: 'nanoGen',
+        data: { model: 'nano-banana' },
+      },
     ] as unknown as StudioNode[]);
     useStudioStore.getState().setEdges([
-      { id: 'e1', source: 'txt', target: 'route', sourceHandle: 'text', targetHandle: 'in' },
-      { id: 'e2', source: 'route', target: 'gen', sourceHandle: 'out', targetHandle: 'prompt' },
+      {
+        id: 'e1',
+        source: 'txt',
+        target: 'route',
+        sourceHandle: 'text',
+        targetHandle: 'in',
+      },
+      {
+        id: 'e2',
+        source: 'route',
+        target: 'gen',
+        sourceHandle: 'out',
+        targetHandle: 'prompt',
+      },
     ]);
 
     const c = controls();
@@ -3111,11 +3622,15 @@ describe('an edge that exists is never reported as missing', () => {
         data: { actionId: 'video.stitch', config: {} },
       },
     ] as unknown as StudioNode[]);
-    useStudioStore
-      .getState()
-      .setEdges([
-        { id: 'e1', source: 'bat', target: 'act', sourceHandle: 'collection', targetHandle: 'in' },
-      ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e1',
+        source: 'bat',
+        target: 'act',
+        sourceHandle: 'collection',
+        targetHandle: 'in',
+      },
+    ]);
 
     const runInWorker = stubSpliceWorker();
     const c = controls();
@@ -3156,8 +3671,20 @@ describe('an edge that exists is never reported as missing', () => {
       },
     ] as unknown as StudioNode[]);
     useStudioStore.getState().setEdges([
-      { id: 'e1', source: 'clip-a', target: 'act', sourceHandle: 'video', targetHandle: 'in' },
-      { id: 'e2', source: 'clip-b', target: 'act', sourceHandle: 'video', targetHandle: 'in' },
+      {
+        id: 'e1',
+        source: 'clip-a',
+        target: 'act',
+        sourceHandle: 'video',
+        targetHandle: 'in',
+      },
+      {
+        id: 'e2',
+        source: 'clip-b',
+        target: 'act',
+        sourceHandle: 'video',
+        targetHandle: 'in',
+      },
     ]);
 
     const runInWorker = stubSpliceWorker();
@@ -3176,14 +3703,27 @@ describe('an edge that exists is never reported as missing', () => {
   // still unresolved.
   it('joins every text edge wired to one port (#305)', async () => {
     useStudioStore.getState().setNodes([
-      { id: 'txt-a', position: { x: 0, y: 0 }, type: 'string', data: { value: 'hello' } },
+      {
+        id: 'txt-a',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'hello' },
+      },
       {
         id: 'upper',
         position: { x: 0, y: 0 },
         type: 'action',
-        data: { actionId: 'text.findReplace', config: { find: 'world', replace: 'canvas' } },
+        data: {
+          actionId: 'text.findReplace',
+          config: { find: 'world', replace: 'canvas' },
+        },
       },
-      { id: 'txt-b', position: { x: 0, y: 0 }, type: 'string', data: { value: 'world' } },
+      {
+        id: 'txt-b',
+        position: { x: 0, y: 0 },
+        type: 'string',
+        data: { value: 'world' },
+      },
       {
         id: 'join',
         position: { x: 0, y: 0 },
@@ -3192,9 +3732,27 @@ describe('an edge that exists is never reported as missing', () => {
       },
     ] as unknown as StudioNode[]);
     useStudioStore.getState().setEdges([
-      { id: 'e1', source: 'txt-a', target: 'join', sourceHandle: 'text', targetHandle: 'in' },
-      { id: 'e2', source: 'txt-b', target: 'upper', sourceHandle: 'text', targetHandle: 'in' },
-      { id: 'e3', source: 'upper', target: 'join', sourceHandle: 'out', targetHandle: 'in' },
+      {
+        id: 'e1',
+        source: 'txt-a',
+        target: 'join',
+        sourceHandle: 'text',
+        targetHandle: 'in',
+      },
+      {
+        id: 'e2',
+        source: 'txt-b',
+        target: 'upper',
+        sourceHandle: 'text',
+        targetHandle: 'in',
+      },
+      {
+        id: 'e3',
+        source: 'upper',
+        target: 'join',
+        sourceHandle: 'out',
+        targetHandle: 'in',
+      },
     ]);
 
     const c = controls();

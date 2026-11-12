@@ -1,5 +1,10 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useValidationErrorMap } from '@/i18n/validation';
+
 // Edit Sheet for an automation. Mounted once per chat surface with the
 // surface's agent fixed; the only way in is the detail sheet's Edit action, so
 // there is always an automation loaded — creation lives in the automation
@@ -37,7 +42,7 @@ import { browserTimezone } from '@/lib/automations/schedule';
 import { useAutomationSheetStore } from '@/lib/automations/sheet-store';
 import {
   type AutomationBuilderFormValues,
-  builderFormSchema,
+  createBuilderFormSchema,
   scheduleToFormFields,
   toRecipients,
   toSchedule,
@@ -79,6 +84,9 @@ type AutomationBuilderSheetProps = {
 };
 
 export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderSheetProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('automations');
+  const validationErrorMap = useValidationErrorMap();
   const { show } = useToast();
   const builderOpen = useAutomationSheetStore((state) => state.builderOpen);
   const editAutomationId = useAutomationSheetStore((state) => state.editAutomationId);
@@ -93,7 +101,10 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
   const open = builderOpen && isOwnedByThisSurface && Boolean(brandId);
 
   const form = useForm<AutomationBuilderFormValues>({
-    resolver: zodResolver(builderFormSchema),
+    resolver: zodResolver(
+      createBuilderFormSchema((source) => localizeAutomationsCopy(source, uiText)),
+      { error: validationErrorMap },
+    ),
     defaultValues: emptyFormValues(),
   });
 
@@ -117,12 +128,12 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
           enabled: values.enabled,
         },
       });
-      show({ title: 'Automation updated', variant: 'success' });
+      show({ title: uiText('automation_updated_0f86cff'), variant: 'success' });
       close();
     } catch (error) {
       show({
-        title: 'Could not update automation',
-        description: error instanceof Error ? error.message : 'Unknown error',
+        title: uiText('could_not_update_automation_6dd9f35'),
+        description: formatUiError(error),
         variant: 'error',
       });
     }
@@ -134,10 +145,11 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
     <Sheet open={open} onOpenChange={(next) => !next && close()}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>Edit automation</SheetTitle>
+          <SheetTitle>{uiText('edit_automation_b16f31c')}</SheetTitle>
           <SheetDescription>
-            {AGENT_LABELS[agent]} runs this prompt on a schedule and emails the report to your
-            recipients.
+            {uiText.rich('sentence_f87e946d22fc', {
+              v0: () => localizeAutomationsCopy(AGENT_LABELS[agent], uiText),
+            })}
           </SheetDescription>
         </SheetHeader>
 
@@ -151,9 +163,13 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>{uiText('name_dcd1d52')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="Weekly performance report" maxLength={120} {...field} />
+                    <Input
+                      placeholder={uiText('weekly_performance_report_306f613')}
+                      maxLength={120}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -165,17 +181,16 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
               name="prompt"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Prompt</FormLabel>
+                  <FormLabel>{uiText('prompt_5c39123')}</FormLabel>
                   <FormControl>
                     <Textarea
                       rows={8}
-                      placeholder="What should the agent analyze and report on each run?"
+                      placeholder={uiText('what_should_the_agent_analyze_and_report_on_e_4ceebba')}
                       {...field}
                     />
                   </FormControl>
                   <FormDescription>
-                    Runs exactly as written — skills and @-mentions are not applied to scheduled
-                    runs yet.
+                    {uiText('runs_exactly_as_written_skills_and_mentions_a_d16dabc')}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -184,13 +199,13 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
 
             <Separator />
             <div>
-              <h3 className="mb-3 text-sm font-medium">Schedule</h3>
+              <h3 className="mb-3 text-sm font-medium">{uiText('schedule_f4830a1')}</h3>
               <ScheduleFields control={form.control} />
             </div>
 
             <Separator />
             <div>
-              <h3 className="mb-3 text-sm font-medium">Email recipients</h3>
+              <h3 className="mb-3 text-sm font-medium">{uiText('email_recipients_fab5b2d')}</h3>
               <RecipientsFields brandId={brandId} control={form.control} />
             </div>
 
@@ -201,8 +216,10 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
               render={({ field }) => (
                 <FormItem className="flex items-center justify-between">
                   <div>
-                    <FormLabel>Enabled</FormLabel>
-                    <FormDescription>Runs on schedule and emails the report.</FormDescription>
+                    <FormLabel>{uiText('enabled_92c1cdf')}</FormLabel>
+                    <FormDescription>
+                      {uiText('runs_on_schedule_and_emails_the_report_2096712')}
+                    </FormDescription>
                   </div>
                   <FormControl>
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -213,10 +230,10 @@ export function AutomationBuilderSheet({ agent, brandId }: AutomationBuilderShee
 
             <SheetFooter className="mt-auto flex-row justify-end gap-2 px-0">
               <Button type="button" variant="ghost" onClick={close} disabled={isSubmitting}>
-                Cancel
+                {uiText('cancel_19766ed')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving…' : 'Save changes'}
+                {isSubmitting ? uiText('saving_23e3929') : uiText('save_changes_dd0ae7a')}
               </Button>
             </SheetFooter>
           </form>

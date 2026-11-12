@@ -10,10 +10,12 @@
 
 import type { MediaComment } from '@continuum/contracts';
 import { Check, Copy, Download, ExternalLink } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { useAssetComments } from '@/components/library/detail/useAssetComments';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/toast-imperative';
+import { formatDecimal } from '@/lib/format/decimal';
 import {
   COMMENT_EXPORT_FORMATS,
   type CommentExportFormat,
@@ -50,6 +52,10 @@ function authorOf(comment: MediaComment): string {
 }
 
 export function EditorView({ brandId, assetId, versionId }: Props) {
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+
   const { comments, loading, error, setResolved } = useAssetComments(brandId, assetId);
   const timing = useAssetTiming({ brandId, assetId, versionId });
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -82,7 +88,7 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
       setCopiedId(id);
       window.setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1500);
     } catch {
-      toast.error('Copying needs clipboard permission in this window');
+      toast.error(translateUi('copying_needs_clipboard_permission__05f75481'));
     }
   };
 
@@ -95,7 +101,13 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
         format,
         timeline,
       }),
-    ).catch((err: unknown) => toast.error(`Export failed · ${(err as Error).message}`));
+    ).catch((err: unknown) =>
+      toast.error(
+        translateUi('export_failed_value0_7abcae8b', {
+          value0: String((err as Error).message),
+        }),
+      ),
+    );
 
   const openCount = rows.filter((row) => !row.root.resolvedAt).length;
 
@@ -108,27 +120,34 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
         <div className="flex items-center gap-2">
           <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">
-            {timing?.assetName ?? 'Loading…'}
+            {timing?.assetName ?? translateUi('loading_ba3bbbe1')}
           </h1>
           <a
             href={`/library?assetId=${assetId}`}
             target="_blank"
             rel="noreferrer"
             className="text-muted-foreground hover:text-foreground"
-            title="Open in the Library"
+            title={translateUi('open_in_the_library_2cc5a234')}
           >
             <ExternalLink className="size-3.5" />
           </a>
         </div>
         <p className="mt-0.5 text-2xs tabular-nums text-muted-foreground">
           {timing
-            ? `${(timing.frameRate.num / timing.frameRate.den).toFixed(3)} fps · starts ${timing.startTimecode}${timing.dropFrame ? ' (drop-frame)' : ''}`
-            : 'Reading the file’s timecode…'}{' '}
-          · {openCount} open
+            ? translateUi('value0_fps_starts_value1_value2_2c11bb3f', {
+                value0: String(
+                  formatDecimal(timing.frameRate.num / timing.frameRate.den, 3, decimalLocale),
+                ),
+                value1: String(timing.startTimecode),
+                value2: String(timing.dropFrame ? translateUi('drop_frame_9d74721f') : ''),
+              })
+            : translateUi('reading_the_file_s_timecode_f9f02daa')}{' '}
+          · {openCount} {translateUi('open_2348f998')}{' '}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-1">
           <label className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
-            Timeline starts at
+            {' '}
+            {translateUi('timeline_starts_at_3579fbaa')}{' '}
             <select
               data-testid="editor-timeline-start"
               value={timeline}
@@ -160,10 +179,13 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
 
       {error ? <p className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
       {loading ? (
-        <p className="px-3 py-4 text-xs text-muted-foreground">Loading comments…</p>
+        <p className="px-3 py-4 text-xs text-muted-foreground">
+          {translateUi('loading_comments_c8d872f3')}
+        </p>
       ) : rows.length === 0 ? (
         <p className="px-3 py-4 text-xs text-muted-foreground">
-          No timed comments on this version.
+          {' '}
+          {translateUi('no_timed_comments_on_this_version_37970d84')}{' '}
         </p>
       ) : (
         <ol className="divide-y divide-border">
@@ -181,7 +203,11 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
                 className={cn('flex gap-2 px-3 py-2', resolved && 'opacity-60')}
               >
                 <Checkbox
-                  aria-label={resolved ? 'Reopen comment' : 'Resolve comment'}
+                  aria-label={
+                    resolved
+                      ? translateUi('reopen_comment_e511728a')
+                      : translateUi('resolve_comment_4ea5c8c9')
+                  }
                   checked={resolved}
                   onCheckedChange={(checked) => void setResolved(root.id, checked === true)}
                   className="mt-0.5"
@@ -191,7 +217,7 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
                     type="button"
                     data-copy-timecode={tcIn}
                     onClick={() => void copy(root.id, tcIn)}
-                    title="Copy timecode"
+                    title={translateUi('copy_timecode_d3e8bd89')}
                     className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-xs tabular-nums text-primary hover:bg-primary/20"
                   >
                     {tcIn}
@@ -207,7 +233,7 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
                   </p>
                   {replies.length > 0 ? (
                     <p className="mt-0.5 text-2xs text-muted-foreground">
-                      {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+                      {translateUi('replyCount', { count: replies.length })}
                     </p>
                   ) : null}
                 </div>

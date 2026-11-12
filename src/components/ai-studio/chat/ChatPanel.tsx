@@ -11,6 +11,7 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Send, SlidersVertical, Square, TriangleAlert, Wand2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -29,6 +30,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useValidationErrorMap } from '@/i18n/validation';
 import type { getAspectsForModel, getMediumForModel } from '@/lib/schemas/chatImageRequest';
 import { VEO_RESOLUTION_DURATION_NOTE } from '@/lib/schemas/chatImageRequest';
 import type {
@@ -53,18 +55,19 @@ type FormValues = {
   steps?: number;
 };
 
-const chatPanelFormSchema = z.object({
-  model: z.enum(CHAT_PANEL_MODEL_IDS),
-  prompt: z.string().min(1, 'Prompt is required'),
-  aspectRatio: z.string().optional(),
-  durationSeconds: z.number().optional(),
-  resolution: z.string().optional(),
-  imageSize: imageSizeSchema.optional(),
-  negativePrompt: z.string().optional(),
-  seed: z.number().optional(),
-  cfgScale: z.number().optional(),
-  steps: z.number().optional(),
-});
+const chatPanelFormSchema = (translateUi: ReturnType<typeof useUiTranslations<'studio'>>) =>
+  z.object({
+    model: z.enum(CHAT_PANEL_MODEL_IDS),
+    prompt: z.string().min(1, translateUi('validationPromptRequired')),
+    aspectRatio: z.string().optional(),
+    durationSeconds: z.number().optional(),
+    resolution: z.string().optional(),
+    imageSize: imageSizeSchema.optional(),
+    negativePrompt: z.string().optional(),
+    seed: z.number().optional(),
+    cfgScale: z.number().optional(),
+    steps: z.number().optional(),
+  });
 
 type ChatPanelProps = {
   disabled?: boolean;
@@ -125,10 +128,16 @@ export function ChatPanel({
   refsSummary,
   promptTemplates,
 }: ChatPanelProps) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const translateUi = useUiTranslations('studio');
+
   const brandAccent = brandColors?.[0];
   const brandFont = brandTypography?.primary ?? undefined;
   const form = useForm<FormValues>({
-    resolver: zodResolver(chatPanelFormSchema),
+    resolver: zodResolver(chatPanelFormSchema(translateUi), {
+      error: validationErrorMap,
+    }),
     defaultValues: {
       model: 'nano-banana',
       prompt: '',
@@ -219,12 +228,15 @@ export function ChatPanel({
     >
       <div className="flex items-center justify-between mb-3">
         <div className="space-y-0.5">
-          <span className="font-medium">Generate</span>
+          <span className="font-medium">{translateUi('generate_49e49bb4')}</span>
           <span className="block text-xs text-gray-400">
-            Model-aware controls with advanced tucked away.
+            {' '}
+            {translateUi('model_aware_controls_with_advanced__31a6c6ab')}{' '}
           </span>
         </div>
-        <Pill variant="muted">{medium === 'image' ? 'Image' : 'Video'}</Pill>
+        <Pill variant="muted">
+          {medium === 'image' ? translateUi('image_1aa4cb0b') : translateUi('video_d534be82')}
+        </Pill>
       </div>
 
       <form
@@ -235,14 +247,14 @@ export function ChatPanel({
         }}
       >
         <div className="space-y-1">
-          <span className="block text-xs text-gray-400">Model</span>
+          <span className="block text-xs text-gray-400">{translateUi('model_5e2c614c')}</span>
           <Select
             value={model}
             onValueChange={(value) => form.setValue('model', value as ChatPanelModel)}
             disabled={disabled || isStreaming}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a model" />
+              <SelectValue placeholder={translateUi('select_a_model_fad7a5ff')} />
             </SelectTrigger>
             <SelectContent>
               {MODEL_OPTIONS.map((option) => {
@@ -266,12 +278,12 @@ export function ChatPanel({
         </div>
 
         <div className="space-y-1">
-          <span className="block text-xs text-gray-400">Prompt</span>
+          <span className="block text-xs text-gray-400">{translateUi('prompt_5c391238')}</span>
           <div className="relative">
             <Textarea
               value={form.watch('prompt')}
               onChange={(e) => form.setValue('prompt', e.target.value)}
-              placeholder="Describe what you want to see"
+              placeholder={translateUi('describe_what_you_want_to_see_11d58474')}
               rows={6}
               className="min-h-[clamp(240px,60dvh,500px)] pr-10"
               disabled={disabled || isStreaming || isEnriching}
@@ -286,7 +298,7 @@ export function ChatPanel({
                           size="sm"
                           variant="ghost"
                           type="button"
-                          aria-label="Align to Brand"
+                          aria-label={translateUi('align_to_brand_9a44e494')}
                           disabled={disabled || isStreaming || isEnriching || !form.watch('prompt')}
                           onClick={(e) => {
                             e.preventDefault();
@@ -303,8 +315,8 @@ export function ChatPanel({
                       }
                     />
                     <TooltipContent>
-                      Align to Brand — rewrites your prompt using your brand's colors, typography,
-                      and voice
+                      {' '}
+                      {translateUi('align_to_brand_rewrites_your_prompt_0012cdd9')}{' '}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -331,14 +343,16 @@ export function ChatPanel({
 
         {model === 'nano-banana' ? (
           <div className="space-y-1">
-            <span className="block text-xs text-gray-400">Resolution</span>
+            <span className="block text-xs text-gray-400">
+              {translateUi('resolution_d4055faf')}
+            </span>
             <Select
               value={form.watch('resolution') ?? '1024x1024'}
               onValueChange={(value) => form.setValue('resolution', value)}
               disabled={disabled || isStreaming}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select resolution" />
+                <SelectValue placeholder={translateUi('select_resolution_c83cb96b')} />
               </SelectTrigger>
               <SelectContent>
                 {NANO_RES_OPTIONS.map((opt) => (
@@ -351,14 +365,16 @@ export function ChatPanel({
           </div>
         ) : medium === 'video' ? (
           <div className="space-y-1">
-            <span className="block text-xs text-gray-400">Resolution</span>
+            <span className="block text-xs text-gray-400">
+              {translateUi('resolution_d4055faf')}
+            </span>
             <Select
               value={form.watch('resolution') ?? '720p'}
               onValueChange={(value) => form.setValue('resolution', value)}
               disabled={disabled || isStreaming}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select resolution" />
+                <SelectValue placeholder={translateUi('select_resolution_c83cb96b')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="720p">720p</SelectItem>
@@ -369,7 +385,9 @@ export function ChatPanel({
         ) : null}
 
         <div className="space-y-1">
-          <span className="block text-xs text-gray-400">Aspect ratio</span>
+          <span className="block text-xs text-gray-400">
+            {translateUi('aspect_ratio_d7ad336f')}
+          </span>
           <div className="flex flex-wrap gap-2">
             {aspectOptions.map((ratio) => (
               <Button
@@ -390,7 +408,9 @@ export function ChatPanel({
 
         {model === 'gemini-3-pro-image' ? (
           <div className="space-y-1">
-            <span className="block text-xs text-gray-400">Image size</span>
+            <span className="block text-xs text-gray-400">
+              {translateUi('image_size_80bb38dc')}
+            </span>
             <div className="flex flex-wrap gap-2">
               {imageSizesForModel('nano-banana-pro').map((size) => (
                 <Button
@@ -413,8 +433,10 @@ export function ChatPanel({
         {medium === 'video' ? (
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Duration (seconds)</span>
-              <span className="text-xs text-gray-400">Default 8s</span>
+              <span className="text-xs text-gray-400">
+                {translateUi('duration_seconds_e4a69a7c')}
+              </span>
+              <span className="text-xs text-gray-400">{translateUi('default_8s_963b3907')}</span>
             </div>
             <RadioGroup
               value={String(form.watch('durationSeconds') ?? '8')}
@@ -448,7 +470,8 @@ export function ChatPanel({
               <span className="block text-xs text-gray-400">{VEO_RESOLUTION_DURATION_NOTE}</span>
             ) : referencesRequire8s ? (
               <span className="block text-xs text-gray-400">
-                Veo renders 8 seconds only when a reference is attached.
+                {' '}
+                {translateUi('veo_renders_8_seconds_only_when_a_r_29f99ce9')}{' '}
               </span>
             ) : null}
           </div>
@@ -461,11 +484,13 @@ export function ChatPanel({
           open={false}
         >
           <summary className="flex cursor-pointer items-center gap-2 text-sm text-gray-200">
-            <SlidersVertical /> Advanced
+            <SlidersVertical /> {translateUi('advanced_9f088dbe')}{' '}
           </summary>
           <div className="mt-3 space-y-3">
             <div className="space-y-1">
-              <span className="block text-xs text-gray-400">Negative prompt</span>
+              <span className="block text-xs text-gray-400">
+                {translateUi('negative_prompt_a2313355')}
+              </span>
               <Textarea
                 value={form.watch('negativePrompt') ?? ''}
                 onChange={(e) => form.setValue('negativePrompt', e.target.value || undefined)}
@@ -478,7 +503,7 @@ export function ChatPanel({
               <div className="grid grid-cols-3 gap-2">
                 <Input
                   type="number"
-                  placeholder="Seed"
+                  placeholder={translateUi('seed_367ef06b')}
                   value={form.watch('seed') ?? ''}
                   onChange={(e) =>
                     form.setValue('seed', e.target.value ? Number(e.target.value) : undefined)
@@ -496,7 +521,7 @@ export function ChatPanel({
                 />
                 <Input
                   type="number"
-                  placeholder="Steps"
+                  placeholder={translateUi('steps_1de3df70')}
                   value={form.watch('steps') ?? ''}
                   onChange={(e) =>
                     form.setValue('steps', e.target.value ? Number(e.target.value) : undefined)
@@ -506,7 +531,8 @@ export function ChatPanel({
               </div>
             ) : (
               <span className="block text-xs text-gray-400">
-                Advanced knobs not required for Nano Banana.
+                {' '}
+                {translateUi('advanced_knobs_not_required_for_nan_91db04fa')}{' '}
               </span>
             )}
           </div>
@@ -516,17 +542,20 @@ export function ChatPanel({
           <TriangleAlert />
           <AlertDescription className="text-gray-300">
             {refsSummary?.refCount
-              ? `${refsSummary.refCount} reference image${refsSummary.refCount === 1 ? '' : 's'} attached.`
-              : 'No reference images attached.'}
+              ? translateUi('value0_reference_image_value1_attac_6755e88d', {
+                  count: Number(refsSummary.refCount),
+                })
+              : translateUi('no_reference_images_attached_9d4376d9')}
             {medium === 'video'
-              ? ` ${refsSummary?.hasFirst ? 'First frame set.' : ''} ${refsSummary?.hasLast ? 'Last frame set.' : ''}`
+              ? ` ${refsSummary?.hasFirst ? translateUi('first_frame_set_88962649') : ''} ${refsSummary?.hasLast ? translateUi('last_frame_set_f1c40376') : ''}`
               : ''}
           </AlertDescription>
         </Alert>
 
         <div className="flex gap-2">
           <Button type="submit" className="flex-1" disabled={disabled || isStreaming}>
-            <Send /> {isStreaming ? 'Streaming' : 'Generate'}
+            <Send />{' '}
+            {isStreaming ? translateUi('streaming_a951c594') : translateUi('generate_49e49bb4')}
           </Button>
           <Button
             type="button"
@@ -535,7 +564,7 @@ export function ChatPanel({
             onClick={onCancel}
             disabled={!isStreaming}
           >
-            <Square /> Cancel
+            <Square /> {translateUi('cancel_19766ed6')}{' '}
           </Button>
         </div>
       </form>

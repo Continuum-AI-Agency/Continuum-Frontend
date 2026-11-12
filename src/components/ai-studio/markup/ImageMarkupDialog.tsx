@@ -1,5 +1,6 @@
 'use client';
 import { Check, RotateCw, SquarePen, Trash2, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 import React from 'react';
 
@@ -64,6 +65,8 @@ export function ImageMarkupDialog({
   onClose,
   onSave,
 }: ImageMarkupDialogProps) {
+  const translateUi = useUiTranslations('studio');
+
   const { show } = useToast();
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
@@ -203,8 +206,11 @@ export function ImageMarkupDialog({
       const bytes = estimateBase64DecodedBytes(compositedBase64);
       if (bytes > maxBytes) {
         show({
-          title: 'Edited image too large',
-          description: `${formatMiB(bytes)} (max ${formatMiB(maxBytes)})`,
+          title: translateUi('edited_image_too_large_ac849a23'),
+          description: translateUi('value0_max_value1_9e0c3e73', {
+            value0: String(formatMiB(bytes)),
+            value1: String(formatMiB(maxBytes)),
+          }),
           variant: 'error',
         });
         return;
@@ -215,7 +221,7 @@ export function ImageMarkupDialog({
       composited: { base64: compositedBase64, mime: 'image/png' },
       markupLayer: { base64: markupBase64, mime: 'image/png' },
     });
-  }, [maxBytes, onSave, show]);
+  }, [maxBytes, onSave, show, translateUi]);
 
   const updateDisplayDims = React.useCallback((width: number, height: number) => {
     const viewport = viewportRef.current;
@@ -250,11 +256,14 @@ export function ImageMarkupDialog({
         setHistoryState([snapshot]);
       };
       markupImg.onerror = () => {
-        show({ title: 'Failed to load existing markup', variant: 'warning' });
+        show({
+          title: translateUi('failed_to_load_existing_markup_af67e506'),
+          variant: 'warning',
+        });
       };
       markupImg.src = `data:image/png;base64,${markupBase64}`;
     },
-    [setHistoryState, show],
+    [setHistoryState, show, translateUi],
   );
 
   React.useEffect(() => {
@@ -281,7 +290,10 @@ export function ImageMarkupDialog({
       });
     };
     img.onerror = () => {
-      show({ title: 'Failed to load image', variant: 'error' });
+      show({
+        title: translateUi('failed_to_load_image_af2035a4'),
+        variant: 'error',
+      });
     };
     img.src = `data:${sourceMime};base64,${sourceBase64}`;
   }, [
@@ -293,6 +305,7 @@ export function ImageMarkupDialog({
     updateDisplayDims,
     initialMarkup,
     loadMarkupLayer,
+    translateUi,
   ]);
 
   React.useEffect(() => {
@@ -318,14 +331,15 @@ export function ImageMarkupDialog({
       <DialogContent className="w-[92vw]" style={{ maxWidth: 960 }} showCloseButton={false}>
         <div className="flex items-center justify-between">
           <div>
-            <DialogTitle>{title ?? 'Markup image'}</DialogTitle>
+            <DialogTitle>{title ?? translateUi('markup_image_c1077adf')}</DialogTitle>
             <DialogDescription>
-              Draw on top of the image. Use pen, eraser, and undo.
+              {' '}
+              {translateUi('draw_on_top_of_the_image_use_pen_er_440440fc')}{' '}
             </DialogDescription>
           </div>
           <DialogClose
             render={
-              <Button size="icon" variant="ghost" aria-label="Close">
+              <Button size="icon" variant="ghost" aria-label={translateUi('close_7d9eb7ac')}>
                 <X />
               </Button>
             }
@@ -339,14 +353,15 @@ export function ImageMarkupDialog({
               variant={tool === 'pen' ? 'default' : 'outline'}
               onClick={() => setTool('pen')}
             >
-              <SquarePen /> Pen
+              <SquarePen /> {translateUi('pen_a04bd35b')}{' '}
             </Button>
             <Button
               size="sm"
               variant={tool === 'eraser' ? 'default' : 'outline'}
               onClick={() => setTool('eraser')}
             >
-              Eraser
+              {' '}
+              {translateUi('eraser_686eee3c')}{' '}
             </Button>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1">
@@ -380,7 +395,9 @@ export function ImageMarkupDialog({
                       ? 'border-white ring-2 ring-white ring-offset-2 ring-offset-slate-950'
                       : 'border-white/30'
                   } transition hover:scale-[1.05] hover:ring-2 hover:ring-white/60 hover:ring-offset-2 hover:ring-offset-slate-950`}
-                  aria-label={`Select ${swatch.name}`}
+                  aria-label={translateUi('select_value0_b4b262ae', {
+                    value0: String(swatch.name),
+                  })}
                 >
                   {isSelected ? <Check className={isLight ? 'text-black' : 'text-white'} /> : null}
                 </button>
@@ -389,7 +406,7 @@ export function ImageMarkupDialog({
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={handleUndo} disabled={!canUndo}>
-              <RotateCw /> Undo
+              <RotateCw /> {translateUi('undo_a8283ade')}{' '}
             </Button>
             <Button
               size="sm"
@@ -397,7 +414,7 @@ export function ImageMarkupDialog({
               className="border-destructive text-destructive hover:text-destructive"
               onClick={resetCanvas}
             >
-              <Trash2 /> Clear
+              <Trash2 /> {translateUi('clear_83b12c22')}{' '}
             </Button>
           </div>
         </div>
@@ -413,7 +430,7 @@ export function ImageMarkupDialog({
             >
               <img
                 src={`data:${sourceMime};base64,${sourceBase64}`}
-                alt="Markup source"
+                alt={translateUi('markup_source_ce3d9de6')}
                 width={canvasDims.width}
                 height={canvasDims.height}
                 draggable={false}
@@ -422,7 +439,8 @@ export function ImageMarkupDialog({
               />
               {isCanvasHover && !isDrawing ? (
                 <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-                  Click + drag to draw
+                  {' '}
+                  {translateUi('click_drag_to_draw_87076949')}{' '}
                 </div>
               ) : null}
               <canvas
@@ -444,14 +462,16 @@ export function ImageMarkupDialog({
             </div>
           ) : (
             <div className="flex min-h-[320px] items-center justify-center text-white/60">
-              <span className="text-sm">Loading image...</span>
+              <span className="text-sm">{translateUi('loading_image_ef7ae93e')}</span>
             </div>
           )}
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-2">
-          <DialogClose render={<Button variant="secondary">Cancel</Button>} />
-          <Button onClick={handleSave}>Save markup</Button>
+          <DialogClose
+            render={<Button variant="secondary">{translateUi('cancel_19766ed6')}</Button>}
+          />
+          <Button onClick={handleSave}>{translateUi('save_markup_b6940e58')}</Button>
         </div>
       </DialogContent>
     </Dialog>

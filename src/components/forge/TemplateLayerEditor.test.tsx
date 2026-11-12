@@ -1,25 +1,25 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type {
+  MediaAsset,
   SaveTemplateLayerVariantRequest,
-  TemplateEditableLayer,
-  TemplateLayerInventoryResponse,
-  TemplateLayerPreviewRequest,
-  TemplatePreview,
-  TemplateLineage,
+  TemplateAuthoringArtifact,
   TemplateAuthoringCommand,
+  TemplateAuthoringCompileRequest,
   TemplateAuthoringDocument,
   TemplateAuthoringDraft,
   TemplateAuthoringDraftPut,
-  TemplateAuthoringArtifact,
-  TemplateAuthoringPreparation,
-  TemplateAuthoringCompileRequest,
-  TemplateAuthoringPreparationRequest,
   TemplateAuthoringNativeRenderRequest,
   TemplateAuthoringNode,
+  TemplateAuthoringPreparation,
+  TemplateAuthoringPreparationRequest,
   TemplateAuthoringWorkspacePreviewResponse,
-  TemplateRevisionVariant,
+  TemplateEditableLayer,
+  TemplateLayerInventoryResponse,
+  TemplateLayerPreviewRequest,
+  TemplateLineage,
+  TemplatePreview,
   TemplateRevisionPreviewRequest,
-  MediaAsset,
+  TemplateRevisionVariant,
 } from '@continuum/contracts';
 import type { TemplateVariablesResponse } from '@/lib/library/templateSources';
 
@@ -61,7 +61,9 @@ const LAYERS = [
     layerId: 71,
     name: 'Red Box',
     index: 1,
-    transformLocks: { scale: 'Scale is set by an expression and must be edited in its source.' },
+    transformLocks: {
+      scale: 'Scale is set by an expression and must be edited in its source.',
+    },
   }),
   layer({
     layerId: 70,
@@ -140,8 +142,35 @@ const authoringDocument = {
   exposureKeys: [],
   fontChoices: [],
   compositions: [
-    { compId: 63, name: 'Middle Text line', width: 400, height: 300, frameRate: 30, durationSec: 5, clock: {}, parentCompIds: [], orderReason: null, creationReason: 'No verified text creation in fixture.', artboardReason: null, nodeIds: LAYERS.filter((item) => item.compId === 63).map((item) => `aep:${item.compId}:${item.layerId}`) },
-    { compId: 412, name: 'Card B', width: 400, height: 300, frameRate: 30, durationSec: 5, clock: {}, parentCompIds: [], orderReason: 'fixed', creationReason: 'No verified text creation in fixture.', nodeIds: ['aep:412:9'] },
+    {
+      compId: 63,
+      name: 'Middle Text line',
+      width: 400,
+      height: 300,
+      frameRate: 30,
+      durationSec: 5,
+      clock: {},
+      parentCompIds: [],
+      orderReason: null,
+      creationReason: 'No verified text creation in fixture.',
+      artboardReason: null,
+      nodeIds: LAYERS.filter((item) => item.compId === 63).map(
+        (item) => `aep:${item.compId}:${item.layerId}`,
+      ),
+    },
+    {
+      compId: 412,
+      name: 'Card B',
+      width: 400,
+      height: 300,
+      frameRate: 30,
+      durationSec: 5,
+      clock: {},
+      parentCompIds: [],
+      orderReason: 'fixed',
+      creationReason: 'No verified text creation in fixture.',
+      nodeIds: ['aep:412:9'],
+    },
   ],
   nodes: LAYERS.map((item) => ({
     nodeId: `aep:${item.compId}:${item.layerId}`,
@@ -165,11 +194,28 @@ const authoringDocument = {
     scale: item.scale,
     opacity: item.opacity,
     transformLocks: item.transformLocks,
-    capabilities: { transform: true, visibility: true, font: true, text: false, order: item.compId === 63, exposure: false, creation: false, duplicate: false, delete: false, grouping: false, masks: false, artboardMutation: false, keyframes: false },
+    capabilities: {
+      transform: true,
+      visibility: true,
+      font: true,
+      text: false,
+      order: item.compId === 63,
+      exposure: false,
+      creation: false,
+      duplicate: false,
+      delete: false,
+      grouping: false,
+      masks: false,
+      artboardMutation: false,
+      keyframes: false,
+    },
     keyframeChannels: [],
     duplicateReason: 'Not part of this fixture.',
     deleteReason: 'Not part of this fixture.',
-    opaqueSourceRef: { versionId: authoringScope.baseVersionId, checksum: authoringChecksum },
+    opaqueSourceRef: {
+      versionId: authoringScope.baseVersionId,
+      checksum: authoringChecksum,
+    },
   })),
   opaqueSourceRef: {
     versionId: authoringScope.baseVersionId,
@@ -197,7 +243,10 @@ const authoringDocumentReads = mock(
     ...authoringDocument,
     scope: { ...authoringScope, brandId, baseVersionId },
     sourceHeadVersionId: baseVersionId,
-    opaqueSourceRef: { ...authoringDocument.opaqueSourceRef, versionId: baseVersionId },
+    opaqueSourceRef: {
+      ...authoringDocument.opaqueSourceRef,
+      versionId: baseVersionId,
+    },
   }),
 );
 const authoringDraftReads = mock(
@@ -217,7 +266,10 @@ const authoringDraftWrites = mock(async (_assetId: string, request: TemplateAuth
     },
     revision: request.expectedRevision + 1,
     commands: structuredClone(request.commands) as TemplateAuthoringCommand[],
-    projectedDocument: projectTemplateAuthoringCommands(authoringProjectionSource, request.commands),
+    projectedDocument: projectTemplateAuthoringCommands(
+      authoringProjectionSource,
+      request.commands,
+    ),
     updatedAt: '2026-10-11T00:00:00.000Z',
   };
   return authoringDraft;
@@ -261,72 +313,120 @@ let authoringPreparation: TemplateAuthoringPreparation = {
   errorCode: null,
   updatedAt: '2026-10-11T00:00:00.000Z',
 };
-const compileAuthoring = mock(async (_assetId: string, request: TemplateAuthoringCompileRequest) => ({
-  ...authoringArtifact,
-  draftRevision: request.expectedRevision,
-  scope: { ...authoringScope, brandId: request.brandId, baseVersionId: request.baseVersionId },
-}));
-const prepareAuthoring = mock(async (_assetId: string, _artifactId: string, _scope: { brandId: string; baseVersionId: string }, request: TemplateAuthoringPreparationRequest) => ({
-  ...authoringPreparation,
-  artifactId: request.artifactId,
-  draftRevision: request.expectedDraftRevision,
-  sourceChecksum: request.sourceChecksum,
-  commandDigest: request.commandDigest,
-  packageChecksum: request.packageChecksum,
-}));
-const nativeRenders = mock(async (_assetId: string, _artifactId: string, _scope: { brandId: string; baseVersionId: string }, request: TemplateAuthoringNativeRenderRequest) => ({
-  renderId: '10000000-0000-4000-8000-000000000303',
-  artifactId: authoringArtifact.artifactId,
-  scope: authoringScope,
-  userId: '10000000-0000-4000-8000-000000000302',
-  draftRevision: request.expectedDraftRevision,
-  sourceChecksum: request.sourceChecksum,
-  commandDigest: request.commandDigest,
-  packageChecksum: request.packageChecksum,
-  requestDigest: 'a'.repeat(64),
-  engine: null,
-  state: 'needs_input' as const,
-  errorCode: 'PRIVATE_NATIVE_RENDER_UNAVAILABLE',
-  frames: [],
-  updatedAt: '2026-10-11T00:00:00.000Z',
-}));
+const compileAuthoring = mock(
+  async (_assetId: string, request: TemplateAuthoringCompileRequest) => ({
+    ...authoringArtifact,
+    draftRevision: request.expectedRevision,
+    scope: {
+      ...authoringScope,
+      brandId: request.brandId,
+      baseVersionId: request.baseVersionId,
+    },
+  }),
+);
+const prepareAuthoring = mock(
+  async (
+    _assetId: string,
+    _artifactId: string,
+    _scope: { brandId: string; baseVersionId: string },
+    request: TemplateAuthoringPreparationRequest,
+  ) => ({
+    ...authoringPreparation,
+    artifactId: request.artifactId,
+    draftRevision: request.expectedDraftRevision,
+    sourceChecksum: request.sourceChecksum,
+    commandDigest: request.commandDigest,
+    packageChecksum: request.packageChecksum,
+  }),
+);
+const nativeRenders = mock(
+  async (
+    _assetId: string,
+    _artifactId: string,
+    _scope: { brandId: string; baseVersionId: string },
+    request: TemplateAuthoringNativeRenderRequest,
+  ) => ({
+    renderId: '10000000-0000-4000-8000-000000000303',
+    artifactId: authoringArtifact.artifactId,
+    scope: authoringScope,
+    userId: '10000000-0000-4000-8000-000000000302',
+    draftRevision: request.expectedDraftRevision,
+    sourceChecksum: request.sourceChecksum,
+    commandDigest: request.commandDigest,
+    packageChecksum: request.packageChecksum,
+    requestDigest: 'a'.repeat(64),
+    engine: null,
+    state: 'needs_input' as const,
+    errorCode: 'PRIVATE_NATIVE_RENDER_UNAVAILABLE',
+    frames: [],
+    updatedAt: '2026-10-11T00:00:00.000Z',
+  }),
+);
 const authoringArtifactReads = mock(async () => authoringArtifact);
-const reviewAuthoring = mock(async () => ({ ...authoringArtifact, state: 'reviewed' as const, reviewedAt: '2026-10-11T00:00:00.000Z' }));
-const commitAuthoring = mock(async (_assetId: string, _artifactId: string, _scope: unknown, request: {
-  parentRevisionId: string;
-  expectedHeadRevisionId: string;
-  variantId?: string;
-}) => ({ ...authoringArtifact, state: 'committed' as const, commit: {
-  assetId: '10000000-0000-4000-8000-000000000304',
-  versionId: '10000000-0000-4000-8000-000000000305',
-  packageChecksum,
-  revisionId: '10000000-0000-4000-8000-000000000306',
-  variantId: request.variantId ?? '10000000-0000-4000-8000-000000000307',
-  parentRevisionId: request.parentRevisionId,
-  expectedHeadRevisionId: request.expectedHeadRevisionId,
-} }));
-const sampleFrameRead = mock(async () => ({ blob: new Blob(['verified-frame']), sha256: 'b'.repeat(64), stale: false }));
-const authoringFontPreviews = mock(async (_assetId: string, _scope: unknown, font: { sha256: string }) => ({
-  bytes: new ArrayBuffer(16), contentType: 'font/ttf', sha256: font.sha256,
+const reviewAuthoring = mock(async () => ({
+  ...authoringArtifact,
+  state: 'reviewed' as const,
+  reviewedAt: '2026-10-11T00:00:00.000Z',
 }));
-const workspacePreviews = mock(async (
-  _assetId: string,
-  _scope: { brandId: string; baseVersionId: string },
-  revision: number,
-  compId?: number,
-): Promise<TemplateAuthoringWorkspacePreviewResponse> => {
-  const { lineage: _lineage, designImport: _designImport, ...preview } = inventory;
-  return {
-    ...preview,
-    compId: compId ?? inventory.compId,
-    svg: SVG,
-    artifactId: '10000000-0000-4000-8000-000000000401',
-    packageChecksum: '9'.repeat(64),
-    draftRevision: revision,
-  };
-});
+const commitAuthoring = mock(
+  async (
+    _assetId: string,
+    _artifactId: string,
+    _scope: unknown,
+    request: {
+      parentRevisionId: string;
+      expectedHeadRevisionId: string;
+      variantId?: string;
+    },
+  ) => ({
+    ...authoringArtifact,
+    state: 'committed' as const,
+    commit: {
+      assetId: '10000000-0000-4000-8000-000000000304',
+      versionId: '10000000-0000-4000-8000-000000000305',
+      packageChecksum,
+      revisionId: '10000000-0000-4000-8000-000000000306',
+      variantId: request.variantId ?? '10000000-0000-4000-8000-000000000307',
+      parentRevisionId: request.parentRevisionId,
+      expectedHeadRevisionId: request.expectedHeadRevisionId,
+    },
+  }),
+);
+const sampleFrameRead = mock(async () => ({
+  blob: new Blob(['verified-frame']),
+  sha256: 'b'.repeat(64),
+  stale: false,
+}));
+const authoringFontPreviews = mock(
+  async (_assetId: string, _scope: unknown, font: { sha256: string }) => ({
+    bytes: new ArrayBuffer(16),
+    contentType: 'font/ttf',
+    sha256: font.sha256,
+  }),
+);
+const workspacePreviews = mock(
+  async (
+    _assetId: string,
+    _scope: { brandId: string; baseVersionId: string },
+    revision: number,
+    compId?: number,
+  ): Promise<TemplateAuthoringWorkspacePreviewResponse> => {
+    const { lineage: _lineage, designImport: _designImport, ...preview } = inventory;
+    return {
+      ...preview,
+      compId: compId ?? inventory.compId,
+      svg: SVG,
+      artifactId: '10000000-0000-4000-8000-000000000401',
+      packageChecksum: '9'.repeat(64),
+      draftRevision: revision,
+    };
+  },
+);
 const stageForForge = mock(async () => ({
-  artifact: { artifactId: '10000000-0000-4000-8000-000000000402', purpose: 'workspace_seed' },
+  artifact: {
+    artifactId: '10000000-0000-4000-8000-000000000402',
+    purpose: 'workspace_seed',
+  },
   map: {},
 }));
 const variantList = mock(async () => ({
@@ -335,13 +435,22 @@ const variantList = mock(async () => ({
 }));
 const revisionVariants = mock(async () => {
   const templateId = '00000000-0000-4000-8000-000000000201';
-  const variantId = inventory.lineage.role === 'golden'
-    ? '00000000-0000-4000-8000-000000000202'
-    : '00000000-0000-4000-8000-000000000212';
+  const variantId =
+    inventory.lineage.role === 'golden'
+      ? '00000000-0000-4000-8000-000000000202'
+      : '00000000-0000-4000-8000-000000000212';
   const sourceRevisions = [
     [VERSION, '00000000-0000-4000-8000-000000000203', null],
-    [nextRevision.versionId, '00000000-0000-4000-8000-000000000204', '00000000-0000-4000-8000-000000000203'],
-    ['00000000-0000-4000-8000-000000000009', '00000000-0000-4000-8000-000000000205', '00000000-0000-4000-8000-000000000204'],
+    [
+      nextRevision.versionId,
+      '00000000-0000-4000-8000-000000000204',
+      '00000000-0000-4000-8000-000000000203',
+    ],
+    [
+      '00000000-0000-4000-8000-000000000009',
+      '00000000-0000-4000-8000-000000000205',
+      '00000000-0000-4000-8000-000000000204',
+    ],
   ].map(([sourceVersionId, id, parentRevisionId], index) => ({
     templateId,
     variantId,
@@ -359,15 +468,17 @@ const revisionVariants = mock(async () => {
     createdBy: null,
     nativeCommitId: null,
   }));
-  const draftHeadRevisionId = inventory.lineage.role === 'golden'
-    ? '00000000-0000-4000-8000-000000000203'
-    : '00000000-0000-4000-8000-000000000204';
+  const draftHeadRevisionId =
+    inventory.lineage.role === 'golden'
+      ? '00000000-0000-4000-8000-000000000203'
+      : '00000000-0000-4000-8000-000000000204';
   const activeVariant = {
     templateId,
     variantId,
     name: inventory.lineage.role === 'golden' ? 'Original' : 'Card B',
     original: inventory.lineage.role === 'golden',
-    parentRevisionId: inventory.lineage.role === 'golden' ? null : '00000000-0000-4000-8000-000000000203',
+    parentRevisionId:
+      inventory.lineage.role === 'golden' ? null : '00000000-0000-4000-8000-000000000203',
     draftHeadRevisionId,
     publishedHeadRevisionId: null,
     archivedAt: null,
@@ -386,13 +497,15 @@ const revisionVariants = mock(async () => {
     archivedAt: null,
     tags: [],
     sourceKind: 'after_effects',
-    revisions: [{
-      ...sourceRevisions[0],
-      variantId: '00000000-0000-4000-8000-000000000213',
-      id: '00000000-0000-4000-8000-000000000214',
-      sourceAssetId: '00000000-0000-4000-8000-000000000215',
-      sourceVersionId: '00000000-0000-4000-8000-000000000216',
-    }],
+    revisions: [
+      {
+        ...sourceRevisions[0],
+        variantId: '00000000-0000-4000-8000-000000000213',
+        id: '00000000-0000-4000-8000-000000000214',
+        sourceAssetId: '00000000-0000-4000-8000-000000000215',
+        sourceVersionId: '00000000-0000-4000-8000-000000000216',
+      },
+    ],
   };
   const originalVariant = {
     templateId,
@@ -416,11 +529,13 @@ const revisionVariants = mock(async () => {
     ? [activeVariant, anotherVariant]
     : [activeVariant, originalVariant, anotherVariant]) as unknown as TemplateRevisionVariant[];
 });
-const fieldReads = mock(async (): Promise<TemplateVariablesResponse> => ({
-  variables: [],
-  edits: [],
-  parseState: 'parsed',
-}));
+const fieldReads = mock(
+  async (): Promise<TemplateVariablesResponse> => ({
+    variables: [],
+    edits: [],
+    parseState: 'parsed',
+  }),
+);
 const sources = { ...(await import('@/lib/library/templateSources')) };
 mock.module('@/lib/library/templateSources', () => ({
   ...sources,
@@ -441,17 +556,28 @@ mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateAuthoringArtifact: authoringArtifactReads,
   fetchTemplateAuthoringPreparation: async () => authoringPreparation,
   fetchTemplateAuthoringNativeRender: async () => ({
-    renderId: '10000000-0000-4000-8000-000000000303', artifactId: authoringArtifact.artifactId,
-    scope: authoringScope, userId: '10000000-0000-4000-8000-000000000302', draftRevision: authoringArtifact.draftRevision,
-    sourceChecksum: authoringArtifact.sourceChecksum, commandDigest: authoringArtifact.commandDigest,
-    packageChecksum: authoringArtifact.packageChecksum, requestDigest: 'a'.repeat(64), engine: null,
-    state: 'needs_input' as const, errorCode: 'PRIVATE_NATIVE_RENDER_UNAVAILABLE', frames: [],
+    renderId: '10000000-0000-4000-8000-000000000303',
+    artifactId: authoringArtifact.artifactId,
+    scope: authoringScope,
+    userId: '10000000-0000-4000-8000-000000000302',
+    draftRevision: authoringArtifact.draftRevision,
+    sourceChecksum: authoringArtifact.sourceChecksum,
+    commandDigest: authoringArtifact.commandDigest,
+    packageChecksum: authoringArtifact.packageChecksum,
+    requestDigest: 'a'.repeat(64),
+    engine: null,
+    state: 'needs_input' as const,
+    errorCode: 'PRIVATE_NATIVE_RENDER_UNAVAILABLE',
+    frames: [],
     updatedAt: '2026-10-11T00:00:00.000Z',
   }),
   fetchTemplateAuthoringNativeRenderFrame: sampleFrameRead,
   reviewTemplateAuthoringArtifact: reviewAuthoring,
   commitTemplateAuthoringArtifact: commitAuthoring,
-  fetchPinnedArtworkPreview: async (_brandId: string, assetRef: { assetId: string; versionId: string; sha256: string }) => {
+  fetchPinnedArtworkPreview: async (
+    _brandId: string,
+    assetRef: { assetId: string; versionId: string; sha256: string },
+  ) => {
     if (failNextPinnedArtworkPreview) {
       failNextPinnedArtworkPreview = false;
       throw new Error('Could not verify the selected Library image once.');
@@ -463,8 +589,13 @@ mock.module('@/lib/library/templateSources', () => ({
     }
     const jpeg = assetRef.assetId.endsWith('103');
     return {
-      id: assetRef.versionId, assetId: assetRef.assetId, checksum: assetRef.sha256,
-      mimeType: jpeg ? 'image/jpeg' : 'image/png', fileName: jpeg ? 'Pinned.jpg' : 'Pinned.png', width: 320, height: 180,
+      id: assetRef.versionId,
+      assetId: assetRef.assetId,
+      checksum: assetRef.sha256,
+      mimeType: jpeg ? 'image/jpeg' : 'image/png',
+      fileName: jpeg ? 'Pinned.jpg' : 'Pinned.png',
+      width: 320,
+      height: 180,
       signedUrl: jpeg ? '/fixture/pinned-image.jpg' : '/fixture/pinned-image.png',
     };
   },
@@ -477,50 +608,108 @@ mock.module('@/lib/api/hyperframesAgent.client', () => ({
   stageHyperframesRevisionForForge: stageForForge,
 }));
 mock.module('@/components/library/editor/LibraryMediaPickerDialog', () => ({
-  LibraryMediaPickerDialog: ({ open, onOpenChange, onPickAssets, copy }: {
+  LibraryMediaPickerDialog: ({
+    open,
+    onOpenChange,
+    onPickAssets,
+    copy,
+  }: {
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     onPickAssets?: (assets: MediaAsset[]) => void;
     copy?: { title: string; description: string; confirm: string };
-  }) => <div data-testid="library-media-picker" data-open={String(!!open)}>
-    {open ? <div role="dialog" aria-label={copy?.title} onKeyDown={(event) => {
-      if (event.key === 'Escape') onOpenChange?.(false);
-    }}>
-    <p>{copy?.description}</p>
-    <button type="button" onClick={() => { onOpenChange?.(false); }}>Cancel</button>
-    <button type="button" onClick={() => {
-      onPickAssets?.([{
-      id: '10000000-0000-4000-8000-000000000101', brandId: BRAND, kind: 'image', mimeType: 'image/png',
-      fileName: 'Pinned.png', title: 'Pinned image', width: 320, height: 180,
-      headVersionId: '10000000-0000-4000-8000-000000000102', checksum: 'd'.repeat(64),
-      } as MediaAsset]);
-      onOpenChange?.(false);
-    }}>Pick exact Library image</button>
-    <button type="button" onClick={() => {
-      onPickAssets?.([{
-      id: '10000000-0000-4000-8000-000000000103', brandId: BRAND, kind: 'image', mimeType: 'image/jpeg',
-      fileName: 'Pinned.jpg', title: 'Pinned JPEG', width: 320, height: 180,
-      headVersionId: '10000000-0000-4000-8000-000000000104', checksum: 'e'.repeat(64),
-      } as MediaAsset]);
-      onOpenChange?.(false);
-    }}>Pick exact Library JPEG</button>
-    </div> : null}
-  </div>,
+  }) => (
+    <div data-testid="library-media-picker" data-open={String(!!open)}>
+      {open ? (
+        <div
+          role="dialog"
+          aria-label={copy?.title}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') onOpenChange?.(false);
+          }}
+        >
+          <p>{copy?.description}</p>
+          <button
+            type="button"
+            onClick={() => {
+              onOpenChange?.(false);
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onPickAssets?.([
+                {
+                  id: '10000000-0000-4000-8000-000000000101',
+                  brandId: BRAND,
+                  kind: 'image',
+                  mimeType: 'image/png',
+                  fileName: 'Pinned.png',
+                  title: 'Pinned image',
+                  width: 320,
+                  height: 180,
+                  headVersionId: '10000000-0000-4000-8000-000000000102',
+                  checksum: 'd'.repeat(64),
+                } as MediaAsset,
+              ]);
+              onOpenChange?.(false);
+            }}
+          >
+            Pick exact Library image
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onPickAssets?.([
+                {
+                  id: '10000000-0000-4000-8000-000000000103',
+                  brandId: BRAND,
+                  kind: 'image',
+                  mimeType: 'image/jpeg',
+                  fileName: 'Pinned.jpg',
+                  title: 'Pinned JPEG',
+                  width: 320,
+                  height: 180,
+                  headVersionId: '10000000-0000-4000-8000-000000000104',
+                  checksum: 'e'.repeat(64),
+                } as MediaAsset,
+              ]);
+              onOpenChange?.(false);
+            }}
+          >
+            Pick exact Library JPEG
+          </button>
+        </div>
+      ) : null}
+    </div>
+  ),
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { LayerDraftState } from './layerDraft';
-import { projectTemplateAuthoringCommands } from './templateAuthoringProjection';
-import { templateAuthoringWorkspaceIdentity } from './useTemplateAuthoringDraft';
-import { readTemplateAuthoringViewState } from './templateDraftRecovery';
 import { applyLayerChange, stackOf, TemplateLayerEditor } from './TemplateLayerEditor';
+import { projectTemplateAuthoringCommands } from './templateAuthoringProjection';
+import { readTemplateAuthoringViewState } from './templateDraftRecovery';
+import { templateAuthoringWorkspaceIdentity } from './useTemplateAuthoringDraft';
 
 const BRAND = '00000000-0000-4000-8000-000000000001';
 const VERSION = '00000000-0000-4000-8000-000000000002';
 const privateDraftStores = new Map<string, Map<IDBValidKey, unknown>>();
 const privateDraftTestDatabase = {
-  objectStoreNames: { contains: (name: string) => privateDraftStores.has(name) },
+  objectStoreNames: {
+    contains: (name: string) => privateDraftStores.has(name),
+  },
   createObjectStore(name: string) {
     privateDraftStores.set(name, new Map());
     return {};
@@ -540,15 +729,35 @@ const privateDraftTestDatabase = {
       objectStore: () => {
         const store = privateDraftStores.get(name)!;
         const request = <T,>(result: T): IDBRequest<T> => {
-          const pending = { result, error: null, source: null, transaction, readyState: 'done', onsuccess: null, onerror: null } as unknown as IDBRequest<T>;
-          queueMicrotask(() => { pending.onsuccess?.(new Event('success') as unknown as IDBRequestEventMap['success']); transaction.oncomplete?.(new Event('complete') as unknown as IDBTransactionEventMap['complete']); });
+          const pending = {
+            result,
+            error: null,
+            source: null,
+            transaction,
+            readyState: 'done',
+            onsuccess: null,
+            onerror: null,
+          } as unknown as IDBRequest<T>;
+          queueMicrotask(() => {
+            pending.onsuccess?.(new Event('success') as unknown as IDBRequestEventMap['success']);
+            transaction.oncomplete?.(
+              new Event('complete') as unknown as IDBTransactionEventMap['complete'],
+            );
+          });
           return pending;
         };
         return {
           get: (key: IDBValidKey) => request(store.get(key)),
           getAll: () => request([...store.values()]),
-          put(value: { id?: IDBValidKey }, key?: IDBValidKey) { const id = key ?? value.id; if (id !== undefined) store.set(id, structuredClone(value)); return request(id); },
-          delete(key: IDBValidKey) { store.delete(key); return request(undefined); },
+          put(value: { id?: IDBValidKey }, key?: IDBValidKey) {
+            const id = key ?? value.id;
+            if (id !== undefined) store.set(id, structuredClone(value));
+            return request(id);
+          },
+          delete(key: IDBValidKey) {
+            store.delete(key);
+            return request(undefined);
+          },
         } as unknown as IDBObjectStore;
       },
     };
@@ -558,7 +767,13 @@ const privateDraftTestDatabase = {
 };
 const privateDraftTestIndexedDb = {
   open() {
-    const request = { result: privateDraftTestDatabase, error: null, onupgradeneeded: null, onsuccess: null, onerror: null } as unknown as IDBOpenDBRequest;
+    const request = {
+      result: privateDraftTestDatabase,
+      error: null,
+      onupgradeneeded: null,
+      onsuccess: null,
+      onerror: null,
+    } as unknown as IDBOpenDBRequest;
     queueMicrotask(() => {
       request.onupgradeneeded?.(new Event('upgradeneeded') as unknown as IDBVersionChangeEvent);
       request.onsuccess?.(new Event('success') as unknown as IDBRequestEventMap['success']);
@@ -567,7 +782,11 @@ const privateDraftTestIndexedDb = {
   },
 } as unknown as IDBFactory;
 const originalPrivateDraftIndexedDb = globalThis.indexedDB;
-const enablePrivateDraftTestStorage = () => Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: privateDraftTestIndexedDb });
+const enablePrivateDraftTestStorage = () =>
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    value: privateDraftTestIndexedDb,
+  });
 const persistedDraftForTest = (
   revision: number,
   commands: TemplateAuthoringCommand[],
@@ -616,7 +835,10 @@ const packageFontChoice = {
 const packageFontAuthoringDocument: TemplateAuthoringDocument = {
   ...seedAuthoringDocument,
   fontChoices: [packageFontChoice],
-  compositions: seedAuthoringDocument.compositions.map((composition) => ({ ...composition, creationReason: null })),
+  compositions: seedAuthoringDocument.compositions.map((composition) => ({
+    ...composition,
+    creationReason: null,
+  })),
 };
 const originalFontFace = globalThis.FontFace;
 const originalDocumentFonts = document.fonts;
@@ -632,10 +854,18 @@ const seededDraftForTest = (revision: number): TemplateAuthoringDraft => ({
   },
   projectedDocument: projectTemplateAuthoringCommands(seedAuthoringDocument, []),
 });
-stageForForge.mockImplementation(async (_revisionId: string, request: { expectedDraftRevision: number }) => {
-  authoringDraft = seededDraftForTest(request.expectedDraftRevision + 1);
-  return { artifact: { artifactId: seedWorkspacePackage.artifactId, purpose: 'workspace_seed' }, map: {} };
-});
+stageForForge.mockImplementation(
+  async (_revisionId: string, request: { expectedDraftRevision: number }) => {
+    authoringDraft = seededDraftForTest(request.expectedDraftRevision + 1);
+    return {
+      artifact: {
+        artifactId: seedWorkspacePackage.artifactId,
+        purpose: 'workspace_seed',
+      },
+      map: {},
+    };
+  },
+);
 const nextRevision = {
   assetId: 'a',
   versionId: '00000000-0000-4000-8000-000000000003',
@@ -647,7 +877,14 @@ const AUTHORING_PARSE = {
   sourceFamily: 'aep',
   missingFootage: [],
   comps: [
-    { name: 'Middle Text line', width: 400, height: 300, durationSec: 5, frameRate: 30, isDelivery: true },
+    {
+      name: 'Middle Text line',
+      width: 400,
+      height: 300,
+      durationSec: 5,
+      frameRate: 30,
+      isDelivery: true,
+    },
   ],
   ratios: [{ ratio: '4:3', width: 400, height: 300, comps: ['Middle Text line'] }],
   slots: [],
@@ -656,9 +893,18 @@ afterEach(() => {
   cleanup();
   failNextPinnedArtworkPreview = false;
   nextPinnedArtworkPreviewRequest = null;
-  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: originalPrivateDraftIndexedDb });
-  Object.defineProperty(globalThis, 'FontFace', { configurable: true, value: originalFontFace });
-  Object.defineProperty(document, 'fonts', { configurable: true, value: originalDocumentFonts });
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    value: originalPrivateDraftIndexedDb,
+  });
+  Object.defineProperty(globalThis, 'FontFace', {
+    configurable: true,
+    value: originalFontFace,
+  });
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: originalDocumentFonts,
+  });
   for (const spy of [
     inventories,
     scenes,
@@ -692,44 +938,92 @@ afterEach(() => {
   authoringDraft = null;
   authoringProjectionSource = authoringDocument;
   authoringArtifact = {
-    artifactId: '10000000-0000-4000-8000-000000000301', scope: authoringScope, draftRevision: 1,
-    sourceChecksum: authoringChecksum, commandDigest: 'e'.repeat(64), packageChecksum,
-    filename: 'private-template.aep', sizeBytes: 4096, state: 'prepared', verification: verificationPending,
-    createdAt: '2026-10-11T00:00:00.000Z', reviewedAt: null, commit: null,
+    artifactId: '10000000-0000-4000-8000-000000000301',
+    scope: authoringScope,
+    draftRevision: 1,
+    sourceChecksum: authoringChecksum,
+    commandDigest: 'e'.repeat(64),
+    packageChecksum,
+    filename: 'private-template.aep',
+    sizeBytes: 4096,
+    state: 'prepared',
+    verification: verificationPending,
+    createdAt: '2026-10-11T00:00:00.000Z',
+    reviewedAt: null,
+    commit: null,
   };
   authoringPreparation = {
-    artifactId: authoringArtifact.artifactId, scope: authoringScope,
-    userId: '10000000-0000-4000-8000-000000000302', draftRevision: 1,
-    sourceChecksum: authoringChecksum, commandDigest: authoringArtifact.commandDigest, packageChecksum,
-    state: 'draft_ready', runId: 'forge-preparation-fixture', forgeState: 'draft_ready', progress: null,
-    errorCode: null, updatedAt: '2026-10-11T00:00:00.000Z',
+    artifactId: authoringArtifact.artifactId,
+    scope: authoringScope,
+    userId: '10000000-0000-4000-8000-000000000302',
+    draftRevision: 1,
+    sourceChecksum: authoringChecksum,
+    commandDigest: authoringArtifact.commandDigest,
+    packageChecksum,
+    state: 'draft_ready',
+    runId: 'forge-preparation-fixture',
+    forgeState: 'draft_ready',
+    progress: null,
+    errorCode: null,
+    updatedAt: '2026-10-11T00:00:00.000Z',
   };
   compileAuthoring.mockImplementation(async (_assetId, request) => ({
-    ...authoringArtifact, scope: { ...authoringScope, brandId: request.brandId, baseVersionId: request.baseVersionId },
+    ...authoringArtifact,
+    scope: {
+      ...authoringScope,
+      brandId: request.brandId,
+      baseVersionId: request.baseVersionId,
+    },
     draftRevision: request.expectedRevision,
   }));
   prepareAuthoring.mockImplementation(async (_assetId, _artifactId, _scope, request) => ({
-    ...authoringPreparation, artifactId: request.artifactId, draftRevision: request.expectedDraftRevision,
-    sourceChecksum: request.sourceChecksum, commandDigest: request.commandDigest, packageChecksum: request.packageChecksum,
+    ...authoringPreparation,
+    artifactId: request.artifactId,
+    draftRevision: request.expectedDraftRevision,
+    sourceChecksum: request.sourceChecksum,
+    commandDigest: request.commandDigest,
+    packageChecksum: request.packageChecksum,
   }));
   nativeRenders.mockImplementation(async (_assetId, _artifactId, _scope, request) => ({
-    renderId: '10000000-0000-4000-8000-000000000303', artifactId: authoringArtifact.artifactId,
-    scope: authoringScope, userId: '10000000-0000-4000-8000-000000000302', draftRevision: request.expectedDraftRevision,
-    sourceChecksum: request.sourceChecksum, commandDigest: request.commandDigest, packageChecksum: request.packageChecksum,
-    requestDigest: 'a'.repeat(64), engine: null, state: 'needs_input', errorCode: 'PRIVATE_NATIVE_RENDER_UNAVAILABLE',
-    frames: [], updatedAt: '2026-10-11T00:00:00.000Z',
+    renderId: '10000000-0000-4000-8000-000000000303',
+    artifactId: authoringArtifact.artifactId,
+    scope: authoringScope,
+    userId: '10000000-0000-4000-8000-000000000302',
+    draftRevision: request.expectedDraftRevision,
+    sourceChecksum: request.sourceChecksum,
+    commandDigest: request.commandDigest,
+    packageChecksum: request.packageChecksum,
+    requestDigest: 'a'.repeat(64),
+    engine: null,
+    state: 'needs_input',
+    errorCode: 'PRIVATE_NATIVE_RENDER_UNAVAILABLE',
+    frames: [],
+    updatedAt: '2026-10-11T00:00:00.000Z',
   }));
   authoringArtifactReads.mockImplementation(async () => authoringArtifact);
-  reviewAuthoring.mockImplementation(async () => ({ ...authoringArtifact, state: 'reviewed', reviewedAt: '2026-10-11T00:00:00.000Z' }));
-  commitAuthoring.mockImplementation(async () => ({ ...authoringArtifact, state: 'committed', commit: {
-    assetId: '10000000-0000-4000-8000-000000000304', versionId: '10000000-0000-4000-8000-000000000305', packageChecksum,
-  } }));
+  reviewAuthoring.mockImplementation(async () => ({
+    ...authoringArtifact,
+    state: 'reviewed',
+    reviewedAt: '2026-10-11T00:00:00.000Z',
+  }));
+  commitAuthoring.mockImplementation(async () => ({
+    ...authoringArtifact,
+    state: 'committed',
+    commit: {
+      assetId: '10000000-0000-4000-8000-000000000304',
+      versionId: '10000000-0000-4000-8000-000000000305',
+      packageChecksum,
+    },
+  }));
   authoringTestUserId = `test-user-${++authoringTestUserSequence}`;
   authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
     ...authoringDocument,
     scope: { ...authoringScope, brandId, baseVersionId },
     sourceHeadVersionId: baseVersionId,
-    opaqueSourceRef: { ...authoringDocument.opaqueSourceRef, versionId: baseVersionId },
+    opaqueSourceRef: {
+      ...authoringDocument.opaqueSourceRef,
+      versionId: baseVersionId,
+    },
   }));
   authoringDraftWrites.mockImplementation(async (_assetId, request) => {
     authoringDraft = {
@@ -744,7 +1038,10 @@ afterEach(() => {
       },
       revision: request.expectedRevision + 1,
       commands: structuredClone(request.commands),
-      projectedDocument: projectTemplateAuthoringCommands(authoringProjectionSource, request.commands),
+      projectedDocument: projectTemplateAuthoringCommands(
+        authoringProjectionSource,
+        request.commands,
+      ),
       updatedAt: '2026-10-11T00:00:00.000Z',
     };
     return authoringDraft;
@@ -811,19 +1108,21 @@ const enableVerifiedAuthoringFixture = () => {
     engine: 'after-effects',
     state: 'completed',
     errorCode: null,
-    frames: [{
-      frameId: '10000000-0000-4000-8000-000000000306',
-      compId: 63,
-      frameIndex: 74,
-      frameTimeSeconds: 74 / 30,
-      formatId: 'Middle Text line',
-      mimeType: 'image/png',
-      width: 400,
-      height: 300,
-      frameRate: { numerator: 30, denominator: 1 },
-      checksum: 'b'.repeat(64),
-      stale: false,
-    }],
+    frames: [
+      {
+        frameId: '10000000-0000-4000-8000-000000000306',
+        compId: 63,
+        frameIndex: 74,
+        frameTimeSeconds: 74 / 30,
+        formatId: 'Middle Text line',
+        mimeType: 'image/png',
+        width: 400,
+        height: 300,
+        frameRate: { numerator: 30, denominator: 1 },
+        checksum: 'b'.repeat(64),
+        stale: false,
+      },
+    ],
     updatedAt: '2026-10-11T00:00:00.000Z',
   }));
 };
@@ -845,7 +1144,11 @@ const waitForAuthoringReadyToPublish = async (actionName: string) => {
 describe('applyLayerChange', () => {
   test('a value equal to the file drops out, and a layer with nothing left is not edited', () => {
     const [text] = LAYERS;
-    const moved = applyLayerChange({}, LAYERS, text!, { x: 120, y: 200, rotation: 0 });
+    const moved = applyLayerChange({}, LAYERS, text!, {
+      x: 120,
+      y: 200,
+      rotation: 0,
+    });
     expect(moved).toEqual({ '63:114': { compId: 63, layerId: 114, x: 120 } });
     expect(applyLayerChange(moved, LAYERS, text!, { x: 100, y: 200 })).toEqual({});
   });
@@ -869,18 +1172,38 @@ describe('TemplateLayerEditor', () => {
   test('creates an empty private draft with revision-zero CAS before importing a seed on first use', async () => {
     enablePrivateDraftTestStorage();
     authoringDraft = null;
-    editor(undefined, undefined, undefined, undefined, VERSION, undefined, undefined, '10000000-0000-4000-8000-000000000413');
-    const importButton = await screen.findByRole('button', { name: 'Create private draft and import' });
+    editor(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      VERSION,
+      undefined,
+      undefined,
+      '10000000-0000-4000-8000-000000000413',
+    );
+    const importButton = await screen.findByRole('button', {
+      name: 'Create private draft and import',
+    });
     await waitFor(() => expect((importButton as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(importButton);
 
-    await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalledWith('a', {
-      brandId: BRAND, baseVersionId: VERSION, expectedRevision: 0, commands: [],
-    }));
-    await waitFor(() => expect(stageForForge).toHaveBeenCalledWith(
-      '10000000-0000-4000-8000-000000000413',
-      { brandId: BRAND, assetId: 'a', baseVersionId: VERSION, expectedDraftRevision: 1 },
-    ));
+    await waitFor(() =>
+      expect(authoringDraftWrites).toHaveBeenCalledWith('a', {
+        brandId: BRAND,
+        baseVersionId: VERSION,
+        expectedRevision: 0,
+        commands: [],
+      }),
+    );
+    await waitFor(() =>
+      expect(stageForForge).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000413', {
+        brandId: BRAND,
+        assetId: 'a',
+        baseVersionId: VERSION,
+        expectedDraftRevision: 1,
+      }),
+    );
     expect(await screen.findByTestId('hyperframes-seed-attached')).toBeTruthy();
   });
 
@@ -891,15 +1214,30 @@ describe('TemplateLayerEditor', () => {
       authoringDraft = persistedDraftForTest(1, []);
       throw new Error('Bootstrap response was lost.');
     });
-    editor(undefined, undefined, undefined, undefined, VERSION, undefined, undefined, '10000000-0000-4000-8000-000000000413');
-    const importButton = await screen.findByRole('button', { name: 'Create private draft and import' });
+    editor(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      VERSION,
+      undefined,
+      undefined,
+      '10000000-0000-4000-8000-000000000413',
+    );
+    const importButton = await screen.findByRole('button', {
+      name: 'Create private draft and import',
+    });
     await waitFor(() => expect((importButton as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(importButton);
 
-    await waitFor(() => expect(stageForForge).toHaveBeenCalledWith(
-      '10000000-0000-4000-8000-000000000413',
-      { brandId: BRAND, assetId: 'a', baseVersionId: VERSION, expectedDraftRevision: 1 },
-    ));
+    await waitFor(() =>
+      expect(stageForForge).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000413', {
+        brandId: BRAND,
+        assetId: 'a',
+        baseVersionId: VERSION,
+        expectedDraftRevision: 1,
+      }),
+    );
     expect(await screen.findByTestId('hyperframes-seed-attached')).toBeTruthy();
   });
 
@@ -908,23 +1246,45 @@ describe('TemplateLayerEditor', () => {
     authoringDraft = persistedDraftForTest(1, []);
     const initialBaseInventoryCalls = inventories.mock.calls.length;
     const initialBaseSceneCalls = scenes.mock.calls.length;
-    editor(undefined, undefined, undefined, undefined, VERSION, undefined, undefined, '10000000-0000-4000-8000-000000000413');
-    const importButton = await screen.findByRole('button', { name: 'Import into this Forge workspace' });
+    editor(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      VERSION,
+      undefined,
+      undefined,
+      '10000000-0000-4000-8000-000000000413',
+    );
+    const importButton = await screen.findByRole('button', {
+      name: 'Import into this Forge workspace',
+    });
     await waitFor(() => expect((importButton as HTMLButtonElement).disabled).toBe(false));
-    await waitFor(() => expect(inventories.mock.calls.length).toBeGreaterThan(initialBaseInventoryCalls));
+    await waitFor(() =>
+      expect(inventories.mock.calls.length).toBeGreaterThan(initialBaseInventoryCalls),
+    );
     await waitFor(() => expect(scenes.mock.calls.length).toBeGreaterThan(initialBaseSceneCalls));
     const baseInventoryCallsBeforeImport = inventories.mock.calls.length;
     const baseSceneCallsBeforeImport = scenes.mock.calls.length;
     fireEvent.click(importButton);
 
-    await waitFor(() => expect(stageForForge).toHaveBeenCalledWith(
-      '10000000-0000-4000-8000-000000000413',
-      { brandId: BRAND, assetId: 'a', baseVersionId: VERSION, expectedDraftRevision: 1 },
-    ));
+    await waitFor(() =>
+      expect(stageForForge).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000413', {
+        brandId: BRAND,
+        assetId: 'a',
+        baseVersionId: VERSION,
+        expectedDraftRevision: 1,
+      }),
+    );
     expect(await screen.findByTestId('hyperframes-seed-attached')).toBeTruthy();
-    await waitFor(() => expect(workspacePreviews).toHaveBeenCalledWith(
-      'a', { brandId: BRAND, baseVersionId: VERSION }, 2, undefined,
-    ));
+    await waitFor(() =>
+      expect(workspacePreviews).toHaveBeenCalledWith(
+        'a',
+        { brandId: BRAND, baseVersionId: VERSION },
+        2,
+        undefined,
+      ),
+    );
     expect(inventories).toHaveBeenCalledTimes(baseInventoryCallsBeforeImport);
     expect(scenes).toHaveBeenCalledTimes(baseSceneCallsBeforeImport);
     expect(saves).not.toHaveBeenCalled();
@@ -934,19 +1294,35 @@ describe('TemplateLayerEditor', () => {
   test('reconciles a seed attach when the private export completes but its response is lost', async () => {
     enablePrivateDraftTestStorage();
     authoringDraft = persistedDraftForTest(1, []);
-    stageForForge.mockImplementation(async (_revisionId: string, request: { expectedDraftRevision: number }) => {
-      authoringDraft = seededDraftForTest(request.expectedDraftRevision + 1);
-      throw new Error('The import response was lost.');
+    stageForForge.mockImplementation(
+      async (_revisionId: string, request: { expectedDraftRevision: number }) => {
+        authoringDraft = seededDraftForTest(request.expectedDraftRevision + 1);
+        throw new Error('The import response was lost.');
+      },
+    );
+    editor(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      VERSION,
+      undefined,
+      undefined,
+      '10000000-0000-4000-8000-000000000413',
+    );
+    const importButton = await screen.findByRole('button', {
+      name: 'Import into this Forge workspace',
     });
-    editor(undefined, undefined, undefined, undefined, VERSION, undefined, undefined, '10000000-0000-4000-8000-000000000413');
-    const importButton = await screen.findByRole('button', { name: 'Import into this Forge workspace' });
     await waitFor(() => expect((importButton as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(importButton);
 
     expect(await screen.findByTestId('hyperframes-seed-attached')).toBeTruthy();
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(workspacePreviews).toHaveBeenCalledWith(
-      'a', { brandId: BRAND, baseVersionId: VERSION }, 2, undefined,
+      'a',
+      { brandId: BRAND, baseVersionId: VERSION },
+      2,
+      undefined,
     );
     expect(saves).not.toHaveBeenCalled();
     expect(commitAuthoring).not.toHaveBeenCalled();
@@ -956,22 +1332,38 @@ describe('TemplateLayerEditor', () => {
     enablePrivateDraftTestStorage();
     authoringDraft = seededDraftForTest(2);
     const recoveryId = 'old-workspace-recovery';
-    privateDraftStores.set('recoveries', new Map([[recoveryId, {
-      id: recoveryId,
-      userId: authoringTestUserId,
-      scope: authoringScope,
-      workspaceIdentity: templateAuthoringWorkspaceIdentity(undefined, authoringChecksum),
-      sourceChecksum: authoringChecksum,
-      revision: 1,
-      commands: [{ type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, text: 'Recovered headline' } }],
-      persistedCommands: [],
-      savedAt: '2026-10-11T00:00:00.000Z',
-      reason: 'local',
-    }]]));
+    privateDraftStores.set(
+      'recoveries',
+      new Map([
+        [
+          recoveryId,
+          {
+            id: recoveryId,
+            userId: authoringTestUserId,
+            scope: authoringScope,
+            workspaceIdentity: templateAuthoringWorkspaceIdentity(undefined, authoringChecksum),
+            sourceChecksum: authoringChecksum,
+            revision: 1,
+            commands: [
+              {
+                type: 'layer.edit',
+                nodeId: 'aep:63:114',
+                edit: { compId: 63, layerId: 114, text: 'Recovered headline' },
+              },
+            ],
+            persistedCommands: [],
+            savedAt: '2026-10-11T00:00:00.000Z',
+            reason: 'local',
+          },
+        ],
+      ]),
+    );
     editor();
 
     fireEvent.click(await screen.findByText(/Browse saved recovery copies/));
-    const restore = await screen.findByRole('button', { name: 'Different workspace · preserved' });
+    const restore = await screen.findByRole('button', {
+      name: 'Different workspace · preserved',
+    });
     expect((restore as HTMLButtonElement).disabled).toBe(true);
     expect(authoringDraftWrites).not.toHaveBeenCalled();
   });
@@ -982,22 +1374,33 @@ describe('TemplateLayerEditor', () => {
       scope: { ...authoringScope, brandId, baseVersionId },
       compositions: authoringDocument.compositions.map((composition) => ({
         ...composition,
-        artboardReason: composition.compId === 63 ? 'authoring_artboard_preflight_pending' : composition.artboardReason,
+        artboardReason:
+          composition.compId === 63
+            ? 'authoring_artboard_preflight_pending'
+            : composition.artboardReason,
       })),
     }));
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const width = await screen.findByRole('spinbutton', { name: 'Composition width' });
+    const width = await screen.findByRole('spinbutton', {
+      name: 'Composition width',
+    });
     expect(width.hasAttribute('disabled')).toBe(true);
     expect(screen.queryByRole('button', { name: 'Apply composition size' })).toBeNull();
-    expect(screen.getByText('Composition size editing is waiting for a verified source check.')).toBeTruthy();
+    expect(
+      screen.getByText('Composition size editing is waiting for a verified source check.'),
+    ).toBeTruthy();
   });
 
   test('artboard resize uses its positive capability, updates the actual preview frame, and saves a command', async () => {
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const width = await screen.findByRole('spinbutton', { name: 'Composition width' });
-    const height = screen.getByRole('spinbutton', { name: 'Composition height' });
+    const width = await screen.findByRole('spinbutton', {
+      name: 'Composition width',
+    });
+    const height = screen.getByRole('spinbutton', {
+      name: 'Composition height',
+    });
     await waitFor(() => expect((width as HTMLInputElement).value).toBe('400'));
     expect((height as HTMLInputElement).value).toBe('300');
     fireEvent.change(width, { target: { value: '640' } });
@@ -1005,49 +1408,105 @@ describe('TemplateLayerEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply composition size' }));
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalled());
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'artboard.resize', compId: 63, width: 640, height: 360,
+      type: 'artboard.resize',
+      compId: 63,
+      width: 640,
+      height: 360,
     });
-    await waitFor(() => expect(document.querySelector('[data-effective-artboard="640x360"]')?.getAttribute('viewBox')).toBe('0 0 640 360'));
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-effective-artboard="640x360"]')?.getAttribute('viewBox'),
+      ).toBe('0 0 640 360'),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled'),
+    ).toBe(true);
     expect(saves).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Undo layer change' }));
-    await waitFor(() => expect(document.querySelector('[data-effective-artboard="400x300"]')?.getAttribute('viewBox')).toBe('0 0 400 300'));
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-effective-artboard="400x300"]')?.getAttribute('viewBox'),
+      ).toBe('0 0 400 300'),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Redo layer change' }));
-    await waitFor(() => expect(document.querySelector('[data-effective-artboard="640x360"]')?.getAttribute('viewBox')).toBe('0 0 640 360'));
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-effective-artboard="640x360"]')?.getAttribute('viewBox'),
+      ).toBe('0 0 640 360'),
+    );
   });
 
   test('a new draft artboard selects by stable UUID and has no native composition ID', async () => {
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const name = await screen.findByRole('textbox', { name: 'New artboard name' });
+    const name = await screen.findByRole('textbox', {
+      name: 'New artboard name',
+    });
     fireEvent.change(name, { target: { value: 'Promo card' } });
-    const addArtboard = screen.getByRole('button', { name: 'Add artboard' }) as HTMLButtonElement;
+    const addArtboard = screen.getByRole('button', {
+      name: 'Add artboard',
+    }) as HTMLButtonElement;
     await waitFor(() => expect(addArtboard.disabled).toBe(false));
     fireEvent.click(addArtboard);
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalled());
-    const create = authoringDraftWrites.mock.calls.at(-1)?.[1].commands.find((command) => command.type === 'artboard.create');
-    expect(create).toMatchObject({ type: 'artboard.create', name: 'Promo card', width: 400, height: 300 });
-    if (create?.type !== 'artboard.create') throw new Error('Expected a draft artboard create command.');
+    const create = authoringDraftWrites.mock.calls
+      .at(-1)?.[1]
+      .commands.find((command) => command.type === 'artboard.create');
+    expect(create).toMatchObject({
+      type: 'artboard.create',
+      name: 'Promo card',
+      width: 400,
+      height: 300,
+    });
+    if (create?.type !== 'artboard.create')
+      throw new Error('Expected a draft artboard create command.');
     expect(create.artboardId).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) => 'compId' in command && command.compId === null)).toBe(false);
+    expect(
+      authoringDraftWrites.mock.calls
+        .at(-1)?.[1]
+        .commands.some((command) => 'compId' in command && command.compId === null),
+    ).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
-      expect.objectContaining({ type: 'shape.create', artboardId: create.artboardId }),
-    ));
-    expect(document.querySelector('[data-effective-artboard="400x300"]')?.getAttribute('viewBox')).toBe('0 0 400 300');
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
+        expect.objectContaining({
+          type: 'shape.create',
+          artboardId: create.artboardId,
+        }),
+      ),
+    );
+    expect(
+      document.querySelector('[data-effective-artboard="400x300"]')?.getAttribute('viewBox'),
+    ).toBe('0 0 400 300');
     expect(document.querySelector(`[data-authored-node-id^="draft:"]`)).toBeTruthy();
   });
 
   test('typing a new draft position after clearing it persists the completed number without a zero command', async () => {
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    fireEvent.change(await screen.findByRole('textbox', { name: 'New artboard name' }), { target: { value: 'Position entry' } });
-    const addArtboard = screen.getByRole('button', { name: 'Add artboard' }) as HTMLButtonElement;
+    fireEvent.change(await screen.findByRole('textbox', { name: 'New artboard name' }), {
+      target: { value: 'Position entry' },
+    });
+    const addArtboard = screen.getByRole('button', {
+      name: 'Add artboard',
+    }) as HTMLButtonElement;
     await waitFor(() => expect(addArtboard.disabled).toBe(false));
     fireEvent.click(addArtboard);
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) => command.type === 'artboard.create')).toBe(true));
+    await waitFor(() =>
+      expect(
+        authoringDraftWrites.mock.calls
+          .at(-1)?.[1]
+          .commands.some((command) => command.type === 'artboard.create'),
+      ).toBe(true),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) => command.type === 'shape.create')).toBe(true));
+    await waitFor(() =>
+      expect(
+        authoringDraftWrites.mock.calls
+          .at(-1)?.[1]
+          .commands.some((command) => command.type === 'shape.create'),
+      ).toBe(true),
+    );
 
     const x = await screen.findByRole('textbox', { name: 'X position' });
     const writesBeforeEdit = authoringDraftWrites.mock.calls.length;
@@ -1056,16 +1515,22 @@ describe('TemplateLayerEditor', () => {
     expect((x as HTMLInputElement).value).toBe('499');
     fireEvent.blur(x);
 
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.length).toBeGreaterThan(writesBeforeEdit));
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.length).toBeGreaterThan(writesBeforeEdit),
+    );
     const savedCommands = authoringDraftWrites.mock.calls.at(-1)?.[1].commands ?? [];
-    expect(savedCommands).toContainEqual(expect.objectContaining({
-      type: 'layer.edit',
-      edit: expect.objectContaining({ position: [499, 150] }),
-    }));
-    expect(savedCommands).not.toContainEqual(expect.objectContaining({
-      type: 'layer.edit',
-      edit: expect.objectContaining({ position: [0, 150] }),
-    }));
+    expect(savedCommands).toContainEqual(
+      expect.objectContaining({
+        type: 'layer.edit',
+        edit: expect.objectContaining({ position: [499, 150] }),
+      }),
+    );
+    expect(savedCommands).not.toContainEqual(
+      expect.objectContaining({
+        type: 'layer.edit',
+        edit: expect.objectContaining({ position: [0, 150] }),
+      }),
+    );
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].expectedRevision).toBeGreaterThan(0);
     expect(saves).not.toHaveBeenCalled();
   });
@@ -1076,15 +1541,31 @@ describe('TemplateLayerEditor', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Duplicate', exact: true })[0]!);
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalled());
-    const duplicate = authoringDraftWrites.mock.calls.at(-1)?.[1].commands.find((command) => command.type === 'artboard.duplicate');
-    expect(duplicate).toMatchObject({ type: 'artboard.duplicate', sourceCompId: 63, name: 'Middle Text line copy' });
-    if (duplicate?.type !== 'artboard.duplicate') throw new Error('Expected a draft artboard duplicate command.');
+    const duplicate = authoringDraftWrites.mock.calls
+      .at(-1)?.[1]
+      .commands.find((command) => command.type === 'artboard.duplicate');
+    expect(duplicate).toMatchObject({
+      type: 'artboard.duplicate',
+      sourceCompId: 63,
+      name: 'Middle Text line copy',
+    });
+    if (duplicate?.type !== 'artboard.duplicate')
+      throw new Error('Expected a draft artboard duplicate command.');
     expect(duplicate.artboardId).toMatch(/^[0-9a-f-]{36}$/i);
     fireEvent.click(screen.getByRole('button', { name: 'Ellipse' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
-      expect.objectContaining({ type: 'shape.create', artboardId: duplicate.artboardId }),
-    ));
-    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) => command.type === 'shape.create' && 'compId' in command)).toBe(false);
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
+        expect.objectContaining({
+          type: 'shape.create',
+          artboardId: duplicate.artboardId,
+        }),
+      ),
+    );
+    expect(
+      authoringDraftWrites.mock.calls
+        .at(-1)?.[1]
+        .commands.some((command) => command.type === 'shape.create' && 'compId' in command),
+    ).toBe(false);
     expect(document.querySelector('[data-layer-id="114"]')).toBeTruthy();
     expect(document.querySelector('[data-layer-id="114"]')).toBeTruthy();
   });
@@ -1093,39 +1574,83 @@ describe('TemplateLayerEditor', () => {
     enablePrivateDraftTestStorage();
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
       ...authoringDocument,
-      scope: {...authoringScope, brandId, baseVersionId},
+      scope: { ...authoringScope, brandId, baseVersionId },
       sourceHeadVersionId: baseVersionId,
-      nodes: authoringDocument.nodes.map(node => node.sourceRef?.layerId === 114
-        ? {...node, capabilities:{...node.capabilities,transform:false},transformLocks:{position:'The source parent hierarchy is preserved.'}}
-        : node),
-      opaqueSourceRef:{...authoringDocument.opaqueSourceRef,versionId:baseVersionId},
+      nodes: authoringDocument.nodes.map((node) =>
+        node.sourceRef?.layerId === 114
+          ? {
+              ...node,
+              capabilities: { ...node.capabilities, transform: false },
+              transformLocks: {
+                position: 'The source parent hierarchy is preserved.',
+              },
+            }
+          : node,
+      ),
+      opaqueSourceRef: {
+        ...authoringDocument.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     editor();
-    const layerList = await screen.findByRole('list',{name:'Layers'});
-    fireEvent.click(within(layerList).getByRole('button', { name: 'MENOS DE 2.5 MENOS', exact: true }));
-    await waitFor(() => expect((screen.getByRole('textbox',{name:'Position X'}) as HTMLInputElement).disabled).toBe(true));
-    expect((screen.getByRole('textbox',{name:'Rotation'}) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox',{name:'Opacity'}) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox',{name:'Scale X'}) as HTMLInputElement).disabled).toBe(true);
-    expect((await screen.findByRole('spinbutton',{name:'Text size (pt)'}) as HTMLInputElement).disabled).toBe(false);
+    const layerList = await screen.findByRole('list', { name: 'Layers' });
+    fireEvent.click(
+      within(layerList).getByRole('button', {
+        name: 'MENOS DE 2.5 MENOS',
+        exact: true,
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole('textbox', {
+            name: 'Position X',
+          }) as HTMLInputElement
+        ).disabled,
+      ).toBe(true),
+    );
+    expect((screen.getByRole('textbox', { name: 'Rotation' }) as HTMLInputElement).disabled).toBe(
+      true,
+    );
+    expect((screen.getByRole('textbox', { name: 'Opacity' }) as HTMLInputElement).disabled).toBe(
+      true,
+    );
+    expect((screen.getByRole('textbox', { name: 'Scale X' }) as HTMLInputElement).disabled).toBe(
+      true,
+    );
+    expect(
+      (
+        (await screen.findByRole('spinbutton', {
+          name: 'Text size (pt)',
+        })) as HTMLInputElement
+      ).disabled,
+    ).toBe(false);
     expect(screen.getByText('The source parent hierarchy is preserved.')).toBeTruthy();
-    expect(screen.queryByRole('button',{name:'Rotate selected layer'})).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rotate selected layer' })).toBeNull();
   });
 
   test('restores the selected composition, layer, and playhead after editor remount', async () => {
     enablePrivateDraftTestStorage();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const view = editor(undefined, client);
     const layers = await screen.findByRole('list', { name: 'Layers' });
-    fireEvent.change(screen.getByLabelText('Search layers'), { target: { value: 'Card' } });
+    fireEvent.change(screen.getByLabelText('Search layers'), {
+      target: { value: 'Card' },
+    });
     fireEvent.click(within(layers).getByRole('button', { name: /^Card/ }));
     await waitFor(() => expect(scenes.mock.calls.at(-1)?.[3]).toBe(412));
 
-    const playhead = await screen.findByLabelText('Timeline playhead') as HTMLInputElement;
+    const playhead = (await screen.findByLabelText('Timeline playhead')) as HTMLInputElement;
     fireEvent.change(playhead, { target: { value: '2.5' } });
     const workspaceIdentity = templateAuthoringWorkspaceIdentity(undefined, authoringChecksum);
     await waitFor(async () => {
-      const saved = await readTemplateAuthoringViewState(authoringTestUserId, authoringScope, workspaceIdentity);
+      const saved = await readTemplateAuthoringViewState(
+        authoringTestUserId,
+        authoringScope,
+        workspaceIdentity,
+      );
       expect(saved).toMatchObject({
         compositionKey: 'aep:412',
         selectedNodeId: 'aep:412:9',
@@ -1136,8 +1661,14 @@ describe('TemplateLayerEditor', () => {
     view.unmount();
     editor(undefined, client);
     await screen.findByRole('list', { name: 'Layers' });
-    await waitFor(() => expect(within(screen.getByRole('combobox', { name: 'Composition' })).getByText('Card B')).toBeTruthy());
-    expect((await screen.findByLabelText('Timeline playhead') as HTMLInputElement).value).toBe('2.5');
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('combobox', { name: 'Composition' })).getByText('Card B'),
+      ).toBeTruthy(),
+    );
+    expect(((await screen.findByLabelText('Timeline playhead')) as HTMLInputElement).value).toBe(
+      '2.5',
+    );
     expect(screen.getByText('Selected: Card')).toBeTruthy();
   });
 
@@ -1147,36 +1678,72 @@ describe('TemplateLayerEditor', () => {
     await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ellipse' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) => command.type === 'shape.create')).toBe(true));
-    const create = authoringDraftWrites.mock.calls.at(-1)?.[1].commands.find((command) => command.type === 'shape.create');
+    await waitFor(() =>
+      expect(
+        authoringDraftWrites.mock.calls
+          .at(-1)?.[1]
+          .commands.some((command) => command.type === 'shape.create'),
+      ).toBe(true),
+    );
+    const create = authoringDraftWrites.mock.calls
+      .at(-1)?.[1]
+      .commands.find((command) => command.type === 'shape.create');
     if (create?.type !== 'shape.create') throw new Error('Expected a saved shape.create command.');
     const nodeId = create.nodeId;
 
-    const layerIn = await screen.findByRole('spinbutton', { name: 'Layer in time' });
+    const layerIn = await screen.findByRole('spinbutton', {
+      name: 'Layer in time',
+    });
     const layerOut = screen.getByRole('spinbutton', { name: 'Layer out time' });
     expect((layerIn as HTMLInputElement).disabled).toBe(false);
     fireEvent.change(layerIn, { target: { value: '0.5' } });
     fireEvent.change(layerOut, { target: { value: '3.5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply timing' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'layer.timing', nodeId, inSec: 0.5, outSec: 3.5,
-    }));
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
+        type: 'layer.timing',
+        nodeId,
+        inSec: 0.5,
+        outSec: 3.5,
+      }),
+    );
 
     expect(screen.queryByRole('list', { name: 'Motion channels' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Edit keyframes/ }));
-    const motionChannels = await screen.findByRole('list', { name: 'Motion channels' });
+    const motionChannels = await screen.findByRole('list', {
+      name: 'Motion channels',
+    });
     fireEvent.click(within(motionChannels).getByRole('button', { name: /^Rotation / }));
     fireEvent.click(screen.getByRole('button', { name: 'Add at playhead' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) =>
-      command.type === 'layer.keyframes.replace' && command.nodeId === nodeId && command.channel === 'rotation',
-    )).toBe(true));
-    const keyframes = authoringDraftWrites.mock.calls.at(-1)?.[1].commands.find((command) =>
-      command.type === 'layer.keyframes.replace' && command.channel === 'rotation',
+    await waitFor(() =>
+      expect(
+        authoringDraftWrites.mock.calls
+          .at(-1)?.[1]
+          .commands.some(
+            (command) =>
+              command.type === 'layer.keyframes.replace' &&
+              command.nodeId === nodeId &&
+              command.channel === 'rotation',
+          ),
+      ).toBe(true),
     );
+    const keyframes = authoringDraftWrites.mock.calls
+      .at(-1)?.[1]
+      .commands.find(
+        (command) => command.type === 'layer.keyframes.replace' && command.channel === 'rotation',
+      );
     expect(keyframes).toMatchObject({
-      type: 'layer.keyframes.replace', nodeId, channelId: `authoring:${nodeId}:ADBE Rotate Z`,
-      keyframes: [expect.objectContaining({ value: 0, inInterpolation: 'LINEAR', outInterpolation: 'LINEAR' })],
+      type: 'layer.keyframes.replace',
+      nodeId,
+      channelId: `authoring:${nodeId}:ADBE Rotate Z`,
+      keyframes: [
+        expect.objectContaining({
+          value: 0,
+          inInterpolation: 'LINEAR',
+          outInterpolation: 'LINEAR',
+        }),
+      ],
     });
   });
 
@@ -1202,23 +1769,81 @@ describe('TemplateLayerEditor', () => {
       inSec: 0,
       outSec: 5,
       timingReason: null,
-      capabilities: { ...authoringDocument.nodes[1]!.capabilities, keyframes: true, timing: true },
+      capabilities: {
+        ...authoringDocument.nodes[1]!.capabilities,
+        keyframes: true,
+        timing: true,
+      },
       keyframeChannels: [
-        { channelId: `${nodeId}:ADBE Position`, channel: 'position' as const, matchName: 'ADBE Position', frameRate: 30, dimensions: 3, separated: false, baseValue: [36, 36, 0], reason: null, keyframes: [
-          { keyframeId: `${nodeId}:position:0`, timeSec: 0, value: [36, 36, 0], inInterpolation: 'LINEAR' as const, outInterpolation: 'LINEAR' as const, inEase: [], outEase: [] },
-          { keyframeId: `${nodeId}:position:5`, timeSec: 5, value: [48, 42, 0], inInterpolation: 'LINEAR' as const, outInterpolation: 'LINEAR' as const, inEase: [], outEase: [] },
-        ] },
-        { channelId: `${nodeId}:ADBE Opacity`, channel: 'opacity' as const, matchName: 'ADBE Opacity', frameRate: 30, dimensions: 1, separated: false, baseValue: 100, reason: null, keyframes: [
-          { keyframeId: `${nodeId}:opacity:0`, timeSec: 0, value: 100, inInterpolation: 'LINEAR' as const, outInterpolation: 'LINEAR' as const, inEase: [], outEase: [] },
-          { keyframeId: `${nodeId}:opacity:5`, timeSec: 5, value: 70, inInterpolation: 'LINEAR' as const, outInterpolation: 'LINEAR' as const, inEase: [], outEase: [] },
-        ] },
+        {
+          channelId: `${nodeId}:ADBE Position`,
+          channel: 'position' as const,
+          matchName: 'ADBE Position',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [36, 36, 0],
+          reason: null,
+          keyframes: [
+            {
+              keyframeId: `${nodeId}:position:0`,
+              timeSec: 0,
+              value: [36, 36, 0],
+              inInterpolation: 'LINEAR' as const,
+              outInterpolation: 'LINEAR' as const,
+              inEase: [],
+              outEase: [],
+            },
+            {
+              keyframeId: `${nodeId}:position:5`,
+              timeSec: 5,
+              value: [48, 42, 0],
+              inInterpolation: 'LINEAR' as const,
+              outInterpolation: 'LINEAR' as const,
+              inEase: [],
+              outEase: [],
+            },
+          ],
+        },
+        {
+          channelId: `${nodeId}:ADBE Opacity`,
+          channel: 'opacity' as const,
+          matchName: 'ADBE Opacity',
+          frameRate: 30,
+          dimensions: 1,
+          separated: false,
+          baseValue: 100,
+          reason: null,
+          keyframes: [
+            {
+              keyframeId: `${nodeId}:opacity:0`,
+              timeSec: 0,
+              value: 100,
+              inInterpolation: 'LINEAR' as const,
+              outInterpolation: 'LINEAR' as const,
+              inEase: [],
+              outEase: [],
+            },
+            {
+              keyframeId: `${nodeId}:opacity:5`,
+              timeSec: 5,
+              value: 70,
+              inInterpolation: 'LINEAR' as const,
+              outInterpolation: 'LINEAR' as const,
+              inEase: [],
+              outEase: [],
+            },
+          ],
+        },
       ],
     } as unknown as TemplateAuthoringNode;
     const sourceDocument = {
       ...authoringDocument,
-      compositions: authoringDocument.compositions.map((composition) => composition.compId === 63
-        ? { ...composition, nodeIds: [...composition.nodeIds, nodeId] }
-        : composition),
+      compositions: authoringDocument.compositions.map((composition) =>
+        composition.compId === 63
+          ? { ...composition, nodeIds: [...composition.nodeIds, nodeId] }
+          : composition,
+      ),
       nodes: [...authoringDocument.nodes, generated],
     };
     authoringProjectionSource = sourceDocument;
@@ -1226,34 +1851,55 @@ describe('TemplateLayerEditor', () => {
       ...sourceDocument,
       scope: { ...authoringScope, brandId, baseVersionId },
       sourceHeadVersionId: baseVersionId,
-      opaqueSourceRef: { ...sourceDocument.opaqueSourceRef, versionId: baseVersionId },
+      opaqueSourceRef: {
+        ...sourceDocument.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
 
     const originalRequestFrame = window.requestAnimationFrame;
     const originalCancelFrame = window.cancelAnimationFrame;
     const originalPerformanceNow = performance.now;
     let tick: FrameRequestCallback | null = null;
-    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: (callback: FrameRequestCallback) => {
-      tick = callback;
-      return 1;
-    } });
-    Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: () => {} });
-    Object.defineProperty(performance, 'now', { configurable: true, value: () => 1_000 });
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: (callback: FrameRequestCallback) => {
+        tick = callback;
+        return 1;
+      },
+    });
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: () => {},
+    });
+    Object.defineProperty(performance, 'now', {
+      configurable: true,
+      value: () => 1_000,
+    });
     try {
       editor();
       const rows = await screen.findByRole('list', { name: 'Layers' });
       fireEvent.click(within(rows).getByText('Generated playback shape'));
-      const authoredSvgNode = document.querySelector<SVGGElement>(`[data-authored-node-id="${nodeId}"]`);
-      expect(authoredSvgNode?.getAttribute('transform')).toBe('translate(36 36) rotate(0) scale(1 1)');
+      const authoredSvgNode = document.querySelector<SVGGElement>(
+        `[data-authored-node-id="${nodeId}"]`,
+      );
+      expect(authoredSvgNode?.getAttribute('transform')).toBe(
+        'translate(36 36) rotate(0) scale(1 1)',
+      );
       expect(authoredSvgNode?.getAttribute('opacity')).toBe('1');
       const play = await screen.findByRole('button', { name: 'Play' });
       fireEvent.click(play);
       await waitFor(() => expect(tick).toBeTruthy());
-      await act(async () => { tick?.(3_200); });
+      await act(async () => {
+        tick?.(3_200);
+      });
       await waitFor(() => {
-        expect(document.querySelector(`[data-authored-node-id="${nodeId}"]`)?.getAttribute('transform'))
-          .toBe('translate(41.28 38.64) rotate(0) scale(1 1)');
-        expect(document.querySelector(`[data-authored-node-id="${nodeId}"]`)?.getAttribute('opacity')).toBe('0.868');
+        expect(
+          document.querySelector(`[data-authored-node-id="${nodeId}"]`)?.getAttribute('transform'),
+        ).toBe('translate(41.28 38.64) rotate(0) scale(1 1)');
+        expect(
+          document.querySelector(`[data-authored-node-id="${nodeId}"]`)?.getAttribute('opacity'),
+        ).toBe('0.868');
       });
       expect((screen.getByLabelText('Timeline playhead') as HTMLInputElement).value).toBe('2.2');
       expect(authoringDraftWrites).not.toHaveBeenCalled();
@@ -1261,9 +1907,18 @@ describe('TemplateLayerEditor', () => {
       expect(generated.position).toEqual([36, 36]);
       expect(generated.opacity).toBe(100);
     } finally {
-      Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: originalRequestFrame });
-      Object.defineProperty(window, 'cancelAnimationFrame', { configurable: true, value: originalCancelFrame });
-      Object.defineProperty(performance, 'now', { configurable: true, value: originalPerformanceNow });
+      Object.defineProperty(window, 'requestAnimationFrame', {
+        configurable: true,
+        value: originalRequestFrame,
+      });
+      Object.defineProperty(window, 'cancelAnimationFrame', {
+        configurable: true,
+        value: originalCancelFrame,
+      });
+      Object.defineProperty(performance, 'now', {
+        configurable: true,
+        value: originalPerformanceNow,
+      });
     }
   });
 
@@ -1271,23 +1926,28 @@ describe('TemplateLayerEditor', () => {
     enablePrivateDraftTestStorage();
     authoringProjectionSource = {
       ...authoringDocument,
-      dependencies: [{
-        footageItemId: 781,
-        name: 'Portrait photo',
-        mediaCode: 'ZPEG',
-        footageFramerate: 0,
-        originalFile: 'media/portrait.jpg',
-        width: 320,
-        height: 180,
-        affectedLayers: [{ compId: 63, layerUid: 71 }],
-        relinkReason: null,
-      }],
+      dependencies: [
+        {
+          footageItemId: 781,
+          name: 'Portrait photo',
+          mediaCode: 'ZPEG',
+          footageFramerate: 0,
+          originalFile: 'media/portrait.jpg',
+          width: 320,
+          height: 180,
+          affectedLayers: [{ compId: 63, layerUid: 71 }],
+          relinkReason: null,
+        },
+      ],
     };
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
       ...authoringProjectionSource,
       scope: { ...authoringScope, brandId, baseVersionId },
       sourceHeadVersionId: baseVersionId,
-      opaqueSourceRef: { ...authoringProjectionSource.opaqueSourceRef, versionId: baseVersionId },
+      opaqueSourceRef: {
+        ...authoringProjectionSource.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     authoringPreparation = {
       ...authoringPreparation,
@@ -1299,36 +1959,48 @@ describe('TemplateLayerEditor', () => {
         stage: 'private_preflight_pending',
         checks: { format: 'passed', dependencies: 'pending' },
         providerActivation: 'pending',
-        diagnostics: [{
-          code: 'authoring_preparation_artwork_missing',
-          reason: 'The exact JPEG package dependency is missing.',
-          missingFootage: [{ name: 'Portrait photo', file: 'media/portrait.jpg' }],
-        }],
+        diagnostics: [
+          {
+            code: 'authoring_preparation_artwork_missing',
+            reason: 'The exact JPEG package dependency is missing.',
+            missingFootage: [{ name: 'Portrait photo', file: 'media/portrait.jpg' }],
+          },
+        ],
       },
     };
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const width = await screen.findByRole('spinbutton', { name: 'Composition width' });
-    const height = screen.getByRole('spinbutton', { name: 'Composition height' });
+    const width = await screen.findByRole('spinbutton', {
+      name: 'Composition width',
+    });
+    const height = screen.getByRole('spinbutton', {
+      name: 'Composition height',
+    });
     await waitFor(() => expect((width as HTMLInputElement).disabled).toBe(false));
     fireEvent.change(width, { target: { value: '640' } });
     fireEvent.change(height, { target: { value: '360' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply composition size' }));
-    await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), { timeout: 2500 });
+    await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), {
+      timeout: 2500,
+    });
     fireEvent.click(await screen.findByRole('button', { name: 'Show preparation details' }));
     expect(await screen.findByText('Portrait photo: media/portrait.jpg')).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Relink from Library' }));
     fireEvent.click(screen.getByRole('button', { name: 'Pick exact Library JPEG' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'dependency.relink',
-      footageItemId: 781,
-      assetRef: {
-        assetId: '10000000-0000-4000-8000-000000000103',
-        versionId: '10000000-0000-4000-8000-000000000104',
-        sha256: 'e'.repeat(64),
-      },
-    }));
-    expect(screen.getByText(/queued for this private package.*verify the relink during compilation/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
+        type: 'dependency.relink',
+        footageItemId: 781,
+        assetRef: {
+          assetId: '10000000-0000-4000-8000-000000000103',
+          versionId: '10000000-0000-4000-8000-000000000104',
+          sha256: 'e'.repeat(64),
+        },
+      }),
+    );
+    expect(
+      screen.getByText(/queued for this private package.*verify the relink during compilation/i),
+    ).toBeTruthy();
     expect(screen.queryByText(/dependencies passed/i)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
     expect(saves).not.toHaveBeenCalled();
@@ -1341,38 +2013,51 @@ describe('TemplateLayerEditor', () => {
     const nextChecksum = 'a'.repeat(64);
     authoringProjectionSource = {
       ...authoringDocument,
-      dependencies: [{
-        footageItemId: 782,
-        name: 'Source-switch image',
-        mediaCode: 'png!',
-        footageFramerate: 0,
-        originalFile: 'media/source-switch.png',
-        width: 320,
-        height: 180,
-        affectedLayers: [{ compId: 63, layerUid: 71 }],
-        relinkReason: null,
-      }],
+      dependencies: [
+        {
+          footageItemId: 782,
+          name: 'Source-switch image',
+          mediaCode: 'png!',
+          footageFramerate: 0,
+          originalFile: 'media/source-switch.png',
+          width: 320,
+          height: 180,
+          affectedLayers: [{ compId: 63, layerUid: 71 }],
+          relinkReason: null,
+        },
+      ],
     };
-    const existingCommands: TemplateAuthoringCommand[] = [{
-      type: 'layer.edit',
-      nodeId: 'aep:63:114',
-      edit: { compId: 63, layerId: 114, x: 101 },
-    }];
+    const existingCommands: TemplateAuthoringCommand[] = [
+      {
+        type: 'layer.edit',
+        nodeId: 'aep:63:114',
+        edit: { compId: 63, layerId: 114, x: 101 },
+      },
+    ];
     authoringDraft = {
       ...persistedDraftForTest(1, existingCommands),
-      projectedDocument: projectTemplateAuthoringCommands(authoringProjectionSource, existingCommands),
+      projectedDocument: projectTemplateAuthoringCommands(
+        authoringProjectionSource,
+        existingCommands,
+      ),
     };
     authoringDraftReads.mockImplementation(async (_assetId, brandId, baseVersionId) =>
-      authoringDraft?.scope.brandId === brandId && authoringDraft.scope.baseVersionId === baseVersionId
+      authoringDraft?.scope.brandId === brandId &&
+      authoringDraft.scope.baseVersionId === baseVersionId
         ? authoringDraft
         : null,
     );
     authoringDraftWrites.mockImplementation(async (assetId, request) => {
-      const sourceChecksum = request.brandId === nextBrand && request.baseVersionId === nextVersion
-        ? nextChecksum
-        : authoringChecksum;
+      const sourceChecksum =
+        request.brandId === nextBrand && request.baseVersionId === nextVersion
+          ? nextChecksum
+          : authoringChecksum;
       authoringDraft = {
-        scope: { brandId: request.brandId, assetId, baseVersionId: request.baseVersionId },
+        scope: {
+          brandId: request.brandId,
+          assetId,
+          baseVersionId: request.baseVersionId,
+        },
         sourceChecksum,
         requiresReconciliation: false,
         currentSource: {
@@ -1383,19 +2068,27 @@ describe('TemplateLayerEditor', () => {
         },
         revision: request.expectedRevision + 1,
         commands: structuredClone(request.commands),
-        projectedDocument: projectTemplateAuthoringCommands(authoringProjectionSource, request.commands),
+        projectedDocument: projectTemplateAuthoringCommands(
+          authoringProjectionSource,
+          request.commands,
+        ),
         updatedAt: '2026-10-11T00:00:00.000Z',
       };
       return authoringDraft;
     });
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => {
-      const sourceChecksum = brandId === nextBrand && baseVersionId === nextVersion ? nextChecksum : authoringChecksum;
+      const sourceChecksum =
+        brandId === nextBrand && baseVersionId === nextVersion ? nextChecksum : authoringChecksum;
       return {
         ...authoringProjectionSource,
         scope: { ...authoringScope, brandId, baseVersionId },
         sourceChecksum,
         sourceHeadVersionId: baseVersionId,
-        opaqueSourceRef: { ...authoringProjectionSource.opaqueSourceRef, versionId: baseVersionId, checksum: sourceChecksum },
+        opaqueSourceRef: {
+          ...authoringProjectionSource.opaqueSourceRef,
+          versionId: baseVersionId,
+          checksum: sourceChecksum,
+        },
       };
     });
     authoringPreparation = {
@@ -1407,27 +2100,43 @@ describe('TemplateLayerEditor', () => {
         stage: 'private_preflight_pending',
         checks: { format: 'passed', dependencies: 'pending' },
         providerActivation: 'pending',
-        diagnostics: [{
-          code: 'authoring_preparation_artwork_missing',
-          reason: 'The current source has one missing image.',
-          missingFootage: [{ name: 'Source-switch image', file: 'media/source-switch.png' }],
-        }],
+        diagnostics: [
+          {
+            code: 'authoring_preparation_artwork_missing',
+            reason: 'The current source has one missing image.',
+            missingFootage: [{ name: 'Source-switch image', file: 'media/source-switch.png' }],
+          },
+        ],
       },
     };
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const view = editor(undefined, client, undefined, undefined, VERSION);
     await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(await screen.findByRole('button', { name: 'Show preparation details' }));
     await screen.findByText('Source-switch image: media/source-switch.png');
     fireEvent.click(await screen.findByRole('button', { name: 'Relink from Library' }));
-    const picker = await screen.findByRole('dialog', { name: 'Add Library image' });
+    const picker = await screen.findByRole('dialog', {
+      name: 'Add Library image',
+    });
     let resolveOldPreview!: (value: {
-      id: string; assetId: string; checksum: string; mimeType: string;
-      fileName: string; width: number; height: number; signedUrl: string;
+      id: string;
+      assetId: string;
+      checksum: string;
+      mimeType: string;
+      fileName: string;
+      width: number;
+      height: number;
+      signedUrl: string;
     }) => void;
-    nextPinnedArtworkPreviewRequest = new Promise((resolve) => { resolveOldPreview = resolve; });
+    nextPinnedArtworkPreviewRequest = new Promise((resolve) => {
+      resolveOldPreview = resolve;
+    });
     fireEvent.click(within(picker).getByRole('button', { name: 'Pick exact Library image' }));
-    expect(await screen.findByText(/Verifying the selected image version and dimensions/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Verifying the selected image version and dimensions/),
+    ).toBeTruthy();
 
     view.rerender(
       <QueryClientProvider client={client}>
@@ -1443,23 +2152,40 @@ describe('TemplateLayerEditor', () => {
         />
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(authoringDocumentReads).toHaveBeenCalledWith('a', nextBrand, nextVersion));
+    await waitFor(() =>
+      expect(authoringDocumentReads).toHaveBeenCalledWith('a', nextBrand, nextVersion),
+    );
     await screen.findByRole('list', { name: 'Layers' });
-    await waitFor(() => expect(authoringDraftReads).toHaveBeenCalledWith('a', nextBrand, nextVersion));
-    const newSourceWrites = () => authoringDraftWrites.mock.calls
-      .filter(([, request]) => request.brandId === nextBrand && request.baseVersionId === nextVersion)
-      .flatMap(([, request]) => request.commands);
+    await waitFor(() =>
+      expect(authoringDraftReads).toHaveBeenCalledWith('a', nextBrand, nextVersion),
+    );
+    const newSourceWrites = () =>
+      authoringDraftWrites.mock.calls
+        .filter(
+          ([, request]) => request.brandId === nextBrand && request.baseVersionId === nextVersion,
+        )
+        .flatMap(([, request]) => request.commands);
     resolveOldPreview({
       id: '10000000-0000-4000-8000-000000000102',
       assetId: '10000000-0000-4000-8000-000000000101',
-      checksum: 'd'.repeat(64), mimeType: 'image/png', fileName: 'Pinned.png',
-      width: 320, height: 180, signedUrl: '/fixture/pinned-image.png',
+      checksum: 'd'.repeat(64),
+      mimeType: 'image/png',
+      fileName: 'Pinned.png',
+      width: 320,
+      height: 180,
+      signedUrl: '/fixture/pinned-image.png',
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(newSourceWrites()).not.toContainEqual(expect.objectContaining({ type: 'dependency.relink' }));
-    expect(newSourceWrites()).not.toContainEqual(expect.objectContaining({ type: 'artwork.create' }));
-    expect(screen.queryByText(/queued for this private package.*verify the relink during compilation/i)).toBeNull();
+    expect(newSourceWrites()).not.toContainEqual(
+      expect.objectContaining({ type: 'dependency.relink' }),
+    );
+    expect(newSourceWrites()).not.toContainEqual(
+      expect.objectContaining({ type: 'artwork.create' }),
+    );
+    expect(
+      screen.queryByText(/queued for this private package.*verify the relink during compilation/i),
+    ).toBeNull();
     expect(screen.queryByText('Could not verify the selected Library image once.')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -1468,27 +2194,30 @@ describe('TemplateLayerEditor', () => {
     enablePrivateDraftTestStorage();
     authoringProjectionSource = {
       ...authoringDocument,
-      dependencies: [{
-        footageItemId: 777,
-        name: 'Backdrop',
-        mediaCode: 'png!',
-        footageFramerate: 0,
-        originalFile: 'media/backdrop.png',
-        width: 320,
-        height: 180,
-        affectedLayers: [{ compId: 63, layerUid: 114 }],
-        relinkReason: null,
-      }, ...[778, 779].map((footageItemId) => ({
-        footageItemId,
-        name: 'Ambiguous',
-        mediaCode: 'png!',
-        footageFramerate: 0,
-        originalFile: 'media/ambiguous.png',
-        width: 320,
-        height: 180,
-        affectedLayers: [{ compId: 63, layerUid: 114 }],
-        relinkReason: null,
-      }))],
+      dependencies: [
+        {
+          footageItemId: 777,
+          name: 'Backdrop',
+          mediaCode: 'png!',
+          footageFramerate: 0,
+          originalFile: 'media/backdrop.png',
+          width: 320,
+          height: 180,
+          affectedLayers: [{ compId: 63, layerUid: 114 }],
+          relinkReason: null,
+        },
+        ...[778, 779].map((footageItemId) => ({
+          footageItemId,
+          name: 'Ambiguous',
+          mediaCode: 'png!',
+          footageFramerate: 0,
+          originalFile: 'media/ambiguous.png',
+          width: 320,
+          height: 180,
+          affectedLayers: [{ compId: 63, layerUid: 114 }],
+          relinkReason: null,
+        })),
+      ],
       compositions: authoringDocument.compositions.map((composition) => ({
         ...composition,
         creationReason: composition.compId === 63 ? null : composition.creationReason,
@@ -1498,7 +2227,10 @@ describe('TemplateLayerEditor', () => {
       ...authoringProjectionSource,
       scope: { ...authoringScope, brandId, baseVersionId },
       sourceHeadVersionId: baseVersionId,
-      opaqueSourceRef: { ...authoringProjectionSource.opaqueSourceRef, versionId: baseVersionId },
+      opaqueSourceRef: {
+        ...authoringProjectionSource.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     authoringPreparation = {
       ...authoringPreparation,
@@ -1532,16 +2264,28 @@ describe('TemplateLayerEditor', () => {
     await screen.findByRole('list', { name: 'Layers' });
     expect(screen.getByTestId('library-media-picker').getAttribute('data-open')).toBe('false');
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const width = await screen.findByRole('spinbutton', { name: 'Composition width' });
-    const height = await screen.findByRole('spinbutton', { name: 'Composition height' });
+    const width = await screen.findByRole('spinbutton', {
+      name: 'Composition width',
+    });
+    const height = await screen.findByRole('spinbutton', {
+      name: 'Composition height',
+    });
     await waitFor(() => expect((width as HTMLInputElement).disabled).toBe(false));
     fireEvent.change(width, { target: { value: '640' } });
     fireEvent.change(height, { target: { value: '360' } });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply composition size' }).hasAttribute('disabled')).toBe(false));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Apply composition size' }).hasAttribute('disabled'),
+      ).toBe(false),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Apply composition size' }));
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalledTimes(1));
-    expect(authoringDraft?.projectedDocument?.dependencies).toEqual(authoringProjectionSource.dependencies);
-    await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), { timeout: 2500 });
+    expect(authoringDraft?.projectedDocument?.dependencies).toEqual(
+      authoringProjectionSource.dependencies,
+    );
+    await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), {
+      timeout: 2500,
+    });
     expect(compileAuthoring.mock.calls[0]?.[1]).toEqual({
       brandId: BRAND,
       baseVersionId: VERSION,
@@ -1559,29 +2303,51 @@ describe('TemplateLayerEditor', () => {
     // exact revision reaches review_ready.
     expect(nativeRenders).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Show preparation details' }));
-    expect(await screen.findByText(/private package preflight passed.*provider activation is pending.*After Effects verification waits for a runner/i)).toBeTruthy();
-    expect(screen.getByText('Package preflight: format passed, dependencies passed · Forge provider pending')).toBeTruthy();
-    expect(screen.getByText('Add exact font files for Foundry Sans.')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        /private package preflight passed.*provider activation is pending.*After Effects verification waits for a runner/i,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Package preflight: format passed, dependencies passed · Forge provider pending',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Exact font evidence is still pending.')).toBeTruthy();
     expect(screen.getByText(/Affected font faces: FoundrySans-Regular/)).toBeTruthy();
     expect(screen.getByText('Backdrop: media/backdrop.png')).toBeTruthy();
     expect(screen.getByText('Ambiguous: media/ambiguous.png')).toBeTruthy();
-    expect(screen.getByText(/Multiple package dependencies match; no automatic target was chosen/)).toBeTruthy();
+    expect(
+      screen.getByText(/Multiple package dependencies match; no automatic target was chosen/),
+    ).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Relink from Library' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Package details and verification' }));
     expect(screen.getByText('private-template.aep')).toBeTruthy();
-    expect(screen.getByTestId('preparation-next-step').textContent).toMatch(/Open Fonts check to resolve the exact listed faces/i);
+    expect(screen.getByTestId('preparation-next-step').textContent).toMatch(
+      /Open Fonts check to resolve the exact listed faces/i,
+    );
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled'),
+    ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Open Fonts check' }));
     expect(openFontRepair).toHaveBeenCalledTimes(1);
-    const createTools = screen.getByRole('button', { name: 'Create and artboard tools' });
+    const createTools = screen.getByRole('button', {
+      name: 'Create and artboard tools',
+    });
     fireEvent.click(createTools);
     expect(createTools.getAttribute('aria-expanded')).toBe('false');
     const writesBeforeCancel = authoringDraftWrites.mock.calls.length;
     const commandsBeforeCancel = structuredClone(authoringDraft?.commands ?? []);
     fireEvent.click(screen.getAllByRole('button', { name: 'Relink from Library' })[0]!);
-    let picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a verified Library image with the exact format and dimensions required by this package dependency.')).toBeTruthy();
+    let picker = await screen.findByRole('dialog', {
+      name: 'Add Library image',
+    });
+    expect(
+      within(picker).getByText(
+        'Choose a verified Library image with the exact format and dimensions required by this package dependency.',
+      ),
+    ).toBeTruthy();
     expect(createTools.getAttribute('aria-expanded')).toBe('false');
     fireEvent.keyDown(picker, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -1589,7 +2355,11 @@ describe('TemplateLayerEditor', () => {
     expect(authoringDraft?.commands).toEqual(commandsBeforeCancel);
     fireEvent.click(screen.getByRole('button', { name: 'Add Library image' }));
     picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.')).toBeTruthy();
+    expect(
+      within(picker).getByText(
+        'Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.',
+      ),
+    ).toBeTruthy();
     expect(createTools.getAttribute('aria-expanded')).toBe('true');
     fireEvent.click(within(picker).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -1599,20 +2369,36 @@ describe('TemplateLayerEditor', () => {
     expect(createTools.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(screen.getAllByRole('button', { name: 'Relink from Library' })[0]!);
     picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a verified Library image with the exact format and dimensions required by this package dependency.')).toBeTruthy();
+    expect(
+      within(picker).getByText(
+        'Choose a verified Library image with the exact format and dimensions required by this package dependency.',
+      ),
+    ).toBeTruthy();
 
     let rejectPendingPreview!: (reason: Error) => void;
-    nextPinnedArtworkPreviewRequest = new Promise((_resolve, reject) => { rejectPendingPreview = reject; });
+    nextPinnedArtworkPreviewRequest = new Promise((_resolve, reject) => {
+      rejectPendingPreview = reject;
+    });
     const commandsBeforeFreshCreate = structuredClone(authoringDraft?.commands ?? []);
     fireEvent.click(screen.getByRole('button', { name: 'Pick exact Library image' }));
-    expect(await screen.findByText(/Verifying the selected image version and dimensions/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Verifying the selected image version and dimensions/),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add Library image' }));
     picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.')).toBeTruthy();
+    expect(
+      within(picker).getByText(
+        'Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.',
+      ),
+    ).toBeTruthy();
     rejectPendingPreview(new Error('Could not verify a stale Library image response.'));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByText('Could not verify a stale Library image response.')).toBeNull();
-    expect(within(picker).getByText('Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.')).toBeTruthy();
+    expect(
+      within(picker).getByText(
+        'Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.',
+      ),
+    ).toBeTruthy();
     fireEvent.click(within(picker).getByRole('button', { name: 'Cancel' }));
     expect(authoringDraft?.commands).toEqual(commandsBeforeFreshCreate);
     fireEvent.click(createTools);
@@ -1620,48 +2406,90 @@ describe('TemplateLayerEditor', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Relink from Library' })[0]!);
     picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a verified Library image with the exact format and dimensions required by this package dependency.')).toBeTruthy();
+    expect(
+      within(picker).getByText(
+        'Choose a verified Library image with the exact format and dimensions required by this package dependency.',
+      ),
+    ).toBeTruthy();
     failNextPinnedArtworkPreview = true;
     fireEvent.click(screen.getByRole('button', { name: 'Pick exact Library image' }));
-    expect(await screen.findByText('Could not verify the selected Library image once.')).toBeTruthy();
-    expect(screen.queryByText(/queued for this private package.*verify the relink during compilation/i)).toBeNull();
+    expect(
+      await screen.findByText('Could not verify the selected Library image once.'),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(/queued for this private package.*verify the relink during compilation/i),
+    ).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Choose image again' }));
     picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a verified Library image with the exact format and dimensions required by this package dependency.')).toBeTruthy();
+    expect(
+      within(picker).getByText(
+        'Choose a verified Library image with the exact format and dimensions required by this package dependency.',
+      ),
+    ).toBeTruthy();
     let resolvePendingPreview!: (value: {
-      id: string; assetId: string; checksum: string; mimeType: string;
-      fileName: string; width: number; height: number; signedUrl: string;
+      id: string;
+      assetId: string;
+      checksum: string;
+      mimeType: string;
+      fileName: string;
+      width: number;
+      height: number;
+      signedUrl: string;
     }) => void;
-    nextPinnedArtworkPreviewRequest = new Promise((resolve) => { resolvePendingPreview = resolve; });
+    nextPinnedArtworkPreviewRequest = new Promise((resolve) => {
+      resolvePendingPreview = resolve;
+    });
     // Start the confirmed repair first, then switch to Create while its exact
     // pinned preview is pending. The edit must still be recorded for target 777.
     fireEvent.click(within(picker).getByRole('button', { name: 'Pick exact Library image' }));
-    expect(await screen.findByText(/Verifying the selected image version and dimensions/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Verifying the selected image version and dimensions/),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add Library image' }));
     picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.')).toBeTruthy();
+    expect(
+      within(picker).getByText(
+        'Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.',
+      ),
+    ).toBeTruthy();
     resolvePendingPreview({
       id: '10000000-0000-4000-8000-000000000102',
       assetId: '10000000-0000-4000-8000-000000000101',
-      checksum: 'd'.repeat(64), mimeType: 'image/png', fileName: 'Pinned.png',
-      width: 320, height: 180, signedUrl: '/fixture/pinned-image.png',
+      checksum: 'd'.repeat(64),
+      mimeType: 'image/png',
+      fileName: 'Pinned.png',
+      width: 320,
+      height: 180,
+      signedUrl: '/fixture/pinned-image.png',
     });
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'dependency.relink',
-      footageItemId: 777,
-      assetRef: {
-        assetId: '10000000-0000-4000-8000-000000000101',
-        versionId: '10000000-0000-4000-8000-000000000102',
-        sha256: 'd'.repeat(64),
-      },
-    }));
-    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).not.toContainEqual(expect.objectContaining({ type: 'artwork.create' }));
-    expect(within(picker).getByText('Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.')).toBeTruthy();
-    expect(screen.queryByText(/queued for this private package.*verify the relink during compilation/i)).toBeNull();
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
+        type: 'dependency.relink',
+        footageItemId: 777,
+        assetRef: {
+          assetId: '10000000-0000-4000-8000-000000000101',
+          versionId: '10000000-0000-4000-8000-000000000102',
+          sha256: 'd'.repeat(64),
+        },
+      }),
+    );
+    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).not.toContainEqual(
+      expect.objectContaining({ type: 'artwork.create' }),
+    );
+    expect(
+      within(picker).getByText(
+        'Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(/queued for this private package.*verify the relink during compilation/i),
+    ).toBeNull();
     expect(createTools.getAttribute('aria-expanded')).toBe('true');
     expect(screen.queryByRole('button', { name: /pin .*library image/i })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled'),
+    ).toBe(true);
     expect(saves).not.toHaveBeenCalled();
   });
 
@@ -1691,36 +2519,50 @@ describe('TemplateLayerEditor', () => {
       engine: 'after-effects',
       state: 'completed',
       errorCode: null,
-      frames: [{
-        frameId: '10000000-0000-4000-8000-000000000306',
-        compId: 63,
-        frameIndex: 74,
-        frameTimeSeconds: 74 / 30,
-        formatId: 'Middle Text line',
-        mimeType: 'image/png',
-        width: 400,
-        height: 300,
-        frameRate: { numerator: 30, denominator: 1 },
-        checksum: 'b'.repeat(64),
-        stale: false,
-      }],
+      frames: [
+        {
+          frameId: '10000000-0000-4000-8000-000000000306',
+          compId: 63,
+          frameIndex: 74,
+          frameTimeSeconds: 74 / 30,
+          formatId: 'Middle Text line',
+          mimeType: 'image/png',
+          width: 400,
+          height: 300,
+          frameRate: { numerator: 30, denominator: 1 },
+          checksum: 'b'.repeat(64),
+          stale: false,
+        },
+      ],
       updatedAt: '2026-10-11T00:00:00.000Z',
     }));
     const onOpenVariant = mock((_id: string) => {});
     editor(onOpenVariant);
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const width = await screen.findByRole('spinbutton', { name: 'Composition width' });
-    const height = await screen.findByRole('spinbutton', { name: 'Composition height' });
+    const width = await screen.findByRole('spinbutton', {
+      name: 'Composition width',
+    });
+    const height = await screen.findByRole('spinbutton', {
+      name: 'Composition height',
+    });
     await waitFor(() => expect((width as HTMLInputElement).disabled).toBe(false));
     fireEvent.change(width, { target: { value: '640' } });
     fireEvent.change(height, { target: { value: '360' } });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply composition size' }).hasAttribute('disabled')).toBe(false));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Apply composition size' }).hasAttribute('disabled'),
+      ).toBe(false),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Apply composition size' }));
 
-    await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), { timeout: 2500 });
+    await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), {
+      timeout: 2500,
+    });
     await waitForAuthoringReadyToPublish('Review and publish variant');
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    const publish = screen.getByRole('button', { name: 'Review and publish variant' });
+    const publish = screen.getByRole('button', {
+      name: 'Review and publish variant',
+    });
     fireEvent.click(publish);
     fireEvent.click(publish);
     await waitFor(() => expect(reviewAuthoring).toHaveBeenCalledTimes(1));
@@ -1734,7 +2576,9 @@ describe('TemplateLayerEditor', () => {
       saveTo: 'new_variant',
       name: 'Card B variant',
     });
-    await waitFor(() => expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'));
+    await waitFor(() =>
+      expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'),
+    );
     expect(saves).not.toHaveBeenCalled();
   });
 
@@ -1742,24 +2586,38 @@ describe('TemplateLayerEditor', () => {
     enablePrivateDraftTestStorage();
     enableVerifiedAuthoringFixture();
     let finishReview: ((artifact: typeof authoringArtifact) => void) | undefined;
-    reviewAuthoring.mockImplementation(() => new Promise((resolve) => {
-      finishReview = resolve;
-    }));
+    reviewAuthoring.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishReview = resolve;
+        }),
+    );
     const onOpenVariant = mock((_id: string) => {});
     editor(onOpenVariant);
     const position = await screen.findByLabelText('Position X');
     fireEvent.change(position, { target: { value: '140' } });
     fireEvent.blur(position);
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
-      expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
-    ));
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
+        expect.objectContaining({
+          type: 'layer.edit',
+          edit: expect.objectContaining({ x: 140 }),
+        }),
+      ),
+    );
     await waitForAuthoringReadyToPublish('Review and publish variant');
     fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
     await waitFor(() => expect(reviewAuthoring).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '160' } });
+    fireEvent.change(screen.getByLabelText('Position X'), {
+      target: { value: '160' },
+    });
     fireEvent.blur(screen.getByLabelText('Position X'));
-    finishReview!({ ...authoringArtifact, state: 'reviewed', reviewedAt: '2026-10-11T00:00:00.000Z' });
+    finishReview!({
+      ...authoringArtifact,
+      state: 'reviewed',
+      reviewedAt: '2026-10-11T00:00:00.000Z',
+    });
 
     expect(await screen.findByText(/did not return a saved version/i)).toBeTruthy();
     expect(commitAuthoring).not.toHaveBeenCalled();
@@ -1771,21 +2629,32 @@ describe('TemplateLayerEditor', () => {
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
       ...authoringDocument,
       scope: { ...authoringScope, brandId, baseVersionId },
-      fontChoices: [{
-        fontId: '10000000-0000-4000-8000-000000000201',
-        postScriptName: 'DejaVuSerif', sha256: 'e'.repeat(64), scope: 'brand',
-      }],
+      fontChoices: [
+        {
+          fontId: '10000000-0000-4000-8000-000000000201',
+          postScriptName: 'DejaVuSerif',
+          sha256: 'e'.repeat(64),
+          scope: 'brand',
+        },
+      ],
     }));
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const font = await screen.findByRole('combobox', { name: 'Authorized text font' });
+    const font = await screen.findByRole('combobox', {
+      name: 'Authorized text font',
+    });
     await waitFor(() => expect(font.textContent).toContain('DejaVuSerif'));
     expect(font.textContent).not.toContain('10000000-0000-4000-8000-000000000201');
   });
 
   test('a private seed workspace retains the existing variant lineage and revision destination', async () => {
     enablePrivateDraftTestStorage();
-    inventory = fresh({ lineage: { role: 'variant', parent: { assetId: 'g', name: 'Original campaign' } } });
+    inventory = fresh({
+      lineage: {
+        role: 'variant',
+        parent: { assetId: 'g', name: 'Original campaign' },
+      },
+    });
     authoringDraft = seededDraftForTest(2);
     editor();
     await screen.findByRole('list', { name: 'Layers' });
@@ -1813,21 +2682,34 @@ describe('TemplateLayerEditor', () => {
       authoringDraft = {
         ...seededDraftForTest(request.expectedRevision + 1),
         commands: structuredClone(request.commands),
-        projectedDocument: projectTemplateAuthoringCommands(packageFontAuthoringDocument, request.commands),
+        projectedDocument: projectTemplateAuthoringCommands(
+          packageFontAuthoringDocument,
+          request.commands,
+        ),
       };
       return authoringDraft;
     });
     authoringFontPreviews.mockImplementation(async () => {
-      if (authoringFontPreviews.mock.calls.length === 1) throw new Error('Temporary font transport failure');
-      return { bytes: new ArrayBuffer(16), contentType: 'font/ttf', sha256: packageFontChoice.sha256 };
+      if (authoringFontPreviews.mock.calls.length === 1)
+        throw new Error('Temporary font transport failure');
+      return {
+        bytes: new ArrayBuffer(16),
+        contentType: 'font/ttf',
+        sha256: packageFontChoice.sha256,
+      };
     });
     Object.defineProperty(globalThis, 'FontFace', {
       configurable: true,
       value: class {
-        load() { return Promise.resolve(this); }
+        load() {
+          return Promise.resolve(this);
+        }
       },
     });
-    Object.defineProperty(document, 'fonts', { configurable: true, value: { add: () => {} } });
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { add: () => {} },
+    });
 
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
@@ -1836,15 +2718,23 @@ describe('TemplateLayerEditor', () => {
     await screen.findByText('Exact font verified for preview.');
     expect(authoringFontPreviews).toHaveBeenCalledTimes(2);
     expect(authoringFontPreviews.mock.calls[1]).toEqual([
-      'a', { brandId: BRAND, baseVersionId: VERSION }, packageFontChoice,
-      { seedArtifactId: seedWorkspacePackage.artifactId, seedPackageChecksum: seedWorkspacePackage.packageChecksum, expectedRevision: 2 },
+      'a',
+      { brandId: BRAND, baseVersionId: VERSION },
+      packageFontChoice,
+      {
+        seedArtifactId: seedWorkspacePackage.artifactId,
+        seedPackageChecksum: seedWorkspacePackage.packageChecksum,
+        expectedRevision: 2,
+      },
     ]);
 
     const position = await screen.findByLabelText('Position X');
     fireEvent.change(position, { target: { value: '110' } });
     fireEvent.blur(position);
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '120' } });
+    fireEvent.change(screen.getByLabelText('Position X'), {
+      target: { value: '120' },
+    });
     fireEvent.blur(screen.getByLabelText('Position X'));
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalledTimes(2));
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1867,20 +2757,37 @@ describe('TemplateLayerEditor', () => {
     Object.defineProperty(globalThis, 'FontFace', {
       configurable: true,
       value: class {
-        load() { return Promise.resolve(this); }
+        load() {
+          return Promise.resolve(this);
+        }
       },
     });
-    Object.defineProperty(document, 'fonts', { configurable: true, value: { add: () => {} } });
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { add: () => {} },
+    });
 
     editor();
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
-    const font = await screen.findByRole('combobox', { name: 'Authorized text font' });
+    const font = await screen.findByRole('combobox', {
+      name: 'Authorized text font',
+    });
     await waitFor(() => expect(font.textContent).toContain('DejaVuSans'));
-    await waitFor(() => expect(authoringFontPreviews).toHaveBeenCalledWith(
-      'a', { brandId: BRAND, baseVersionId: VERSION }, packageFontChoice,
-      { seedArtifactId: seedWorkspacePackage.artifactId, seedPackageChecksum: seedWorkspacePackage.packageChecksum, expectedRevision: 2 },
-    ));
-    fireEvent.change(screen.getByRole('textbox', { name: 'New text layer content' }), { target: { value: 'Package font headline' } });
+    await waitFor(() =>
+      expect(authoringFontPreviews).toHaveBeenCalledWith(
+        'a',
+        { brandId: BRAND, baseVersionId: VERSION },
+        packageFontChoice,
+        {
+          seedArtifactId: seedWorkspacePackage.artifactId,
+          seedPackageChecksum: seedWorkspacePackage.packageChecksum,
+          expectedRevision: 2,
+        },
+      ),
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'New text layer content' }), {
+      target: { value: 'Package font headline' },
+    });
     fireEvent.click(await screen.findByRole('button', { name: 'Add text layer' }));
 
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalled());
@@ -1902,51 +2809,95 @@ describe('TemplateLayerEditor', () => {
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
       ...authoringDocument,
       scope: { ...authoringScope, brandId, baseVersionId },
-      nodes: authoringDocument.nodes.map((node) => memberIds.has(node.nodeId)
-        ? { ...node, capabilities: { ...node.capabilities, grouping: true }, groupingReason: null }
-        : node),
+      nodes: authoringDocument.nodes.map((node) =>
+        memberIds.has(node.nodeId)
+          ? {
+              ...node,
+              capabilities: { ...node.capabilities, grouping: true },
+              groupingReason: null,
+            }
+          : node,
+      ),
     }));
     editor();
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Include MENOS DE 2.5 in group' }));
+    fireEvent.click(
+      await screen.findByRole('checkbox', {
+        name: 'Include MENOS DE 2.5 in group',
+      }),
+    );
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Red Box in group' }));
     fireEvent.click(screen.getByRole('button', { name: 'Group' }));
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalled());
-    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(expect.objectContaining({
-      type: 'layer.group',
-      compId: 63,
-      memberNodeIds: ['aep:63:114', 'aep:63:71'],
-    }));
-    const rotation = await screen.findByRole('textbox', { name: 'Group rotation' });
+    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
+      expect.objectContaining({
+        type: 'layer.group',
+        compId: 63,
+        memberNodeIds: ['aep:63:114', 'aep:63:71'],
+      }),
+    );
+    const rotation = await screen.findByRole('textbox', {
+      name: 'Group rotation',
+    });
     expect((rotation as HTMLInputElement).disabled).toBe(false);
     fireEvent.change(rotation, { target: { value: '12.5' } });
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'layer.group.transform',
-      nodeId: expect.any(String),
-      transform: { rotation: 12.5 },
-    }));
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
+        type: 'layer.group.transform',
+        nodeId: expect.any(String),
+        transform: { rotation: 12.5 },
+      }),
+    );
     const scaleX = screen.getByRole('textbox', { name: 'Group scale X' });
     expect((scaleX as HTMLInputElement).disabled).toBe(false);
     fireEvent.change(scaleX, { target: { value: '125' } });
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1)).toMatchObject({
-      type: 'layer.group.transform',
-      transform: { scale: [125, 100] },
-    }));
-    expect((screen.getByRole('spinbutton', { name: 'Layer in time' }) as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText(/Group timing stays locked because its parent layer does not trim child layers/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1)).toMatchObject({
+        type: 'layer.group.transform',
+        transform: { scale: [125, 100] },
+      }),
+    );
+    expect(
+      (
+        screen.getByRole('spinbutton', {
+          name: 'Layer in time',
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      screen.getByText(
+        /Group timing stays locked because its parent layer does not trim child layers/i,
+      ),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /^Edit keyframes/ }));
-    const motionChannels = await screen.findByRole('list', { name: 'Motion channels' });
+    const motionChannels = await screen.findByRole('list', {
+      name: 'Motion channels',
+    });
     expect(screen.queryByRole('button', { name: /Opacity/ })).toBeNull();
     fireEvent.click(within(motionChannels).getByRole('button', { name: /^Rotation / }));
     fireEvent.click(screen.getByRole('button', { name: 'Add at playhead' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1)).toMatchObject({
-      type: 'layer.keyframes.replace',
-      nodeId: expect.any(String),
-      channel: 'rotation',
-    }));
-    expect((screen.getByRole('textbox', { name: 'Group rotation' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/Static group edits and ungroup are locked while unsupported or nested motion must stay intact/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1)).toMatchObject({
+        type: 'layer.keyframes.replace',
+        nodeId: expect.any(String),
+        channel: 'rotation',
+      }),
+    );
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: 'Group rotation',
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(
+      screen.getByText(
+        /Static group edits and ungroup are locked while unsupported or nested motion must stay intact/i,
+      ),
+    ).toBeTruthy();
   });
 
   test('locks static transform and ungroup once a generated group contains keyframes', async () => {
@@ -1955,27 +2906,46 @@ describe('TemplateLayerEditor', () => {
       ...authoringDocument,
       scope: { ...authoringScope, brandId, baseVersionId },
       sourceHeadVersionId: baseVersionId,
-      nodes: authoringDocument.nodes.map((node) => memberIds.has(node.nodeId)
-        ? { ...node, capabilities: { ...node.capabilities, grouping: true }, groupingReason: null }
-        : node),
+      nodes: authoringDocument.nodes.map((node) =>
+        memberIds.has(node.nodeId)
+          ? {
+              ...node,
+              capabilities: { ...node.capabilities, grouping: true },
+              groupingReason: null,
+            }
+          : node,
+      ),
     }));
     authoringDraftWrites.mockImplementation(async (_assetId, request) => {
-      const projected = projectTemplateAuthoringCommands(authoringProjectionSource, request.commands);
+      const projected = projectTemplateAuthoringCommands(
+        authoringProjectionSource,
+        request.commands,
+      );
       const animatedProjection = {
         ...projected,
-        nodes: projected.nodes.map((node) => node.kind !== 'group' ? node : {
-          ...node,
-          keyframeChannels: node.keyframeChannels.map((channel) => channel.channel !== 'rotation' ? channel : {
-            ...channel,
-            keyframes: [{
-              keyframeId: 'draft:00000000-0000-4000-8000-000000000001',
-              timeSec: 0,
-              value: 12.5,
-              inInterpolation: 'LINEAR' as const,
-              outInterpolation: 'LINEAR' as const,
-            }],
-          }),
-        }),
+        nodes: projected.nodes.map((node) =>
+          node.kind !== 'group'
+            ? node
+            : {
+                ...node,
+                keyframeChannels: node.keyframeChannels.map((channel) =>
+                  channel.channel !== 'rotation'
+                    ? channel
+                    : {
+                        ...channel,
+                        keyframes: [
+                          {
+                            keyframeId: 'draft:00000000-0000-4000-8000-000000000001',
+                            timeSec: 0,
+                            value: 12.5,
+                            inInterpolation: 'LINEAR' as const,
+                            outInterpolation: 'LINEAR' as const,
+                          },
+                        ],
+                      },
+                ),
+              },
+        ),
       };
       authoringDraft = {
         scope: { ...authoringScope, baseVersionId: request.baseVersionId },
@@ -1996,27 +2966,49 @@ describe('TemplateLayerEditor', () => {
     });
     enablePrivateDraftTestStorage();
     editor();
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Include MENOS DE 2.5 in group' }));
+    fireEvent.click(
+      await screen.findByRole('checkbox', {
+        name: 'Include MENOS DE 2.5 in group',
+      }),
+    );
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Red Box in group' }));
     fireEvent.click(screen.getByRole('button', { name: 'Group' }));
 
-    const rotation = await screen.findByRole('textbox', { name: 'Group rotation' });
+    const rotation = await screen.findByRole('textbox', {
+      name: 'Group rotation',
+    });
     await waitFor(() => expect((rotation as HTMLInputElement).disabled).toBe(true));
-    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
     fireEvent.change(rotation, { target: { value: '20' } });
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).not.toContainEqual(expect.objectContaining({
-      type: 'layer.group.transform',
-      transform: { rotation: 20 },
-    })));
-    expect(screen.getByText(/Static group edits and ungroup are locked while unsupported or nested motion must stay intact/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).not.toContainEqual(
+        expect.objectContaining({
+          type: 'layer.group.transform',
+          transform: { rotation: 20 },
+        }),
+      ),
+    );
+    expect(
+      screen.getByText(
+        /Static group edits and ungroup are locked while unsupported or nested motion must stay intact/i,
+      ),
+    ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Move selected group' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Resize selected layer from nw' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rotate selected layer' })).toBeNull();
-    fireEvent.keyDown(screen.getByRole('application', { name: 'Interactive template preview' }), { key: 'ArrowRight' });
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).not.toContainEqual(expect.objectContaining({
-      type: 'layer.group.transform',
-      transform: { position: expect.any(Array) },
-    })));
+    fireEvent.keyDown(screen.getByRole('application', { name: 'Interactive template preview' }), {
+      key: 'ArrowRight',
+    });
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).not.toContainEqual(
+        expect.objectContaining({
+          type: 'layer.group.transform',
+          transform: { position: expect.any(Array) },
+        }),
+      ),
+    );
   });
 
   test('edits and ungroups a committed source group from exact version context without recreating it', async () => {
@@ -2025,20 +3017,74 @@ describe('TemplateLayerEditor', () => {
     const secondId = 'draft:20000000-0000-4000-8000-000000000083';
     const base = structuredClone(authoringDocument);
     const group = {
-      ...base.nodes[0]!, nodeId: groupId, sourceRef: { compId: 63, layerId: 50 },
-      sourceCompositionId: 63, parentNodeId: null, name: 'Committed group', textContent: null,
-      fontRef: null, fillColor: null, kind: 'group' as const, shape: null, size: null, pathPosition: null,
-      fill: null, stroke: null, font: null, fontSize: null, position: [40, 50] as [number, number],
-      rotation: 0, scale: [100, 100] as [number, number], opacity: 100,
+      ...base.nodes[0]!,
+      nodeId: groupId,
+      sourceRef: { compId: 63, layerId: 50 },
+      sourceCompositionId: 63,
+      parentNodeId: null,
+      name: 'Committed group',
+      textContent: null,
+      fontRef: null,
+      fillColor: null,
+      kind: 'group' as const,
+      shape: null,
+      size: null,
+      pathPosition: null,
+      fill: null,
+      stroke: null,
+      font: null,
+      fontSize: null,
+      position: [40, 50] as [number, number],
+      rotation: 0,
+      scale: [100, 100] as [number, number],
+      opacity: 100,
       keyframeChannels: [
-        { channelId: `${groupId}:ADBE Position`, channel: 'position' as const, matchName: 'ADBE Position', frameRate: 30, dimensions: 3, separated: false, baseValue: [40, 50, 0] as [number, number, number], reason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Scale`, channel: 'scale' as const, matchName: 'ADBE Scale', frameRate: 30, dimensions: 3, separated: false, baseValue: [100, 100, 100] as [number, number, number], reason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Rotate Z`, channel: 'rotation' as const, matchName: 'ADBE Rotate Z', frameRate: 30, dimensions: 1, separated: false, baseValue: 0, reason: null, keyframes: [] },
+        {
+          channelId: `${groupId}:ADBE Position`,
+          channel: 'position' as const,
+          matchName: 'ADBE Position',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [40, 50, 0] as [number, number, number],
+          reason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Scale`,
+          channel: 'scale' as const,
+          matchName: 'ADBE Scale',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [100, 100, 100] as [number, number, number],
+          reason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Rotate Z`,
+          channel: 'rotation' as const,
+          matchName: 'ADBE Rotate Z',
+          frameRate: 30,
+          dimensions: 1,
+          separated: false,
+          baseValue: 0,
+          reason: null,
+          keyframes: [],
+        },
       ],
     };
     const members = [
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!, nodeId: firstId, parentNodeId: groupId },
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!, nodeId: secondId, parentNodeId: groupId },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!,
+        nodeId: firstId,
+        parentNodeId: groupId,
+      },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!,
+        nodeId: secondId,
+        parentNodeId: groupId,
+      },
     ];
     const sourceDoc: TemplateAuthoringDocument = {
       ...base,
@@ -2046,14 +3092,25 @@ describe('TemplateLayerEditor', () => {
         artifactId: '10000000-0000-4000-8000-000000000084',
         versionId: authoringScope.baseVersionId,
         packageChecksum: authoringChecksum,
-        identityMap: [{ nodeId: groupId, compId: 63, persistedUid: 50, sourceUid: 500, members: [
-          { nodeId: firstId, persistedUid: 114, parentUid: 50 },
-          { nodeId: secondId, persistedUid: 71, parentUid: 50 },
-        ] }],
+        identityMap: [
+          {
+            nodeId: groupId,
+            compId: 63,
+            persistedUid: 50,
+            sourceUid: 500,
+            members: [
+              { nodeId: firstId, persistedUid: 114, parentUid: 50 },
+              { nodeId: secondId, persistedUid: 71, parentUid: 50 },
+            ],
+          },
+        ],
         freshArtboardReceipts: [],
       },
-      compositions: base.compositions.map((composition) => composition.compId === 63
-        ? { ...composition, nodeIds: [groupId, firstId, secondId] } : composition),
+      compositions: base.compositions.map((composition) =>
+        composition.compId === 63
+          ? { ...composition, nodeIds: [groupId, firstId, secondId] }
+          : composition,
+      ),
       nodes: [...base.nodes.filter((node) => node.sourceRef?.compId !== 63), group, ...members],
     };
     authoringProjectionSource = sourceDoc;
@@ -2061,29 +3118,52 @@ describe('TemplateLayerEditor', () => {
       ...sourceDoc,
       scope: { ...authoringScope, brandId, baseVersionId },
       sourceHeadVersionId: baseVersionId,
-      sourceAuthoringContext: { ...sourceDoc.sourceAuthoringContext!, versionId: baseVersionId },
-      opaqueSourceRef: { ...sourceDoc.opaqueSourceRef, versionId: baseVersionId },
+      sourceAuthoringContext: {
+        ...sourceDoc.sourceAuthoringContext!,
+        versionId: baseVersionId,
+      },
+      opaqueSourceRef: {
+        ...sourceDoc.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     editor();
     const rows = await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(within(rows).getAllByText('Committed group')[0]!);
-    const rotation = await screen.findByRole('textbox', { name: 'Group rotation' });
+    const rotation = await screen.findByRole('textbox', {
+      name: 'Group rotation',
+    });
     expect((rotation as HTMLInputElement).disabled).toBe(false);
     fireEvent.change(rotation, { target: { value: '12' } });
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'layer.group.transform', nodeId: groupId, transform: { rotation: 12 },
-    }));
-    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) => command.type === 'layer.group')).toBe(false);
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
+        type: 'layer.group.transform',
+        nodeId: groupId,
+        transform: { rotation: 12 },
+      }),
+    );
+    expect(
+      authoringDraftWrites.mock.calls
+        .at(-1)?.[1]
+        .commands.some((command) => command.type === 'layer.group'),
+    ).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Ungroup' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1)).toEqual({ type: 'layer.ungroup', nodeId: groupId }));
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1)).toEqual({
+        type: 'layer.ungroup',
+        nodeId: groupId,
+      }),
+    );
     const reopened = authoringDraft!.projectedDocument!;
     expect(reopened.nodes.some((node) => node.nodeId === groupId)).toBe(false);
     expect(reopened.nodes.find((node) => node.nodeId === firstId)).toMatchObject({
-      parentNodeId: null, sourceRef: { compId: 63, layerId: 114 },
+      parentNodeId: null,
+      sourceRef: { compId: 63, layerId: 114 },
     });
     expect(reopened.nodes.find((node) => node.nodeId === secondId)).toMatchObject({
-      parentNodeId: null, sourceRef: { compId: 63, layerId: 71 },
+      parentNodeId: null,
+      sourceRef: { compId: 63, layerId: 71 },
     });
   });
 
@@ -2093,75 +3173,220 @@ describe('TemplateLayerEditor', () => {
     const secondId = 'draft:20000000-0000-4000-8000-000000000123';
     const base = structuredClone(authoringDocument);
     const group = {
-      ...base.nodes[0]!, nodeId: groupId, sourceRef: { compId: 63, layerId: 50 }, sourceCompositionId: 63,
-      parentNodeId: null, name: 'Translated animated group', kind: 'group' as const, textContent: null,
-      fontRef: null, fillColor: null, shape: null, size: null, pathPosition: null, fill: null, stroke: null,
-      font: null, fontSize: null, position: [40, 50] as [number, number], rotation: 0,
-      scale: [100, 100] as [number, number], opacity: 0,
+      ...base.nodes[0]!,
+      nodeId: groupId,
+      sourceRef: { compId: 63, layerId: 50 },
+      sourceCompositionId: 63,
+      parentNodeId: null,
+      name: 'Translated animated group',
+      kind: 'group' as const,
+      textContent: null,
+      fontRef: null,
+      fillColor: null,
+      shape: null,
+      size: null,
+      pathPosition: null,
+      fill: null,
+      stroke: null,
+      font: null,
+      fontSize: null,
+      position: [40, 50] as [number, number],
+      rotation: 0,
+      scale: [100, 100] as [number, number],
+      opacity: 0,
       ungroupTranslationReason: null,
-      transformLocks: { position: 'authoring_animated_group_static_transform_locked',
-        rotation: 'authoring_animated_group_static_transform_locked', scale: 'authoring_animated_group_static_transform_locked' },
-      positionSource: { kind: 'explicit' as const, value: [40, 50, 0] as [number, number, number], reason: null },
+      transformLocks: {
+        position: 'authoring_animated_group_static_transform_locked',
+        rotation: 'authoring_animated_group_static_transform_locked',
+        scale: 'authoring_animated_group_static_transform_locked',
+      },
+      positionSource: {
+        kind: 'explicit' as const,
+        value: [40, 50, 0] as [number, number, number],
+        reason: null,
+      },
       keyframeChannels: [
-        { channelId: `${groupId}:ADBE Position`, channel: 'position' as const, matchName: 'ADBE Position', frameRate: 30, dimensions: 3, separated: false, baseValue: [40, 50, 0] as [number, number, number], reason: null, propertyReason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Scale`, channel: 'scale' as const, matchName: 'ADBE Scale', frameRate: 30, dimensions: 3, separated: false, baseValue: [100, 100, 100] as [number, number, number], reason: null, propertyReason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Rotate Z`, channel: 'rotation' as const, matchName: 'ADBE Rotate Z', frameRate: 30, dimensions: 1, separated: false, baseValue: 0, reason: null, propertyReason: null, keyframes: [] },
+        {
+          channelId: `${groupId}:ADBE Position`,
+          channel: 'position' as const,
+          matchName: 'ADBE Position',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [40, 50, 0] as [number, number, number],
+          reason: null,
+          propertyReason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Scale`,
+          channel: 'scale' as const,
+          matchName: 'ADBE Scale',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [100, 100, 100] as [number, number, number],
+          reason: null,
+          propertyReason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Rotate Z`,
+          channel: 'rotation' as const,
+          matchName: 'ADBE Rotate Z',
+          frameRate: 30,
+          dimensions: 1,
+          separated: false,
+          baseValue: 0,
+          reason: null,
+          propertyReason: null,
+          keyframes: [],
+        },
       ],
     };
     const members = [
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!, nodeId: firstId, parentNodeId: groupId,
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!,
+        nodeId: firstId,
+        parentNodeId: groupId,
         ungroupTranslationReason: null,
         position: [10, 20] as [number, number],
-        positionSource: { kind: 'keyframed' as const, value: null, reason: null },
-        keyframeChannels: [{ channelId: `${firstId}:ADBE Position`, channel: 'position' as const,
-          matchName: 'ADBE Position', frameRate: 30, dimensions: 3, separated: false,
-          baseValue: null, propertyBaseValue: null, reason: null, propertyReason: null, keyframes: [{
-            keyframeId: 'source-position-key', timeSec: 0.5, nativeTimeSec: 0.5, value: [15, 25, 3],
-            inInterpolation: 'BEZIER' as const, outInterpolation: 'BEZIER' as const,
-            inEase: [{ speed: 1, influence: 30 }], outEase: [{ speed: 2, influence: 40 }], nativeFrame: 15,
-          }] }],
+        positionSource: {
+          kind: 'keyframed' as const,
+          value: null,
+          reason: null,
+        },
+        keyframeChannels: [
+          {
+            channelId: `${firstId}:ADBE Position`,
+            channel: 'position' as const,
+            matchName: 'ADBE Position',
+            frameRate: 30,
+            dimensions: 3,
+            separated: false,
+            baseValue: null,
+            propertyBaseValue: null,
+            reason: null,
+            propertyReason: null,
+            keyframes: [
+              {
+                keyframeId: 'source-position-key',
+                timeSec: 0.5,
+                nativeTimeSec: 0.5,
+                value: [15, 25, 3],
+                inInterpolation: 'BEZIER' as const,
+                outInterpolation: 'BEZIER' as const,
+                inEase: [{ speed: 1, influence: 30 }],
+                outEase: [{ speed: 2, influence: 40 }],
+                nativeFrame: 15,
+              },
+            ],
+          },
+        ],
       },
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!, nodeId: secondId, parentNodeId: groupId,
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!,
+        nodeId: secondId,
+        parentNodeId: groupId,
         ungroupTranslationReason: null,
         position: [30, 40] as [number, number],
-        positionSource: { kind: 'explicit' as const, value: [30, 40, 0] as [number, number, number], reason: null },
-        keyframeChannels: [] },
+        positionSource: {
+          kind: 'explicit' as const,
+          value: [30, 40, 0] as [number, number, number],
+          reason: null,
+        },
+        keyframeChannels: [],
+      },
     ];
     const sourceDoc: TemplateAuthoringDocument = {
       ...base,
       sourceAuthoringContext: {
-        artifactId: '10000000-0000-4000-8000-000000000124', versionId: authoringScope.baseVersionId,
+        artifactId: '10000000-0000-4000-8000-000000000124',
+        versionId: authoringScope.baseVersionId,
         packageChecksum: authoringChecksum,
-        identityMap: [{ nodeId: groupId, compId: 63, persistedUid: 50, sourceUid: 500, members: [
-          { nodeId: firstId, persistedUid: 114, parentUid: 50 }, { nodeId: secondId, persistedUid: 71, parentUid: 50 },
-        ] }], freshArtboardReceipts: [],
+        identityMap: [
+          {
+            nodeId: groupId,
+            compId: 63,
+            persistedUid: 50,
+            sourceUid: 500,
+            members: [
+              { nodeId: firstId, persistedUid: 114, parentUid: 50 },
+              { nodeId: secondId, persistedUid: 71, parentUid: 50 },
+            ],
+          },
+        ],
+        freshArtboardReceipts: [],
       },
-      compositions: base.compositions.map((composition) => composition.compId === 63
-        ? { ...composition, nodeIds: [groupId, firstId, secondId] } : composition),
+      compositions: base.compositions.map((composition) =>
+        composition.compId === 63
+          ? { ...composition, nodeIds: [groupId, firstId, secondId] }
+          : composition,
+      ),
       nodes: [...base.nodes.filter((node) => node.sourceRef?.compId !== 63), group, ...members],
     };
     authoringProjectionSource = sourceDoc;
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
-      ...sourceDoc, scope: { ...authoringScope, brandId, baseVersionId }, sourceHeadVersionId: baseVersionId,
-      sourceAuthoringContext: { ...sourceDoc.sourceAuthoringContext!, versionId: baseVersionId },
-      opaqueSourceRef: { ...sourceDoc.opaqueSourceRef, versionId: baseVersionId },
+      ...sourceDoc,
+      scope: { ...authoringScope, brandId, baseVersionId },
+      sourceHeadVersionId: baseVersionId,
+      sourceAuthoringContext: {
+        ...sourceDoc.sourceAuthoringContext!,
+        versionId: baseVersionId,
+      },
+      opaqueSourceRef: {
+        ...sourceDoc.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     editor();
     const rows = await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(within(rows).getAllByText('Translated animated group')[0]!);
-    expect((await screen.findByRole('textbox', { name: 'Group rotation' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox', { name: 'Group scale X' }) as HTMLInputElement).disabled).toBe(true);
-    const ungroup = await screen.findByRole('button', { name: 'Ungroup' }) as HTMLButtonElement;
+    expect(
+      (
+        (await screen.findByRole('textbox', {
+          name: 'Group rotation',
+        })) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: 'Group scale X',
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    const ungroup = (await screen.findByRole('button', {
+      name: 'Ungroup',
+    })) as HTMLButtonElement;
     expect(ungroup.disabled).toBe(false);
     fireEvent.click(ungroup);
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1))
-      .toEqual({ type: 'layer.ungroup', nodeId: groupId }));
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.at(-1)).toEqual({
+        type: 'layer.ungroup',
+        nodeId: groupId,
+      }),
+    );
     const reopened = authoringDraft!.projectedDocument!;
     expect(reopened.nodes.some((node) => node.nodeId === groupId)).toBe(false);
     expect(reopened.nodes.find((node) => node.nodeId === firstId)).toMatchObject({
-      parentNodeId: null, position: [50, 70], positionSource: { kind: 'keyframed', value: null },
-      keyframeChannels: [{ baseValue: null, keyframes: [{ keyframeId: 'source-position-key', value: [55, 75, 3],
-        inInterpolation: 'BEZIER', outInterpolation: 'BEZIER', nativeFrame: 15 }] }],
+      parentNodeId: null,
+      position: [50, 70],
+      positionSource: { kind: 'keyframed', value: null },
+      keyframeChannels: [
+        {
+          baseValue: null,
+          keyframes: [
+            {
+              keyframeId: 'source-position-key',
+              value: [55, 75, 3],
+              inInterpolation: 'BEZIER',
+              outInterpolation: 'BEZIER',
+              nativeFrame: 15,
+            },
+          ],
+        },
+      ],
     });
   });
 
@@ -2172,51 +3397,160 @@ describe('TemplateLayerEditor', () => {
     const secondId = 'draft:20000000-0000-4000-8000-000000000113';
     const base = structuredClone(authoringDocument);
     const group = {
-      ...base.nodes[0]!, nodeId: groupId, sourceRef: { compId: 63, layerId: 50 }, sourceCompositionId: 63,
-      sourceNodeId: null, parentNodeId: null, name: 'Locked root group', textContent: null, fontRef: null,
-      fillColor: null, kind: 'group' as const, shape: null, size: null, pathPosition: null, fill: null, stroke: null,
-      font: null, fontSize: null, position: [40, 50] as [number, number], rotation: 0,
-      scale: [100, 100] as [number, number], opacity: 100,
+      ...base.nodes[0]!,
+      nodeId: groupId,
+      sourceRef: { compId: 63, layerId: 50 },
+      sourceCompositionId: 63,
+      sourceNodeId: null,
+      parentNodeId: null,
+      name: 'Locked root group',
+      textContent: null,
+      fontRef: null,
+      fillColor: null,
+      kind: 'group' as const,
+      shape: null,
+      size: null,
+      pathPosition: null,
+      fill: null,
+      stroke: null,
+      font: null,
+      fontSize: null,
+      position: [40, 50] as [number, number],
+      rotation: 0,
+      scale: [100, 100] as [number, number],
+      opacity: 100,
       transformLocks: { position: 'unknown_native_position_lock' },
       capabilities: { ...base.nodes[0]!.capabilities, transform: true },
       keyframeChannels: [
-        { channelId: `${groupId}:ADBE Position`, channel: 'position' as const, matchName: 'ADBE Position', frameRate: 30, dimensions: 3, separated: false, baseValue: [40, 50, 0] as [number, number, number], reason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Scale`, channel: 'scale' as const, matchName: 'ADBE Scale', frameRate: 30, dimensions: 3, separated: false, baseValue: [100, 100, 100] as [number, number, number], reason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Rotate Z`, channel: 'rotation' as const, matchName: 'ADBE Rotate Z', frameRate: 30, dimensions: 1, separated: false, baseValue: 0, reason: null, keyframes: [] },
+        {
+          channelId: `${groupId}:ADBE Position`,
+          channel: 'position' as const,
+          matchName: 'ADBE Position',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [40, 50, 0] as [number, number, number],
+          reason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Scale`,
+          channel: 'scale' as const,
+          matchName: 'ADBE Scale',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [100, 100, 100] as [number, number, number],
+          reason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Rotate Z`,
+          channel: 'rotation' as const,
+          matchName: 'ADBE Rotate Z',
+          frameRate: 30,
+          dimensions: 1,
+          separated: false,
+          baseValue: 0,
+          reason: null,
+          keyframes: [],
+        },
       ],
     };
     const members = [
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!, nodeId: firstId, parentNodeId: groupId },
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!, nodeId: secondId, parentNodeId: groupId },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!,
+        nodeId: firstId,
+        parentNodeId: groupId,
+      },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!,
+        nodeId: secondId,
+        parentNodeId: groupId,
+      },
     ];
     const sourceDoc: TemplateAuthoringDocument = {
       ...base,
       sourceAuthoringContext: {
-        artifactId: '10000000-0000-4000-8000-000000000114', versionId: authoringScope.baseVersionId,
+        artifactId: '10000000-0000-4000-8000-000000000114',
+        versionId: authoringScope.baseVersionId,
         packageChecksum: authoringChecksum,
-        identityMap: [{ nodeId: groupId, compId: 63, persistedUid: 50, sourceUid: 500, members: [
-          { nodeId: firstId, persistedUid: 114, parentUid: 50 }, { nodeId: secondId, persistedUid: 71, parentUid: 50 },
-        ] }], freshArtboardReceipts: [],
+        identityMap: [
+          {
+            nodeId: groupId,
+            compId: 63,
+            persistedUid: 50,
+            sourceUid: 500,
+            members: [
+              { nodeId: firstId, persistedUid: 114, parentUid: 50 },
+              { nodeId: secondId, persistedUid: 71, parentUid: 50 },
+            ],
+          },
+        ],
+        freshArtboardReceipts: [],
       },
-      compositions: base.compositions.map((composition) => composition.compId === 63
-        ? { ...composition, nodeIds: [groupId, firstId, secondId] } : composition),
+      compositions: base.compositions.map((composition) =>
+        composition.compId === 63
+          ? { ...composition, nodeIds: [groupId, firstId, secondId] }
+          : composition,
+      ),
       nodes: [...base.nodes.filter((node) => node.sourceRef?.compId !== 63), group, ...members],
     };
     authoringProjectionSource = sourceDoc;
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
-      ...sourceDoc, scope: { ...authoringScope, brandId, baseVersionId }, sourceHeadVersionId: baseVersionId,
-      sourceAuthoringContext: { ...sourceDoc.sourceAuthoringContext!, versionId: baseVersionId },
-      opaqueSourceRef: { ...sourceDoc.opaqueSourceRef, versionId: baseVersionId },
+      ...sourceDoc,
+      scope: { ...authoringScope, brandId, baseVersionId },
+      sourceHeadVersionId: baseVersionId,
+      sourceAuthoringContext: {
+        ...sourceDoc.sourceAuthoringContext!,
+        versionId: baseVersionId,
+      },
+      opaqueSourceRef: {
+        ...sourceDoc.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     editor();
     const rows = await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(within(rows).getAllByText('Locked root group')[0]!);
-    expect((await screen.findByRole('textbox', { name: 'X position' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox', { name: 'Y position' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox', { name: 'Group rotation' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox', { name: 'Group scale X' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox', { name: 'Group scale Y' }) as HTMLInputElement).disabled).toBe(true);
-    expect((await screen.findByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (
+        (await screen.findByRole('textbox', {
+          name: 'X position',
+        })) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect((screen.getByRole('textbox', { name: 'Y position' }) as HTMLInputElement).disabled).toBe(
+      true,
+    );
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: 'Group rotation',
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: 'Group scale X',
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole('textbox', {
+          name: 'Group scale Y',
+        }) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        (await screen.findByRole('button', {
+          name: 'Ungroup',
+        })) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
   });
 
   test('keeps a receipt-verified nested source group static controls and ungroup locked', async () => {
@@ -2227,53 +3561,168 @@ describe('TemplateLayerEditor', () => {
     const extraId = 'draft:20000000-0000-4000-8000-000000000109';
     const base = structuredClone(authoringDocument);
     const group = {
-      ...base.nodes[0]!, nodeId: groupId, sourceRef: { compId: 63, layerId: 50 }, sourceCompositionId: 63,
-      sourceNodeId: null, parentNodeId: parentId, name: 'Nested group', textContent: null, fontRef: null, fillColor: null,
-      kind: 'group' as const, shape: null, size: null, pathPosition: null, fill: null, stroke: null, font: null,
-      fontSize: null, position: [40, 50] as [number, number], rotation: 0, scale: [100, 100] as [number, number], opacity: 100,
+      ...base.nodes[0]!,
+      nodeId: groupId,
+      sourceRef: { compId: 63, layerId: 50 },
+      sourceCompositionId: 63,
+      sourceNodeId: null,
+      parentNodeId: parentId,
+      name: 'Nested group',
+      textContent: null,
+      fontRef: null,
+      fillColor: null,
+      kind: 'group' as const,
+      shape: null,
+      size: null,
+      pathPosition: null,
+      fill: null,
+      stroke: null,
+      font: null,
+      fontSize: null,
+      position: [40, 50] as [number, number],
+      rotation: 0,
+      scale: [100, 100] as [number, number],
+      opacity: 100,
       capabilities: { ...base.nodes[0]!.capabilities, transform: true },
       keyframeChannels: [
-        { channelId: `${groupId}:ADBE Position`, channel: 'position' as const, matchName: 'ADBE Position', frameRate: 30, dimensions: 3, separated: false, baseValue: [40, 50, 0] as [number, number, number], reason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Scale`, channel: 'scale' as const, matchName: 'ADBE Scale', frameRate: 30, dimensions: 3, separated: false, baseValue: [100, 100, 100] as [number, number, number], reason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Rotate Z`, channel: 'rotation' as const, matchName: 'ADBE Rotate Z', frameRate: 30, dimensions: 1, separated: false, baseValue: 0, reason: null, keyframes: [] },
+        {
+          channelId: `${groupId}:ADBE Position`,
+          channel: 'position' as const,
+          matchName: 'ADBE Position',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [40, 50, 0] as [number, number, number],
+          reason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Scale`,
+          channel: 'scale' as const,
+          matchName: 'ADBE Scale',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [100, 100, 100] as [number, number, number],
+          reason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Rotate Z`,
+          channel: 'rotation' as const,
+          matchName: 'ADBE Rotate Z',
+          frameRate: 30,
+          dimensions: 1,
+          separated: false,
+          baseValue: 0,
+          reason: null,
+          keyframes: [],
+        },
       ],
     };
     const members = [
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!, nodeId: firstId, parentNodeId: groupId },
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!, nodeId: secondId, parentNodeId: groupId },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!,
+        nodeId: firstId,
+        parentNodeId: groupId,
+      },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!,
+        nodeId: secondId,
+        parentNodeId: groupId,
+      },
     ];
-    const extra = { ...members[1]!, nodeId: extraId, sourceRef: { compId: 63, layerId: 72 }, parentNodeId: parentId };
-    const parent = { ...group, nodeId: parentId, sourceRef: { compId: 63, layerId: 60 }, parentNodeId: null, name: 'Outer group' };
+    const extra = {
+      ...members[1]!,
+      nodeId: extraId,
+      sourceRef: { compId: 63, layerId: 72 },
+      parentNodeId: parentId,
+    };
+    const parent = {
+      ...group,
+      nodeId: parentId,
+      sourceRef: { compId: 63, layerId: 60 },
+      parentNodeId: null,
+      name: 'Outer group',
+    };
     const sourceDoc: TemplateAuthoringDocument = {
       ...base,
       sourceAuthoringContext: {
-        artifactId: '10000000-0000-4000-8000-000000000110', versionId: authoringScope.baseVersionId,
+        artifactId: '10000000-0000-4000-8000-000000000110',
+        versionId: authoringScope.baseVersionId,
         packageChecksum: authoringChecksum,
         identityMap: [
-          { nodeId: groupId, compId: 63, persistedUid: 50, sourceUid: 500, members: [
-            { nodeId: firstId, persistedUid: 114, parentUid: 50 }, { nodeId: secondId, persistedUid: 71, parentUid: 50 },
-          ] },
-          { nodeId: parentId, compId: 63, persistedUid: 60, sourceUid: 600, members: [
-            { nodeId: groupId, persistedUid: 50, parentUid: 60 }, { nodeId: extraId, persistedUid: 72, parentUid: 60 },
-          ] },
+          {
+            nodeId: groupId,
+            compId: 63,
+            persistedUid: 50,
+            sourceUid: 500,
+            members: [
+              { nodeId: firstId, persistedUid: 114, parentUid: 50 },
+              { nodeId: secondId, persistedUid: 71, parentUid: 50 },
+            ],
+          },
+          {
+            nodeId: parentId,
+            compId: 63,
+            persistedUid: 60,
+            sourceUid: 600,
+            members: [
+              { nodeId: groupId, persistedUid: 50, parentUid: 60 },
+              { nodeId: extraId, persistedUid: 72, parentUid: 60 },
+            ],
+          },
         ],
-        freshArtboardReceipts: [{ compId: 63, sourceCompId: null, name: 'Fresh board', width: 640, height: 480, frameRate: 30, durationSec: 5, layerUidMap: [] }],
+        freshArtboardReceipts: [
+          {
+            compId: 63,
+            sourceCompId: null,
+            name: 'Fresh board',
+            width: 640,
+            height: 480,
+            frameRate: 30,
+            durationSec: 5,
+            layerUidMap: [],
+          },
+        ],
       },
-      compositions: base.compositions.map((composition) => composition.compId === 63
-        ? { ...composition, nodeIds: [parentId, groupId, firstId, secondId, extraId] } : composition),
-      nodes: [...base.nodes.filter((node) => node.sourceRef?.compId !== 63), parent, group, ...members, extra],
+      compositions: base.compositions.map((composition) =>
+        composition.compId === 63
+          ? {
+              ...composition,
+              nodeIds: [parentId, groupId, firstId, secondId, extraId],
+            }
+          : composition,
+      ),
+      nodes: [
+        ...base.nodes.filter((node) => node.sourceRef?.compId !== 63),
+        parent,
+        group,
+        ...members,
+        extra,
+      ],
     };
     authoringProjectionSource = sourceDoc;
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
-      ...sourceDoc, scope: { ...authoringScope, brandId, baseVersionId }, sourceHeadVersionId: baseVersionId,
-      sourceAuthoringContext: { ...sourceDoc.sourceAuthoringContext!, versionId: baseVersionId },
-      opaqueSourceRef: { ...sourceDoc.opaqueSourceRef, versionId: baseVersionId },
+      ...sourceDoc,
+      scope: { ...authoringScope, brandId, baseVersionId },
+      sourceHeadVersionId: baseVersionId,
+      sourceAuthoringContext: {
+        ...sourceDoc.sourceAuthoringContext!,
+        versionId: baseVersionId,
+      },
+      opaqueSourceRef: {
+        ...sourceDoc.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     editor();
     const rows = await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(within(rows).getAllByText('Nested group')[0]!);
     expect(screen.queryByRole('textbox', { name: 'Group rotation' })).toBeNull();
-    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 
   test('keeps verified animated source-group transform channels editable while locking static handles and ungroup', async () => {
@@ -2282,56 +3731,170 @@ describe('TemplateLayerEditor', () => {
     const secondId = 'draft:20000000-0000-4000-8000-000000000087';
     const base = structuredClone(authoringDocument);
     const group = {
-      ...base.nodes[0]!, nodeId: groupId, sourceRef: { compId: 63, layerId: 50 }, sourceCompositionId: 63,
-      parentNodeId: null, name: 'Animated committed group', textContent: null, fontRef: null, fillColor: null,
-      kind: 'group' as const, shape: null, size: null, pathPosition: null, fill: null, stroke: null,
-      font: null, fontSize: null, position: [40, 50] as [number, number], rotation: 0,
-      scale: [100, 100] as [number, number], opacity: 100,
-      capabilities: { ...base.nodes[0]!.capabilities, transform: true, keyframes: true },
+      ...base.nodes[0]!,
+      nodeId: groupId,
+      sourceRef: { compId: 63, layerId: 50 },
+      sourceCompositionId: 63,
+      parentNodeId: null,
+      name: 'Animated committed group',
+      textContent: null,
+      fontRef: null,
+      fillColor: null,
+      kind: 'group' as const,
+      shape: null,
+      size: null,
+      pathPosition: null,
+      fill: null,
+      stroke: null,
+      font: null,
+      fontSize: null,
+      position: [40, 50] as [number, number],
+      rotation: 0,
+      scale: [100, 100] as [number, number],
+      opacity: 100,
+      capabilities: {
+        ...base.nodes[0]!.capabilities,
+        transform: true,
+        keyframes: true,
+      },
       keyframeChannels: [
-        { channelId: `${groupId}:ADBE Position`, channel: 'position' as const, matchName: 'ADBE Position', frameRate: 30, dimensions: 3, separated: false, baseValue: [40, 50, 0] as [number, number, number], reason: null, keyframes: [
-          { keyframeId: 'draft:20000000-0000-4000-8000-000000000088', timeSec: 0.5, value: [55, 65, 0], inInterpolation: 'LINEAR' as const, outInterpolation: 'LINEAR' as const, inEase: [], outEase: [] },
-        ] },
-        { channelId: `${groupId}:ADBE Scale`, channel: 'scale' as const, matchName: 'ADBE Scale', frameRate: 30, dimensions: 3, separated: false, baseValue: [100, 100, 100] as [number, number, number], reason: null, keyframes: [] },
-        { channelId: `${groupId}:ADBE Rotate Z`, channel: 'rotation' as const, matchName: 'ADBE Rotate Z', frameRate: 30, dimensions: 1, separated: false, baseValue: 0, reason: null, keyframes: [] },
+        {
+          channelId: `${groupId}:ADBE Position`,
+          channel: 'position' as const,
+          matchName: 'ADBE Position',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [40, 50, 0] as [number, number, number],
+          reason: null,
+          keyframes: [
+            {
+              keyframeId: 'draft:20000000-0000-4000-8000-000000000088',
+              timeSec: 0.5,
+              value: [55, 65, 0],
+              inInterpolation: 'LINEAR' as const,
+              outInterpolation: 'LINEAR' as const,
+              inEase: [],
+              outEase: [],
+            },
+          ],
+        },
+        {
+          channelId: `${groupId}:ADBE Scale`,
+          channel: 'scale' as const,
+          matchName: 'ADBE Scale',
+          frameRate: 30,
+          dimensions: 3,
+          separated: false,
+          baseValue: [100, 100, 100] as [number, number, number],
+          reason: null,
+          keyframes: [],
+        },
+        {
+          channelId: `${groupId}:ADBE Rotate Z`,
+          channel: 'rotation' as const,
+          matchName: 'ADBE Rotate Z',
+          frameRate: 30,
+          dimensions: 1,
+          separated: false,
+          baseValue: 0,
+          reason: null,
+          keyframes: [],
+        },
       ],
     };
     const members = [
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!, nodeId: firstId, parentNodeId: groupId },
-      { ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!, nodeId: secondId, parentNodeId: groupId },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 114)!,
+        nodeId: firstId,
+        parentNodeId: groupId,
+      },
+      {
+        ...base.nodes.find((node) => node.sourceRef?.layerId === 71)!,
+        nodeId: secondId,
+        parentNodeId: groupId,
+      },
     ];
     const sourceDoc: TemplateAuthoringDocument = {
       ...base,
       sourceAuthoringContext: {
-        artifactId: '10000000-0000-4000-8000-000000000089', versionId: authoringScope.baseVersionId,
+        artifactId: '10000000-0000-4000-8000-000000000089',
+        versionId: authoringScope.baseVersionId,
         packageChecksum: authoringChecksum,
-        identityMap: [{ nodeId: groupId, compId: 63, persistedUid: 50, sourceUid: 500, members: [
-          { nodeId: firstId, persistedUid: 114, parentUid: 50 }, { nodeId: secondId, persistedUid: 71, parentUid: 50 },
-        ] }], freshArtboardReceipts: [],
+        identityMap: [
+          {
+            nodeId: groupId,
+            compId: 63,
+            persistedUid: 50,
+            sourceUid: 500,
+            members: [
+              { nodeId: firstId, persistedUid: 114, parentUid: 50 },
+              { nodeId: secondId, persistedUid: 71, parentUid: 50 },
+            ],
+          },
+        ],
+        freshArtboardReceipts: [],
       },
-      compositions: base.compositions.map((composition) => composition.compId === 63
-        ? { ...composition, nodeIds: [groupId, firstId, secondId] } : composition),
+      compositions: base.compositions.map((composition) =>
+        composition.compId === 63
+          ? { ...composition, nodeIds: [groupId, firstId, secondId] }
+          : composition,
+      ),
       nodes: [...base.nodes.filter((node) => node.sourceRef?.compId !== 63), group, ...members],
     };
     authoringProjectionSource = sourceDoc;
     authoringDocumentReads.mockImplementation(async (_assetId, brandId, baseVersionId) => ({
-      ...sourceDoc, scope: { ...authoringScope, brandId, baseVersionId }, sourceHeadVersionId: baseVersionId,
-      sourceAuthoringContext: { ...sourceDoc.sourceAuthoringContext!, versionId: baseVersionId },
-      opaqueSourceRef: { ...sourceDoc.opaqueSourceRef, versionId: baseVersionId },
+      ...sourceDoc,
+      scope: { ...authoringScope, brandId, baseVersionId },
+      sourceHeadVersionId: baseVersionId,
+      sourceAuthoringContext: {
+        ...sourceDoc.sourceAuthoringContext!,
+        versionId: baseVersionId,
+      },
+      opaqueSourceRef: {
+        ...sourceDoc.opaqueSourceRef,
+        versionId: baseVersionId,
+      },
     }));
     editor();
     const rows = await screen.findByRole('list', { name: 'Layers' });
     fireEvent.click(within(rows).getAllByText('Animated committed group')[0]!);
-    expect((await screen.findByRole('textbox', { name: 'Group rotation' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('textbox', { name: 'X position' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (
+        (await screen.findByRole('textbox', {
+          name: 'Group rotation',
+        })) as HTMLInputElement
+      ).disabled,
+    ).toBe(true);
+    expect((screen.getByRole('textbox', { name: 'X position' }) as HTMLInputElement).disabled).toBe(
+      true,
+    );
+    expect((screen.getByRole('button', { name: 'Ungroup' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
     fireEvent.click(screen.getByRole('button', { name: /Edit keyframes/ }));
-    expect((await screen.findByRole('button', { name: 'Add at playhead' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (
+        (await screen.findByRole('button', {
+          name: 'Add at playhead',
+        })) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Add at playhead' }));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
-      expect.objectContaining({ type: 'layer.keyframes.replace', nodeId: groupId, channel: 'position' }),
-    ));
-    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands.some((command) => command.type === 'layer.group')).toBe(false);
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
+        expect.objectContaining({
+          type: 'layer.keyframes.replace',
+          nodeId: groupId,
+          channel: 'position',
+        }),
+      ),
+    );
+    expect(
+      authoringDraftWrites.mock.calls
+        .at(-1)?.[1]
+        .commands.some((command) => command.type === 'layer.group'),
+    ).toBe(false);
   });
 
   test('Library artwork is pinned, privately saved, and excluded from version saves', async () => {
@@ -2348,8 +3911,14 @@ describe('TemplateLayerEditor', () => {
     expect(screen.getByTestId('library-media-picker').getAttribute('data-open')).toBe('false');
     fireEvent.click(await screen.findByRole('button', { name: 'Create and artboard tools' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Choose from Library' }));
-    const picker = await screen.findByRole('dialog', { name: 'Add Library image' });
-    expect(within(picker).getByText('Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.')).toBeTruthy();
+    const picker = await screen.findByRole('dialog', {
+      name: 'Add Library image',
+    });
+    expect(
+      within(picker).getByText(
+        'Choose a PNG or JPEG version already in this brand Library. The selected version stays pinned in this draft.',
+      ),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Pick exact Library image' }));
     await waitFor(() => expect(authoringDraft?.commands).toHaveLength(1));
     expect(authoringDraft?.commands[0]).toMatchObject({
@@ -2361,7 +3930,9 @@ describe('TemplateLayerEditor', () => {
       },
       size: [320, 180],
     });
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled'),
+    ).toBe(true);
     expect(saves).not.toHaveBeenCalled();
   });
 
@@ -2370,7 +3941,9 @@ describe('TemplateLayerEditor', () => {
     editor(undefined, undefined, (next) => {
       draft = next;
     });
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
     await waitFor(() => expect(draft?.dirty).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Undo layer change' }));
     await waitFor(() => expect(draft?.dirty).toBe(false));
@@ -2378,7 +3951,10 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(draft?.dirty).toBe(true));
     expect((screen.getByLabelText('Position X') as HTMLInputElement).value).toBe('140');
     const nativeInput = screen.getByLabelText('Variant name');
-    const nativeUndo = fireEvent.keyDown(nativeInput, { key: 'z', ctrlKey: true });
+    const nativeUndo = fireEvent.keyDown(nativeInput, {
+      key: 'z',
+      ctrlKey: true,
+    });
     expect(nativeUndo).toBe(true);
     expect(draft?.dirty).toBe(true);
   });
@@ -2389,7 +3965,9 @@ describe('TemplateLayerEditor', () => {
     const rotation = await screen.findByLabelText('Rotation');
     fireEvent.change(rotation, { target: { value: '20' } });
     fireEvent.blur(rotation);
-    fireEvent.change(screen.getByLabelText('Rotation'), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText('Rotation'), {
+      target: { value: '10' },
+    });
     fireEvent.blur(screen.getByLabelText('Rotation'));
     fireEvent.click(within(list).getByRole('button', { name: 'Send MENOS DE 2.5 backward' }));
     await waitFor(() =>
@@ -2405,11 +3983,15 @@ describe('TemplateLayerEditor', () => {
 
   test('an external version refresh pins a dirty draft until undo or discard', async () => {
     let draft: LayerDraftState | null = null;
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const view = editor(undefined, client, (next) => {
       draft = next;
     });
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
     await waitFor(() => expect(draft?.dirty).toBe(true));
     const latestVersion = '00000000-0000-4000-8000-000000000009';
     view.rerender(
@@ -2456,14 +4038,24 @@ describe('TemplateLayerEditor', () => {
 
   test('multi-sample canvas drag coalesces into one editor history step', async () => {
     const { container } = editor();
-    const canvas = await screen.findByRole('application', { name: 'Interactive template preview' });
+    const canvas = await screen.findByRole('application', {
+      name: 'Interactive template preview',
+    });
     const svg = container.querySelector('svg');
-    Object.assign(canvas, { setPointerCapture: mock(() => {}), hasPointerCapture: () => false });
+    Object.assign(canvas, {
+      setPointerCapture: mock(() => {}),
+      hasPointerCapture: () => false,
+    });
     Object.defineProperty(svg, 'getScreenCTM', {
       value: () => ({ inverse: () => ({ a: 1, b: 0, c: 0, d: 1 }) }),
     });
     const target = container.querySelector('[data-layer-id="114"] text')!;
-    fireEvent.pointerDown(target, { button: 0, pointerId: 3, clientX: 10, clientY: 10 });
+    fireEvent.pointerDown(target, {
+      button: 0,
+      pointerId: 3,
+      clientX: 10,
+      clientY: 10,
+    });
     fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 20, clientY: 20 });
     fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 30, clientY: 40 });
     fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 40, clientY: 50 });
@@ -2518,13 +4110,19 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(draft?.dirty).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Redo layer change' }));
     await waitFor(() => expect(draft?.dirty).toBe(true));
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'exposure.set', slotKey: 'headline', exposed: false,
-    }));
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
+        type: 'exposure.set',
+        slotKey: 'headline',
+        exposed: false,
+      }),
+    );
     await waitFor(() => expect(compileAuthoring).toHaveBeenCalled());
     await waitFor(() => expect(prepareAuthoring).toHaveBeenCalled());
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'exposure.set', slotKey: 'headline', exposed: false,
+      type: 'exposure.set',
+      slotKey: 'headline',
+      exposed: false,
     });
     expect(nativeRenders).not.toHaveBeenCalled();
     expect(saves).not.toHaveBeenCalled();
@@ -2542,7 +4140,9 @@ describe('TemplateLayerEditor', () => {
       },
       onSaved,
     );
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
     await waitFor(() => expect(draft?.dirty).toBe(true));
     expect(draft?.saveLabel).toBe('Save private draft');
     expect(await draft!.save()).toBe(true);
@@ -2557,7 +4157,10 @@ describe('TemplateLayerEditor', () => {
     expect(onSaved).not.toHaveBeenCalled();
     await waitFor(() => expect(draft?.dirty).toBe(false));
     await waitFor(() => expect(authoringDraft?.revision).toBe(1));
-    expect(authoringDraft?.projectedDocument.nodes.find((node) => node.nodeId === 'aep:63:114')?.position).toEqual([140, 200]);
+    expect(
+      authoringDraft?.projectedDocument.nodes.find((node) => node.nodeId === 'aep:63:114')
+        ?.position,
+    ).toEqual([140, 200]);
     expect(screen.queryByText(/newer server draft exists/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /use server draft/i })).toBeNull();
   });
@@ -2567,14 +4170,17 @@ describe('TemplateLayerEditor', () => {
       {
         type: 'layer.edit',
         nodeId: 'aep:63:114',
-      edit: { compId: 63, layerId: 114, x: 141.25, y: 202.5 },
+        edit: { compId: 63, layerId: 114, x: 141.25, y: 202.5 },
       },
     ]);
     editor();
     const x = await screen.findByLabelText('Position X');
     await waitFor(() => expect((x as HTMLInputElement).value).toBe('141.25'));
     expect((screen.getByLabelText('Position Y') as HTMLInputElement).value).toBe('202.5');
-    expect(authoringDraft?.projectedDocument?.nodes.find((node) => node.nodeId === 'aep:63:114')?.position).toEqual([141.25, 202.5]);
+    expect(
+      authoringDraft?.projectedDocument?.nodes.find((node) => node.nodeId === 'aep:63:114')
+        ?.position,
+    ).toEqual([141.25, 202.5]);
     expect(screen.queryByText(/a newer server draft exists/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /use server draft/i })).toBeNull();
     expect(authoringDraftWrites).not.toHaveBeenCalled();
@@ -2629,7 +4235,9 @@ describe('TemplateLayerEditor', () => {
   });
 
   test('a delayed save preserves edits made while the write is in flight', async () => {
-    inventory = fresh({ lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } } });
+    inventory = fresh({
+      lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } },
+    });
     let resolveWrite: ((value: TemplateAuthoringDraft) => void) | undefined;
     authoringDraftWrites.mockImplementation(async (_assetId, request) => {
       if (authoringDraftWrites.mock.calls.length === 1) {
@@ -2643,14 +4251,20 @@ describe('TemplateLayerEditor', () => {
     editor(undefined, undefined, (next) => {
       draft = next;
     });
-    fireEvent.change(await screen.findByLabelText('Rotation'), { target: { value: '20' } });
+    fireEvent.change(await screen.findByLabelText('Rotation'), {
+      target: { value: '20' },
+    });
     fireEvent.blur(screen.getByLabelText('Rotation'));
     await waitFor(() => expect(draft?.dirty).toBe(true));
     const savePromise = draft!.save();
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText('Rotation'), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText('Rotation'), {
+      target: { value: '10' },
+    });
     fireEvent.blur(screen.getByLabelText('Rotation'));
-    resolveWrite!({ ...persistedDraftForTest(1, authoringDraftWrites.mock.calls[0]![1].commands) });
+    resolveWrite!({
+      ...persistedDraftForTest(1, authoringDraftWrites.mock.calls[0]![1].commands),
+    });
     expect(await savePromise).toBe(true);
     await waitFor(() => expect(authoringDraftWrites).toHaveBeenCalledTimes(2));
     expect(authoringDraftWrites.mock.calls[1]?.[1].expectedRevision).toBe(1);
@@ -2661,7 +4275,9 @@ describe('TemplateLayerEditor', () => {
   test('saving with newer edits keeps them pinned to the version they were authored against', async () => {
     enablePrivateDraftTestStorage();
     enableVerifiedAuthoringFixture();
-    inventory = fresh({ lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } } });
+    inventory = fresh({
+      lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } },
+    });
     let resolveWrite: ((value: typeof authoringArtifact) => void) | undefined;
     commitAuthoring.mockImplementation(
       () =>
@@ -2670,7 +4286,9 @@ describe('TemplateLayerEditor', () => {
         }),
     );
     let draft: LayerDraftState | null = null;
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     let view: ReturnType<typeof render>;
     const refreshVersion: () => Promise<void> = async () => {
       inventory = fresh({
@@ -2701,26 +4319,44 @@ describe('TemplateLayerEditor', () => {
       },
       refreshVersion,
     );
-    fireEvent.change(await screen.findByLabelText('Rotation'), { target: { value: '20' } });
+    fireEvent.change(await screen.findByLabelText('Rotation'), {
+      target: { value: '20' },
+    });
     fireEvent.blur(screen.getByLabelText('Rotation'));
     await waitFor(() => expect(draft?.dirty).toBe(true));
     await waitForAuthoringReadyToPublish('Review and publish revision');
     fireEvent.click(screen.getByRole('button', { name: 'Review and publish revision' }));
     await waitFor(() => expect(commitAuthoring).toHaveBeenCalledTimes(1));
     expect(commitAuthoring.mock.calls[0]?.[2].baseVersionId).toBe(VERSION);
-    fireEvent.change(screen.getByLabelText('Rotation'), { target: { value: '25' } });
+    fireEvent.change(screen.getByLabelText('Rotation'), {
+      target: { value: '25' },
+    });
     fireEvent.blur(screen.getByLabelText('Rotation'));
-    resolveWrite!({ ...authoringArtifact, state: 'committed', commit: {
-      assetId: '10000000-0000-4000-8000-000000000304', versionId: nextRevision.versionId, packageChecksum,
-    } });
+    resolveWrite!({
+      ...authoringArtifact,
+      state: 'committed',
+      commit: {
+        assetId: '10000000-0000-4000-8000-000000000304',
+        versionId: nextRevision.versionId,
+        packageChecksum,
+      },
+    });
     expect(inventories.mock.calls.some(([, , version]) => version === nextRevision.versionId)).toBe(
       false,
     );
-    expect(await screen.findByText(/The reviewed version was saved\. Your newer edits stay in this private draft\./i)).toBeTruthy();
+    expect(
+      await screen.findByText(
+        /The reviewed version was saved\. Your newer edits stay in this private draft\./i,
+      ),
+    ).toBeTruthy();
     expect((screen.getByLabelText('Rotation') as HTMLInputElement).value).toBe('25');
     await waitFor(() =>
       expect(
-        (screen.getByRole('button', { name: 'Undo layer change' }) as HTMLButtonElement).disabled,
+        (
+          screen.getByRole('button', {
+            name: 'Undo layer change',
+          }) as HTMLButtonElement
+        ).disabled,
       ).toBe(false),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Undo layer change' }));
@@ -2730,9 +4366,13 @@ describe('TemplateLayerEditor', () => {
   test('a clean save adopts the new file baseline for typing and Reset', async () => {
     enablePrivateDraftTestStorage();
     enableVerifiedAuthoringFixture();
-    inventory = fresh({ lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } } });
+    inventory = fresh({
+      lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } },
+    });
     let draft: LayerDraftState | null = null;
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     let view: ReturnType<typeof render>;
     const refreshVersion: () => Promise<void> = async () => {
       inventory = fresh({
@@ -2765,7 +4405,9 @@ describe('TemplateLayerEditor', () => {
       },
       refreshVersion,
     );
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
     fireEvent.blur(screen.getByLabelText('Position X'));
     await waitFor(() => expect(draft?.dirty).toBe(true));
     await waitForAuthoringReadyToPublish('Review and publish revision');
@@ -2808,19 +4450,30 @@ describe('TemplateLayerEditor', () => {
       },
       onSaved,
     );
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
-    await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
-      expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
-    ));
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
+    await waitFor(() =>
+      expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
+        expect.objectContaining({
+          type: 'layer.edit',
+          edit: expect.objectContaining({ x: 140 }),
+        }),
+      ),
+    );
     await waitForAuthoringReadyToPublish('Review and publish variant');
     fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText('Rotation'), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText('Rotation'), {
+      target: { value: '10' },
+    });
     fireEvent.blur(screen.getByLabelText('Rotation'));
     finishRefresh!();
     await waitFor(() =>
       expect(
-        screen.getByText('The reviewed version was saved. Your newer edits stay in this private draft.'),
+        screen.getByText(
+          'The reviewed version was saved. Your newer edits stay in this private draft.',
+        ),
       ).toBeTruthy(),
     );
     expect(onOpenVariant).not.toHaveBeenCalled();
@@ -2835,7 +4488,9 @@ describe('TemplateLayerEditor', () => {
     editor(undefined, undefined, (next) => {
       draft = next;
     });
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
     await waitFor(() => expect(draft?.dirty).toBe(true));
     expect(await draft!.save()).toBe(false);
     expect(saves).not.toHaveBeenCalled();
@@ -2865,9 +4520,14 @@ describe('TemplateLayerEditor', () => {
     await waitForAuthoringReadyToPublish('Review and publish variant');
     fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
     await waitFor(() => expect(commitAuthoring).toHaveBeenCalledTimes(1));
-    expect(commitAuthoring.mock.calls[0]?.[3]).toMatchObject({ saveTo: 'new_variant', name: 'Card B variant' });
+    expect(commitAuthoring.mock.calls[0]?.[3]).toMatchObject({
+      saveTo: 'new_variant',
+      name: 'Card B variant',
+    });
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, x: 140 },
+      type: 'layer.edit',
+      nodeId: 'aep:63:114',
+      edit: { compId: 63, layerId: 114, x: 140 },
     });
     await waitFor(() =>
       expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'),
@@ -2878,7 +4538,9 @@ describe('TemplateLayerEditor', () => {
   test('on a variant, Save writes this variant without a name', async () => {
     enablePrivateDraftTestStorage();
     enableVerifiedAuthoringFixture();
-    inventory = fresh({ lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } } });
+    inventory = fresh({
+      lineage: { role: 'variant', parent: { assetId: 'g', name: 'Card B' } },
+    });
     editor();
     await screen.findByText('of Card B');
     const rotation = await screen.findByLabelText('Rotation');
@@ -2887,10 +4549,14 @@ describe('TemplateLayerEditor', () => {
     await waitForAuthoringReadyToPublish('Review and publish revision');
     fireEvent.click(screen.getByRole('button', { name: 'Review and publish revision' }));
     await waitFor(() => expect(commitAuthoring).toHaveBeenCalledTimes(1));
-    expect(commitAuthoring.mock.calls[0]?.[3]).toMatchObject({ saveTo: 'this_variant' });
+    expect(commitAuthoring.mock.calls[0]?.[3]).toMatchObject({
+      saveTo: 'this_variant',
+    });
     expect(commitAuthoring.mock.calls[0]?.[3]).not.toHaveProperty('name');
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, rotation: 15 },
+      type: 'layer.edit',
+      nodeId: 'aep:63:114',
+      edit: { compId: 63, layerId: 114, rotation: 15 },
     });
     expect(saves).not.toHaveBeenCalled();
   });
@@ -2903,7 +4569,9 @@ describe('TemplateLayerEditor', () => {
     await waitFor(
       () =>
         expect(
-          revisionPreviews.mock.calls.some(([, r]) => r.edits.orders.length === 1 && r.edits.orders[0]?.compId === 63),
+          revisionPreviews.mock.calls.some(
+            ([, r]) => r.edits.orders.length === 1 && r.edits.orders[0]?.compId === 63,
+          ),
         ).toBe(true),
       { timeout: 3000 },
     );
@@ -2912,7 +4580,9 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(compileAuthoring).toHaveBeenCalled());
     await waitFor(() => expect(prepareAuthoring).toHaveBeenCalled());
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
-      type: 'composition.order', compId: 63, nodeIds: ['aep:63:71', 'aep:63:114', 'aep:63:70'],
+      type: 'composition.order',
+      compId: 63,
+      nodeIds: ['aep:63:71', 'aep:63:114', 'aep:63:70'],
     });
     expect(nativeRenders).not.toHaveBeenCalled();
     expect(saves).not.toHaveBeenCalled();
@@ -2956,9 +4626,13 @@ describe('TemplateLayerEditor', () => {
     inventory = fresh();
     editor();
     await screen.findByRole('list', { name: 'Layers' });
-    fireEvent.change(screen.getByLabelText('Search layers'), { target: { value: 'Card' } });
+    fireEvent.change(screen.getByLabelText('Search layers'), {
+      target: { value: 'Card' },
+    });
     fireEvent.click(
-      within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: /^Card/ }),
+      within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', {
+        name: /^Card/,
+      }),
     );
     await waitFor(() => expect(scenes.mock.calls.at(-1)?.[3]).toBe(412));
     expect(screen.getByText('Selected: Card')).toBeTruthy();
@@ -2972,17 +4646,29 @@ describe('TemplateLayerEditor', () => {
       throw new Error('Composition unavailable');
     });
     editor();
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
     await waitFor(
       () => expect(screen.getByText('Local estimate · composition unavailable')).toBeTruthy(),
       { timeout: 3000 },
     );
     expect(screen.queryByText('Composed preview')).toBeNull();
-    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Composition unavailable');
-    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Private recovery storage is unavailable in this browser.');
-    fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '160' } });
+    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain(
+      'Composition unavailable',
+    );
+    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain(
+      'Private recovery storage is unavailable in this browser.',
+    );
+    fireEvent.change(screen.getByLabelText('Position X'), {
+      target: { value: '160' },
+    });
     expect(screen.getByText('Local estimate · updating')).toBeTruthy();
-    expect(screen.queryAllByRole('alert').some((alert) => alert.textContent === 'Composition unavailable')).toBe(false);
+    expect(
+      screen
+        .queryAllByRole('alert')
+        .some((alert) => alert.textContent === 'Composition unavailable'),
+    ).toBe(false);
     await waitFor(
       () => expect(screen.getByText('Local estimate · composition unavailable')).toBeTruthy(),
       { timeout: 3000 },
@@ -2993,17 +4679,26 @@ describe('TemplateLayerEditor', () => {
   });
 
   test('a failed refresh keeps the fidelity of an already composed current preview', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     editor(undefined, client);
-    fireEvent.change(await screen.findByLabelText('Position X'), { target: { value: '140' } });
+    fireEvent.change(await screen.findByLabelText('Position X'), {
+      target: { value: '140' },
+    });
     await screen.findByText('Composed preview', {}, { timeout: 3000 });
     revisionPreviews.mockImplementation(async () => {
       throw new Error('Refresh unavailable');
     });
-    await client.refetchQueries({ queryKey: ['forge-layer-preview'], type: 'active' });
+    await client.refetchQueries({
+      queryKey: ['forge-layer-preview'],
+      type: 'active',
+    });
     await screen.findByText('Composed preview · refresh unavailable');
     expect(screen.queryByText('Local estimate · composition unavailable')).toBeNull();
-    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Refresh unavailable');
+    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain(
+      'Refresh unavailable',
+    );
   });
 
   test('opening the tab asks for the layer list and the scene only; the rest loads when opened', async () => {
@@ -3026,7 +4721,11 @@ describe('TemplateLayerEditor', () => {
     expect(await screen.findByRole('status', { name: 'Reading template layers…' })).toBeTruthy();
     await waitFor(() => expect(container.querySelector('[data-layer-id="114"]')).toBeTruthy());
     expect(
-      (screen.getByRole('button', { name: 'Review and publish variant' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Review and publish variant',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     land(inventory);
     expect(await screen.findByRole('list', { name: 'Layers' })).toBeTruthy();

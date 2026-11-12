@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Ambiguity, surfaced — the one block whose subject is a WORD rather than a number.
 //
@@ -24,6 +25,7 @@ import { JAINA_MODULE } from './modules';
 type SurveyBlockProps = { block: SurveyBlockV2; isStreaming: boolean };
 
 export default function SurveyBlock({ block }: SurveyBlockProps) {
+  const uiText = useTranslations('scale');
   return (
     <section className={JAINA_MODULE.neutral} data-jaina-module="block" data-testid="survey-block">
       <BlockHeading
@@ -40,7 +42,7 @@ export default function SurveyBlock({ block }: SurveyBlockProps) {
         data-testid="survey-figure"
       >
         <span className={cn(JAINA_TYPE.figure, 'text-foreground')}>“{block.term}”</span>
-        <span className="text-foreground">was read as</span>
+        <span className="text-foreground">{uiText('was_read_as_730722e')}</span>
       </p>
 
       <p className={cn('mt-0.5 text-foreground', JAINA_TYPE.body)} data-testid="survey-sentence">
@@ -52,7 +54,9 @@ export default function SurveyBlock({ block }: SurveyBlockProps) {
         className={cn('mt-1 text-muted-foreground', JAINA_TYPE.table)}
         data-testid="survey-alternatives"
       >
-        It could also have meant {block.alternatives.join('; ')}.
+        {uiText.rich('sentence_e7e609ee46d5', {
+          v0: block.alternatives.join('; '),
+        })}
       </p>
     </section>
   );

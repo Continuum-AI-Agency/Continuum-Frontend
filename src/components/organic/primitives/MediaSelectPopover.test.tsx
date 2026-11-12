@@ -1,15 +1,40 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
 
 const ASSETS = [
-  { id: 'a1', kind: 'image', signedUrl: 'https://cdn/a1.jpg', fileName: 'a1', title: 'Asset One' },
-  { id: 'a2', kind: 'image', signedUrl: 'https://cdn/a2.jpg', fileName: 'a2', title: 'Asset Two' },
-  { id: 'v1', kind: 'video', signedUrl: 'https://cdn/v1.mp4', fileName: 'v1', title: 'Clip One' },
-  { id: 'v2', kind: 'video', signedUrl: 'https://cdn/v2.mp4', fileName: 'v2', title: 'Clip Two' },
+  {
+    id: 'a1',
+    kind: 'image',
+    signedUrl: 'https://cdn/a1.jpg',
+    fileName: 'a1',
+    title: 'Asset One',
+  },
+  {
+    id: 'a2',
+    kind: 'image',
+    signedUrl: 'https://cdn/a2.jpg',
+    fileName: 'a2',
+    title: 'Asset Two',
+  },
+  {
+    id: 'v1',
+    kind: 'video',
+    signedUrl: 'https://cdn/v1.mp4',
+    fileName: 'v1',
+    title: 'Clip One',
+  },
+  {
+    id: 'v2',
+    kind: 'video',
+    signedUrl: 'https://cdn/v2.mp4',
+    fileName: 'v2',
+    title: 'Clip Two',
+  },
 ];
 
 mock.module('@/lib/creative-assets/useStudioLibraryBrowser', () => ({
@@ -188,7 +213,9 @@ describe('MediaSelectPopover — one video per post', () => {
     expect(screen.queryByText('Only one video per post')).toBeNull();
     fireEvent.click(screen.getByText(/Attach/));
     expect((onAttachAssets.mock.calls[0][0] as Array<{ id: string }>).map((a) => a.id)).toEqual([
-      'v1', 'a1', 'v2',
+      'v1',
+      'a1',
+      'v2',
     ]);
   });
 

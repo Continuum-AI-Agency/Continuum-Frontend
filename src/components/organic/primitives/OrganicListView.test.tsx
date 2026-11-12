@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderInDom, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // The cards name their posting account through React Query; no brand is set, so it stays idle.
@@ -197,7 +198,10 @@ describe('OrganicListView', () => {
     expect(screen.queryByTestId('bulk-toolbar-clearance')).toBeNull();
 
     cleanup();
-    renderList({ days: [makeDay([makeDraft()])], selectedDraftIds: ['draft-1'] });
+    renderList({
+      days: [makeDay([makeDraft()])],
+      selectedDraftIds: ['draft-1'],
+    });
     expect(screen.getByTestId('bulk-toolbar-clearance')).toBeTruthy();
   });
 
@@ -336,7 +340,10 @@ describe('OrganicListView', () => {
   // Base UI emits `data-checked`; the old `data-[state=checked]` (Radix) never matched, so a
   // selected row's tick vanished until hover. Hidden controls must also show on focus.
   it('shows a ticked box at rest, and every hover-only control on focus', () => {
-    renderList({ days: [makeDay([makeDraft()])], selectedDraftIds: ['draft-1'] });
+    renderList({
+      days: [makeDay([makeDraft()])],
+      selectedDraftIds: ['draft-1'],
+    });
 
     const box = screen.getByRole('checkbox', { name: /Select/ });
     expect(box.hasAttribute('data-checked')).toBe(true);
@@ -348,17 +355,26 @@ describe('OrganicListView', () => {
 
   it('sends a scheduled row back to draft through the server, which cancels its publish', () => {
     unschedule.mockClear();
-    const scheduled = makeDraft({ status: 'scheduled', backendDraftId: 'srv-1' });
+    const scheduled = makeDraft({
+      status: 'scheduled',
+      backendDraftId: 'srv-1',
+    });
     renderList({ days: [makeDay([scheduled])] });
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     expect(unschedule).toHaveBeenCalledTimes(1);
-    expect(unschedule.mock.calls[0]?.[0]).toMatchObject({ id: 'draft-1', backendDraftId: 'srv-1' });
+    expect(unschedule.mock.calls[0]?.[0]).toMatchObject({
+      id: 'draft-1',
+      backendDraftId: 'srv-1',
+    });
   });
 
   it('keeps every clickable row reachable from the keyboard', () => {
-    renderList({ days: [makeDay([makeDraft()])], backlogDrafts: [makeDraft({ id: 'backlog-1' })] });
+    renderList({
+      days: [makeDay([makeDraft()])],
+      backlogDrafts: [makeDraft({ id: 'backlog-1' })],
+    });
 
     const rows = screen.getAllByRole('button').filter((el) => el.tagName === 'DIV');
     expect(rows.length).toBeGreaterThan(0);
@@ -425,7 +441,10 @@ describe('OrganicListView', () => {
 
     it('toggles the multi-selection by id from the row checkbox', () => {
       const onToggleSelection = mock((_id: string) => undefined);
-      renderList({ days: [makeDay([makeDraft({ id: 'draft-9' })])], onToggleSelection });
+      renderList({
+        days: [makeDay([makeDraft({ id: 'draft-9' })])],
+        onToggleSelection,
+      });
 
       fireEvent.click(screen.getByRole('checkbox', { name: 'Select Draft title' }));
 

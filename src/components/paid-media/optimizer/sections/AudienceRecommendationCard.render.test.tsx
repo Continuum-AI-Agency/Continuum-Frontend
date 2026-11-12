@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { audienceCardView, portfolioSpecsFrom } from './audienceCardModel';
 
 // The plan's posters are signed Meta URLs that expire; the card recovers them through the
@@ -74,7 +75,11 @@ const plan = {
       id: '101',
       name: 'Gimnasios',
       spec: null,
-      estimate: { lower: 2_000_000, upper: 2_400_000, source: 'catalogue_band' },
+      estimate: {
+        lower: 2_000_000,
+        upper: 2_400_000,
+        source: 'catalogue_band',
+      },
       verified: true,
       locale: null,
       blocked_by: null,
@@ -121,10 +126,21 @@ const plan = {
     ],
     targeting_automation: { advantage_audience: 1 },
   },
-  advantage_audience: { enabled: true, rationale: 'purchase objective, wide pool' },
+  advantage_audience: {
+    enabled: true,
+    rationale: 'purchase objective, wide pool',
+  },
   reach: {
-    current: { lower: 3_300_000, upper: 3_500_000, source: 'delivery_estimate' },
-    proposed: { lower: 1_100_000, upper: 1_300_000, source: 'delivery_estimate' },
+    current: {
+      lower: 3_300_000,
+      upper: 3_500_000,
+      source: 'delivery_estimate',
+    },
+    proposed: {
+      lower: 1_100_000,
+      upper: 1_300_000,
+      source: 'delivery_estimate',
+    },
     estimated_at: null,
   },
   budget: {
@@ -232,7 +248,9 @@ const portfolioSpecs = portfolioSpecsFrom(
     { adsetId: 'as-1', spec: plan.previous_spec },
     {
       adsetId: 'as-2',
-      spec: { flexible_spec: [{ interests: [{ id: '101', name: 'Gimnasios' }] }] },
+      spec: {
+        flexible_spec: [{ interests: [{ id: '101', name: 'Gimnasios' }] }],
+      },
     },
   ],
   (adsetId) => (adsetId === 'as-2' ? 'ALEIRA // AGOSTO' : null),
@@ -432,7 +450,12 @@ describe('AudienceRecommendationCard — the rail', () => {
   it('ads: an expired poster recovers through the preview endpoint, never showing a broken image', () => {
     const withPoster = {
       ...plan,
-      creatives: [{ ...plan.creatives[0], poster_url: 'https://cdn.meta.test/expired.jpg' }],
+      creatives: [
+        {
+          ...plan.creatives[0],
+          poster_url: 'https://cdn.meta.test/expired.jpg',
+        },
+      ],
     };
     const view = audienceCardView([row({ proposal: withPoster })], rec);
     const { container, rerender } = render(
@@ -759,7 +782,11 @@ describe('AudienceRecommendationCard — English only', () => {
         ],
         rec,
       ),
-      failedWith({ code: 'execute_failed', phase: 'execute', message: '{"x":1}' }),
+      failedWith({
+        code: 'execute_failed',
+        phase: 'execute',
+        message: '{"x":1}',
+      }),
       failedWith({ code: 'propose_failed' }, { proposal: null }),
       audienceCardView([row({ status: 'executed', result: executedResult })], rec),
     ];
@@ -823,7 +850,11 @@ describe('AudienceRecommendationCard — the optimizer type scale', () => {
         ],
         rec,
       ),
-      failedWith({ code: 'meta_permission', phase: 'execute', meta_message: 'x' }),
+      failedWith({
+        code: 'meta_permission',
+        phase: 'execute',
+        meta_message: 'x',
+      }),
       audienceCardView([row({ status: 'executed', result: executedResult })], rec),
     ];
     for (const view of faces) {

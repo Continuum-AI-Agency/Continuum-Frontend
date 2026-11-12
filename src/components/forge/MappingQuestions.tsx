@@ -8,6 +8,7 @@ import {
   type TemplateForgeNeed,
 } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +33,8 @@ export function MappingQuestions({
   busy: boolean;
   onAnswer: (decisions: ReturnType<typeof decisionsFor>) => Promise<void>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const questions = groupMappingNeeds(needs);
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -46,13 +49,16 @@ export function MappingQuestions({
 
   return (
     <div className="flex flex-col gap-2">
-      <ul className="flex flex-col gap-1.5" aria-label="Questions">
+      <ul className="flex flex-col gap-1.5" aria-label={translateUi('questions_9a72221a')}>
         {questions.map((question) => (
           <li key={question.key} className="flex flex-wrap items-center justify-between gap-2">
             <span className="min-w-0 flex-1">
               <span className="text-foreground">{question.label}</span>
               {question.needs.length > 1 ? (
-                <span className="text-muted-foreground"> · {question.needs.length} formats</span>
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {question.needs.length} {translateUi('formats_c2792b43')}
+                </span>
               ) : null}
               {question.reason ? (
                 <span className="block text-2xs text-muted-foreground">{question.reason}</span>
@@ -62,11 +68,21 @@ export function MappingQuestions({
               disabled={busy}
               value={answers[question.key] ?? null}
               onValueChange={(value) =>
-                value && setAnswers((current) => ({ ...current, [question.key]: String(value) }))
+                value &&
+                setAnswers((current) => ({
+                  ...current,
+                  [question.key]: String(value),
+                }))
               }
             >
-              <SelectTrigger size="sm" className="w-56" aria-label={`Field for ${question.label}`}>
-                <SelectValue placeholder="Choose a field">
+              <SelectTrigger
+                size="sm"
+                className="w-56"
+                aria-label={translateUi('field_for_value0_78bf98bf', {
+                  value0: String(question.label),
+                })}
+              >
+                <SelectValue placeholder={translateUi('choose_a_field_f1ceaf17')}>
                   {(value: string) =>
                     value === KEEP
                       ? 'Keep as designed'
@@ -81,7 +97,7 @@ export function MappingQuestions({
                     {option.label}
                   </SelectItem>
                 ))}
-                <SelectItem value={KEEP}>Keep as designed</SelectItem>
+                <SelectItem value={KEEP}>{translateUi('keep_as_designed_089b12f2')}</SelectItem>
               </SelectContent>
             </Select>
           </li>
@@ -94,13 +110,15 @@ export function MappingQuestions({
           disabled={busy || unanswered > 0}
           onClick={() => void onAnswer(decisionsFor(questions, answers))}
         >
-          {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-          Apply answers
+          {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+          {translateUi('apply_answers_be5c8116')}{' '}
         </Button>
         <span className="text-muted-foreground">
           {unanswered > 0
-            ? `${unanswered} still to answer. "Keep as designed" renders what the file already shows.`
-            : 'The build carries on from here.'}
+            ? translateUi('value0_still_to_answer_keep_as_desi_ed30d176', {
+                count: Number(unanswered),
+              })
+            : translateUi('the_build_carries_on_from_here_d58bb227')}
         </span>
       </div>
     </div>

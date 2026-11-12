@@ -1,4 +1,12 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useLocale as useFormatLocale,
+  useLocale,
+  useLocale as useNumberLocale,
+} from 'next-intl';
+import { resultWords } from '../../../account/overviewModel';
+import { resultWordsUi } from './metaLensModel';
 
 // Branches (Meta twin of G05): each branch's share of the spend against its share of the
 // results, and what a result costs there against the goal. On an account that runs one
@@ -36,6 +44,8 @@ const TEST_ID = 'board-module-branches';
 const MAX_ROWS: Record<BoardModuleSize, number> = { s: 5, m: 6, l: 8, w: 8 };
 
 export default function BranchesLens({ ctx, slot }: BoardModuleProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const campaigns = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_campaigns');
   const model = useMemo(
     () =>
@@ -47,14 +57,14 @@ export default function BranchesLens({ ctx, slot }: BoardModuleProps) {
       slot={slot}
       state={frameStateOf(campaigns.status, model != null)}
       testId={TEST_ID}
-      title="Branches"
+      title={betaUiText('beta_2eee037c67fb')}
     >
       {campaigns.status !== 'ready' ? (
         <ReadNote size={slot.size} state={campaigns} testId={TEST_ID} what="campaigns" />
       ) : model ? (
         <BranchesView currency={ctx.currency} model={model} size={slot.size} />
       ) : (
-        <LensNote testId={`${TEST_ID}-empty`}>No campaign spent in the last 30 days.</LensNote>
+        <LensNote testId={`${TEST_ID}-empty`}>{betaUiText('beta_57b869c75f73')}</LensNote>
       )}
     </MetaFrame>
   );
@@ -76,23 +86,43 @@ export function BranchesView({
   );
 }
 
-function rowTip(row: MixRow, model: MixModel, currency: string | null) {
-  const words = model.result?.en;
+function RowTip({
+  row,
+  model,
+  currency,
+}: {
+  row: MixRow;
+  model: MixModel;
+  currency: string | null;
+}) {
+  const t = useBetaTranslations('scale');
+  const locale = useLocale();
+  const words = model.result ? resultWords(model.result.kind, model.result.en.one, t) : null;
   return (
     <span className="flex flex-col gap-0.5">
       <span className="font-medium">{row.label}</span>
       <span>
-        {formatCurrency(row.spend, currency)} spend · {formatShare(row.spendShare)}
+        {t('metaSpendShare', {
+          amount: formatCurrency(row.spend, currency, locale),
+          share: formatShare(row.spendShare),
+        })}
       </span>
       {words && row.results != null ? (
         <span>
-          {row.results.toLocaleString('en-US')} {row.results === 1 ? words.one : words.many} ·{' '}
-          {formatShare(row.resultShare)}
+          {t('metaResultCount', {
+            count: row.results,
+            result: row.results === 1 ? words.one : words.many,
+            cost: '',
+          })}{' '}
+          · {formatShare(row.resultShare)}
         </span>
       ) : null}
       {words && row.costPerResult != null ? (
         <span>
-          {formatCurrency(row.costPerResult, currency)} per {words.one}
+          {t('metaPerResult', {
+            amount: formatCurrency(row.costPerResult, currency, locale),
+            result: words.one,
+          })}
         </span>
       ) : null}
     </span>
@@ -100,6 +130,10 @@ function rowTip(row: MixRow, model: MixModel, currency: string | null) {
 }
 
 function BranchesSmall({ model, currency }: { model: MixModel; currency: string | null }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const headline = mixHeadline(model, currency);
   const rows = foldTail(model, MAX_ROWS.s).filter((row) => row.costPerResult != null);
@@ -133,7 +167,11 @@ function BranchesSmall({ model, currency }: { model: MixModel; currency: string 
                     background: toneColor(row.tone),
                     originX: 0,
                   }}
-                  transition={{ duration: 0.6, delay: index * 0.05, ease: ENTER_EASE }}
+                  transition={{
+                    duration: 0.6,
+                    delay: index * 0.05,
+                    ease: ENTER_EASE,
+                  }}
                 />
                 {goal != null ? (
                   <span
@@ -144,13 +182,18 @@ function BranchesSmall({ model, currency }: { model: MixModel; currency: string 
                 ) : null}
               </span>
               <span className="font-mono tabular-nums">
-                {formatCurrency(row.costPerResult, currency)}
+                {formatCurrency(row.costPerResult, currency, numberLocale)}
               </span>
             </li>
           ))}
         </ul>
       ) : (
-        <LensNote>No {model.result?.en.many ?? 'results'} in the last 30 days.</LensNote>
+        <LensNote>
+          {betaUiText('beta_1ea442a134b2')}{' '}
+          {(model.result ? resultWordsUi(model.result.kind, betaUiText).many : undefined) ??
+            betaUiText('beta_c099142bc318')}{' '}
+          {betaUiText('beta_47df78c587b0')}
+        </LensNote>
       )}
     </div>
   );
@@ -206,12 +249,18 @@ function BranchesFull({
   size: BoardModuleSize;
   currency: string | null;
 }) {
+  const formatLocale = useFormatLocale();
+
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion() ?? false;
   const host = useRef<HTMLDivElement>(null);
   const { tip, show, hide } = useChartTip(host);
   const rows = foldTail(model, MAX_ROWS[size]);
   const max = Math.max(...rows.map((row) => Math.max(row.spendShare, row.resultShare ?? 0)), 0.01);
-  const words = model.result?.en;
+  const words = model.result ? resultWordsUi(model.result.kind, betaUiText) : null;
   const noun = model.by === 'branch' ? 'branches' : 'campaigns';
   const reference = model.reference;
   return (
@@ -223,14 +272,17 @@ function BranchesFull({
             : `${model.campaignCount} campaigns`
         }${
           words && model.totals.results != null
-            ? ` · ${model.totals.results.toLocaleString('en-US')} ${words.many}`
+            ? ` · ${model.totals.results.toLocaleString(formatLocale)} ${words.many}`
             : ''
         }`}
         testId={TEST_ID}
       />
       <div className="relative" ref={host}>
         <ul
-          aria-label={`Share of spend and of ${words?.many ?? 'results'} by ${model.by}`}
+          aria-label={betaUiText('beta_968b9726c729', {
+            value0: String(words?.many ?? betaUiText('metaResults')),
+            value1: String(model.by),
+          })}
           className="flex flex-col gap-2.5"
         >
           {rows.map((row, index) => (
@@ -248,14 +300,21 @@ function BranchesFull({
                 </span>
                 {model.by === 'branch' && !row.folded && row.campaignIds.length > 1 ? (
                   <span className="block text-muted-foreground text-xs">
-                    {row.campaignIds.length} campaigns
+                    {row.campaignIds.length} {betaUiText('beta_7a4c3d21f9c6')}
                   </span>
                 ) : null}
               </span>
               <span
-                aria-label={`${row.label}: ${formatShare(row.spendShare)} of spend, ${formatShare(row.resultShare)} of ${words?.many ?? 'results'}`}
+                aria-label={betaUiText('beta_e2ae6f90fe31', {
+                  value0: String(row.label),
+                  value1: String(formatShare(row.spendShare)),
+                  value2: String(formatShare(row.resultShare)),
+                  value3: String(words?.many ?? betaUiText('metaResults')),
+                })}
                 className="flex min-w-0 flex-col gap-1"
-                onPointerEnter={(event) => show(event, rowTip(row, model, currency))}
+                onPointerEnter={(event) =>
+                  show(event, <RowTip row={row} model={model} currency={currency} />)
+                }
                 onPointerLeave={hide}
                 role="img"
               >
@@ -285,8 +344,10 @@ function BranchesFull({
                   )}
                 >
                   {row.costPerResult != null
-                    ? formatCurrency(row.costPerResult, currency)
-                    : `No ${words?.many ?? 'results'}`}
+                    ? formatCurrency(row.costPerResult, currency, numberLocale)
+                    : betaUiText('beta_a9281477781c', {
+                        value0: String(words?.many ?? betaUiText('metaResults')),
+                      })}
                 </span>
                 {row.costPerResult != null && reference ? (
                   <span className="flex items-center justify-end gap-1 text-muted-foreground text-xs">
@@ -305,21 +366,29 @@ function BranchesFull({
         <ChartTip tip={tip} />
       </div>
       <LegendRow>
-        <LegendItem label="Share of spend" variant="outline" />
+        <LegendItem label={betaUiText('beta_eadd3f98ddb5')} variant="outline" />
         <LegendItem
           color={BOARD_COLOR.below}
-          label={`Share of ${words?.many ?? 'results'} · under ${reference?.kind === 'average' ? 'average' : 'goal'}`}
+          label={betaUiText('beta_ec9762c7933c', {
+            value0: String(words?.many ?? betaUiText('metaResults')),
+            value1: String(reference?.kind === 'average' ? 'average' : 'goal'),
+          })}
         />
         {model.rows.some((row) => row.tone === 'mid' && row.costPerResult != null) ? (
-          <LegendItem color={BOARD_COLOR.mid} label="on it" />
+          <LegendItem color={BOARD_COLOR.mid} label={betaUiText('beta_c13ba5bd3aed')} />
         ) : null}
-        <LegendItem color={BOARD_COLOR.above} label="over" />
+        <LegendItem color={BOARD_COLOR.above} label={betaUiText('beta_5fb6a47e368e')} />
         {reference && words ? (
           <span data-testid={`${TEST_ID}-reference`}>
-            Cost per {words.one} ·{' '}
+            {betaUiText('beta_9221bd5cd9df')} {words.one} ·{' '}
             {reference.kind === 'goal'
-              ? `goal ${formatCurrency(reference.value, currency)}${reference.source ? ` (${reference.source})` : ''}`
-              : `account average ${formatCurrency(reference.value, currency)}`}
+              ? betaUiText('beta_ed1c7699ae06', {
+                  value0: String(formatCurrency(reference.value, currency, numberLocale)),
+                  value1: String(reference.source ? ` (${reference.source})` : ''),
+                })
+              : betaUiText('beta_bc0ed1e98cd3', {
+                  value0: String(formatCurrency(reference.value, currency, numberLocale)),
+                })}
           </span>
         ) : null}
       </LegendRow>

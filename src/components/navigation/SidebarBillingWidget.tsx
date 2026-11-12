@@ -1,10 +1,11 @@
 'use client';
 
 import { Building2, ChevronRight, CircleDashed, Coins } from 'lucide-react';
-import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { type ReactNode, useMemo } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
+import { Link } from '@/i18n/navigation';
 import { formatCredits, formatUsd } from '@/lib/billing/billingViewModel';
 import type { MeteredSidebarBilling, SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import { cn } from '@/lib/utils';
@@ -14,16 +15,23 @@ import { cn } from '@/lib/utils';
 // previews the breakdown. Collapsed, only the icon shows, with the same preview. The preview is
 // supplementary: everything in it is on the Billing page, which the link opens.
 
-const periodEndFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-
-function accessibleName(view: SidebarBillingView): string {
+function accessibleName(
+  view: SidebarBillingView,
+  t: ReturnType<typeof useTranslations<'navigation'>>,
+): string {
   switch (view.kind) {
     case 'metered':
-      return `Billing: ${view.planLabel}, ${formatCredits(view.remainingCredits)} credits remaining${view.paymentFailed ? ', payment failed' : ''}`;
+      return t('billingMeterAria', {
+        plan: view.planLabel,
+        credits: view.remainingCredits,
+        failed: view.paymentFailed ? 'yes' : 'no',
+      });
     case 'managed':
-      return 'Billing: Managed plan · unmetered';
+      return t('billingManagedAria');
     case 'no_plan':
-      return view.paymentFailed ? 'Billing: No plan, payment failed' : 'Billing: No plan';
+      return t('billingNoPlanAria', {
+        failed: view.paymentFailed ? 'yes' : 'no',
+      });
   }
 }
 
@@ -43,11 +51,12 @@ export function SidebarBillingWidget({
   /** Set when the row should open Top up (see `sidebarOpensTopUp`) rather than link to Billing. */
   onTopUp?: () => void;
 }) {
+  const t = useTranslations('navigation');
   const paymentFailed = view.kind !== 'managed' && view.paymentFailed === true;
   const warn = (view.kind === 'metered' && view.low) || paymentFailed;
   const Icon = view.kind === 'metered' ? Coins : view.kind === 'managed' ? Building2 : CircleDashed;
   const rowProps = {
-    'aria-label': accessibleName(view),
+    'aria-label': accessibleName(view, t),
     'data-testid': 'sidebar-billing',
     'data-kind': view.kind,
     'data-low': warn || undefined,
@@ -111,6 +120,7 @@ export function SidebarBillingWidget({
 }
 
 function WidgetLines({ view }: { view: SidebarBillingView }) {
+  const uiText = useTranslations('navigation');
   switch (view.kind) {
     case 'metered':
       return (
@@ -121,7 +131,7 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
               view.paymentFailed ? 'text-warning' : 'text-[var(--sidebar-muted)]',
             )}
           >
-            {view.paymentFailed ? 'Payment failed' : view.planLabel}
+            {view.paymentFailed ? uiText('payment_failed_17aadc0') : view.planLabel}
           </span>
           <span
             className={cn(
@@ -129,7 +139,7 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
               view.low ? 'text-warning' : 'text-[var(--sidebar-foreground)]',
             )}
           >
-            {formatCredits(view.remainingCredits)} credits
+            {uiText('billingCredits', { credits: view.remainingCredits })}
           </span>
         </>
       );
@@ -138,11 +148,11 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
       return (
         <>
           <span className="truncate text-[0.72rem] font-medium tracking-[0.01em] text-[var(--sidebar-muted)]">
-            Managed plan
+            {uiText('managed_plan_640533a')}
           </span>
           <span className="sr-only"> · </span>
           <span className="truncate text-[0.8rem] font-semibold tracking-[0.01em] text-[var(--sidebar-foreground)] capitalize">
-            unmetered
+            {uiText('billingUnmetered')}
           </span>
         </>
       );
@@ -150,7 +160,7 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
       return (
         <>
           <span className="truncate text-[0.78rem] font-medium tracking-[0.01em] text-[var(--sidebar-foreground)]">
-            No plan
+            {uiText('no_plan_6f9d687')}
           </span>
           <span
             className={cn(
@@ -158,7 +168,7 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
               view.paymentFailed ? 'text-warning' : 'text-[var(--sidebar-muted)]',
             )}
           >
-            {view.paymentFailed ? 'Payment failed · update card' : 'Choose one in Billing'}
+            {view.paymentFailed ? uiText('billingPaymentUpdate') : uiText('billingChoose')}
           </span>
         </>
       );
@@ -175,25 +185,20 @@ function PreviewRow({ label, children }: { label: string; children: ReactNode })
 }
 
 function BillingPreview({ view, topUp }: { view: SidebarBillingView; topUp: boolean }) {
+  const uiText = useTranslations('navigation');
   if (view.kind === 'managed') {
     return (
       <div className="space-y-1 p-4">
-        <p className="text-sm font-semibold text-foreground">Managed plan</p>
-        <p className="text-xs text-muted-foreground">
-          This brand's access is set by Continuum, and Canvas use isn't metered. Open Billing for
-          what it includes.
-        </p>
+        <p className="text-sm font-semibold text-foreground">{uiText('managed_plan_640533a')}</p>
+        <p className="text-xs text-muted-foreground">{uiText('billingManagedDescription')}</p>
       </div>
     );
   }
   if (view.kind === 'no_plan') {
     return (
       <div className="space-y-1 p-4">
-        <p className="text-sm font-semibold text-foreground">No plan</p>
-        <p className="text-xs text-muted-foreground">
-          Choose Organic Plus or Performance Plus in Billing to unlock Canvas, Organic and paid
-          media.
-        </p>
+        <p className="text-sm font-semibold text-foreground">{uiText('no_plan_6f9d687')}</p>
+        <p className="text-xs text-muted-foreground">{uiText('billingNoPlanDescription')}</p>
       </div>
     );
   }
@@ -201,6 +206,12 @@ function BillingPreview({ view, topUp }: { view: SidebarBillingView; topUp: bool
 }
 
 function MeteredPreview({ view, topUp }: { view: MeteredSidebarBilling; topUp: boolean }) {
+  const uiText = useTranslations('navigation');
+  const locale = useLocale();
+  const periodEndFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }),
+    [locale],
+  );
   return (
     <div>
       <div className="space-y-0.5 border-b border-border px-4 py-3">
@@ -211,27 +222,37 @@ function MeteredPreview({ view, topUp }: { view: MeteredSidebarBilling; topUp: b
             view.low ? 'text-warning' : 'text-foreground',
           )}
         >
-          {formatCredits(view.remainingCredits)}{' '}
-          <span className="font-sans text-xs font-normal text-muted-foreground">
-            credits remaining
-          </span>
+          {uiText('billingRemaining', { credits: view.remainingCredits })}
         </p>
       </div>
       <dl className="space-y-1.5 px-4 py-3 text-xs">
-        <PreviewRow label="Included left this period">
-          {formatCredits(view.includedRemainingCredits)} of {formatCredits(view.includedCredits)}
+        <PreviewRow label={uiText('billingIncluded')}>
+          {uiText('billingIncludedCount', {
+            remaining: view.includedRemainingCredits,
+            included: view.includedCredits,
+          })}
         </PreviewRow>
-        <PreviewRow label="Rollover">{formatCredits(view.rolloverCredits)}</PreviewRow>
-        <PreviewRow label="Purchased packs">{formatCredits(view.purchasedCredits)}</PreviewRow>
+        <PreviewRow label={uiText('rollover_2831489')}>
+          {formatCredits(view.rolloverCredits, locale)}
+        </PreviewRow>
+        <PreviewRow label={uiText('billingPacks')}>
+          {formatCredits(view.purchasedCredits, locale)}
+        </PreviewRow>
         {view.periodEnd ? (
-          <PreviewRow label="Period ends">
+          <PreviewRow label={uiText('billingPeriodEnds')}>
             {periodEndFormat.format(new Date(view.periodEnd))}
           </PreviewRow>
         ) : null}
-        <PreviewRow label="Auto-billing">
+        <PreviewRow label={uiText('billingAuto')}>
           {view.autoBilling.on
-            ? `On${view.autoBilling.capUsd !== null ? ` · up to ${formatUsd(view.autoBilling.capUsd)}/mo` : ''}`
-            : 'Off'}
+            ? uiText('billingAutoOn', {
+                limited: view.autoBilling.capUsd !== null ? 'yes' : 'no',
+                amount:
+                  view.autoBilling.capUsd !== null
+                    ? formatUsd(view.autoBilling.capUsd, 'usd', locale)
+                    : '',
+              })
+            : uiText('off_ca7981b')}
         </PreviewRow>
       </dl>
       <p
@@ -241,19 +262,19 @@ function MeteredPreview({ view, topUp }: { view: MeteredSidebarBilling; topUp: b
         )}
       >
         {view.paymentFailed
-          ? "The last payment didn't go through. Update your card in Billing."
+          ? uiText('billingUpdateCard')
           : topUp
             ? view.exhausted
-              ? 'Out of credits. Click to top up and keep generating.'
-              : 'Click to top up.'
+              ? uiText('billingOutTopUp')
+              : uiText('billingClickTopUp')
             : view.exhausted
-              ? 'Out of credits. Add a credit pack in Billing to keep generating.'
-              : 'Click to buy credit packs in Billing.'}
+              ? uiText('billingOutPacks')
+              : uiText('billingBuyPacks')}
         {topUp ? (
           <>
             {' '}
             <Link href={view.href} className="text-foreground underline underline-offset-3">
-              Open Billing
+              {uiText('billingOpen')}
             </Link>
           </>
         ) : null}

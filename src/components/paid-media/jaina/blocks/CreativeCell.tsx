@@ -1,6 +1,7 @@
 'use client';
 
 import { datasetCreativeRefSchema } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,7 +20,10 @@ type CreativeCellProps = {
   alt?: string;
 };
 
-type PreviewState = { status: 'idle' | 'loading' | 'ready' | 'error'; url: string | null };
+type PreviewState = {
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  url: string | null;
+};
 
 // A creative table cell: shows its label, and on hover-open lazy-resolves a
 // fresh preview image (Meta CDN URLs expire) via the creative-preview endpoint.
@@ -30,13 +34,17 @@ export function CreativeCell({
   display = 'cell',
   alt = label,
 }: CreativeCellProps) {
+  const uiText = useTranslations('scale');
   const ref = useMemo(() => {
     const parsed = datasetCreativeRefSchema.safeParse(creative);
     return parsed.success ? parsed.data : null;
   }, [creative]);
 
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<PreviewState>({ status: 'idle', url: null });
+  const [preview, setPreview] = useState<PreviewState>({
+    status: 'idle',
+    url: null,
+  });
   const resolvable = ref !== null && isResolvableCreativeRef(ref);
   // Paper cannot hover. In an export the preview must resolve unprompted, or every
   // creative in a data table renders as bare text — which is what the old raster
@@ -68,11 +76,13 @@ export function CreativeCell({
         {preview.status === 'ready' && preview.url ? (
           <img src={preview.url} alt={alt} className="size-full object-contain" loading="lazy" />
         ) : !resolvable || preview.status === 'error' ? (
-          <span className="text-xs text-muted-foreground">Preview unavailable</span>
+          <span className="text-xs text-muted-foreground">
+            {uiText('preview_unavailable_b99fa6c')}
+          </span>
         ) : (
           <Skeleton
             role="status"
-            aria-label={`Loading preview for ${alt}`}
+            aria-label={uiText('template_7482134aac06', { v0: alt })}
             className="size-full rounded-none"
           />
         )}
@@ -118,7 +128,7 @@ export function CreativeCell({
           />
         ) : preview.status === 'error' ? (
           <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
-            Preview unavailable
+            {uiText('preview_unavailable_b99fa6c')}
           </div>
         ) : (
           <Skeleton className="h-32 w-full rounded-md" />

@@ -1,4 +1,9 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useLocale as useFormatLocale,
+  useTranslations as useLabelTranslations,
+} from 'next-intl';
 
 // G07 Search terms on the adaptive board: what the search-term spend buys, by intent — brand,
 // competitor, wrong intent and the rest — as a treemap of each bucket's roots, competitors and
@@ -82,22 +87,36 @@ const HEADLINE_CAPTION: Record<FlaggedBucket, string> = {
 };
 
 type ReadModel = Extract<TermsModel, { kind: 'read' }>;
-type Selection = { bucket: TermBucket; groupKey: string | null; folded: boolean };
+type Selection = {
+  bucket: TermBucket;
+  groupKey: string | null;
+  folded: boolean;
+};
 type Money = (value: number) => string;
 
-export type TermsLensInputs = { read: GoogleSignalsRead; cards: PlatformCard[] | null };
+export type TermsLensInputs = {
+  read: GoogleSignalsRead;
+  cards: PlatformCard[] | null;
+};
 
 export default function TermsLens({ ctx, slot }: BoardModuleProps) {
   const customer = useGoogleCustomer(ctx.brandId, ctx.adAccountId);
   const customerId = customer.status === 'ready' ? customer.data.customerId : '';
-  const query = useGoogleSignals({ brandId: ctx.brandId, customerId, blocks: TERMS_BLOCKS });
+  const query = useGoogleSignals({
+    brandId: ctx.brandId,
+    customerId,
+    blocks: TERMS_BLOCKS,
+  });
   const cards = useGoogleCardsLens(ctx.brandId);
   const reads = lensAll(googleLensRead(query), cards);
   const state: LensState<TermsLensInputs> =
     customer.status !== 'ready'
       ? customer
       : reads.status === 'ready'
-        ? { status: 'ready', data: { read: reads.data[0], cards: reads.data[1] } }
+        ? {
+            status: 'ready',
+            data: { read: reads.data[0], cards: reads.data[1] },
+          }
         : reads;
   const currency = ctx.currency ?? (customer.status === 'ready' ? customer.data.currency : null);
   return <TermsLensView currency={currency} slot={slot} state={state} />;
@@ -112,6 +131,8 @@ export function TermsLensView({
   state: LensState<TermsLensInputs>;
   currency: string | null;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const read = state.status === 'ready' ? state.data.read : null;
   const cards = state.status === 'ready' ? state.data.cards : null;
   // Vivo 47's terms are ~27k rows: the buckets are read once per answer, never per render.
@@ -135,7 +156,7 @@ export function TermsLensView({
       size={slot.size}
       state={frameStateOf(state, model?.kind === 'read')}
       testId={TEST_ID}
-      title={BOARD_MODULE_TITLES.terms}
+      title={betaUiText('boardModuleTitle', { id: 'terms' })}
     >
       <LensBody size={slot.size} state={state} testId={TEST_ID}>
         {() =>
@@ -161,25 +182,29 @@ function TermsBody({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   if (model.kind === 'unread') {
     return <LensNote testId="terms-unread">— {model.reason}</LensNote>;
   }
   if (model.kind === 'empty') {
-    return (
-      <LensNote testId="terms-empty">
-        No search term spent in Google's last 30 complete days.
-      </LensNote>
-    );
+    return <LensNote testId="terms-empty">{betaUiText('beta_ebc3749b768f')}</LensNote>;
   }
   if (isTile(size)) return <TermsTileBody model={model} money={money} />;
   return <TermsFullBody model={model} money={money} size={size} />;
 }
 
 function Headline({ model, money }: { model: ReadModel; money: Money }) {
+  const formatLocale = useFormatLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   if (!model.headline) {
     return (
       <LensFigure
-        caption={`on ${model.termCount.toLocaleString('en-US')} search terms`}
+        caption={betaUiText('beta_80d8314ef0c5', {
+          value0: String(model.termCount.toLocaleString(formatLocale)),
+        })}
         testId="terms-headline"
         value={money(model.total)}
       />
@@ -196,6 +221,8 @@ function Headline({ model, money }: { model: ReadModel; money: Money }) {
 }
 
 function TermsTileBody({ model, money }: { model: ReadModel; money: Money }) {
+  const labelCopy = useLabelTranslations('scale');
+
   return (
     <div className="space-y-2.5">
       <Headline model={model} money={money} />
@@ -203,7 +230,7 @@ function TermsTileBody({ model, money }: { model: ReadModel; money: Money }) {
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs">
         {TERM_BUCKETS.filter((bucket) => model.buckets[bucket].spend > 0).map((bucket) => (
           <LegendKey color={BUCKET_COLOR[bucket]} hatched={bucket === 'wrong_intent'} key={bucket}>
-            {TERM_BUCKET_LABEL[bucket]} {pct(model.buckets[bucket].share)}
+            {labelCopy('termBucket', { kind: bucket })} {pct(model.buckets[bucket].share)}
           </LegendKey>
         ))}
       </div>
@@ -213,15 +240,26 @@ function TermsTileBody({ model, money }: { model: ReadModel; money: Money }) {
 
 /** The four buckets as one thin bar: no text on it, every part in its readout. */
 function BucketBar({ model, money }: { model: ReadModel; money: Money }) {
+  const labelCopy = useLabelTranslations('scale');
+
+  const betaUiText = useBetaTranslations('scale');
+
   const parts = TERM_BUCKETS.map((bucket) => model.buckets[bucket]).filter(
     (figure) => figure.spend > 0,
   );
   const reduce = useReducedMotion();
   return (
     <div
-      aria-label={`Search-term spend by intent: ${parts
-        .map((figure) => `${TERM_BUCKET_LABEL[figure.bucket]} ${pct(figure.share)}`)
-        .join(', ')}`}
+      aria-label={betaUiText('beta_9d1e997cd72e', {
+        value0: String(
+          parts
+            .map(
+              (figure) =>
+                `${labelCopy('termBucket', { kind: figure.bucket })} ${pct(figure.share)}`,
+            )
+            .join(', '),
+        ),
+      })}
       className="flex h-2 w-full gap-0.5"
       data-testid="terms-bucket-bar"
       role="img"
@@ -236,8 +274,11 @@ function BucketBar({ model, money }: { model: ReadModel; money: Money }) {
           )}
           initial={reduce ? false : { scaleX: 0 }}
           key={figure.bucket}
-          style={{ backgroundColor: BUCKET_COLOR[figure.bucket], flexGrow: figure.spend }}
-          title={`${TERM_BUCKET_LABEL[figure.bucket]} · ${pct(figure.share)} · ${money(figure.spend)}`}
+          style={{
+            backgroundColor: BUCKET_COLOR[figure.bucket],
+            flexGrow: figure.spend,
+          }}
+          title={`${labelCopy('termBucket', { kind: figure.bucket })} · ${pct(figure.share)} · ${money(figure.spend)}`}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         />
       ))}
@@ -274,6 +315,10 @@ function TermsFullBody({
   money: Money;
   size: BoardModuleSize;
 }) {
+  const formatLocale = useFormatLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   const [selection, setSelection] = useState<Selection | null>(null);
   const tall = size === 'l';
   const listsRoots = tall || size === 'w';
@@ -305,12 +350,13 @@ function TermsFullBody({
         ) : listsRoots ? (
           <TopGroups model={model} money={money} />
         ) : (
-          <LensNote>Tap a tile or a bucket to list its terms.</LensNote>
+          <LensNote>{betaUiText('beta_e7ad2d835607')}</LensNote>
         )}
         <Takeaway model={model} money={money} />
         <LensNote testId="terms-scope">
-          {windowRangeLabel(model.window.since, model.window.until)} · Google's last 30 complete
-          days · {model.termCount.toLocaleString('en-US')} Search and Performance Max terms
+          {windowRangeLabel(model.window.since, model.window.until)}{' '}
+          {betaUiText('beta_8aec6ede70e0')} {model.termCount.toLocaleString(formatLocale)}{' '}
+          {betaUiText('beta_10db1ef47e95')}
         </LensNote>
       </div>
     </div>
@@ -353,6 +399,12 @@ function Treemap({
   selection: Selection | null;
   onSelect: (selection: Selection) => void;
 }) {
+  const formatLocale = useFormatLocale();
+
+  const labelCopy = useLabelTranslations('scale');
+
+  const betaUiText = useBetaTranslations('scale');
+
   const [ref, measured] = useBoxWidth<HTMLDivElement>();
   const width = measured ?? NARROWEST;
   const reduce = useReducedMotion();
@@ -383,7 +435,17 @@ function Treemap({
         const showLabel = rect.w >= LABEL_MIN.w && rect.h >= LABEL_MIN.h;
         const showMoney = showLabel && rect.h >= LABEL_MIN.hMoney;
         const share = tile.spend / model.total;
-        const summary = `${tile.label} · ${TERM_BUCKET_LABEL[tile.bucket]} · ${pct(share)} · ${tile.termCount} ${tile.termCount === 1 ? 'term' : 'terms'} · ${tile.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conv.`;
+        const summary = betaUiText('beta_02cbce1e4b38', {
+          value0: String(tile.label),
+          value1: String(labelCopy('termBucket', { kind: tile.bucket })),
+          value2: String(pct(share)),
+          value3: tile.termCount,
+          value5: String(
+            tile.conversions.toLocaleString(formatLocale, {
+              maximumFractionDigits: 1,
+            }),
+          ),
+        });
         return (
           <MarkTip
             key={tile.id}
@@ -410,7 +472,10 @@ function Treemap({
                   height: `${(rect.h / height) * 100}%`,
                   backgroundColor: BUCKET_COLOR[tile.bucket],
                 }}
-                transition={{ duration: 0.35, delay: reduce ? 0 : index * 0.03 }}
+                transition={{
+                  duration: 0.35,
+                  delay: reduce ? 0 : index * 0.03,
+                }}
                 type="button"
               >
                 {showLabel ? (
@@ -444,6 +509,8 @@ function BucketLegend({
   selection: Selection | null;
   onSelect: (selection: Selection) => void;
 }) {
+  const labelCopy = useLabelTranslations('scale');
+
   return (
     <ul className="grid @sm/module:grid-cols-2 grid-cols-1 gap-1" data-testid="terms-legend">
       {TERM_BUCKETS.map((bucket) => {
@@ -461,8 +528,10 @@ function BucketLegend({
               data-testid="terms-legend-unknown"
               key={bucket}
             >
-              <span className="font-medium text-foreground">{TERM_BUCKET_LABEL[bucket]}</span> —{' '}
-              {figure.unknown}
+              <span className="font-medium text-foreground">
+                {labelCopy('termBucket', { kind: bucket })}
+              </span>{' '}
+              — {figure.unknown}
             </li>
           );
         }
@@ -482,7 +551,9 @@ function BucketLegend({
               type="button"
             >
               <LegendKey color={BUCKET_COLOR[bucket]} hatched={bucket === 'wrong_intent'}>
-                <span className="font-medium text-foreground">{TERM_BUCKET_LABEL[bucket]}</span>
+                <span className="font-medium text-foreground">
+                  {labelCopy('termBucket', { kind: bucket })}
+                </span>
               </LegendKey>
               <span className="shrink-0 text-muted-foreground tabular-nums">
                 <span className="font-medium text-foreground">{pct(figure.share)}</span> ·{' '}
@@ -499,12 +570,19 @@ function BucketLegend({
 const LISTED = 6;
 
 function TermRow({ term, money }: { term: SearchTerm; money: Money }) {
+  const formatLocale = useFormatLocale();
+
+  const betaUiText = useBetaTranslations('scale');
+
   return (
     <li className="flex min-w-0 items-baseline justify-between gap-3 py-1 text-xs">
       <span className="min-w-0 break-words text-foreground">{term.term}</span>
       <span className="shrink-0 text-muted-foreground tabular-nums">
         {money(term.totals.spend)} ·{' '}
-        {term.totals.conversions.toLocaleString('en-US', { maximumFractionDigits: 1 })} conv.
+        {term.totals.conversions.toLocaleString(formatLocale, {
+          maximumFractionDigits: 1,
+        })}{' '}
+        {betaUiText('beta_ebd4fde09112')}
       </span>
     </li>
   );
@@ -519,6 +597,12 @@ function SelectedTerms({
   money: Money;
   selection: Selection;
 }) {
+  const formatLocale = useFormatLocale();
+
+  const labelCopy = useLabelTranslations('scale');
+
+  const betaUiText = useBetaTranslations('scale');
+
   const terms = termsOfSelection(model, selection);
   const spend = terms.reduce((sum, term) => sum + term.totals.spend, 0);
   const tile = model.tiles.find(
@@ -530,10 +614,16 @@ function SelectedTerms({
   const title =
     tile?.label ??
     (selection.folded
-      ? `${TERM_BUCKET_LABEL[selection.bucket]} · smaller groups`
-      : TERM_BUCKET_LABEL[selection.bucket]);
+      ? betaUiText('beta_090e541fccf7', {
+          value0: String(labelCopy('termBucket', { kind: selection.bucket })),
+        })
+      : labelCopy('termBucket', { kind: selection.bucket }));
   return (
-    <section aria-label={`Terms in ${title}`} className="space-y-1" data-testid="terms-selected">
+    <section
+      aria-label={betaUiText('beta_5cee5a1dad66', { value0: String(title) })}
+      className="space-y-1"
+      data-testid="terms-selected"
+    >
       <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs">
         <LegendKey
           color={BUCKET_COLOR[selection.bucket]}
@@ -542,7 +632,8 @@ function SelectedTerms({
           <span className="font-semibold text-foreground">{title}</span>
         </LegendKey>
         <span className="text-muted-foreground tabular-nums">
-          {terms.length.toLocaleString('en-US')} {terms.length === 1 ? 'term' : 'terms'} ·{' '}
+          {terms.length.toLocaleString(formatLocale)}{' '}
+          {terms.length === 1 ? betaUiText('beta_599f7703547e') : betaUiText('beta_51d2361f4fae')} ·{' '}
           {money(spend)}
         </span>
       </p>
@@ -558,7 +649,8 @@ function SelectedTerms({
       <p className="flex flex-wrap items-center gap-x-3 text-xs">
         {terms.length > LISTED ? (
           <span className="text-muted-foreground">
-            The {LISTED} that spent most; {(terms.length - LISTED).toLocaleString('en-US')} more.
+            {betaUiText('beta_b344d80e24a3')} {LISTED} {betaUiText('beta_422180f1f40d')}{' '}
+            {(terms.length - LISTED).toLocaleString(formatLocale)} {betaUiText('beta_bcc7f11af343')}
           </span>
         ) : null}
         <a
@@ -573,7 +665,7 @@ function SelectedTerms({
             { newConversation: true },
           )}
         >
-          Ask Jaina about these
+          {betaUiText('beta_736f511f48e1')}
         </a>
       </p>
     </section>
@@ -582,9 +674,15 @@ function SelectedTerms({
 
 /** The groups that spent most, whatever their bucket: the roots, competitors and themes. */
 function TopGroups({ model, money }: { model: ReadModel; money: Money }) {
+  const betaUiText = useBetaTranslations('scale');
+
   return (
-    <section aria-label="Top roots" className="space-y-1" data-testid="terms-top-groups">
-      <p className="font-medium text-muted-foreground text-xs">Top roots</p>
+    <section
+      aria-label={betaUiText('beta_bbe4dfcd9bab')}
+      className="space-y-1"
+      data-testid="terms-top-groups"
+    >
+      <p className="font-medium text-muted-foreground text-xs">{betaUiText('beta_bbe4dfcd9bab')}</p>
       <ul className="divide-y divide-border/60">
         {model.topGroups.map(({ bucket, group }) => (
           <li
@@ -594,7 +692,10 @@ function TopGroups({ model, money }: { model: ReadModel; money: Money }) {
             <LegendKey color={BUCKET_COLOR[bucket]} hatched={bucket === 'wrong_intent'}>
               <span className="text-foreground">{group.label}</span>{' '}
               <span className="text-muted-foreground">
-                · {group.terms.length} {group.terms.length === 1 ? 'term' : 'terms'}
+                · {group.terms.length}{' '}
+                {group.terms.length === 1
+                  ? betaUiText('beta_599f7703547e')
+                  : betaUiText('beta_51d2361f4fae')}
               </span>
             </LegendKey>
             <span className="shrink-0 text-muted-foreground tabular-nums">

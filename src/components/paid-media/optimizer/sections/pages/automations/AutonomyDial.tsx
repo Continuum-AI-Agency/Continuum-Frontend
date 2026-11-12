@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // The autonomy dial: Observe → Recommend → Approve → Autopilot, one track, the level the portfolio
 // is on lifted onto the page colour. The lift slides to the new level once the write has landed —
@@ -26,6 +27,8 @@ export function AutonomyDial({
   disabled?: boolean;
   onSelect: (level: AutonomyLevel) => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const reduce = useReducedMotion();
   const at = AUTONOMY_LEVELS.indexOf(value);
   return (
@@ -34,7 +37,7 @@ export function AutonomyDial({
       data-level={value}
       data-testid="autonomy-dial"
     >
-      <legend className="sr-only">How much this portfolio may do on its own</legend>
+      <legend className="sr-only">{betaUiText('beta_161abbf6295a')}</legend>
       {AUTONOMY_LEVELS.map((level, index) => {
         const selected = level === value;
         const lock = selected ? undefined : locks[level];

@@ -1,4 +1,9 @@
 'use client';
+import type { UiLocale } from '@/i18n/config';
+
+type GoalCopy = ReturnType<typeof useBetaTranslations<'dashboard'>>;
+
+import { useTranslations as useBetaTranslations, useLocale as useNumberLocale } from 'next-intl';
 
 // A goal held against its target: the bar on the tile, the ring in the expanded module (with a
 // tick where the complete days say the figure should be), and the lines that say what the two show.
@@ -39,13 +44,37 @@ function toneOf(status: Compared): Tone {
 const percentOf = (progress: number) => Math.round(progress * 100);
 
 /** The target, in the figure's own format. */
-export function goalTargetFigure(target: Compared['target']): string {
-  return formatFigure(target.target, unitOf({ target }), target.currency);
+export function goalTargetFigure(target: Compared['target'], locale: UiLocale = 'en'): string {
+  return formatFigure(target.target, unitOf({ target }), target.currency, locale);
 }
 
 /** Where the goal stands: its period, the complete days, what they owe and the pace; once the
  *  period is over, how much of the target it reached. */
-export function goalPaceLine(status: Compared): string {
+export function goalPaceLine(status: Compared, t?: GoalCopy, locale: UiLocale = 'en'): string {
+  if (t) {
+    const dates = goalWindowLabel(
+      { since: status.period.since, until: status.period.until },
+      locale,
+    );
+    if (status.period.phase === 'ended')
+      return t('goalEndedLine', { dates, percent: percentOf(status.progress) });
+    const percent = status.paceRatio === null ? null : Math.round((status.paceRatio - 1) * 100);
+    const pace =
+      percent === null
+        ? ''
+        : t('goalPaceWords', {
+            side: percent >= 3 ? 'ahead' : percent <= -6 ? 'below' : 'on',
+            percent: Math.abs(percent),
+          });
+    return t('goalRunningLine', {
+      dates,
+      elapsed: status.period.elapsedDays,
+      days: status.period.days,
+      owed: formatFigure(status.expectedToDate, unitOf(status), status.target.currency, locale),
+      pace: pace ? ' · ' + pace : '',
+    });
+  }
+
   const { period, target } = status;
   const dates = goalWindowLabel({ since: period.since, until: period.until });
   if (period.phase === 'ended')
@@ -58,18 +87,57 @@ export function goalPaceLine(status: Compared): string {
 }
 
 /** What a target that is not held against the figure says instead; null for the others. */
-export function goalTargetNote(status: GoalTargetStatus): string | null {
+export function goalTargetNote(
+  status: GoalTargetStatus,
+  t?: GoalCopy,
+  locale: UiLocale = 'en',
+): string | null {
+  if (t) {
+    switch (status.kind) {
+      case 'unreadable':
+        return t('goalTargetUnread');
+      case 'not-running':
+        return status.period.phase === 'upcoming'
+          ? t('goalUpcomingNote', {
+              amount: goalTargetFigure(status.target, locale),
+              date: goalDayLabel(status.period.since, locale),
+            })
+          : t('goalTodayNote', {
+              amount: goalTargetFigure(status.target, locale),
+            });
+      case 'mismatch': {
+        const codes = status.figureCurrencies.filter(
+          (code): code is string => typeof code === 'string',
+        );
+        return t('goalMismatchNote', {
+          currency: status.target.currency ?? '',
+          figures: codes.length
+            ? t('goalCurrencies', {
+                currencies: new Intl.ListFormat(locale, {
+                  type: 'conjunction',
+                }).format(codes),
+              })
+            : t('goalUnknownCurrency'),
+        });
+      }
+      default:
+        return null;
+    }
+  }
+
   switch (status.kind) {
     case 'unreadable':
       return 'Couldn’t read this goal’s target just now. The figure is real.';
     case 'not-running':
-      return `Target ${goalTargetFigure(status.target)}. ${
+      return `Target ${goalTargetFigure(status.target, locale)}. ${
         status.period.phase === 'upcoming'
           ? `Its period starts ${goalDayLabel(status.period.since)}, so there is nothing to compare yet.`
           : 'Its period started today, so no day of it is complete yet.'
       }`;
     case 'mismatch': {
-      const figures = status.figureCurrencies.filter(Boolean).join(' and ');
+      const figures = status.figureCurrencies
+        .filter((code): code is string => typeof code === 'string')
+        .join(' and ');
       return `This target is in ${status.target.currency} and these figures are ${
         figures ? `in ${figures}` : 'in an unknown currency'
       }, so they are not compared.`;
@@ -80,10 +148,12 @@ export function goalTargetNote(status: GoalTargetStatus): string | null {
 }
 
 export function GoalProgressBar({ status, label }: { status: Compared; label: string }) {
+  const betaUiText = useBetaTranslations('dashboard');
+
   const percent = percentOf(status.progress);
   return (
     <div
-      aria-label={`${label} against its target`}
+      aria-label={betaUiText('beta_7994a1c04b28', { value0: String(label) })}
       aria-valuemax={100}
       aria-valuemin={0}
       aria-valuenow={Math.min(100, percent)}
@@ -101,6 +171,10 @@ export function GoalProgressBar({ status, label }: { status: Compared; label: st
 const RING_RADIUS = 84;
 
 export function GoalRing({ status }: { status: Compared }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('dashboard');
+
   const share = Math.min(1, status.progress);
   const expected = Math.min(1, status.expectedToDate / status.target.target);
   const running = status.period.phase === 'running';
@@ -144,10 +218,10 @@ export function GoalRing({ status }: { status: Compared }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
         <span className="max-w-full truncate font-semibold text-2xl tabular-nums tracking-tight">
-          {formatFigure(status.actual, unitOf(status), status.amount.currency)}
+          {formatFigure(status.actual, unitOf(status), status.amount.currency, numberLocale)}
         </span>
         <span className="max-w-full truncate text-muted-foreground text-xs">
-          of {goalTargetFigure(status.target)}
+          {betaUiText('beta_28391d3bc64e')} {goalTargetFigure(status.target, numberLocale)}
         </span>
       </div>
     </div>

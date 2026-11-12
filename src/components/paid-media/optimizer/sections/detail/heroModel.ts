@@ -1,3 +1,12 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import type { UiLocale } from '@/i18n/config';
+import {
+  type OptimizerDisplayTranslate,
+  optimizerDisplayCopy,
+} from '@/lib/paid-media/optimizationMetricPresentation';
 // The hero view: what the portfolio opens on. Growth from the recap (the same arithmetic the
 // recap tiles use), the hero from the daily brief when it belongs to the
 // latest cycle — else the deterministic brief composed here from the report, so the screen
@@ -7,6 +16,7 @@ import type {
   BriefCandidate,
   BriefCta,
   BriefGrowth,
+  BriefStanding,
   CycleRunPacing,
   OptimizationMetricDefinition,
   ParsedCycleRunReport,
@@ -66,7 +76,10 @@ export function isQueueRowKey(key: string | null | undefined): key is string {
  */
 export function queueRowKeyFor(
   cta: Pick<BriefCta, 'kind' | 'target_id'> | null | undefined,
-  fallback: { candidateId?: string | null; recommendationId?: string | null } = {},
+  fallback: {
+    candidateId?: string | null;
+    recommendationId?: string | null;
+  } = {},
 ): string | null {
   if (!cta || cta.kind === 'manage') return null;
   if (isQueueRowKey(cta.target_id)) return cta.target_id;
@@ -82,6 +95,7 @@ export type HeroView = {
   pacingLine: string | null;
   pacingTone: 'success' | 'warning' | 'muted';
   brief: PortfolioBrief;
+  standing?: BriefStanding;
   cta: HeroCta | null;
   observe: boolean;
   asOf: string | null;
@@ -113,7 +127,10 @@ export type HeroView = {
 
 /** Why the hero has no read of the whole portfolio (HeroView.unread): `pending` while the read
  *  that covers the range is on its way, `unavailable` when none does. */
-export type HeroUnread = { reason: 'pending' | 'unavailable'; sentence: string };
+export type HeroUnread = {
+  reason: 'pending' | 'unavailable';
+  sentence: string;
+};
 
 /** A Google, TikTok or mixed portfolio's platforms, and the state of its metrics read at the
  *  range's window — `uncovered` when no metrics window covers the range. */
@@ -151,15 +168,52 @@ export function crossPlatformRead(args: {
     ...(args.portfolio.platforms ?? []),
     ...(ready?.by_platform.map((row) => row.platform) ?? []),
   ]);
-  return { platforms: [...platforms], read: args.window ? args.metrics.status : 'uncovered' };
+  return {
+    platforms: [...platforms],
+    read: args.window ? args.metrics.status : 'uncovered',
+  };
 }
 
-function unreadOf(cross: CrossPlatformRead, resultLabel: string): HeroUnread {
+function unreadOf(
+  cross: CrossPlatformRead,
+  resultLabel: string,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
+): HeroUnread {
+  if (translate) {
+    const names = cross.platforms.map((platform) => platformName({ platform }, translate));
+    const platforms = names.length
+      ? new Intl.ListFormat(locale, {
+          style: 'long',
+          type: 'conjunction',
+        }).format(names)
+      : translate('anotherPlatform');
+    return {
+      reason: cross.read === 'loading' ? 'pending' : 'unavailable',
+      sentence: translate(
+        cross.read === 'loading'
+          ? 'crossReading'
+          : cross.read === 'uncovered'
+            ? 'crossUncovered'
+            : 'crossUnavailable',
+        { result: resultLabel, platforms },
+      ),
+    };
+  }
   const names = cross.platforms.map((platform) => platformName({ platform }));
-  const last = names.pop() ?? 'another platform';
-  const on = names.length > 0 ? `${names.join(', ')} and ${last}` : last;
+  const last = names.pop() ?? optimizerDisplayCopy('anotherPlatform', translate);
+  const on =
+    names.length > 0
+      ? uiTranslate
+        ? uiTranslate('helper_c6a22df1409d', { v0: names.join(', '), v1: last })
+        : `${names.join(', ')} and ${last}`
+      : last;
   if (cross.read === 'loading') {
-    return { reason: 'pending', sentence: `Reading spend and ${resultLabel} across ${on}…` };
+    return {
+      reason: 'pending',
+      sentence: `Reading spend and ${resultLabel} across ${on}…`,
+    };
   }
   return {
     reason: 'unavailable',
@@ -172,7 +226,11 @@ function unreadOf(cross: CrossPlatformRead, resultLabel: string): HeroUnread {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-function pacingLineOf(flight: FlightPacingModel | null): {
+function pacingLineOf(
+  flight: FlightPacingModel | null,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+): {
   line: string | null;
   tone: HeroView['pacingTone'];
 } {
@@ -181,23 +239,57 @@ function pacingLineOf(flight: FlightPacingModel | null): {
     case 'no_flight':
       return { line: null, tone: 'muted' };
     case 'not_started':
-      return { line: `Flight starts ${flight.start}`, tone: 'muted' };
+      return {
+        line: translate
+          ? translate('flightStarts', {
+              date: new Intl.DateTimeFormat(locale, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                timeZone: 'UTC',
+              }).format(new Date(flight.start + 'T00:00:00Z')),
+            })
+          : `Flight starts ${flight.start}`,
+        tone: 'muted',
+      };
     case 'ended':
-      return { line: 'Flight ended', tone: 'muted' };
+      return {
+        line: optimizerDisplayCopy('flightEnded', translate),
+        tone: 'muted',
+      };
     case 'awaiting_cycle':
       return {
-        line: `Flight day ${flight.dayIndex} of ${flight.periodDays} · awaiting the first cycle`,
+        line: translate
+          ? translate('flightAwaiting', {
+              day: flight.dayIndex,
+              total: flight.periodDays,
+            })
+          : `Flight day ${flight.dayIndex} of ${flight.periodDays} · awaiting the first cycle`,
         tone: 'muted',
       };
     default: {
-      const f = flight as { status?: string; dayIndex?: number; periodDays?: number };
+      const f = flight as {
+        status?: string;
+        dayIndex?: number;
+        periodDays?: number;
+      };
       const status = f.status ?? 'on_track';
       const word =
-        status === 'on_track' ? 'On pace' : status === 'underpacing' ? 'Under pace' : 'Over pace';
+        status === 'on_track'
+          ? optimizerDisplayCopy('paceOn', translate)
+          : status === 'underpacing'
+            ? optimizerDisplayCopy('paceUnder', translate)
+            : optimizerDisplayCopy('paceOver', translate);
       return {
         line:
           f.dayIndex != null && f.periodDays != null
-            ? `${word} · day ${f.dayIndex} of ${f.periodDays}`
+            ? translate
+              ? translate('flightProgress', {
+                  pace: word,
+                  day: f.dayIndex,
+                  total: f.periodDays,
+                })
+              : `${word} · day ${f.dayIndex} of ${f.periodDays}`
             : word,
         tone: status === 'on_track' ? 'success' : 'warning',
       };
@@ -250,7 +342,10 @@ function withPacingVerdict(
   stored: PortfolioBrief,
   runPacing: CycleRunPacing | null | undefined,
 ): PortfolioBrief {
-  const growth: BriefGrowth = { ...stored.growth, pacing: pacingVerdict(runPacing) };
+  const growth: BriefGrowth = {
+    ...stored.growth,
+    pacing: pacingVerdict(runPacing),
+  };
   if (growth.pacing.status) return { ...stored, growth };
   const sentence = stripPaceClaim(stored.growth_sentence);
   return {
@@ -411,13 +506,23 @@ function candidatesFromReport(
 export function ctaForCandidate(
   candidate: Pick<BriefCandidate, 'id' | 'module' | 'cta'> & { kind?: string },
   observe: boolean,
+  translate?: OptimizerDisplayTranslate,
 ): HeroCta {
-  if (observe) return { kind: 'manage', rowKey: null, label: 'See what Recommend would do' };
+  if (observe)
+    return {
+      kind: 'manage',
+      rowKey: null,
+      label: optimizerDisplayCopy('seeRecommend', translate),
+    };
   const rowKey = queueRowKeyFor(candidate.cta, { candidateId: candidate.id });
   // A card whose target the queue cannot hold gets Manage, named as Manage — never a button
   // labelled "Open the audience proposal" that switches tabs and focuses nothing.
   if (candidate.cta.kind !== 'manage' && !rowKey) {
-    return { kind: 'manage', rowKey: null, label: 'Open Manage' };
+    return {
+      kind: 'manage',
+      rowKey: null,
+      label: optimizerDisplayCopy('openManage', translate),
+    };
   }
   // pause_ad sits in the creative module (a creative losing the auction), but the row it
   // opens is a pause: the button names what it opens.
@@ -436,48 +541,73 @@ export function ctaForCandidate(
   return { kind: candidate.cta.kind, rowKey, label };
 }
 
-function ctaFor(brief: PortfolioBrief, observe: boolean): HeroCta | null {
+function ctaFor(
+  brief: PortfolioBrief,
+  observe: boolean,
+  translate?: OptimizerDisplayTranslate,
+): HeroCta | null {
   const hero = brief.hero;
-  if (observe) return { kind: 'manage', rowKey: null, label: 'See what Recommend would do' };
+  if (observe)
+    return {
+      kind: 'manage',
+      rowKey: null,
+      label: optimizerDisplayCopy('seeRecommend', translate),
+    };
   if (!hero.cta || hero.module === 'none') return null;
   const candidate = brief.candidates.find((c) => c.id === hero.candidate_id) ?? null;
   return ctaForCandidate(
-    candidate ?? { id: hero.candidate_id ?? '', module: hero.module, cta: hero.cta },
+    candidate ?? {
+      id: hero.candidate_id ?? '',
+      module: hero.module,
+      cta: hero.cta,
+    },
     observe,
+    translate,
   );
 }
 
-export function buildHeroView(args: {
-  report: ParsedCycleRunReport | null;
-  recap: RecapModel;
-  flightPacing: FlightPacingModel | null;
-  metric: OptimizationMetricDefinition;
-  currency: string | null;
-  portfolio: PortfolioListItem;
-  target: number | null;
-  window: BriefGrowth['window'];
-  firstCycle: boolean;
-  /**
-   * The portfolio's headline figure (portfolioFigure.ts), passed at the default range — and,
-   * for a Google, TikTok or mixed portfolio, at any range its metrics read covers (measured
-   * over `window`). When present it IS the growth read — over the stored brief's cycle-time
-   * figures and over the recap — so the hero prints exactly what the portfolio's list row prints.
-   */
-  figure?: PortfolioFigure | null;
-  /**
-   * crossPlatformRead() for a Google, TikTok or mixed portfolio. Its recap sums the Meta half
-   * only, so without `figure` the hero has no read of the whole portfolio and says so
-   * (HeroView.unread) instead of printing the Meta half's zero as "no spend".
-   */
-  crossPlatform?: CrossPlatformRead | null;
-  now?: string;
-}): HeroView {
+export function buildHeroView(
+  args: {
+    report: ParsedCycleRunReport | null;
+    recap: RecapModel;
+    flightPacing: FlightPacingModel | null;
+    metric: OptimizationMetricDefinition;
+    currency: string | null;
+    portfolio: PortfolioListItem;
+    target: number | null;
+    window: BriefGrowth['window'];
+    firstCycle: boolean;
+    /**
+     * The portfolio's headline figure (portfolioFigure.ts), passed at the default range — and,
+     * for a Google, TikTok or mixed portfolio, at any range its metrics read covers (measured
+     * over `window`). When present it IS the growth read — over the stored brief's cycle-time
+     * figures and over the recap — so the hero prints exactly what the portfolio's list row prints.
+     */
+    figure?: PortfolioFigure | null;
+    /**
+     * crossPlatformRead() for a Google, TikTok or mixed portfolio. Its recap sums the Meta half
+     * only, so without `figure` the hero has no read of the whole portfolio and says so
+     * (HeroView.unread) instead of printing the Meta half's zero as "no spend".
+     */
+    crossPlatform?: CrossPlatformRead | null;
+    now?: string;
+    translate?: OptimizerDisplayTranslate;
+    locale?: UiLocale;
+  },
+  uiTranslate?: ScaleCopy,
+): HeroView {
   const { report, recap, metric } = args;
   const observe = args.portfolio.apply_mode === 'observe';
   const figure = args.figure ?? null;
   const unread =
     args.crossPlatform && !figure
-      ? unreadOf(args.crossPlatform, metric.resultLabel.toLowerCase())
+      ? unreadOf(
+          args.crossPlatform,
+          args.translate ? metric.resultLabel : metric.resultLabel.toLowerCase(),
+          args.translate,
+          args.locale,
+          uiTranslate,
+        )
       : null;
   const growth = figure
     ? growthFromFigure({
@@ -495,7 +625,7 @@ export function buildHeroView(args: {
         latestRun: report?.latest_run ?? null,
         window: args.window,
       });
-  const pacing = pacingLineOf(args.flightPacing);
+  const pacing = pacingLineOf(args.flightPacing, args.translate, args.locale);
   const stored = report?.hero_brief ? readPortfolioBrief(report.hero_brief) : null;
   const latestRunId = report?.latest_run?.id ?? null;
   const briefIsCurrent =
@@ -525,10 +655,15 @@ export function buildHeroView(args: {
   return {
     state: args.firstCycle ? 'first_cycle' : 'ready',
     source: briefIsCurrent ? 'brief' : 'fallback',
+    ...(args.translate
+      ? {
+          standing: readBriefStanding(report?.latest_run, report?.latest_items ?? []),
+        }
+      : {}),
     pacingLine: pacing.line,
     pacingTone: pacing.tone,
     brief,
-    cta: ctaFor(brief, observe),
+    cta: ctaFor(brief, observe, args.translate),
     observe,
     asOf: report?.latest_run?.cycle_ts ?? null,
     figure: figure

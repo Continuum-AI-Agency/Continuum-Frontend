@@ -1,4 +1,5 @@
 'use client';
+import { useRouter } from 'next/navigation';
 
 // Keeps the Library page live for every viewer, brand-wide, from the moment it mounts.
 // Collection create/rename/delete refreshes the list for everyone; a grid whose order or
@@ -14,7 +15,7 @@
 // debounced, and only when the change can actually move what is on screen.
 
 import type { MediaCollection } from '@continuum/contracts';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 

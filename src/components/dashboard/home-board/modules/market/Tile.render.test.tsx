@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock, setSystemTime } from 'bun:test';
 import type { Competitor, HomeBoardTile } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { HomeBoardContext } from '../../types';
 import { AWARENESS, NOW, SMART_FIT, SPORT_CITY, TRENDS_READ } from './__fixtures__/marketRadar';
 import { competitorMovesOf, trendItemsOf, trendsFromReadResponse } from './marketRadarModel';
@@ -26,7 +27,10 @@ const reset = () => {
 };
 reset();
 const realRadar = await import('./useMarketRadar');
-mock.module('./useMarketRadar', () => ({ ...realRadar, useMarketRadar: () => radar }));
+mock.module('./useMarketRadar', () => ({
+  ...realRadar,
+  useMarketRadar: () => radar,
+}));
 
 const competitor = (id: string, name: string) => ({ id, name }) as Competitor;
 const realSpy = await import('@/lib/api/competitorSpy');
@@ -46,7 +50,9 @@ afterEach(() => {
   reset();
 });
 
-const ctx = { brandId: '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64' } as HomeBoardContext;
+const ctx = {
+  brandId: '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64',
+} as HomeBoardContext;
 const tileOf = (size: HomeBoardTile['size'] = 's'): HomeBoardTile => ({
   id: 'market',
   size,

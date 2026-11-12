@@ -6,12 +6,14 @@ import type {
   ApiRenderSlackChannelListResponse,
 } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import {
   describeSlackFailure,
   ROLE_BLURB,
   type SlackRoomRole,
 } from '@/components/forge/slackRoomCopy';
+import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -53,6 +55,10 @@ export function AddSlackRoom({
   onAdded: (destination: ApiRenderDeliveryDestination) => void;
   onCancel: () => void;
 }) {
+  const presentForge = useForgePresentationText();
+
+  const translateUi = useUiTranslations('forge');
+
   const [channels, setChannels] = useState<ApiRenderSlackChannelListResponse | null>(null);
   const [channelId, setChannelId] = useState('');
   const [role, setRole] = useState<SlackRoomRole>(roles[0] ?? 'ops');
@@ -69,12 +75,12 @@ export function AddSlackRoom({
       .catch((error) => {
         if (cancelled) return;
         setChannels({ workspaceName: null, channels: [] });
-        setProblem(describeSlackFailure(error));
+        setProblem(describeSlackFailure(error, presentForge));
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, presentForge]);
 
   const channelLabel = (channel: { id: string; name: string; isPrivate?: boolean }) =>
     `${channel.isPrivate ? '🔒 ' : '#'}${channel.name}`;
@@ -83,9 +89,15 @@ export function AddSlackRoom({
     setSaving(true);
     setProblem(null);
     try {
-      onAdded(await apiRendersApi.createDeliveryDestination({ brandId, role, channelId }));
+      onAdded(
+        await apiRendersApi.createDeliveryDestination({
+          brandId,
+          role,
+          channelId,
+        }),
+      );
     } catch (error) {
-      setProblem(describeSlackFailure(error));
+      setProblem(describeSlackFailure(error, presentForge));
     } finally {
       setSaving(false);
     }
@@ -95,24 +107,25 @@ export function AddSlackRoom({
     <div className="space-y-2 rounded-md border bg-muted/20 p-2 text-xs">
       {channels === null ? (
         <p className="flex items-center gap-1.5 text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Loading this brand’s Slack
-          channels…
+          <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+          {translateUi('loading_this_brand_s_slack_channels_5f3e90b6')}{' '}
         </p>
       ) : channels.channels.length ? (
         <>
           <div className="flex flex-col gap-1">
             <Label htmlFor="slack-room-channel" className="text-muted-foreground">
-              Channel
+              {' '}
+              {translateUi('channel_ce4683e7')}{' '}
             </Label>
             <Select value={channelId} onValueChange={setChannelId}>
               <SelectTrigger
                 id="slack-room-channel"
-                aria-label="Channel to add"
+                aria-label={translateUi('channel_to_add_01faaca3')}
                 size="sm"
                 className="w-full"
               >
                 <SelectValue
-                  placeholder="Choose a channel"
+                  placeholder={translateUi('choose_a_channel_86306895')}
                   items={Object.fromEntries(
                     channels.channels.map((channel) => [channel.id, channelLabel(channel)]),
                   )}
@@ -125,7 +138,7 @@ export function AddSlackRoom({
                     <SelectItem key={`${workspace}:${channel.id}`} value={channel.id}>
                       {channelLabel(channel)}
                       {channel.isPrivate && !channel.isMember
-                        ? ' — invite the Continuum app first'
+                        ? translateUi('invite_the_continuum_app_first_3f00962f')
                         : ''}
                     </SelectItem>
                   ));
@@ -145,12 +158,13 @@ export function AddSlackRoom({
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="slack-room-role" className="text-muted-foreground">
-              Who reads it
+              {' '}
+              {translateUi('who_reads_it_7b68c4d4')}{' '}
             </Label>
             <Select value={role} onValueChange={(next) => setRole(next as SlackRoomRole)}>
               <SelectTrigger
                 id="slack-room-role"
-                aria-label="Channel role"
+                aria-label={translateUi('channel_role_ed79788f')}
                 size="sm"
                 className="w-full"
               >
@@ -159,7 +173,7 @@ export function AddSlackRoom({
               <SelectContent>
                 {roles.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {ROLE_BLURB[option]}
+                    {presentForge(ROLE_BLURB[option])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -167,12 +181,15 @@ export function AddSlackRoom({
           </div>
         </>
       ) : problem ? null : (
-        <p className="text-muted-foreground">No channels found in this brand’s Slack workspaces.</p>
+        <p className="text-muted-foreground">
+          {translateUi('no_channels_found_in_this_brand_s_s_578bb71d')}
+        </p>
       )}
       {problem ? <p className="text-muted-foreground">{problem}</p> : null}
       <div className="flex justify-end gap-1.5">
         <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={onCancel}>
-          Cancel
+          {' '}
+          {translateUi('cancel_19766ed6')}{' '}
         </Button>
         <Button
           type="button"
@@ -181,8 +198,8 @@ export function AddSlackRoom({
           disabled={!channelId || saving}
           onClick={() => void add()}
         >
-          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-          Add channel
+          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}{' '}
+          {translateUi('add_channel_62f66a6a')}{' '}
         </Button>
       </div>
     </div>

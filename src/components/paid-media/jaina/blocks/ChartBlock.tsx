@@ -34,11 +34,14 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import type { UiLocale } from '@/i18n/config';
 import type { ChartBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { useAnswerLanguage } from '../answerLanguageContext';
 import { useIsExportMode } from '../export/ExportModeContext';
 import { EXPORT_CHART_HEIGHT_PX, EXPORT_CHART_WIDTH_PX } from '../export/exportStyles';
 import { JAINA_TYPE } from '../reading';
+import { reportMarkerLabel, reportReferenceLabel } from '../reportChrome';
 import { BlockHeading } from './BlockHeading';
 import {
   chartHeight,
@@ -385,7 +388,7 @@ function calloutShape(
  * one tile per point and series, labelled by the category and, when the chart carries more
  * than one series, the series.
  */
-function chartTiles(block: ChartBlockV2): MetricTile[] {
+function chartTiles(block: ChartBlockV2, locale: UiLocale = 'en'): MetricTile[] {
   const isPie = block.chart_type === 'pie' || block.chart_type === 'doughnut';
   const configKeys = Object.keys(block.chart_config);
   const valueKeys = isPie ? [block.value_key ?? configKeys[0] ?? 'value'] : configKeys;
@@ -399,7 +402,7 @@ function chartTiles(block: ChartBlockV2): MetricTile[] {
         {
           key: `${rowIndex}-${key}`,
           label: valueKeys.length > 1 || isPie ? `${category} · ${seriesLabel}` : category,
-          value: formatChartValue(value, block),
+          value: formatChartValue(value, block, locale),
         },
       ];
     });
@@ -407,6 +410,7 @@ function chartTiles(block: ChartBlockV2): MetricTile[] {
 }
 
 export function ChartBlock({ block }: ChartBlockProps) {
+  const reportLocale = useAnswerLanguage();
   const isExport = useIsExportMode();
   const names = useEntityNames();
   // Index the per-point metadata by its category value so the tooltip can look
@@ -426,11 +430,13 @@ export function ChartBlock({ block }: ChartBlockProps) {
   const tooltipFormatter = (value: unknown, name: unknown, item?: { payload?: DrawnRow }) => {
     // A waterfall bar's value is its [low, high] range and a funnel stage's its count: the
     // tooltip prints what the bar is labelled with — the signed delta, the stage's share.
-    const printed = item?.payload ? printedValueOf(item.payload, String(name), block) : null;
+    const printed = item?.payload
+      ? printedValueOf(item.payload, String(name), block, reportLocale)
+      : null;
     const formatted =
       printed ??
       (typeof value === 'string' || typeof value === 'number'
-        ? formatChartValue(value, block)
+        ? formatChartValue(value, block, reportLocale)
         : String(value ?? '—'));
     const label = block.chart_config[String(name)]?.label ?? String(name);
     return (
@@ -476,7 +482,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
   const isWaterfall = block.chart_type === 'waterfall';
   const isFunnel = block.chart_type === 'funnel';
   const isStacked = block.chart_type === 'stacked_bar';
-  const rows = drawnRowsOf(block);
+  const rows = drawnRowsOf(block, reportLocale);
   const seriesKeys = seriesKeysOf(block);
   const categories = rows.map((point) => String(point[block.category_key] ?? ''));
   const hasLongCategories = categories.some((category) => category.length > 18);
@@ -491,20 +497,24 @@ export function ChartBlock({ block }: ChartBlockProps) {
     .map((point) => {
       const category = point[block.category_key];
       const values = seriesKeys.flatMap((key) => {
-        const printed = printedValueOf(point, key, block);
+        const printed = printedValueOf(point, key, block, reportLocale);
         return printed == null ? [] : `${seriesLabel(key)} ${printed}`;
       });
-      return `${String(category ?? 'Unknown category')}: ${values.join(', ')}`;
+      return `${String(category ?? (reportLocale === 'es' ? 'Categoría desconocida' : 'Unknown category'))}: ${values.join(', ')}`;
     })
     .join('; ');
   const accessibleCallouts = [
-    ...(block.reference_lines ?? []).map(
-      (line) =>
-        `Reference line ${line.label} ${formatChartValue(line.value, block)}${
-          line.axis === 'right' ? ' on the right axis' : ''
-        }`,
+    ...(block.reference_lines ?? []).map((line) =>
+      reportReferenceLabel(
+        line.label,
+        formatChartValue(line.value, block, reportLocale),
+        line.axis === 'right',
+        reportLocale,
+      ),
     ),
-    ...(block.markers ?? []).map((marker) => `Marker ${marker.label} at ${marker.category}`),
+    ...(block.markers ?? []).map((marker) =>
+      reportMarkerLabel(marker.label, String(marker.category), reportLocale),
+    ),
   ];
 
   // Recharts animates every series in on mount. An export document is built in an
@@ -518,9 +528,12 @@ export function ChartBlock({ block }: ChartBlockProps) {
   const axisOf = (key: string) => (block.series_axis?.[key] === 'right' ? 'right' : 'left');
   const onValueAxis = (axis: 'left' | 'right') =>
     horizontal ? { xAxisId: axis } : { yAxisId: axis };
-  const valueTickFormatter = (value: string | number) => formatChartValue(value, block);
+  const valueTickFormatter = (value: string | number) =>
+    formatChartValue(value, block, reportLocale);
   const formatPlotted = (value: unknown) =>
-    typeof value === 'string' || typeof value === 'number' ? formatChartValue(value, block) : null;
+    typeof value === 'string' || typeof value === 'number'
+      ? formatChartValue(value, block, reportLocale)
+      : null;
   const printLabel = (value: unknown) => (typeof value === 'string' ? value : null);
   const showValues = block.show_values === true;
   // A marked category on a chart laid on its side is called out in its own tick.
@@ -548,7 +561,12 @@ export function ChartBlock({ block }: ChartBlockProps) {
   const needsRightRoom = horizontal && (isFunnel || (showValues && !isStacked));
   const margin =
     needsHeadroom || needsRightRoom
-      ? { top: needsHeadroom ? 20 : 5, right: needsRightRoom ? 88 : 5, bottom: 5, left: 5 }
+      ? {
+          top: needsHeadroom ? 20 : 5,
+          right: needsRightRoom ? 88 : 5,
+          bottom: 5,
+          left: 5,
+        }
       : undefined;
 
   // The screen chart is a 240px plot over an axis area sized to its tallest wrapped tick
@@ -558,8 +576,16 @@ export function ChartBlock({ block }: ChartBlockProps) {
   // smear. A chart on its side is as tall as its rows instead.
   const valueAxisLabel = block.y_axis_label
     ? horizontal
-      ? { value: block.y_axis_label, position: 'insideBottom' as const, offset: -4 }
-      : { value: block.y_axis_label, angle: -90, position: 'insideLeft' as const }
+      ? {
+          value: block.y_axis_label,
+          position: 'insideBottom' as const,
+          offset: -4,
+        }
+      : {
+          value: block.y_axis_label,
+          angle: -90,
+          position: 'insideLeft' as const,
+        }
     : undefined;
   const categoryAxis = horizontal ? (
     <YAxis
@@ -612,7 +638,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
 
   const referenceLines = (block.reference_lines ?? []).map((line, index) => {
     const axis = line.axis ?? 'left';
-    const text = `${line.label} · ${formatChartValue(line.value, block)}`;
+    const text = `${line.label} · ${formatChartValue(line.value, block, reportLocale)}`;
     return (
       <ReferenceLine
         key={`reference-${index}-${line.label}`}
@@ -877,7 +903,10 @@ export function ChartBlock({ block }: ChartBlockProps) {
             config={chartConfig}
             explicitSize={
               isExport
-                ? { width: EXPORT_CHART_WIDTH_PX, height: EXPORT_CHART_HEIGHT_PX }
+                ? {
+                    width: EXPORT_CHART_WIDTH_PX,
+                    height: EXPORT_CHART_HEIGHT_PX,
+                  }
                 : undefined
             }
             className={isExport ? 'w-full' : 'aspect-auto w-full'}
@@ -908,7 +937,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         </div>
       ) : (
         <MetricTiles
-          tiles={chartTiles(block)}
+          tiles={chartTiles(block, reportLocale)}
           aria-label={block.title}
           data-testid="chart-as-tiles"
           data-chart-points={shape.points}

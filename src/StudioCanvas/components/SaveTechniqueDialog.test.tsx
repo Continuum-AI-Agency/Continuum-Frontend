@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { brandTechniquesQueryKey } from '@/lib/ai-studio/techniques';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
@@ -60,7 +67,9 @@ const renderDialog = (
   } = {},
 ) => {
   useStudioStore.setState({ brandId: BRAND, edges, nodes });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       {options.listening ? <TechniquesListener queryFn={options.listening} /> : null}
@@ -77,7 +86,9 @@ const renderDialog = (
 
 const typeNameAndSave = (name: string) => {
   act(() => {
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: name } });
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: name },
+    });
   });
   act(() => {
     fireEvent.click(screen.getByRole('button', { name: 'Save technique' }));
@@ -99,7 +110,14 @@ describe('SaveTechniqueDialog', () => {
     const generator = node('gen', 'nanoGen');
     renderDialog(
       [generator],
-      [{ id: 'e1', source: 'outside', target: 'gen', targetHandle: 'ref-image' } as StoreEdge],
+      [
+        {
+          id: 'e1',
+          source: 'outside',
+          target: 'gen',
+          targetHandle: 'ref-image',
+        } as StoreEdge,
+      ],
     );
 
     const ports = screen.getByTestId('technique-ports').textContent ?? '';
@@ -113,7 +131,12 @@ describe('SaveTechniqueDialog', () => {
     renderDialog(
       [prompt, generator],
       [
-        { id: 'inside', source: 'prompt', target: 'gen', targetHandle: 'prompt' } as StoreEdge,
+        {
+          id: 'inside',
+          source: 'prompt',
+          target: 'gen',
+          targetHandle: 'prompt',
+        } as StoreEdge,
         {
           id: 'crossing',
           source: 'outside',
@@ -124,7 +147,9 @@ describe('SaveTechniqueDialog', () => {
     );
 
     act(() => {
-      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Palette smash-up' } });
+      fireEvent.change(screen.getByLabelText('Name'), {
+        target: { value: 'Palette smash-up' },
+      });
     });
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Save technique' }));
@@ -136,7 +161,13 @@ describe('SaveTechniqueDialog', () => {
       name: string;
       nodes: unknown[];
       edges: unknown[];
-      metadata: { technique: { kind: string; inputPorts: unknown[]; outputPorts: unknown[] } };
+      metadata: {
+        technique: {
+          kind: string;
+          inputPorts: unknown[];
+          outputPorts: unknown[];
+        };
+      };
     };
 
     expect(saved.name).toBe('Palette smash-up');
@@ -145,10 +176,18 @@ describe('SaveTechniqueDialog', () => {
     expect(saved.edges).toHaveLength(1);
     expect(saved.metadata.technique.kind).toBe('generation');
     expect(saved.metadata.technique.inputPorts).toContainEqual(
-      expect.objectContaining({ handleId: 'ref-image', dataType: 'image', origin: 'edge' }),
+      expect.objectContaining({
+        handleId: 'ref-image',
+        dataType: 'image',
+        origin: 'edge',
+      }),
     );
     expect(saved.metadata.technique.outputPorts).toContainEqual(
-      expect.objectContaining({ handleId: 'image', dataType: 'image', origin: 'terminal' }),
+      expect.objectContaining({
+        handleId: 'image',
+        dataType: 'image',
+        origin: 'terminal',
+      }),
     );
   });
 
@@ -156,7 +195,11 @@ describe('SaveTechniqueDialog', () => {
     renderDialog([node('gen', 'nanoGen')], []);
 
     expect(
-      (screen.getByRole('button', { name: 'Save technique' }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole('button', {
+          name: 'Save technique',
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 

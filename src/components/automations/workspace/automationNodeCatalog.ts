@@ -28,6 +28,8 @@ import {
   Share2,
   SlidersHorizontal,
 } from 'lucide-react';
+import type { useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
 
 export type AutomationNodeCategory = 'trigger' | 'context' | 'intelligence' | 'logic' | 'outcome';
 
@@ -254,16 +256,40 @@ const CATALOG_BY_TYPE = new Map(
   AUTOMATION_NODE_CATALOG.flatMap((group) => group.items).map((item) => [item.type, item]),
 );
 
+export function localizedAutomationNodeCatalog(
+  t: ReturnType<typeof useTranslations<'automations'>>,
+) {
+  return AUTOMATION_NODE_CATALOG.map((group) => ({
+    ...group,
+    label: localizeAutomationsCopy(group.label, t),
+    description: localizeAutomationsCopy(group.description, t),
+    items: group.items.map((item) => ({
+      ...item,
+      label: localizeAutomationsCopy(item.label, t),
+      description: localizeAutomationsCopy(item.description, t),
+    })),
+  }));
+}
+
 export const getAutomationNodeCatalogItem = (
   type: AutomationWorkflowNode['type'],
-): AutomationNodeCatalogItem =>
-  CATALOG_BY_TYPE.get(type) ?? {
+  translate?: ReturnType<typeof useTranslations<'automations'>>,
+): AutomationNodeCatalogItem => {
+  const item: AutomationNodeCatalogItem = CATALOG_BY_TYPE.get(type) ?? {
     type,
-    label: type.replaceAll('.', ' '),
+    label: 'Workflow step',
     description: 'Workflow step',
     category: 'context',
     icon: FileOutput,
   };
+  return translate
+    ? {
+        ...item,
+        label: localizeAutomationsCopy(item.label, translate),
+        description: localizeAutomationsCopy(item.description, translate),
+      }
+    : item;
+};
 
 export const getAutomationNodeLifecycle = (
   node: AutomationWorkflowNode,
@@ -307,7 +333,12 @@ export function createAutomationWorkflowNode({
 
   switch (type) {
     case 'trigger.manual':
-      return { ...common, type, label: 'Run manually', config: { inputSchema: {} } };
+      return {
+        ...common,
+        type,
+        label: 'Run manually',
+        config: { inputSchema: {} },
+      };
     case 'trigger.schedule':
       return {
         ...common,
@@ -336,7 +367,12 @@ export function createAutomationWorkflowNode({
         },
       };
     case 'trigger.webhook':
-      return { ...common, type, label: 'Inbound webhook', config: { payloadSchema: {} } };
+      return {
+        ...common,
+        type,
+        label: 'Inbound webhook',
+        config: { payloadSchema: {} },
+      };
     case 'source':
       return {
         ...common,
@@ -375,7 +411,9 @@ export function createAutomationWorkflowNode({
         ...common,
         type,
         label: 'Instructions',
-        config: { text: 'Explain what the agent should accomplish with the incoming context.' },
+        config: {
+          text: 'Explain what the agent should accomplish with the incoming context.',
+        },
       };
     case 'agent':
       return {
@@ -409,7 +447,11 @@ export function createAutomationWorkflowNode({
         type,
         label: 'Format report',
         config: {
-          contract: { kind: 'native', contractId: 'report.document', version: 1 },
+          contract: {
+            kind: 'native',
+            contractId: 'report.document',
+            version: 1,
+          },
           instructions: 'Synthesize only the supplied evidence into a concise final output.',
           timeoutSeconds: 180,
           maxAttempts: 2,
@@ -456,7 +498,12 @@ export function createAutomationWorkflowNode({
     case 'logic.parallel':
       return { ...common, type, label: 'Run in parallel', config: {} };
     case 'logic.join':
-      return { ...common, type, label: 'Join branches', config: { mode: 'all' } };
+      return {
+        ...common,
+        type,
+        label: 'Join branches',
+        config: { mode: 'all' },
+      };
     case 'logic.repeat_until':
       return {
         ...common,
@@ -493,14 +540,20 @@ export function createAutomationWorkflowNode({
         // `scheduledAt`. `accountId` is what the adapter's preflight actually
         // demands, so seeding the unset sentinel makes a freshly dropped node
         // read as "pick an account" instead of silently failing its first run.
-        config: { platform: 'instagram', accountId: 'select-connected-account' },
+        config: {
+          platform: 'instagram',
+          accountId: 'select-connected-account',
+        },
       };
     case 'action.organic_publish':
       return {
         ...common,
         type,
         label: 'Publish organic',
-        config: { platform: 'instagram', accountId: 'select-connected-account' },
+        config: {
+          platform: 'instagram',
+          accountId: 'select-connected-account',
+        },
       };
     case 'action.ai_studio_generate':
       return {

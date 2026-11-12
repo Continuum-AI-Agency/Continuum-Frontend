@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Shared "tag accounts to this brand" surface. Connects providers via OAuth and
 // assigns the resulting accounts to a brand profile. Used by the onboarding
 // integrations step and the dedicated /integrations quick-assign route. Keep this
@@ -16,7 +19,7 @@ import {
   useState,
   useTransition,
 } from 'react';
-import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
+import { applyBrandIntegrationAssignmentsAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import {
   isProviderComingSoon,
@@ -96,12 +99,19 @@ type SyncOptions = { linkedinMode?: LinkedInSyncMode; metaMode?: MetaSyncMode };
 
 const stagger = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.06, delayChildren: 0.05 },
+  },
 };
 
 const item = {
   hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.16, 1, 0.3, 1] as const } },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.32, ease: [0.16, 1, 0.3, 1] as const },
+  },
 };
 
 function countAssetsForGroup(assets: UserIntegrationAssetRow[], group: ProviderGroup): number {
@@ -126,11 +136,12 @@ function buildAssetItem(
   asset: UserIntegrationAssetRow,
   platform: PlatformKey,
   assignedSet: Set<string>,
+  t: ReturnType<typeof useTranslations<'common'>>,
 ): IntegrationSwitcherItem {
   return {
     id: asset.id,
     code: asset.external_account_id ?? asset.id.slice(0, 8),
-    title: asset.name?.trim() || asset.external_account_id || 'Unnamed account',
+    title: asset.name?.trim() || asset.external_account_id || t('m_5c0de372dc'),
     icon: PLATFORM_ICONS[platform] ?? Plug,
     status: assignedSet.has(asset.id) ? 'checked' : 'copy',
   };
@@ -165,7 +176,11 @@ function adAccountKeyFor(asset: UserIntegrationAssetRow): string {
 function buildMetaItems(
   metaAssets: UserIntegrationAssetRow[],
   assignedSet: Set<string>,
-): { items: IntegrationSwitcherItem[]; childrenByParent: Map<string, string[]> } {
+  t: ReturnType<typeof useTranslations<'common'>>,
+): {
+  items: IntegrationSwitcherItem[];
+  childrenByParent: Map<string, string[]>;
+} {
   // #155: the same ad account reachable via two logins arrives as two rows
   // sharing an ad_account_id. Collapse by real ad-account id, keeping the
   // highest-privilege login's row so the account stays fully actionable.
@@ -207,11 +222,16 @@ function buildMetaItems(
     const childRows = (childrenByAdAccountKey.get(childKey) ?? []).slice();
     childRows.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
     const childItems = childRows.map((child) =>
-      buildAssetItem(child, mapIntegrationTypeToPlatformKey(child.type) ?? 'facebook', assignedSet),
+      buildAssetItem(
+        child,
+        mapIntegrationTypeToPlatformKey(child.type) ?? 'facebook',
+        assignedSet,
+        t,
+      ),
     );
     items.push({
-      ...buildAssetItem(adAccount, 'facebook', assignedSet),
-      subtitle: isReadOnlyMetaRole(adAccount.role) ? 'Read-only' : undefined,
+      ...buildAssetItem(adAccount, 'facebook', assignedSet, t),
+      subtitle: isReadOnlyMetaRole(adAccount.role) ? t('read_only_72bb908') : undefined,
       children: childItems.length > 0 ? childItems : undefined,
     });
     if (childItems.length > 0) {
@@ -231,7 +251,7 @@ function buildMetaItems(
 
   for (const orphan of orphans) {
     const platform = mapIntegrationTypeToPlatformKey(orphan.type) ?? 'facebook';
-    items.push(buildAssetItem(orphan, platform, assignedSet));
+    items.push(buildAssetItem(orphan, platform, assignedSet, t));
   }
 
   return { items, childrenByParent };
@@ -252,6 +272,7 @@ function ProviderConnectMenu({
   /** Single element: it becomes the popover trigger via Base UI `render`. */
   children?: ReactElement;
 }) {
+  const uiText = useTranslations('common');
   return (
     <Popover>
       <PopoverTrigger
@@ -259,7 +280,7 @@ function ProviderConnectMenu({
           children ?? (
             <button
               type="button"
-              aria-label="Connect a provider"
+              aria-label={uiText('connect_a_provider_a002b3f')}
               className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Plus className="h-4 w-4" />
@@ -269,10 +290,10 @@ function ProviderConnectMenu({
       />
       <PopoverContent align="end" className="w-80 p-2">
         <div className="px-2 py-1.5">
-          <p className="text-sm font-semibold text-foreground">Connect a provider</p>
-          <p className="text-xs text-muted-foreground">
-            Sign in to pull its accounts into the list above.
+          <p className="text-sm font-semibold text-foreground">
+            {uiText('connect_a_provider_a002b3f')}
           </p>
+          <p className="text-xs text-muted-foreground">{uiText('m_25bec73975')}</p>
         </div>
         <div className="mt-1 space-y-1">
           {PROVIDER_GROUPS.map((group) => {
@@ -297,7 +318,7 @@ function ProviderConnectMenu({
                     </p>
                     {comingSoon ? (
                       <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
-                        Coming soon
+                        {uiText('coming_soon_4f7d640')}
                       </Badge>
                     ) : null}
                   </div>
@@ -307,7 +328,7 @@ function ProviderConnectMenu({
                 </div>
                 {comingSoon ? (
                   <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>
-                    Coming soon
+                    {uiText('coming_soon_4f7d640')}
                   </Button>
                 ) : group === 'facebook' ? (
                   // Instagram only = Business Login for Instagram, for an Instagram
@@ -331,11 +352,11 @@ function ProviderConnectMenu({
                       variant="outline"
                       size="sm"
                       className="h-7 gap-1 px-2 text-xs"
-                      title="Connect an Instagram account that has no Facebook Page"
+                      title={uiText('connect_an_instagram_account_that_has_no_face_240b55a')}
                       onClick={() => onConnect(group, { metaMode: 'instagram' })}
                       disabled={syncing}
                     >
-                      Instagram only
+                      {uiText('instagram_only_b525f98')}
                     </Button>
                   </div>
                 ) : group === 'linkedin' ? (
@@ -350,7 +371,7 @@ function ProviderConnectMenu({
                       disabled={syncing}
                     >
                       <Plus className="h-3 w-3" />
-                      Ads
+                      {uiText('m_13bad3d96f')}
                     </Button>
                     <Button
                       variant="outline"
@@ -359,7 +380,7 @@ function ProviderConnectMenu({
                       onClick={() => onConnect(group, { linkedinMode: 'organic' })}
                       disabled={syncing}
                     >
-                      Organic
+                      {uiText('organic_89b8cb6')}
                     </Button>
                   </div>
                 ) : (
@@ -375,7 +396,7 @@ function ProviderConnectMenu({
                     ) : (
                       <Plus className="h-3 w-3" />
                     )}
-                    {syncing ? 'Connecting…' : 'Connect'}
+                    {syncing ? uiText('m_fd3e796994') : uiText('connect_1a2303e')}
                   </Button>
                 )}
               </div>
@@ -405,6 +426,9 @@ export function BrandAssetAssigner({
   footer,
   className,
 }: BrandAssetAssignerProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const { show } = useToast();
 
   const {
@@ -426,7 +450,7 @@ export function BrandAssetAssigner({
     let childrenByParent = new Map<string, string[]>();
 
     if (metaAssets.length > 0) {
-      const meta = buildMetaItems(metaAssets, assignedSet);
+      const meta = buildMetaItems(metaAssets, assignedSet, uiText);
       tabs.push({
         id: META_TAB_ID,
         name: 'Meta',
@@ -446,13 +470,13 @@ export function BrandAssetAssigner({
         icon: PLATFORM_ICONS[key] ?? Plug,
       });
       const items = (otherByPlatform.get(key) ?? [])
-        .map((asset) => buildAssetItem(asset, key, assignedSet))
+        .map((asset) => buildAssetItem(asset, key, assignedSet, uiText))
         .sort((a, b) => a.title.localeCompare(b.title));
       data[key] = items;
     }
 
     return { tabs, data, childrenByParent };
-  }, [userAssets, assignedIds]);
+  }, [userAssets, assignedIds, uiText]);
 
   // #154 fingerprint: Meta is connected (pages/IG synced) but no ad account came
   // through. Precise so a never-connected user never triggers a no-op resync.
@@ -500,7 +524,10 @@ export function BrandAssetAssigner({
       try {
         if (next) {
           await Promise.all(allIds.map((id) => assignBrandIntegrationAccount(brandId, id)));
-          onTrack?.('asset_assigned', { provider: tabId, cascaded: cascadeChildren.length });
+          onTrack?.('asset_assigned', {
+            provider: tabId,
+            cascaded: cascadeChildren.length,
+          });
         } else {
           await unassignBrandIntegrationAccount(brandId, assetId);
           onTrack?.('asset_unassigned', { provider: tabId });
@@ -508,15 +535,25 @@ export function BrandAssetAssigner({
         await refreshAssigned();
       } catch (error) {
         show({
-          title: next ? "Couldn't link account" : "Couldn't unlink account",
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: next ? uiText('m_6677ee5f36') : uiText('m_6aabc0687b'),
+          description: getUiErrorMessage(error),
           variant: 'error',
         });
       } finally {
         markPending(allIds, false);
       }
     },
-    [brandId, assignedIds, childrenByParent, refreshAssigned, show, markPending, onTrack],
+    [
+      brandId,
+      assignedIds,
+      childrenByParent,
+      refreshAssigned,
+      show,
+      markPending,
+      onTrack,
+      uiText,
+      getUiErrorMessage,
+    ],
   );
 
   const markSyncing = useCallback((ids: string[], syncing: boolean) => {
@@ -535,8 +572,8 @@ export function BrandAssetAssigner({
       const group = PROVIDER_GROUP_BY_ID[tabId];
       if (!group) {
         show({
-          title: 'Sync not supported',
-          description: "This provider can't be connected from here yet.",
+          title: uiText('m_ad08938d23'),
+          description: uiText('m_8a6ca0adfa'),
           variant: 'error',
         });
         return;
@@ -546,8 +583,8 @@ export function BrandAssetAssigner({
 
       if (isProviderComingSoon(group)) {
         show({
-          title: `${providerLabel} is coming soon`,
-          description: "This integration isn't available yet.",
+          title: uiText('m_c72115024b', { v0: String(providerLabel) }),
+          description: uiText('m_6610e68cdd'),
           variant: 'info',
         });
         return;
@@ -585,8 +622,8 @@ export function BrandAssetAssigner({
         const popup = openCenteredPopup(syncResponse.url, popupTitle, 600, 700);
         if (!popup) {
           show({
-            title: "Couldn't open OAuth popup",
-            description: 'Please allow popups for this site and try again.',
+            title: uiText('m_6b181a07df'),
+            description: uiText('m_7e55b4b02d'),
             variant: 'error',
           });
           return;
@@ -643,43 +680,38 @@ export function BrandAssetAssigner({
 
         if (result.warning === 'no_ads_accounts' || result.warning === 'ads_enrichment_failed') {
           show({
-            title: 'Connected, with a note',
-            description:
-              'No Google Ads accounts were found for this account. They may live under a different Google identity.',
+            title: uiText('connected_with_a_note_9b4378e'),
+            description: uiText('m_3a9ab0f245'),
             variant: 'info',
           });
         } else if (result.warning === 'ga4_scope_missing') {
           show({
-            title: 'Connected, without Analytics',
-            description:
-              'Google Analytics access was not granted, so no GA4 properties were synced. Reconnect and approve Analytics to enable them.',
+            title: uiText('connected_without_analytics_bc5710d'),
+            description: uiText('google_analytics_access_was_not_granted_so_no_9bea59d'),
             variant: 'info',
           });
         } else if (result.warning === 'ga4_enrichment_failed') {
           show({
-            title: 'Connected, with a note',
-            description:
-              "Couldn't read your Google Analytics properties. Everything else connected fine.",
+            title: uiText('connected_with_a_note_9b4378e'),
+            description: uiText('m_b64e03cc36'),
             variant: 'info',
           });
         } else if (result.warning === 'meta_partial_sync') {
           show({
-            title: 'Connected, with a note',
-            description:
-              "Some Meta accounts may not have loaded. We'll keep trying — reopen this step in a moment if any are missing.",
+            title: uiText('connected_with_a_note_9b4378e'),
+            description: uiText('m_de111cb4b5'),
             variant: 'info',
           });
         } else if (added > 0) {
           show({
-            title: `Connected ${providerLabel}`,
-            description: `${added} account${added === 1 ? '' : 's'} found.`,
+            title: uiText('m_dc1cabb877', { v0: String(providerLabel) }),
+            description: uiText('m_2c6c98dffd', { v0: added }),
             variant: 'success',
           });
         } else {
           show({
-            title: `${providerLabel} sync complete`,
-            description:
-              "No new accounts found. Check your permissions in the provider's settings.",
+            title: uiText('m_83908f6700', { v0: String(providerLabel) }),
+            description: uiText('m_5902d4af6f'),
             variant: 'info',
           });
         }
@@ -687,11 +719,11 @@ export function BrandAssetAssigner({
       } catch (error) {
         onTrack?.('oauth_failed', {
           provider: group,
-          message: error instanceof Error ? error.message : 'Unknown error',
+          message: getUiErrorMessage(error),
         });
         show({
-          title: `Couldn't connect ${providerLabel}`,
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: uiText('m_35a4791a79', { v0: String(providerLabel) }),
+          description: getUiErrorMessage(error),
           variant: 'error',
         });
       } finally {
@@ -703,7 +735,17 @@ export function BrandAssetAssigner({
         markSyncing([tabId, group], false);
       }
     },
-    [brandId, markSyncing, refetchUserAssets, refreshAssigned, show, userAssets, onTrack],
+    [
+      brandId,
+      markSyncing,
+      refetchUserAssets,
+      refreshAssigned,
+      show,
+      userAssets,
+      onTrack,
+      uiText,
+      getUiErrorMessage,
+    ],
   );
 
   const handleClearAll = useCallback(() => {
@@ -714,21 +756,26 @@ export function BrandAssetAssigner({
         onTrack?.('assets_cleared');
       } catch (error) {
         show({
-          title: "Couldn't clear accounts",
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: uiText('m_4976ab5fe9'),
+          description: getUiErrorMessage(error),
           variant: 'error',
         });
       }
     });
-  }, [brandId, refreshAssigned, show, onTrack]);
+  }, [brandId, refreshAssigned, show, onTrack, uiText, getUiErrorMessage]);
 
-  const syncLabel = useCallback((tabId: string, hasItems: boolean) => {
-    const group = PROVIDER_GROUP_BY_ID[tabId];
-    const providerLabel = group
-      ? PROVIDER_GROUP_LABELS[group]
-      : (PLATFORM_LABELS[tabId as PlatformKey] ?? tabId);
-    return hasItems ? `Sync more from ${providerLabel}` : `Connect ${providerLabel}`;
-  }, []);
+  const syncLabel = useCallback(
+    (tabId: string, hasItems: boolean) => {
+      const group = PROVIDER_GROUP_BY_ID[tabId];
+      const providerLabel = group
+        ? PROVIDER_GROUP_LABELS[group]
+        : (PLATFORM_LABELS[tabId as PlatformKey] ?? tabId);
+      return hasItems
+        ? uiText('m_0e129b7cfb', { v0: String(providerLabel) })
+        : uiText('m_fa78632e83', { v0: String(providerLabel) });
+    },
+    [uiText],
+  );
 
   const isEmpty = !assetsLoading && tabs.length === 0;
 
@@ -741,7 +788,11 @@ export function BrandAssetAssigner({
     >
       {renderHeader ? (
         <motion.div variants={item}>
-          {renderHeader({ assignedCount: assignedIds.length, clearAll: handleClearAll, clearing })}
+          {renderHeader({
+            assignedCount: assignedIds.length,
+            clearAll: handleClearAll,
+            clearing,
+          })}
         </motion.div>
       ) : null}
 
@@ -755,14 +806,17 @@ export function BrandAssetAssigner({
               className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
               aria-hidden
             />
-            Refreshing your Meta accounts…
+            {uiText('m_203e9def72')}
           </div>
         ) : resyncError ? (
           <div
             role="alert"
             className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
           >
-            <span>Couldn&apos;t refresh Meta accounts. {resyncError}</span>
+            <span>
+              {uiText('m_b2cba8732a')}
+              {resyncError}
+            </span>
             <Button
               type="button"
               variant="outline"
@@ -770,7 +824,7 @@ export function BrandAssetAssigner({
               className="h-6 px-2 text-xs"
               onClick={triggerResync}
             >
-              Retry
+              {uiText('retry_942087c')}
             </Button>
           </div>
         ) : metaConnectedButNoAdAccounts ? (
@@ -778,7 +832,7 @@ export function BrandAssetAssigner({
             role="status"
             className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
           >
-            <span>Meta is connected but no ad accounts were found.</span>
+            <span>{uiText('m_49db7187fa')}</span>
             <Button
               type="button"
               variant="outline"
@@ -786,22 +840,22 @@ export function BrandAssetAssigner({
               className="h-6 px-2 text-xs"
               onClick={triggerResync}
             >
-              Refresh Meta accounts
+              {uiText('m_d11f9ef6bf')}
             </Button>
           </div>
         ) : null}
         {isEmpty ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/10 px-5 py-10 text-center">
             <Plug className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />
-            <p className="text-sm font-medium text-foreground">No connected accounts yet</p>
+            <p className="text-sm font-medium text-foreground">{uiText('m_b65a21c8d5')}</p>
             <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-              Connect a provider to start tagging its accounts to this brand.
+              {uiText('m_82528f08f3')}
             </p>
             <div className="mt-4 flex items-center justify-center">
               <ProviderConnectMenu onConnect={handleSync} syncingGroups={syncingTabIds}>
                 <Button type="button" variant="outline" size="sm" className="gap-2">
                   <Plus className="h-3.5 w-3.5" />
-                  Connect a provider
+                  {uiText('connect_a_provider_a002b3f')}
                 </Button>
               </ProviderConnectMenu>
             </div>
@@ -820,9 +874,7 @@ export function BrandAssetAssigner({
             }
             className="max-w-none"
             maxItemHeight="50vh"
-            emptyState={
-              <p className="text-xs text-muted-foreground">No accounts on this provider yet.</p>
-            }
+            emptyState={<p className="text-xs text-muted-foreground">{uiText('m_61cf24c781')}</p>}
           />
         )}
       </motion.div>

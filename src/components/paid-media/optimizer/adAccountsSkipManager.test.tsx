@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // PP-DT-E-home-setup-mode-mcc-mismatch, the Scale half (deep test 2026-10-31, lane E, low). The
 // Sound Vault's only assignment is a Google Ads manager (MCC "Cont Sandbox", 4990471415): it runs
@@ -49,7 +50,9 @@ mock.module('@/lib/supabase/client', () => ({
 const { useOptimizerAdAccounts } = await import('./useOptimizerData');
 
 function createWrapper() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   };

@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { STUDIO_NODE_REGISTRY } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type React from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
 (global as { MutationObserver?: unknown }).MutationObserver = window.MutationObserver;
@@ -66,7 +73,12 @@ mock.module('@/lib/brands/useBrandDesignSections.client', () => ({
   useBrandDesignSections: () => ({ sections: [], isLoading: false }),
 }));
 mock.module('@/lib/organic/skills', () => ({
-  useBrandSkills: () => ({ all: [], skills: [], templates: [], isLoading: false }),
+  useBrandSkills: () => ({
+    all: [],
+    skills: [],
+    templates: [],
+    isLoading: false,
+  }),
 }));
 
 const { useStudioStore } = await import('../stores/useStudioStore');
@@ -79,7 +91,13 @@ const seed = (...nodes: Array<Partial<StoreNode> & { id: string; type: string }>
     brandId: 'brand-1',
     saveTrigger: 0,
     nodes: nodes.map(
-      (node) => ({ position: { x: 0, y: 0 }, data: {}, selected: true, ...node }) as StoreNode,
+      (node) =>
+        ({
+          position: { x: 0, y: 0 },
+          data: {},
+          selected: true,
+          ...node,
+        }) as StoreNode,
     ),
   });
 };
@@ -111,7 +129,11 @@ describe('NodeInspectorPanel', () => {
   });
 
   it('renders the video generator section for a selected video node', () => {
-    seed({ id: 'v1', type: 'videoGen', data: { model: 'veo-3.1', resolution: '720p' } });
+    seed({
+      id: 'v1',
+      type: 'videoGen',
+      data: { model: 'veo-3.1', resolution: '720p' },
+    });
     render(<NodeInspectorPanel />);
 
     expect(screen.getByTestId('node-inspector')).toBeTruthy();
@@ -163,7 +185,10 @@ describe('NodeInspectorPanel', () => {
       fireEvent.click(screen.getByRole('button', { name: '9:16' }));
     });
 
-    const style = useStudioStore.getState().nodes[0].style as { width: number; height: number };
+    const style = useStudioStore.getState().nodes[0].style as {
+      width: number;
+      height: number;
+    };
     expect(data().aspectRatio).toBe('9:16');
     expect(style.height).toBeGreaterThan(style.width);
   });
@@ -214,10 +239,14 @@ describe('NodeInspectorPanel', () => {
   });
 
   it('falls back to the generic section for a type with no hand-written one', () => {
-    seed({ id: 'f1', type: 'frameExtract', data: { selector: 'last', outputWidth: 1024 } });
+    seed({
+      id: 'f1',
+      type: 'frameExtract',
+      data: { selector: 'last', outputWidth: 1024 },
+    });
     render(<NodeInspectorPanel />);
 
-    expect(screen.getByText('Frame Extract')).toBeTruthy();
+    expect(screen.getByText(STUDIO_NODE_REGISTRY.frameExtract.label)).toBeTruthy();
     expect(screen.getByText('selector')).toBeTruthy();
     expect(screen.getByText('last')).toBeTruthy();
     expect(screen.getByText('outputWidth')).toBeTruthy();
@@ -313,7 +342,9 @@ describe('NodeInspectorPanel', () => {
     seed({ id: 'i1', type: 'nanoGen', data: {} });
     // The dialog invalidates the techniques query on save, so it needs a client
     // once it mounts. The app root provides one; the panel alone does not.
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     render(
       <QueryClientProvider client={queryClient}>
         <NodeInspectorPanel />

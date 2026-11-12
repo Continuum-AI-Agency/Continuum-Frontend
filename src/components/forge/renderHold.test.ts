@@ -1,23 +1,24 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError, markFetchFailure } from '@/lib/api/errors';
 import { retryTransient } from '@/StudioCanvas/nodes/api-render/renderRetry';
 import {
+  BEAT_MS,
   canRetry,
   clearHold,
   confirmUnderHold,
   forgetPageSession,
-  BEAT_MS,
   heldCopy,
   holdKeyOf,
-  isHeld,
   holdReasonOf,
+  isHeld,
   RenderHeldError,
-  SESSION_RETRY,
-  STALE_MS,
   readHold,
   retryHeld,
+  SESSION_RETRY,
   type SignedBatch,
+  STALE_MS,
   sendingElsewhere,
   useRenderHold,
 } from './renderHold';
@@ -135,7 +136,9 @@ describe('renderHold', () => {
     clearHold(SCOPE, SIGNED.batchId);
     await expect(
       confirmUnderHold(SCOPE, SIGNED, async () => {
-        throw new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' });
+        throw new ApiError('Service Unavailable', 503, undefined, {
+          error: 'Service Unavailable',
+        });
       }),
     ).rejects.toBeInstanceOf(ApiError);
     expect(canRetry(readHold(SCOPE)!)).toBe(true);
@@ -232,7 +235,10 @@ describe('renderHold', () => {
       ).rejects.toBeInstanceOf(TypeError);
       expect(notSaved).toBe(1);
       // Held, in memory only: this page opens it, and a second send is refused.
-      expect(readHold(SCOPE)).toMatchObject({ batchId: 'batch-1', saved: false });
+      expect(readHold(SCOPE)).toMatchObject({
+        batchId: 'batch-1',
+        saved: false,
+      });
       expect(canRetry(readHold(SCOPE)!)).toBe(true);
       await expect(confirmUnderHold(SCOPE, SIGNED, async () => undefined)).rejects.toBeInstanceOf(
         RenderHeldError,
@@ -241,7 +247,10 @@ describe('renderHold', () => {
       forgetPageSession();
       expect(isHeld(SCOPE)).toBe(false);
     } finally {
-      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: real,
+      });
     }
   });
 
@@ -323,7 +332,10 @@ describe('renderHold', () => {
       saved: true,
       sending: false,
       signed: SIGNED,
-      reason: { kind: 'refused' as const, detail: 'The render service refused this.' },
+      reason: {
+        kind: 'refused' as const,
+        detail: 'The render service refused this.',
+      },
     };
     expect(heldCopy(held)).toBe(
       'The render service refused this. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
@@ -506,7 +518,11 @@ describe('renderHold', () => {
   test('a write-ahead read back as another tab’s batch is not sent; the hold opens instead', async () => {
     // Tab B's write lands between this tab's fresh read and its read-back.
     const real = globalThis.localStorage;
-    const raced = JSON.stringify({ batchId: 'batch-b', heldAt: Date.now(), inflight: true });
+    const raced = JSON.stringify({
+      batchId: 'batch-b',
+      heldAt: Date.now(),
+      inflight: true,
+    });
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: {
@@ -525,7 +541,10 @@ describe('renderHold', () => {
       expect(sent).toBe(false);
       expect(readHold(SCOPE)?.batchId).toBe('batch-b');
     } finally {
-      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: real,
+      });
     }
   });
 
@@ -570,7 +589,10 @@ describe('renderHold', () => {
   test('a hold from days ago is still held: only the ledger lets it go', () => {
     localStorage.setItem(
       holdKeyOf(SCOPE),
-      JSON.stringify({ batchId: 'batch-1', heldAt: Date.now() - 9 * 24 * 3_600_000 }),
+      JSON.stringify({
+        batchId: 'batch-1',
+        heldAt: Date.now() - 9 * 24 * 3_600_000,
+      }),
     );
     expect(isHeld(SCOPE)).toBe(true);
     expect(readHold(SCOPE)?.batchId).toBe('batch-1');
@@ -584,7 +606,11 @@ describe('renderHold', () => {
     act(() => {
       localStorage.setItem(
         holdKeyOf(SCOPE),
-        JSON.stringify({ batchId: 'batch-2', heldAt: Date.now(), inflight: true }),
+        JSON.stringify({
+          batchId: 'batch-2',
+          heldAt: Date.now(),
+          inflight: true,
+        }),
       );
       // What the browser fires here when another tab writes this key.
       window.dispatchEvent(Object.assign(new Event('storage'), { key: holdKeyOf(SCOPE) }));

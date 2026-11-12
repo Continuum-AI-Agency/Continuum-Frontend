@@ -39,11 +39,12 @@ import {
 } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
 import { Gem, Loader2, Sparkles } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
-
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { useBrandDesignSections } from '@/lib/brands/useBrandDesignSections.client';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -82,6 +83,10 @@ async function signExemplar(
 }
 
 export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<DesignRefNodeData>>) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const brandId = useStudioStore((state) => state.brandId);
   const { sections, snapshot, designSystemId, isLoading } = useBrandDesignSections(brandId);
@@ -156,7 +161,7 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
       const item = output?.type === 'image' ? output : undefined;
       const url = item?.url ?? (item?.base64 ? `data:${item.mimeType};base64,${item.base64}` : '');
       if (!result.success || !url) {
-        setError(result.error ?? 'The specimen did not come back.');
+        setError(result.error ?? translateUi('the_specimen_did_not_come_back_1621cdba'));
         return;
       }
 
@@ -167,17 +172,17 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
         ...(item?.assetId ? { specimenAssetId: item.assetId } : {}),
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(uiErrorText(caught));
     } finally {
       setIsGenerating(false);
     }
-  }, [brandId, executeGeneration, id, section, snapshot, updateNodeData]);
+  }, [brandId, executeGeneration, id, section, snapshot, updateNodeData, uiErrorText, translateUi]);
 
   const provenance =
     data.specimenSource === 'exemplar'
-      ? 'Specimen · from your design system'
+      ? translateUi('designSpecimenExemplar')
       : data.specimenSource === 'generated'
-        ? 'Specimen · generated'
+        ? translateUi('designSpecimenGenerated')
         : null;
 
   return (
@@ -187,19 +192,19 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <NodeTitleBar icon={Gem} label="Design Reference">
+        <NodeTitleBar icon={Gem} label={translateUi('design_reference_11c81022')}>
           {/* A native select is as wide as its widest option, and "Specimen + tokens" left
               the node's own title with 90px to render "Design Reference" in (Airtable #283). */}
           <select
             className="nodrag h-5 rounded-sm border border-border/60 bg-background px-1 text-2xs"
             value={mode}
-            aria-label="What this reference emits"
-            title="What this reference emits"
+            aria-label={translateUi('what_this_reference_emits_146e9e1c')}
+            title={translateUi('what_this_reference_emits_146e9e1c')}
             onChange={(event) => updateNodeData(id, { mode: event.target.value as DesignRefMode })}
           >
-            <option value="both">Both</option>
-            <option value="image">Specimen</option>
-            <option value="tokens">Tokens</option>
+            <option value="both">{translateUi('both_b6c1d862')}</option>
+            <option value="image">{translateUi('specimen_f02bd0fc')}</option>
+            <option value="tokens">{translateUi('tokens_a039dfb9')}</option>
           </select>
         </NodeTitleBar>
 
@@ -214,7 +219,12 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
                 variant={section === preset.section ? 'default' : 'outline'}
                 title={preset.hint}
                 className="nodrag h-6 flex-1 px-1 text-2xs"
-                onClick={() => updateNodeData(id, { section: preset.section, mode: preset.mode })}
+                onClick={() =>
+                  updateNodeData(id, {
+                    section: preset.section,
+                    mode: preset.mode,
+                  })
+                }
               >
                 {preset.label}
               </Button>
@@ -223,14 +233,14 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
           <select
             className="nodrag h-6 rounded-sm border border-border/60 bg-background px-1 text-xs"
             value={section ?? ''}
-            aria-label="Design system section"
+            aria-label={translateUi('design_system_section_956d3aba')}
             onChange={(event) =>
               updateNodeData(id, {
                 section: (event.target.value || null) as DesignSection | null,
               })
             }
           >
-            <option value="">Choose a section…</option>
+            <option value="">{translateUi('choose_a_section_c0b30d93')}</option>
             {sections.map((row) => (
               <option key={row.section} value={row.section}>
                 {DESIGN_SECTION_LABELS[row.section]}
@@ -251,18 +261,24 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
                 <img
                   loading="lazy"
                   src={data.specimenUrl}
-                  alt={section ? `${DESIGN_SECTION_LABELS[section]} specimen` : 'Section specimen'}
+                  alt={
+                    section
+                      ? translateUi('value0_specimen_7900d1d2', {
+                          value0: String(DESIGN_SECTION_LABELS[section]),
+                        })
+                      : translateUi('section_specimen_b6dfede0')
+                  }
                   className="max-h-full max-w-full object-contain"
                 />
               ) : (
                 <span className="max-h-full overflow-y-auto px-3 pb-7 text-center text-2xs text-muted-foreground">
                   {!section
-                    ? 'Choose a section'
+                    ? translateUi('choose_a_section_55164776')
                     : isLoading
-                      ? 'Reading the design system…'
+                      ? translateUi('reading_the_design_system_c9bd9778')
                       : !snapshot
-                        ? 'This brand has no design system yet'
-                        : 'No image in your system for this section — generate one'}
+                        ? translateUi('this_brand_has_no_design_system_yet_0e19ccee')
+                        : translateUi('no_image_in_your_system_for_this_se_e4f78ffc')}
                 </span>
               )}
 
@@ -281,7 +297,9 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
                   ) : (
                     <Sparkles className="mr-1 size-3" />
                   )}
-                  {data.specimenUrl ? 'Regenerate' : 'Generate'}
+                  {data.specimenUrl
+                    ? translateUi('regenerate_1651031b')
+                    : translateUi('generate_49e49bb4')}
                 </Button>
               ) : null}
 
@@ -320,7 +338,8 @@ export function DesignRefNode({ id, data, selected }: NodeProps<ReactFlowNode<De
             node promises nothing yet. */}
         {section ? (
           <p className="shrink-0 border-t border-border/60 px-1.5 py-1 text-left text-2xs leading-tight text-muted-foreground">
-            Informs the generation and its critique. Not enforced on the result.
+            {' '}
+            {translateUi('informs_the_generation_and_its_crit_5a4dc173')}{' '}
           </p>
         ) : null}
       </CanvasNode>

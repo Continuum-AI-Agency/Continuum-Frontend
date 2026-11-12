@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale as useUiLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
 // Takeover detail view for a Library asset: preview stage with annotated
 // comments on the left, threaded comments sidebar on the right, version rail
 // underneath, with slots owned by sibling workstreams: ReviewStatusControl,
@@ -24,6 +27,7 @@ import {
   previewFrameSpec,
 } from '@continuum/contracts';
 import { ChevronLeft, ChevronRight, Columns2, Layers3 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProvenancePanel } from '@/components/library/detail/ProvenancePanel';
 import { viewerFamily } from '@/components/library/viewers';
@@ -96,7 +100,7 @@ export type AssetDetailModalProps = {
 // they widen the tab union here rather than in transcriptSegments.
 type DetailSidebarTab = SidebarTab | 'performance' | 'fields' | 'insights' | 'info';
 
-function assetMetaLine(asset: MediaAsset): string {
+function assetMetaLine(asset: MediaAsset, locale: UiLocale = 'en'): string {
   const parts: string[] = [
     asset.kind === 'file' ? (fileExtension(asset.fileName) ?? 'FILE') : asset.kind.toUpperCase(),
     SOURCE_LABEL[asset.source],
@@ -104,7 +108,7 @@ function assetMetaLine(asset: MediaAsset): string {
   if (asset.width && asset.height) parts.push(`${asset.width} × ${asset.height}`);
   if (asset.sizeBytes) parts.push(formatBytes(asset.sizeBytes));
   parts.push(
-    new Date(asset.createdAt).toLocaleDateString(undefined, {
+    new Date(asset.createdAt).toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -205,6 +209,10 @@ function AssetDetailDialog({
   onPrev,
   onNext,
 }: AssetDetailModalProps & { asset: MediaAsset }) {
+  const calendarLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+
   const {
     comments,
     loading,
@@ -277,11 +285,14 @@ function AssetDetailDialog({
       kind: slide.kind,
       src: slide.signedUrl,
       durationMs: null,
-      label: `${asset.title ?? asset.fileName} · slide ${carouselSlideIndex + 1}`,
+      label: translateUi('value0_slide_value1_59ee1977', {
+        value0: String(asset.title ?? asset.fileName),
+        value1: String(carouselSlideIndex + 1),
+      }),
       key: `carousel-${asset.groupId ?? asset.id}-${slide.assetId ?? slide.slideIndex}`,
       sourceRole: 'original',
     } satisfies StageMedia;
-  }, [asset, viewedVersion, headVersion, viewingHead, carouselSlideIndex]);
+  }, [asset, viewedVersion, headVersion, viewingHead, carouselSlideIndex, translateUi]);
 
   const isTimed = stage.kind === 'video' || stage.kind === 'audio';
   // Browsers cannot play AIFF or WMA: those stage their AAC audio proxy instead.
@@ -361,7 +372,11 @@ function AssetDetailDialog({
   // Resolving a thread retires its pin (Figma-style); belonging to another
   // version retires it too, because its geometry addresses other bytes.
   const { imagePins, videoMarkers, pinLabels } = useMemo(
-    () => buildStageAnnotations({ openThreads: partition.current.open, selectedCommentId }),
+    () =>
+      buildStageAnnotations({
+        openThreads: partition.current.open,
+        selectedCommentId,
+      }),
     [partition.current.open, selectedCommentId],
   );
 
@@ -479,8 +494,8 @@ function AssetDetailDialog({
             <div className="flex items-center gap-0.5">
               <button
                 type="button"
-                aria-label="Previous asset"
-                title="Previous asset (← or ⌥←)"
+                aria-label={translateUi('previous_asset_05c2b18d')}
+                title={translateUi('previous_asset_or_6843723b')}
                 data-testid="asset-detail-prev"
                 disabled={!onPrev}
                 onClick={onPrev}
@@ -490,8 +505,8 @@ function AssetDetailDialog({
               </button>
               <button
                 type="button"
-                aria-label="Next asset"
-                title="Next asset (→ or ⌥→)"
+                aria-label={translateUi('next_asset_21e7551d')}
+                title={translateUi('next_asset_or_38890913')}
                 data-testid="asset-detail-next"
                 disabled={!onNext}
                 onClick={onNext}
@@ -506,9 +521,12 @@ function AssetDetailDialog({
               {asset.title ?? asset.fileName}
             </DialogTitle>
             <DialogDescription className="truncate text-xs text-muted-foreground">
-              {assetMetaLine(asset)}
+              {assetMetaLine(asset, calendarLocale)}
               {previewFrame !== 'native' && previewFrameSpec(previewFrame)
-                ? ` · as ${previewFrameSpec(previewFrame)?.label} · ${previewFrameSpec(previewFrame)?.surface}`
+                ? translateUi('as_value0_value1_a7b0a826', {
+                    value0: String(previewFrameSpec(previewFrame)?.label),
+                    value1: String(previewFrameSpec(previewFrame)?.surface),
+                  })
                 : ''}
             </DialogDescription>
           </div>
@@ -616,7 +634,9 @@ function AssetDetailDialog({
                   renderComposer={({ timeMs, endMs, clear }) => (
                     <CommentComposer
                       placeholder={
-                        endMs === null ? 'Comment at this moment...' : 'Comment on this passage...'
+                        endMs === null
+                          ? translateUi('comment_at_this_moment_3d40196d')
+                          : translateUi('comment_on_this_passage_732f4d5e')
                       }
                       busy={posting}
                       autoFocus
@@ -664,7 +684,7 @@ function AssetDetailDialog({
                 <div className="absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
                   <button
                     type="button"
-                    aria-label="Previous carousel slide"
+                    aria-label={translateUi('previous_carousel_slide_03ba5926')}
                     className="flex size-7 items-center justify-center rounded-full hover:bg-muted"
                     onClick={() =>
                       setCarouselSlideIndex(
@@ -682,7 +702,7 @@ function AssetDetailDialog({
                   </span>
                   <button
                     type="button"
-                    aria-label="Next carousel slide"
+                    aria-label={translateUi('next_carousel_slide_2d43f18f')}
                     className="flex size-7 items-center justify-center rounded-full hover:bg-muted"
                     onClick={() =>
                       setCarouselSlideIndex((index) => (index + 1) % asset.carousel!.slides.length)
@@ -729,13 +749,12 @@ function AssetDetailDialog({
                     <button
                       type="button"
                       data-testid="compare-with-asset"
-                      title="Compare with another asset"
-                      aria-label="Compare with another asset"
+                      title={translateUi('compare_with_another_asset_a2ac164b')}
+                      aria-label={translateUi('compare_with_another_asset_a2ac164b')}
                       onClick={() => setComparePickerOpen(true)}
                       className="flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors hover:bg-muted"
                     >
-                      <Columns2 className="size-3.5" />
-                      Compare
+                      <Columns2 className="size-3.5" /> {translateUi('compare_e888155d')}{' '}
                     </button>
                     {stage.kind === 'video' && stage.src ? (
                       <PosterFramePicker
@@ -772,7 +791,8 @@ function AssetDetailDialog({
                 onClick={() => chooseTab('comments')}
                 count={openCount}
               >
-                Comments
+                {' '}
+                {translateUi('comments_355f79f2')}{' '}
               </SidebarTabButton>
               {transcriptEnabled && (
                 <SidebarTabButton
@@ -782,7 +802,8 @@ function AssetDetailDialog({
                     transcript.view.status === 'ready' ? transcript.view.segments.length : undefined
                   }
                 >
-                  Transcript
+                  {' '}
+                  {translateUi('transcript_721164f0')}{' '}
                 </SidebarTabButton>
               )}
               {transcriptEnabled && asset.videoInsights ? (
@@ -790,23 +811,27 @@ function AssetDetailDialog({
                   active={sidebarTab === 'insights'}
                   onClick={() => chooseTab('insights')}
                 >
-                  Insights
+                  {' '}
+                  {translateUi('insights_2a932f90')}{' '}
                 </SidebarTabButton>
               ) : null}
               <SidebarTabButton active={sidebarTab === 'info'} onClick={() => chooseTab('info')}>
-                Info
+                {' '}
+                {translateUi('info_170322a3')}{' '}
               </SidebarTabButton>
               <SidebarTabButton
                 active={sidebarTab === 'fields'}
                 onClick={() => chooseTab('fields')}
               >
-                Fields
+                {' '}
+                {translateUi('fields_616f48c1')}{' '}
               </SidebarTabButton>
               <SidebarTabButton
                 active={sidebarTab === 'performance'}
                 onClick={() => chooseTab('performance')}
               >
-                Performance
+                {' '}
+                {translateUi('performance_442aded8')}{' '}
               </SidebarTabButton>
             </div>
 
@@ -833,7 +858,7 @@ function AssetDetailDialog({
                 onSeek={seekTo}
                 renderRangeComposer={({ timeMs, endMs, clear }) => (
                   <CommentComposer
-                    placeholder="Comment on these lines..."
+                    placeholder={translateUi('comment_on_these_lines_e53fda31')}
                     busy={posting}
                     autoFocus
                     brandId={brandId}
@@ -849,7 +874,11 @@ function AssetDetailDialog({
                     onSubmit={(body, extras) => {
                       void post({
                         body,
-                        annotation: { kind: 'time', timeMs, ...(endMs === null ? {} : { endMs }) },
+                        annotation: {
+                          kind: 'time',
+                          timeMs,
+                          ...(endMs === null ? {} : { endMs }),
+                        },
                         ...extras,
                       });
                       clear();
@@ -900,8 +929,10 @@ function AssetDetailDialog({
                   <CommentComposer
                     placeholder={
                       viewedVersion
-                        ? `Add a comment on v${viewedVersion.versionNumber}...`
-                        : 'Add a comment...'
+                        ? translateUi('add_a_comment_on_v_value0_4e85f544', {
+                            value0: String(viewedVersion.versionNumber),
+                          })
+                        : translateUi('add_a_comment_23c5f331')
                     }
                     busy={posting}
                     brandId={brandId}
@@ -917,8 +948,8 @@ function AssetDetailDialog({
           brandId={brandId}
           excludeAssetIds={[asset.id]}
           copy={{
-            title: 'Compare with another asset',
-            description: 'Pick an image, video or audio file to open beside this one.',
+            title: translateUi('compare_with_another_asset_a2ac164b'),
+            description: translateUi('pick_an_image_video_or_audio_file_t_e9b326c2'),
             confirm: 'Compare',
           }}
           open={comparePickerOpen}

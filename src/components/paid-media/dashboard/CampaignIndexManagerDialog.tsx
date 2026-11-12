@@ -1,5 +1,7 @@
 'use client';
+
 import { Check } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 
@@ -42,6 +44,7 @@ export function CampaignIndexManagerDialog({
   onCancel,
   onSave,
 }: CampaignIndexManagerDialogProps) {
+  const uiText = useTranslations('scale');
   const [name, setName] = React.useState('');
   const [selectedCampaignIds, setSelectedCampaignIds] = React.useState<string[]>([]);
   const [search, setSearch] = React.useState('');
@@ -75,16 +78,18 @@ export function CampaignIndexManagerDialog({
     <div className="rounded-md border border-border/70 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
       <div className="space-y-2 border-b border-border/70 px-3 py-2.5">
         <p className="text-sm font-semibold">
-          {initialValue?.id ? 'Edit campaign index' : 'Create campaign index'}
+          {initialValue?.id
+            ? uiText('edit_campaign_index_038e002')
+            : uiText('create_campaign_index_1b7173d')}
         </p>
         <p className="text-xs text-muted-foreground">
-          Command-based selection. Search, toggle campaigns, then save the grouped index.
+          {uiText('command_based_selection_search_toggle_campaig_685cf4e')}
         </p>
         <Input
           id="campaign-index-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Q1 Core Portfolio"
+          placeholder={uiText('q1_core_portfolio_2420007')}
           maxLength={120}
           className="h-8 text-xs"
         />
@@ -92,7 +97,7 @@ export function CampaignIndexManagerDialog({
 
       <Command className="rounded-none bg-transparent">
         <CommandInput
-          placeholder="Search campaigns by name, id, status..."
+          placeholder={uiText('search_campaigns_by_name_id_status_e8fa545')}
           value={search}
           onValueChange={setSearch}
           onFocus={() => setCommandOpen(true)}
@@ -101,8 +106,12 @@ export function CampaignIndexManagerDialog({
         />
         {commandOpen ? (
           <CommandList className="max-h-[320px]" onMouseDown={(event) => event.preventDefault()}>
-            <CommandEmpty>No campaign matches this search.</CommandEmpty>
-            <CommandGroup heading={`Campaigns (${selectedCampaignIds.length} selected)`}>
+            <CommandEmpty>{uiText('no_campaign_matches_this_search_289a8e4')}</CommandEmpty>
+            <CommandGroup
+              heading={uiText('campaigns_selected_count', {
+                count: selectedCampaignIds.length,
+              })}
+            >
               {visibleCampaigns.map((campaign) => {
                 const selected = selectedCampaignIds.includes(campaign.id);
 
@@ -143,7 +152,7 @@ export function CampaignIndexManagerDialog({
           onClick={onCancel}
           disabled={saving}
         >
-          Cancel
+          {uiText('cancel_19766ed')}
         </Button>
         <Button
           size="sm"
@@ -157,7 +166,11 @@ export function CampaignIndexManagerDialog({
           }
           disabled={!canSave}
         >
-          {saving ? 'Saving...' : initialValue?.id ? 'Save index' : 'Create index'}
+          {saving
+            ? uiText('saving_dc85af8')
+            : initialValue?.id
+              ? uiText('save_index_8baa71b')
+              : uiText('create_index_fd80ea5')}
         </Button>
       </div>
     </div>

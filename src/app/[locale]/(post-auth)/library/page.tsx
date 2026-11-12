@@ -1,0 +1,280 @@
+import {
+  libraryAspectRatioBinSchema,
+  libraryBrowseDestinationSchema,
+  libraryBrowseQuerySchema,
+  libraryFieldRangeSchema,
+  libraryFormatGroupSchema,
+  libraryLayoutSchema,
+  libraryMediaTypeSchema,
+  libraryPerformanceWindowSchema,
+  libraryPlacementSchema,
+  libraryPreviewFrameSchema,
+  libraryRangeFiltersSchema,
+  librarySortSchema,
+  libraryTechnicalFiltersSchema,
+  mediaKindSchema,
+  mediaReviewStatusSchema,
+  mediaSourceSchema,
+  parseCommentDeepLink,
+} from '@continuum/contracts';
+import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
+import { getTranslations as getUiTranslations } from 'next-intl/server';
+import { Suspense } from 'react';
+import { LibraryViewer } from '@/components/library/LibraryViewer';
+import { readLibraryViewPreferences } from '@/components/library/views/viewPreferences';
+import { Skeleton } from '@/components/ui/skeleton';
+import { fetchBrandStyle } from '@/lib/ai-studio/brandStyle.server.ts';
+import { readBrandAccess } from '@/lib/billing/brandAccess.server.ts';
+import { isPaidBrand } from '@/lib/billing/productAccess';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
+import { setActiveBrandPreference } from '@/lib/brands/preferences';
+import { buildCaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { fetchLibraryBrowsePage } from '@/lib/media/browse.server.ts';
+import { fetchMediaAssets, fetchMediaCollections } from '@/lib/media/fetchers.server.ts';
+import {
+  kindToMediaType,
+  libraryBrowseExtrasFromParams,
+  parseTagsParam,
+} from '@/lib/media/filters';
+import { fetchLibrarySavedViews } from '@/lib/media/saved-views.server.ts';
+import { parseLibrarySection } from '@/lib/media/sections';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getUiTranslations('library');
+  return { title: t('pageTitle'), description: t('pageDescription') };
+}
+
+function LibrarySkeleton() {
+  return (
+    <div className="flex h-full gap-4 p-4">
+      <Skeleton className="w-56 shrink-0 rounded-xl" />
+      <div className="flex flex-1 flex-col gap-4">
+        <Skeleton className="h-9 w-full rounded-lg" />
+        <div className="grid grid-cols-3 gap-4 lg:grid-cols-4 xl:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-[4/3] rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type LibrarySearchParams = Record<string, string | string[] | undefined>;
+
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function enumList<T extends string>(
+  value: string | string[] | undefined,
+  accepts: (candidate: string) => candidate is T,
+): T[] {
+  return parseTagsParam(first(value)).filter(accepts);
+}
+
+function optionalBoolean(value: string | undefined): boolean | undefined {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+function isUuid(value: string | undefined): value is string {
+  return (
+    !!value &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
+/**
+ * The structured filters off the URL, each kept only when it validates: a hand-edited or
+ * stale link drops the one bad filter rather than failing the whole page.
+ */
+function parseBrowseExtras(params: LibrarySearchParams) {
+  const extras = libraryBrowseExtrasFromParams((key) => first(params[key]) ?? null);
+  const valid = <T,>(
+    schema: { safeParse: (value: unknown) => { success: boolean; data?: T } },
+    value: unknown,
+  ) => {
+    const parsed = schema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
+  };
+  return {
+    families: extras.families.filter((value) => libraryFormatGroupSchema.safeParse(value).success),
+    ranges: valid(libraryRangeFiltersSchema, extras.ranges),
+    technical: valid(libraryTechnicalFiltersSchema, extras.technical),
+    fieldRanges: valid(libraryFieldRangeSchema.array().max(10), extras.fieldRanges) ?? [],
+    thenBy: extras.thenBy,
+    reviewStateIds: parseTagsParam(first(params.reviewStates)).filter(isUuid).slice(0, 50),
+  };
+}
+
+function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
+  const legacySource = mediaSourceSchema.safeParse(first(params.source));
+  const legacyKind = mediaKindSchema.safeParse(first(params.kind));
+  const mediaType = libraryMediaTypeSchema.safeParse(first(params.mediaType));
+  const sort = librarySortSchema.safeParse(first(params.sort));
+  const performanceWindow = libraryPerformanceWindowSchema.safeParse(
+    first(params.performanceWindow),
+  );
+  const layout = libraryLayoutSchema.safeParse(first(params.layout));
+  const collection = first(params.collection);
+  const destination = libraryBrowseDestinationSchema.safeParse(first(params.destination));
+  const defaultHome =
+    !destination.success &&
+    !first(params.mediaType) &&
+    !first(params.sort) &&
+    !collection &&
+    !first(params.section) &&
+    // A format or technical filter asks for more than Home's recent images and videos.
+    !['families', 'ranges', 'technical', 'fieldRanges'].some((key) => first(params[key]));
+
+  return libraryBrowseQuerySchema.parse({
+    ...parseBrowseExtras(params),
+    brandId,
+    destination: destination.success ? destination.data : defaultHome ? 'home' : undefined,
+    previewFrame: libraryPreviewFrameSchema.safeParse(first(params.frame)).success
+      ? libraryPreviewFrameSchema.parse(first(params.frame))
+      : undefined,
+    aspectRatios: enumList(
+      params.aspectRatios,
+      (candidate): candidate is (typeof libraryAspectRatioBinSchema)['_output'] =>
+        libraryAspectRatioBinSchema.safeParse(candidate).success,
+    ),
+    mediaType: mediaType.success
+      ? mediaType.data
+      : kindToMediaType(legacyKind.success ? legacyKind.data : undefined),
+    createdWith: enumList(
+      params.createdWith,
+      (candidate): candidate is (typeof mediaSourceSchema)['_output'] =>
+        mediaSourceSchema.safeParse(candidate).success,
+    ).concat(legacySource.success ? [legacySource.data] : []),
+    placements: enumList(
+      params.placements,
+      (candidate): candidate is (typeof libraryPlacementSchema)['_output'] =>
+        libraryPlacementSchema.safeParse(candidate).success,
+    ),
+    tags: parseTagsParam(first(params.tags)),
+    reviewStatuses: enumList(
+      params.reviewStatuses,
+      (candidate): candidate is (typeof mediaReviewStatusSchema)['_output'] =>
+        mediaReviewStatusSchema.safeParse(candidate).success,
+    ),
+    ownerIds: parseTagsParam(first(params.ownerIds)).filter(isUuid),
+    campaignIds: parseTagsParam(first(params.campaignIds)),
+    projectIds: parseTagsParam(first(params.projectIds)).filter(isUuid),
+    usageRights: parseTagsParam(first(params.usageRights)).filter((value) =>
+      ['owned', 'licensed', 'restricted', 'expired'].includes(value),
+    ),
+    collectionId: isUuid(collection) ? collection : undefined,
+    used: optionalBoolean(first(params.used)),
+    shared: optionalBoolean(first(params.shared)),
+    leadingOnly: optionalBoolean(first(params.leadingOnly)),
+    templateOnly: optionalBoolean(first(params.templateOnly)),
+    ratios: parseTagsParam(first(params.ratios)),
+    fonts: parseTagsParam(first(params.fonts)),
+    search: first(params.search),
+    sort: sort.success ? sort.data : defaultHome ? 'updated_desc' : undefined,
+    performanceWindow: performanceWindow.success ? performanceWindow.data : undefined,
+    layout: layout.success ? layout.data : undefined,
+    boardGroupBy: first(params.boardGroupBy),
+    sortFieldId: first(params.sortField) ?? undefined,
+  });
+}
+
+async function LibraryContent({ searchParams }: { searchParams: LibrarySearchParams }) {
+  const context = await getActiveBrandContext();
+  let activeBrandId = context.activeBrandId;
+  let brandAccess = context.brandAccess;
+
+  if (!activeBrandId) {
+    redirect('/onboarding');
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const requestedBrandId = first(searchParams.brandId);
+  const canUseRequestedBrand =
+    isUuid(requestedBrandId) &&
+    context.permissions.some((permission) => permission.brand_profile_id === requestedBrandId);
+  if (canUseRequestedBrand && requestedBrandId !== activeBrandId) {
+    const { data: requestedBrand } = await supabase
+      .schema('brand_profiles')
+      .from('brand_profiles')
+      .select('id')
+      .eq('id', requestedBrandId)
+      .eq('active', true)
+      .maybeSingle();
+    if (requestedBrand) {
+      activeBrandId = requestedBrandId;
+      brandAccess = await readBrandAccess(requestedBrandId);
+      try {
+        await setActiveBrandPreference(requestedBrandId);
+      } catch (error) {
+        console.error('[library] Could not persist email-linked brand selection', error);
+      }
+    }
+  }
+
+  const browseQuery = parseBrowseQuery(activeBrandId, searchParams);
+  const requestedAssetId = first(searchParams.assetId);
+  const overlayParams = new URLSearchParams();
+  for (const key of ['comment', 't', 'end'] as const) {
+    const value = first(searchParams[key]);
+    if (value) overlayParams.set(key, value);
+  }
+  const initialDeepLink = parseCommentDeepLink(overlayParams);
+  const [page, collections, savedViews, brandStyle, requestedAssets, viewConfig] =
+    await Promise.all([
+      fetchLibraryBrowsePage(supabase, browseQuery),
+      fetchMediaCollections(activeBrandId),
+      fetchLibrarySavedViews(supabase, activeBrandId),
+      fetchBrandStyle(activeBrandId),
+      isUuid(requestedAssetId)
+        ? fetchMediaAssets(activeBrandId, { assetId: requestedAssetId, limit: 1 })
+        : Promise.resolve([]),
+      readLibraryViewPreferences(supabase, activeBrandId),
+    ]);
+  // An explicit ?layout= wins (shared links, the tabs); otherwise the user's saved one.
+  const initialBrowseQuery =
+    !first(searchParams.layout) && viewConfig.layout
+      ? { ...browseQuery, layout: viewConfig.layout }
+      : browseQuery;
+
+  return (
+    <LibraryViewer
+      brandId={activeBrandId}
+      isPaid={isPaidBrand(brandAccess)}
+      initialAssets={page.items}
+      initialNextCursor={page.nextCursor}
+      initialCollections={collections}
+      initialSavedViews={savedViews}
+      captionStyle={buildCaptionStyle(brandStyle)}
+      section={parseLibrarySection(first(searchParams.section))}
+      initialBrowseQuery={initialBrowseQuery}
+      initialDetailAsset={requestedAssets[0] ?? null}
+      initialDeepLink={initialDeepLink}
+      initialViewConfig={viewConfig}
+      initialTrashOpen={first(searchParams.view) === 'trash'}
+    />
+  );
+}
+
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<LibrarySearchParams>;
+}) {
+  return (
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full min-w-0 overflow-hidden">
+      {/* Stable Suspense boundary (no per-filter key): filter/collection changes
+          are soft navigations, so React keeps the current grid mounted during the
+          refetch instead of tearing it down to the skeleton. The skeleton shows
+          only on the first load of the route. */}
+      <Suspense fallback={<LibrarySkeleton />}>
+        <LibraryContent searchParams={await searchParams} />
+      </Suspense>
+    </div>
+  );
+}

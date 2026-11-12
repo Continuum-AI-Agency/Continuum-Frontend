@@ -1,6 +1,7 @@
 'use client';
 
 import { PUBLISH_PLATFORM_LABELS, PUBLISH_PLATFORM_ORDER } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { cardCaption } from '@/lib/organic/groupDraft';
@@ -38,6 +39,7 @@ export function CardTargets({
   brandId?: string;
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
   const accounts = usePublishAccounts(brandId);
   const platforms = PUBLISH_PLATFORM_ORDER.filter((platform) => draft.platforms.includes(platform));
   const account = findAccount(accounts, draft.targetAccountId);
@@ -46,7 +48,7 @@ export function CardTargets({
   const accountText = account
     ? accountName(account)
     : accounts.length > 0
-      ? 'Choose account'
+      ? uiText('choose_account_3be3203')
       : null;
   return (
     <span className={cn('flex min-w-0 items-center gap-1', className)}>
@@ -81,19 +83,20 @@ export function StatusBadge({
   format?: string;
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
   if (format === 'Newsletter') {
     return (
       <Pill
         variant="outline"
         className={cn('border-destructive/30 bg-destructive/10 text-destructive', className)}
-        title="Newsletter"
+        title={uiText('newsletter_f84ca2e')}
       >
-        Newsletter
+        {uiText('newsletter_f84ca2e')}
       </Pill>
     );
   }
 
-  const { label, hint, tone, pillClassName } = draftStatusPresentation(status);
+  const { label, hint, tone, pillClassName } = draftStatusPresentation(status, uiText);
 
   return (
     <Pill variant={tone} className={cn(pillClassName, className)} title={hint} aria-label={hint}>
@@ -109,7 +112,8 @@ export function StatusBadge({
  * so "every status is labeled" holds on the month grid too.
  */
 export function StatusDot({ status }: { status: OrganicDraftStatus }): React.JSX.Element {
-  const { label, hint, strip } = draftStatusPresentation(status);
+  const uiText = useTranslations('organic');
+  const { label, hint, strip } = draftStatusPresentation(status, uiText);
 
   return (
     <span className="inline-flex shrink-0 items-center" title={hint}>

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -51,7 +52,11 @@ describe('RunOutcomeNotice', () => {
     ['no_adsets', 'no ad sets are enrolled'],
     ['no_snapshots', 'no live Meta data'],
   ] as const)('explains a %s skip as actionable, not as an outage', (reason, expected) => {
-    renderOutcome({ status: 'skipped', reason, run: { ...RUN, runId: null, skipped: reason } });
+    renderOutcome({
+      status: 'skipped',
+      reason,
+      run: { ...RUN, runId: null, skipped: reason },
+    });
     const text = screen.getByRole('status').textContent ?? '';
     expect(text).toContain(expected);
     expect(text).not.toContain('not live yet');

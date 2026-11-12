@@ -4,7 +4,13 @@ import {
   type VideoEditorOpName,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import type { VideoStudioContext } from '../types';
 
@@ -14,7 +20,10 @@ let pollAnswers: Array<() => unknown> = [];
 const polled: string[] = [];
 /** Projects whose transcript the dialog asked for on open (the warm-up, not a poll). */
 const warmed: string[] = [];
-const toasts: Array<{ title: string; action?: { label: string; onClick: () => void } }> = [];
+const toasts: Array<{
+  title: string;
+  action?: { label: string; onClick: () => void };
+}> = [];
 
 mock.module('@/lib/api/videoEditorOps.client', () => ({
   runVideoEditorOp: async (projectId: string, op: string) => {
@@ -29,9 +38,13 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
     return answer();
   },
 }));
-mock.module('next/navigation', () => ({ useRouter: () => ({ push: () => undefined }) }));
+mock.module('@/i18n/navigation', () => ({
+  useRouter: () => ({ push: () => undefined }),
+}));
 mock.module('@/components/ui/ToastProvider', () => ({
-  useToast: () => ({ show: (toast: (typeof toasts)[number]) => toasts.push(toast) }),
+  useToast: () => ({
+    show: (toast: (typeof toasts)[number]) => toasts.push(toast),
+  }),
 }));
 
 const { BriefDialog } = await import('./BriefDialog');
@@ -47,7 +60,12 @@ afterEach(() => {
 const TIMEOUT_MS = 10_000;
 const PROJECT_ID = '22222222-2222-4222-8222-222222222222';
 const footage = [
-  { assetId: 'reel', kind: 'video' as const, title: 'Reel', origin: 'project' as const },
+  {
+    assetId: 'reel',
+    kind: 'video' as const,
+    title: 'Reel',
+    origin: 'project' as const,
+  },
 ];
 
 function renderDialog(
@@ -56,7 +74,12 @@ function renderDialog(
 ) {
   const calls: Array<{ op: string; input: unknown }> = [];
   const project = {
-    ...createEditorProjectV2({ projectId: PROJECT_ID, title: 'Edit', width: 1080, height: 1920 }),
+    ...createEditorProjectV2({
+      projectId: PROJECT_ID,
+      title: 'Edit',
+      width: 1080,
+      height: 1920,
+    }),
     revision: 7,
   };
   const studio = {
@@ -95,7 +118,9 @@ describe('BriefDialog', () => {
     renderDialog(() => {
       throw new Error('no draft in this test');
     });
-    await waitFor(() => expect(warmed).toEqual([PROJECT_ID]), { timeout: TIMEOUT_MS });
+    await waitFor(() => expect(warmed).toEqual([PROJECT_ID]), {
+      timeout: TIMEOUT_MS,
+    });
     expect(polled).toEqual([]);
   });
 
@@ -104,7 +129,9 @@ describe('BriefDialog', () => {
     async () => {
       const calls = renderDialog(() => ({ jobId: 'job_f', state: 'running' }));
       expect(
-        screen.getByLabelText('Length in seconds', { selector: 'input[type="range"]' }),
+        screen.getByLabelText('Length in seconds', {
+          selector: 'input[type="range"]',
+        }),
       ).toBeTruthy();
       const switchNamed = (name: string) => screen.getByRole('switch', { name });
       for (const name of ['Music', 'Hook title', 'B-roll', 'Brand captions']) {
@@ -119,7 +146,9 @@ describe('BriefDialog', () => {
       fireEvent.click(switchNamed('B-roll'));
       pollAnswers.push(() => ({ jobId: 'job_f', state: 'running' }));
       submit();
-      await waitFor(() => expect(calls[0]?.op).toBe('draft_cut'), { timeout: TIMEOUT_MS });
+      await waitFor(() => expect(calls[0]?.op).toBe('draft_cut'), {
+        timeout: TIMEOUT_MS,
+      });
       expect(calls[0]?.input).toMatchObject({
         brief: 'Keep my exact astronaut brief.',
         captions: true,
@@ -138,14 +167,24 @@ describe('BriefDialog', () => {
     async () => {
       const calls = renderDialog(
         () => ({ jobId: 'job_m', state: 'running' }),
-        [...footage, { assetId: 'bed', kind: 'audio', title: 'Music bed', origin: 'project' }],
+        [
+          ...footage,
+          {
+            assetId: 'bed',
+            kind: 'audio',
+            title: 'Music bed',
+            origin: 'project',
+          },
+        ],
       );
       expect(
         screen.getByTestId('brief-footage').querySelectorAll('[role="checkbox"]'),
       ).toHaveLength(1);
       pollAnswers.push(() => ({ jobId: 'job_m', state: 'running' }));
       submit();
-      await waitFor(() => expect(calls[0]?.op).toBe('draft_cut'), { timeout: TIMEOUT_MS });
+      await waitFor(() => expect(calls[0]?.op).toBe('draft_cut'), {
+        timeout: TIMEOUT_MS,
+      });
       expect(calls[0]?.input).toMatchObject({ sourceAssetIds: ['reel'] });
     },
     TIMEOUT_MS,
@@ -171,17 +210,24 @@ describe('BriefDialog', () => {
         if (started === 1) return { jobId: 'job_1', state: 'running' };
         throw new Error('The draft could not start.');
       });
-      pollAnswers.push(() => ({ jobId: 'job_1', state: 'failed', error: 'No speech found.' }));
+      pollAnswers.push(() => ({
+        jobId: 'job_1',
+        state: 'failed',
+        error: 'No speech found.',
+      }));
       submit();
       await waitFor(
-        () => expect(screen.getByRole('alert').textContent).toContain('No speech found.'),
+        () => expect(screen.getByRole('alert').textContent).toContain('The draft failed.'),
         {
           timeout: TIMEOUT_MS,
         },
       );
       submit();
       await waitFor(
-        () => expect(screen.getByRole('alert').textContent).toContain('The draft could not start.'),
+        () =>
+          expect(screen.getByRole('alert').textContent).toContain(
+            'An unexpected error occurred. Please try again.',
+          ),
         { timeout: TIMEOUT_MS },
       );
       expect(screen.queryByTestId('brief-progress')).toBeNull();
@@ -201,7 +247,10 @@ describe('BriefDialog', () => {
       });
       submit();
       await waitFor(
-        () => expect(screen.getByRole('alert').textContent).toContain('No draft job_2'),
+        () =>
+          expect(screen.getByRole('alert').textContent).toContain(
+            'This item is no longer available.',
+          ),
         { timeout: TIMEOUT_MS },
       );
       await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -217,7 +266,10 @@ describe('BriefDialog', () => {
       const calls = renderDialog((op) =>
         op === 'draft_cut'
           ? { jobId: 'job_3', state: 'running' }
-          : { restoredRevision: 7, commit: { revision: 9, fingerprint: 'f', summary: 'Undo' } },
+          : {
+              restoredRevision: 7,
+              commit: { revision: 9, fingerprint: 'f', summary: 'Undo' },
+            },
       );
       const variant = (label: string, projectId: string) => ({
         projectId,

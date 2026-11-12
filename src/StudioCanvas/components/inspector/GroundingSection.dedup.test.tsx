@@ -7,8 +7,8 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, waitFor } from '@testing-library/react';
 import type React from 'react';
+import { cleanup, render, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
 (global as { MutationObserver?: unknown }).MutationObserver = window.MutationObserver;
@@ -20,7 +20,9 @@ const fetchBrandDirectionPieces = mock(async () => ({
   directionVersion: 2,
   pieces: [{ piece: 'photography', ruleCount: 3, approvedCount: 2, gates: true }],
 }));
-mock.module('@/lib/api/brandDirectionPieces.client', () => ({ fetchBrandDirectionPieces }));
+mock.module('@/lib/api/brandDirectionPieces.client', () => ({
+  fetchBrandDirectionPieces,
+}));
 
 const fetchDesignSystem = mock(async () => ({
   present: true,
@@ -29,7 +31,14 @@ const fetchDesignSystem = mock(async () => ({
   updated_at: '2026-08-01T00:00:00.000Z',
   design_system: {
     rigor: 'strict',
-    sections: [{ section: 'colour', title: 'Colour', enabled: true, rules: [{ id: 'r1' }] }],
+    sections: [
+      {
+        section: 'colour',
+        title: 'Colour',
+        enabled: true,
+        rules: [{ id: 'r1' }],
+      },
+    ],
   },
   design_system_id: 'ds-1',
 }));
@@ -69,7 +78,12 @@ mock.module('@/lib/brands/useBrandBook.client', () => ({
   fetchBrandBookClient: async () => null,
 }));
 mock.module('@/lib/organic/skills', () => ({
-  useBrandSkills: () => ({ all: [], skills: [], templates: [], isLoading: false }),
+  useBrandSkills: () => ({
+    all: [],
+    skills: [],
+    templates: [],
+    isLoading: false,
+  }),
 }));
 
 const { useStudioStore } = await import('../../stores/useStudioStore');
@@ -86,7 +100,9 @@ const node = {
 } as StoreNode;
 
 function renderSection() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <GroundingSection node={node} brandId={BRAND} />

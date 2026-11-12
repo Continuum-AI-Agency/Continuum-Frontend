@@ -2,12 +2,14 @@
 
 import { TRENDS_REUSE_DAYS } from '@continuum/contracts';
 import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { TrendGenerationProgress } from '@/components/brand-insights/TrendGenerationProgress';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSmoothTrendProgress } from '@/hooks/useSmoothTrendProgress';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { revalidateBrandInsights } from '@/lib/actions/brandInsights';
 import {
   generateBrandInsights,
@@ -46,6 +48,23 @@ export function BrandInsightsGenerateButton({
   subtle = false,
   force = false,
 }: Props) {
+  const tUi = useTranslations('common');
+  const getUiErrorMessage = useUiErrorMessage();
+  const stageKeys = {
+    awaiting_brand_context: 'm_695ed43e06',
+    awaiting_strategic_analysis: 'm_0ac0d6926a',
+    queued: 'queued_661ff40',
+    scraping: 'm_9dcca872d7',
+    raw_search: 'm_f444e7a435',
+    synthesis: 'm_d7b22a6928',
+    web_enrichment: 'm_7ba0d56d2c',
+    questions: 'questions_9a72221',
+    secondary_platform_eval: 'm_7621ca76a3',
+    persisting: 'm_68a9ccaac6',
+    completed: 'm_1798b3ba42',
+    failed: 'failed_031a8f0',
+  } as const;
+
   const router = useRouter();
   const { show } = useToast();
   const [generationId, setGenerationId] = useState<string | null>(null);
@@ -69,41 +88,43 @@ export function BrandInsightsGenerateButton({
   const isStale = ageDays === null || ageDays >= STALE_AFTER_DAYS;
 
   const buttonLabel = useMemo(() => {
-    if (generationId) return 'Generating…';
-    if (isPending) return 'Starting…';
-    if (force) return 'Refresh Trends';
-    return isStale ? 'Regenerate Trends' : 'Refresh Trends';
-  }, [generationId, isPending, isStale, force]);
+    if (generationId) return tUi('m_11edad70c1');
+    if (isPending) return tUi('starting_bbe5fc3');
+    if (force) return tUi('m_0c80809193');
+    return isStale ? tUi('m_17ca5fb6f5') : tUi('m_0c80809193');
+  }, [generationId, isPending, isStale, force, tUi]);
 
   // Relative age caption, hidden while a run is in flight (the progress row
   // takes over). Null when we have no prior generation to describe.
   const ageLabel = useMemo(() => {
     if (isWorking || ageDays === null) return null;
-    if (ageDays <= 0) return 'Up to date';
-    return isStale ? `${ageDays}d old` : 'Up to date';
-  }, [isWorking, ageDays, isStale]);
+    if (ageDays <= 0) return tUi('m_82fb1d5144');
+    return isStale ? tUi('m_edbc56c2c7', { v0: String(ageDays) }) : tUi('m_82fb1d5144');
+  }, [isWorking, ageDays, isStale, tUi]);
 
   const progressSteps = useMemo(() => {
     const steps = buildBrandInsightsProgressSteps({ stage, status });
     const showAwaitingBrandContext = stage === 'awaiting_brand_context';
     const showAwaitingStrategic = stage === 'awaiting_strategic_analysis';
-    return steps.filter((step) => {
-      if (step.id === 'awaiting_brand_context' && !showAwaitingBrandContext) {
-        return false;
-      }
-      if (step.id === 'awaiting_strategic_analysis' && !showAwaitingStrategic) {
-        return false;
-      }
-      if (step.id === 'failed' && !isFailureStatus) {
-        return false;
-      }
-      return true;
-    });
-  }, [stage, status, isFailureStatus]);
+    return steps
+      .map((step) => ({ ...step, label: tUi(stageKeys[step.id]) }))
+      .filter((step) => {
+        if (step.id === 'awaiting_brand_context' && !showAwaitingBrandContext) {
+          return false;
+        }
+        if (step.id === 'awaiting_strategic_analysis' && !showAwaitingStrategic) {
+          return false;
+        }
+        if (step.id === 'failed' && !isFailureStatus) {
+          return false;
+        }
+        return true;
+      });
+  }, [stage, status, isFailureStatus, tUi]);
 
   const currentLabel = useMemo(
-    () => progressSteps.find((s) => s.status === 'current')?.label ?? 'Queued',
-    [progressSteps],
+    () => progressSteps.find((s) => s.status === 'current')?.label ?? tUi('queued_661ff40'),
+    [progressSteps, tUi],
   );
 
   const isTerminal = isFailureStatus || status === 'completed';
@@ -142,7 +163,10 @@ export function BrandInsightsGenerateButton({
     setStageMessage(null);
     startTransition(async () => {
       try {
-        const result = await generateBrandInsights({ brandId, forceRegenerate: force });
+        const result = await generateBrandInsights({
+          brandId,
+          forceRegenerate: force,
+        });
         if (result.status === 'processing' && result.generationId) {
           const activeGenerationId = result.generationId;
           setGenerationId(activeGenerationId);
@@ -179,8 +203,8 @@ export function BrandInsightsGenerateButton({
                 ) {
                   completedToastGenerationRef.current = activeGenerationId;
                   show({
-                    title: 'Brand insights ready',
-                    description: 'Trend generation completed successfully.',
+                    title: tUi('m_e8b1187f89'),
+                    description: tUi('m_bd27df9b01'),
                     variant: 'success',
                   });
                 }
@@ -212,15 +236,15 @@ export function BrandInsightsGenerateButton({
               }
             },
             onError: (streamError) => {
-              setError(streamError.message);
+              setError(getUiErrorMessage(streamError));
             },
           });
         } else {
           // Fresh (<5d) generation reused by the backend — nothing to stream,
           // just re-pull the page so the latest saved trends render.
           show({
-            title: 'Trends up to date',
-            description: 'Showing the latest saved trends.',
+            title: tUi('m_39a239b0d9'),
+            description: tUi('m_1803c313b8'),
             variant: 'success',
           });
           await refreshInsights();
@@ -229,10 +253,10 @@ export function BrandInsightsGenerateButton({
         // 409: the brand report isn't approved yet — trends start on their own after onboarding.
         setError(
           runError instanceof ApiError && runError.status === 409
-            ? 'Trends start automatically once your brand report is approved.'
+            ? tUi('m_078d1efd06')
             : runError instanceof Error
-              ? runError.message
-              : 'Unable to start generation',
+              ? getUiErrorMessage(runError)
+              : tUi('m_aa69543610'),
         );
       }
     });
@@ -271,7 +295,10 @@ export function BrandInsightsGenerateButton({
           progressPercent={displayPercent}
           currentLabel={currentLabel}
           isError={isFailureStatus || Boolean(error)}
-          errorMessage={error ?? stageMessage ?? undefined}
+          errorMessage={
+            error ??
+            (isFailureStatus ? getUiErrorMessage({ code: 'generation_failed' }) : undefined)
+          }
           etaSeconds={etaSeconds}
         />
       )}

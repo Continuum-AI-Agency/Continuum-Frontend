@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // What a reader can actually get out of the two shapes the portfolio hero opens on.
 //
 // Every assertion here is about a figure being REACHABLE — by pointer, by keyboard, or as
@@ -7,7 +8,7 @@
 // back untouched rather than invented into one.
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent } from '@testing-library/react';
 
 mock.module('motion/react', () => {
   const React = require('react');
@@ -218,19 +219,30 @@ describe('AccountChartView — interval says what the interval is, and what the 
     // The same drawing measuring a different thing. The view prints what it was given and
     // never a word of its own: a view that turned `unit: currency` into "Cost" would get
     // this one wrong, and would go on getting it wrong silently.
-    const { getByTestId } = draw({ ...interval, value_label: 'Spend per day at risk' });
+    const { getByTestId } = draw({
+      ...interval,
+      value_label: 'Spend per day at risk',
+    });
     expect(getByTestId('interval-axis-label').textContent).toBe('Spend per day at risk');
   });
 
   it('prints no axis name at all when the producer did not give one', () => {
-    const { queryByTestId, getByTestId } = draw({ ...interval, value_label: null });
+    const { queryByTestId, getByTestId } = draw({
+      ...interval,
+      value_label: null,
+    });
     expect(queryByTestId('interval-axis-label')).toBeNull();
     // and the two ends stay, so the drawing is still readable
     expect(getByTestId('interval-axis-high').textContent).toBe('$840 USD');
   });
 
   it('reads the real bounds on hover, not a figure re-derived from the drawing', () => {
-    const { getByTestId } = draw({ ...interval, low: 41735, high: 83470, no_results: false });
+    const { getByTestId } = draw({
+      ...interval,
+      low: 41735,
+      high: 83470,
+      no_results: false,
+    });
     const band = getByTestId('interval-band');
     expect(band.getAttribute('data-active')).toBe('false');
     act(() => {
@@ -264,7 +276,11 @@ describe('AccountChartView — interval says what the interval is, and what the 
   });
 
   it('draws the point estimate when the candidate carries one, and says it first', () => {
-    const { getByTestId } = draw({ ...interval, estimate: 560, no_results: false });
+    const { getByTestId } = draw({
+      ...interval,
+      estimate: 560,
+      no_results: false,
+    });
     expect(getByTestId('interval-readout').textContent).toBe(
       '$560 USD, between $420 USD and $840 USD',
     );

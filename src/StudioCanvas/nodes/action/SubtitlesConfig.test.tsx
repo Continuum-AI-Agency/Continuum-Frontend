@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // Base UI's Switch is a popup-free primitive but still relies on browser APIs the DOM shim
 // does not provide; a checkbox stands in so the assertions stay about THIS component.
@@ -113,13 +118,17 @@ describe('SubtitlesConfig', () => {
     // The registry field is nullable, and null means auto-detect. Writing '' would be a
     // value the user never chose.
     const { writes } = setup({ language: 'en-US' });
-    fireEvent.change(screen.getByLabelText('Language'), { target: { value: '  ' } });
+    fireEvent.change(screen.getByLabelText('Language'), {
+      target: { value: '  ' },
+    });
     expect(writes).toEqual([{ key: 'language', value: null }]);
   });
 
   it('writes a trimmed language code', () => {
     const { writes } = setup();
-    fireEvent.change(screen.getByLabelText('Language'), { target: { value: ' es-ES ' } });
+    fireEvent.change(screen.getByLabelText('Language'), {
+      target: { value: ' es-ES ' },
+    });
     expect(writes).toEqual([{ key: 'language', value: 'es-ES' }]);
   });
 

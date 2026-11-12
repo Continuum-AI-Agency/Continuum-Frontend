@@ -1,10 +1,11 @@
+import { renderHook } from '@/i18n/__tests__/render';
 // PP-DT-C-unfinished-dashboard-hang-and-raw-error: the URL-reachable Dashboard's insight reads are
 // raw `fetch` calls to the Next routes with no bound, and their failure text is the library's —
 // a dropped read printed "Failed to fetch" in the Account insights panel, and a hung one kept its
 // skeletons for good. Every read reachable by URL ends in a defined state, in words.
 
 import { afterEach, describe, expect, it, jest, mock } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { useAccountInsights } from './useAccountInsights';
 import { useCampaignInsights } from './useCampaignInsights';
 
@@ -33,7 +34,11 @@ describe('useAccountInsights — the Dashboard read ends in words', () => {
       Promise.reject(new TypeError('Failed to fetch')),
     ) as unknown as typeof fetch;
     const { result } = renderHook(() =>
-      useAccountInsights({ brandId: 'brand-1', adAccountId: 'act_1', timeRange }),
+      useAccountInsights({
+        brandId: 'brand-1',
+        adAccountId: 'act_1',
+        timeRange,
+      }),
     );
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(result.current.error).toBe(
@@ -45,7 +50,11 @@ describe('useAccountInsights — the Dashboard read ends in words', () => {
     jest.useFakeTimers();
     globalThis.fetch = hangingFetch();
     const { result } = renderHook(() =>
-      useAccountInsights({ brandId: 'brand-1', adAccountId: 'act_1', timeRange }),
+      useAccountInsights({
+        brandId: 'brand-1',
+        adAccountId: 'act_1',
+        timeRange,
+      }),
     );
     expect(result.current.isLoading).toBe(true);
     await act(async () => {

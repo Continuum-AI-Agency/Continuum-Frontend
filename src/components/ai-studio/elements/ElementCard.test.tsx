@@ -1,6 +1,11 @@
 import { afterEach, expect, test } from 'bun:test';
 import type { ElementRecord } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ELEMENT_DRAG_TYPE, parseElementDragPayload } from '@/lib/ai-studio/referenceDrop';
 import { ElementCard } from './ElementCard';
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The real slackWorkspaces client and contract schema run; only the HTTP transport is replaced.
 
@@ -38,7 +39,9 @@ const requestMock = mock(async (options: RequestOptions) => {
 const showMock = mock(() => {});
 
 mock.module('@/lib/api/http', () => ({ http: { request: requestMock } }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show: showMock }) }));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show: showMock }),
+}));
 
 import { BrandSlackWorkspacesSection } from './BrandSlackWorkspacesSection';
 
@@ -54,7 +57,11 @@ const renderSection = (canManage: boolean) =>
 beforeEach(() => {
   rows = [
     workspace('agency'),
-    workspace('client', { teamName: null, teamId: 'T0CLIENT', status: 'revoked' }),
+    workspace('client', {
+      teamName: null,
+      teamId: 'T0CLIENT',
+      status: 'revoked',
+    }),
   ];
   requestMock.mockClear();
   showMock.mockClear();
@@ -97,7 +104,8 @@ describe('BrandSlackWorkspacesSection', () => {
   });
 
   it('disconnects a workspace only after the confirm, then shows the refetched list', async () => {
-    const { findByText, getAllByRole, findByRole, queryAllByText, queryByText } = renderSection(true);
+    const { findByText, getAllByRole, findByRole, queryAllByText, queryByText } =
+      renderSection(true);
     await findByText('Team agency');
 
     fireEvent.click(getAllByRole('button', { name: /Disconnect/ })[0] as HTMLElement);

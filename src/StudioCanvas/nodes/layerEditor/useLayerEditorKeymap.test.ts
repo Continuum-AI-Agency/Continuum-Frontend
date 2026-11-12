@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import { createElement } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import {
   NUDGE_COARSE_STEP_PX,
   NUDGE_STEP_PX,
@@ -15,7 +16,14 @@ import {
 // keymap that fires through a focused input silently reorders while you are naming.
 
 const key = (over: Partial<KeyboardEvent>) =>
-  ({ metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, key: '', ...over }) as never;
+  ({
+    metaKey: false,
+    ctrlKey: false,
+    shiftKey: false,
+    altKey: false,
+    key: '',
+    ...over,
+  }) as never;
 
 describe('resolveLayerHistoryShortcut', () => {
   it('maps the undo/redo chords and ignores the bare key', () => {
@@ -103,7 +111,11 @@ function mount(enabled = true) {
 }
 
 const press = (init: KeyboardEventInit & { key: string }, target?: EventTarget) => {
-  const event = new window.KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true });
+  const event = new window.KeyboardEvent('keydown', {
+    ...init,
+    bubbles: true,
+    cancelable: true,
+  });
   (target ?? window).dispatchEvent(event);
   return event;
 };

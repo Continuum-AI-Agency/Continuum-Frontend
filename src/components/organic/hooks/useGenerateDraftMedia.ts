@@ -1,4 +1,7 @@
 'use client';
+import { useTranslations } from 'next-intl';
+
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // Shared hook for opt-in Step-3 media realization: dispatches reel/video drafts
 // to /reels/generate (editable Canvas composition path) and image/carousel drafts to /media/realize
@@ -10,6 +13,7 @@ import {
   mediaExpandResponseSchema,
   mediaRealizeFrameSchema,
   preparePlannerCompositionResponseSchema,
+  type ReelPreflightErrorCode,
   type ReelVideoBatchFrame,
   reelVideoBatchFrameSchema,
 } from '@continuum/contracts';
@@ -78,7 +82,22 @@ const REEL_ERROR_MESSAGES: Record<string, string> = {
   preview_changed: 'This preview changed. Review the latest version, then generate again.',
 };
 
-export function friendlyReelError(error: string): string {
+const REEL_ERROR_KEYS = {
+  reel_scenes_missing_enrich_first: 'reelStoryboardMissing',
+  preview_approval_required: 'reelPreviewRequired',
+  preview_changed: 'reelPreviewChanged',
+} as const satisfies Record<ReelPreflightErrorCode, string>;
+
+export function friendlyReelError(
+  error: string,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+): string {
+  if (translate)
+    return translate(
+      Object.hasOwn(REEL_ERROR_KEYS, error)
+        ? REEL_ERROR_KEYS[error as keyof typeof REEL_ERROR_KEYS]
+        : 'streamGenerationFailed',
+    );
   return REEL_ERROR_MESSAGES[error] ?? error;
 }
 
@@ -88,7 +107,16 @@ export function friendlyReelError(error: string): string {
 // stage label that never moves.
 export function reelProgressLabel(
   frame: Extract<ReelVideoBatchFrame, { type: 'reel_progress' }>,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
 ): string {
+  if (translate)
+    return translate('reelProgress', {
+      stage: frame.stage,
+      hasElapsed: typeof frame.elapsedSec === 'number' ? 'yes' : 'no',
+      elapsed: frame.elapsedSec ?? 0,
+      hasEta: typeof frame.etaSec === 'number' ? 'yes' : 'no',
+      eta: frame.etaSec ?? 0,
+    });
   if (frame.message) return frame.message;
   const stageLabel = REEL_STAGE_LABELS[frame.stage] ?? 'Working…';
   const telemetry: string[] = [];
@@ -105,6 +133,8 @@ function realizeJobId(feId: string): string {
 }
 
 export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
+  const uiText = useTranslations('organic');
+  const formatUiError = useUiErrorMessage();
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const upsertGeneration = useCalendarStore((state) => state.upsertGeneration);
   const { show } = useToast();
@@ -162,6 +192,8 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
                 show,
                 controller,
                 authHeaders,
+                uiText,
+                formatUiError,
               )
             : Promise.resolve(),
           imageTargets.length > 0
@@ -173,6 +205,8 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
                 show,
                 controller,
                 authHeaders,
+                uiText,
+                formatUiError,
               )
             : Promise.resolve(),
         ]);
@@ -186,14 +220,18 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
             const key = realizeJobId(target.feId);
             const current = gens[key]?.status;
             if (current === 'running' || current === 'queued') {
-              upsertGeneration({ jobId: key, draftId: target.feId, status: 'cancelled' });
+              upsertGeneration({
+                jobId: key,
+                draftId: target.feId,
+                status: 'cancelled',
+              });
             }
           }
           return;
         }
         show({
-          title: 'Media generation failed',
-          description: error instanceof Error ? error.message : 'Unexpected error.',
+          title: uiText('media_generation_failed_62d2e37'),
+          description: formatUiError(error),
           variant: 'error',
         });
       } finally {
@@ -201,7 +239,7 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
         setIsGenerating(false);
       }
     },
-    [updateDraft, upsertGeneration, show],
+    [updateDraft, upsertGeneration, show, uiText, formatUiError],
   );
 
   // Stage-2 "Enrich": plain JSON enqueue (no stream). The durable expand_draft
@@ -220,7 +258,10 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ brandId, draftIds: drafts.map((d) => d.backendDraftId) }),
+          body: JSON.stringify({
+            brandId,
+            draftIds: drafts.map((d) => d.backendDraftId),
+          }),
         });
         if (!response.ok) {
           throw new Error(`Could not start enrichment (${response.status}).`);
@@ -251,28 +292,31 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
 
         if (enqueued > 0) {
           show({
-            title: 'Enriching drafts',
-            description: `${enqueued} draft${enqueued === 1 ? '' : 's'} queued for a blueprint sketch${skipped > 0 ? `, ${skipped} skipped` : ''}.`,
+            title: uiText('enriching_drafts_50c0faf'),
+            description: uiText('blueprintQueued', {
+              count: enqueued,
+              skipped,
+            }),
             variant: 'success',
           });
         } else {
           show({
-            title: 'Nothing to enrich',
-            description: 'The selected drafts already have media (or need copy first).',
+            title: uiText('nothing_to_enrich_c800976'),
+            description: uiText('the_selected_drafts_already_have_media_or_nee_5484471'),
             variant: 'error',
           });
         }
       } catch (error) {
         show({
-          title: 'Enrichment failed',
-          description: error instanceof Error ? error.message : 'Unexpected error.',
+          title: uiText('enrichment_failed_8396f34'),
+          description: formatUiError(error),
           variant: 'error',
         });
       } finally {
         setIsExpanding(false);
       }
     },
-    [show, updateDraft],
+    [show, updateDraft, uiText, formatUiError],
   );
 
   const stitchDraftReel = React.useCallback(
@@ -280,12 +324,12 @@ export function useGenerateDraftMedia(): UseGenerateDraftMediaResult {
       if (!brandId || !target.backendDraftId) return;
       openClientRenderInbox();
       show({
-        title: 'Reel ready to render',
-        description: 'Claim it from the shared render queue to use this device.',
+        title: uiText('reel_ready_to_render_f66a974'),
+        description: uiText('claim_it_from_the_shared_render_queue_to_use__c397223'),
         variant: 'success',
       });
     },
-    [show],
+    [show, uiText],
   );
 
   return {
@@ -310,6 +354,8 @@ async function realizeReels(
   show: ReturnType<typeof useToast>['show'],
   controller: AbortController,
   authHeaders: Record<string, string>,
+  uiText: ReturnType<typeof useTranslations<'organic'>>,
+  formatUiError: (error: unknown) => string,
 ): Promise<void> {
   const feIdByBackendId = new Map(targets.map((t) => [t.backendDraftId, t.feId]));
   const feIdFor = (backendDraftId: string): string | null =>
@@ -318,8 +364,16 @@ async function realizeReels(
   const setStage = (backendDraftId: string, stage: string | undefined) => {
     const feId = feIdFor(backendDraftId);
     if (!feId) return;
-    patchUnlessUserSupplied(updateDraft, feId, (draft) => ({ ...draft, generationStage: stage }));
-    upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: 'running', stage });
+    patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
+      ...draft,
+      generationStage: stage,
+    }));
+    upsertGeneration({
+      jobId: realizeJobId(feId),
+      draftId: feId,
+      status: 'running',
+      stage,
+    });
   };
 
   const response = await fetch(`${getApiBaseUrl()}/api/organic/agent/reels/generate`, {
@@ -336,10 +390,7 @@ async function realizeReels(
   });
 
   if (!response.ok || !response.body) {
-    const message =
-      response.status === 400
-        ? 'Too many reels selected for one batch.'
-        : 'Could not start reel generation.';
+    const message = response.status === 400 ? uiText('reelTooMany') : uiText('reelStartFailed');
     for (const target of targets) {
       upsertGeneration({
         jobId: realizeJobId(target.feId),
@@ -348,7 +399,11 @@ async function realizeReels(
         error: message,
       });
     }
-    show({ title: 'Reel generation failed', description: message, variant: 'error' });
+    show({
+      title: uiText('reel_generation_failed_590614a'),
+      description: message,
+      variant: 'error',
+    });
     return;
   }
 
@@ -383,15 +438,14 @@ async function realizeReels(
           stage: 'Generating UGC clips in the background…',
         });
         show({
-          title: 'UGC generation queued',
-          description:
-            'The locked-character clips will generate in the background. The render inbox will receive them when they are ready.',
+          title: uiText('ugc_generation_queued_e8a1715'),
+          description: uiText('the_locked_character_clips_will_generate_in_t_d443b79'),
           variant: 'success',
         });
         break;
       }
       case 'reel_progress':
-        setStage(frame.draftId, reelProgressLabel(frame));
+        setStage(frame.draftId, reelProgressLabel(frame, uiText));
         break;
       case 'reel_clips_ready': {
         const feId = feIdFor(frame.draftId);
@@ -472,14 +526,13 @@ async function realizeReels(
             previewUrl: frame.clips[0]?.signedClipUrl,
           });
           show({
-            title: 'Reel ready to render',
-            description:
-              'The editable composition is saved. Claim it from the render inbox when you are ready.',
+            title: uiText('reel_ready_to_render_f66a974'),
+            description: uiText('the_editable_composition_is_saved_claim_it_fr_b61923d'),
             variant: 'success',
           });
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') break;
-          const message = err instanceof Error ? err.message : 'Composition preparation failed.';
+          const message = formatUiError(err);
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,
@@ -527,7 +580,7 @@ async function realizeReels(
       case 'reel_failed': {
         const feId = feIdFor(frame.draftId);
         if (feId) {
-          const message = friendlyReelError(frame.error);
+          const message = friendlyReelError(frame.error, uiText);
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,
@@ -545,14 +598,17 @@ async function realizeReels(
       case 'batch_completed': {
         if (frame.ready > 0) {
           show({
-            title: 'Reel clips generated',
-            description: `${frame.ready} reel composition${frame.ready === 1 ? '' : 's'} prepared${frame.failed > 0 ? `, ${frame.failed} failed` : ''}.`,
+            title: uiText('reel_clips_generated_346660d'),
+            description: uiText('reelCompositionsPrepared', {
+              count: frame.ready,
+              failed: frame.failed,
+            }),
             variant: frame.failed > 0 ? 'error' : 'success',
           });
         } else if (frame.failed > 0) {
           show({
-            title: 'Reel generation failed',
-            description: `${frame.failed} reel${frame.failed === 1 ? '' : 's'} failed.`,
+            title: uiText('reel_generation_failed_590614a'),
+            description: uiText('reelsFailed', { count: frame.failed }),
             variant: 'error',
           });
         }
@@ -573,6 +629,8 @@ async function realizeImages(
   show: ReturnType<typeof useToast>['show'],
   controller: AbortController,
   authHeaders: Record<string, string>,
+  uiText: ReturnType<typeof useTranslations<'organic'>>,
+  formatUiError: (error: unknown) => string,
 ): Promise<void> {
   // Mark all as generating optimistically.
   for (const target of targets) {
@@ -598,10 +656,7 @@ async function realizeImages(
   });
 
   if (!response.ok || !response.body) {
-    const message =
-      response.status === 400
-        ? 'Too many drafts selected for one batch.'
-        : 'Could not start media generation.';
+    const message = response.status === 400 ? uiText('mediaTooMany') : uiText('mediaStartFailed');
     // Revert optimistic generating state.
     for (const target of targets) {
       patchUnlessUserSupplied(updateDraft, target.feId, (draft) => ({
@@ -616,7 +671,11 @@ async function realizeImages(
         error: message,
       });
     }
-    show({ title: 'Media generation failed', description: message, variant: 'error' });
+    show({
+      title: uiText('media_generation_failed_62d2e37'),
+      description: message,
+      variant: 'error',
+    });
     return;
   }
 
@@ -637,7 +696,10 @@ async function realizeImages(
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: 'Generating media…',
-            mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: 'generating' },
+            mediaSuggestion: {
+              ...draft.mediaSuggestion,
+              mediaStatus: 'generating',
+            },
           }));
           upsertGeneration({
             jobId: realizeJobId(feId),
@@ -657,7 +719,12 @@ async function realizeImages(
             ...draft,
             generationStage: stage,
           }));
-          upsertGeneration({ jobId: realizeJobId(feId), draftId: feId, status: 'running', stage });
+          upsertGeneration({
+            jobId: realizeJobId(feId),
+            draftId: feId,
+            status: 'running',
+            stage,
+          });
         }
         break;
       }
@@ -692,14 +759,17 @@ async function realizeImages(
       }
       case 'realize_failed': {
         const feId = feIdByBackendId.get(frame.draftId);
-        const message = friendlyReelError(frame.error);
+        const message = friendlyReelError(frame.error, uiText);
         failed++;
         if (feId) {
           patchUnlessUserSupplied(updateDraft, feId, (draft) => ({
             ...draft,
             generationStage: undefined,
             generationError: message,
-            mediaSuggestion: { ...draft.mediaSuggestion, mediaStatus: 'pending' },
+            mediaSuggestion: {
+              ...draft.mediaSuggestion,
+              mediaStatus: 'pending',
+            },
           }));
           upsertGeneration({
             jobId: realizeJobId(feId),
@@ -713,7 +783,7 @@ async function realizeImages(
       case 'realize_batch_completed': {
         if (frame.ready > 0) {
           show({
-            ...formatMediaReadyToast(frame.ready, frame.failed),
+            ...formatMediaReadyToast(frame.ready, frame.failed, uiText),
             variant: frame.failed > 0 ? 'error' : 'success',
           });
           // Convergence safety net: realize_ready already mounted the assets for
@@ -722,7 +792,7 @@ async function realizeImages(
           useCalendarStore.getState().requestCalendarRefetch();
         } else if (frame.failed > 0) {
           show({
-            ...formatMediaReadyToast(frame.ready, frame.failed),
+            ...formatMediaReadyToast(frame.ready, frame.failed, uiText),
             variant: 'error',
           });
         }

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Product-news list for the header Sparkles bell: newest-first entries with a
 // tag pill, relative date, and safe markdown body. The per-row "new" dot is
@@ -29,19 +30,19 @@ export type WhatsNewPanelProps = {
 };
 
 export function WhatsNewPanel({ entries, snapshotLastSeenId }: WhatsNewPanelProps) {
+  const tUi = useTranslations('common');
+
   const unreadBoundary = computeUnreadCount(entries, snapshotLastSeenId);
 
   return (
     <div>
       <div className="mb-1.5 px-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          What's New
+          {tUi('m_a2efe20277')}
         </p>
       </div>
       {entries.length === 0 ? (
-        <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-          No updates yet. Product news lands here.
-        </p>
+        <p className="px-3 py-4 text-center text-xs text-muted-foreground">{tUi('m_4ee2c09872')}</p>
       ) : (
         <div className="max-h-96 space-y-0.5 overflow-y-auto">
           {entries.map((entry, index) => (

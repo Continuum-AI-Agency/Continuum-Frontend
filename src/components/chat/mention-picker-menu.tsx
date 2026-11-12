@@ -2,6 +2,7 @@
 
 import { AtSign, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
+import { useTranslations } from 'next-intl';
 import {
   type MentionAnalyticsContext,
   MentionSuggestionHover,
@@ -146,6 +147,7 @@ export function MentionPickerMenu({
   onPlatformChange,
   className,
 }: MentionPickerMenuProps) {
+  const uiText = useTranslations('common');
   const selectedKey =
     suggestions[highlightedIndex] != null
       ? `${suggestions[highlightedIndex].key}::${highlightedIndex}`
@@ -189,7 +191,7 @@ export function MentionPickerMenu({
               variant="ghost"
               size="icon"
               className="size-7 shrink-0"
-              aria-label="Back"
+              aria-label={uiText('back_76900f1')}
               onClick={onBack}
             >
               <ChevronLeft className="size-4" />
@@ -205,7 +207,7 @@ export function MentionPickerMenu({
               <Breadcrumb>
                 <BreadcrumbList className="gap-1 text-xs sm:gap-1">
                   <BreadcrumbItem>
-                    <span className="text-muted-foreground">Context</span>
+                    <span className="text-muted-foreground">{uiText('m_cc11b3a28f')}</span>
                   </BreadcrumbItem>
                   {parentStack.map((parent, i) => (
                     <span key={parent.key} className="contents">
@@ -228,14 +230,16 @@ export function MentionPickerMenu({
                 </BreadcrumbList>
               </Breadcrumb>
             ) : (
-              <p className="truncate text-xs font-medium text-foreground">Add context</p>
+              <p className="truncate text-xs font-medium text-foreground">
+                {uiText('m_08dae0bb10')}
+              </p>
             )}
             <p className="truncate text-2xs text-muted-foreground">
               {currentFolder?.childrenLabel
                 ? currentFolder.childrenLabel
                 : activeQuery
-                  ? `Matching “${activeQuery}”`
-                  : 'Browse families or keep typing to search'}
+                  ? uiText('m_028d1d84d8', { v0: String(activeQuery) })
+                  : uiText('m_c2cb660266')}
             </p>
           </div>
 
@@ -248,9 +252,9 @@ export function MentionPickerMenu({
 
         {showPlatformFilter ? (
           <fieldset className="m-0 flex items-center gap-1.5 border-0 border-b border-border/50 px-2.5 py-1.5">
-            <legend className="sr-only">Filter by platform</legend>
+            <legend className="sr-only">{uiText('m_91c133f020')}</legend>
             <span className="mr-0.5 shrink-0 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-              Platform
+              {uiText('platform_c78ffe1')}
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap gap-1">
               {platforms!.map((platform) => {
@@ -285,7 +289,7 @@ export function MentionPickerMenu({
         <CommandList className="max-h-none overflow-visible">
           <ScrollArea className="h-[min(18rem,50vh)]">
             <CommandEmpty className="py-8 text-center text-xs text-muted-foreground">
-              No references found.
+              {uiText('m_efd98d6b7d')}
             </CommandEmpty>
             <CommandGroup heading={inFolder ? undefined : undefined} className="p-1.5">
               {suggestions.map((suggestion, index) => {
@@ -345,24 +349,25 @@ export function MentionPickerMenu({
             <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">
               ↑↓
             </kbd>{' '}
-            navigate
+            {uiText('m_fb6aa5c2f5')}
             <span className="mx-1.5 text-border">·</span>
             <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">
               ↵
             </kbd>{' '}
-            select
+            {uiText('m_81448fe273')}
             {inFolder ? (
               <>
                 <span className="mx-1.5 text-border">·</span>
                 <kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono">
-                  esc
+                  {uiText('m_abb761d9af')}
                 </kbd>{' '}
-                back
+                {uiText('m_61bb8d29b5')}
               </>
             ) : null}
           </span>
           <span className="tabular-nums">
-            {suggestions.length} {suggestions.length === 1 ? 'item' : 'items'}
+            {suggestions.length}{' '}
+            {suggestions.length === 1 ? uiText('m_3a7d9767b1') : uiText('m_7316c8b2e7')}
           </span>
         </div>
       </Command>

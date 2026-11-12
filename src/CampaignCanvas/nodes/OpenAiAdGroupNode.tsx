@@ -1,6 +1,8 @@
 'use client';
+
 import { AlertCircle, CheckCircle2, Copy, Layers, Plus, Trash2, XCircle } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
+import { memo, useCallback, useMemo } from 'react';
 import {
   Node,
   NodeContent,
@@ -30,26 +32,28 @@ import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignNodeProps, OpenAiAdGroupData } from '../types';
 import { microsToUnits, OpenAiRecordBadge, unitsToMicros } from './openAiNodeShared';
 
-const BILLING_EVENTS: Array<{
-  value: OpenAiAdGroupData['billingEventType'];
-  label: string;
-  description: string;
-}> = [
-  {
-    value: 'impression',
-    label: 'Impression',
-    description: 'For an impressions campaign. The bid is a CPM — $60 CPM is 60,000 micros.',
-  },
-  {
-    value: 'click',
-    label: 'Click',
-    description:
-      'For click and conversion campaigns. Under conversion bidding this bid is the CPA even though billing stays per click.',
-  },
-];
-
 export const OpenAiAdGroupNode = memo(
   ({ id, data, selected }: CampaignNodeProps<'openai-ad-group'>) => {
+    const uiText = useTranslations('scale');
+    const BILLING_EVENTS: Array<{
+      value: OpenAiAdGroupData['billingEventType'];
+      label: string;
+      description: string;
+    }> = useMemo(
+      () => [
+        {
+          value: 'impression',
+          label: uiText('canvasBillingImpression'),
+          description: uiText('for_an_impressions_campaign_the_bid_is_a_cpm__cc8b3f9'),
+        },
+        {
+          value: 'click',
+          label: uiText('canvasBillingClick'),
+          description: uiText('for_click_and_conversion_campaigns_under_conv_4f99b6e'),
+        },
+      ],
+      [uiText],
+    );
     const updateNodeData = useCampaignStore((store) => store.updateNodeData);
     const removeNode = useCampaignStore((store) => store.removeNode);
     const duplicateNode = useCampaignStore((store) => store.duplicateNode);
@@ -94,7 +98,7 @@ export const OpenAiAdGroupNode = memo(
                     <Layers className="h-4 w-4" />
                   </div>
                   <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Ad Group
+                    {uiText('ad_group_33500c3')}
                   </NodeTitle>
                 </div>
                 <div className="flex items-center gap-1">
@@ -117,12 +121,14 @@ export const OpenAiAdGroupNode = memo(
               </h3>
 
               <NodeDescription className="text-xs text-muted-foreground">
-                Billed per {data.billingEventType === 'click' ? 'click' : 'impression'}
+                {uiText.rich('sentence_6bae9f3c3a13', {
+                  event: data.billingEventType,
+                })}
               </NodeDescription>
 
               <div className="flex items-center gap-1.5">
                 <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                  Max bid
+                  {uiText('max_bid_460243e')}
                 </span>
                 <span className="text-sm font-medium text-foreground">
                   <EditableAmount
@@ -135,7 +141,9 @@ export const OpenAiAdGroupNode = memo(
 
               {data.contextHints?.length ? (
                 <Badge variant="outline" className="text-3xs px-1 py-0 uppercase opacity-70">
-                  {data.contextHints.length} hint{data.contextHints.length === 1 ? '' : 's'}
+                  {uiText.rich('sentence_e0bec8abb862', {
+                    count: data.contextHints.length,
+                  })}
                 </Badge>
               ) : null}
 
@@ -145,26 +153,34 @@ export const OpenAiAdGroupNode = memo(
         </ContextMenuTrigger>
 
         <ContextMenuContent className="w-64">
-          <ContextMenuLabel>Ad Group Actions</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('ad_group_actions_7655095')}</ContextMenuLabel>
           <ContextMenuGroup>
             <ContextMenuItem onClick={handleAddAd}>
-              <Plus className="mr-2 h-4 w-4 text-primary" />
-              Add Ad
-              <ContextMenuItemInfo description="An ad carries the chat card a person actually sees." />
+              {uiText.rich('sentence_1b5197711087', {
+                v0: () => <Plus className="mr-2 h-4 w-4 text-primary" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    description={uiText('an_ad_carries_the_chat_card_a_person_actually_816390a')}
+                  />
+                ),
+              })}
             </ContextMenuItem>
           </ContextMenuGroup>
 
           <ContextMenuSeparator />
-          <ContextMenuLabel>Configuration</ContextMenuLabel>
+          <ContextMenuLabel>{uiText('configuration_b332c34')}</ContextMenuLabel>
           <ContextMenuGroup>
             <ContextMenuSub>
               <ContextMenuSubTrigger>
-                <Layers className="mr-2 h-4 w-4" />
-                Billing event
-                <ContextMenuItemInfo
-                  className="ml-2 mr-4"
-                  description="Must match the campaign's goal: impression for CPM, click for both CPC and conversion campaigns."
-                />
+                {uiText.rich('sentence_318ff6e0d8bb', {
+                  v0: () => <Layers className="mr-2 h-4 w-4" />,
+                  v1: () => (
+                    <ContextMenuItemInfo
+                      className="ml-2 mr-4"
+                      description={uiText('must_match_the_campaign_s_goal_impression_for_9cf872f')}
+                    />
+                  ),
+                })}
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="w-56">
                 {BILLING_EVENTS.map((event) => (
@@ -185,11 +201,11 @@ export const OpenAiAdGroupNode = memo(
           <ContextMenuGroup>
             <ContextMenuItem onClick={() => duplicateNode(id)}>
               <Copy className="mr-2 h-4 w-4" />
-              Duplicate
+              {uiText('duplicate_02cdaab')}
             </ContextMenuItem>
             <ContextMenuItem variant="destructive" onClick={() => removeNode(id)}>
               <Trash2 className="mr-2 h-4 w-4" />
-              Remove from canvas
+              {uiText('remove_from_canvas_3e4656c')}
             </ContextMenuItem>
           </ContextMenuGroup>
         </ContextMenuContent>

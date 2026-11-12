@@ -1,9 +1,10 @@
 'use client';
 
 import { GaugeCircleIcon, RotateCw } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { persistCampaignInsightsSnapshot } from '@/app/_actions/paidMediaInsights';
+import { persistCampaignInsightsSnapshot } from '@/app/[locale]/_actions/paidMediaInsights';
 import { BudgetPacingWidget } from '@/components/paid-media/budget-pacing/BudgetPacingWidget';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,6 +53,7 @@ export function CampaignPerformanceTab({
   adAccountId,
   platform,
 }: CampaignPerformanceTabProps) {
+  const uiText = useTranslations('scale');
   const [rangePreset, setRangePreset] = React.useState<RangePreset>('last_14d');
   const [selectedMetric, setSelectedMetric] = React.useState<CampaignPerformanceMetricKey>('roas');
   const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | null>(null);
@@ -164,10 +166,11 @@ export function CampaignPerformanceTab({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-card text-muted-foreground">
             <GaugeCircleIcon className="h-5 w-5" />
           </div>
-          <h2 className="mt-3 text-sm font-semibold tracking-tight">Pick an ad account</h2>
+          <h2 className="mt-3 text-sm font-semibold tracking-tight">
+            {uiText('pick_an_ad_account_ae46c35')}
+          </h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Performance loads campaign-level metrics, percentile heatmaps, and budget pacing for the
-            selected account. Choose one from the selector above to begin.
+            {uiText('performance_loads_campaign_level_metrics_perc_5932cb1')}
           </p>
         </div>
       </div>
@@ -181,8 +184,12 @@ export function CampaignPerformanceTab({
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/10 px-3 py-2">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold tracking-tight">Performance</h2>
-          <p className="text-xs text-muted-foreground">Heatmap · matrix · insights · pacing.</p>
+          <h2 className="truncate text-sm font-semibold tracking-tight">
+            {uiText('performance_442aded')}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {uiText('heatmap_matrix_insights_pacing_9f6ef7e')}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
@@ -208,7 +215,7 @@ export function CampaignPerformanceTab({
             className="h-7 w-7"
             disabled={campaignEntry?.status === 'loading'}
             onClick={() => load(true)}
-            aria-label="Refresh performance"
+            aria-label={uiText('refresh_performance_5019c5d')}
           >
             <RotateCw className={cn(campaignEntry?.status === 'loading' && 'animate-spin')} />
           </Button>
@@ -262,7 +269,7 @@ export function CampaignPerformanceTab({
         {selectedCampaign ? (
           <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/15 px-3 py-1.5 text-xs">
             <span className="font-mono uppercase tracking-[0.08em] text-muted-foreground">
-              Selected
+              {uiText('selected_57fd7a0')}
             </span>
             <span className="truncate font-medium">{selectedCampaign.name}</span>
             <button
@@ -270,7 +277,7 @@ export function CampaignPerformanceTab({
               onClick={() => setSelectedCampaignId(null)}
               className="ml-auto text-muted-foreground transition-colors hover:text-foreground"
             >
-              Clear
+              {uiText('clear_83b12c2')}
             </button>
           </div>
         ) : null}

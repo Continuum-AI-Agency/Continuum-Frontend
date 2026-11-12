@@ -37,9 +37,12 @@ import {
   SquareDashedBottom,
   X,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import {
   type FrameRate,
   frameAtMs,
@@ -91,7 +94,10 @@ export type PostAtTimeInput = {
   box: NormalizedBox | null;
   /** The complete annotation to save, marks included. */
   annotation: TimeAnnotation;
-  extras: { visibility: ComposerExtras['visibility']; attachments: CommentAttachment[] };
+  extras: {
+    visibility: ComposerExtras['visibility'];
+    attachments: CommentAttachment[];
+  };
 };
 
 type Props = {
@@ -174,6 +180,12 @@ export function VideoAnnotationPlayer({
   assetId,
   assetVersionId,
 }: Props) {
+  const decimalLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const laneRef = useRef<HTMLDivElement>(null);
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
@@ -190,7 +202,10 @@ export function VideoAnnotationPlayer({
   const [range, setRange] = useState<Range | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [pointMs, setPointMs] = useState<number | null>(null);
-  const [shuttle, setShuttle] = useState<{ direction: 1 | -1; speed: number } | null>(null);
+  const [shuttle, setShuttle] = useState<{
+    direction: 1 | -1;
+    speed: number;
+  } | null>(null);
   const [tool, setTool] = useState<StageTool>('arrow');
   const [color, setColor] = useState<string>(DEFAULT_DRAWING_COLOR);
   const [drawing, dispatchDrawing] = useReducer(drawingHistoryReducer, EMPTY_DRAWING);
@@ -323,8 +338,8 @@ export function VideoAnnotationPlayer({
     if (!video || !src) return;
     downloadVideoStill(video, fileStem(src, playback?.fileName)).catch((error: unknown) => {
       console.error('[VideoAnnotationPlayer] still capture failed', error);
-      toast.error('Could not save the still', {
-        description: error instanceof Error ? error.message : undefined,
+      toast.error(translateUi('could_not_save_the_still_29583684'), {
+        description: uiErrorText(error),
       });
     });
   };
@@ -394,7 +409,10 @@ export function VideoAnnotationPlayer({
 
   const markIn = useCallback(() => {
     const at = playheadMs();
-    setRange((prev) => ({ inMs: at, outMs: prev?.outMs && prev.outMs > at ? prev.outMs : null }));
+    setRange((prev) => ({
+      inMs: at,
+      outMs: prev?.outMs && prev.outMs > at ? prev.outMs : null,
+    }));
   }, [playheadMs]);
 
   // The contract requires endMs > timeMs, so an out-point at or before the
@@ -540,10 +558,16 @@ export function VideoAnnotationPlayer({
       if (!prev) return prev;
       if (edge === 'in') {
         const limit = prev.outMs === null ? durationMs : prev.outMs - 1;
-        return { ...prev, inMs: Math.min(limit, Math.max(0, prev.inMs + step)) };
+        return {
+          ...prev,
+          inMs: Math.min(limit, Math.max(0, prev.inMs + step)),
+        };
       }
       const out = prev.outMs ?? prev.inMs;
-      return { ...prev, outMs: Math.min(durationMs, Math.max(prev.inMs + 1, out + step)) };
+      return {
+        ...prev,
+        outMs: Math.min(durationMs, Math.max(prev.inMs + 1, out + step)),
+      };
     });
   };
 
@@ -639,7 +663,8 @@ export function VideoAnnotationPlayer({
             <div className="flex flex-col items-center gap-2 text-center">
               <ImageOff className="size-8 text-muted-foreground/40" aria-hidden />
               <span className="text-xs">
-                Video preview unavailable. Timeline comments remain available.
+                {' '}
+                {translateUi('video_preview_unavailable_timeline__41f64ba9')}{' '}
               </span>
             </div>
           </div>
@@ -678,7 +703,7 @@ export function VideoAnnotationPlayer({
             type="button"
             variant="ghost"
             size="icon"
-            aria-label={playing ? 'Pause' : 'Play'}
+            aria-label={playing ? translateUi('pause_858e4ba7') : translateUi('play_436e6101')}
             onClick={() => (playing || shuttle ? pause() : void videoRef.current?.play())}
           >
             {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -691,7 +716,7 @@ export function VideoAnnotationPlayer({
             data-testid="timecode-mode"
             data-mode={timecodeMode}
             className="h-6 px-1.5 text-2xs text-muted-foreground"
-            title="Show time as m:ss, source timecode, or frames"
+            title={translateUi('show_time_as_m_ss_source_timecode_o_5016cc71')}
             onClick={() => setTimecodeDisplay(nextTimecodeDisplay(timecodeMode))}
           >
             {TIMECODE_MODE_LABELS[timecodeMode]}
@@ -701,7 +726,9 @@ export function VideoAnnotationPlayer({
             {timecodeMode === 'clock' ? formatTimecode(durationMs) : stageTime(durationMs)}
             <span className="ml-1.5 text-muted-foreground/70" data-testid="player-frame">
               f{currentFrame} ·{' '}
-              {measuredRate ? `${framesPerSecond(measuredRate).toFixed(2)} fps` : '~30 fps'}
+              {measuredRate
+                ? `${formatDecimal(framesPerSecond(measuredRate), 2, decimalLocale)} fps`
+                : '~30 fps'}
             </span>
             {shuttle ? (
               <span className="ml-1.5 font-medium text-primary">
@@ -730,7 +757,9 @@ export function VideoAnnotationPlayer({
                 data-tile-index={scrubSpriteTile(hoverFraction).index}
                 className="pointer-events-none absolute bottom-full z-30 mb-1 flex -translate-x-1/2 flex-col items-center gap-1"
                 // Held 80px (half the thumb) inside the lane so the ends stay on screen.
-                style={{ left: `clamp(80px, ${hoverFraction * 100}%, calc(100% - 80px))` }}
+                style={{
+                  left: `clamp(80px, ${hoverFraction * 100}%, calc(100% - 80px))`,
+                }}
               >
                 <div
                   className="w-40 rounded-md bg-black bg-no-repeat shadow-md ring-1 ring-border"
@@ -767,7 +796,9 @@ export function VideoAnnotationPlayer({
                 <button
                   type="button"
                   data-testid="range-handle-in"
-                  aria-label={`Range start ${formatTimecode(range.inMs)}`}
+                  aria-label={translateUi('range_start_value0_ca129d75', {
+                    value0: String(formatTimecode(range.inMs)),
+                  })}
                   onPointerDown={dragHandle('in')}
                   onKeyDown={nudgeHandle('in')}
                   className="pointer-events-auto absolute -top-1.5 left-0 h-4 w-2 -translate-x-1/2 cursor-ew-resize rounded-sm bg-amber-500 ring-1 ring-background"
@@ -776,7 +807,9 @@ export function VideoAnnotationPlayer({
                   <button
                     type="button"
                     data-testid="range-handle-out"
-                    aria-label={`Range end ${formatTimecode(range.outMs)}`}
+                    aria-label={translateUi('range_end_value0_ba8201be', {
+                      value0: String(formatTimecode(range.outMs)),
+                    })}
                     onPointerDown={dragHandle('out')}
                     onKeyDown={nudgeHandle('out')}
                     className="pointer-events-auto absolute -top-1.5 right-0 h-4 w-2 translate-x-1/2 cursor-ew-resize rounded-sm bg-amber-500 ring-1 ring-background"
@@ -786,7 +819,7 @@ export function VideoAnnotationPlayer({
             ) : null}
             <input
               type="range"
-              aria-label="Seek"
+              aria-label={translateUi('seek_67ae3405')}
               min={0}
               max={Math.max(durationMs, 1)}
               step={1}
@@ -799,7 +832,7 @@ export function VideoAnnotationPlayer({
           {playback && playback.rungs.length > 0 ? (
             <select
               data-testid="player-quality"
-              aria-label="Playback quality"
+              aria-label={translateUi('playback_quality_78d1c797')}
               value={quality}
               className={SELECT_CLASS}
               onChange={(event) => {
@@ -808,18 +841,18 @@ export function VideoAnnotationPlayer({
                 event.currentTarget.blur();
               }}
             >
-              <option value="auto">Auto</option>
+              <option value="auto">{translateUi('auto_02862497')}</option>
               {playback.rungs.map((rung) => (
                 <option key={rung.role} value={rung.role}>
                   {rung.label}
                 </option>
               ))}
-              <option value="original">Original</option>
+              <option value="original">{translateUi('original_88d759ea')}</option>
             </select>
           ) : null}
           <select
             data-testid="player-speed"
-            aria-label="Playback speed"
+            aria-label={translateUi('playback_speed_afec2b22')}
             value={speed}
             className={SELECT_CLASS}
             onChange={(event) => {
@@ -839,8 +872,16 @@ export function VideoAnnotationPlayer({
             size="icon"
             data-testid="player-loop"
             aria-pressed={loop}
-            aria-label={range?.outMs != null ? 'Loop the marked range' : 'Loop'}
-            title={range?.outMs != null ? 'Loop the marked range' : 'Loop'}
+            aria-label={
+              range?.outMs != null
+                ? translateUi('loop_the_marked_range_612e973c')
+                : translateUi('loop_f2f6a018')
+            }
+            title={
+              range?.outMs != null
+                ? translateUi('loop_the_marked_range_612e973c')
+                : translateUi('loop_f2f6a018')
+            }
             className={cn(loop && 'bg-accent text-accent-foreground')}
             onClick={() => setLoop((on) => !on)}
           >
@@ -851,8 +892,8 @@ export function VideoAnnotationPlayer({
             variant="ghost"
             size="icon"
             data-testid="player-download-still"
-            aria-label="Download still"
-            title="Download this frame as a PNG"
+            aria-label={translateUi('download_still_c4247cf2')}
+            title={translateUi('download_this_frame_as_a_png_5bfd4f35')}
             onClick={saveStill}
           >
             <Camera className="size-4" />
@@ -864,12 +905,16 @@ export function VideoAnnotationPlayer({
               variant="outline"
               size="sm"
               onClick={openComposer}
-              title="Comment (C) — mark a range first with I and O"
+              title={translateUi('comment_c_mark_a_range_first_with_i_c4b17425')}
             >
               <MessageSquarePlus className="size-3.5" />
               {range
-                ? `Comment on ${stageRange(range.inMs, range.outMs)}`
-                : `Comment at ${stageTime(currentMs)}`}
+                ? translateUi('comment_on_value0_6337c8a1', {
+                    value0: String(stageRange(range.inMs, range.outMs)),
+                  })
+                : translateUi('comment_at_value0_a86e186d', {
+                    value0: String(stageTime(currentMs)),
+                  })}
             </Button>
           ) : (
             <Button
@@ -878,10 +923,10 @@ export function VideoAnnotationPlayer({
               size="sm"
               onClick={markOut}
               disabled={draftInMs === null || currentMs <= draftInMs}
-              title="Extend this comment into a range ending at the playhead (O)"
+              title={translateUi('extend_this_comment_into_a_range_en_d752de91')}
             >
-              <SquareDashedBottom className="size-3.5" />
-              End at {stageTime(currentMs)}
+              <SquareDashedBottom className="size-3.5" /> {translateUi('end_at_d55048a0')}{' '}
+              {stageTime(currentMs)}
             </Button>
           )}
         </div>
@@ -890,7 +935,9 @@ export function VideoAnnotationPlayer({
           <div className="mt-2 rounded-lg border border-border bg-muted/30 p-2.5">
             <CommentComposer
               placeholder={
-                draftOutMs === null ? 'Comment at this moment...' : 'Comment on this passage...'
+                draftOutMs === null
+                  ? translateUi('comment_at_this_moment_3d40196d')
+                  : translateUi('comment_on_this_passage_732f4d5e')
               }
               busy={posting}
               autoFocus
@@ -906,8 +953,8 @@ export function VideoAnnotationPlayer({
                     {draftOutMs !== null && (
                       <button
                         type="button"
-                        aria-label="Clear the end point and comment on a single moment"
-                        title="Back to a single moment"
+                        aria-label={translateUi('clear_the_end_point_and_comment_on__7e76d128')}
+                        title={translateUi('back_to_a_single_moment_a7fdba3a')}
                         onClick={() => setRange((prev) => (prev ? { ...prev, outMs: null } : prev))}
                         className="-mr-0.5 rounded-sm p-0.5 text-primary/70 transition-colors hover:text-primary"
                       >
@@ -916,8 +963,10 @@ export function VideoAnnotationPlayer({
                     )}
                   </span>
                   {drawing.shapes.length > 0
-                    ? `${drawing.shapes.length} mark${drawing.shapes.length === 1 ? '' : 's'}`
-                    : 'Draw on the frame'}
+                    ? translateUi('value0_mark_value1_a889e162', {
+                        count: Number(drawing.shapes.length),
+                      })
+                    : translateUi('draw_on_the_frame_1baf3744')}
                 </span>
               }
               onSubmit={(body, extras) => {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type React from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 import { AdAccountSelector } from './AdAccountSelector';
 
@@ -47,7 +48,10 @@ global.ResizeObserver = class ResizeObserver {
 const originalFetch = global.fetch;
 const timeline = (ok: boolean) =>
   mock(() =>
-    Promise.resolve({ ok, json: () => Promise.resolve({ accounts: [] }) } as Response),
+    Promise.resolve({
+      ok,
+      json: () => Promise.resolve({ accounts: [] }),
+    } as Response),
   ) as unknown as typeof fetch;
 
 const CHIP = { brandName: 'Diésel', brandLogoUrl: null, platforms: [] };

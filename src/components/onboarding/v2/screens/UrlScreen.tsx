@@ -16,6 +16,7 @@ import {
   WarningCircle,
   X,
 } from '@phosphor-icons/react';
+import { useTranslations as useBetaTranslations, useTranslations } from 'next-intl';
 import { type ReactNode, useId, useRef, useState } from 'react';
 import { FacebookIcon, InstagramIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
@@ -46,8 +47,16 @@ type Mode = 'website' | 'social' | 'description' | 'documents';
 
 const MODE_OPTIONS: Array<{ mode: Mode; label: string; icon: ReactNode }> = [
   { mode: 'website', label: 'Website', icon: <Globe aria-hidden /> },
-  { mode: 'social', label: 'Social profile', icon: <InstagramIcon aria-hidden /> },
-  { mode: 'description', label: 'Description', icon: <TextAlignLeft aria-hidden /> },
+  {
+    mode: 'social',
+    label: 'Social profile',
+    icon: <InstagramIcon aria-hidden />,
+  },
+  {
+    mode: 'description',
+    label: 'Description',
+    icon: <TextAlignLeft aria-hidden />,
+  },
   { mode: 'documents', label: 'Brand documents', icon: <Files aria-hidden /> },
 ];
 
@@ -103,6 +112,10 @@ export function UrlScreen({
   retrying,
   onRetry,
 }: UrlScreenProps) {
+  const tUi = useTranslations('onboarding');
+
+  const betaUiText = useBetaTranslations('onboarding');
+
   const ids = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -203,10 +216,10 @@ export function UrlScreen({
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-xl">
         <h1 className="mb-3 text-balance text-center text-3xl font-bold leading-tight tracking-tight text-foreground md:text-5xl">
-          Start with your brand
+          {tUi('m_fa0801b70a')}
         </h1>
         <p className="mx-auto mb-8 max-w-md text-balance text-center text-muted-foreground">
-          Paste a link, drop in brand files, or describe what you do. You don’t need a website.
+          {betaUiText('beta_b52528fc610e')}
         </p>
         <form
           className="space-y-4"
@@ -216,7 +229,7 @@ export function UrlScreen({
           }}
         >
           <Label htmlFor={`${ids}-source`} className="sr-only">
-            Website, social profile, or a description of your business
+            {betaUiText('beta_9cef0ed2157e')}
           </Label>
           <InputGroup
             data-testid="intake-composer"
@@ -251,7 +264,9 @@ export function UrlScreen({
                     <span className="min-w-0 truncate">{file.name}</span>
                     <button
                       type="button"
-                      aria-label={`Remove ${file.name}`}
+                      aria-label={betaUiText('beta_3028bf7d2dec', {
+                        value0: String(file.name),
+                      })}
                       disabled={busy}
                       onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
                       className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -271,8 +286,8 @@ export function UrlScreen({
               disabled={busy}
               placeholder={
                 override === 'description'
-                  ? 'What does your business do, and who is it for?'
-                  : 'Paste your website or social handle, drop brand files, or describe your business'
+                  ? betaUiText('beta_898c042f02cb')
+                  : betaUiText('beta_decca3ce853c')
               }
               className="max-h-60 min-h-14 px-4 text-base md:text-base"
               aria-invalid={Boolean(fieldError)}
@@ -293,7 +308,7 @@ export function UrlScreen({
               <div className="flex min-w-0 items-center gap-1">
                 <InputGroupButton
                   size="icon-sm"
-                  aria-label="Attach brand files"
+                  aria-label={betaUiText('beta_7cf6aefd9dfd')}
                   disabled={busy}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -322,7 +337,7 @@ export function UrlScreen({
                 {busy ? (
                   <>
                     <CircleNotch className="size-4 animate-spin motion-reduce:animate-none" />
-                    Reading your source…
+                    {betaUiText('beta_bc565dba4006')}
                   </>
                 ) : (
                   <>
@@ -348,7 +363,7 @@ export function UrlScreen({
 
           {mode && mode !== 'website' ? (
             <div className="space-y-1.5">
-              <Label htmlFor={`${ids}-brand-name`}>Brand name</Label>
+              <Label htmlFor={`${ids}-brand-name`}>{betaUiText('beta_3cfd0ef82258')}</Label>
               <Input
                 id={`${ids}-brand-name`}
                 value={brandName}
@@ -378,7 +393,7 @@ export function UrlScreen({
                         onClick={onRetry}
                         disabled={busy}
                       >
-                        Try again
+                        {betaUiText('beta_d8b8392e2c54')}
                       </Button>
                     ) : null}
                     {mode !== 'description' ? (
@@ -389,7 +404,7 @@ export function UrlScreen({
                         onClick={describeInstead}
                         disabled={busy}
                       >
-                        Describe it instead
+                        {betaUiText('beta_7f0757e5ef07')}
                       </Button>
                     ) : null}
                   </div>
@@ -420,6 +435,8 @@ function SourceChip({
   disabled: boolean;
   onChoose: (mode: Mode) => void;
 }) {
+  const betaUiText = useBetaTranslations('onboarding');
+
   const { icon, label, detail } = describeSource(mode, detected, fileCount);
   return (
     <DropdownMenu>
@@ -435,7 +452,7 @@ function SourceChip({
             <span className="text-foreground">{label}</span>
             {detail ? <span className="min-w-0 truncate">{detail}</span> : null}
             <CaretDown aria-hidden />
-            <span className="sr-only">. Change source type</span>
+            <span className="sr-only">{betaUiText('beta_75b58d9f16d8')}</span>
           </button>
         }
       />
@@ -474,13 +491,33 @@ function describeSource(
   if (mode === 'social') {
     if (detected?.kind === 'instagram') {
       const handle = new URL(detected.url).pathname.replaceAll('/', '');
-      return { icon: <InstagramIcon aria-hidden />, label: 'Instagram', detail: `@${handle}` };
+      return {
+        icon: <InstagramIcon aria-hidden />,
+        label: 'Instagram',
+        detail: `@${handle}`,
+      };
     }
     if (detected?.kind === 'facebook')
-      return { icon: <FacebookIcon aria-hidden />, label: 'Facebook Page', detail: null };
-    return { icon: <InstagramIcon aria-hidden />, label: 'Social profile', detail: null };
+      return {
+        icon: <FacebookIcon aria-hidden />,
+        label: 'Facebook Page',
+        detail: null,
+      };
+    return {
+      icon: <InstagramIcon aria-hidden />,
+      label: 'Social profile',
+      detail: null,
+    };
   }
   if (mode === 'description')
-    return { icon: <TextAlignLeft aria-hidden />, label: 'Description', detail: null };
-  return { icon: <Globe aria-hidden />, label: 'Detects as you type', detail: null };
+    return {
+      icon: <TextAlignLeft aria-hidden />,
+      label: 'Description',
+      detail: null,
+    };
+  return {
+    icon: <Globe aria-hidden />,
+    label: 'Detects as you type',
+    detail: null,
+  };
 }

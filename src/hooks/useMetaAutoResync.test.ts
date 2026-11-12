@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // Controllable stand-in for the react-query mutation so the hook can be driven
 // without a QueryClientProvider or a live backend.
-let mutateResult: () => Promise<unknown> = async () => ({ updated: [], failed: [] });
+let mutateResult: () => Promise<unknown> = async () => ({
+  updated: [],
+  failed: [],
+});
 const mutateAsync = mock(async (_arg?: string) => mutateResult());
 
 mock.module('@/lib/api/integrations', () => ({
@@ -39,7 +43,9 @@ describe('useMetaAutoResync', () => {
       }),
     );
 
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    });
     await waitFor(() => expect(resynced).toBe(1), { timeout: 2000 });
   });
 

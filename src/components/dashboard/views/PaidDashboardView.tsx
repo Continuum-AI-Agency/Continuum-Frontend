@@ -1,8 +1,9 @@
 'use client';
-import { ChevronLeft, ChevronRight, ScrollText } from 'lucide-react';
 
+import { ChevronLeft, ChevronRight, ScrollText } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PaidInsightsList } from '@/components/dashboard/briefing/PaidInsightsList';
 import { PaidKpiSelect } from '@/components/dashboard/briefing/PaidKpiSelect';
@@ -11,8 +12,8 @@ import { PaidScopeToggle } from '@/components/dashboard/briefing/PaidScopeToggle
 import { CompetitorAdsTable } from '@/components/dashboard/competitor/CompetitorAdsTable';
 import { DashboardWarmOnMount } from '@/components/dashboard/DashboardWarmOnMount';
 import { SendPulseButton } from '@/components/dashboard/SendPulseButton';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAccountSelectionStore } from '@/lib/integrations/accountSelectionStore';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 
@@ -81,6 +82,7 @@ function writeCollapsed(value: boolean): void {
 }
 
 function DCORailStrip({ onExpand }: { onExpand: () => void }) {
+  const uiText = useTranslations('dashboard');
   const reduceMotion = useReducedMotion();
   const [charging, setCharging] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -149,7 +151,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
                   clearCharge();
                   onExpand();
                 }}
-                aria-label="Open DCO actions"
+                aria-label={uiText('open_dco_actions_8b2f75a')}
                 className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
                 style={{ transitionProperty: 'background-color, color, scale' }}
               >
@@ -157,7 +159,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
               </button>
             }
           />
-          <TooltipContent side="left">Open DCO actions (or hover)</TooltipContent>
+          <TooltipContent side="left">{uiText('open_dco_actions_or_hover_22c2cca')}</TooltipContent>
         </Tooltip>
         <div className="z-10 my-1 h-px w-5 bg-border/70" aria-hidden="true" />
         <Tooltip>
@@ -169,7 +171,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
                   clearCharge();
                   onExpand();
                 }}
-                aria-label="Show DCO actions"
+                aria-label={uiText('show_dco_actions_2bfd1d9')}
                 className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
                 style={{ transitionProperty: 'background-color, color, scale' }}
               >
@@ -177,7 +179,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
               </button>
             }
           />
-          <TooltipContent side="left">DCO actions</TooltipContent>
+          <TooltipContent side="left">{uiText('dco_actions_d3f7a22')}</TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>
@@ -185,6 +187,7 @@ function DCORailStrip({ onExpand }: { onExpand: () => void }) {
 }
 
 function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
+  const uiText = useTranslations('dashboard');
   return (
     <TooltipProvider>
       <Tooltip>
@@ -193,7 +196,7 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
             <button
               type="button"
               onClick={onCollapse}
-              aria-label="Hide DCO actions"
+              aria-label={uiText('hide_dco_actions_dd5c946')}
               className="absolute right-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96]"
               style={{ transitionProperty: 'background-color, color, scale' }}
             >
@@ -201,13 +204,14 @@ function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
             </button>
           }
         />
-        <TooltipContent side="left">Hide DCO actions</TooltipContent>
+        <TooltipContent side="left">{uiText('hide_dco_actions_dd5c946')}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
 }
 
 export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
+  const uiText = useTranslations('dashboard');
   const paidScope = useDashboardPrefsStore((store) => store.paidScope);
   const setSelection = useAccountSelectionStore((store) => store.setSelection);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(() =>
@@ -277,9 +281,11 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
       <section className="flex min-w-0 flex-col gap-[var(--dashboard-section-gap)]">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
+            <h2 className="text-base font-semibold tracking-tight text-foreground">
+              {uiText('overview_d4b1ea5')}
+            </h2>
             <p className="text-xs text-muted-foreground">
-              Your paid performance at a glance. Pick your next move.
+              {uiText('your_paid_performance_at_a_glance_pick_your_n_beec78b')}
             </p>
           </div>
           <SendPulseButton brandId={brandId} />
@@ -303,11 +309,13 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
               brandId={brandId}
               adAccountId={selectedAccountId}
               scope={paidScope}
-              title={paidScope === 'top_adsets' ? 'Top ad sets' : 'Top campaigns'}
-              emptyMessage={
+              title={
                 paidScope === 'top_adsets'
-                  ? 'No ad set performance yet for this account.'
-                  : 'No campaign performance yet for this account.'
+                  ? uiText('top_ad_sets_c7400f3')
+                  : uiText('top_campaigns_4b2c69d')
+              }
+              emptyMessage={
+                paidScope === 'top_adsets' ? uiText('m_c62d457469') : uiText('m_103bd191bd')
               }
             />
           </div>

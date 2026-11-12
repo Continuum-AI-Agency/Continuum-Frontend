@@ -8,9 +8,16 @@ mock.module('@/lib/api/http', () => ({
 
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { useStudioStore } from '../stores/useStudioStore';
 import { ElementNode, type ElementNodeData } from './ElementNode';
 
@@ -137,7 +144,10 @@ describe('ElementNode', () => {
       ],
     } as never);
 
-    const { container } = renderNode({ elementId: 'element-1', useIntent: 'motion' });
+    const { container } = renderNode({
+      elementId: 'element-1',
+      useIntent: 'motion',
+    });
 
     await waitFor(() => expect(container.querySelector('video')).toBeTruthy());
     expect(container.querySelector('.react-flow__handle')?.getAttribute('data-handleid')).toBe(
@@ -203,7 +213,12 @@ describe('ElementNode', () => {
     } as never);
     useStudioStore.setState({
       nodes: [
-        { id: 'node-1', type: 'element', position: { x: 0, y: 0 }, data: { elementId: null } },
+        {
+          id: 'node-1',
+          type: 'element',
+          position: { x: 0, y: 0 },
+          data: { elementId: null },
+        },
       ] as never,
       edges: [],
       brandId: 'brand-1',
@@ -232,7 +247,12 @@ describe('ElementNode', () => {
     requestMock.mockResolvedValue({ elements: [buildElement()] } as never);
     useStudioStore.setState({
       nodes: [
-        { id: 'node-1', type: 'element', position: { x: 0, y: 0 }, data: { elementId: null } },
+        {
+          id: 'node-1',
+          type: 'element',
+          position: { x: 0, y: 0 },
+          data: { elementId: null },
+        },
       ] as never,
       edges: [],
       brandId: 'brand-1',
@@ -250,7 +270,12 @@ describe('ElementNode', () => {
 
   it('shows the category on a resolved Element', async () => {
     requestMock.mockResolvedValue({
-      elements: [buildElement({ category: 'character', members: [{ assetId: 'm', position: 0 }] })],
+      elements: [
+        buildElement({
+          category: 'character',
+          members: [{ assetId: 'm', position: 0 }],
+        }),
+      ],
     } as never);
 
     renderNode({ elementId: 'element-1' });

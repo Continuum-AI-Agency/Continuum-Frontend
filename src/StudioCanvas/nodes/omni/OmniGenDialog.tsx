@@ -16,7 +16,15 @@
 
 import type { Skill } from '@continuum/contracts';
 import { Download, Loader2, Sparkles, Video, Wand2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useMemo as useUiConfigMemo,
+} from 'react';
 import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,12 +41,21 @@ import type { OmniGenNodeData, OmniVariation } from '../../types';
 
 const PERSIST_DEBOUNCE_MS = 150;
 
-const RESOLUTIONS: { value: NonNullable<OmniGenNodeData['resolution']>; label: string }[] = [
-  { value: '360p', label: '360p — draft' },
-  { value: '720p', label: '720p' },
-  { value: '1080p', label: '1080p' },
-  { value: '4k', label: '4K' },
-];
+function useLocalResolutionsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: {
+      value: NonNullable<OmniGenNodeData['resolution']>;
+      label: string;
+    }[] = [
+      { value: '360p', label: translateConfig('360p_draft_1d736ceb') },
+      { value: '720p', label: '720p' },
+      { value: '1080p', label: '1080p' },
+      { value: '4k', label: '4K' },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 export interface OmniGenDialogProps {
   open: boolean;
@@ -88,6 +105,10 @@ export function OmniGenDialog({
   onDownload,
   slashSkills,
 }: OmniGenDialogProps) {
+  const RESOLUTIONS = useLocalResolutionsMessages();
+
+  const translateUi = useUiTranslations('studio');
+
   const [draft, setDraft] = useState('');
   const slash = useSlashTextarea(useSkillSlashOptions(slashSkills), setDraft);
 
@@ -159,7 +180,8 @@ export function OmniGenDialog({
               <Sparkles className="h-4 w-4" /> Omni 1.1 Flash
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Describe a clip, then keep talking to edit, extend and sharpen it.
+              {' '}
+              {translateUi('describe_a_clip_then_keep_talking_t_abddaf91')}{' '}
             </DialogDescription>
           </div>
 
@@ -170,27 +192,30 @@ export function OmniGenDialog({
                   className="max-w-40 truncate rounded-md border border-border/70 bg-muted px-2 py-1 text-2xs text-muted-foreground"
                   title={videoInput.label}
                 >
-                  Source: {videoInput.label}
+                  {' '}
+                  {translateUi('source_c707ee4e')} {videoInput.label}
                 </span>
                 <select
-                  aria-label="What to do with the wired clip"
+                  aria-label={translateUi('what_to_do_with_the_wired_clip_38d1d379')}
                   className="nodrag h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
                   value={videoTask}
                   disabled={hasChain}
                   onChange={(event) => onVideoTaskChange(event.target.value as 'edit' | 'extend')}
                 >
-                  <option value="edit">Edit clip</option>
-                  <option value="extend">Extend clip</option>
+                  <option value="edit">{translateUi('edit_clip_65ce10df')}</option>
+                  <option value="extend">{translateUi('extend_clip_477a7b23')}</option>
                 </select>
               </>
             ) : null}
 
             <select
-              aria-label="Aspect ratio"
+              aria-label={translateUi('aspect_ratio_d7ad336f')}
               className="nodrag h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
               value={aspectRatio}
               disabled={hasChain}
-              title={hasChain ? 'Anchored to the ratio this chain started at' : undefined}
+              title={
+                hasChain ? translateUi('anchored_to_the_ratio_this_chain_st_3071317e') : undefined
+              }
               onChange={(event) => onAspectRatioChange(event.target.value as '16:9' | '9:16')}
             >
               <option value="16:9">16:9</option>
@@ -198,7 +223,7 @@ export function OmniGenDialog({
             </select>
 
             <select
-              aria-label="Resolution"
+              aria-label={translateUi('resolution_d4055faf')}
               className="nodrag h-8 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
               value={resolution}
               onChange={(event) =>
@@ -213,10 +238,11 @@ export function OmniGenDialog({
             </select>
 
             <Button variant="ghost" size="sm" onClick={onDownload} disabled={!previewSrc}>
-              <Download className="mr-1.5 h-4 w-4" /> Download
+              <Download className="mr-1.5 h-4 w-4" /> {translateUi('download_d6eafe82')}{' '}
             </Button>
             <Button size="sm" onClick={() => onOpenChange(false)}>
-              Done
+              {' '}
+              {translateUi('done_11a6767d')}{' '}
             </Button>
           </div>
         </DialogHeader>
@@ -263,7 +289,7 @@ export function OmniGenDialog({
                       </span>
                     )}
                     <span className="absolute bottom-0 left-0 right-0 truncate bg-black/55 px-1 py-0.5 text-3xs leading-tight text-white">
-                      {index === 0 ? 'Original' : `v${index + 1}`}
+                      {index === 0 ? translateUi('original_88d759ea') : `v${index + 1}`}
                     </span>
                   </button>
                 );
@@ -279,14 +305,18 @@ export function OmniGenDialog({
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <Video className="h-8 w-8" />
-                <p className="text-sm">Describe the clip you want and press Generate.</p>
+                <p className="text-sm">
+                  {translateUi('describe_the_clip_you_want_and_pres_6fd24d3b')}
+                </p>
               </div>
             )}
             {isTurnPending ? (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/55 backdrop-blur-[1px]">
                 <span className="flex items-center gap-2 rounded-md bg-background/90 px-3 py-2 text-xs shadow-sm">
                   <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-                  {mode === 'turn' ? 'Working on your change…' : 'Generating…'}
+                  {mode === 'turn'
+                    ? translateUi('working_on_your_change_744fb0c4')
+                    : translateUi('generating_d20a4476')}
                 </span>
               </div>
             ) : null}
@@ -304,8 +334,8 @@ export function OmniGenDialog({
               onBlur={slash.close}
               placeholder={
                 mode === 'turn'
-                  ? 'Describe a change — Omni keeps the rest of the clip.'
-                  : 'A marble rolling fast along a wooden track, one continuous shot…'
+                  ? translateUi('describe_a_change_omni_keeps_the_re_77ee1e68')
+                  : translateUi('a_marble_rolling_fast_along_a_woode_23ef9336')
               }
               className="min-h-24 resize-none text-sm"
               onKeyDown={(event) => {
@@ -320,12 +350,14 @@ export function OmniGenDialog({
           <div className="mt-2 flex items-center justify-between">
             <p className="text-2xs text-muted-foreground">
               {mode === 'turn'
-                ? 'Cmd/Ctrl+Enter to send. Raise the resolution to take this clip to a master.'
-                : 'Cmd/Ctrl+Enter to generate. 360p is the cheap draft tier.'}
+                ? translateUi('cmd_ctrl_enter_to_send_raise_the_re_a58f31ca')
+                : translateUi('cmd_ctrl_enter_to_generate_360p_is__b37bed33')}
             </p>
             <Button size="sm" disabled={!canSubmit} onClick={submit}>
               <Wand2 className="mr-1.5 h-4 w-4" />
-              {mode === 'turn' ? 'Send edit' : 'Generate'}
+              {mode === 'turn'
+                ? translateUi('send_edit_29c90d78')
+                : translateUi('generate_49e49bb4')}
             </Button>
           </div>
         </div>

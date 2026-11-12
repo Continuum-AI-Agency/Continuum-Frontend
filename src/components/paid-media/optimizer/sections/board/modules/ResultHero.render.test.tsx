@@ -9,7 +9,8 @@ import {
   PortfolioMetricsSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { PortfolioMetricsState } from '../../detail/usePortfolioMetrics';
 import type { GoogleAdsOverviewState } from '../../platforms/useGoogleAdsOverview';
 
@@ -54,7 +55,11 @@ mock.module('../../usePortfolioFigures', () => ({
     const figures = new Map<string, NonNullable<ReturnType<typeof realFigure.portfolioFigure>>>();
     portfolios.forEach((portfolio, index) => {
       const cycle = realFigure.seriesWindowFigures(series[index] ?? []);
-      const figure = realFigure.portfolioFigure({ portfolio, live: cycle, snapshot: cycle });
+      const figure = realFigure.portfolioFigure({
+        portfolio,
+        live: cycle,
+        snapshot: cycle,
+      });
       if (figure) figures.set(portfolio.id, figure);
     });
     return { figures, pending: false };
@@ -77,7 +82,11 @@ mock.module('../../platforms/useGoogleAdsOverview', () => ({
   useGoogleAdsOverview: () => googleState,
 }));
 
-const dailyAsked: { adAccountId: string; resultBucket?: string; range: unknown }[] = [];
+const dailyAsked: {
+  adAccountId: string;
+  resultBucket?: string;
+  range: unknown;
+}[] = [];
 let dailyRead: PaidAccountOverview | null = null;
 mock.module('@/lib/paid-media/paid-overview.client', () => ({
   fetchPaidAccountOverview: async (call: {
@@ -153,7 +162,9 @@ function mountHero(
   portfolios: PortfolioListItem[],
   reading: AdAccountReading,
 ) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <ResultHero
@@ -249,7 +260,12 @@ describe('ResultHero on Google — Vivo 47, Oct 26 – Nov 1', () => {
   };
   const TEST_1 = 'e642c737-ddde-4622-af8f-4b5622da98d0';
   const leadsReading = () =>
-    readingOf('google_ads', { label: 'leads', kind: 'leads', goal: null, source: 'producer' });
+    readingOf('google_ads', {
+      label: 'leads',
+      kind: 'leads',
+      goal: null,
+      source: 'producer',
+    });
 
   it('prints Test 1’s own figure, the metrics read its lane prints, dated', async () => {
     googleState = ready;

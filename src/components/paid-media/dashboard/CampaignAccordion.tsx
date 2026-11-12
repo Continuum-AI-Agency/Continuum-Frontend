@@ -2,6 +2,7 @@
 
 import type { IntegrationErrorCode } from '@continuum/contracts';
 import { Megaphone, RotateCw } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { EmptyState } from '@/components/shared/state';
 import {
@@ -12,8 +13,12 @@ import {
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { humanizeStatus } from '../campaigns/EntityStatusPill';
 import { type AdSet, type AdSetAdsLoadState, AdSetTable } from './AdSetTable';
 import {
   type PaidMetricsComparison,
@@ -65,8 +70,8 @@ type AdSetLoadState = {
 
 const META_RATE_LIMIT_COOLDOWN_MS = 60000;
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+function formatCurrency(value: number, uiLocale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(uiLocale, {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
@@ -106,16 +111,20 @@ function isMetaRateLimitMessage(message: string): boolean {
   );
 }
 
-async function extractInvokeError(
-  error: unknown,
-): Promise<{ message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }> {
+async function extractInvokeError(error: unknown): Promise<{
+  message: string;
+  errorCode?: IntegrationErrorCode;
+  retryAfter?: number;
+}> {
   if (!(error instanceof Error)) {
     return { message: 'Edge function request failed' };
   }
 
   const baseMessage = error.message;
   const maybeContext = (
-    error as { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }
+    error as {
+      context?: { json?: () => Promise<unknown>; text?: () => Promise<string> };
+    }
   ).context;
   if (!maybeContext) {
     return { message: baseMessage };
@@ -163,6 +172,12 @@ export function CampaignAccordion({
   dcoManagedCampaignIds = [],
   onSelectedCampaignChange,
 }: CampaignAccordionProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
+  // Locale changes update guidance without retriggering the data-read callback.
+  const fetchCopyRef = React.useRef(uiText);
+  fetchCopyRef.current = uiText;
+  const uiLocale = useLocale();
   const [adSetState, setAdSetState] = React.useState<AdSetLoadState>({});
   const [adStateByAdSet, setAdStateByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
   const [openCampaignId, setOpenCampaignId] = React.useState<string | undefined>();
@@ -217,7 +232,10 @@ export function CampaignAccordion({
           [campaignId]: {
             status: 'error',
             adSets: prev[campaignId]?.adSets ?? [],
-            errorMessage: `${platform === 'linkedin' ? 'LinkedIn' : 'Meta'} API rate limit active. Retry in ~${secondsLeft}s.`,
+            errorMessage: fetchCopyRef.current('dashboardRateLimit', {
+              platform: platform === 'linkedin' ? 'LinkedIn' : 'Meta',
+              seconds: secondsLeft,
+            }),
           },
         }));
         return;
@@ -247,7 +265,10 @@ export function CampaignAccordion({
 
         if (fetchError) {
           const { message, errorCode, retryAfter } = await extractInvokeError(fetchError);
-          const err = Object.assign(new Error(message), { errorCode, retryAfter });
+          const err = Object.assign(new Error(message), {
+            errorCode,
+            retryAfter,
+          });
           throw err;
         }
 
@@ -291,11 +312,14 @@ export function CampaignAccordion({
           [campaignId]: { status: 'success', adSets: adSetsWithMetrics },
         }));
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
         const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
         const retryAfter = (error as { retryAfter?: number }).retryAfter;
+        const message = formatUiError(errorCode ? { code: errorCode } : error);
 
-        if (errorCode === 'RATE_LIMITED' || isMetaRateLimitMessage(message)) {
+        if (
+          errorCode === 'RATE_LIMITED' ||
+          isMetaRateLimitMessage(error instanceof Error ? error.message : '')
+        ) {
           rateLimitedUntilRef.current = Date.now() + META_RATE_LIMIT_COOLDOWN_MS;
         }
 
@@ -312,7 +336,7 @@ export function CampaignAccordion({
         }));
       }
     },
-    [accountId, adSetState, brandId, isLinkedIn, platform, segmentLabel, timeRange],
+    [accountId, adSetState, brandId, isLinkedIn, platform, segmentLabel, timeRange, formatUiError],
   );
 
   React.useEffect(() => {
@@ -394,12 +418,12 @@ export function CampaignAccordion({
           [adSetId]: {
             status: 'error',
             ads: [],
-            errorMessage: error instanceof Error ? error.message : 'Failed to load ads',
+            errorMessage: formatUiError(error),
           },
         }));
       }
     },
-    [accountId, brandId, platform, segmentLabel, timeRange.preset],
+    [accountId, brandId, platform, segmentLabel, timeRange.preset, formatUiError],
   );
 
   if (filteredCampaigns.length === 0) {
@@ -407,7 +431,7 @@ export function CampaignAccordion({
       <EmptyState
         className="py-8"
         media={<Megaphone aria-hidden="true" className="size-5" />}
-        headline="No campaigns found"
+        headline={uiText('no_campaigns_found_1b93a5e')}
       />
     );
   }
@@ -438,13 +462,23 @@ export function CampaignAccordion({
               <div className="flex w-full items-center justify-between pr-4">
                 <div className="flex items-center gap-3">
                   <span className="font-medium">{campaign.name}</span>
-                  <Badge variant={getStatusColor(campaign.status)}>{campaign.status}</Badge>
+                  <Badge variant={getStatusColor(campaign.status)}>
+                    {humanizeStatus(campaign.status, uiText)}
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   {campaign.metrics ? (
                     <>
-                      <span>Spend: {formatCurrency(campaign.metrics.spend)}</span>
-                      <span>ROAS: {campaign.metrics.roas.toFixed(2)}</span>
+                      <span>
+                        {uiText.rich('sentence_650accb8f7ee', {
+                          v0: formatCurrency(campaign.metrics.spend, uiLocale),
+                        })}
+                      </span>
+                      <span>
+                        {uiText.rich('sentence_572a3757f7d4', {
+                          v0: formatDecimal(campaign.metrics.roas, 2, uiLocale),
+                        })}
+                      </span>
                     </>
                   ) : null}
                 </div>
@@ -459,8 +493,10 @@ export function CampaignAccordion({
                 />
                 {state.status === 'loading' ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <RotateCw className="mr-2 h-4 w-4 animate-spin" />
-                    Loading {segmentLabel}...
+                    {uiText.rich('sentence_87137bcc6b57', {
+                      v0: () => <RotateCw className="mr-2 h-4 w-4 animate-spin" />,
+                      v1: segmentLabel,
+                    })}
                   </div>
                 ) : null}
                 {state.status === 'error' ? (

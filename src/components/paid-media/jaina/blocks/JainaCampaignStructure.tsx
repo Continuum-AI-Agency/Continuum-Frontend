@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations as useBetaTranslations } from 'next-intl';
 
 // A proposed campaign, drawn inside the chat (P5 "Structure designs", chosen 2026-10-21).
 //
@@ -96,6 +97,8 @@ function StructureFrame({
   title: string;
   onUnreachable: () => void;
 }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<FrameState>('loading');
 
@@ -137,7 +140,7 @@ function StructureFrame({
       ) : (
         <div className="absolute inset-0 grid place-items-center p-4">
           <p className="text-center text-xs text-muted-foreground">
-            {state === 'loading' ? 'Drawing…' : HYPERFRAME_UNREACHABLE_NOTE}
+            {state === 'loading' ? betaUiText('beta_eb683f4ca4a7') : HYPERFRAME_UNREACHABLE_NOTE}
           </p>
         </div>
       )}
@@ -162,9 +165,13 @@ const viewOf = (
 export const isReadStructure = (structure: CampaignStructurePayload): boolean =>
   structure.layout === 'diff' || structure.layout === 'outline';
 
-export type JainaCampaignStructureProps = { structure: CampaignStructurePayload };
+export type JainaCampaignStructureProps = {
+  structure: CampaignStructurePayload;
+};
 
 export function JainaCampaignStructure({ structure }: JainaCampaignStructureProps) {
+  const betaUiText = useBetaTranslations('scale');
+
   const { sessionId, onScaffoldFocus } = useScaffoldThread();
   const scope = useJainaBrandScope();
   const [frameFailed, setFrameFailed] = useState(false);
@@ -190,18 +197,22 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
       <figcaption className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="min-w-0">
           <span className={`block ${JAINA_TYPE.label} text-muted-foreground`}>
-            {LAYOUT_LABEL[structure.layout]} · version {structure.version}
+            {LAYOUT_LABEL[structure.layout]} {betaUiText('beta_01ed56b70902')} {structure.version}
           </span>
         </span>
         {/* Read carries its own "Open in canvas"; a compiled picture needs the link here. */}
         {framed && canvasHref ? (
           <Link
-            className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'h-7 gap-1.5' })}
+            className={buttonVariants({
+              variant: 'ghost',
+              size: 'sm',
+              className: 'h-7 gap-1.5',
+            })}
             data-testid="campaign-structure-open-canvas"
             href={canvasHref}
           >
             <ExternalLink className="size-3.5" />
-            Open on canvas
+            {betaUiText('beta_41c4341007bc')}
           </Link>
         ) : null}
       </figcaption>
@@ -224,8 +235,8 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
       ) : null}
       {view === 'read' && structure.truncated ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          {structure.counts.adSets} ad sets and {structure.counts.ads} ads are too many to list
-          here. The scaffold card and the canvas show every one.
+          {structure.counts.adSets} {betaUiText('beta_2336aeba7a74')} {structure.counts.ads}{' '}
+          {betaUiText('beta_c2cdc22fcf21')}
         </p>
       ) : null}
       {framed ? null : (
@@ -237,7 +248,9 @@ export function JainaCampaignStructure({ structure }: JainaCampaignStructureProp
   );
 }
 
-export type JainaCampaignStructuresProps = { structures: CampaignStructurePayload[] };
+export type JainaCampaignStructuresProps = {
+  structures: CampaignStructurePayload[];
+};
 
 /** Every drawing a turn made, in order — "01 + 04 together" is two of them. */
 export function JainaCampaignStructures({ structures }: JainaCampaignStructuresProps) {

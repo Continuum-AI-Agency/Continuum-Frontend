@@ -33,6 +33,8 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type React from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import {
   cleanup,
   fireEvent,
@@ -40,9 +42,7 @@ import {
   render as testingRender,
   waitFor,
   within,
-} from '@testing-library/react';
-import type React from 'react';
-import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { RenderSetTabs, rendersBySet, rendersLine, templateJobsKey } from './RenderSetTabs';
@@ -80,7 +80,12 @@ const LAUNCH = set('55555555-5555-4555-8555-555555555551', 'Launch week', 6, 'Sp
 const TEASER = set('55555555-5555-4555-8555-555555555552', 'Teaser', 1);
 
 const job = (renderSetId: string | null, createdAt: string, templateKey = '133') =>
-  ({ id: crypto.randomUUID(), templateKey, renderSetId, createdAt }) as ApiRenderJob;
+  ({
+    id: crypto.randomUUID(),
+    templateKey,
+    renderSetId,
+    createdAt,
+  }) as ApiRenderJob;
 
 const page = (items: ApiRenderJob[], nextCursor: string | null = null) =>
   ({ items, nextCursor }) as ApiRenderJobListResponse;
@@ -104,7 +109,10 @@ describe('rendersBySet / rendersLine', () => {
       '133',
     );
     expect(complete).toBe(true);
-    expect(bySet.get(LAUNCH.id)).toEqual({ count: 3, lastAt: '2026-09-15T09:00:00.000Z' });
+    expect(bySet.get(LAUNCH.id)).toEqual({
+      count: 3,
+      lastAt: '2026-09-15T09:00:00.000Z',
+    });
     expect(bySet.has(TEASER.id)).toBe(false);
     expect(rendersLine(bySet.get(LAUNCH.id), complete, NOW)).toBe('3 renders · 3h ago');
     expect(rendersLine({ count: 1, lastAt: '2026-09-15T11:00:00.000Z' }, true, NOW)).toBe(
@@ -126,7 +134,9 @@ describe('rendersBySet / rendersLine', () => {
 
 describe('RenderSetTabs', () => {
   const setup = (over: Partial<React.ComponentProps<typeof RenderSetTabs>> = {}) => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     client.setQueryData(
       templateJobsKey(BRAND, '133'),
       page([job(LAUNCH.id, new Date(Date.now() - 2 * 3_600_000).toISOString())]),
@@ -196,8 +206,12 @@ describe('RenderSetTabs', () => {
     expect(props.onDescribe).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Spain first' }));
-    const again = screen.getByRole('textbox', { name: 'Description of Launch week' });
-    fireEvent.change(again, { target: { value: '  Short cut\nfor stories  ' } });
+    const again = screen.getByRole('textbox', {
+      name: 'Description of Launch week',
+    });
+    fireEvent.change(again, {
+      target: { value: '  Short cut\nfor stories  ' },
+    });
     fireEvent.keyDown(again, { key: 'Enter' });
     expect(props.onDescribe).toHaveBeenCalledTimes(1);
     expect(props.onDescribe.mock.calls[0]).toEqual([LAUNCH, 'Short cut for stories']);
@@ -206,7 +220,9 @@ describe('RenderSetTabs', () => {
   test('clearing a description saves null', () => {
     const { props } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Spain first' }));
-    const field = screen.getByRole('textbox', { name: 'Description of Launch week' });
+    const field = screen.getByRole('textbox', {
+      name: 'Description of Launch week',
+    });
     fireEvent.change(field, { target: { value: '   ' } });
     fireEvent.keyDown(field, { key: 'Enter' });
     expect(props.onDescribe.mock.calls[0]).toEqual([LAUNCH, null]);
@@ -267,7 +283,10 @@ describe('RenderSetTabs', () => {
       unregister = registerToastSink(({ title, variant }) =>
         toasts.push({ title: String(title), variant }),
       );
-      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      });
     });
     afterEach(() => {
       unregister();

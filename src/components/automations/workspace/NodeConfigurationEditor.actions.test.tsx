@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // The five wired action editors. Each assertion is about the CONFIG that
 // reaches `onChange`: the backend adapters validate these at preflight, so a
 // shape the schema rejects is a failed run, not a form error. Every written
@@ -6,7 +7,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type AutomationWorkflowNode, automationWorkflowNodeSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { createAutomationWorkflowNode } from './automationNodeCatalog';
 import { NodeConfigurationEditor } from './NodeConfigurationEditor';
 import { chooseOption, installPickerDomGlobals, openSelect } from './pickers/pickerTestHarness';
@@ -23,13 +24,19 @@ afterEach(() => {
 });
 
 function makeNode(type: AutomationWorkflowNode['type']): AutomationWorkflowNode {
-  return createAutomationWorkflowNode({ type, id: type, position: { x: 0, y: 0 } });
+  return createAutomationWorkflowNode({
+    type,
+    id: type,
+    position: { x: 0, y: 0 },
+  });
 }
 
 /** Renders the editor with no brand in scope, which is the degraded path every
  *  picker must support: the stored id stays editable as plain text. */
 function renderEditor(node: AutomationWorkflowNode, onChange: (config: unknown) => void) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <NodeConfigurationEditor
@@ -75,12 +82,17 @@ describe('action.library_save editor', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ collections: [{ id: 'col-1', name: 'Brand assets' }] }),
+        json: () =>
+          Promise.resolve({
+            collections: [{ id: 'col-1', name: 'Brand assets' }],
+          }),
       } as Response),
     ) as unknown as typeof fetch;
 
     const node = makeNode('action.library_save');
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     render(
       <QueryClientProvider client={client}>
         <NodeConfigurationEditor
@@ -94,7 +106,9 @@ describe('action.library_save editor', () => {
     );
 
     await waitFor(() => {
-      const trigger = screen.getByRole('combobox', { name: 'Library collection' });
+      const trigger = screen.getByRole('combobox', {
+        name: 'Library collection',
+      });
       expect(trigger.getAttribute('disabled')).toBeNull();
     });
     openSelect('Library collection');
@@ -128,7 +142,9 @@ describe('action.planner_upsert editor', () => {
     const onChange = mock();
     renderEditor(node, onChange);
 
-    fireEvent.change(screen.getByLabelText('Maximum drafts per run'), { target: { value: '999' } });
+    fireEvent.change(screen.getByLabelText('Maximum drafts per run'), {
+      target: { value: '999' },
+    });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ maxDrafts: 50 }));
     expectParses(node, onChange.mock.calls.at(-1)?.[0]);
   });
@@ -206,7 +222,10 @@ describe('action.ai_studio_generate editor', () => {
   test('a pipeline hides the generator, the output count and the workspace', () => {
     const node = makeNode('action.ai_studio_generate');
     renderEditor(
-      { ...node, config: { ...node.config, pipelineId: PIPELINE_ID } } as AutomationWorkflowNode,
+      {
+        ...node,
+        config: { ...node.config, pipelineId: PIPELINE_ID },
+      } as AutomationWorkflowNode,
       mock(),
     );
 

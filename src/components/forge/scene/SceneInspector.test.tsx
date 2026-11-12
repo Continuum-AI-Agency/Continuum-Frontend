@@ -9,7 +9,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { type BlendField, blendParseSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import parseExample from '../../../../packages/contracts/src/media/__fixtures__/blend-parse.example.json';
 import {
   groupSceneFields,
@@ -58,7 +64,11 @@ describe('sceneFieldGroup', () => {
   });
 
   test('a hidden field outside objects, cameras and lights is advanced', () => {
-    const hiddenColour: BlendField = { ...field('brand_colour'), key: 'x', exposed: false };
+    const hiddenColour: BlendField = {
+      ...field('brand_colour'),
+      key: 'x',
+      exposed: false,
+    };
     expect(sceneFieldGroup(hiddenColour, 'CamWide', cameras)).toBe('advanced');
   });
 });
@@ -149,7 +159,9 @@ describe('SceneInspector', () => {
   test('a search lists matching fields flat, by name or object, and says when none match', async () => {
     mount(fields);
     search('swatch location');
-    const results = await screen.findByRole('region', { name: 'Matching fields' });
+    const results = await screen.findByRole('region', {
+      name: 'Matching fields',
+    });
     expect(within(results).getByLabelText('Swatch location X')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Objects/ })).toBeNull();
 
@@ -184,7 +196,9 @@ describe('SceneInspector', () => {
     expect(container.querySelectorAll('*').length).toBeLessThan(1_251 * 10);
 
     search('location');
-    const results = await screen.findByRole('region', { name: 'Matching fields' });
+    const results = await screen.findByRole('region', {
+      name: 'Matching fields',
+    });
     expect(results.querySelectorAll('[data-field]')).toHaveLength(SEARCH_LIMIT);
     expect(
       within(results).getByText(`${1_251 - SEARCH_LIMIT} more — refine the search`),

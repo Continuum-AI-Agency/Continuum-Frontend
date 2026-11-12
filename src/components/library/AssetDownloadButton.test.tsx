@@ -4,7 +4,14 @@ import {
   type MediaAsset,
   PSD_STATIC_EXPORT_ROUTE,
 } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { clearLibraryPlaybackCache } from '@/lib/library/libraryPlayback';
 import { registerStageVideo } from '@/lib/library/videoPoster';
 import { AssetDownloadButton } from './AssetDownloadButton';
@@ -43,7 +50,11 @@ function libraryAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {
 }
 
 const videoAsset = () =>
-  libraryAsset({ kind: 'video', fileName: 'hero.mov', mimeType: 'video/quicktime' });
+  libraryAsset({
+    kind: 'video',
+    fileName: 'hero.mov',
+    mimeType: 'video/quicktime',
+  });
 
 const PLAYBACK: LibraryPlayback = {
   assetId: '9a1bb67e-5c2a-4c0f-9f26-3f9b2f9a9a22',
@@ -115,7 +126,11 @@ describe('AssetDownloadButton — labelled menu', () => {
     fireEvent.click(screen.getByTestId('download-original'));
 
     await waitFor(() => expect(clicked).toHaveLength(1));
-    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1', download: 'hero.jpg' });
+    expect(signBodies[0]).toEqual({
+      brandId: 'brand-1',
+      assetId: 'asset-1',
+      download: 'hero.jpg',
+    });
     expect(clicked[0]?.href).toBe('https://cdn.test/signed?download=hero.jpg');
   });
 
@@ -163,7 +178,11 @@ describe('AssetDownloadButton — labelled menu', () => {
     render(
       <AssetDownloadButton
         brandId="brand-1"
-        asset={libraryAsset({ kind: 'audio', fileName: 'vo.aiff', mimeType: 'audio/aiff' })}
+        asset={libraryAsset({
+          kind: 'audio',
+          fileName: 'vo.aiff',
+          mimeType: 'audio/aiff',
+        })}
       />,
     );
 
@@ -242,7 +261,11 @@ describe('AssetDownloadButton — grid card icon', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download' }));
 
     await waitFor(() => expect(clicked).toHaveLength(1));
-    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1', download: 'hero.mov' });
+    expect(signBodies[0]).toEqual({
+      brandId: 'brand-1',
+      assetId: 'asset-1',
+      download: 'hero.mov',
+    });
     expect(playbackUrls).toEqual([]);
     expect(screen.queryByTestId('download-menu')).toBeNull();
   });
@@ -260,7 +283,9 @@ describe('AssetDownloadButton — grid card icon', () => {
     })) as unknown as typeof fetch;
     const clicked = captureAnchor();
     render(<AssetDownloadButton brandId="brand-1" asset={libraryAsset()} variant="icon" />);
-    const button = screen.getByRole('button', { name: 'Download' }) as HTMLButtonElement;
+    const button = screen.getByRole('button', {
+      name: 'Download',
+    }) as HTMLButtonElement;
 
     fireEvent.click(button);
 

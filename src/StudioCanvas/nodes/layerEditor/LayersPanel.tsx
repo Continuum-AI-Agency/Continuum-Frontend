@@ -28,8 +28,9 @@ import {
   LockOpen,
   TriangleAlert,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
-import { useCallback, useMemo, useState, memo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -39,6 +40,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useStudioMetadata } from '../../hooks/useStudioMetadata';
 import type { LayerEditorLayer } from '../../types';
 import { duplicateNames, type LayerMove } from '../../utils/layers/layerOps';
 
@@ -85,9 +87,13 @@ function LayersPanelImpl({
   onReorder,
   onOrder,
 }: LayersPanelProps) {
+  const translateUi = useUiTranslations('studio');
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   const displayed = useMemo(() => [...layers].reverse(), [layers]);
@@ -124,7 +130,8 @@ function LayersPanelImpl({
   if (layers.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-4 text-center text-2xs text-muted-foreground">
-        Connect images to this node, then add them as layers.
+        {' '}
+        {translateUi('connect_images_to_this_node_then_ad_1675a7e3')}{' '}
       </div>
     );
   }
@@ -178,6 +185,9 @@ function LayerRow({
   onRename: (name: string) => void;
   onOrder: (move: LayerMove) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+  const registryText = useStudioMetadata();
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: layer.id,
   });
@@ -204,7 +214,9 @@ function LayerRow({
             <div className="flex min-w-0 items-center gap-1">
               <button
                 type="button"
-                aria-label={`Reorder ${layer.name}`}
+                aria-label={translateUi('reorder_value0_52756178', {
+                  value0: String(layer.name),
+                })}
                 className="cursor-grab text-muted-foreground hover:text-foreground"
                 {...attributes}
                 {...listeners}
@@ -214,7 +226,15 @@ function LayerRow({
 
               <button
                 type="button"
-                aria-label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
+                aria-label={
+                  layer.visible
+                    ? translateUi('hide_value0_e1ddf57b', {
+                        value0: String(layer.name),
+                      })
+                    : translateUi('show_value0_bf682fa5', {
+                        value0: String(layer.name),
+                      })
+                }
                 aria-pressed={layer.visible}
                 onClick={onToggleVisible}
                 className="text-muted-foreground hover:text-foreground"
@@ -228,7 +248,15 @@ function LayerRow({
 
               <button
                 type="button"
-                aria-label={layer.locked ? `Unlock ${layer.name}` : `Lock ${layer.name}`}
+                aria-label={
+                  layer.locked
+                    ? translateUi('unlock_value0_8ff206d1', {
+                        value0: String(layer.name),
+                      })
+                    : translateUi('lock_value0_fa3e5447', {
+                        value0: String(layer.name),
+                      })
+                }
                 aria-pressed={layer.locked}
                 onClick={onToggleLocked}
                 className="text-muted-foreground hover:text-foreground"
@@ -271,7 +299,9 @@ function LayerRow({
                 <input
                   // biome-ignore lint/a11y/noAutofocus: the row was just double-clicked to rename
                   autoFocus
-                  aria-label={`Rename ${layer.name}`}
+                  aria-label={translateUi('rename_value0_bb7a240d', {
+                    value0: String(layer.name),
+                  })}
                   defaultValue={layer.name}
                   className="min-w-0 flex-1 rounded border border-input bg-background px-1 py-0.5 text-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   onBlur={(event) => {
@@ -310,8 +340,8 @@ function LayerRow({
                     }
                   />
                   <TooltipContent>
-                    Another layer shares this name. Kept as typed — the name is how an external
-                    template binds to this layer.
+                    {' '}
+                    {translateUi('another_layer_shares_this_name_kept_112fea89')}{' '}
                   </TooltipContent>
                 </Tooltip>
               ) : null}
@@ -334,7 +364,7 @@ function LayerRow({
               }}
             >
               <Icon className="mr-2 h-4 w-4" />
-              {label}
+              {registryText(label)}
               <ContextMenuShortcut>{chord}</ContextMenuShortcut>
             </ContextMenuItem>
           ))}

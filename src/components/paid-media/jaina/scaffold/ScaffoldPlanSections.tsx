@@ -2,6 +2,12 @@
 
 import type { PaidScaffoldPlan } from '@continuum/contracts';
 import { Copy, Film, GalleryHorizontal, ImageIcon, ImageOff } from 'lucide-react';
+import {
+  useTranslations as useBetaTranslations,
+  useFormatter,
+  useLocale,
+  useTranslations,
+} from 'next-intl';
 import * as React from 'react';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { Button } from '@/components/ui/button';
@@ -13,6 +19,7 @@ import {
   type CreativeTile,
   DECISION_LABELS,
   formatMetricValue,
+  localizeScaffoldCopy,
   PROVENANCE_LABELS,
   type ScaffoldFieldGroup,
   type ScaffoldSummary,
@@ -30,50 +37,73 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   return <h4 className="font-medium text-foreground text-sm">{children}</h4>;
 }
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
-
 export function ScaffoldSummaryStrip({ summary }: { summary: ScaffoldSummary }) {
+  const format = useFormatter();
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const budget =
     typeof summary.dailyBudgetMinorUnits === 'number'
-      ? `${formatCurrency(summary.dailyBudgetMinorUnits / 100, summary.currency)}/day`
-      : 'Placeholder';
+      ? uiText('helper_34dd8b60efe4', {
+          v0: formatCurrency(summary.dailyBudgetMinorUnits / 100, summary.currency, uiLocale),
+        })
+      : uiText('scaffoldSummaryPlaceholder');
   const expected =
     typeof summary.conversionsPerDay === 'number'
-      ? `≈ ${summary.conversionsPerDay.toFixed(summary.conversionsPerDay >= 10 ? 0 : 1)}/day`
+      ? uiText('scaffoldSummaryExpected', {
+          amount: format.number(summary.conversionsPerDay, {
+            minimumFractionDigits: summary.conversionsPerDay >= 10 ? 0 : 1,
+            maximumFractionDigits: summary.conversionsPerDay >= 10 ? 0 : 1,
+          }),
+        })
       : '—';
   const cells: { key: string; label: string; value: string; hint?: string }[] = [
-    { key: 'objective', label: 'Objective', value: summary.objective },
+    {
+      key: 'objective',
+      label: uiText('objective_3b20adc'),
+      value: summary.objective,
+    },
     {
       key: 'budget',
-      label: 'Daily budget',
+      label: uiText('daily_budget_7b0a1f0'),
       value: budget,
       hint:
         typeof summary.dailyBudgetMinorUnits !== 'number'
-          ? 'No measured CPA yet'
-          : summary.budgetHeldByCampaign
-            ? 'Campaign budget (CBO)'
-            : 'Total across ad sets',
+          ? uiText('scaffoldSummaryBudgetHint', { kind: 'unmeasured' })
+          : uiText('scaffoldSummaryBudgetHint', {
+              kind: summary.budgetHeldByCampaign ? 'campaign' : 'adsets',
+            }),
     },
     {
       key: 'expected',
-      label: 'Expected conversions',
+      label: uiText('expected_conversions_3bc322d'),
       value: expected,
       hint:
         typeof summary.cpa === 'number'
-          ? `At ${formatCurrency(summary.cpa, summary.currency)} CPA`
-          : 'Needs a measured CPA',
+          ? uiText('scaffoldSummaryCpa', {
+              amount: formatCurrency(summary.cpa, summary.currency, uiLocale),
+            })
+          : uiText('scaffoldSummaryNeedsCpa'),
     },
-    { key: 'audiences', label: 'Audiences', value: String(summary.audiences) },
+    {
+      key: 'audiences',
+      label: uiText('audiences_9e3922b'),
+      value: format.number(summary.audiences),
+    },
     {
       key: 'creatives',
-      label: 'Creatives',
-      value: `${summary.creatives} of ${summary.ads}`,
-      hint: summary.creatives < summary.ads ? 'Some ads have none yet' : 'Every ad has one',
+      label: uiText('creatives_2eb70c5'),
+      value: uiText('scaffoldSummaryCreativeCount', {
+        creatives: summary.creatives,
+        ads: summary.ads,
+      }),
+      hint: uiText('scaffoldSummaryCreativeHint', {
+        incomplete: summary.creatives < summary.ads ? 'yes' : 'no',
+      }),
     },
     {
       key: 'optimizer',
-      label: 'Optimizer',
-      value: summary.optimizer ?? 'Not planned',
+      label: uiText('optimizer_2ee6172'),
+      value: summary.optimizer ?? uiText('scaffoldSummaryNotPlanned'),
     },
   ];
 
@@ -107,14 +137,15 @@ const EVIDENCE_PREVIEW = 4;
  * shown — but it is shown as a claim, not dressed as a measurement.
  */
 export function ScaffoldEvidence({ plan }: { plan: PaidScaffoldPlan | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const [expanded, setExpanded] = React.useState(false);
   if (!plan) {
     return (
       <section className="flex flex-col gap-1.5" data-testid="scaffold-evidence">
-        <SectionHeading>Why this plan</SectionHeading>
+        <SectionHeading>{uiText('why_this_plan_841b655')}</SectionHeading>
         <p className="text-muted-foreground text-sm">
-          This version was proposed before Jaina recorded evidence for each decision. The budget
-          below is still sized from the account&rsquo;s measured CPA.
+          {uiText('this_version_was_proposed_before_jaina_record_c5db4ce')}
         </p>
       </section>
     );
@@ -125,9 +156,11 @@ export function ScaffoldEvidence({ plan }: { plan: PaidScaffoldPlan | null }) {
 
   return (
     <section className="flex flex-col gap-1.5" data-testid="scaffold-evidence">
-      <SectionHeading>Why this plan</SectionHeading>
+      <SectionHeading>{uiText('why_this_plan_841b655')}</SectionHeading>
       {entries.length === 0 ? (
-        <p className="text-muted-foreground text-sm">No evidence was recorded for this version.</p>
+        <p className="text-muted-foreground text-sm">
+          {uiText('no_evidence_was_recorded_for_this_version_6cbcfa3')}
+        </p>
       ) : (
         <ul className="divide-y divide-foreground/5 rounded-xl bg-background/80">
           {shown.map((entry, index) => (
@@ -138,13 +171,13 @@ export function ScaffoldEvidence({ plan }: { plan: PaidScaffoldPlan | null }) {
               data-decision={entry.decision}
             >
               <span className="pt-px text-muted-foreground text-xs">
-                {DECISION_LABELS[entry.decision]}
+                {localizeScaffoldCopy(DECISION_LABELS[entry.decision], uiText)}
               </span>
               <div className="flex min-w-0 flex-col gap-1.5">
                 <p className="text-pretty text-foreground text-sm leading-snug">
                   {entry.claim}{' '}
                   <span className="whitespace-nowrap text-muted-foreground text-xs">
-                    · {PROVENANCE_LABELS[entry.provenance]}
+                    · {localizeScaffoldCopy(PROVENANCE_LABELS[entry.provenance], uiText)}
                   </span>
                 </p>
                 {entry.metrics.length > 0 ? (
@@ -153,16 +186,16 @@ export function ScaffoldEvidence({ plan }: { plan: PaidScaffoldPlan | null }) {
                       <li
                         key={`${metric.label}:${metric.source}`}
                         className="inline-flex max-w-full items-baseline gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs"
-                        title={sourceLabel(metric.source)}
+                        title={sourceLabel(metric.source, uiText)}
                         data-testid="scaffold-evidence-metric"
                       >
                         <span className="text-muted-foreground">{metric.label}</span>
                         <span className="font-medium text-foreground tabular-nums">
-                          {formatMetricValue(metric)}
+                          {formatMetricValue(metric, uiLocale)}
                         </span>
-                        {windowLabel(metric.window) ? (
+                        {windowLabel(metric.window, uiText) ? (
                           <span className="text-muted-foreground">
-                            · {windowLabel(metric.window)}
+                            · {windowLabel(metric.window, uiText)}
                           </span>
                         ) : null}
                       </li>
@@ -182,7 +215,9 @@ export function ScaffoldEvidence({ plan }: { plan: PaidScaffoldPlan | null }) {
           className="h-7 self-start px-2 text-muted-foreground"
           onClick={() => setExpanded((value) => !value)}
         >
-          {expanded ? 'Show fewer' : `Show ${hidden} more`}
+          {expanded
+            ? uiText('show_fewer_255beb6')
+            : uiText('template_a1eec0306f3f', { v0: hidden })}
         </Button>
       ) : null}
     </section>
@@ -190,10 +225,13 @@ export function ScaffoldEvidence({ plan }: { plan: PaidScaffoldPlan | null }) {
 }
 
 export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) {
+  const betaUiText = useBetaTranslations('scale');
+
+  const uiText = useTranslations('scale');
   if (audiences.length === 0) return null;
   return (
     <section className="flex flex-col gap-1.5" data-testid="scaffold-audiences">
-      <SectionHeading>Audiences</SectionHeading>
+      <SectionHeading>{uiText('audiences_9e3922b')}</SectionHeading>
       <ul className="divide-y divide-foreground/5 rounded-xl bg-background/80">
         {audiences.map((audience) => (
           <li
@@ -207,17 +245,21 @@ export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) 
               </span>
               <span className="shrink-0 text-muted-foreground text-xs">
                 {audience.kind === 'group'
-                  ? 'Published group'
+                  ? betaUiText('beta_db5004c2d24b')
                   : audience.kind === 'copied'
-                    ? 'Copied'
-                    : 'Broad'}
+                    ? betaUiText('beta_8d525e5f158b')
+                    : betaUiText('beta_3d9c05379c20')}
               </span>
             </div>
             <p className="flex flex-wrap gap-x-1.5 text-muted-foreground text-xs">
               {[
                 audience.summary,
                 audience.reach,
-                audience.kind === 'group' ? plural(audience.memberCount, 'member') : null,
+                audience.kind === 'group'
+                  ? uiText('scaffoldMemberCount', {
+                      count: audience.memberCount,
+                    })
+                  : null,
               ]
                 .filter((part): part is string => Boolean(part))
                 .map((part, index) => (
@@ -233,12 +275,19 @@ export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) 
                 title={audience.members.join(', ')}
               >
                 {audience.members.slice(0, 3).join(', ')}
-                {audience.members.length > 3 ? ` +${audience.members.length - 3} more` : ''}
+                {audience.members.length > 3
+                  ? uiText('template_5bea7822d675', {
+                      v0: audience.members.length - 3,
+                    })
+                  : ''}
               </p>
             ) : null}
             <p className="text-muted-foreground text-xs">
-              Feeds {audience.adSets.slice(0, 2).join(', ')}
-              {audience.adSets.length > 2 ? ` +${audience.adSets.length - 2} more` : ''}
+              {uiText.rich('sentence_e19d67a46558', {
+                sets: audience.adSets.slice(0, 2).join(', '),
+                hasMore: audience.adSets.length > 2 ? 'yes' : 'no',
+                more: Math.max(0, audience.adSets.length - 2),
+              })}
             </p>
           </li>
         ))}
@@ -247,10 +296,16 @@ export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) 
   );
 }
 
-const FORMAT_ICON = { image: ImageIcon, video: Film, carousel: GalleryHorizontal } as const;
+const FORMAT_ICON = {
+  image: ImageIcon,
+  video: Film,
+  carousel: GalleryHorizontal,
+} as const;
 const TILE_LIMIT = 8;
 
 function CreativeThumb({ tile, signedUrl }: { tile: CreativeTile; signedUrl?: string }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const Icon = tile.format ? FORMAT_ICON[tile.format] : tile.reusedCreativeId ? Copy : ImageOff;
   const [broken, setBroken] = React.useState(false);
   const src = broken ? null : (tile.thumbnails[0] ?? signedUrl ?? null);
@@ -285,7 +340,7 @@ function CreativeThumb({ tile, signedUrl }: { tile: CreativeTile; signedUrl?: st
         ) : null}
       </div>
       <span className="truncate text-muted-foreground text-xs" title={tile.adName}>
-        {tile.format || tile.reusedCreativeId ? tile.adName : 'No creative'}
+        {tile.format || tile.reusedCreativeId ? tile.adName : betaUiText('beta_34a6e0766d06')}
       </span>
     </li>
   );
@@ -298,6 +353,7 @@ export function ScaffoldCreatives({
   tiles: CreativeTile[];
   brandId?: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const signed = useSignedAssetUrls(
     brandId || undefined,
     tiles.flatMap((tile) =>
@@ -308,7 +364,7 @@ export function ScaffoldCreatives({
   const hidden = tiles.length - TILE_LIMIT;
   return (
     <section className="flex flex-col gap-1.5" data-testid="scaffold-creatives">
-      <SectionHeading>Creatives</SectionHeading>
+      <SectionHeading>{uiText('creatives_2eb70c5')}</SectionHeading>
       <ul className="flex flex-wrap gap-2">
         {tiles.slice(0, TILE_LIMIT).map((tile) => (
           <CreativeThumb
@@ -342,13 +398,15 @@ const FIELD_GROUP_PREVIEW = 4;
  * still an open question, before anything reaches Meta.
  */
 export function ScaffoldFields({ groups }: { groups: ScaffoldFieldGroup[] }) {
+  const betaUiText = useBetaTranslations('scale');
+
   const [expanded, setExpanded] = React.useState(false);
   if (groups.length === 0) return null;
   const shown = expanded ? groups : groups.slice(0, FIELD_GROUP_PREVIEW);
   const hidden = groups.length - shown.length;
   return (
     <section className="flex flex-col gap-1.5" data-testid="scaffold-fields">
-      <SectionHeading>Every field</SectionHeading>
+      <SectionHeading>{betaUiText('beta_a0b1e8239f2d')}</SectionHeading>
       <ul className="flex flex-col gap-2">
         {shown.map((group) => (
           <li
@@ -400,7 +458,9 @@ export function ScaffoldFields({ groups }: { groups: ScaffoldFieldGroup[] }) {
           className="h-7 self-start px-2 text-muted-foreground"
           onClick={() => setExpanded((value) => !value)}
         >
-          {expanded ? 'Show fewer' : `Show ${hidden} more`}
+          {expanded
+            ? betaUiText('beta_255beb6510e7')
+            : betaUiText('beta_8af6fc3d8124', { value0: String(hidden) })}
         </Button>
       ) : null}
     </section>

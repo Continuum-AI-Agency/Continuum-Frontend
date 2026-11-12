@@ -16,6 +16,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { ArrowUpDown } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,28 +43,45 @@ const PAGE_SIZE = 50;
 
 type StatusFilter = 'all' | McpToolCallStatus;
 
-const STATUS_STYLE: Record<McpToolCallStatus, { label: string; className: string }> = {
-  ok: { label: 'ok', className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
-  error: { label: 'error', className: 'bg-red-500/15 text-red-600 dark:text-red-400' },
-  denied: { label: 'denied', className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
-  rate_limited: {
-    label: 'rate limited',
-    className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  },
-  cancelled: {
-    label: 'cancelled',
-    className: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
-  },
-};
-
-function formatTimestamp(value: string): string {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
+function getStatusStyles(tUi: ReturnType<typeof useTranslations<'settings'>>) {
+  return {
+    ok: {
+      label: tUi('m_7a85f4764b'),
+      className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    },
+    error: {
+      label: tUi('m_11f9578d05'),
+      className: 'bg-red-500/15 text-red-600 dark:text-red-400',
+    },
+    denied: {
+      label: tUi('m_304e06a569'),
+      className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    },
+    rate_limited: {
+      label: tUi('m_877bb49e5f'),
+      className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    },
+    cancelled: {
+      label: tUi('m_8761d26fb8'),
+      className: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
+    },
+  };
 }
 
-function formatDuration(ms: number | null): string {
+function formatTimestamp(value: string, locale: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString(locale);
+}
+
+function formatDuration(ms: number | null, locale: string): string {
   if (ms === null || !Number.isFinite(ms)) return '—';
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: ms >= 1000 ? 'second' : 'millisecond',
+    unitDisplay: 'short',
+    minimumFractionDigits: ms >= 1000 ? 1 : 0,
+    maximumFractionDigits: ms >= 1000 ? 1 : 0,
+  }).format(ms >= 1000 ? ms / 1000 : Math.round(ms));
 }
 
 function buildPath(cursor: string | null, status: StatusFilter, tool: string): string {
@@ -75,6 +93,12 @@ function buildPath(cursor: string | null, status: StatusFilter, tool: string): s
 }
 
 export function McpActivityTable() {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('settings');
+
+  const STATUS_STYLE = getStatusStyles(tUi);
+
   const [status, setStatus] = React.useState<StatusFilter>('all');
   const [toolFilter, setToolFilter] = React.useState('');
   const deferredToolFilter = React.useDeferredValue(toolFilter.trim());
@@ -100,24 +124,24 @@ export function McpActivityTable() {
     () => [
       {
         accessorKey: 'created_at',
-        header: ({ column }) => <SortHeader column={column} label="When" />,
+        header: ({ column }) => <SortHeader column={column} label={tUi('m_769bb19e61')} />,
         cell: ({ row }) => (
           <span className="font-data text-xs tabular-nums text-muted-foreground">
-            {formatTimestamp(row.original.created_at)}
+            {formatTimestamp(row.original.created_at, uiLocale)}
           </span>
         ),
         sortingFn: 'datetime',
       },
       {
         accessorKey: 'email',
-        header: 'User',
+        header: tUi('m_9f8a2389a2'),
         cell: ({ row }) => (
           <span className="text-xs text-foreground">{row.original.email ?? '—'}</span>
         ),
       },
       {
         accessorKey: 'client_name',
-        header: 'MCP client',
+        header: tUi('m_016ad99e5a'),
         cell: ({ row }) => (
           <span className="text-xs text-foreground">
             {row.original.client_name ?? row.original.client_id ?? '—'}
@@ -126,7 +150,7 @@ export function McpActivityTable() {
       },
       {
         accessorKey: 'tool',
-        header: 'Tool',
+        header: tUi('tableTool'),
         cell: ({ row }) => (
           <span className="font-data text-xs text-foreground">
             {row.original.tool ?? row.original.event_name}
@@ -135,7 +159,7 @@ export function McpActivityTable() {
       },
       {
         accessorKey: 'status',
-        header: 'Status',
+        header: tUi('m_bae7d5be70'),
         cell: ({ row }) => {
           const style = STATUS_STYLE[row.original.status];
           return (
@@ -150,17 +174,17 @@ export function McpActivityTable() {
       },
       {
         accessorKey: 'duration_ms',
-        header: ({ column }) => <SortHeader column={column} label="Duration" />,
+        header: ({ column }) => <SortHeader column={column} label={tUi('m_1370004da7')} />,
         cell: ({ row }) => (
           <span className="font-data text-xs tabular-nums text-muted-foreground">
-            {formatDuration(row.original.duration_ms)}
+            {formatDuration(row.original.duration_ms, uiLocale)}
           </span>
         ),
         sortingFn: 'basic',
       },
       {
         accessorKey: 'error_code',
-        header: 'Error',
+        header: tUi('m_7f2f6a15cf'),
         cell: ({ row }) => (
           <span className="font-data text-xs text-muted-foreground">
             {row.original.error_code ?? '—'}
@@ -168,7 +192,7 @@ export function McpActivityTable() {
         ),
       },
     ],
-    [],
+    [tUi, uiLocale],
   );
 
   const table = useReactTable({
@@ -186,20 +210,20 @@ export function McpActivityTable() {
         <Input
           value={toolFilter}
           onChange={(e) => setToolFilter(e.target.value)}
-          placeholder="Filter by tool…"
+          placeholder={tUi('m_9f1d7c6dc5')}
           className="h-8 max-w-[14rem] text-xs"
         />
         <Select value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
           <SelectTrigger className="h-8 w-[10rem] text-xs">
-            <SelectValue placeholder="All statuses" />
+            <SelectValue placeholder={tUi('m_6405179d24')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="ok">OK</SelectItem>
-            <SelectItem value="error">Error</SelectItem>
-            <SelectItem value="denied">Denied</SelectItem>
-            <SelectItem value="rate_limited">Rate limited</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="all">{tUi('m_6405179d24')}</SelectItem>
+            <SelectItem value="ok">{tUi('statusOk')}</SelectItem>
+            <SelectItem value="error">{tUi('m_7f2f6a15cf')}</SelectItem>
+            <SelectItem value="denied">{tUi('m_63b16bd41e')}</SelectItem>
+            <SelectItem value="rate_limited">{tUi('m_9f0d69d178')}</SelectItem>
+            <SelectItem value="cancelled">{tUi('m_a1bf92eff4')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -229,9 +253,9 @@ export function McpActivityTable() {
                     colSpan={columns.length}
                     className="h-24 text-center text-sm text-muted-foreground"
                   >
-                    Could not load activity.{' '}
+                    {tUi('m_4a27499b03')}{' '}
                     <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
-                      Retry
+                      {tUi('m_9f5cd8a2e8')}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -241,7 +265,7 @@ export function McpActivityTable() {
                     colSpan={columns.length}
                     className="h-24 text-center text-sm text-muted-foreground"
                   >
-                    No tool calls yet.
+                    {tUi('m_19456dd220')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -268,7 +292,7 @@ export function McpActivityTable() {
             disabled={query.isFetchingNextPage}
             onClick={() => void query.fetchNextPage()}
           >
-            {query.isFetchingNextPage ? 'Loading…' : 'Load more'}
+            {query.isFetchingNextPage ? tUi('m_33ce417454') : tUi('m_dfe60ca92e')}
           </Button>
         </div>
       ) : null}
@@ -296,7 +320,10 @@ function SortHeader({
   column,
   label,
 }: {
-  column: { toggleSorting: (asc?: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' };
+  column: {
+    toggleSorting: (asc?: boolean) => void;
+    getIsSorted: () => false | 'asc' | 'desc';
+  };
   label: string;
 }) {
   return (

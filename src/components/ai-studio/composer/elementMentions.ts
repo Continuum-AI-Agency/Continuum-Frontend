@@ -29,8 +29,10 @@ import {
   resolveElementRefs,
   withElementStyleTokens,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { ELEMENT_CATEGORY_LABEL } from '@/lib/ai-studio/elements';
+import { elementCategoryLabel } from '../elements/elementPresentation';
 
 export const ELEMENTS_ROOT_KEY = 'canvas-context:elements';
 export const ELEMENT_CATEGORY_FOLDER_PREFIX = 'canvas-context:elements:';
@@ -68,29 +70,42 @@ export function parseElementCategoryFolderKey(key: string): ElementCategory | nu
  */
 export function elementToCanvasMentionSuggestion(
   element: ElementRecord,
+  uiText?: ReturnType<typeof useTranslations<'studio'>>,
 ): AgentMentionSuggestion | null {
   const assetIds = resolveElementRefs(element).map((ref) => ref.asset_id);
   if (assetIds.length === 0) return null;
 
   const pinned = Boolean(element.defaultReferenceAssetId);
   const droppedCount = pinned ? 0 : Math.max(0, element.members.length - assetIds.length);
-  const categoryLabel = ELEMENT_CATEGORY_LABEL[element.category];
+  const categoryLabel = uiText
+    ? elementCategoryLabel(element.category, uiText)
+    : ELEMENT_CATEGORY_LABEL[element.category];
 
   return {
     key: `${ELEMENT_MENTION_KEY_PREFIX}${element.id}`,
     label: element.name,
     type: 'media_asset',
     source: 'canvas',
-    group: `Elements · ${categoryLabel}`,
-    description: pinned
-      ? `${categoryLabel} · pinned reference`
-      : [
-          `${categoryLabel} · ${assetIds.length} image${assetIds.length === 1 ? '' : 's'}`,
-          droppedCount > 0 ? `${droppedCount} over the limit` : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
-    badge: 'element',
+    group: uiText
+      ? uiText('elementSuggestionGroup', { category: categoryLabel })
+      : `Elements · ${categoryLabel}`,
+    description: uiText
+      ? pinned
+        ? uiText('elementPinnedDescription', { category: categoryLabel })
+        : uiText('elementFallbackDescription', {
+            category: categoryLabel,
+            count: assetIds.length,
+            dropped: droppedCount,
+          })
+      : pinned
+        ? `${categoryLabel} · pinned reference`
+        : [
+            `${categoryLabel} · ${assetIds.length} image${assetIds.length === 1 ? '' : 's'}`,
+            droppedCount > 0 ? `${droppedCount} over the limit` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+    badge: uiText ? uiText('element_4e5b548d') : 'element',
     reference: {
       id: assetIds[0] as string,
       type: 'media_asset',
@@ -132,12 +147,13 @@ export async function refreshElementMentions(
 /** Groups the brand's Elements by category, in the canonical category order. */
 export function elementSuggestionsByCategory(
   elements: readonly ElementRecord[],
+  uiText?: ReturnType<typeof useTranslations<'studio'>>,
 ): Map<ElementCategory, AgentMentionSuggestion[]> {
   const grouped = new Map<ElementCategory, AgentMentionSuggestion[]>();
   for (const category of ELEMENT_CATEGORIES) {
     const bucket = elements
       .filter((element) => element.category === category)
-      .map(elementToCanvasMentionSuggestion)
+      .map((element) => elementToCanvasMentionSuggestion(element, uiText))
       .filter((suggestion): suggestion is AgentMentionSuggestion => suggestion !== null);
     if (bucket.length > 0) grouped.set(category, bucket);
   }

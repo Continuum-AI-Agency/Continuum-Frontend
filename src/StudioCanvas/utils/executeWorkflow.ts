@@ -14,6 +14,7 @@ import {
   FAST_CUT_AUDIO_INPUT_HANDLE,
   FAST_CUT_MEDIA_INPUT_HANDLE,
   isActionId,
+  isStudioGenerationErrorCode,
   LAYER_EDITOR_IMAGE_INPUT_HANDLE,
   MAX_BATCH_ITEMS,
   type OmniGenRequest,
@@ -99,6 +100,13 @@ import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehy
 import { runFastCutNode } from './runFastCutNode';
 import { startHyperframesAgentNode } from './startHyperframesAgent';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
+import {
+  WorkflowUiError,
+  type WorkflowUiFailure,
+  workflowFailure,
+  workflowFailureFromError,
+  workflowUiText,
+} from './workflowUiFailure';
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
@@ -221,6 +229,7 @@ export const collectPublisherHandoffs = (
 };
 
 type NodeReadiness = {
+  uiFailure?: WorkflowUiFailure;
   ready: boolean;
   reason?: string;
   blockedNodeId?: string;
@@ -456,7 +465,12 @@ const getPromptValue = (
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
   allEdges: Edge[],
-): { value?: string; fromEdge: boolean; fromCollection?: boolean; blockedNodeId?: string } => {
+): {
+  value?: string;
+  fromEdge: boolean;
+  fromCollection?: boolean;
+  blockedNodeId?: string;
+} => {
   const promptHandles =
     isVideoGeneratorNodeType(node.type) ||
     node.type === 'omniGen' ||
@@ -500,6 +514,7 @@ const getPromptValue = (
 };
 
 type MissingOptionalInput = {
+  uiFailure?: WorkflowUiFailure;
   label: string;
   blockedNodeId: string;
   /**
@@ -569,19 +584,54 @@ const referenceIsEmpty = (node: StudioNode | undefined): boolean => {
  * node says missing — and every one of them started its diagnosis in the wrong place.
  * When an edge is present but unresolvable, the message names WHY instead.
  */
-const unresolvedInputReason = (
+const unresolvedInputDiagnostic = (
   handle: string,
   sourceNode: StudioNode | undefined,
   resolvedOutputs: Map<string, NodeOutput>,
-): string => {
-  if (referenceIsUnreadable(sourceNode)) {
-    return `The reference on "${handle}" could not be loaded — its signed URL was never refreshed. Check that the canvas can reach the backend.`;
-  }
+): { reason: string; uiFailure: WorkflowUiFailure } => {
+  if (referenceIsUnreadable(sourceNode))
+    return {
+      reason: `The reference on "${handle}" could not be loaded — its signed URL was never refreshed. Check that the canvas can reach the backend.`,
+      uiFailure: workflowFailure('workflow_the_reference_on_value0_could__81d076b5', {
+        input: handle,
+      }),
+    };
   const source = describeSource(sourceNode);
-  if (sourceNode && !resolvedOutputs.has(sourceNode.id)) {
-    return `The "${handle}" input is waiting on ${source}, which has not produced anything yet`;
-  }
-  return `The "${handle}" input is wired to ${source}, but nothing readable came through it`;
+  const authored = asTrimmedString(sourceNode?.data?.label);
+  const registered = sourceNode
+    ? STUDIO_NODE_REGISTRY[sourceNode.type as StudioNodeType]?.label
+    : undefined;
+  const values = {
+    input: handle,
+    source: authored || registered || '',
+    sourceKind: authored || registered ? 'named' : 'unknown',
+  };
+  const metadataValues = !authored && registered ? { source: registered } : undefined;
+  if (sourceNode && !resolvedOutputs.has(sourceNode.id))
+    return {
+      reason: `The "${handle}" input is waiting on ${source}, which has not produced anything yet`,
+      uiFailure: workflowFailure(
+        'workflow_the_value0_input_is_waiting_on_d9483d34',
+        values,
+        metadataValues,
+      ),
+    };
+  return {
+    reason: `The "${handle}" input is wired to ${source}, but nothing readable came through it`,
+    uiFailure: workflowFailure(
+      'workflow_the_value0_input_is_wired_to_v_7169ff27',
+      values,
+      metadataValues,
+    ),
+  };
+};
+const unresolvedInputError = (
+  handle: string,
+  sourceNode: StudioNode | undefined,
+  resolvedOutputs: Map<string, NodeOutput>,
+): WorkflowUiError => {
+  const diagnostic = unresolvedInputDiagnostic(handle, sourceNode, resolvedOutputs);
+  return new WorkflowUiError(diagnostic.reason, diagnostic.uiFailure);
 };
 
 /**
@@ -626,7 +676,7 @@ const findMissingOptionalInput = (
   const unresolved = (edge: Edge, handle: string): MissingOptionalInput => ({
     label: handle,
     blockedNodeId: edge.source,
-    reason: unresolvedInputReason(handle, nodeById.get(edge.source), resolvedOutputs),
+    ...unresolvedInputDiagnostic(handle, nodeById.get(edge.source), resolvedOutputs),
   });
 
   if (node.type === 'nanoGen') {
@@ -660,7 +710,9 @@ const findMissingOptionalInput = (
       } else if (handle === 'ref-video') {
         if (
           videoModel === 'kling-omni' &&
-          !resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: false })
+          !resolveVideoInput(edge, resolvedOutputs, nodeById, {
+            allowUri: false,
+          })
         ) {
           return unresolved(edge, handle);
         }
@@ -757,7 +809,11 @@ const collectionInputFor = (
     const edge = getIncomingEdges(edges, nodeId).find((e) => e.targetHandle === port.handle);
     const output = edge ? resolvedOutputs.get(edge.source) : undefined;
     if (output?.type === 'collection') {
-      return { handle: port.handle, modality: port.modality, items: output.items };
+      return {
+        handle: port.handle,
+        modality: port.modality,
+        items: output.items,
+      };
     }
   }
   return undefined;
@@ -798,7 +854,12 @@ const resolveActionInputsFor = async (
     // user wired.
     const wired = incoming.filter((candidate) => candidate.targetHandle === port.handle);
     if (wired.length === 0)
-      throw new Error(`Nothing is connected to this action's "${port.handle}" input`);
+      throw new WorkflowUiError(
+        `Nothing is connected to this action's "${port.handle}" input`,
+        workflowFailure('workflow_nothing_is_connected_to_this_a_3067954c', {
+          input: port.handle,
+        }),
+      );
 
     for (const edge of wired.slice(0, port.max)) {
       const collection = resolvedOutputs.get(edge.source);
@@ -816,9 +877,7 @@ const resolveActionInputsFor = async (
       if (port.modality === 'text') {
         const text = resolveTextInput(edge, resolvedOutputs, nodeById, edges);
         if (text === undefined) {
-          throw new Error(
-            unresolvedInputReason(port.handle, nodeById.get(edge.source), resolvedOutputs),
-          );
+          throw unresolvedInputError(port.handle, nodeById.get(edge.source), resolvedOutputs);
         }
         inputs.push({ handle: port.handle, text });
         continue;
@@ -857,9 +916,7 @@ const resolveActionInputsFor = async (
         sourceData.sourceUrl,
       ].find((value): value is string => typeof value === 'string' && value.length > 0);
       if (!url) {
-        throw new Error(
-          unresolvedInputReason(port.handle, nodeById.get(edge.source), resolvedOutputs),
-        );
+        throw unresolvedInputError(port.handle, nodeById.get(edge.source), resolvedOutputs);
       }
       // A reference node already knows which Library asset it holds, and that id is
       // the only way a backend op can register its result as a DERIVATIVE of this.
@@ -868,7 +925,10 @@ const resolveActionInputsFor = async (
       // reported "not saved to the Library" about assets that were already there.
       const ref = readNodeAssetRef(sourceData);
       const assetRef = ref
-        ? { assetId: ref.assetId, ...(ref.versionId ? { assetVersionId: ref.versionId } : {}) }
+        ? {
+            assetId: ref.assetId,
+            ...(ref.versionId ? { assetVersionId: ref.versionId } : {}),
+          }
         : {};
       const shaderStack = shaderStackV1Schema.safeParse(sourceData.shaderStack);
       const metadata = {
@@ -886,7 +946,12 @@ const resolveActionInputsFor = async (
               ...metadata,
               ...sourceNodeId,
             }
-          : { handle: port.handle, imageUrl: url, ...metadata, ...sourceNodeId },
+          : {
+              handle: port.handle,
+              imageUrl: url,
+              ...metadata,
+              ...sourceNodeId,
+            },
       );
     }
   }
@@ -896,10 +961,22 @@ const resolveActionInputsFor = async (
 
 /** A worker op re-encodes bytes, so a video input has to be fetched, not linked. */
 const fetchBlob = async (url: string | undefined, handle: string): Promise<Blob> => {
-  if (!url) throw new Error(`The input on "${handle}" has no readable source`);
+  if (!url)
+    throw new WorkflowUiError(
+      `The input on "${handle}" has no readable source`,
+      workflowFailure('workflow_the_input_on_value0_has_no_rea_168dc297', {
+        input: handle,
+      }),
+    );
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Could not read the clip on "${handle}" (${response.status})`);
+    throw new WorkflowUiError(
+      `Could not read the clip on "${handle}" (${response.status})`,
+      workflowFailure('workflow_could_not_read_the_clip_on_val_12c287e4', {
+        input: handle,
+        status: response.status,
+      }),
+    );
   }
   return response.blob();
 };
@@ -956,7 +1033,13 @@ const materializeBatch = (
 const batchItemOutput = (item: BatchItem, itemType: 'text' | 'image' | 'video'): NodeOutput => {
   if (itemType === 'text') return { type: 'text', value: item.value ?? '' };
   if (itemType === 'video') return { type: 'video', url: item.url ?? '', assetId: item.assetId };
-  return { type: 'image', base64: '', mimeType: 'image/png', url: item.url, assetId: item.assetId };
+  return {
+    type: 'image',
+    base64: '',
+    mimeType: 'image/png',
+    url: item.url,
+    assetId: item.assetId,
+  };
 };
 
 const getNodeReadiness = (
@@ -974,7 +1057,11 @@ const getNodeReadiness = (
     if (externalInputEdges.length === 0) {
       return normalizeText((node.data as any).value)
         ? { ready: true }
-        : { ready: false, reason: 'Missing required prompt' };
+        : {
+            ready: false,
+            reason: 'Missing required prompt',
+            uiFailure: workflowFailure('workflow_missing_required_prompt_fd8a0824'),
+          };
     }
 
     for (const edge of externalInputEdges) {
@@ -985,7 +1072,11 @@ const getNodeReadiness = (
           : targetHandle === 'audio'
             ? Boolean(resolveAudioInput(edge, nodeById))
             : targetHandle === 'video'
-              ? Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: false }))
+              ? Boolean(
+                  resolveVideoInput(edge, resolvedOutputs, nodeById, {
+                    allowUri: false,
+                  }),
+                )
               : targetHandle === 'document'
                 ? Boolean(resolveDocumentInput(edge, nodeById))
                 : false;
@@ -994,7 +1085,7 @@ const getNodeReadiness = (
         return {
           ready: false,
           blockedNodeId: edge.source,
-          reason: unresolvedInputReason(
+          ...unresolvedInputDiagnostic(
             targetHandle || 'string input',
             nodeById.get(edge.source),
             resolvedOutputs,
@@ -1008,20 +1099,33 @@ const getNodeReadiness = (
 
   const failedEdge = incomingEdges.find((edge) => failedNodes.has(edge.source));
   if (failedEdge) {
-    return { ready: false, reason: 'Upstream dependency failed' };
+    return {
+      ready: false,
+      reason: 'Upstream dependency failed',
+      uiFailure: workflowFailure('workflow_upstream_dependency_failed_69bca120'),
+    };
   }
 
   // Park anything downstream of a Video Editor gate that is still awaiting a
   // human render, mirroring the failed-dependency propagation above.
   const awaitingEdge = incomingEdges.find((edge) => awaitingNodes.has(edge.source));
   if (awaitingEdge) {
-    return { ready: false, awaiting: true, reason: 'Waiting on an upstream Video Editor' };
+    return {
+      ready: false,
+      awaiting: true,
+      reason: 'Waiting on an upstream Video Editor',
+      uiFailure: workflowFailure('workflow_waiting_on_an_upstream_video_e_fa42e665'),
+    };
   }
 
   if (node.type === 'videoDecode') {
     const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
     if (videoEdges.length === 0) {
-      return { ready: false, reason: 'Missing required video input' };
+      return {
+        ready: false,
+        reason: 'Missing required video input',
+        uiFailure: workflowFailure('workflow_missing_required_video_input_4e4d436c'),
+      };
     }
     const hasVideo = videoEdges.some((edge) =>
       resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }),
@@ -1030,7 +1134,7 @@ const getNodeReadiness = (
       return {
         ready: false,
         blockedNodeId: videoEdges[0].source,
-        reason: unresolvedInputReason('video', nodeById.get(videoEdges[0].source), resolvedOutputs),
+        ...unresolvedInputDiagnostic('video', nodeById.get(videoEdges[0].source), resolvedOutputs),
       };
     }
     return { ready: true };
@@ -1039,7 +1143,11 @@ const getNodeReadiness = (
   if (node.type === 'frameExtract') {
     const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
     if (videoEdges.length === 0) {
-      return { ready: false, reason: 'Missing required video input' };
+      return {
+        ready: false,
+        reason: 'Missing required video input',
+        uiFailure: workflowFailure('workflow_missing_required_video_input_4e4d436c'),
+      };
     }
     const hasVideo = videoEdges.some((edge) =>
       resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }),
@@ -1049,7 +1157,7 @@ const getNodeReadiness = (
       : {
           ready: false,
           blockedNodeId: videoEdges[0].source,
-          reason: unresolvedInputReason(
+          ...unresolvedInputDiagnostic(
             'video',
             nodeById.get(videoEdges[0].source),
             resolvedOutputs,
@@ -1060,7 +1168,11 @@ const getNodeReadiness = (
   if (node.type === 'extendVideo') {
     const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
     if (videoEdges.length === 0) {
-      return { ready: false, reason: 'Missing required video input' };
+      return {
+        ready: false,
+        reason: 'Missing required video input',
+        uiFailure: workflowFailure('workflow_missing_required_video_input_4e4d436c'),
+      };
     }
     const hasVideo = videoEdges.some((edge) =>
       resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }),
@@ -1069,7 +1181,7 @@ const getNodeReadiness = (
       return {
         ready: false,
         blockedNodeId: videoEdges[0].source,
-        reason: unresolvedInputReason('video', nodeById.get(videoEdges[0].source), resolvedOutputs),
+        ...unresolvedInputDiagnostic('video', nodeById.get(videoEdges[0].source), resolvedOutputs),
       };
     }
 
@@ -1082,7 +1194,7 @@ const getNodeReadiness = (
         return {
           ready: false,
           blockedNodeId: promptEdges[0].source,
-          reason: unresolvedInputReason(
+          ...unresolvedInputDiagnostic(
             'prompt',
             nodeById.get(promptEdges[0].source),
             resolvedOutputs,
@@ -1101,20 +1213,32 @@ const getNodeReadiness = (
       (edge) => (edge.targetHandle ?? '') === TIMELINE_MEDIA_INPUT_HANDLE,
     );
     if (poolEdges.length === 0) {
-      return { ready: false, reason: 'Connect at least one clip or image to the Video Editor' };
+      return {
+        ready: false,
+        reason: 'Connect at least one clip or image to the Video Editor',
+        uiFailure: workflowFailure('workflow_connect_at_least_one_clip_or_i_92b06028'),
+      };
     }
     // Every placed clip must reference a connected, resolvable pool source.
     for (const item of items) {
       const edge = poolEdges.find((candidate) => candidate.source === item.sourceNodeId);
       if (!edge) {
-        return { ready: false, reason: 'A timeline clip references a disconnected source' };
+        return {
+          ready: false,
+          reason: 'A timeline clip references a disconnected source',
+          uiFailure: workflowFailure('workflow_a_timeline_clip_references_a_d_9fbc3c25'),
+        };
       }
       const hasVideo = Boolean(
         resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }),
       );
       const hasImage = Boolean(resolveImageInput(edge, resolvedOutputs, nodeById));
       if (!hasVideo && !hasImage) {
-        return { ready: false, reason: 'A timeline clip has no resolvable media yet' };
+        return {
+          ready: false,
+          reason: 'A timeline clip has no resolvable media yet',
+          uiFailure: workflowFailure('workflow_a_timeline_clip_has_no_resolva_287b7da8'),
+        };
       }
     }
     // Hard manual break-point: only "ready" (resumable) once a human has rendered
@@ -1129,6 +1253,7 @@ const getNodeReadiness = (
       ready: false,
       awaiting: true,
       reason: 'Awaiting manual edit — open the Video Editor and render',
+      uiFailure: workflowFailure('workflow_awaiting_manual_edit_open_the__9ab01241'),
     };
   }
 
@@ -1139,20 +1264,29 @@ const getNodeReadiness = (
       (edge) => edge.targetHandle === FAST_CUT_MEDIA_INPUT_HANDLE,
     );
     if (poolEdges.length === 0) {
-      return { ready: false, reason: 'Connect clips or stills to the Fast Cut footage pool' };
+      return {
+        ready: false,
+        reason: 'Connect clips or stills to the Fast Cut footage pool',
+        uiFailure: workflowFailure('workflow_connect_clips_or_stills_to_the_4a032864'),
+      };
     }
     if (!incomingEdges.some((edge) => edge.targetHandle === FAST_CUT_AUDIO_INPUT_HANDLE)) {
-      return { ready: false, reason: 'Connect one music bed (an Audio node) to Fast Cut' };
+      return {
+        ready: false,
+        reason: 'Connect one music bed (an Audio node) to Fast Cut',
+        uiFailure: workflowFailure('workflow_connect_one_music_bed_an_audio_2081a519'),
+      };
     }
     for (const edge of poolEdges) {
       const resolvable =
-        resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }) ||
-        resolveImageInput(edge, resolvedOutputs, nodeById);
+        resolveVideoInput(edge, resolvedOutputs, nodeById, {
+          allowUri: true,
+        }) || resolveImageInput(edge, resolvedOutputs, nodeById);
       if (!resolvable) {
         return {
           ready: false,
           blockedNodeId: edge.source,
-          reason: unresolvedInputReason(
+          ...unresolvedInputDiagnostic(
             FAST_CUT_MEDIA_INPUT_HANDLE,
             nodeById.get(edge.source),
             resolvedOutputs,
@@ -1168,15 +1302,25 @@ const getNodeReadiness = (
     const renderedUrl = data.generatedVideoUrl;
     if (renderedUrl) return { ready: true };
     if (data.activeRunId) {
-      return { ready: false, awaiting: true, reason: 'HyperFrames Agent is still working' };
+      return {
+        ready: false,
+        awaiting: true,
+        reason: 'HyperFrames Agent is still working',
+        uiFailure: workflowFailure('workflow_hyperframes_agent_is_still_wor_64cf8ed7'),
+      };
     }
     const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
     if (!prompt.value && !prompt.fromCollection) {
-      if (!prompt.fromEdge) return { ready: false, reason: 'Add or connect a prompt' };
+      if (!prompt.fromEdge)
+        return {
+          ready: false,
+          reason: 'Add or connect a prompt',
+          uiFailure: workflowFailure('workflow_add_or_connect_a_prompt_e95829ba'),
+        };
       return {
         ready: false,
         blockedNodeId: prompt.blockedNodeId,
-        reason: unresolvedInputReason(
+        ...unresolvedInputDiagnostic(
           'prompt',
           prompt.blockedNodeId ? nodeById.get(prompt.blockedNodeId) : undefined,
           resolvedOutputs,
@@ -1192,7 +1336,12 @@ const getNodeReadiness = (
 
   if (node.type === 'action') {
     const def = actionDef((node.data as Record<string, unknown>).actionId);
-    if (!def) return { ready: false, reason: 'Pick an operation for this action' };
+    if (!def)
+      return {
+        ready: false,
+        reason: 'Pick an operation for this action',
+        uiFailure: workflowFailure('workflow_pick_an_operation_for_this_act_1a72d079'),
+      };
     for (const port of def.inputs) {
       // EVERY edge on the port, not just the first. Judging a many-input port by one
       // wire let the scheduler start the node while its other sources were still
@@ -1201,7 +1350,14 @@ const getNodeReadiness = (
       // one clip (#304).
       const wired = incomingEdges.filter((candidate) => candidate.targetHandle === port.handle);
       if (wired.length === 0)
-        return { ready: false, reason: `Connect ${port.modality} to "${port.handle}"` };
+        return {
+          ready: false,
+          reason: `Connect ${port.modality} to "${port.handle}"`,
+          uiFailure: workflowFailure('workflow_connect_value0_to_value1_998a2f82', {
+            kind: port.modality,
+            input: port.handle,
+          }),
+        };
       for (const edge of wired) {
         // A collection satisfies ANY port modality: a many-input port takes its items
         // as its inputs, and a single-input port is fanned out one item per run. The
@@ -1215,12 +1371,16 @@ const getNodeReadiness = (
             ? resolveTextInput(edge, resolvedOutputs, nodeById, edges) !== undefined
             : port.modality === 'image'
               ? Boolean(resolveImageInput(edge, resolvedOutputs, nodeById))
-              : Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true })));
+              : Boolean(
+                  resolveVideoInput(edge, resolvedOutputs, nodeById, {
+                    allowUri: true,
+                  }),
+                ));
         if (!available) {
           return {
             ready: false,
             blockedNodeId: edge.source,
-            reason: unresolvedInputReason(port.handle, nodeById.get(edge.source), resolvedOutputs),
+            ...unresolvedInputDiagnostic(port.handle, nodeById.get(edge.source), resolvedOutputs),
           };
         }
       }
@@ -1230,10 +1390,19 @@ const getNodeReadiness = (
 
   if (node.type === 'router') {
     const edge = incomingEdges[0];
-    if (!edge) return { ready: false, reason: 'Connect something to route' };
+    if (!edge)
+      return {
+        ready: false,
+        reason: 'Connect something to route',
+        uiFailure: workflowFailure('workflow_connect_something_to_route_c984d030'),
+      };
     return resolvedOutputs.has(edge.source)
       ? { ready: true }
-      : { ready: false, reason: 'Waiting on the upstream node' };
+      : {
+          ready: false,
+          reason: 'Waiting on the upstream node',
+          uiFailure: workflowFailure('workflow_waiting_on_the_upstream_node_848f54dc'),
+        };
   }
 
   if (node.type === 'batch') {
@@ -1241,7 +1410,11 @@ const getNodeReadiness = (
     if (Array.isArray(items) && items.length > 0) return { ready: true };
     return incomingEdges.some((edge) => resolvedOutputs.has(edge.source))
       ? { ready: true }
-      : { ready: false, reason: 'Add items, or connect something to collect' };
+      : {
+          ready: false,
+          reason: 'Add items, or connect something to collect',
+          uiFailure: workflowFailure('workflow_add_items_or_connect_something_f74d8de1'),
+        };
   }
 
   if (node.type === 'export') {
@@ -1249,7 +1422,11 @@ const getNodeReadiness = (
     // something to write.
     return incomingEdges.some((edge) => resolvedOutputs.has(edge.source))
       ? { ready: true }
-      : { ready: false, reason: 'Connect something to export' };
+      : {
+          ready: false,
+          reason: 'Connect something to export',
+          uiFailure: workflowFailure('workflow_connect_something_to_export_9e23de65'),
+        };
   }
 
   if (node.type === 'layerEditor') {
@@ -1258,13 +1435,18 @@ const getNodeReadiness = (
       (edge) => (edge.targetHandle ?? '') === LAYER_EDITOR_IMAGE_INPUT_HANDLE,
     );
     if (pool.length === 0) {
-      return { ready: false, reason: 'Connect at least one image to the Layer Editor' };
+      return {
+        ready: false,
+        reason: 'Connect at least one image to the Layer Editor',
+        uiFailure: workflowFailure('workflow_connect_at_least_one_image_to__b07c2dbc'),
+      };
     }
     // Manual break-point, exactly like the Video Editor: a person presses Compose.
     if (!(data.generatedImageUrl ?? data.generatedImage)) {
       return {
         ready: false,
         reason: 'Awaiting manual edit — open the Layer Editor and compose',
+        uiFailure: workflowFailure('workflow_awaiting_manual_edit_open_the__685d3e25'),
       };
     }
     return { ready: true };
@@ -1278,11 +1460,16 @@ const getNodeReadiness = (
   // `fromCollection` is a batch on the prompt port: the fan-out unwraps it to one item
   // per run, so there is no single string to find here and there never will be (#300).
   if (!prompt.value && !prompt.fromCollection) {
-    if (!prompt.fromEdge) return { ready: false, reason: 'Missing required prompt' };
+    if (!prompt.fromEdge)
+      return {
+        ready: false,
+        reason: 'Missing required prompt',
+        uiFailure: workflowFailure('workflow_missing_required_prompt_fd8a0824'),
+      };
     return {
       ready: false,
       blockedNodeId: prompt.blockedNodeId,
-      reason: unresolvedInputReason(
+      ...unresolvedInputDiagnostic(
         'prompt',
         prompt.blockedNodeId ? nodeById.get(prompt.blockedNodeId) : undefined,
         resolvedOutputs,
@@ -1301,6 +1488,11 @@ const getNodeReadiness = (
     return {
       ready: false,
       reason: missingOptional.reason ?? `Missing connected input for ${missingOptional.label}`,
+      uiFailure:
+        missingOptional.uiFailure ??
+        workflowFailure('workflow_missing_connected_input_for_va_70bd5b80', {
+          input: missingOptional.label,
+        }),
       blockedNodeId: missingOptional.blockedNodeId,
     };
   }
@@ -1422,6 +1614,7 @@ const resolveRegenerationSet = (
 };
 
 type WorkflowPreflightIssue = {
+  uiFailure?: WorkflowUiFailure;
   nodeId: string;
   blockedNodeId: string;
   reason: string;
@@ -1447,7 +1640,11 @@ const buildOptimisticPreflightOutputs = (
       node.type === 'frameExtract' ||
       actionModality === 'image'
     ) {
-      outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
+      outputs.set(node.id, {
+        type: 'image',
+        base64: 'preflight-ready',
+        mimeType: 'image/png',
+      });
     } else if (node.type === 'batch') {
       // A batch's modality is known before anything runs — it is the item kind. Leaving
       // it unset made every consumer of a batch read as not-ready during preflight, and
@@ -1465,12 +1662,22 @@ const buildOptimisticPreflightOutputs = (
       const locked = routerLockedType(node, edges, nodes);
       if (locked === 'text') outputs.set(node.id, { type: 'text', value: 'preflight-ready' });
       else if (locked === 'image') {
-        outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
+        outputs.set(node.id, {
+          type: 'image',
+          base64: 'preflight-ready',
+          mimeType: 'image/png',
+        });
       } else if (locked === 'video') {
-        outputs.set(node.id, { type: 'video', url: 'data:video/mp4;base64,preflight-ready' });
+        outputs.set(node.id, {
+          type: 'video',
+          url: 'data:video/mp4;base64,preflight-ready',
+        });
       }
     } else if (actionModality === 'video' || isMediaNodeType(node.type)) {
-      outputs.set(node.id, { type: 'video', url: 'data:video/mp4;base64,preflight-ready' });
+      outputs.set(node.id, {
+        type: 'video',
+        url: 'data:video/mp4;base64,preflight-ready',
+      });
     }
   }
 
@@ -1487,7 +1694,11 @@ const buildOptimisticPreflightOutputs = (
           outputs.set(node.id, { type: 'video', url: sourceUrl });
           continue;
         }
-        outputs.set(node.id, { type: 'image', base64: 'preflight-ready', mimeType: 'image/png' });
+        outputs.set(node.id, {
+          type: 'image',
+          base64: 'preflight-ready',
+          mimeType: 'image/png',
+        });
       }
       continue;
     }
@@ -1499,7 +1710,10 @@ const buildOptimisticPreflightOutputs = (
         mimeType: 'image/png',
       });
     } else if (node.type === 'video') {
-      outputs.set(node.id, { type: 'video', url: 'data:video/mp4;base64,preflight-ready' });
+      outputs.set(node.id, {
+        type: 'video',
+        url: 'data:video/mp4;base64,preflight-ready',
+      });
     }
   }
   return outputs;
@@ -1523,6 +1737,8 @@ const findWorkflowPreflightIssue = (
       nodeId: node.id,
       blockedNodeId: readiness.blockedNodeId ?? node.id,
       reason: readiness.reason ?? 'Missing required inputs or prompt',
+      uiFailure:
+        readiness.uiFailure ?? workflowFailure('workflow_missing_required_inputs_or_pro_3eca3adf'),
     };
   }
 
@@ -1534,12 +1750,16 @@ const surfacePreflightIssue = (
   nodes: StudioNode[],
   issue: WorkflowPreflightIssue,
 ) => {
-  useStudioStore
-    .getState()
-    .setNodes(nodes.map((node) => ({ ...node, selected: node.id === issue.blockedNodeId })));
+  useStudioStore.getState().setNodes(
+    nodes.map((node) => ({
+      ...node,
+      selected: node.id === issue.blockedNodeId,
+    })),
+  );
   useStudioStore.getState().updateNodeData(issue.nodeId, {
     isExecuting: false,
     error: issue.reason,
+    uiFailure: issue.uiFailure,
   });
 
   const blockedNode = nodes.find((node) => node.id === issue.blockedNodeId);
@@ -1548,10 +1768,22 @@ const surfacePreflightIssue = (
   // wording of a message — so improving the message silently downgraded the toast.
   const isMissingImageReference = referenceIsEmpty(blockedNode);
   controls.show?.({
-    title: isMissingImageReference ? 'Reference image required' : 'Flow needs input',
-    description: isMissingImageReference
-      ? 'Add a reference image to run this flow.'
-      : `${issue.reason}. Fix the selected node, then run the flow again.`,
+    title: workflowUiText(
+      isMissingImageReference
+        ? workflowFailure('workflow_reference_image_required_44615c1c')
+        : workflowFailure('workflow_flow_needs_input_7f90e70f'),
+      controls.translateUi,
+    ),
+    description: workflowUiText(
+      isMissingImageReference
+        ? workflowFailure('workflow_add_a_reference_image_to_run_t_a4724533')
+        : issue.uiFailure
+          ? workflowFailure('workflow_value0_fix_the_selected_node_t_09a22143', {
+              reason: workflowUiText(issue.uiFailure, controls.translateUi).replace(/[.!?]+$/, ''),
+            })
+          : workflowFailure('workflow_the_selected_node_needs_input__74f52cc9'),
+      controls.translateUi,
+    ),
     variant: 'error',
   });
 };
@@ -1695,9 +1927,14 @@ export async function executeWorkflow(
     if (scopeNodeIds.length === 0) {
       console.warn('[studio] EXEC-EARLY-RETURN scope empty');
       controls.show?.({
-        title: 'Nothing to run',
-        description:
-          'This flow has no runnable nodes. Add a generation node (or connect one), then run again.',
+        title: workflowUiText(
+          workflowFailure('workflow_nothing_to_run_170a141e'),
+          controls.translateUi,
+        ),
+        description: workflowUiText(
+          workflowFailure('workflow_this_flow_has_no_runnable_node_9e7b6955'),
+          controls.translateUi,
+        ),
         variant: 'error',
       });
       return;
@@ -1757,9 +1994,14 @@ export async function executeWorkflow(
   if (executableNodeIds.length === 0) {
     console.warn('[studio] EXEC-EARLY-RETURN executable empty');
     controls.show?.({
-      title: 'Nothing to run',
-      description:
-        'This flow has no runnable nodes. Add a generation node (or connect one), then run again.',
+      title: workflowUiText(
+        workflowFailure('workflow_nothing_to_run_170a141e'),
+        controls.translateUi,
+      ),
+      description: workflowUiText(
+        workflowFailure('workflow_this_flow_has_no_runnable_node_9e7b6955'),
+        controls.translateUi,
+      ),
       variant: 'error',
     });
     return;
@@ -1800,10 +2042,16 @@ export async function executeWorkflow(
   const publisherHandoffs = collectPublisherHandoffs(nodes, edges, executableNodeIds);
   if (publisherHandoffs.length > 0) {
     controls.show?.({
-      title: 'Publisher nodes are delivery handoffs',
-      description: `The run generates the media; a run never publishes. Deliver from the ${
-        publisherHandoffs.length === 1 ? 'publisher node' : 'publisher nodes'
-      } (Attach to draft / Replace creative).`,
+      title: workflowUiText(
+        workflowFailure('workflow_publisher_nodes_are_delivery_h_f9da5afd'),
+        controls.translateUi,
+      ),
+      description: workflowUiText(
+        workflowFailure('workflow_the_run_generates_the_media_a__502931ad', {
+          count: publisherHandoffs.length,
+        }),
+        controls.translateUi,
+      ),
       variant: 'info',
     });
   }
@@ -1836,6 +2084,7 @@ export async function executeWorkflow(
       isComplete: false,
       error: undefined,
       errorCode: undefined,
+      uiFailure: undefined,
       generatedImage: undefined,
       generatedImageUrl: undefined,
       generatedVideo: undefined,
@@ -1923,7 +2172,10 @@ export async function executeWorkflow(
         const parsed = parseDataUrl(imageData.image);
         const ref = readNodeAssetRef(imageData);
         const assetRef = ref
-          ? { assetId: ref.assetId, ...(ref.versionId ? { assetVersionId: ref.versionId } : {}) }
+          ? {
+              assetId: ref.assetId,
+              ...(ref.versionId ? { assetVersionId: ref.versionId } : {}),
+            }
           : {};
         if (parsed?.base64) {
           resolvedOutputs.set(node.id, {
@@ -1975,10 +2227,17 @@ export async function executeWorkflow(
       const parsed = parseDataUrl(rawVideo);
       const ref = readNodeAssetRef(node.data as Record<string, unknown>);
       const assetRef = ref
-        ? { assetId: ref.assetId, ...(ref.versionId ? { assetVersionId: ref.versionId } : {}) }
+        ? {
+            assetId: ref.assetId,
+            ...(ref.versionId ? { assetVersionId: ref.versionId } : {}),
+          }
         : {};
       if (parsed?.base64) {
-        resolvedOutputs.set(node.id, { type: 'video', url: rawVideo!, ...assetRef });
+        resolvedOutputs.set(node.id, {
+          type: 'video',
+          url: rawVideo!,
+          ...assetRef,
+        });
       } else if (isHttpUrl(rawVideo)) {
         resolvedOutputs.set(node.id, {
           type: 'video',
@@ -2124,6 +2383,7 @@ export async function executeWorkflow(
     status: 'running' | 'awaiting' | 'completed' | 'failed',
     error?: string,
     errorCode?: string,
+    uiFailure?: WorkflowUiFailure,
   ) => {
     const current = useStudioStore.getState().nodes.find((node) => node.id === nodeId)?.data as
       | Record<string, unknown>
@@ -2143,6 +2403,12 @@ export async function executeWorkflow(
       awaitingInput: status === 'awaiting',
       error: error,
       errorCode: errorCode,
+      uiFailure:
+        status === 'failed'
+          ? isStudioGenerationErrorCode(errorCode)
+            ? workflowFailure('workflow_this_node_could_not_complete_r_4bbf0954')
+            : (uiFailure ?? workflowFailure('workflow_this_node_could_not_complete_r_4bbf0954'))
+          : undefined,
     });
     // Every node transition in this executor routes through here, whatever the node type,
     // so this one call is the whole per-node timing feed — the "where did the time go" half
@@ -2449,7 +2715,13 @@ export async function executeWorkflow(
     try {
       const brandId = workflowBrandId;
       if (!brandId) {
-        updateNodeStatus(nodeId, 'failed', 'No brand selected — reload AI Studio');
+        updateNodeStatus(
+          nodeId,
+          'failed',
+          'No brand selected — reload AI Studio',
+          undefined,
+          workflowFailure('workflow_no_brand_selected_reload_ai_st_88c4474b'),
+        );
         return false;
       }
       if (node.type === 'string') {
@@ -2466,7 +2738,13 @@ export async function executeWorkflow(
         });
 
         if (typeof executeEnrichment !== 'function') {
-          updateNodeStatus(nodeId, 'failed', 'Enrichment execution unavailable');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Enrichment execution unavailable',
+            undefined,
+            workflowFailure('workflow_enrichment_execution_unavailab_eb587b97'),
+          );
           return false;
         }
 
@@ -2490,10 +2768,19 @@ export async function executeWorkflow(
           // payload). Reporting success on a request the user made explicitly is
           // how Enrich Prompt read as "reloads and nothing happens".
           if (isExplicitEnrich) {
-            updateNodeStatus(nodeId, 'failed', 'Nothing to enrich — this prompt box is empty');
+            updateNodeStatus(
+              nodeId,
+              'failed',
+              'Nothing to enrich — this prompt box is empty',
+              undefined,
+              workflowFailure('workflow_nothing_to_enrich_this_prompt__ca80766b'),
+            );
             return false;
           }
-          setNodeOutput(nodeId, { type: 'text', value: (node.data as any).value || '' });
+          setNodeOutput(nodeId, {
+            type: 'text',
+            value: (node.data as any).value || '',
+          });
           return true;
         }
 
@@ -2501,7 +2788,13 @@ export async function executeWorkflow(
 
         if (result && !result.success) {
           console.error('Enrichment error', result.error);
-          updateNodeStatus(nodeId, 'failed', result.error || 'Enrichment failed');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            result.error || 'Enrichment failed',
+            undefined,
+            workflowFailure('workflow_enrichment_failed_8396f34c'),
+          );
           return false;
         }
 
@@ -2519,7 +2812,13 @@ export async function executeWorkflow(
 
         // Truthy-but-empty, or no result at all: the enrichment produced no text.
         // Falling through here left the node spinning with no error to read.
-        updateNodeStatus(nodeId, 'failed', 'Enrichment returned no text');
+        updateNodeStatus(
+          nodeId,
+          'failed',
+          'Enrichment returned no text',
+          undefined,
+          workflowFailure('workflow_enrichment_returned_no_text_1381ca15'),
+        );
         return false;
       }
 
@@ -2528,11 +2827,23 @@ export async function executeWorkflow(
         const promptResult = getPromptValue(node, incoming, resolvedOutputs, nodeById, edges);
         const prompt = promptResult.value?.trim();
         if (!prompt) {
-          updateNodeStatus(nodeId, 'failed', 'Missing required prompt');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Missing required prompt',
+            undefined,
+            workflowFailure('workflow_missing_required_prompt_fd8a0824'),
+          );
           return false;
         }
         if (typeof controls.executeOmniTurn !== 'function') {
-          updateNodeStatus(nodeId, 'failed', 'Omni execution unavailable');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Omni execution unavailable',
+            undefined,
+            workflowFailure('workflow_omni_execution_unavailable_96628acb'),
+          );
           return false;
         }
 
@@ -2558,7 +2869,9 @@ export async function executeWorkflow(
           (edge) => edge.targetHandle === VIDEO_REFERENCE_VIDEO_HANDLE,
         );
         const videoInput = videoEdge
-          ? resolveVideoInput(videoEdge, resolvedOutputs, nodeById, { allowUri: true })
+          ? resolveVideoInput(videoEdge, resolvedOutputs, nodeById, {
+              allowUri: true,
+            })
           : undefined;
         const sourceVideo: OmniGenRequest['sourceVideo'] = !videoInput
           ? undefined
@@ -2597,7 +2910,13 @@ export async function executeWorkflow(
         });
 
         if (!result.success || !result.output) {
-          updateNodeStatus(nodeId, 'failed', result.error || 'Omni generation failed');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            result.error || 'Omni generation failed',
+            undefined,
+            workflowFailure('workflow_omni_generation_failed_0c757f6c'),
+          );
           return false;
         }
 
@@ -2655,7 +2974,13 @@ export async function executeWorkflow(
                   | Blob
                   | undefined);
         if (!videoEdge || !source) {
-          updateNodeStatus(nodeId, 'failed', 'Missing connected video input');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Missing connected video input',
+            undefined,
+            workflowFailure('workflow_missing_connected_video_input_4927612f'),
+          );
           return false;
         }
 
@@ -2670,7 +2995,13 @@ export async function executeWorkflow(
           quality: data.quality,
         });
         if (!frame) {
-          updateNodeStatus(nodeId, 'failed', 'This browser could not decode the selected frame');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'This browser could not decode the selected frame',
+            undefined,
+            workflowFailure('workflow_this_browser_could_not_decode__edada005'),
+          );
           return false;
         }
 
@@ -2731,11 +3062,19 @@ export async function executeWorkflow(
         const incoming = getIncomingEdges(edges, nodeId);
         const videoEdge = incoming.find((edge) => edge.targetHandle === 'video');
         const resolvedVideo = videoEdge
-          ? resolveVideoInput(videoEdge, resolvedOutputs, nodeById, { allowUri: true })
+          ? resolveVideoInput(videoEdge, resolvedOutputs, nodeById, {
+              allowUri: true,
+            })
           : undefined;
 
         if (!resolvedVideo) {
-          updateNodeStatus(nodeId, 'failed', 'Missing connected video input');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Missing connected video input',
+            undefined,
+            workflowFailure('workflow_missing_connected_video_input_4927612f'),
+          );
           return false;
         }
 
@@ -2746,7 +3085,13 @@ export async function executeWorkflow(
         } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) {
-          updateNodeStatus(nodeId, 'failed', 'Authentication session required for video decode');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Authentication session required for video decode',
+            undefined,
+            workflowFailure('workflow_authentication_session_require_b6705a60'),
+          );
           return false;
         }
 
@@ -2781,13 +3126,25 @@ export async function executeWorkflow(
         if (!response.ok) {
           const err = await response.text();
           console.error('[studio] video decode HTTP error', response.status, err);
-          updateNodeStatus(nodeId, 'failed', err || 'Video decode failed');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            err || 'Video decode failed',
+            undefined,
+            workflowFailure('workflow_video_decode_failed_2dbbafdc'),
+          );
           return false;
         }
 
         const reader = response.body?.getReader();
         if (!reader) {
-          updateNodeStatus(nodeId, 'failed', 'No response body');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'No response body',
+            undefined,
+            workflowFailure('workflow_no_response_body_9fc4fcab'),
+          );
           return false;
         }
 
@@ -2820,7 +3177,10 @@ export async function executeWorkflow(
 
             if (eventName === 'error') {
               try {
-                const parsed = JSON.parse(payloadText) as { message?: string; error?: string };
+                const parsed = JSON.parse(payloadText) as {
+                  message?: string;
+                  error?: string;
+                };
                 streamError =
                   parsed.message || parsed.error || payloadText || 'Video decode failed';
               } catch {
@@ -2831,19 +3191,37 @@ export async function executeWorkflow(
         });
 
         if (streamError) {
-          console.error('[studio] video decode stream error', { nodeId, streamError });
-          updateNodeStatus(nodeId, 'failed', streamError);
+          console.error('[studio] video decode stream error', {
+            nodeId,
+            streamError,
+          });
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            streamError,
+            undefined,
+            workflowFailure('workflow_this_node_could_not_complete_r_4bbf0954'),
+          );
           return false;
         }
 
         if (!accumulatedValue.trim()) {
-          updateNodeStatus(nodeId, 'failed', 'Video decode returned empty output');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Video decode returned empty output',
+            undefined,
+            workflowFailure('workflow_video_decode_returned_empty_ou_e3c23160'),
+          );
           return false;
         }
 
         setNodeOutput(nodeId, { type: 'text', value: accumulatedValue });
         updateNodeStatus(nodeId, 'completed');
-        console.info('[studio] video decode complete', { nodeId, length: accumulatedValue.length });
+        console.info('[studio] video decode complete', {
+          nodeId,
+          length: accumulatedValue.length,
+        });
         return true;
       }
 
@@ -2851,7 +3229,13 @@ export async function executeWorkflow(
         const built = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges, brandId);
 
         if (!built) {
-          updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Missing required inputs or prompt',
+            undefined,
+            workflowFailure('workflow_missing_required_inputs_or_pro_3eca3adf'),
+          );
           return false;
         }
 
@@ -2859,7 +3243,13 @@ export async function executeWorkflow(
           !('executeVideoExtension' in controls) ||
           typeof controls.executeVideoExtension !== 'function'
         ) {
-          updateNodeStatus(nodeId, 'failed', 'Video extension execution unavailable');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Video extension execution unavailable',
+            undefined,
+            workflowFailure('workflow_video_extension_execution_unav_37a747a1'),
+          );
           return false;
         }
 
@@ -2885,6 +3275,11 @@ export async function executeWorkflow(
               nodeId,
               'failed',
               error instanceof Error ? error.message : 'Could not read the connected clip',
+              undefined,
+              workflowFailureFromError(
+                error,
+                workflowFailure('workflow_could_not_read_the_connected_c_96ea01cf'),
+              ),
             );
             return false;
           }
@@ -2899,7 +3294,13 @@ export async function executeWorkflow(
         });
 
         if (!result.success) {
-          updateNodeStatus(nodeId, 'failed', result.error || 'Generation failed');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            result.error || 'Generation failed',
+            undefined,
+            workflowFailure('workflow_generation_failed_78257562'),
+          );
           return false;
         }
 
@@ -2909,7 +3310,13 @@ export async function executeWorkflow(
           return true;
         }
 
-        updateNodeStatus(nodeId, 'failed', 'No output received');
+        updateNodeStatus(
+          nodeId,
+          'failed',
+          'No output received',
+          undefined,
+          workflowFailure('workflow_no_output_received_e490da0d'),
+        );
         return false;
       }
 
@@ -2953,7 +3360,13 @@ export async function executeWorkflow(
           return true;
         }
         if (!brandId || !workflowRoomId) {
-          updateNodeStatus(nodeId, 'failed', 'AI Studio workspace is unavailable');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'AI Studio workspace is unavailable',
+            undefined,
+            workflowFailure('workflow_ai_studio_workspace_is_unavail_8ba152e7'),
+          );
           return false;
         }
         await startHyperframesAgentNode({
@@ -2968,7 +3381,13 @@ export async function executeWorkflow(
 
       if (node.type === 'fastCut') {
         if (!workflowRoomId) {
-          updateNodeStatus(nodeId, 'failed', 'AI Studio workspace is unavailable');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'AI Studio workspace is unavailable',
+            undefined,
+            workflowFailure('workflow_ai_studio_workspace_is_unavail_8ba152e7'),
+          );
           return false;
         }
         const controller = controls.registerController(nodeId);
@@ -3008,6 +3427,11 @@ export async function executeWorkflow(
             nodeId,
             'failed',
             error instanceof Error ? error.message : 'The fast cut could not be rendered',
+            undefined,
+            workflowFailureFromError(
+              error,
+              workflowFailure('workflow_the_fast_cut_could_not_be_rend_5272b4cb'),
+            ),
           );
           return false;
         } finally {
@@ -3028,7 +3452,13 @@ export async function executeWorkflow(
         const incoming = getIncomingEdges(edges, nodeId)[0];
         const upstream = incoming ? resolvedOutputs.get(incoming.source) : undefined;
         if (!upstream) {
-          updateNodeStatus(nodeId, 'failed', 'Nothing is connected to this router');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Nothing is connected to this router',
+            undefined,
+            workflowFailure('workflow_nothing_is_connected_to_this_r_0a628d9e'),
+          );
           return false;
         }
         setNodeOutput(nodeId, upstream);
@@ -3056,7 +3486,13 @@ export async function executeWorkflow(
           exportKindForSources(sources),
         );
         if (!format) {
-          updateNodeStatus(nodeId, 'failed', 'Nothing is connected to export');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Nothing is connected to export',
+            undefined,
+            workflowFailure('workflow_nothing_is_connected_to_export_358ce627'),
+          );
           return false;
         }
         try {
@@ -3066,6 +3502,8 @@ export async function executeWorkflow(
             nodeId,
             'failed',
             error instanceof Error ? error.message : 'Export failed',
+            undefined,
+            workflowFailureFromError(error, workflowFailure('workflow_export_failed_e94d3ee0')),
           );
           return false;
         }
@@ -3076,13 +3514,27 @@ export async function executeWorkflow(
       if (node.type === 'batch') {
         const collection = materializeBatch(node, edges, nodeById);
         if (!collection) {
-          updateNodeStatus(nodeId, 'failed', 'This batch has no items to run');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'This batch has no items to run',
+            undefined,
+            workflowFailure('workflow_this_batch_has_no_items_to_run_81e8c9cd'),
+          );
           return false;
         }
         if (collection.truncated) {
           controls.show?.({
-            title: 'Batch truncated',
-            description: `Only the first ${MAX_BATCH_ITEMS} items will run.`,
+            title: workflowUiText(
+              workflowFailure('workflow_batch_truncated_e0e299b5'),
+              controls.translateUi,
+            ),
+            description: workflowUiText(
+              workflowFailure('workflow_only_the_first_value0_items_wi_69c7dd2d', {
+                count: MAX_BATCH_ITEMS,
+              }),
+              controls.translateUi,
+            ),
             variant: 'info',
           });
         }
@@ -3094,7 +3546,13 @@ export async function executeWorkflow(
       if (node.type === 'action') {
         const data = node.data as Record<string, unknown>;
         if (!isActionId(data.actionId)) {
-          updateNodeStatus(nodeId, 'failed', 'Pick an operation for this action');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'Pick an operation for this action',
+            undefined,
+            workflowFailure('workflow_pick_an_operation_for_this_act_1a72d079'),
+          );
           return false;
         }
         const actionId = data.actionId;
@@ -3126,7 +3584,10 @@ export async function executeWorkflow(
             // watermark fanned over 40 clips should not re-fetch the logo 40 times.
             const { items, handle } = collectionPort;
             const shared = await resolveActionInputsFor(
-              { ...def, inputs: def.inputs.filter((port) => port.handle !== handle) },
+              {
+                ...def,
+                inputs: def.inputs.filter((port) => port.handle !== handle),
+              },
               nodeId,
               edges,
               resolvedOutputs,
@@ -3147,17 +3608,40 @@ export async function executeWorkflow(
             );
             if (fan.failures > 0) {
               controls.show?.({
-                title: `${fan.failures} of ${items.length} items failed`,
-                description: `${def.label} finished the rest.`,
+                title: workflowUiText(
+                  workflowFailure('workflow_value0_of_value1_items_failed_858fc89a', {
+                    failed: fan.failures,
+                    total: items.length,
+                  }),
+                  controls.translateUi,
+                ),
+                description: workflowUiText(
+                  workflowFailure('workflow_value0_finished_the_rest_567e2097', undefined, {
+                    operation: def.label,
+                  }),
+                  controls.translateUi,
+                ),
                 variant: 'info',
               });
             }
             const produced = fan.results.filter((result): result is NodeOutput => result !== null);
             if (produced.length === 0) {
-              updateNodeStatus(nodeId, 'failed', `${def.label} produced nothing for any item`);
+              updateNodeStatus(
+                nodeId,
+                'failed',
+                `${def.label} produced nothing for any item`,
+                undefined,
+                workflowFailure('workflow_value0_produced_nothing_for_an_361e6695', undefined, {
+                  operation: def.label,
+                }),
+              );
               return false;
             }
-            output = { type: 'collection', itemType: def.output, items: produced };
+            output = {
+              type: 'collection',
+              itemType: def.output,
+              items: produced,
+            };
           } else {
             const inputs = await resolveActionInputsFor(
               def,
@@ -3180,6 +3664,11 @@ export async function executeWorkflow(
             nodeId,
             'failed',
             error instanceof Error ? error.message : String(error),
+            undefined,
+            workflowFailureFromError(
+              error,
+              workflowFailure('workflow_this_node_could_not_complete_r_4bbf0954'),
+            ),
           );
           return false;
         } finally {
@@ -3206,6 +3695,11 @@ export async function executeWorkflow(
             nodeId,
             'failed',
             error instanceof Error ? error.message : String(error),
+            undefined,
+            workflowFailureFromError(
+              error,
+              workflowFailure('workflow_this_node_could_not_complete_r_4bbf0954'),
+            ),
           );
           return false;
         }
@@ -3241,7 +3735,13 @@ export async function executeWorkflow(
         // A named refusal, not a silent skip. Neither type is reachable from the
         // palette, but the MCP agent write path can create one, and a run that quietly
         // ignored it would report success for work that never happened.
-        updateNodeStatus(nodeId, 'failed', unimplemented);
+        updateNodeStatus(
+          nodeId,
+          'failed',
+          unimplemented,
+          undefined,
+          workflowFailure('workflow_this_node_could_not_complete_r_4bbf0954'),
+        );
         return false;
       }
 
@@ -3260,13 +3760,27 @@ export async function executeWorkflow(
       if (batchSources && (node.type === 'nanoGen' || isVideoGenerator)) {
         const plan = batchGenerationPlan(batchSources);
         if (!plan) {
-          updateNodeStatus(nodeId, 'failed', 'This batch has no items to run');
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            'This batch has no items to run',
+            undefined,
+            workflowFailure('workflow_this_batch_has_no_items_to_run_81e8c9cd'),
+          );
           return false;
         }
         if (plan.truncated) {
           controls.show?.({
-            title: 'Batch truncated',
-            description: `Only the first ${MAX_BATCH_ITEMS} items will run.`,
+            title: workflowUiText(
+              workflowFailure('workflow_batch_truncated_e0e299b5'),
+              controls.translateUi,
+            ),
+            description: workflowUiText(
+              workflowFailure('workflow_only_the_first_value0_items_wi_69c7dd2d', {
+                count: MAX_BATCH_ITEMS,
+              }),
+              controls.translateUi,
+            ),
             variant: 'info',
           });
         }
@@ -3311,13 +3825,23 @@ export async function executeWorkflow(
             'failed',
             'This batch produced nothing for any item',
             firstErrorCode,
+            workflowFailure('workflow_this_batch_produced_nothing_fo_a808c2ae'),
           );
           return false;
         }
         if (fanned.record.failed > 0) {
           controls.show?.({
-            title: `${fanned.record.failed} of ${plan.pairs.length} items failed`,
-            description: 'The rest of the batch finished.',
+            title: workflowUiText(
+              workflowFailure('workflow_value0_of_value1_items_failed_858fc89a', {
+                failed: fanned.record.failed,
+                total: plan.pairs.length,
+              }),
+              controls.translateUi,
+            ),
+            description: workflowUiText(
+              workflowFailure('workflow_the_rest_of_the_batch_finished_ad5d57b5'),
+              controls.translateUi,
+            ),
             variant: 'info',
           });
         }
@@ -3336,7 +3860,13 @@ export async function executeWorkflow(
       }
 
       if (!payload) {
-        updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
+        updateNodeStatus(
+          nodeId,
+          'failed',
+          'Missing required inputs or prompt',
+          undefined,
+          workflowFailure('workflow_missing_required_inputs_or_pro_3eca3adf'),
+        );
         return false;
       }
 
@@ -3372,7 +3902,13 @@ export async function executeWorkflow(
       });
 
       if (!result.success) {
-        updateNodeStatus(nodeId, 'failed', result.error || 'Generation failed', result.errorCode);
+        updateNodeStatus(
+          nodeId,
+          'failed',
+          result.error || 'Generation failed',
+          result.errorCode,
+          workflowFailure('workflow_generation_failed_78257562'),
+        );
         return false;
       }
 
@@ -3382,11 +3918,17 @@ export async function executeWorkflow(
         return true;
       }
 
-      updateNodeStatus(nodeId, 'failed', 'No output received');
+      updateNodeStatus(
+        nodeId,
+        'failed',
+        'No output received',
+        undefined,
+        workflowFailure('workflow_no_output_received_e490da0d'),
+      );
       return false;
     } catch (err) {
       console.error(err);
-      updateNodeStatus(nodeId, 'failed', String(err));
+      updateNodeStatus(nodeId, 'failed', String(err), undefined, workflowFailureFromError(err));
       return false;
     }
   }
@@ -3428,7 +3970,10 @@ export async function executeWorkflow(
       while (readyNodes.length > 0 && runningNodes.size < MAX_CONCURRENT_EXECUTIONS) {
         const nodeId = readyNodes.shift()!;
         pendingNodes.delete(nodeId);
-        const execution = executeNode(nodeId).then((success) => ({ id: nodeId, success }));
+        const execution = executeNode(nodeId).then((success) => ({
+          id: nodeId,
+          success,
+        }));
         runningNodes.set(nodeId, execution);
       }
 
@@ -3477,6 +4022,9 @@ export async function executeWorkflow(
             nodeId,
             'failed',
             readiness.reason ?? 'Missing required inputs or prompt',
+            undefined,
+            readiness.uiFailure ??
+              workflowFailure('workflow_missing_required_inputs_or_pro_3eca3adf'),
           );
           failedNodes.add(nodeId);
         }

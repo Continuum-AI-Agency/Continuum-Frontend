@@ -1,4 +1,9 @@
 'use client';
+import {
+  useTranslations as useBetaTranslations,
+  useLocale as useNumberLocale,
+  useLocale as usePacingLocale,
+} from 'next-intl';
 
 // H06 Budget pacing: what the brand's running budget plans have spent so far, against the plan and
 // against what the plan expected by the day the spend covers. Only Optimizer portfolios with a
@@ -35,6 +40,11 @@ function ReadyBody({
   others: PacingCurrencyGroup[];
   size: HomeTileProps['tile']['size'];
 }) {
+  const numberLocale = useNumberLocale();
+
+  const betaUiText = useBetaTranslations('dashboard');
+  const pacingLocale = usePacingLocale();
+
   const { currency } = headline;
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -44,18 +54,24 @@ function ReadyBody({
         data-testid="home-tile-pacing-headline"
         data-value={String(headline.spent)}
       >
-        {formatMoney(headline.spent, currency)}{' '}
-        <span className="font-normal text-muted-foreground text-xs">spent</span>
+        {formatMoney(headline.spent, currency, numberLocale)}{' '}
+        <span className="font-normal text-muted-foreground text-xs">
+          {betaUiText('beta_2705d83fa7bc')}
+        </span>
       </p>
       <PlanBar group={headline} />
       <p className="text-muted-foreground text-xs leading-snug">
-        of {formatMoney(headline.plan, currency)} plan
+        {betaUiText('beta_28391d3bc64e')} {formatMoney(headline.plan, currency, numberLocale)}{' '}
+        {betaUiText('beta_64879f7d6b96')}
         {headline.through
-          ? ` · ${formatMoney(headline.expected, currency)} expected by ${dayLabel(headline.through)}`
+          ? betaUiText('beta_a898121d4496', {
+              value0: String(formatMoney(headline.expected, currency, numberLocale)),
+              value1: String(dayLabel(headline.through, pacingLocale)),
+            })
           : ''}
       </p>
       <p className={cn('font-medium text-xs', PACE_TONE[headline.pace])}>
-        {gapLabel(headline.gap, headline.gapPct, currency)}
+        {gapLabel(headline.gap, headline.gapPct, currency, betaUiText, pacingLocale)}
       </p>
       {size !== 's'
         ? others.map((group) => (
@@ -64,9 +80,12 @@ function ReadyBody({
               data-testid="home-pacing-other-currency"
               key={group.currency ?? 'none'}
             >
-              Also {formatMoney(group.spent, group.currency)} of{' '}
-              {formatMoney(group.plan, group.currency)} plan ·{' '}
-              {gapLabel(group.gap, group.gapPct, group.currency)}
+              {betaUiText('beta_3edc274f12ee')}{' '}
+              {formatMoney(group.spent, group.currency, numberLocale)}{' '}
+              {betaUiText('beta_28391d3bc64e')}{' '}
+              {formatMoney(group.plan, group.currency, numberLocale)}{' '}
+              {betaUiText('beta_a096c030358a')}{' '}
+              {gapLabel(group.gap, group.gapPct, group.currency, betaUiText, pacingLocale)}
             </p>
           ))
         : null}
@@ -75,6 +94,9 @@ function ReadyBody({
 }
 
 export default function PacingTile({ ctx, tile }: HomeTileProps) {
+  const betaUiText = useBetaTranslations('dashboard');
+  const pacingLocale = usePacingLocale();
+
   const reads = usePacingReads(ctx.brandId);
   const view = pacingView({
     portfolios: reads.portfolios,
@@ -98,11 +120,9 @@ export default function PacingTile({ ctx, tile }: HomeTileProps) {
     return (
       <HomeTileFrame state="error" tile={tile}>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground text-xs">
-            The Optimizer’s budget plans could not be read.
-          </p>
+          <p className="text-muted-foreground text-xs">{betaUiText('beta_3c6ab20dee2d')}</p>
           <Button onClick={reads.retry} size="sm" type="button" variant="outline">
-            Retry
+            {betaUiText('beta_942087cc2d41')}
           </Button>
         </div>
       </HomeTileFrame>
@@ -114,7 +134,7 @@ export default function PacingTile({ ctx, tile }: HomeTileProps) {
         <TileMissing>
           {view.reason}{' '}
           <Link className="hit-area underline underline-offset-2" href={optimizerHref(null)}>
-            Open the Optimizer
+            {betaUiText('beta_9ec303b5dbb2')}
           </Link>
         </TileMissing>
       </HomeTileFrame>
@@ -124,9 +144,11 @@ export default function PacingTile({ ctx, tile }: HomeTileProps) {
   const [, ...others] = view.groups;
   return (
     <HomeTileFrame
-      badge={`${view.headline.portfolios} ${view.headline.portfolios === 1 ? 'plan' : 'plans'} running`}
+      badge={betaUiText('beta_f3a3de234dc8', {
+        value0: view.headline.portfolios,
+      })}
       expanded={<Module view={view} />}
-      expandedDescription={EXPANDED_DESCRIPTION}
+      expandedDescription={betaUiText('homePacingDescription')}
       state="ready"
       tile={tile}
     >

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * PP-DT-E-scale-google-only-gated (deep test 2026-10-31, lane E): Pink Elephant and Tangassi have a
  * Google Ads account and no Meta ad account. Scale always opened on Meta, found no Meta account to
@@ -9,7 +10,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 
 const navigation = { params: new URLSearchParams('tab=performance') };
 let assignedAccounts: { platform: string; account_id: string; name: string }[] = [];
@@ -46,7 +47,11 @@ mock.module('@/lib/prefetch/paid-media-cache', () => ({
   prefetchPaidMediaDashboard: () => undefined,
 }));
 mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
-  useOptimizerAdAccounts: () => ({ isSuccess: true, isPending: false, data: assignedAccounts }),
+  useOptimizerAdAccounts: () => ({
+    isSuccess: true,
+    isPending: false,
+    data: assignedAccounts,
+  }),
   useOptimizerPortfolios: () => ({
     isSuccess: true,
     isError: false,
@@ -63,7 +68,10 @@ mock.module('@/components/paid-media/dashboard/whats-working/WhatsWorkingExplore
 }));
 mock.module('@/components/paid-media/optimizer/OptimizerTab', () => ({
   OptimizerTab: (props: { adAccountId: string; platform: string }) => {
-    optimizerTabProps.push({ adAccountId: props.adAccountId, platform: props.platform });
+    optimizerTabProps.push({
+      adAccountId: props.adAccountId,
+      platform: props.platform,
+    });
     return <div data-testid="optimizer-tab" />;
   },
 }));
@@ -94,7 +102,11 @@ afterEach(() => {
 describe('Scale on a brand whose ad accounts are all Google', () => {
   it('opens Performance + on the Google account instead of the connect gate', async () => {
     assignedAccounts = [
-      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+      {
+        platform: 'google_ads',
+        account_id: '6619636193',
+        name: 'Pink Elephant',
+      },
     ];
     render(
       <PaidMediaClientPage
@@ -105,13 +117,24 @@ describe('Scale on a brand whose ad accounts are all Google', () => {
     );
     await waitFor(() => expect(screen.getByTestId('optimizer-tab')).toBeTruthy());
     expect(screen.queryByTestId('paid-setup-diagnostics')).toBeNull();
-    expect(optimizerTabProps.at(-1)).toEqual({ adAccountId: '6619636193', platform: 'google-ads' });
+    expect(optimizerTabProps.at(-1)).toEqual({
+      adAccountId: '6619636193',
+      platform: 'google-ads',
+    });
   });
 
   it('still opens on Meta when the brand has a Meta ad account as well', async () => {
     assignedAccounts = [
-      { platform: 'google_ads', account_id: '5251780631', name: 'Easy Fit Google' },
-      { platform: 'meta_ads', account_id: 'act_521903353286118', name: 'Easy Fit' },
+      {
+        platform: 'google_ads',
+        account_id: '5251780631',
+        name: 'Easy Fit Google',
+      },
+      {
+        platform: 'meta_ads',
+        account_id: 'act_521903353286118',
+        name: 'Easy Fit',
+      },
     ];
     render(
       <PaidMediaClientPage

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'bun:test';
 import type { ElementRecord, Skill } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import {
+  type FetchMediaMentionAssetsInput,
+  type MediaMentionText,
+  sourceFolderToSuggestion,
+} from '@/lib/agent/media-mentions';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
+import libraryEs from '../../../../messages/library/es.json';
+import libraryPt from '../../../../messages/library/pt-BR.json';
+import studioEs from '../../../../messages/studio/es.json';
+import studioPt from '../../../../messages/studio/pt-BR.json';
 import {
   type CanvasSignalCatalog,
   createCanvasComposerMentionProvider,
@@ -27,7 +37,11 @@ const skill = (overrides: Partial<Skill> = {}): Skill => ({
   ...overrides,
 });
 
-const noSignals: CanvasSignalCatalog = { trends: [], events: [], questions: [] };
+const noSignals: CanvasSignalCatalog = {
+  trends: [],
+  events: [],
+  questions: [],
+};
 
 const element = (overrides: Partial<ElementRecord> = {}): ElementRecord => ({
   id: 'element-1',
@@ -90,7 +104,11 @@ describe('canvas composer context provider', () => {
       type: 'skill',
       label: 'bold-product-lighting',
       source: 'canvas',
-      metadata: { skillId: 'skill-1', kind: 'creative_direction', slug: 'bold-product-lighting' },
+      metadata: {
+        skillId: 'skill-1',
+        kind: 'creative_direction',
+        slug: 'bold-product-lighting',
+      },
     });
     expect(suggestion.description).toBe('Hard light and crisp shadows.');
     expect(JSON.stringify(suggestion)).not.toContain('Use hard light.');
@@ -150,7 +168,12 @@ describe('canvas composer context provider', () => {
         label: 'Hero',
         type: 'media_asset',
         source: 'canvas',
-        reference: { id: 'image', type: 'media_asset', label: 'Hero', source: 'canvas' },
+        reference: {
+          id: 'image',
+          type: 'media_asset',
+          label: 'Hero',
+          source: 'canvas',
+        },
       },
       {
         key: 'file',
@@ -166,7 +189,10 @@ describe('canvas composer context provider', () => {
         },
       },
     ];
-    media[0].reference = { ...media[0].reference!, metadata: { kind: 'image' } };
+    media[0].reference = {
+      ...media[0].reference!,
+      metadata: { kind: 'image' },
+    };
     const provider = createCanvasComposerMentionProvider({
       brandId: 'brand-1',
       skills: [],
@@ -241,4 +267,100 @@ describe('canvas composer context provider — Elements', () => {
     const provider = providerWithElements([element({ members: [] })]);
     expect(await provider.getSuggestions({ query: 'nova' })).toEqual([]);
   });
+});
+
+describe('canvas context locale presentation', () => {
+  for (const locale of ['pt-BR', 'es'] as const) {
+    it(`keeps lookup keys and skill references while translating the menu in ${locale}`, async () => {
+      const uiText = createTranslator({
+        locale,
+        messages: { studio: locale === 'pt-BR' ? studioPt : studioEs },
+        namespace: 'studio',
+        onError: (error) => {
+          throw error;
+        },
+      });
+      const make = (localized: boolean) =>
+        createCanvasComposerMentionProvider({
+          brandId: 'brand-1',
+          skills: [skill()],
+          fetchAssets: async () => [],
+          fetchFolders: async () => [],
+          ...(localized ? { uiText } : {}),
+        });
+      const original = make(false);
+      const localized = make(true);
+      const roots = await localized.getSuggestions({ query: '' });
+      const oldRoots = await original.getSuggestions({ query: '' });
+      expect(roots.map((item) => item.key)).toEqual(oldRoots.map((item) => item.key));
+      expect(roots[0]?.label).toBe(locale === 'pt-BR' ? 'Habilidades' : 'Habilidades');
+      const folders = await localized.getChildSuggestions?.(roots[0]!, '');
+      const oldFolders = await original.getChildSuggestions?.(oldRoots[0]!, '');
+      expect(folders?.map((item) => item.key)).toEqual(oldFolders?.map((item) => item.key));
+      const suggestions = await localized.getChildSuggestions?.(folders![0]!, '');
+      const oldSuggestions = await original.getChildSuggestions?.(oldFolders![0]!, '');
+      expect(suggestions?.map((item) => item.reference)).toEqual(
+        oldSuggestions?.map((item) => item.reference),
+      );
+      expect(suggestions?.[0]?.description).toBe(oldSuggestions?.[0]?.description);
+      expect(suggestions?.[0]?.group).toBe(
+        locale === 'pt-BR' ? 'Habilidades da marca' : 'Habilidades de la marca',
+      );
+    });
+  }
+});
+
+describe('canvas context media translator boundary', () => {
+  for (const locale of ['pt-BR', 'es'] as const) {
+    it(`passes active Library messages through existing media reads in ${locale}`, async () => {
+      const mediaText = createTranslator({
+        locale,
+        messages: { library: locale === 'pt-BR' ? libraryPt : libraryEs },
+        namespace: 'library',
+        onError: (error) => {
+          throw error;
+        },
+      });
+      const reads: FetchMediaMentionAssetsInput[] = [];
+      const folderReads: Array<[string, string | undefined, MediaMentionText | undefined]> = [];
+      const provider = createCanvasComposerMentionProvider({
+        brandId: 'original-brand',
+        skills: [],
+        mediaText,
+        fetchAssets: async (input) => {
+          reads.push(input);
+          return [];
+        },
+        fetchFolders: async (brand, source, t) => {
+          folderReads.push([brand, source, t]);
+          return [sourceFolderToSuggestion({ value: 'all', label: 'All media' }, 'canvas', t)];
+        },
+      });
+      await provider.getSuggestions({ query: 'authored asset query' });
+      expect(reads[0]).toEqual({
+        brandId: 'original-brand',
+        query: 'authored asset query',
+        limit: 8,
+        referenceSource: 'canvas',
+        uiText: mediaText,
+      });
+      const roots = await provider.getSuggestions({ query: '' });
+      const media = roots.find((item) => item.key === 'canvas-context:media-library');
+      if (!media) throw new Error('Media lookup key must remain available');
+      const folders = await provider.getChildSuggestions?.(media, '');
+      expect(folderReads).toEqual([['original-brand', 'canvas', mediaText]]);
+      expect(folders?.[0]?.key).toBe('media-source:all');
+      expect(folders?.[0]?.label).toBe(locale === 'pt-BR' ? 'Todas as mídias' : 'Todos los medios');
+      await provider.getChildSuggestions?.(folders![0]!, '');
+      expect(reads[1]).toEqual({
+        brandId: 'original-brand',
+        query: '',
+        limit: 24,
+        referenceSource: 'canvas',
+        source: 'all',
+        uiText: mediaText,
+      });
+      expect(reads).toHaveLength(2);
+    });
+  }
 });

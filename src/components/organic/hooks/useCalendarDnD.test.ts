@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { type DragEndEvent, KeyboardCode } from '@dnd-kit/core';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDay, OrganicCalendarDraft } from '../primitives/types';
@@ -13,8 +14,12 @@ const rescheduleMany = mock(() => Promise.resolve());
 
 const storeStub = createCalendarStoreStub({ updateDraft, addDraft });
 mock.module('@/lib/organic/store', () => storeStub);
-mock.module('zustand/react/shallow', () => ({ useShallow: (fn: (s: unknown) => unknown) => fn }));
-mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
+mock.module('zustand/react/shallow', () => ({
+  useShallow: (fn: (s: unknown) => unknown) => fn,
+}));
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({ show }),
+}));
 
 const {
   crossPlatformDropRefusal,
@@ -24,14 +29,23 @@ const {
 } = await import('./useCalendarDnD');
 
 const DAYS: OrganicCalendarDay[] = [
-  { id: '2026-08-03', label: 'Mon', dateLabel: 'Aug 3', suggestedTimes: [], slots: [] },
+  {
+    id: '2026-08-03',
+    label: 'Mon',
+    dateLabel: 'Aug 3',
+    suggestedTimes: [],
+    slots: [],
+  },
 ];
 const DRAFTS: OrganicCalendarDraft[] = [];
 
 function dragOntoCellId(
   overId: string,
   selectedIds: string[],
-  options: { drafts?: OrganicCalendarDraft[]; delta?: { x: number; y: number } } = {},
+  options: {
+    drafts?: OrganicCalendarDraft[];
+    delta?: { x: number; y: number };
+  } = {},
 ): void {
   const { result } = renderHook(() =>
     useCalendarDnD(DAYS, options.drafts ?? DRAFTS, { instagram: 'acct-ig' }, selectedIds, {
@@ -158,14 +172,18 @@ describe('useCalendarDnD — a drop that goes nowhere', () => {
 
   // Space, Space on an undated dock row used to persist a drop onto the nearest cell.
   it('moves nothing when the draft was picked up and put down in place', () => {
-    dragOntoCellId('planner-cell::2026-08-10::instagram', ['d1'], { delta: { x: 0, y: 0 } });
+    dragOntoCellId('planner-cell::2026-08-10::instagram', ['d1'], {
+      delta: { x: 0, y: 0 },
+    });
 
     expect(reschedule).not.toHaveBeenCalled();
     expect(rescheduleMany).not.toHaveBeenCalled();
   });
 
   it('still moves a draft whose drag only travelled vertically', () => {
-    dragOntoCellId('planner-cell::2026-08-10::instagram', ['d1'], { delta: { x: 0, y: -120 } });
+    dragOntoCellId('planner-cell::2026-08-10::instagram', ['d1'], {
+      delta: { x: 0, y: -120 },
+    });
 
     expect(reschedule).toHaveBeenCalledTimes(1);
   });
@@ -260,7 +278,9 @@ describe('useCalendarDnD — cross-platform drop', () => {
     });
 
   it('refuses a group dropped on a platform it is not on, and says where to change it', () => {
-    dragOntoCellId('planner-cell::2026-08-10::linkedin', ['d1'], { drafts: [groupDraft()] });
+    dragOntoCellId('planner-cell::2026-08-10::linkedin', ['d1'], {
+      drafts: [groupDraft()],
+    });
 
     expect(reschedule).not.toHaveBeenCalled();
     expect(show.mock.calls[0]?.[0].title).toBe(
@@ -269,7 +289,9 @@ describe('useCalendarDnD — cross-platform drop', () => {
   });
 
   it('moves a group to another day along any of its own platforms', () => {
-    dragOntoCellId('planner-cell::2026-08-10::tiktok', ['d1'], { drafts: [groupDraft()] });
+    dragOntoCellId('planner-cell::2026-08-10::tiktok', ['d1'], {
+      drafts: [groupDraft()],
+    });
 
     expect(reschedule).toHaveBeenCalledTimes(1);
     expect(show).not.toHaveBeenCalled();
@@ -301,7 +323,12 @@ describe('plannerCellKeyboardCoordinates', () => {
         (day) =>
           [
             `${row}-${day}`,
-            rect({ left: day * 100, top: rowIndex * 80, width: 100, height: 80 }),
+            rect({
+              left: day * 100,
+              top: rowIndex * 80,
+              width: 100,
+              height: 80,
+            }),
           ] as const,
       ),
     ),
@@ -318,7 +345,9 @@ describe('plannerCellKeyboardCoordinates', () => {
           active: { id: 'd1' },
           collisionRect: rect(dragged),
           droppableRects: cells,
-          droppableContainers: { getEnabled: () => [...cells.keys()].map((id) => ({ id })) },
+          droppableContainers: {
+            getEnabled: () => [...cells.keys()].map((id) => ({ id })),
+          },
         } as never,
       },
     );
@@ -329,16 +358,25 @@ describe('plannerCellKeyboardCoordinates', () => {
   const card = { left: 20, top: 20, width: 60, height: 40 };
 
   it('moves right one day along the same row, centred on that cell', () => {
-    expect(press(KeyboardCode.Right, card).coordinates).toEqual({ x: 120, y: 20 });
+    expect(press(KeyboardCode.Right, card).coordinates).toEqual({
+      x: 120,
+      y: 20,
+    });
   });
 
   it('moves down one platform row on the same day', () => {
-    expect(press(KeyboardCode.Down, card).coordinates).toEqual({ x: 20, y: 100 });
+    expect(press(KeyboardCode.Down, card).coordinates).toEqual({
+      x: 20,
+      y: 100,
+    });
   });
 
   it('centres a dragged rect wider than the cell, so its centre lands in that cell', () => {
     const overlay = { left: -60, top: 0, width: 220, height: 80 };
-    expect(press(KeyboardCode.Right, overlay).coordinates).toEqual({ x: 40, y: 0 });
+    expect(press(KeyboardCode.Right, overlay).coordinates).toEqual({
+      x: 40,
+      y: 0,
+    });
   });
 
   it('stays put at the edge, and leaves keys that are not arrows to the sensor', () => {
