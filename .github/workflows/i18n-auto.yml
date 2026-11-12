@@ -6,6 +6,7 @@ on:
     paths: ['src/**', 'messages/**', 'scripts/i18n/**', 'package.json', 'bun.lock', '.github/workflows/i18n-auto.yml']
 permissions:
   contents: write
+  pull-requests: read
   id-token: write
 concurrency:
   group: i18n-${{ github.event.pull_request.number }}
@@ -51,7 +52,7 @@ jobs:
           BASE_SHA: ${{ steps.pr.outputs.base }}
         run: |
           node tool/scripts/i18n/auto.mjs --check --project "$GITHUB_WORKSPACE/incoming" --base "$BASE_SHA" > "$RUNNER_TEMP/i18n-plan.json" || test "$?" = 2
-          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/i18n-plan.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,"changes="+Boolean(p.sourceFiles||p.missingOrChangedTargets)+"\n");'
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/i18n-plan.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,"changes="+(p.status!=="CURRENT")+"\n");'
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         if: steps.plan.outputs.changes == 'true'
         with:
@@ -62,13 +63,24 @@ jobs:
       - name: Fill static draft catalogs and validate without building
         if: steps.plan.outputs.changes == 'true'
         id: fill
+        continue-on-error: true
         env:
           BASE_SHA: ${{ steps.pr.outputs.base }}
           SOURCE_RUN: ${{ github.run_id }}
         run: |
+          set +e
           node tool/scripts/i18n/auto.mjs --write --project "$GITHUB_WORKSPACE/incoming" --base "$BASE_SHA" --run-id "github-$SOURCE_RUN" --staging "$RUNNER_TEMP/i18n-drafts" --prefix "gs://continuum-production-477821-creative-benchmarks/i18n/automation/github-$SOURCE_RUN/" --max-characters 10000
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Decide whether validated drafts can be committed
+        if: always() && steps.plan.outcome == 'success'
+        id: result
+        env:
+          I18N_WRITE_EXIT: ${{ steps.fill.outputs.exit_code }}
+        run: node tool/scripts/i18n/ci-status.mjs
       - name: Commit translation drafts back to the originating PR
-        if: steps.fill.outcome == 'success'
+        if: steps.result.outputs.commit == 'true'
         working-directory: incoming
         env:
           TARGET_BRANCH: ${{ steps.pr.outputs.target }}
@@ -79,6 +91,25 @@ jobs:
           git add -- src messages
           if test -f scripts/i18n/translation-drafts.json; then git add -- scripts/i18n/translation-drafts.json; fi
           git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
           node ../tool/scripts/i18n/seal-patch.mjs "$RUNNER_TEMP/i18n-drafts" "gs://continuum-production-477821-creative-benchmarks/i18n/automation/github-$SOURCE_RUN/"
           git commit -m 'chore(i18n): fill offline translation drafts for review'
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+      - name: Require source checks to pass
+        if: always() && steps.pr.outputs.run == 'true'
+        env:
+          SOURCE_CHECKS_PASSED: ${{ steps.result.outputs.passed }}
+        run: |
+          if test "$SOURCE_CHECKS_PASSED" != true; then
+            echo 'Localization still requires review; valid drafts were retained and unsafe output was not committed.'
+            exit 2
+          fi
+      - name: Retain failed-run recovery data
+        if: always() && steps.pr.outputs.run == 'true' && (failure() || steps.result.outputs.passed != 'true')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: i18n-recovery-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/i18n-drafts/
+            ${{ runner.temp }}/i18n-plan.json
+          if-no-files-found: ignore

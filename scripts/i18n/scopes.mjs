@@ -59,6 +59,12 @@ export function buildMessageScopes(projectDirectory) {
     }
   });
   if (!namespaces.length) throw new Error('The canonical message namespace registry is missing');
+  if (
+    namespaces.some(
+      (namespace) => typeof namespace !== 'string' || !/^[a-z][a-z0-9-]*$/.test(namespace),
+    )
+  )
+    throw new Error('Message namespaces must be catalog directory names');
   for (const namespace of namespaces) {
     const keys = catalogKeys(
       JSON.parse(

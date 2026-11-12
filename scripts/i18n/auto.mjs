@@ -43,6 +43,25 @@ function sourceFiles(directory) {
   });
 }
 
+function assertDataPaths(root) {
+  const inspect = (file, recursive = false) => {
+    if (!existsSync(file)) return;
+    if (lstatSync(file).isSymbolicLink())
+      throw new Error(`Localization input symlinks require review: ${file}`);
+    if (recursive && lstatSync(file).isDirectory())
+      for (const entry of readdirSync(file)) inspect(path.join(file, entry), true);
+  };
+  // A privileged PR job reads this tree as data; ancestor links must not escape it.
+  for (const directory of ['src', 'messages']) inspect(path.join(root, directory), true);
+  for (const file of [
+    'scripts',
+    'scripts/i18n',
+    'scripts/i18n/literal-exceptions.json',
+    'scripts/i18n/translation-drafts.json',
+  ])
+    inspect(path.join(root, file));
+}
+
 function previousCatalog(root, base, file) {
   if (!base) return {};
   if (!/^[\w/.-]+$/.test(base) || base.startsWith('-'))
@@ -57,6 +76,7 @@ function previousCatalog(root, base, file) {
 }
 
 export function planLocalization(root = project, base = 'HEAD') {
+  assertDataPaths(root);
   const catalogs = {};
   for (const entry of readdirSync(path.join(root, 'messages'), { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith('client-')) continue;
@@ -87,6 +107,12 @@ export function planLocalization(root = project, base = 'HEAD') {
   const jobs = [];
   for (const [namespace, messages] of Object.entries(english)) {
     const oldEnglish = previousCatalog(root, base, `messages/${namespace}/en.json`);
+    const oldTargets = Object.fromEntries(
+      locales.map((locale) => [
+        locale,
+        previousCatalog(root, base, `messages/${namespace}/${locale}.json`),
+      ]),
+    );
     for (const [key, source] of Object.entries(messages)) {
       if (typeof source !== 'string')
         throw new Error(`Nested catalog keys require review: ${namespace}.${key}`);
@@ -97,6 +123,14 @@ export function planLocalization(root = project, base = 'HEAD') {
         const changed = typeof oldEnglish[key] === 'string' && oldEnglish[key] !== source;
         const alreadyDrafted =
           saved?.sourceHash === sourceHash && saved.targets?.[locale] === hash(current ?? '');
+        const previousDraft = saved?.targets?.[locale] === hash(current ?? '');
+        const manuallyTranslated =
+          changed &&
+          typeof current === 'string' &&
+          current.trim() &&
+          current !== oldTargets[locale][key] &&
+          !previousDraft;
+        if (manuallyTranslated) continue;
         if (
           (typeof current !== 'string' || !current.trim() || changed) &&
           !(alreadyDrafted && typeof current === 'string' && current.trim())
@@ -170,15 +204,21 @@ export function runLocalization(options = {}) {
     missingOrChangedTargets: plan.jobs.length,
     pending: plan.pending,
   };
-  if (!options.write)
+  if (!options.write) {
+    const checked = plan.jobs.length || plan.sourceEdits.length ? null : check(root);
     return {
       ...summary,
       mode: 'CHECK',
+      errors: checked?.errors ?? [],
+      machineFindings: checked?.machineFindings ?? [],
       status:
         plan.jobs.length || plan.sourceEdits.length || plan.pending.length
           ? 'NEEDS_TRANSLATION'
-          : 'CURRENT',
+          : checked.errors.length || checked.findings.length || checked.machineFindings.length
+            ? 'NEEDS_REVIEW'
+            : 'CURRENT',
     };
+  }
   const runId =
     options.runId ??
     `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`;

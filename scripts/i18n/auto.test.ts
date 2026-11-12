@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createTranslator } from 'next-intl';
-import { applyDrafts, planLocalization } from './auto.mjs';
+import { applyDrafts, planLocalization, runLocalization } from './auto.mjs';
+import { reviewStatus } from './ci-status.mjs';
 import { extractUi, jsxText } from './extract.mjs';
 import { protectMessage } from './protect.mjs';
+import { buildMessageScopes, lazyCatalogOutputs } from './scopes.mjs';
 
 describe('offline message protection', () => {
   it('keeps nested plurals, tags and native number formats intact', () => {
@@ -112,6 +116,95 @@ describe('safe React source extraction', () => {
 });
 
 describe('incremental catalog filling', () => {
+  it('preserves human edits alongside changed English, refreshes stale drafts and avoids repeat charges', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'i18n-auto-history-'));
+    for (const directory of ['src', 'messages/common', 'scripts/i18n'])
+      mkdirSync(path.join(root, directory), { recursive: true });
+    const catalog = (locale: string, text: string) =>
+      writeFileSync(
+        path.join(root, `messages/common/${locale}.json`),
+        JSON.stringify({ save: text }),
+      );
+    catalog('en', 'Save');
+    catalog('pt-BR', 'Salvar');
+    catalog('es', 'Guardar');
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    git('init', '--quiet');
+    git('add', '.');
+    git(
+      '-c',
+      'user.name=I18n test',
+      '-c',
+      'user.email=i18n-test@example.invalid',
+      'commit',
+      '--quiet',
+      '-m',
+      'baseline',
+    );
+    catalog('en', 'Save draft');
+    catalog('pt-BR', 'Salvar rascunho revisado');
+    expect(planLocalization(root).jobs.map((job: { locale: string }) => job.locale)).toEqual([
+      'es',
+    ]);
+    const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+    writeFileSync(
+      path.join(root, 'scripts/i18n/translation-drafts.json'),
+      JSON.stringify({
+        'common.save': {
+          sourceHash: hash('Save draft'),
+          targets: { es: hash('Guardar borrador') },
+          reviewStatus: 'DRAFT',
+        },
+      }),
+    );
+    catalog('es', 'Guardar borrador');
+    expect(planLocalization(root).jobs).toEqual([]);
+    catalog('en', 'Save campaign');
+    expect(planLocalization(root).jobs.map((job: { locale: string }) => job.locale)).toEqual([
+      'es',
+    ]);
+  });
+  it('checks existing catalogs before declaring a no-op current and refuses linked input trees', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'i18n-auto-check-'));
+    const file = (name: string, text: string) => {
+      const target = path.join(root, name);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, text);
+    };
+    file('src/i18n/catalogs.ts', "export const messageNamespaces=['common'] as const;");
+    for (const [locale, message] of [
+      ['en', 'Save {name}'],
+      ['pt-BR', 'Salvar {name}'],
+      ['es', 'Guardar {name}'],
+    ]) {
+      file(`messages/common/${locale}.json`, JSON.stringify({ save: message }));
+      file(
+        `src/i18n/emergency/${locale}.json`,
+        JSON.stringify({
+          error:
+            locale === 'en'
+              ? 'Something went wrong'
+              : locale === 'es'
+                ? 'Algo salió mal'
+                : 'Algo deu errado',
+        }),
+      );
+    }
+    const manifest = buildMessageScopes(root);
+    file('src/i18n/message-scopes.generated.json', JSON.stringify(manifest));
+    for (const [name, content] of lazyCatalogOutputs(root, manifest)) file(name, content);
+    expect(runLocalization({ project: root }).status).toBe('CURRENT');
+    file('messages/common/es.json', JSON.stringify({ save: 'Guardar {other}' }));
+    const result = runLocalization({ project: root });
+    expect(result.status).toBe('NEEDS_REVIEW');
+    expect(result.errors.length).toBeGreaterThan(0);
+    file('src/i18n/catalogs.ts', "export const messageNamespaces=['../../outside'] as const;");
+    expect(() => buildMessageScopes(root)).toThrow('catalog directory names');
+    const linkedRoot = mkdtempSync(path.join(tmpdir(), 'i18n-auto-linked-'));
+    symlinkSync(path.join(root, 'messages'), path.join(linkedRoot, 'messages'));
+    expect(() => planLocalization(linkedRoot)).toThrow('symlinks');
+  });
   it('fills only missing locales, preserves reviewed text and stops on corrupt ICU', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'i18n-auto-test-'));
     for (const directory of ['src', 'messages/common', 'scripts/i18n'])
@@ -145,6 +238,28 @@ describe('incremental catalog filling', () => {
 });
 
 describe('review automation boundaries', () => {
+  it('keeps valid drafts while failing unresolved UI review and malformed catalogs', () => {
+    const plan = { status: 'NEEDS_REVIEW', pending: [{ text: 'unresolved helper' }] };
+    expect(reviewStatus(plan, null)).toEqual({ commit: false, passed: false, pending: 1 });
+    const report = {
+      status: 'NEEDS_REVIEW',
+      errors: [],
+      machineFindings: [],
+      pending: plan.pending,
+    };
+    expect(reviewStatus(plan, report)).toEqual({ commit: true, passed: false, pending: 1 });
+    expect(reviewStatus(plan, report, 1)).toEqual({ commit: false, passed: false, pending: 1 });
+    expect(reviewStatus(plan, { ...report, errors: ['broken ICU'] })).toEqual({
+      commit: false,
+      passed: false,
+      pending: 1,
+    });
+    expect(reviewStatus({ status: 'CURRENT', pending: [] }, null)).toEqual({
+      commit: false,
+      passed: true,
+      pending: 0,
+    });
+  });
   it('pins trusted base code and restricts incoming repositories', () => {
     const workflow = Bun.YAML.parse(
       readFileSync(new URL('../../.github/workflows/i18n-auto.yml', import.meta.url), 'utf8'),
@@ -154,7 +269,7 @@ describe('review automation boundaries', () => {
         drafts: { if: string; steps: Array<{ uses?: string; with?: Record<string, unknown> }> };
       };
     };
-    expect(workflow.on.pull_request_target.branches).toEqual(['beta','main']);
+    expect(workflow.on.pull_request_target.branches).toEqual(['beta', 'main']);
     expect(workflow.jobs.drafts.if).toContain('head.repo.id == github.event.repository.id');
     const first = workflow.jobs.drafts.steps[0];
     expect(first.with?.path).toBe('tool');
