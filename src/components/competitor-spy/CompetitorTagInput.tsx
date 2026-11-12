@@ -287,7 +287,13 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
                       >
                         {post.coverUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={post.coverUrl} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={post.coverUrl}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
                         ) : null}
                       </div>
                     ))}

@@ -209,7 +209,11 @@
     ".next/forge-scene-bench/types/**/*.ts",
     ".next/forge-scene-bench/dev/types/**/*.ts",
     ".next/forge-scene-real-bench/types/**/*.ts",
-    ".next/forge-scene-real-bench/dev/types/**/*.ts"
+    ".next/forge-scene-real-bench/dev/types/**/*.ts",
+    ".next/media-delivery-bench/types/**/*.ts",
+    ".next/media-delivery-bench/dev/types/**/*.ts",
+    ".next/media-delivery-prod/types/**/*.ts",
+    ".next/media-delivery-prod/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

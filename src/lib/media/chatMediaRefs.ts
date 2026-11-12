@@ -282,7 +282,10 @@ export function useChatMediaTiles(
             merge(signed);
             const unanswered = refs.filter((ref) => !signed.has(chatMediaRefKey(ref)));
             if (unanswered.length === 0 || retried) return;
-            retryTimer.current = setTimeout(() => resign(unanswered, true), CHAT_MEDIA_SIGN_RETRY_MS);
+            retryTimer.current = setTimeout(
+              () => resign(unanswered, true),
+              CHAT_MEDIA_SIGN_RETRY_MS,
+            );
           });
         };
         resign(failed, false);
@@ -295,20 +298,5 @@ export function useChatMediaTiles(
 }
 
 // Media signs once it comes near the viewport, so reopening a long thread signs what the reader
-// can see, not everything it holds. Latched: media scrolled past stays signed.
-export function useNearViewport(): [(node: HTMLElement | null) => void, boolean] {
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
-  useEffect(() => {
-    if (near || !node) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
-      },
-      { rootMargin: '200px 0px' },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [near, node]);
-  return [setNode, near];
-}
+// can see, not everything it holds. The one hook the app uses for "about to be seen".
+export { useNearViewport } from '@/hooks/useNearViewport';

@@ -50,11 +50,75 @@ interface CacheEntry {
 const resolved = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<string | null>>();
 
+// A reload starts the page over but not the tab. Kept in sessionStorage, the URLs a canvas
+// already drew survive it, so a reopened canvas paints from the browser cache instead of
+// downloading every clip again under a new token. Entries are stored under the person they were
+// signed for: another person signing in to this tab, or a lost session, drops every entry that is
+// not theirs before anything can read it. The `continuum:` prefix is also what logout purges.
+export const SIGNED_URL_STORAGE_PREFIX = 'continuum:signed-url\n';
+const STORED = SIGNED_URL_STORAGE_PREFIX;
+
+let owner: string | null = null;
+
+const storedKey = (key: string) => `${STORED}${owner}\n${key}`;
+
+function dropStored(drop: (storageKey: string) => boolean): void {
+  try {
+    const store = globalThis.sessionStorage;
+    const keys: string[] = [];
+    for (let i = 0; store && i < store.length; i += 1) {
+      const key = store.key(i);
+      if (key?.startsWith(STORED) && drop(key)) keys.push(key);
+    }
+    for (const key of keys) store?.removeItem(key);
+  } catch {
+    // Nothing stored to drop.
+  }
+}
+
+/** Whose URLs this tab keeps: set from the auth session on every change (react-query provider). */
+export function setSignedUrlCacheOwner(id: string | null): void {
+  if (id === owner) return;
+  owner = id;
+  resolved.clear();
+  inFlight.clear();
+  dropStored((key) => !id || !key.startsWith(`${STORED}${id}\n`));
+}
+
+function stored(key: string): CacheEntry | undefined {
+  if (!owner) return undefined;
+  try {
+    const raw = globalThis.sessionStorage?.getItem(storedKey(key));
+    return raw ? (JSON.parse(raw) as CacheEntry) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function store(key: string, entry: CacheEntry): void {
+  if (!owner) return;
+  try {
+    globalThis.sessionStorage?.setItem(storedKey(key), JSON.stringify(entry));
+  } catch {
+    // A full or blocked sessionStorage only costs the reload its cache.
+  }
+}
+
+function unstore(key: string): void {
+  if (!owner) return;
+  try {
+    globalThis.sessionStorage?.removeItem(storedKey(key));
+  } catch {
+    // Nothing stored to drop.
+  }
+}
+
 function readFresh(key: string, now: number): string | null {
-  const entry = resolved.get(key);
+  const entry = resolved.get(key) ?? stored(key);
   if (!entry) return null;
   if (entry.expiresAtMs <= now) {
     resolved.delete(key);
+    unstore(key);
     return null;
   }
   return entry.url;
@@ -67,6 +131,7 @@ function remember(key: string, url: string, now: number): void {
   // not worth storing — caching it would just hand the next caller something stale.
   if (expiresAtMs <= now) return;
   resolved.set(key, { url, expiresAtMs });
+  store(key, { url, expiresAtMs });
 }
 
 /**
@@ -82,6 +147,8 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
   signBatch: (pending: Coordinate[]) => Promise<Map<string, string>>,
 ): Promise<Map<string, string>> {
   const now = Date.now();
+  // Whose cache this sign fills. A person switching mid-sign must never find these URLs.
+  const signedFor = owner;
   const out = new Map<string, string>();
   const waits: Array<{ key: string; promise: Promise<string | null> }> = [];
   const pending: Coordinate[] = [];
@@ -112,35 +179,42 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
     // against that request BEFORE the first await, so a caller arriving mid-flight
     // joins this fetch instead of starting a second one.
     const batch = signBatch(pending).catch(() => new Map<string, string>());
+    const mine: typeof waits = [];
 
     for (const coordinate of pending) {
       const key = signedUrlKey(coordinate.bucket, coordinate.path);
       const promise = batch.then((signed) => signed.get(key) ?? null);
       inFlight.set(key, promise);
-      waits.push({ key, promise });
+      mine.push({ key, promise });
     }
+    waits.push(...mine);
 
     void batch.finally(() => {
-      for (const coordinate of pending) {
-        inFlight.delete(signedUrlKey(coordinate.bucket, coordinate.path));
+      // Only this batch's entries: after a change of person the key may be someone else's sign.
+      for (const { key, promise } of mine) {
+        if (inFlight.get(key) === promise) inFlight.delete(key);
       }
     });
   }
 
   const settled = await Promise.all(waits.map((wait) => wait.promise));
   const settledAt = Date.now();
+  // Signed for someone who is no longer this tab's person: the caller who asked gets them,
+  // the cache does not.
+  const keep = owner === signedFor;
   settled.forEach((url, index) => {
     const key = waits[index]?.key;
     if (!key || !url) return;
-    remember(key, url, settledAt);
+    if (keep) remember(key, url, settledAt);
     out.set(key, url);
   });
 
   return out;
 }
 
-/** Drop everything. Used when the canvas switches rooms or brands, and by tests. */
+/** Drop everything, stored entries included. Tests use it; a change of person goes through setSignedUrlCacheOwner. */
 export function clearSignedUrlCache(): void {
+  dropStored(() => true);
   resolved.clear();
   inFlight.clear();
 }

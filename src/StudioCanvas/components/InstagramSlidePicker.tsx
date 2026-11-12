@@ -2,6 +2,7 @@
 
 import type { InstagramMediaItem, InstagramPost } from '@continuum/contracts';
 import { ArrowLeft } from 'lucide-react';
+import { VideoStill } from '@/components/media/VideoStill';
 import { Button } from '@/components/ui/button';
 import { setInstagramMediaDragData } from './instagramMediaDrag';
 
@@ -42,7 +43,11 @@ const SlideTile = ({
     }`}
   >
     {item.kind === 'video' ? (
-      <video src={item.url} className="h-full w-full object-cover" muted />
+      <VideoStill
+        src={item.url}
+        alt={`slide ${index + 1}`}
+        className="h-full w-full object-cover"
+      />
     ) : (
       // draggable={false} so the tile button owns the drag: a natively draggable
       // <img> starts its own drag with the browser's default payload instead.
@@ -51,6 +56,8 @@ const SlideTile = ({
         src={item.url}
         alt={`slide ${index + 1}`}
         draggable={false}
+        loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover"
       />
     )}

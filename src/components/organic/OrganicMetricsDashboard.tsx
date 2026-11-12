@@ -482,6 +482,10 @@ function PostGalleryCard({
   platform?: MetricsPlatform;
 }) {
   const preview = getPostPreviewUrl(post);
+  // A video card shows its still until the pointer is on it: a gallery of autoplaying reels
+  // downloads every film in range before anyone looks at one.
+  const [hovered, setHovered] = React.useState(false);
+  const still = post.thumbnailUrl ?? null;
   // TikTok and YouTube only expose a thumbnail (no playable file), so they render
   // as a still + permalink rather than an inline <video>.
   const isThumbnailOnlyVideo = platform === 'tiktok' || platform === 'youtube';
@@ -510,6 +514,8 @@ function PostGalleryCard({
       transition={{ duration: 0.26, ease: [0.2, 0.8, 0.2, 1] }}
       type="button"
       onClick={onSelect}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       aria-label={`Open analytics for ${post.title ?? post.mediaType ?? post.id}`}
       className={cn(
         'group relative block w-full overflow-hidden rounded-xl border border-border bg-surface text-left transition-[transform,box-shadow,opacity,border-color] duration-200',
@@ -521,10 +527,15 @@ function PostGalleryCard({
     >
       <div className="relative flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-black/90 ring-1 ring-black/10 dark:ring-white/10">
         {preview ? (
-          video && !isThumbnailOnlyVideo ? (
+          video && !isThumbnailOnlyVideo && (hovered || !still) ? (
             // aspect-auto defeats the Reel root's own aspect-[9/16] so the video
             // letterboxes inside this frame instead of overflowing and being cropped.
-            <Reel className="h-full w-full aspect-auto" data={reelData} defaultMuted>
+            <Reel
+              className="h-full w-full aspect-auto"
+              data={reelData}
+              defaultMuted
+              playing={hovered}
+            >
               <ReelContent>
                 {(item) => (
                   <ReelVideo
@@ -541,7 +552,7 @@ function PostGalleryCard({
             <div className="relative h-full w-full">
               <PostMediaPreviewImage
                 postId={post.id}
-                src={preview}
+                src={(video && still) || preview}
                 alt={post.title ?? post.caption ?? 'Post media'}
                 className="h-full w-full object-contain outline outline-1 outline-black/10 dark:outline-white/10"
                 onRecover={onRecoverMedia}

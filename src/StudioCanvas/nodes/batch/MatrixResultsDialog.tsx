@@ -12,6 +12,7 @@ import { MAX_BATCH_ITEMS } from '@continuum/contracts';
 import { Download, X } from 'lucide-react';
 import { useState } from 'react';
 
+import { VideoStill } from '@/components/media/VideoStill';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -61,9 +62,7 @@ function AxisHeader({ entry }: { entry: MatrixAxisEntry }) {
         <img src={url} alt="" className="size-8 shrink-0 rounded object-cover" />
       ) : null}
       {url && entry.item.kind === 'video' ? (
-        <video src={url} preload="metadata" muted className="size-8 shrink-0 rounded bg-black">
-          <track kind="captions" />
-        </video>
+        <VideoStill src={url} className="size-8 shrink-0 rounded bg-black" />
       ) : null}
       <span className="max-w-[10rem] truncate text-xs font-medium">{entry.label}</span>
     </div>
@@ -80,11 +79,7 @@ function CellBody({ preview }: { preview: CellPreview }) {
   }
   if (!preview.src) return <span className="text-xs text-muted-foreground">no preview</span>;
   if (preview.kind === 'video') {
-    return (
-      <video src={preview.src} preload="metadata" muted className="size-full object-cover">
-        <track kind="captions" />
-      </video>
-    );
+    return <VideoStill src={preview.src} className="size-full object-cover" />;
   }
   return <img src={preview.src} alt="" className="size-full object-cover" />;
 }

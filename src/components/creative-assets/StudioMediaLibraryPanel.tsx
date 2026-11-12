@@ -17,6 +17,7 @@ import React from 'react';
 import { LibraryElementsGrid } from '@/components/library/LibraryElementsGrid';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
+import { AssetStill, assetStill } from '@/components/media/AssetStill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { setStudioAssetDragData } from '@/lib/creative-assets/studioAssetDrop';
@@ -268,18 +269,8 @@ function InspirationEmptyState({ pull }: { pull: InspirationPull }) {
   );
 }
 
-// Image/video tiles paint the original. Audio and source files (PSD, INDD, 3D, PDF…)
-// paint their Library preview still, never the original bytes an <img> cannot draw.
-function tileStill(asset: MediaAsset): string | null {
-  if (asset.kind === 'image' || asset.kind === 'video') return sanitizeCreativeAssetUrl(asset.signedUrl);
-  const preview = asset.preview;
-  return sanitizeCreativeAssetUrl(
-    preview?.state === 'ready' && preview.kind === 'image' ? preview.signedUrl : asset.thumbnailUrl,
-  );
-}
-
 function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: string }) {
-  const url = tileStill(asset);
+  const url = assetStill(asset);
   const isVideo = asset.kind === 'video';
   const label = asset.title ?? asset.fileName;
 
@@ -296,16 +287,8 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
               onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
               className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
             >
-              {url && !isVideo ? (
-                <img src={url} alt={label} className="h-full w-full object-cover" />
-              ) : url && isVideo ? (
-                <video
-                  src={`${url}#t=0.01`}
-                  preload="metadata"
-                  muted
-                  playsInline
-                  className="h-full w-full object-cover"
-                />
+              {url || isVideo ? (
+                <AssetStill asset={asset} alt={label} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-gray-600">
                   {asset.kind === 'audio' ? (
@@ -370,16 +353,8 @@ function StudioAssetHoverDetail({
     <HoverCardContent side="left" className="w-72">
       <div className="flex flex-col gap-2.5">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black/30">
-          {url && !isVideo ? (
-            <img src={url} alt={label} className="h-full w-full object-contain" />
-          ) : url && isVideo ? (
-            <video
-              src={`${url}#t=0.01`}
-              preload="metadata"
-              muted
-              playsInline
-              className="h-full w-full object-contain"
-            />
+          {url || isVideo ? (
+            <AssetStill asset={asset} alt={label} eager className="h-full w-full object-contain" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <ImageOff className="h-6 w-6" />

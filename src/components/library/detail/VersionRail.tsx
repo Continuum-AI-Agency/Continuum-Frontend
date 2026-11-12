@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
+import { VideoStill } from '@/components/media/VideoStill';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,6 +91,8 @@ type VersionDisplay = {
   createdAt: string;
   isHead: boolean;
   commentCount: number;
+  /** The head video's poster, drawn in place of loading the film. */
+  stillUrl?: string | null;
 };
 
 function toDisplay(version: MediaAssetVersion, commentCount: number): VersionDisplay {
@@ -130,7 +133,7 @@ function VersionPreview({
   version,
   className,
 }: {
-  version: Pick<VersionDisplay, 'mimeType' | 'signedUrl' | 'fileName'>;
+  version: Pick<VersionDisplay, 'mimeType' | 'signedUrl' | 'fileName' | 'stillUrl'>;
   className?: string;
 }) {
   const base = cn('flex items-center justify-center overflow-hidden rounded bg-muted', className);
@@ -138,6 +141,8 @@ function VersionPreview({
     return (
       <div className={base}>
         <img
+          // The same URL the stage draws, already in the browser: a smaller copy here would be a
+          // second download that waits on the versions read, and the screen waits on it.
           src={version.signedUrl}
           alt={version.fileName}
           loading="lazy"
@@ -149,11 +154,10 @@ function VersionPreview({
   if (version.signedUrl && version.mimeType.startsWith('video/')) {
     return (
       <div className={base}>
-        {/* biome-ignore lint/a11y/useMediaCaption: silent thumbnail preview of the user's own upload; no caption track exists */}
-        <video
+        <VideoStill
           src={version.signedUrl}
-          muted
-          preload="metadata"
+          poster={version.stillUrl}
+          alt={version.fileName}
           className="h-full w-full object-cover"
         />
       </div>
@@ -428,10 +432,12 @@ export function VersionRail({
   const loading = versions === null;
   const mutating = rollingBack || restacking;
   const stacked = versions !== null && versions.length > 1;
-  const displayList: VersionDisplay[] =
+  const headStill = asset.kind === 'video' ? (asset.thumbnailUrl ?? null) : null;
+  const displayList: VersionDisplay[] = (
     versions && versions.length > 0
       ? versions.map((version) => toDisplay(version, commentCounts.get(version.id) ?? 0))
-      : [implicitHeadFromAsset(asset)];
+      : [implicitHeadFromAsset(asset)]
+  ).map((display) => (display.isHead ? { ...display, stillUrl: headStill } : display));
   const headId = versions?.find((version) => version.isHead)?.id ?? null;
 
   return (

@@ -183,7 +183,7 @@ export function AdSnapshotCard({
                   poster={media.thumbnailUrl}
                   controls
                   playsInline
-                  preload="metadata"
+                  preload={media.thumbnailUrl ? 'none' : 'metadata'}
                   aria-label={`${entry.competitorName} ad video`}
                   className="max-h-[65vh] w-full object-contain"
                 >

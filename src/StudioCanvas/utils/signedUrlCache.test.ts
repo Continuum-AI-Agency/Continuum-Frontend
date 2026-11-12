@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
+import { purgeStorageForLogout } from '@/lib/storage/brandScopedStorage';
 import {
   clearSignedUrlCache,
   resolveSignedUrls,
+  SIGNED_URL_STORAGE_PREFIX,
   type SignedUrlCoordinate,
+  setSignedUrlCacheOwner,
   signedUrlKey,
 } from './signedUrlCache';
 
@@ -122,5 +125,75 @@ describe('resolveSignedUrls', () => {
       throw new Error('network down');
     });
     expect(out.size).toBe(0);
+  });
+});
+
+describe('signed URLs kept across a reload', () => {
+  const storedKeys = () =>
+    Object.keys(sessionStorage).filter((key) => key.startsWith(SIGNED_URL_STORAGE_PREFIX));
+
+  it('are read back from sessionStorage, and logout clears them for the next person', async () => {
+    setSignedUrlCacheOwner('user-a');
+    const key = signedUrlKey('b', 'kept.mp4');
+    const url = (await resolveSignedUrls([coord('kept.mp4')], recordingSigner().sign)).get(key);
+    expect(url).toBeString();
+    expect(storedKeys()).toHaveLength(1);
+
+    // A reload empties memory but keeps the tab's sessionStorage: no new sign, same URL.
+    const stored = { ...sessionStorage };
+    clearSignedUrlCache();
+    for (const [key, value] of Object.entries(stored)) sessionStorage.setItem(key, value);
+    const second = recordingSigner();
+    expect((await resolveSignedUrls([coord('kept.mp4')], second.sign)).get(key)).toBe(url);
+    expect(second.calls).toBe(0);
+
+    purgeStorageForLogout();
+    expect(storedKeys()).toHaveLength(0);
+  });
+
+  it('belong to the person they were signed for: another person in the tab never reads them', async () => {
+    setSignedUrlCacheOwner('user-a');
+    const key = signedUrlKey('b', 'mine.mp4');
+    expect(
+      (await resolveSignedUrls([coord('mine.mp4')], recordingSigner().sign)).get(key),
+    ).toBeString();
+
+    // The next person signs for themselves: nothing of user-a's is left to read.
+    setSignedUrlCacheOwner('user-b');
+    expect(storedKeys()).toHaveLength(0);
+    const other = recordingSigner();
+    await resolveSignedUrls([coord('mine.mp4')], other.sign);
+    expect(other.calls).toBe(1);
+
+    setSignedUrlCacheOwner(null);
+    expect(storedKeys()).toHaveLength(0);
+  });
+
+  it('a sign still in flight when the person changes is never kept for the next person', async () => {
+    setSignedUrlCacheOwner('user-a');
+    const key = signedUrlKey('b', 'race.mp4');
+    let answer: (signed: Map<string, string>) => void = () => {};
+    const forA = resolveSignedUrls(
+      [coord('race.mp4')],
+      () => new Promise<Map<string, string>>((resolve) => (answer = resolve)),
+    );
+
+    setSignedUrlCacheOwner('user-b');
+    answer(new Map([[key, 'https://storage.test/race.mp4?token=minted-for-a']]));
+    // The caller who asked still gets its URL…
+    expect((await forA).get(key)).toBe('https://storage.test/race.mp4?token=minted-for-a');
+    // …but user-b's first read signs for user-b.
+    expect(storedKeys()).toHaveLength(0);
+    const forB = recordingSigner();
+    const url = (await resolveSignedUrls([coord('race.mp4')], forB.sign)).get(key);
+    expect(forB.calls).toBe(1);
+    expect(url).not.toContain('minted-for-a');
+  });
+
+  it('are dropped by clearSignedUrlCache', async () => {
+    setSignedUrlCacheOwner('user-a');
+    await resolveSignedUrls([coord('dropped.mp4')], recordingSigner().sign);
+    clearSignedUrlCache();
+    expect(storedKeys()).toHaveLength(0);
   });
 });

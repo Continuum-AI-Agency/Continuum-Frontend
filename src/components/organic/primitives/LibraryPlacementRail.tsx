@@ -11,8 +11,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { ChevronDownIcon, ChevronUpIcon, ImageOff, Play } from 'lucide-react';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
+import { AssetStill } from '@/components/media/AssetStill';
 import { Skeleton } from '@/components/ui/skeleton';
-import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { cn } from '@/lib/utils';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
@@ -44,7 +44,6 @@ function DraggableAssetTile({
     data: { assetId: asset.id, asset },
   });
 
-  const url = sanitizeCreativeAssetUrl(asset.signedUrl);
   const isVideo = asset.kind === 'video';
 
   const style: React.CSSProperties = {
@@ -80,27 +79,16 @@ function DraggableAssetTile({
         'min-h-[44px] min-w-[44px]',
       )}
     >
-      {url && !isVideo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={asset.title ?? asset.fileName}
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
-      ) : url && isVideo ? (
-        <video
-          src={`${url}#t=0.01`}
-          preload="metadata"
-          muted
-          playsInline
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
-          <ImageOff className="size-4" />
-        </div>
-      )}
+      <AssetStill
+        asset={asset}
+        alt={asset.title ?? asset.fileName}
+        className="h-full w-full object-cover"
+        fallback={
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
+            <ImageOff className="size-4" />
+          </div>
+        }
+      />
 
       {isVideo && (
         <div className="pointer-events-none absolute left-1 top-1 rounded-full bg-black/60 p-0.5">

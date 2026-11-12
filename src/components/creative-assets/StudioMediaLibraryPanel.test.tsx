@@ -133,6 +133,18 @@ describe('StudioMediaLibraryPanel — Inspiration folder (#251)', () => {
     expect(getByTestId('studio-inspiration-regenerate')).toBeTruthy();
   });
 
+  it('paints each tile from its still, lazily, never the original file', async () => {
+    listPages = [[{ ...asset('a'), thumbnailUrl: 'https://example.test/a-480.webp' } as MediaAsset]];
+    const { getByTestId, getAllByRole } = render(<StudioMediaLibraryPanel brandProfileId="brand-1" />);
+    await settle();
+    await selectInspiration(getByTestId);
+    await settle();
+
+    const [tile] = getAllByRole('img');
+    expect(tile?.getAttribute('src')).toBe('https://example.test/a-480.webp');
+    expect(tile?.getAttribute('loading')).toBe('lazy');
+  });
+
   it('explains why the folder is empty instead of blaming the whole library', async () => {
     const { getByTestId, queryByText } = render(
       <StudioMediaLibraryPanel brandProfileId="brand-1" />,

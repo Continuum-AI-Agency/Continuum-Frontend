@@ -54,6 +54,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { pluralize } from '@/lib/format/pluralize';
+import { useLibraryStill } from '@/lib/media/libraryStills';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
@@ -123,9 +124,15 @@ function ChecksCell({ job }: { job: ApiRenderJob }) {
  * and froze the ledger. A still that fails to load — an expired signed link, a deleted file — or
  * a video whose poster is not made yet falls back to the tile.
  */
-function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
+function Thumbnail({ brandId, output }: { brandId: string; output: ApiRenderOutput | null }) {
   const [broken, setBroken] = useState(false);
-  const still = output?.kind === 'image' ? thumbnailSrc(output) : output?.posterUrl;
+  // A still at the row's 36 px, never the full render: the Library copy's poster or image resized
+  // to 96 px; an image's own 480p or a video's 640 poster only for a render outside the Library.
+  const libraryStill = useLibraryStill(brandId, output?.assetId, 96);
+  const own = output?.kind === 'image' ? output.thumbnailUrl : output?.posterUrl;
+  const fallback = own ?? (output?.kind === 'image' && output ? thumbnailSrc(output) : null);
+  // Nothing while the Library answers: drawing the fallback first would download it anyway.
+  const still = output?.assetId && libraryStill === undefined ? null : (libraryStill ?? fallback);
   if (still && !broken) {
     return (
       <img
@@ -319,6 +326,7 @@ export function RenderJobsGrid({
               {/* Keyed by the link it draws: a re-signed or newly made still gets a fresh try. */}
               <Thumbnail
                 key={first ? (first.posterUrl ?? thumbnailSrc(first)) : 'none'}
+                brandId={brandId}
                 output={first}
               />
             </ViewTransition>
@@ -520,6 +528,7 @@ export function RenderJobsGrid({
           return (
             <Thumbnail
               key={first ? (first.posterUrl ?? thumbnailSrc(first)) : 'none'}
+              brandId={brandId}
               output={first}
             />
           );

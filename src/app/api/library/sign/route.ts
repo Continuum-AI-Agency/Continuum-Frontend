@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   // the caller's brand, so no service-role bypass is needed.
   const { data, error } = await mediaSchema(supabase)
     .from('assets')
-    .select('storage_path, bucket, thumbnail_path, mime_type')
+    .select('storage_path, bucket, thumbnail_path, mime_type, updated_at')
     .eq('id', assetId)
     .eq('brand_id', brandId)
     .is('deleted_at', null)
@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     bucket: string;
     thumbnail_path: string | null;
     mime_type: string | null;
+    updated_at: string | null;
   };
 
   // The head read above stays the authorization AND the soft-delete gate even when an
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ signedUrl: versionUrl, thumbnailUrl: null });
   }
 
-  const signedUrl = await mintSignedUrl(row.storage_path, row.bucket, download);
+  const signedUrl = await mintSignedUrl(row.storage_path, row.bucket, download, row.updated_at);
   if (!signedUrl) {
     return NextResponse.json({ error: 'Sign failed' }, { status: 500 });
   }
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
   // to, so a recovered video would still look broken. Additive — existing callers read
   // `signedUrl` and ignore this.
   const thumbnailUrl = row.thumbnail_path
-    ? await mintSignedUrl(row.thumbnail_path, row.bucket)
+    ? await mintSignedUrl(row.thumbnail_path, row.bucket, undefined, row.updated_at)
     : null;
 
   return NextResponse.json({ signedUrl, thumbnailUrl, mimeType: row.mime_type });

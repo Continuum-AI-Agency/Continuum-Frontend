@@ -19,9 +19,11 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
-import { type DragEvent, useEffect, useRef, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { VideoStill } from '@/components/media/VideoStill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
+import { useNearViewport } from '@/hooks/useNearViewport';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { formatUsesCompanionPreview, officeDocumentType } from '@/lib/library/previewPlayable';
 import { normalizeReviewStatus } from '@/lib/library/reviewStatus';
@@ -115,25 +117,6 @@ function cardAspectClass(
   return NATIVE_ASPECT_CLASS[bin];
 }
 
-// Defers assigning src to the video element until the card is near the viewport,
-// preventing preload="metadata" range requests for every off-screen video card.
-function useLazyVideoSrc(src: string | null | undefined, immediate: boolean) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const [active, setActive] = useState(immediate);
-  useEffect(() => {
-    if (active || !ref.current) return;
-    const ob = new IntersectionObserver(
-      ([e]) => {
-        if (e?.isIntersecting) setActive(true);
-      },
-      { rootMargin: '200px' },
-    );
-    ob.observe(ref.current);
-    return () => ob.disconnect();
-  }, [active]);
-  return { ref, activeSrc: active && src ? src : undefined };
-}
-
 // One class for every control in the card's hover corner, so a control added later
 // cannot drift into a different size or a different contrast against the thumbnail.
 const HOVER_CHROME_BUTTON =
@@ -160,7 +143,16 @@ function VideoThumbnail({
       : (asset.thumbnailUrl ?? null);
   const [hovered, setHovered] = useState(false);
   const hoveredRef = useRef(false);
-  const { ref: videoRef, activeSrc } = useLazyVideoSrc(asset.signedUrl, priority && !posterUrl);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [observe, near] = useNearViewport(priority && !posterUrl);
+  const setVideo = useCallback(
+    (video: HTMLVideoElement | null) => {
+      videoRef.current = video;
+      observe(video);
+    },
+    [observe],
+  );
+  const activeSrc = near && asset.signedUrl ? asset.signedUrl : undefined;
   const src = !posterUrl || hovered ? activeSrc : undefined;
   const scrub = useCardScrub(asset);
 
@@ -171,12 +163,22 @@ function VideoThumbnail({
 
   return (
     <>
+      {posterUrl ? (
+        // A lazy still: a <video poster> downloads its poster on screen or not.
+        // biome-ignore lint/performance/noImgElement: signed storage still behind a video element
+        <img
+          src={posterUrl}
+          alt=""
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          className="absolute inset-0 size-full object-cover"
+        />
+      ) : null}
       {/* biome-ignore lint/a11y/useMediaCaption: silent grid preview of the user's own creative; no caption track exists */}
       <video
-        ref={videoRef}
+        ref={setVideo}
         src={src}
-        poster={posterUrl ?? undefined}
-        className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+        className="relative size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
         muted
         playsInline
         preload={posterUrl ? 'none' : 'metadata'}
@@ -281,13 +283,12 @@ function Thumbnail({
 
   if ((asset.kind === 'file' || companionFormat) && preview?.signedUrl) {
     return preview.kind === 'video' ? (
-      // biome-ignore lint/a11y/useMediaCaption: silent visual companion for a source project.
-      <video
+      // A silent visual companion for a source project: its first frame, once near the screen.
+      <VideoStill
         src={preview.signedUrl}
+        alt={asset.title ?? asset.fileName}
+        eager={priority}
         className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-        muted
-        playsInline
-        preload="metadata"
         onError={() => setMediaError(true)}
       />
     ) : (
@@ -462,13 +463,11 @@ function CarouselThumbnail({
     <>
       {slide?.signedUrl && !mediaError ? (
         slide.kind === 'video' ? (
-          <video
+          <VideoStill
             key={slide.slideIndex}
             src={slide.signedUrl}
+            alt={`${alt} — slide ${index + 1}`}
             className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-            muted
-            playsInline
-            preload="metadata"
             onError={() => setMediaError(true)}
             onLoadedMetadata={(event) => seekVideoPreviewFrame(event.currentTarget)}
           />
@@ -562,7 +561,8 @@ function MediaCardHoverDetail({
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
           {asset.signedUrl && asset.kind === 'image' && asset.mimeType !== 'application/pdf' ? (
             <Image
-              src={asset.signedUrl}
+              // The 480 px still fills this 320 px box; the original only when there is none.
+              src={asset.thumbnailUrl ?? asset.signedUrl}
               alt={asset.title ?? asset.fileName}
               fill
               sizes="320px"

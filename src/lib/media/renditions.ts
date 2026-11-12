@@ -53,7 +53,7 @@ export async function loadAssetRenditions(
 export function renditionSignablePaths(rows: readonly AssetRenditionRow[]): SignablePath[] {
   return rows.flatMap((row) =>
     row.state === 'ready' && row.bucket && row.storage_path
-      ? [{ bucket: row.bucket, path: row.storage_path }]
+      ? [{ bucket: row.bucket, path: row.storage_path, version: row.updated_at }]
       : [],
   );
 }

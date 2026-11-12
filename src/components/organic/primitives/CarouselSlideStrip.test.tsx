@@ -100,6 +100,15 @@ describe('CarouselSlideStrip', () => {
   });
 
   it('renders video slides as video thumbnails while retaining their order', () => {
+    // On screen: a video slide with no poster loads its first frame once it is near.
+    const realObserver = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = class {
+      constructor(private readonly report: (entries: { isIntersecting: boolean }[]) => void) {}
+      observe() {
+        this.report([{ isIntersecting: true }]);
+      }
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
     render(
       <CarouselSlideStrip
         slides={[
@@ -118,6 +127,7 @@ describe('CarouselSlideStrip', () => {
       'https://cdn/clip.mp4#t=0.01',
     );
     expect(screen.getByLabelText('Slide 2 (active)')).toBeTruthy();
+    globalThis.IntersectionObserver = realObserver;
   });
 
   it('routes remove, replace and enlarge through the same position', () => {

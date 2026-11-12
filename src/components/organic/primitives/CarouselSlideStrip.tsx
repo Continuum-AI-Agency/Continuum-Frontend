@@ -26,6 +26,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Maximize2, Plus, Replace, X } from 'lucide-react';
 import Image from 'next/image';
 import * as React from 'react';
+import { VideoStill } from '@/components/media/VideoStill';
 import type { UseDraftMediaPlacementResult } from '@/components/organic/hooks/useDraftMediaPlacement';
 import { cn } from '@/lib/utils';
 
@@ -111,14 +112,11 @@ function SortableThumb({
         {...listeners}
       >
         {slide.kind === 'video' ? (
-          <video
+          <VideoStill
             key={slide.storageUrl}
             src={`${slide.storageUrl}#t=0.01`}
-            poster={slide.poster ?? undefined}
-            aria-label={`Video slide ${label}`}
-            preload="metadata"
-            muted
-            playsInline
+            poster={slide.poster}
+            alt={`Video slide ${label}`}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (

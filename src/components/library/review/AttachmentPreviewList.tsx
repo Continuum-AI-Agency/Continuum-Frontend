@@ -30,7 +30,7 @@ function Preview({ preview }: { preview: AttachmentPreviewItem }) {
         src={preview.url}
         poster={preview.thumbnailUrl ?? undefined}
         controls
-        preload="metadata"
+        preload={preview.thumbnailUrl ? 'none' : 'metadata'}
         className="h-16 w-28 bg-black object-contain"
       />
     );

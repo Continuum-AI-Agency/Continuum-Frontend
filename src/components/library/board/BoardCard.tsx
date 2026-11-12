@@ -8,6 +8,7 @@ import type { MediaAsset } from '@continuum/contracts';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { FileIcon } from 'lucide-react';
+import { VideoStill } from '@/components/media/VideoStill';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
@@ -47,8 +48,11 @@ function CardPreview({ asset }: { asset: MediaAsset }) {
     (asset.kind === 'video' || (asset.preview?.state === 'ready' && asset.preview.kind === 'video'))
   ) {
     return (
-      // biome-ignore lint/a11y/useMediaCaption: silent board thumbnail of the user's own upload; no caption track exists
-      <video src={previewUrl} muted preload="metadata" className="h-full w-full object-cover" />
+      <VideoStill
+        src={previewUrl}
+        alt={asset.title ?? asset.fileName}
+        className="h-full w-full object-cover"
+      />
     );
   }
   return (

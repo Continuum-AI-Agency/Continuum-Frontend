@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
 type TestHooks = {
   __testCreateSupabaseServerClient?: () => unknown;
@@ -11,16 +11,30 @@ mock.module('@/lib/supabase/server', () => ({
 }));
 
 import { displayDerivativeKey } from './mapper';
-import { assetSignablePaths, mintSignedUrls } from './signed-urls';
+import {
+  assetSignablePaths,
+  mintSignedUrls,
+  rememberSignedUrl,
+  reusableSignedUrl,
+  stillSignable,
+} from './signed-urls';
 
 const ORIGIN = 'https://proj.supabase.co/storage/v1';
 
 type SignCall = { bucket: string; path: string; transform?: unknown };
 
-function fakeStorage(options: { failPaths?: string[]; failBatchBucket?: string } = {}) {
+let users = 0;
+
+// Each fake is a different person unless one is passed, so the module's reuse memo never
+// carries a URL from one test into another.
+function fakeStorage(
+  options: { failPaths?: string[]; failBatchBucket?: string; userId?: string } = {},
+) {
   const single: SignCall[] = [];
   const batches: { bucket: string; paths: string[] }[] = [];
+  const sub = options.userId ?? `user-${++users}`;
   hooks.__testCreateSupabaseServerClient = () => ({
+    auth: { getClaims: async () => ({ data: { claims: { sub } }, error: null }) },
     storage: {
       from: (bucket: string) => ({
         createSignedUrls: async (paths: string[]) => {
@@ -84,6 +98,42 @@ describe('assetSignablePaths', () => {
   });
 });
 
+describe('stillSignable', () => {
+  const row = { bucket: 'b', storage_path: 'render.png', mime_type: 'image/png', updated_at: 'v1' };
+
+  it('is the poster when the row has one (resized when it can be), else the image resized', () => {
+    expect(stillSignable({ ...row, thumbnail_path: 'poster.webp' }, 96)).toEqual({
+      path: 'poster.webp',
+      bucket: 'b',
+      displayDerivative: true,
+      version: 'v1',
+      edge: 96,
+    });
+    expect(stillSignable({ ...row, thumbnail_path: 'poster.avif' }, 96)).toEqual({
+      path: 'poster.avif',
+      bucket: 'b',
+      version: 'v1',
+    });
+    expect(stillSignable(row, 96)).toEqual({
+      path: 'render.png',
+      bucket: 'b',
+      displayDerivative: true,
+      version: 'v1',
+      edge: 96,
+    });
+  });
+
+  it('is never the original: no still for a video with no poster or a file Supabase cannot resize', () => {
+    expect(
+      stillSignable({ ...row, storage_path: 'clip.mp4', mime_type: 'video/mp4' }, 96),
+    ).toBeNull();
+    expect(
+      stillSignable({ ...row, storage_path: 'anim.gif', mime_type: 'image/gif' }, 96),
+    ).toBeNull();
+    expect(stillSignable({ ...row, bucket: 'gs://films' }, 96)).toBeNull();
+  });
+});
+
 describe('mintSignedUrls', () => {
   it('signs originals in one batch and each derivative on its own call with a transform', async () => {
     const calls = fakeStorage();
@@ -116,5 +166,45 @@ describe('mintSignedUrls', () => {
     expect(map.has(displayDerivativeKey('bad.jpg'))).toBe(false);
     expect(map.has('lost.jpg')).toBe(false);
     expect(map.get(displayDerivativeKey('lost.jpg'))).toBeString();
+  });
+
+  it('hands the same person the URL it already minted, until the row changes', async () => {
+    const first = fakeStorage({ userId: 'reuser' });
+    const items = [
+      { bucket: 'b', path: 'r.jpg', version: 'v1' },
+      { bucket: 'b', path: 'r.jpg', displayDerivative: true, version: 'v1' },
+    ];
+    const minted = await mintSignedUrls(items);
+    expect(first.batches).toHaveLength(1);
+    expect(first.single).toHaveLength(1);
+
+    const again = fakeStorage({ userId: 'reuser' });
+    const reused = await mintSignedUrls(items);
+    expect(again.batches).toHaveLength(0);
+    expect(again.single).toHaveLength(0);
+    expect(reused).toEqual(minted);
+
+    const changed = fakeStorage({ userId: 'reuser' });
+    await mintSignedUrls(items.map((item) => ({ ...item, version: 'v2' })));
+    expect(changed.batches).toHaveLength(1);
+    expect(changed.single).toHaveLength(1);
+
+    const someoneElse = fakeStorage({ userId: 'someone-else' });
+    await mintSignedUrls(items);
+    expect(someoneElse.batches).toHaveLength(1);
+  });
+
+  it('stops handing a URL back once less than half its life is left', () => {
+    const start = Date.now();
+    const clock = spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      rememberSignedUrl('half-life', 'https://storage.test/h.jpg', 100);
+      clock.mockReturnValue(start + 49_000);
+      expect(reusableSignedUrl('half-life')).toBe('https://storage.test/h.jpg');
+      clock.mockReturnValue(start + 51_000);
+      expect(reusableSignedUrl('half-life')).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
   });
 });
