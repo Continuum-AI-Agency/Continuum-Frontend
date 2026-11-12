@@ -5,6 +5,7 @@
 // collection's approval report. Mounted from the collection's menu.
 
 import { Loader2, UsersRound } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -37,6 +38,8 @@ export function RequestCollectionReviewDialog({
   open,
   onOpenChange,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const [targets, setTargets] = useState<ReviewPingTarget[] | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [dueAt, setDueAt] = useState('');
@@ -49,9 +52,13 @@ export function RequestCollectionReviewDialog({
       .then(setTargets)
       .catch((error: unknown) => {
         setTargets([]);
-        toast.error(`Loading teammates failed · ${(error as Error).message}`);
+        toast.error(
+          translateUi('loading_teammates_failed_value0_a571da5e', {
+            value0: String((error as Error).message),
+          }),
+        );
       });
-  }, [open, targets, brandId]);
+  }, [open, targets, brandId, translateUi]);
 
   const submit = async () => {
     setSubmitting(true);
@@ -64,9 +71,13 @@ export function RequestCollectionReviewDialog({
         ...(dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}),
       });
       toast.success(
-        `Review requested on ${result.assetIds.length} asset${result.assetIds.length === 1 ? '' : 's'}` +
+        translateUi('review_requested_on_value0_asset_va_540bf3cc', {
+          count: Number(result.assetIds.length),
+        }) +
           (result.skippedAssetIds.length > 0
-            ? ` · ${result.skippedAssetIds.length} already in review`
+            ? translateUi('value0_already_in_review_14dccc9b', {
+                value0: String(result.skippedAssetIds.length),
+              })
             : ''),
       );
       onOpenChange(false);
@@ -74,7 +85,11 @@ export function RequestCollectionReviewDialog({
       setNote('');
       setDueAt('');
     } catch (error) {
-      toast.error(`Requesting review failed · ${(error as Error).message}`);
+      toast.error(
+        translateUi('requesting_review_failed_value0_2de664f5', {
+          value0: String((error as Error).message),
+        }),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -85,11 +100,12 @@ export function RequestCollectionReviewDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
-            <UsersRound className="size-4" />
-            Request review
+            <UsersRound className="size-4" /> {translateUi('request_review_8f47b4cd')}{' '}
           </DialogTitle>
           <DialogDescription className="truncate text-xs">
-            Every asset in {collectionName} goes to review with these reviewers.
+            {' '}
+            {translateUi('every_asset_in_0774c290')} {collectionName}{' '}
+            {translateUi('goes_to_review_with_these_reviewers_65f3cb58')}{' '}
           </DialogDescription>
         </DialogHeader>
         {targets === null ? (
@@ -117,7 +133,7 @@ export function RequestCollectionReviewDialog({
                   }
                 />
                 <span className="min-w-0 flex-1 truncate text-xs">
-                  {target.email ?? 'Teammate'}
+                  {target.email ?? translateUi('teammate_ab52c213')}
                 </span>
                 <span className="text-2xs uppercase text-muted-foreground">{target.role}</span>
               </label>
@@ -128,7 +144,8 @@ export function RequestCollectionReviewDialog({
           htmlFor="collection-review-due-at"
           className="flex flex-col gap-1 text-xs text-muted-foreground"
         >
-          Due (reminders before, escalation after)
+          {' '}
+          {translateUi('due_reminders_before_escalation_aft_ab5525b4')}{' '}
           <Input
             id="collection-review-due-at"
             type="datetime-local"
@@ -140,7 +157,7 @@ export function RequestCollectionReviewDialog({
         <Textarea
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Optional note for the reviewers"
+          placeholder={translateUi('optional_note_for_the_reviewers_d677d6f6')}
           maxLength={2000}
           className="min-h-16 text-xs"
         />
@@ -150,7 +167,8 @@ export function RequestCollectionReviewDialog({
             download
             className="text-xs text-muted-foreground underline-offset-2 hover:underline"
           >
-            Approval report
+            {' '}
+            {translateUi('approval_report_bb125019')}{' '}
           </a>
           <Button
             type="button"
@@ -158,8 +176,8 @@ export function RequestCollectionReviewDialog({
             disabled={selected.size === 0 || submitting}
             onClick={() => void submit()}
           >
-            {submitting && <Loader2 className="size-3.5 animate-spin" />}
-            Request review
+            {submitting && <Loader2 className="size-3.5 animate-spin" />}{' '}
+            {translateUi('request_review_8f47b4cd')}{' '}
           </Button>
         </DialogFooter>
       </DialogContent>

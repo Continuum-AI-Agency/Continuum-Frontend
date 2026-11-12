@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // Spread the real module: mock.module replaces it for the whole process.
 const realOptimizerData = await import('../../useOptimizerData');

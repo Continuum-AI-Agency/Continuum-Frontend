@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import type { PlannerAiStudioHandoff } from '@/lib/organic/ai-studio-bridge';
 import type { StudioNode } from '../types';

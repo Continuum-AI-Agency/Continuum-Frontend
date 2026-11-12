@@ -2,6 +2,7 @@
 
 import type { InstagramPost } from '@continuum/contracts';
 import { ChevronLeft, ChevronRight, Images, Play } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { setInstagramMediaDragData } from './instagramMediaDrag';
@@ -15,6 +16,8 @@ interface InstagramPostGridProps {
 }
 
 const PostCover = ({ post }: { post: InstagramPost }) => {
+  const translateUi = useUiTranslations('studio');
+
   if (post.coverUrl) {
     // draggable={false} so the tile button owns the drag: a natively draggable
     // <img> starts its own drag with the browser's default payload instead.
@@ -29,12 +32,15 @@ const PostCover = ({ post }: { post: InstagramPost }) => {
   }
   return (
     <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-      No preview
+      {' '}
+      {translateUi('no_preview_4b8bacd8')}{' '}
     </div>
   );
 };
 
 const PostBadge = ({ post }: { post: InstagramPost }) => {
+  const translateUi = useUiTranslations('studio');
+
   if (post.kind === 'carousel') {
     return (
       <Badge variant="secondary" className="absolute right-1 top-1 gap-1">
@@ -46,8 +52,7 @@ const PostBadge = ({ post }: { post: InstagramPost }) => {
   if (post.kind === 'reel') {
     return (
       <Badge variant="secondary" className="absolute right-1 top-1 gap-1">
-        <Play className="h-3 w-3" />
-        Reel
+        <Play className="h-3 w-3" /> {translateUi('reel_9cb145e8')}{' '}
       </Badge>
     );
   }
@@ -61,6 +66,8 @@ export function InstagramPostGrid({
   onPageChange,
   onSelect,
 }: InstagramPostGridProps) {
+  const translateUi = useUiTranslations('studio');
+
   const totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
   const start = safePage * pageSize;
@@ -73,7 +80,10 @@ export function InstagramPostGrid({
           <button
             key={post.id}
             type="button"
-            aria-label={`Import from ${post.kind} ${post.shortcode || post.id}`}
+            aria-label={translateUi('import_from_value0_value1_1c2636ce', {
+              value0: String(post.kind),
+              value1: String(post.shortcode || post.id),
+            })}
             onClick={() => onSelect(post)}
             // Only image covers are draggable: a video reference cannot be inlined
             // through the image proxy, so a dragged reel would land as a dead node.
@@ -98,12 +108,13 @@ export function InstagramPostGrid({
             size="sm"
             onClick={() => onPageChange(safePage - 1)}
             disabled={safePage === 0}
-            aria-label="Previous page"
+            aria-label={translateUi('previous_page_1208ec01')}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-xs text-muted-foreground">
-            Page {safePage + 1} of {totalPages}
+            {' '}
+            {translateUi('page_0a30a815')} {safePage + 1} {translateUi('of_28391d3b')} {totalPages}
           </span>
           <Button
             type="button"
@@ -111,7 +122,7 @@ export function InstagramPostGrid({
             size="sm"
             onClick={() => onPageChange(safePage + 1)}
             disabled={safePage >= totalPages - 1}
-            aria-label="Next page"
+            aria-label={translateUi('next_page_c08ac736')}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 // Render markdown as its raw string so we can assert on the thought prose, and
 // flatten the shimmer wrapper to a plain span so the header label is queryable.

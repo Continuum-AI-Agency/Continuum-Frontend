@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Whether the Optimizer may write a platform's budgets in a portfolio (G5). The portfolio list
 // carries platform_writes — portfolio_platforms.apply_enabled, 20261017090000: Meta writes unless
 // its row is switched off, any other platform only with its row switched on. A move nobody may
@@ -30,6 +34,7 @@ export function itemWritable(portfolio: WritesSource, item: CycleItemRow): boole
 export function proposalsOnlyNote(
   portfolio: WritesSource,
   items: readonly CycleItemRow[],
+  uiTranslate?: ScaleCopy,
 ): string | null {
   const held = items.filter(
     (item) =>
@@ -40,5 +45,12 @@ export function proposalsOnlyNote(
     ...new Set(held.map((item) => platformName({ platform: itemPlatform(item), level: null }))),
   ].join(' and ');
   const moves = held.length === 1 ? '1 budget move' : `${held.length} budget moves`;
-  return `${moves} on ${names} ${held.length === 1 ? 'is a proposal' : 'are proposals'} only — writes to ${names} are switched off for this portfolio.`;
+  return uiTranslate
+    ? uiTranslate('helper_929147865122', {
+        v0: moves,
+        v1: names,
+        v2: held.length === 1 ? 'is a proposal' : 'are proposals',
+        v3: names,
+      })
+    : `${moves} on ${names} ${held.length === 1 ? 'is a proposal' : 'are proposals'} only — writes to ${names} are switched off for this portfolio.`;
 }

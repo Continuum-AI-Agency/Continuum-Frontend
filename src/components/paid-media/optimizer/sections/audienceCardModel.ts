@@ -1,3 +1,9 @@
+import type { AudienceProposalErrorCode } from '@continuum/contracts';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Pure reads for the audience recommendation card. No React, no fetch: what to show for a
 // proposal row, the before → after comparison an open proposal leads with, the rail of
 // small reads under it (why, new to the portfolio, launch plan, ads), what went wrong when
@@ -6,6 +12,7 @@
 
 import type {
   AudienceExpansionOption,
+  AudienceProposalBlock,
   AudienceProposalCardState,
   AudienceProposalPlan,
   AudienceProposalResult,
@@ -26,6 +33,7 @@ import {
   readProposalResult,
   summarizeTargetingSpec,
 } from '@continuum/contracts';
+import { formatDecimal } from '@/lib/format/decimal';
 import { formatCurrency } from '../format';
 
 export const AUDIENCE_TRIGGERS = new Set(['F2_audience_saturation', 'F3_audience_exhausted']);
@@ -147,7 +155,7 @@ export const AUDIENCE_PROPOSAL_STATE_LABEL: Record<AudienceProposalCardState, st
 
 /** The one-line reason an error code stands for, when the stored message is not a sentence
  *  written for a person. */
-const FAILURE_COPY_BY_CODE: Record<string, string> = {
+const FAILURE_COPY_BY_CODE: Record<AudienceProposalErrorCode, string> = {
   propose_failed: 'Jaina ran into an error while reading the audience, catalogue and creatives.',
   execute_failed: 'Meta returned an error while the new ad set was being created.',
   activate_failed: 'Meta returned an error while the new ad set was being switched on.',
@@ -193,11 +201,19 @@ function metaRejection(message: string): { metaText: string | null } | null {
  * message written as a sentence is used as is; anything else is replaced by the sentence the
  * error code stands for.
  */
-export function proposalFailureReason(error: AudienceProposalRow['error']): string | null {
+export function proposalFailureReason(
+  error: AudienceProposalRow['error'],
+  uiTranslate?: ScaleCopy,
+): string | null {
   if (!error) return null;
+  if (uiTranslate)
+    return uiTranslate('audienceFailureReason', { code: stringField(error, 'code') });
   const message = stringField(error, 'message');
   if (isHumanMessage(message) && !metaRejection(message)) return message.trim();
-  return FAILURE_COPY_BY_CODE[stringField(error, 'code')] ?? FAILURE_COPY_DEFAULT;
+  return (
+    FAILURE_COPY_BY_CODE[stringField(error, 'code') as AudienceProposalErrorCode] ??
+    FAILURE_COPY_DEFAULT
+  );
 }
 
 // ── A failed row: what failed, and the button that fixes it ────────────────────────────
@@ -266,6 +282,7 @@ export function proposalFailure(
   row: Pick<AudienceProposalRow, 'status' | 'error'> | null,
   plan: AudienceProposalPlan | null,
   result: AudienceProposalResult | null,
+  uiTranslate?: ScaleCopy,
 ): ProposalFailure | null {
   if (!row || row.status !== 'failed') return null;
   const error = row.error ?? {};
@@ -286,10 +303,18 @@ export function proposalFailure(
   const writePhase = phase !== 'propose';
   return {
     phase,
-    headline: HEADLINE_BY_PHASE[phase],
-    reason: proposalFailureReason(error) ?? FAILURE_COPY_DEFAULT,
+    headline: uiTranslate
+      ? uiTranslate('audienceFailureHeadline', { phase })
+      : HEADLINE_BY_PHASE[phase],
+    reason: proposalFailureReason(error, uiTranslate) ?? FAILURE_COPY_DEFAULT,
     metaSaid: metaRaw && metaRaw !== message ? clip(metaRaw, META_MESSAGE_MAX) : null,
-    outcome,
+    outcome: uiTranslate
+      ? uiTranslate('audienceFailureOutcome', {
+          write: phase === 'activate' || phase === 'undo' ? 'existing' : 'new',
+          hasId: adsetId ? 'yes' : 'no',
+          id: adsetId ?? '',
+        })
+      : outcome,
     action: writePhase && plan != null && !REASK_CODES.has(code) ? 'retry' : 'reask',
     checkConnection: code === 'meta_permission',
   };
@@ -301,28 +326,35 @@ export function proposalFailure(
 const REASK_WINDOW_MS = 60 * 60 * 1000;
 const THROTTLED_STATUSES = new Set<AudienceProposalRow['status']>(['failed', 'blocked', 'ready']);
 
-const localTime = (at: Date): string =>
-  at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-
 /** The note for a re-ask the RPC throttled, or null when the press opened a new proposal. */
 export function reaskThrottledNote(
   returnedId: string,
   row: Pick<AudienceProposalRow, 'id' | 'status' | 'created_at'> | null,
-  formatTime: (at: Date) => string = localTime,
+  formatTime: ((at: Date) => string) | undefined = undefined,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): string | null {
+  const displayTime =
+    formatTime ??
+    ((at: Date) => at.toLocaleTimeString(uiLocale, { hour: '2-digit', minute: '2-digit' }));
   if (!row || returnedId !== row.id || !THROTTLED_STATUSES.has(row.status)) return null;
   const createdAt = Date.parse(row.created_at);
   if (Number.isNaN(createdAt)) {
-    return 'Jaina already re-analysed this in the last hour. Try again later.';
+    return uiTranslate
+      ? uiTranslate('audienceReaskLater')
+      : 'Jaina already re-analysed this in the last hour. Try again later.';
   }
-  return `Jaina already re-analysed this in the last hour. Try again after ${formatTime(
-    new Date(createdAt + REASK_WINDOW_MS),
-  )}.`;
+  return uiTranslate
+    ? uiTranslate('helper_51e9e9027da2', { v0: displayTime(new Date(createdAt + REASK_WINDOW_MS)) })
+    : `Jaina already re-analysed this in the last hour. Try again after ${displayTime(
+        new Date(createdAt + REASK_WINDOW_MS),
+      )}.`;
 }
 
 export function audienceCardView(
   rows: readonly AudienceProposalRow[],
   rec: Pick<RecommendationRow, 'id' | 'adset_id' | 'trigger'>,
+  uiTranslate?: ScaleCopy,
 ): AudienceCardView {
   const row = proposalForRecommendation(rows, rec);
   const plan = row ? readProposalPlan(row) : null;
@@ -331,10 +363,17 @@ export function audienceCardView(
     row,
     state: audienceCardStateFor(row),
     plan,
-    block: row ? readProposalBlock(row) : null,
+    block: row
+      ? (() => {
+          const block = readProposalBlock(row);
+          return block && uiTranslate
+            ? { ...block, message: uiTranslate('audienceBlockReason', { code: block.code }) }
+            : block;
+        })()
+      : null,
     result,
-    errorMessage: row ? proposalFailureReason(row.error) : null,
-    failure: proposalFailure(row, plan, result),
+    errorMessage: row ? proposalFailureReason(row.error, uiTranslate) : null,
+    failure: proposalFailure(row, plan, result, uiTranslate),
   };
 }
 
@@ -388,7 +427,7 @@ const refNames = (refs: readonly MetaTargetingRef[] | undefined): string[] =>
 /** A radius around a named place (geo_locations.places / custom_locations): the shared
  *  summary reads countries, regions, cities and zips only, so a local business that targets
  *  "4 km around the gym" would otherwise read as no location at all. */
-function placeWords(spec: MetaTargetingSpec): string[] {
+function placeWords(spec: MetaTargetingSpec, uiTranslate?: ScaleCopy): string[] {
   const geo = (spec.geo_locations ?? {}) as Record<string, unknown>;
   const spots = [geo.places, geo.custom_locations].flatMap((list) =>
     Array.isArray(list) ? (list as Array<Record<string, unknown>>) : [],
@@ -399,18 +438,24 @@ function placeWords(spec: MetaTargetingSpec): string[] {
         ? spot.name.trim()
         : typeof spot.address_string === 'string'
           ? spot.address_string
-          : 'a pinned location';
+          : uiTranslate
+            ? uiTranslate('audiencePinnedLocation')
+            : 'a pinned location';
     const unit = spot.distance_unit === 'mile' ? 'mi' : 'km';
-    return typeof spot.radius === 'number' ? `${spot.radius} ${unit} around ${name}` : name;
+    return typeof spot.radius === 'number'
+      ? uiTranslate
+        ? uiTranslate('audienceRadius', { radius: spot.radius, unit, name })
+        : `${spot.radius} ${unit} around ${name}`
+      : name;
   });
 }
 
-function facetsOf(spec: MetaTargetingSpec): Facets {
+function facetsOf(spec: MetaTargetingSpec, uiTranslate?: ScaleCopy): Facets {
   const summary = summarizeTargetingSpec(spec);
   return {
     age: summary.age,
     gender: spec.genders && spec.genders.length > 0 ? summary.gender : null,
-    geo: [...summary.geo, ...placeWords(spec)],
+    geo: [...summary.geo, ...placeWords(spec, uiTranslate)],
     interests: summary.interests,
     behaviors: summary.behaviors,
     seeds: refNames(spec.custom_audiences),
@@ -432,22 +477,47 @@ function hasFacets(facets: Facets): boolean {
   );
 }
 
-function wordsOf(facets: Facets): string | null {
+function wordsOf(facets: Facets, uiTranslate?: ScaleCopy): string | null {
   const parts: string[] = [];
   if (facets.seeds.length > 0) parts.push(facets.seeds.join(', '));
   if (facets.geo.length > 0) parts.push(facets.geo.join(', '));
   if (facets.age) parts.push(facets.age);
-  if (facets.gender && facets.gender !== 'all') parts.push(GENDER_WORD[facets.gender]);
-  if (facets.interests.length > 0) parts.push(`interests: ${facets.interests.join(', ')}`);
-  if (facets.behaviors.length > 0) parts.push(`behaviors: ${facets.behaviors.join(', ')}`);
-  if (facets.excludedSeeds.length > 0) parts.push(`excludes ${facets.excludedSeeds.join(', ')}`);
-  if (facets.advantage === true) parts.push('Advantage+ on');
+  if (facets.gender && facets.gender !== 'all')
+    parts.push(
+      uiTranslate
+        ? uiTranslate('audienceGender', { gender: facets.gender })
+        : GENDER_WORD[facets.gender],
+    );
+  if (facets.interests.length > 0)
+    parts.push(
+      uiTranslate
+        ? uiTranslate('helper_d150c2d27a06', { v0: facets.interests.join(', ') })
+        : `interests: ${facets.interests.join(', ')}`,
+    );
+  if (facets.behaviors.length > 0)
+    parts.push(
+      uiTranslate
+        ? uiTranslate('helper_a44b589f5358', { v0: facets.behaviors.join(', ') })
+        : `behaviors: ${facets.behaviors.join(', ')}`,
+    );
+  if (facets.excludedSeeds.length > 0)
+    parts.push(
+      uiTranslate
+        ? uiTranslate('helper_242ad2de4103', { v0: facets.excludedSeeds.join(', ') })
+        : `excludes ${facets.excludedSeeds.join(', ')}`,
+    );
+  if (facets.advantage === true)
+    parts.push(
+      uiTranslate
+        ? `Advantage+ ${uiTranslate('audienceSwitchValue', { state: 'on' })}`
+        : 'Advantage+ on',
+    );
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 /** "Lookalike 1% buyers · MX · 25–45 · interests: Gyms" — or null for an empty spec. */
-export function audienceWords(spec: MetaTargetingSpec): string | null {
-  return wordsOf(facetsOf(spec));
+export function audienceWords(spec: MetaTargetingSpec, uiTranslate?: ScaleCopy): string | null {
+  return wordsOf(facetsOf(spec, uiTranslate), uiTranslate);
 }
 
 const chosenOptions = (plan: AudienceProposalPlan): AudienceExpansionOption[] => {
@@ -463,10 +533,10 @@ const SEED_KINDS = new Set<AudienceExpansionOption['kind']>([
 
 /** The proposed facets: the proposal's own spec, or — when the builder wrote none — the
  *  current spec with the chosen options folded in by kind. */
-function proposedFacets(plan: AudienceProposalPlan): Facets {
-  const own = facetsOf(plan.targeting_spec);
+function proposedFacets(plan: AudienceProposalPlan, uiTranslate?: ScaleCopy): Facets {
+  const own = facetsOf(plan.targeting_spec, uiTranslate);
   if (hasFacets(own)) return own;
-  const base = facetsOf(plan.previous_spec);
+  const base = facetsOf(plan.previous_spec, uiTranslate);
   const union = (list: string[], add: string[]) => [...new Set([...list, ...add])];
   const names = (kinds: (kind: AudienceExpansionOption['kind']) => boolean) =>
     chosenOptions(plan)
@@ -501,10 +571,18 @@ export type ProposedAudience = {
 };
 
 /** The proposal in words with its estimated reach. */
-export function proposedAudience(plan: AudienceProposalPlan): ProposedAudience {
+export function proposedAudience(
+  plan: AudienceProposalPlan,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): ProposedAudience {
   return {
-    words: wordsOf(proposedFacets(plan)) ?? 'The proposal carries no readable targeting.',
-    reach: estimateLabel(plan.reach.proposed),
+    words:
+      wordsOf(proposedFacets(plan, uiTranslate), uiTranslate) ??
+      (uiTranslate
+        ? uiTranslate('audienceUnreadableTargeting')
+        : 'The proposal carries no readable targeting.'),
+    reach: estimateLabel(plan.reach.proposed, uiLocale),
   };
 }
 
@@ -579,11 +657,17 @@ function listCells(
   };
 }
 
-const ageGender = (facets: Facets): string =>
-  `${facets.age ?? 'Any age'} · ${GENDER_WORD[facets.gender ?? 'all']}`;
+const ageGender = (facets: Facets, uiTranslate?: ScaleCopy): string =>
+  `${facets.age ?? (uiTranslate ? uiTranslate('audienceAnyAge') : 'Any age')} · ${uiTranslate ? uiTranslate('audienceGender', { gender: facets.gender ?? 'all' }) : GENDER_WORD[facets.gender ?? 'all']}`;
 
-const advantageWord = (value: boolean | null): string =>
-  value == null ? 'Not set' : value ? 'On' : 'Off';
+const advantageWord = (value: boolean | null, uiTranslate?: ScaleCopy): string =>
+  uiTranslate
+    ? uiTranslate('audienceSwitchValue', { state: value == null ? 'unset' : value ? 'on' : 'off' })
+    : value == null
+      ? 'Not set'
+      : value
+        ? 'On'
+        : 'Off';
 
 /**
  * The before → after the card leads with: the ad set's targeting today beside the proposed
@@ -595,38 +679,49 @@ const advantageWord = (value: boolean | null): string =>
 export function audienceComparison(
   plan: AudienceProposalPlan,
   novelty: Pick<AudienceNovelty, 'fresh'> | null = null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): AudienceComparison {
-  const before = facetsOf(plan.previous_spec);
-  const after = proposedFacets(plan);
+  const before = facetsOf(plan.previous_spec, uiTranslate);
+  const after = proposedFacets(plan, uiTranslate);
   const hasPrevious = hasFacets(before);
   const fresh = new Set((novelty?.fresh ?? []).map((item) => item.name));
-  const unknown = text('Not recorded');
+  const unknown = text(uiTranslate ? uiTranslate('audienceNotRecorded') : 'Not recorded');
 
   const rows: ComparisonRow[] = [];
   rows.push({
-    label: 'Age · gender',
-    current: hasPrevious ? text(ageGender(before)) : unknown,
-    proposed: text(ageGender(after)),
+    label: uiTranslate ? uiTranslate('age_gender_413360e') : 'Age · gender',
+    current: hasPrevious ? text(ageGender(before, uiTranslate)) : unknown,
+    proposed: text(ageGender(after, uiTranslate)),
   });
   rows.push({
-    label: 'Locations',
-    current: hasPrevious ? text(before.geo.join(', ') || 'Anywhere') : unknown,
-    proposed: text(after.geo.join(', ') || 'Anywhere'),
+    label: uiTranslate ? uiTranslate('audienceLocations') : 'Locations',
+    current: hasPrevious
+      ? text(before.geo.join(', ') || (uiTranslate ? uiTranslate('audienceAnywhere') : 'Anywhere'))
+      : unknown,
+    proposed: text(
+      after.geo.join(', ') || (uiTranslate ? uiTranslate('audienceAnywhere') : 'Anywhere'),
+    ),
   });
   const interests = listCells(
     hasPrevious ? [...before.interests, ...before.behaviors] : [],
     [...after.interests, ...after.behaviors],
     fresh,
-    'None',
+    uiTranslate ? uiTranslate('audienceNoItems') : 'None',
   );
   rows.push({
-    label: 'Interests',
+    label: uiTranslate ? uiTranslate('interests_756aaea') : 'Interests',
     current: hasPrevious ? interests.current : unknown,
     proposed: interests.proposed,
   });
-  const seeds = listCells(hasPrevious ? before.seeds : [], after.seeds, fresh, 'None');
+  const seeds = listCells(
+    hasPrevious ? before.seeds : [],
+    after.seeds,
+    fresh,
+    uiTranslate ? uiTranslate('audienceNoItems') : 'None',
+  );
   rows.push({
-    label: 'Custom/saved audiences',
+    label: uiTranslate ? uiTranslate('custom_saved_audiences_0cf0b86') : 'Custom/saved audiences',
     current: hasPrevious ? seeds.current : unknown,
     proposed: seeds.proposed,
   });
@@ -634,17 +729,17 @@ export function audienceComparison(
     hasPrevious ? before.excludedSeeds : [],
     after.excludedSeeds,
     new Set(),
-    'Nothing',
+    uiTranslate ? uiTranslate('audienceNothing') : 'Nothing',
   );
   rows.push({
-    label: 'Excludes',
+    label: uiTranslate ? uiTranslate('audienceExcludes') : 'Excludes',
     current: hasPrevious ? excludes.current : unknown,
     proposed: excludes.proposed,
   });
   rows.push({
     label: 'Advantage+',
-    current: hasPrevious ? text(advantageWord(before.advantage)) : unknown,
-    proposed: text(advantageWord(after.advantage)),
+    current: hasPrevious ? text(advantageWord(before.advantage, uiTranslate)) : unknown,
+    proposed: text(advantageWord(after.advantage, uiTranslate)),
   });
 
   // excluded_custom_audiences only ever holds custom audiences and lookalikes, so a lifted
@@ -652,16 +747,28 @@ export function audienceComparison(
   const lifted = hasPrevious
     ? before.excludedSeeds.filter((name) => !after.excludedSeeds.includes(name))
     : [];
-  const currentReach = estimateLabel(plan.reach.current);
-  const proposedReach = estimateLabel(plan.reach.proposed);
+  const currentReach = estimateLabel(plan.reach.current, uiLocale);
+  const proposedReach = estimateLabel(plan.reach.proposed, uiLocale);
   return {
     hasPrevious,
     rows,
-    currentReach: currentReach ? `Reach ${currentReach}` : null,
-    proposedReach: proposedReach ? `Reach ${proposedReach}` : null,
-    reachChange: reachChange(plan),
+    currentReach: currentReach
+      ? uiTranslate
+        ? uiTranslate('audienceReach', { value: currentReach })
+        : `Reach ${currentReach}`
+      : null,
+    proposedReach: proposedReach
+      ? uiTranslate
+        ? uiTranslate('audienceReach', { value: proposedReach })
+        : `Reach ${proposedReach}`
+      : null,
+    reachChange: reachChange(plan, uiLocale),
     exclusionWarning:
-      lifted.length > 0 ? `People in ${lifted.join(', ')} can see these ads again.` : null,
+      lifted.length > 0
+        ? uiTranslate
+          ? uiTranslate('audienceLiftedExclusion', { names: lifted.join(', ') })
+          : `People in ${lifted.join(', ')} can see these ads again.`
+        : null,
   };
 }
 
@@ -748,9 +855,32 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n =
 
 /** The "New to the portfolio" tile in three short lines; the long lists stay behind the
  *  tile's collapsible. */
-export function noveltySummary(novelty: AudienceNovelty): NoveltySummary {
+export function noveltySummary(novelty: AudienceNovelty, uiTranslate?: ScaleCopy): NoveltySummary {
   const total = novelty.fresh.length + novelty.reused.length;
   const adsetsReusing = new Set(novelty.reused.flatMap((item) => item.usedIn)).size;
+  if (uiTranslate)
+    return {
+      headline: uiTranslate('audienceNoveltyHeadline', {
+        hasItems: total === 0 ? 'no' : 'yes',
+        fresh: novelty.fresh.length,
+        total,
+      }),
+      basis: uiTranslate('audienceNoveltyBasis', { count: novelty.comparedAdsets }),
+      counts:
+        [
+          novelty.reused.length
+            ? uiTranslate('audienceNoveltyReused', {
+                count: novelty.reused.length,
+                adsets: adsetsReusing,
+              })
+            : null,
+          novelty.excludedByRule.length
+            ? uiTranslate('audienceNoveltyFiltered', { count: novelty.excludedByRule.length })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null,
+    };
   const counts = [
     novelty.reused.length > 0
       ? `${novelty.reused.length} reused in ${plural(adsetsReusing, 'ad set')}`
@@ -778,8 +908,10 @@ const TRIGGER_LABEL: Record<string, string> = {
   F3_audience_exhausted: 'Reach exhausted',
 };
 
-export function triggerLabel(trigger: string): string {
-  return TRIGGER_LABEL[trigger] ?? trigger;
+export function triggerLabel(trigger: string, uiTranslate?: ScaleCopy): string {
+  return uiTranslate && Object.hasOwn(TRIGGER_LABEL, trigger)
+    ? uiTranslate('audienceTriggerLabel', { trigger })
+    : (TRIGGER_LABEL[trigger] ?? trigger);
 }
 
 export type ImplementationLine = { label: string; value: string };
@@ -791,53 +923,91 @@ export function implementationLines(
   plan: AudienceProposalPlan,
   currency: string | null,
   startActive = false,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): ImplementationLine[] {
   const code = currency ?? plan.budget.currency;
   const source = plan.source.adset_name ?? plan.source.adset_id;
   const lines: ImplementationLine[] = [
-    { label: 'New ad set', value: plan.adset_name },
     {
-      label: 'Starts',
-      value: `${startActive ? 'Active' : 'Paused'}, next to "${source}"${
-        plan.mode === 'add'
-          ? '; both keep running'
-          : '; the current one pauses once the new one is live'
-      }`,
+      label: uiTranslate ? uiTranslate('new_ad_set_36c72f1') : 'New ad set',
+      value: plan.adset_name,
+    },
+    {
+      label: uiTranslate ? uiTranslate('audienceStarts') : 'Starts',
+      value: uiTranslate
+        ? uiTranslate('helper_35c0cbdd08ec', {
+            v0: startActive ? uiTranslate('entityActive') : uiTranslate('entityPaused'),
+            v1: source,
+            v2: plan.mode,
+          })
+        : `${startActive ? 'Active' : 'Paused'}, next to "${source}"${
+            plan.mode === 'add'
+              ? '; both keep running'
+              : '; the current one pauses once the new one is live'
+          }`,
     },
   ];
   if (plan.source.campaign_name) {
-    lines.push({ label: 'Campaign', value: plan.source.campaign_name });
+    lines.push({
+      label: uiTranslate ? uiTranslate('campaign_268286d') : 'Campaign',
+      value: plan.source.campaign_name,
+    });
   }
   lines.push({
-    label: 'Budget',
-    value: `${formatCurrency(majorUnits(plan.budget.suggested_minor_units), code)}/day · between ${formatCurrency(
-      majorUnits(plan.budget.bounds.min_minor_units),
-      code,
-    )} and ${formatCurrency(majorUnits(plan.budget.bounds.max_minor_units), code)}${
-      plan.budget.note ? ` · ${plan.budget.note}` : ''
-    }`,
+    label: uiTranslate ? uiTranslate('budget_1c6225e') : 'Budget',
+    value: uiTranslate
+      ? uiTranslate('helper_14a40b02b39f', {
+          v0: formatCurrency(majorUnits(plan.budget.suggested_minor_units), code, uiLocale),
+          v1: formatCurrency(majorUnits(plan.budget.bounds.min_minor_units), code, uiLocale),
+          v2: formatCurrency(majorUnits(plan.budget.bounds.max_minor_units), code, uiLocale),
+          v3: plan.budget.note ? ` · ${plan.budget.note}` : '',
+        })
+      : `${formatCurrency(majorUnits(plan.budget.suggested_minor_units), code, uiLocale)}/day · between ${formatCurrency(majorUnits(plan.budget.bounds.min_minor_units), code, uiLocale)} and ${formatCurrency(majorUnits(plan.budget.bounds.max_minor_units), code, uiLocale)}${
+          plan.budget.note ? ` · ${plan.budget.note}` : ''
+        }`,
   });
   return lines;
 }
 
 // ── Figures ────────────────────────────────────────────────────────────────────────────
 
-const compact = (n: number): string =>
-  n >= 1_000_000
-    ? `${(n / 1_000_000).toFixed(1)}M`
-    : n >= 1_000
-      ? `${Math.round(n / 1_000)}K`
-      : String(Math.round(n));
+const compactUnits = new Map<string, string>();
+function compact(n: number, locale: UiLocale = 'en'): string {
+  const divisor = n >= 1_000_000 ? 1_000_000 : n >= 1_000 ? 1_000 : 1;
+  const digits = divisor === 1_000_000 ? 1 : 0;
+  const value = divisor === 1_000_000 ? n / divisor : Math.round(n / divisor);
+  if (divisor === 1)
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 0, useGrouping: false }).format(
+      value,
+    );
+  const key = `${locale}:${divisor}`;
+  let unit = compactUnits.get(key);
+  if (!unit) {
+    unit =
+      new Intl.NumberFormat(locale, { notation: 'compact' })
+        .formatToParts(divisor)
+        .find((part) => part.type === 'compact')?.value ?? '';
+    compactUnits.set(key, unit);
+  }
+  return `${formatDecimal(value, digits, locale)}${locale === 'en' ? '' : ' '}${unit}`;
+}
 
-export function estimateLabel(estimate: AudienceSizeEstimate | null | undefined): string | null {
+export function estimateLabel(
+  estimate: AudienceSizeEstimate | null | undefined,
+  uiLocale: UiLocale = 'en',
+): string | null {
   if (!estimate) return null;
-  if (estimate.lower === estimate.upper) return compact(estimate.lower);
-  return `${compact(estimate.lower)}–${compact(estimate.upper)}`;
+  if (estimate.lower === estimate.upper) return compact(estimate.lower, uiLocale);
+  return `${compact(estimate.lower, uiLocale)}–${compact(estimate.upper, uiLocale)}`;
 }
 
 /** "+10%", "−65%" or "×2.3" from the midpoints of the two estimates; null when either side
  *  is missing or the current one is zero. */
-export function reachChange(plan: AudienceProposalPlan): { label: string; up: boolean } | null {
+export function reachChange(
+  plan: AudienceProposalPlan,
+  uiLocale: UiLocale = 'en',
+): { label: string; up: boolean } | null {
   const current = plan.reach.current;
   const proposed = plan.reach.proposed;
   if (!current || !proposed) return null;
@@ -845,9 +1015,13 @@ export function reachChange(plan: AudienceProposalPlan): { label: string; up: bo
   const to = (proposed.lower + proposed.upper) / 2;
   if (from <= 0) return null;
   const ratio = to / from;
-  if (ratio >= 2) return { label: `×${ratio.toFixed(1)}`, up: true };
+  if (ratio >= 2) return { label: `×${formatDecimal(ratio, 1, uiLocale)}`, up: true };
   const pct = Math.round((ratio - 1) * 100);
-  return { label: pct >= 0 ? `+${pct}%` : `−${Math.abs(pct)}%`, up: pct >= 0 };
+  const percent = new Intl.NumberFormat(uiLocale, {
+    style: 'percent',
+    maximumFractionDigits: 0,
+  }).format(Math.abs(pct) / 100);
+  return { label: `${pct >= 0 ? '+' : '−'}${percent}`, up: pct >= 0 };
 }
 
 export function majorUnits(minor: number): number {
@@ -863,66 +1037,163 @@ export type ImplementedRow = { label: string; value: string };
 export function implementedRows(
   result: AudienceProposalResult,
   plan: AudienceProposalPlan | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): ImplementedRow[] {
   const rows: ImplementedRow[] = [];
   if (result.campaign)
     rows.push({
-      label: 'Campaign',
+      label: uiTranslate ? uiTranslate('campaign_268286d') : 'Campaign',
       value: `${result.campaign.name ?? ''} (${result.campaign.id})`.trim(),
     });
   if (result.adset) {
     const a = result.adset;
-    rows.push({ label: 'Ad set', value: `${a.name ?? ''} (${a.id})`.trim() });
-    rows.push({ label: 'Status', value: a.effective_status ?? a.status ?? '—' });
+    rows.push({
+      label: uiTranslate ? uiTranslate('ad_set_639a64f') : 'Ad set',
+      value: `${a.name ?? ''} (${a.id})`.trim(),
+    });
+    rows.push({
+      label: uiTranslate ? uiTranslate('status_920e413') : 'Status',
+      value: a.effective_status ?? a.status ?? '—',
+    });
     if (a.daily_budget)
       rows.push({
-        label: 'Daily budget',
-        value: `${majorUnits(Number(a.daily_budget))} (minor units ${a.daily_budget})`,
+        label: uiTranslate ? uiTranslate('daily_budget_7b0a1f0') : 'Daily budget',
+        value: uiTranslate
+          ? uiTranslate('audienceImplementedBudget', {
+              amount: new Intl.NumberFormat(uiLocale, {
+                maximumFractionDigits: 2,
+                useGrouping: false,
+              }).format(majorUnits(Number(a.daily_budget))),
+              raw: a.daily_budget,
+            })
+          : `${majorUnits(Number(a.daily_budget))} (minor units ${a.daily_budget})`,
       });
-    if (a.optimization_goal) rows.push({ label: 'Optimization goal', value: a.optimization_goal });
-    if (a.billing_event) rows.push({ label: 'Billing event', value: a.billing_event });
-    if (a.bid_strategy) rows.push({ label: 'Bid strategy', value: a.bid_strategy });
+    if (a.optimization_goal)
+      rows.push({
+        label: uiTranslate ? uiTranslate('optimization_goal_b5f886f') : 'Optimization goal',
+        value: a.optimization_goal,
+      });
+    if (a.billing_event)
+      rows.push({
+        label: uiTranslate ? uiTranslate('billing_event_574dbe6') : 'Billing event',
+        value: a.billing_event,
+      });
+    if (a.bid_strategy)
+      rows.push({
+        label: uiTranslate ? uiTranslate('bid_strategy_43f45e0') : 'Bid strategy',
+        value: a.bid_strategy,
+      });
     if (a.targeting) {
       const spec = a.targeting as MetaTargetingSpec;
-      rows.push({ label: 'Targeting', value: audienceWords(spec) ?? '—' });
+      rows.push({
+        label: uiTranslate ? uiTranslate('targeting_dfa4ae5') : 'Targeting',
+        value: audienceWords(spec, uiTranslate) ?? '—',
+      });
       const s = summarizeTargetingSpec(spec);
-      if (s.interests.length) rows.push({ label: 'Interests', value: s.interests.join(', ') });
-      if (s.behaviors.length) rows.push({ label: 'Behaviors', value: s.behaviors.join(', ') });
+      if (s.interests.length)
+        rows.push({
+          label: uiTranslate ? uiTranslate('interests_756aaea') : 'Interests',
+          value: s.interests.join(', '),
+        });
+      if (s.behaviors.length)
+        rows.push({
+          label: uiTranslate ? uiTranslate('behaviors_5066deb') : 'Behaviors',
+          value: s.behaviors.join(', '),
+        });
       if (s.customAudienceCount)
-        rows.push({ label: 'Custom audiences', value: String(s.customAudienceCount) });
+        rows.push({
+          label: uiTranslate ? uiTranslate('custom_audiences_563723a') : 'Custom audiences',
+          value: new Intl.NumberFormat(uiLocale, {
+            maximumFractionDigits: 0,
+            useGrouping: false,
+          }).format(s.customAudienceCount),
+        });
       rows.push({
         label: 'Advantage+',
-        value: s.advantageAudience == null ? 'not set' : s.advantageAudience ? 'on' : 'off',
+        value: uiTranslate
+          ? uiTranslate('audienceSwitchValue', {
+              state: s.advantageAudience == null ? 'unset' : s.advantageAudience ? 'on' : 'off',
+            })
+          : s.advantageAudience == null
+            ? 'not set'
+            : s.advantageAudience
+              ? 'on'
+              : 'off',
       });
     }
     if (a.promoted_object)
-      rows.push({ label: 'Promoted object', value: JSON.stringify(a.promoted_object) });
+      rows.push({
+        label: uiTranslate ? uiTranslate('promoted_object_d28829a') : 'Promoted object',
+        value: JSON.stringify(a.promoted_object),
+      });
   }
   for (const ad of result.ads) {
     const source = ad.source_adset_name ?? ad.source_adset_id;
     rows.push({
-      label: 'Ad',
-      value: `${ad.name ?? ad.id} (${ad.id}) · ${ad.effective_status ?? ad.status ?? '—'} · creative ${ad.creative_id ?? '?'}${source ? ` · from ${source}` : ''}`,
+      label: uiTranslate ? uiTranslate('ad_1d97c9f') : 'Ad',
+      value: uiTranslate
+        ? uiTranslate('audienceImplementedAd', {
+            name: ad.name ?? ad.id,
+            id: ad.id,
+            status: ad.effective_status ?? ad.status ?? '—',
+            creative: ad.creative_id ?? '?',
+            hasSource: source ? 'yes' : 'no',
+            source: source ?? '',
+          })
+        : `${ad.name ?? ad.id} (${ad.id}) · ${ad.effective_status ?? ad.status ?? '—'} · creative ${ad.creative_id ?? '?'}${source ? ` · from ${source}` : ''}`,
     });
   }
   if (result.source_adset) {
     rows.push({
-      label: 'Source ad set',
-      value: `${result.source_adset.name ?? result.source_adset.id} · ${result.source_adset.paused ? `paused (was ${result.source_adset.prior_status ?? '?'})` : `still ${result.source_adset.status_after ?? result.source_adset.prior_status ?? 'as it was'}`}${result.source_adset.note ? ` · ${result.source_adset.note}` : ''}`,
+      label: uiTranslate ? uiTranslate('source_ad_set_ba3bd6a') : 'Source ad set',
+      value: uiTranslate
+        ? uiTranslate('audienceImplementedSource', {
+            name: result.source_adset.name ?? result.source_adset.id,
+            state: result.source_adset.paused ? 'paused' : 'kept',
+            prior: result.source_adset.prior_status ?? '?',
+            status: result.source_adset.status_after ?? result.source_adset.prior_status ?? '—',
+            hasNote: result.source_adset.note ? 'yes' : 'no',
+            note: result.source_adset.note ?? '',
+          })
+        : `${result.source_adset.name ?? result.source_adset.id} · ${result.source_adset.paused ? `paused (was ${result.source_adset.prior_status ?? '?'})` : `still ${result.source_adset.status_after ?? result.source_adset.prior_status ?? 'as it was'}`}${result.source_adset.note ? ` · ${result.source_adset.note}` : ''}`,
     });
   }
   if (result.activation) {
     rows.push({
-      label: 'Activation',
-      value: result.activation.requested
-        ? `requested · ad set ${result.activation.adset_status_after ?? '?'} · ads ${result.activation.ads_status_after.join(', ') || '—'}`
-        : 'not requested (created paused)',
+      label: uiTranslate ? uiTranslate('audienceActivation') : 'Activation',
+      value: uiTranslate
+        ? uiTranslate('audienceImplementedActivation', {
+            state: result.activation.requested ? 'requested' : 'paused',
+            adset: result.activation.adset_status_after ?? '?',
+            ads: result.activation.ads_status_after.join(', ') || '—',
+          })
+        : result.activation.requested
+          ? `requested · ad set ${result.activation.adset_status_after ?? '?'} · ads ${result.activation.ads_status_after.join(', ') || '—'}`
+          : 'not requested (created paused)',
     });
   }
   if (plan)
     rows.push({
-      label: 'Mode',
-      value: plan.mode === 'replace' ? 'Replaces the current audience' : 'Adds a new audience',
+      label: uiTranslate ? uiTranslate('mode_5e23ec6') : 'Mode',
+      value: uiTranslate
+        ? uiTranslate('audienceLaunchMode', { mode: plan.mode })
+        : plan.mode === 'replace'
+          ? 'Replaces the current audience'
+          : 'Adds a new audience',
     });
   return rows;
+}
+
+export function audienceProposalStateLabel(
+  state: AudienceProposalCardState | 'closed',
+  t: ScaleCopy,
+): string {
+  return t('audienceStateLabel', { state });
+}
+export function audienceBlockReason(
+  block: AudienceProposalBlock | null,
+  t: ScaleCopy,
+): string | null {
+  return block ? t('audienceBlockReason', { code: block.code }) : null;
 }

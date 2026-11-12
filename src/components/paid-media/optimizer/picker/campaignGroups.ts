@@ -1,3 +1,9 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+import { pickerProviderStatusLabel } from './platformPickerModel';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Groups a fleet of ad-set snapshots into a campaign -> ad-set tree for the
 // enrollment picker, and classifies each ad set's ELIGIBILITY for budget
 // reallocation. An ad set is eligible only when it has an ad-set-level daily
@@ -119,25 +125,53 @@ function events14Of(snapshot: PortfolioPickerSource): number {
 // freeze: an ABO campaign (unsupported_budget in campaign mode) must read as
 // ABO, not as the ad-set-context "CBO/lifetime" freezeLabel. Every other freeze
 // keeps the shared freezeLabel wording, falling back to the mode default.
-function providerHeldReason(source: PortfolioPickerEntity): string | null {
+function providerHeldReason(source: PortfolioPickerEntity, uiTranslate?: ScaleCopy): string | null {
   const status = source.providerStatus?.replaceAll('_', ' ').toLowerCase();
   if (source.providerLifecycle === 'active') return null;
   if (source.providerLifecycle === 'recoverable') {
-    return `${status ? `${status[0].toUpperCase()}${status.slice(1)}` : 'Inactive'} on Meta — held until active.`;
+    return uiTranslate
+      ? uiTranslate('helper_a30d79e23464', {
+          v0: source.providerStatus
+            ? pickerProviderStatusLabel(source.providerStatus, uiTranslate)
+            : uiTranslate('entityInactive'),
+        })
+      : `${status ? `${status[0].toUpperCase()}${status.slice(1)}` : 'Inactive'} on Meta — held until active.`;
   }
-  if (source.providerLifecycle === 'archived') return 'Archived on Meta — remove-only.';
-  if (source.providerLifecycle === 'deleted') return 'Deleted on Meta — remove-only.';
-  return 'Meta status unavailable — remove-only.';
+  if (source.providerLifecycle === 'archived')
+    return uiTranslate
+      ? uiTranslate('archived_on_meta_remove_only_fb6eb54')
+      : 'Archived on Meta — remove-only.';
+  if (source.providerLifecycle === 'deleted')
+    return uiTranslate
+      ? uiTranslate('deleted_on_meta_remove_only_ef5e29d')
+      : 'Deleted on Meta — remove-only.';
+  return uiTranslate
+    ? uiTranslate('meta_status_unavailable_remove_only_13b1145')
+    : 'Meta status unavailable — remove-only.';
 }
 
-function heldReason(snapshot: PortfolioPickerSource, mode: PortfolioLevel): string {
+function heldReason(
+  snapshot: PortfolioPickerSource,
+  mode: PortfolioLevel,
+  uiTranslate?: ScaleCopy,
+): string {
   if (isPickerEntity(snapshot)) {
-    const providerReason = providerHeldReason(snapshot);
+    const providerReason = providerHeldReason(snapshot, uiTranslate);
     if (providerReason) return providerReason;
   }
-  const fallbackReason = mode === 'campaign' ? CAMPAIGN_HELD_REASON : ADSET_HELD_REASON;
+  const fallbackReason = uiTranslate
+    ? uiTranslate('pickerHeldBudget', { mode })
+    : mode === 'campaign'
+      ? CAMPAIGN_HELD_REASON
+      : ADSET_HELD_REASON;
   if (mode === 'campaign' && snapshot.freezeReason === 'unsupported_budget') return fallbackReason;
-  return freezeLabel(snapshot.freezeReason)?.label ?? fallbackReason;
+  return (
+    freezeLabel(
+      snapshot.freezeReason,
+      undefined,
+      uiTranslate ? createOptimizerDisplayTranslate(uiTranslate) : undefined,
+    )?.label ?? fallbackReason
+  );
 }
 
 function toPickItem(
@@ -145,6 +179,7 @@ function toPickItem(
   mode: PortfolioLevel,
   objective?: OptimizationObjective,
   claims: AdsetClaimMap = NO_CLAIMS,
+  uiTranslate?: ScaleCopy,
 ): AdsetPickItem {
   const currentBudget = snapshot.currentBudget ?? 0;
   const frozen = isPickerEntity(snapshot)
@@ -152,7 +187,7 @@ function toPickItem(
     : snapshot.status === 'frozen' || snapshot.freeze === true;
   const eligible = isPickerEntity(snapshot) ? snapshot.optimizable : currentBudget > 0 && !frozen;
   const canAdd = isPickerEntity(snapshot) ? snapshot.canAdd : eligible;
-  const reason = eligible ? null : heldReason(snapshot, mode);
+  const reason = eligible ? null : heldReason(snapshot, mode, uiTranslate);
   const spend14 = snapshot.windows?.d14?.spend ?? 0;
 
   // With an objective in hand, count the event the portfolio ACTUALLY prices on. Without one,
@@ -210,15 +245,21 @@ export function buildCampaignSections(
   mode: PortfolioLevel = 'adset',
   objective?: OptimizationObjective,
   claims: AdsetClaimMap = NO_CLAIMS,
+  uiTranslate?: ScaleCopy,
 ): CampaignSection[] {
   const byCampaign = new Map<string, { name: string; items: AdsetPickItem[] }>();
 
   for (const snapshot of snapshots) {
     const campaignId = snapshot.campaignId?.trim() || UNGROUPED_ID;
     const campaignName =
-      snapshot.campaignName?.trim() || (campaignId === UNGROUPED_ID ? UNGROUPED_LABEL : campaignId);
+      snapshot.campaignName?.trim() ||
+      (campaignId === UNGROUPED_ID
+        ? uiTranslate
+          ? uiTranslate('pickerUngrouped')
+          : UNGROUPED_LABEL
+        : campaignId);
     const bucket = byCampaign.get(campaignId) ?? { name: campaignName, items: [] };
-    bucket.items.push(toPickItem(snapshot, mode, objective, claims));
+    bucket.items.push(toPickItem(snapshot, mode, objective, claims, uiTranslate));
     byCampaign.set(campaignId, bucket);
   }
 
@@ -311,11 +352,16 @@ export function previewMoves(
 // "Advantage Campaign Budget"). These are the convert-to-ABO targets we surface as
 // not-yet-optimizable. Only snapshots carrying a real campaignId qualify (a convert
 // needs one), and each resulting section is one CBO campaign with its held ad sets.
-export function buildCboCampaignSections(snapshots: AdSetSnapshot[]): CampaignSection[] {
+export function buildCboCampaignSections(
+  snapshots: AdSetSnapshot[],
+  uiTranslate?: ScaleCopy,
+): CampaignSection[] {
   const cbo = snapshots.filter(
     (snapshot) => snapshot.freezeReason === 'unsupported_budget' && !!snapshot.campaignId?.trim(),
   );
-  return buildCampaignSections(cbo).filter((section) => section.campaignId !== UNGROUPED_ID);
+  return buildCampaignSections(cbo, undefined, undefined, undefined, uiTranslate).filter(
+    (section) => section.campaignId !== UNGROUPED_ID,
+  );
 }
 
 // Narrow a section's ad sets to a search query. A hit on the campaign name keeps

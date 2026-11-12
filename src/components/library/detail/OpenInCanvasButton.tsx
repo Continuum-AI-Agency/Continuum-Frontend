@@ -14,8 +14,8 @@ import {
   type MediaAsset,
 } from '@continuum/contracts';
 import { ExternalLink, Loader2, Workflow } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useCallback, useEffect, useState, useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -26,6 +26,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import type { LibraryCanvasTemplate } from '@/lib/library/canvasTemplates';
 import { templateSupportsAsset } from '@/lib/library/canvasTemplates';
 import {
@@ -41,23 +43,29 @@ export type OpenInCanvasButtonProps = {
   onAssetChanged?: () => void;
 };
 
-const TEMPLATE_ROWS: { template: LibraryCanvasTemplate; label: string; hint: string }[] = [
-  {
-    template: 'brand-align',
-    label: 'Brand align',
-    hint: 'Reference → brand-enforced image node',
-  },
-  {
-    template: 'resize-pack',
-    label: 'Resize pack',
-    hint: 'One node per placement ratio',
-  },
-  {
-    template: 'blank',
-    label: 'Blank canvas',
-    hint: 'Drop the asset in and wire it yourself',
-  },
-];
+function useLocalTemplateRowsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value: { template: LibraryCanvasTemplate; label: string; hint: string }[] = [
+      {
+        template: 'brand-align',
+        label: translateConfig('brand_align_6769804d'),
+        hint: 'Reference → brand-enforced image node',
+      },
+      {
+        template: 'resize-pack',
+        label: translateConfig('resize_pack_b131a6c0'),
+        hint: 'One node per placement ratio',
+      },
+      {
+        template: 'blank',
+        label: translateConfig('blank_canvas_d719689d'),
+        hint: 'Drop the asset in and wire it yourself',
+      },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 // What the canvas would place this asset as, from what the detail row already knows. The
 // seeding route decides for real from the head version's renditions; a PSD whose card
@@ -78,6 +86,12 @@ export function canvasPlacement(asset: MediaAsset): CanvasLibraryNodeType | null
 }
 
 export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCanvasButtonProps) {
+  const TEMPLATE_ROWS = useLocalTemplateRowsMessages();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const router = useRouter();
   const [seeding, setSeeding] = useState<LibraryCanvasTemplate | null>(null);
   const [derived, setDerived] = useState<MediaAsset[]>([]);
@@ -113,7 +127,7 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
         const params = new URLSearchParams({ roomId, seedId });
         router.push(`${CANVAS_ROUTE}?${params.toString()}`);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not open the canvas');
+        setError(uiErrorText(err));
       } finally {
         // Always clear the spinner. It previously only reset on failure, so a
         // successful seed left the button stuck spinning until navigation
@@ -121,7 +135,7 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
         setSeeding(null);
       }
     },
-    [brandId, asset.id, router],
+    [brandId, asset.id, router, translateUi, uiErrorText],
   );
 
   const handleSaveVersion = useCallback(
@@ -132,12 +146,12 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
         await saveDerivedAssetAsVersion({ brandId, assetId: asset.id, derived: output });
         onAssetChanged?.();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not save the version');
+        setError(uiErrorText(err));
       } finally {
         setSavingId(null);
       }
     },
-    [brandId, asset.id, onAssetChanged],
+    [brandId, asset.id, onAssetChanged, translateUi, uiErrorText],
   );
 
   const busy = seeding !== null;
@@ -157,8 +171,8 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Workflow className="size-3.5" aria-hidden />
-              )}
-              Open in Canvas
+              )}{' '}
+              {translateUi('open_in_canvas_e3850337')}{' '}
             </Button>
           }
         />
@@ -166,7 +180,7 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
           {/* Base UI's GroupLabel throws outside a Group: an ungrouped label crashed the
               menu on open, and took the asset dialog down with it. */}
           <DropdownMenuGroup>
-            <DropdownMenuLabel>Pre-made workflows</DropdownMenuLabel>
+            <DropdownMenuLabel>{translateUi('pre_made_workflows_10e8c5a1')}</DropdownMenuLabel>
             {TEMPLATE_ROWS.map((row) => {
               const unsupported = !templateSupportsAsset(row.template, placement);
               return (
@@ -181,7 +195,7 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
                   <div className="flex min-w-0 flex-col">
                     <span className="text-sm">{row.label}</span>
                     <span className="text-xs text-muted-foreground">
-                      {unsupported ? 'Images only' : row.hint}
+                      {unsupported ? translateUi('images_only_51e8e726') : row.hint}
                     </span>
                   </div>
                 </DropdownMenuItem>
@@ -193,7 +207,10 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
             <>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Canvas outputs ({derived.length})</DropdownMenuLabel>
+                <DropdownMenuLabel>
+                  {translateUi('canvas_outputs_d9aba9e4')}
+                  {derived.length})
+                </DropdownMenuLabel>
                 {derived.map((output) => (
                   <DropdownMenuItem
                     key={output.id}
@@ -206,7 +223,9 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate text-sm">{output.title ?? output.fileName}</span>
                       <span className="text-xs text-muted-foreground">
-                        {savingId === output.id ? 'Saving…' : 'Save as new version'}
+                        {savingId === output.id
+                          ? translateUi('saving_23e39291')
+                          : translateUi('save_as_new_version_ad8907dd')}
                       </span>
                     </div>
                   </DropdownMenuItem>
@@ -220,7 +239,8 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
       {derived.length > 0 ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
           <ExternalLink className="size-3" aria-hidden />
-          {derived.length} canvas output{derived.length === 1 ? '' : 's'}
+          {derived.length} {translateUi('canvas_output_6ea6c6b3')}
+          {derived.length === 1 ? '' : 's'}
         </span>
       ) : null}
 

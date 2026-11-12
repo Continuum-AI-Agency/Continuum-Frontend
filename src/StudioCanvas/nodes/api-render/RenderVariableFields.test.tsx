@@ -10,9 +10,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ApiRenderInputValue, ApiRenderVariable } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { RenderVariableFields } from './RenderVariableFields';
 
 const variable = (overrides: Partial<ApiRenderVariable> = {}): ApiRenderVariable => ({

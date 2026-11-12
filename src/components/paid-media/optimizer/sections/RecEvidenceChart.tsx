@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // The argument behind a recommendation, drawn. A pause carries the ad set's cost
 // interval (the Poisson CI the engine already computes — narrower means more events,
@@ -33,12 +36,16 @@ export function RecEvidenceChart({
   currency,
   name,
 }: RecEvidenceChartProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const isPause = rec.kind === 'pause';
   if (isPause && item?.diagnostics?.ci) {
     return (
       <div className="space-y-1.5" data-testid="rec-evidence-ci">
         <p className={`${typeScale.label} text-muted-foreground`}>
-          Cost per result · 95% interval, narrower = more events
+          {uiText('cost_per_result_95_interval_narrower_more_eve_e0ecf50')}
         </p>
         <CpaConfidenceBar
           currency={currency}
@@ -50,21 +57,29 @@ export function RecEvidenceChart({
       </div>
     );
   }
-  const series = evidenceSeries(rec.evidence, snapshot, kpiField);
+  const series = evidenceSeries(rec.evidence, snapshot, kpiField, optimizerText);
   if (!series) return null;
   return <EvidenceBars currency={currency} series={series} />;
 }
 
 function EvidenceBars({ series, currency }: { series: EvidenceSeries; currency: string | null }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+
   const max = Math.max(...series.points.map((p) => p.value), series.threshold ?? 0, 1e-9);
   const thresholdPct =
     series.threshold != null ? Math.min(100, (series.threshold / max) * 100) : null;
   return (
     <div className="space-y-1.5" data-testid="rec-evidence-bars">
       <p className={`${typeScale.label} text-muted-foreground`}>
-        {series.metric}
+        {series.metricLabel ?? series.metric}
         {series.threshold != null && series.thresholdLabel
-          ? ` · dashed line = ${series.thresholdLabel} ${formatEvidenceValue(series.unit, series.threshold, currency)}`
+          ? uiText('template_754f4ff90c34', {
+              v0: series.thresholdLabel,
+              v1: formatEvidenceValue(series.unit, series.threshold, currency, uiLocale),
+            })
           : ''}
       </p>
       <ul className="space-y-1">
@@ -87,7 +102,7 @@ function EvidenceBars({ series, currency }: { series: EvidenceSeries; currency: 
               ) : null}
             </span>
             <span className="w-20 shrink-0 text-right font-semibold tabular-nums">
-              {formatEvidenceValue(series.unit, point.value, currency)}
+              {formatEvidenceValue(series.unit, point.value, currency, uiLocale)}
             </span>
           </li>
         ))}

@@ -315,17 +315,26 @@ export function formatAway(ms: number): string {
   return `${Math.floor(ms / DAY)}d ${Math.floor((ms % DAY) / HOUR)}h`;
 }
 
-export function formatClock(ms: number): string {
-  if (ms >= MINUTE) return `${+(ms / MINUTE).toFixed(1)}m`;
-  if (ms >= 1000) return `${+(ms / 1000).toFixed(1)}s`;
-  return `${Math.round(ms)}ms`;
+export function formatClock(ms: number, locale = 'en'): string {
+  if (ms >= MINUTE)
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(+(ms / MINUTE).toFixed(1))}m`;
+  if (ms >= 1000)
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(+(ms / 1000).toFixed(1))}s`;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Math.round(ms))}ms`;
 }
 
-export function formatUsd(value: number): string {
-  return `$${value > 0 && value < 0.01 ? value.toFixed(4) : value.toFixed(2)}`;
+export function formatUsd(value: number, locale = 'en'): string {
+  const digits = value > 0 && value < 0.01 ? 4 : 2;
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
 }
 
-const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
-export function formatTokens(value: number): string {
-  return COMPACT.format(value);
+export function formatTokens(value: number, locale = 'en'): string {
+  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(
+    value,
+  );
 }

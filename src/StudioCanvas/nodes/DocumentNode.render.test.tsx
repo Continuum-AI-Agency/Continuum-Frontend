@@ -9,8 +9,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { CanvasDocument, DocumentNodeData } from '../types';
@@ -132,7 +137,7 @@ describe('DocumentNode — mounted after the document reached its state', () => 
 
     renderNode(linked);
 
-    await waitFor(() => expect(screen.getByText('No extractable text found.')).toBeDefined());
+    await waitFor(() => expect(screen.getByText('No text found')).toBeDefined());
     expect(screen.queryByText('processing…')).toBeNull();
   });
 
@@ -163,7 +168,7 @@ describe('DocumentNode — mounted after the document reached its state', () => 
 
     renderNode(linked);
 
-    await waitFor(() => expect(screen.getByText('embedding')).toBeDefined());
+    await waitFor(() => expect(screen.getByText('Indexing')).toBeDefined());
     expect(writes).toHaveLength(0);
   });
 

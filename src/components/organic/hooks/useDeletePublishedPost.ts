@@ -1,6 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useDestructiveConfirmation } from '@/components/organic/primitives/DestructiveConfirmation';
 import type { OrganicCalendarPostedContent } from '@/components/organic/primitives/types';
@@ -19,6 +20,8 @@ export const canDeletePublishedPost = (post: OrganicCalendarPostedContent): bool
  * is still live. Never retried: like a publish, a lost response says nothing about the outcome.
  */
 export function useDeletePublishedPost(onDeleted: () => void) {
+  const uiText = useTranslations('organic');
+
   const queryClient = useQueryClient();
   const { requestDestructiveConfirmation } = useDestructiveConfirmation();
   const { show } = useToast();
@@ -29,9 +32,9 @@ export function useDeletePublishedPost(onDeleted: () => void) {
       if (!post.externalPostId) return;
       const label = postPlatformLabel(post.platform);
       const confirmed = await requestDestructiveConfirmation({
-        title: `Delete this post from ${label}?`,
-        description: `It is removed from your ${label} Page for everyone, and this can't be undone. If it came from a draft, the draft returns to the planner.`,
-        confirmLabel: `Delete from ${label}`,
+        title: uiText('deletePublishedTitle', { platform: label }),
+        description: uiText('deletePublishedDescription', { platform: label }),
+        confirmLabel: uiText('deleteFromPlatform', { platform: label }),
       });
       if (!confirmed) return;
 
@@ -55,28 +58,32 @@ export function useDeletePublishedPost(onDeleted: () => void) {
         }
         if (response.ok) {
           show({
-            title: `Deleted from ${label}`,
-            description: `The post is no longer on your ${label} Page.`,
+            title: uiText('deletedFromPlatform', { platform: label }),
+            description: uiText('postDeletedDescription', { platform: label }),
             variant: 'success',
           });
         } else {
           show({
-            title: deleted ? `Deleted from ${label}` : `Couldn't delete from ${label}`,
-            description: body.message ?? `Something went wrong. The post is still on ${label}.`,
+            title: deleted
+              ? uiText('deletedFromPlatform', { platform: label })
+              : uiText('deleteFromPlatformFailed', { platform: label }),
+            description: deleted
+              ? uiText('deletedPlannerStale')
+              : uiText('postDeleteFailedDescription', { platform: label }),
             variant: 'error',
           });
         }
       } catch {
         show({
-          title: `Couldn't reach Continuum`,
-          description: `Refresh the planner to see whether the post is still on ${label}.`,
+          title: uiText('continuumUnreachable'),
+          description: uiText('postDeletionUnknown', { platform: label }),
           variant: 'error',
         });
       } finally {
         setDeletingId(null);
       }
     },
-    [onDeleted, queryClient, requestDestructiveConfirmation, show],
+    [onDeleted, queryClient, requestDestructiveConfirmation, show, uiText],
   );
 
   return { deletePost, deletingId };

@@ -1,5 +1,10 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { competitorErrorCopy } from './competitorErrorCopy';
+
 // The Saved view of the Inspiration Library: every competitor post saved to the
 // brand's Library (tracked, searched, or pasted), with the metrics captured when
 // it was saved. Pasting any public Instagram post URL saves it here, so a post
@@ -20,15 +25,9 @@ const SAVE_URL_ERRORS: Record<string, string> = {
     'Instagram did not return that post. It may be private, deleted, or from a personal account.',
 };
 
-function saveUrlErrorText(error: unknown): string {
-  if (error instanceof ApiError) {
-    const code = error.code ?? error.message;
-    return SAVE_URL_ERRORS[code] ?? error.message;
-  }
-  return 'Could not save that post. Try again.';
-}
-
 function PasteUrlForm({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('competitor');
+  const formatUiError = useUiErrorMessage();
   const [url, setUrl] = useState('');
   const save = useSaveInspirationUrl(brandId);
 
@@ -53,19 +52,19 @@ function PasteUrlForm({ brandId }: { brandId: string }) {
             inputMode="url"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="Paste an Instagram post or reel link"
-            aria-label="Instagram post URL"
+            placeholder={uiText('paste_an_instagram_post_or_reel_link_1a227f0')}
+            aria-label={uiText('instagram_post_url_cdfa17a')}
             className="h-8 pl-8 text-sm"
             disabled={save.isPending}
           />
         </div>
         <Button type="submit" size="sm" disabled={save.isPending || url.trim().length === 0}>
-          {save.isPending ? 'Saving…' : 'Save post'}
+          {save.isPending ? uiText('saving_23e3929') : uiText('save_post_f1142ba')}
         </Button>
       </div>
       {save.isError ? (
         <p data-testid="save-url-error" className="text-xs text-destructive">
-          {saveUrlErrorText(save.error)}
+          {competitorErrorCopy(save.error, SAVE_URL_ERRORS, uiText, formatUiError)}
         </p>
       ) : null}
       {save.data ? (
@@ -74,7 +73,7 @@ function PasteUrlForm({ brandId }: { brandId: string }) {
           className="text-xs text-muted-foreground"
           aria-live="polite"
         >
-          {save.data.alreadyExisted ? 'Already saved: ' : 'Saved: '}@
+          {save.data.alreadyExisted ? uiText('already_saved_48a79e2') : uiText('saved_4d9f390')}@
           {save.data.post.instagramUsername}
         </p>
       ) : null}
@@ -93,6 +92,8 @@ export function SavedInspiration({
   compact?: boolean;
   renderActions?: (view: CompetitorPostView) => ReactNode;
 }) {
+  const uiText = useTranslations('competitor');
+
   const saved = useSavedInspirationPosts(brandId);
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -103,10 +104,10 @@ export function SavedInspiration({
         views={saved.data ?? []}
         isLoading={saved.isLoading}
         isError={saved.isError}
-        errorText="Saved posts are unavailable right now."
+        errorText={localizeCompetitorCopy('Saved posts are unavailable right now.', uiText)}
         gridClassName={gridClassName}
         renderActions={renderActions}
-        emptyText="Nothing saved yet. Save a post from the feed, or paste a link above."
+        emptyText={uiText('nothing_saved_yet_save_a_post_from_the_feed_o_f582554')}
       />
     </div>
   );

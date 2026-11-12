@@ -1,3 +1,8 @@
+import { createTranslator } from 'next-intl';
+import { englishMessages } from '@/i18n/__tests__/render';
+
+const t = createTranslator({ locale: 'en', messages: englishMessages, namespace: 'common' });
+
 import { describe, expect, it } from 'bun:test';
 import {
   createDashboardWelcomeToastOptions,
@@ -34,6 +39,6 @@ describe('shouldShowDashboardWelcomeToast', () => {
 
 describe('createDashboardWelcomeToastOptions', () => {
   it('falls back to "User" for a blank name', () => {
-    expect(createDashboardWelcomeToastOptions('  ').title).toBe('Welcome back, User.');
+    expect(createDashboardWelcomeToastOptions('  ', t).title).toBe('Welcome back, User.');
   });
 });

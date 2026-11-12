@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import type { PaidMetricsTrendPoint } from '@/components/paid-media/dashboard/PerformanceDetails';
@@ -44,6 +45,8 @@ export function MetricSparkline({
   height = 20,
   className,
 }: MetricSparklineProps) {
+  const uiText = useTranslations('scale');
+
   const field = TREND_FIELD_BY_METRIC[metric];
 
   const values = React.useMemo(() => {
@@ -89,7 +92,7 @@ export function MetricSparkline({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label={`${metric} trend`}
+      aria-label={uiText('template_ddf435e47a89', { v0: metric })}
     >
       <polyline
         fill="none"

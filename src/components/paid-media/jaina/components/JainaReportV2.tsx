@@ -10,6 +10,8 @@ import {
   Share2Icon,
   Table2Icon,
 } from 'lucide-react';
+
+import { useTranslations } from 'next-intl';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
@@ -17,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   acknowledgeReportDelivery,
   type ReportDeliveryKind,
@@ -98,6 +101,7 @@ const DISCLOSURE_CHEVRON_CLASS = 'size-3.5 shrink-0 transition-transform group-o
 // in every persisted report but were previously dropped at the schema; surfacing
 // them keeps a thin/degraded report from looking empty.
 function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) {
+  const uiText = useTranslations('scale');
   const objectives = report.execution_objectives;
   const sources = report.cached_sources;
   const reasoning = report.reasoning_trace.trim();
@@ -111,8 +115,10 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
       {objectives.length > 0 ? (
         <details className="group">
           <summary className={DISCLOSURE_SUMMARY_CLASS}>
-            Execution objectives ({objectives.length})
-            <ChevronDownIcon aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />
+            {uiText.rich('sentence_f03740c15f68', {
+              v0: objectives.length,
+              v1: () => <ChevronDownIcon aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />,
+            })}
           </summary>
           <ul className="mt-2 space-y-1.5">
             {objectives.map((objective) => (
@@ -137,7 +143,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
       {reasoning.length > 0 ? (
         <details className="group">
           <summary className={DISCLOSURE_SUMMARY_CLASS}>
-            Analysis
+            {uiText('analysis_e70d8eb')}
             <ChevronDownIcon aria-hidden="true" className={DISCLOSURE_CHEVRON_CLASS} />
           </summary>
           <SafeMarkdown
@@ -180,6 +186,8 @@ export function JainaReportV2({
   sourcePrompt,
   onSuggestionClick,
 }: JainaReportV2Props) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const { show } = useToast();
   const [hiddenBlockIds, setHiddenBlockIds] = useState<Set<string>>(() => new Set());
   const [exporting, setExporting] = useState<'sheets' | 'share' | 'pdf' | 'html' | null>(null);
@@ -256,15 +264,14 @@ export function JainaReportV2({
     } catch (error) {
       await acknowledgeDelivery('pdf', 'fallback');
       show({
-        title: 'Export failed',
-        description:
-          error instanceof Error ? error.message : 'Unable to generate the report PDF right now.',
+        title: uiText('export_failed_e94d3ee'),
+        description: formatUiError(error),
         variant: 'error',
       });
     } finally {
       setExporting(null);
     }
-  }, [acknowledgeDelivery, report, show, visibleBlocks]);
+  }, [acknowledgeDelivery, report, show, visibleBlocks, uiText, formatUiError]);
 
   const handleHtmlExport = useCallback(async () => {
     setExporting('html');
@@ -272,15 +279,14 @@ export function JainaReportV2({
       await downloadJainaReportV2Html({ report, blocks: visibleBlocks });
     } catch (error) {
       show({
-        title: 'Export failed',
-        description:
-          error instanceof Error ? error.message : 'Unable to generate the report HTML right now.',
+        title: uiText('export_failed_e94d3ee'),
+        description: formatUiError(error),
         variant: 'error',
       });
     } finally {
       setExporting(null);
     }
-  }, [report, show, visibleBlocks]);
+  }, [report, show, visibleBlocks, uiText, formatUiError]);
 
   const handleSheetsExport = useCallback(async () => {
     setExporting('sheets');
@@ -289,17 +295,20 @@ export function JainaReportV2({
         buildJainaReportV2SheetsExportRequest({ report, visibleBlocks }),
       );
       window.open(result.url, '_blank', 'noopener,noreferrer');
-      show({ title: 'Google Sheet created', description: 'Your visible modules are ready.' });
+      show({
+        title: uiText('google_sheet_created_625ad8c'),
+        description: uiText('your_visible_modules_are_ready_aac583b'),
+      });
     } catch (error) {
       show({
-        title: 'Google Sheets export failed',
-        description: error instanceof Error ? error.message : 'Unable to export the report.',
+        title: uiText('google_sheets_export_failed_6b033bc'),
+        description: formatUiError(error),
         variant: 'error',
       });
     } finally {
       setExporting(null);
     }
-  }, [report, show, visibleBlocks]);
+  }, [report, show, visibleBlocks, formatUiError, uiText]);
 
   const handleShare = useCallback(async () => {
     setExporting('share');
@@ -310,20 +319,20 @@ export function JainaReportV2({
         downloadFile(file);
         openJainaReportMailDraft('Jaina performance report');
         show({
-          title: 'Attach the downloaded report',
-          description: 'Your email draft is open. Attach the downloaded report before sending.',
+          title: uiText('attach_the_downloaded_report_ffa76ca'),
+          description: uiText('your_email_draft_is_open_attach_the_downloade_6ecced3'),
         });
       }
     } catch {
       show({
-        title: 'Share failed',
-        description: 'Unable to prepare the report for sharing right now.',
+        title: uiText('share_failed_609fbf0'),
+        description: uiText('unable_to_prepare_the_report_for_sharing_righ_60230b9'),
         variant: 'error',
       });
     } finally {
       setExporting(null);
     }
-  }, [report, show, visibleBlocks]);
+  }, [report, show, visibleBlocks, uiText]);
 
   // An answer is modules separated by space: no card around it, no rule between its parts.
   // The section is the container the modules query, so the same answer lays its reading out
@@ -336,10 +345,12 @@ export function JainaReportV2({
             <Badge
               variant="secondary"
               className="gap-1"
-              aria-label={`Sourced from ${citationCount} citations`}
+              aria-label={uiText('template_dee909e33af9', { count: citationCount })}
             >
-              <BookIcon className="size-3" aria-hidden="true" />
-              Sourced · {citationCount}
+              {uiText.rich('sentence_29cff36b24a0', {
+                v0: () => <BookIcon className="size-3" aria-hidden="true" />,
+                v1: citationCount,
+              })}
             </Badge>
           </div>
         ) : null}
@@ -357,7 +368,7 @@ export function JainaReportV2({
          *  above it would state the answer twice, in two sets of words and possibly two sets
          *  of numbers. Only a report with no (visible) template block keeps the summary. */}
         {report.executive_summary && templateBlocks.length === 0 ? (
-          <div data-report-part="sentence">
+          <div data-report-part="sentence" lang={language}>
             <JainaProse
               content={normalizeJainaMarkdownTables(report.executive_summary)}
               className={cn(JAINA_ANSWER_PROSE, JAINA_LEAD)}
@@ -368,7 +379,11 @@ export function JainaReportV2({
 
         {/* The rest of the answer — the reading, the moves — set as part of it. */}
         {sections.answer.length > 0 ? (
-          <div data-report-section="answer" className={cn('flex flex-col', JAINA_MODULE_GAP)}>
+          <div
+            data-report-section="answer"
+            lang={language}
+            className={cn('flex flex-col', JAINA_MODULE_GAP)}
+          >
             {/* A templated answer puts its sentence and chart here and its steps under the
              *  justification below — the same answer/justification split as every block.
              *
@@ -424,11 +439,11 @@ export function JainaReportV2({
          *  table of contents before the answer. */}
         {!isStreaming && orderedBlocks.length > 0 ? (
           <fieldset
-            aria-label="Report modules"
+            aria-label={uiText('report_modules_a64028a')}
             className="flex flex-wrap items-center gap-2 border-0 p-0"
           >
             <legend className="mb-1 text-xs font-medium text-muted-foreground">
-              Report modules
+              {uiText('report_modules_a64028a')}
             </legend>
             {orderedBlocks.map((block) => {
               const isVisible = !hiddenBlockIds.has(block.block_id);
@@ -438,7 +453,10 @@ export function JainaReportV2({
                   type="button"
                   size="xs"
                   variant={isVisible ? 'secondary' : 'outline'}
-                  aria-label={`${isVisible ? 'Hide' : 'Show'} ${block.title} module`}
+                  aria-label={uiText('template_8e24ee884e4d', {
+                    v0: isVisible ? uiText('hide_ac20a57') : uiText('show_0df6f1c'),
+                    v1: block.title,
+                  })}
                   aria-pressed={isVisible}
                   onClick={() => toggleBlock(block.block_id)}
                 >
@@ -455,7 +473,7 @@ export function JainaReportV2({
 
       <footer className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
-          Export the visible modules as a PDF or a self-contained HTML file.
+          {uiText('export_the_visible_modules_as_a_pdf_or_a_self_a0eb99f')}
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <SaveDashboardButton
@@ -470,10 +488,11 @@ export function JainaReportV2({
             variant="outline"
             onClick={() => void handleSheetsExport()}
             disabled={isStreaming || exporting !== null}
-            aria-label="Export visible modules to Google Sheets"
+            aria-label={uiText('export_visible_modules_to_google_sheets_6262ea6')}
           >
-            <Table2Icon className="size-3.5" />
-            Google Sheets
+            {uiText.rich('sentence_7ada52d96afe', {
+              v0: () => <Table2Icon className="size-3.5" />,
+            })}
           </Button>
           <Button
             type="button"
@@ -481,10 +500,10 @@ export function JainaReportV2({
             variant="outline"
             onClick={() => void handleShare()}
             disabled={isStreaming || exporting !== null}
-            aria-label="Share report by email"
+            aria-label={uiText('share_report_by_email_6991803')}
           >
             <Share2Icon className="size-3.5" />
-            Email
+            {uiText('email_969ccbd')}
           </Button>
           <Button
             type="button"
@@ -492,10 +511,10 @@ export function JainaReportV2({
             variant="outline"
             onClick={() => void handleHtmlExport()}
             disabled={isStreaming || exporting !== null}
-            aria-label="Export report as HTML"
+            aria-label={uiText('export_report_as_html_3e86f53')}
           >
             <CodeIcon className="size-3.5" />
-            {exporting === 'html' ? 'Preparing…' : 'Export HTML'}
+            {exporting === 'html' ? uiText('preparing_5d1fa38') : uiText('export_html_17f681a')}
           </Button>
           <Button
             type="button"
@@ -503,10 +522,10 @@ export function JainaReportV2({
             variant="outline"
             onClick={() => void handlePdfExport()}
             disabled={isStreaming || exporting !== null}
-            aria-label="Export report as PDF"
+            aria-label={uiText('export_report_as_pdf_42e2244')}
           >
             <FileDownIcon className="size-3.5" />
-            {exporting === 'pdf' ? 'Preparing…' : 'Export PDF'}
+            {exporting === 'pdf' ? uiText('preparing_5d1fa38') : uiText('export_pdf_7aad9d4')}
           </Button>
         </div>
       </footer>

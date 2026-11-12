@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { apiRenderJobSchema } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
 import { DeliveryChain } from '@/components/forge/DeliveryChain';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 afterEach(cleanup);
 

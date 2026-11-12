@@ -4,7 +4,13 @@ import {
   apiRenderTemplateSummarySchema,
   WEB_COMPONENT_BINDING_ID,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TemplatePicker } from './RenderToolbar';
 
 afterEach(cleanup);
@@ -112,12 +118,10 @@ test('once the registry answers, rows group by what each was authored in, and th
   );
   fireEvent.click(screen.getByRole('button', { name: 'Template' }));
   await screen.findAllByRole('option');
-  const headings = screen
-    .getAllByRole('group')
-    .flatMap((group) => {
-      const id = group.getAttribute('aria-labelledby');
-      return id ? [document.getElementById(id)?.textContent] : [];
-    });
+  const headings = screen.getAllByRole('group').flatMap((group) => {
+    const id = group.getAttribute('aria-labelledby');
+    return id ? [document.getElementById(id)?.textContent] : [];
+  });
   expect(headings).toEqual(['Illustrator', 'After Effects', 'Shared workspace']);
   const rowsIn = (name: string) =>
     within(screen.getByRole('group', { name }))

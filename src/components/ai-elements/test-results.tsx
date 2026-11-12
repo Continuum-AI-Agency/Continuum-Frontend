@@ -1,5 +1,7 @@
 'use client';
+
 import { Circle, CircleCheck, CircleX } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { Pill } from '@/components/kibo-ui/pill';
 import { Spinner } from '@/components/ui/Loading';
@@ -17,7 +19,11 @@ type TestResultsProps = {
   title?: string;
 };
 
-export function TestResults({ results, title = 'Test Results' }: TestResultsProps) {
+export function TestResults({ results, title: uiProvidedTitle }: TestResultsProps) {
+  const tUi = useTranslations('common');
+const title=uiProvidedTitle??tUi('m_0bb198d417');
+
+
   const passing = results.filter((r) => r.status === 'pass').length;
   const failing = results.filter((r) => r.status === 'fail').length;
   const total = results.length;
@@ -28,9 +34,22 @@ export function TestResults({ results, title = 'Test Results' }: TestResultsProp
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-secondary">{title}</span>
           <div className="flex gap-2">
-            {passing > 0 && <Pill variant="success">{passing} passed</Pill>}
-            {failing > 0 && <Pill variant="destructive">{failing} failed</Pill>}
-            <Pill variant="muted">{total} total</Pill>
+            {passing > 0 && (
+              <Pill variant="success">
+                {passing}
+                {tUi('m_1325f7c5d6')}
+              </Pill>
+            )}
+            {failing > 0 && (
+              <Pill variant="destructive">
+                {failing}
+                {tUi('m_524a7d520f')}
+              </Pill>
+            )}
+            <Pill variant="muted">
+              {total}
+              {tUi('m_9ac1f4b1eb')}
+            </Pill>
           </div>
         </div>
       </div>

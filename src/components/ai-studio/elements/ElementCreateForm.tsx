@@ -10,6 +10,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Plus, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -25,19 +26,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useValidationErrorMap } from '@/i18n/validation';
 import {
   ELEMENT_CATEGORIES,
-  ELEMENT_CATEGORY_GUIDANCE,
-  ELEMENT_CATEGORY_LABEL,
-  ELEMENT_GUIDELINES_COPY,
-  ELEMENT_INPUT_COPY,
   ELEMENT_MEMBER_LIMIT,
-  ELEMENT_RIGHTS_COPY,
-  ELEMENT_STYLE_INPUT_COPY,
   type ElementCategory,
   elementRequiresRightsNote,
 } from '@/lib/ai-studio/elements';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
+import { elementCategoryGuidance, elementCategoryLabel } from './elementPresentation';
 
 export interface StagedElementMember {
   assetId: string;
@@ -50,14 +48,15 @@ export type ElementMemberUploader = (params: {
   brandId: string;
 }) => Promise<{ assetId: string; versionId: string; signedUrl: string }>;
 
-const createElementSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  category: z.enum(ELEMENT_CATEGORIES),
-  guidelines: z.string().optional(),
-  rightsNote: z.string().optional(),
-});
+const createElementSchema = (translateUi: ReturnType<typeof useUiTranslations<'studio'>>) =>
+  z.object({
+    name: z.string().min(1, translateUi('validationElementNameRequired')),
+    category: z.enum(ELEMENT_CATEGORIES),
+    guidelines: z.string().optional(),
+    rightsNote: z.string().optional(),
+  });
 
-type CreateElementFormValues = z.infer<typeof createElementSchema>;
+type CreateElementFormValues = z.infer<ReturnType<typeof createElementSchema>>;
 
 export interface ElementCreateFormProps {
   brandId: string;
@@ -81,13 +80,19 @@ export function ElementCreateForm({
   onSubmit,
   uploadAsset,
 }: ElementCreateFormProps) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const [members, setMembers] = React.useState<StagedElementMember[]>([]);
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
   const upload = uploadAsset ?? ((params) => uploadMediaAsset(params));
 
   const form = useForm<CreateElementFormValues>({
-    resolver: zodResolver(createElementSchema),
+    resolver: zodResolver(createElementSchema(translateUi), { error: validationErrorMap }),
     defaultValues: { name: '', category: 'product', guidelines: '', rightsNote: '' },
     mode: 'onSubmit',
   });
@@ -95,7 +100,6 @@ export function ElementCreateForm({
   const category = form.watch('category');
   const rightsNote = form.watch('rightsNote');
   const needsRights = elementRequiresRightsNote(category);
-  const guidance = ELEMENT_CATEGORY_GUIDANCE[category];
   const remaining = ELEMENT_MEMBER_LIMIT - members.length;
 
   const missingRights = needsRights && !(rightsNote ?? '').trim();
@@ -131,7 +135,7 @@ export function ElementCreateForm({
         ]);
       }
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Upload failed');
+      setUploadError(uiErrorText(error));
     } finally {
       setUploading(false);
     }
@@ -151,15 +155,19 @@ export function ElementCreateForm({
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} data-testid="element-create-form">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="element-name">Name</Label>
-        <Input id="element-name" placeholder="Aria — brand model" {...form.register('name')} />
+        <Label htmlFor="element-name">{translateUi('name_dcd1d522')}</Label>
+        <Input
+          id="element-name"
+          placeholder={translateUi('aria_brand_model_eb8739dc')}
+          {...form.register('name')}
+        />
         {form.formState.errors.name ? (
           <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
         ) : null}
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="element-category">Category</Label>
+        <Label htmlFor="element-category">{translateUi('category_292c06f0')}</Label>
         <Select
           value={category}
           onValueChange={(value) => form.setValue('category', value as ElementCategory)}
@@ -170,20 +178,20 @@ export function ElementCreateForm({
           <SelectContent>
             {ELEMENT_CATEGORIES.map((value) => (
               <SelectItem key={value} value={value}>
-                {ELEMENT_CATEGORY_LABEL[value]}
+                {elementCategoryLabel(value, translateUi)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          {guidance.count} images. Vary {guidance.vary}. Keep constant: {guidance.constant}.
+          {elementCategoryGuidance(category, translateUi)}
         </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="element-images">Images</Label>
+        <Label htmlFor="element-images">{translateUi('images_be7e2f20')}</Label>
         <p className="text-xs text-muted-foreground">
-          {category === 'style' ? ELEMENT_STYLE_INPUT_COPY : ELEMENT_INPUT_COPY}
+          {translateUi(category === 'style' ? 'elementStyleInputGuidance' : 'elementInputGuidance')}
         </p>
         <div className="flex flex-wrap gap-2">
           {members.map((member, index) => (
@@ -207,7 +215,9 @@ export function ElementCreateForm({
                 type="button"
                 size="icon"
                 variant="secondary"
-                aria-label={`Remove ${member.fileName}`}
+                aria-label={translateUi('remove_value0_3028bf7d', {
+                  value0: String(member.fileName),
+                })}
                 className="absolute right-0 top-0 h-5 w-5 rounded-none rounded-bl"
                 onClick={() =>
                   setMembers((current) => current.filter((item) => item.assetId !== member.assetId))
@@ -247,29 +257,30 @@ export function ElementCreateForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="element-guidelines">Guidelines</Label>
+        <Label htmlFor="element-guidelines">{translateUi('guidelines_c4f9417b')}</Label>
         <Textarea
           id="element-guidelines"
           rows={2}
-          placeholder="the matte finish, not the glossy one"
+          placeholder={translateUi('the_matte_finish_not_the_glossy_one_10ad94e8')}
           {...form.register('guidelines')}
         />
-        <p className="text-xs text-muted-foreground">{ELEMENT_GUIDELINES_COPY}</p>
+        <p className="text-xs text-muted-foreground">{translateUi('elementGuidelinesGuidance')}</p>
       </div>
 
       {needsRights ? (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="element-rights">Rights basis</Label>
+          <Label htmlFor="element-rights">{translateUi('rights_basis_c272d465')}</Label>
           <Input
             id="element-rights"
-            placeholder="own employee, consent on file"
+            placeholder={translateUi('own_employee_consent_on_file_4131e603')}
             {...form.register('rightsNote')}
           />
-          <p className="text-xs text-muted-foreground">{ELEMENT_RIGHTS_COPY}</p>
+          <p className="text-xs text-muted-foreground">{translateUi('elementRightsGuidance')}</p>
           {missingRights ? (
             <p className="text-xs text-destructive">
-              A {ELEMENT_CATEGORY_LABEL[category]} Element needs a rights basis before it can be
-              saved.
+              {translateUi('elementRightsMissingSave', {
+                category: elementCategoryLabel(category, translateUi),
+              })}
             </p>
           ) : null}
         </div>
@@ -277,19 +288,23 @@ export function ElementCreateForm({
 
       {needsRights ? (
         <p className="text-xs text-muted-foreground">
-          Creating this {ELEMENT_CATEGORY_LABEL[category].toLowerCase()} makes their character sheet
-          — turnaround, expressions, poses, costume and palette — from these photos. Three paid
-          image calls, about two minutes.
+          {' '}
+          {translateUi('elementCharacterCreationGuidance', {
+            category: elementCategoryLabel(category, translateUi).toLowerCase(),
+          })}
         </p>
       ) : null}
 
       <div className="flex items-center justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
+          {' '}
+          {translateUi('cancel_19766ed6')}{' '}
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {needsRights ? 'Create and make character sheet' : 'Create Element'}
+          {needsRights
+            ? translateUi('create_and_make_character_sheet_fd9c5449')
+            : translateUi('create_element_635864da')}
         </Button>
       </div>
     </form>

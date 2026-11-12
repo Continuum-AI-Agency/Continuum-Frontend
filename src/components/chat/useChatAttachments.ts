@@ -1,8 +1,10 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STALE_PROCESSING_MS } from '@/components/documents/useDocuments';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { uploadEphemeralChatDocument } from '@/lib/documents/uploadEphemeralChatDocument';
 import {
   ACCEPTED_DOCUMENT_EXTENSIONS,
@@ -53,6 +55,10 @@ export function useChatAttachments({
   brandId,
   sessionId,
 }: UseChatAttachmentsParams): ChatAttachmentsController {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+
   const [files, setFiles] = useState<Attachment[]>([]);
   const [heartbeatVersion, setHeartbeatVersion] = useState(0);
   const { show } = useToast();
@@ -73,7 +79,7 @@ export function useChatAttachments({
   const uploadMedia = useCallback(
     async (id: string, file: File) => {
       if (!brandId) {
-        patch(id, { status: 'error', error: 'No brand selected' });
+        patch(id, { status: 'error', error: tUi('m_1a2a61a123') });
         return;
       }
       try {
@@ -89,17 +95,17 @@ export function useChatAttachments({
       } catch (error) {
         patch(id, {
           status: 'error',
-          error: error instanceof Error ? error.message : 'Upload failed',
+          error: getUiErrorMessage(error),
         });
       }
     },
-    [brandId, patch],
+    [brandId, patch, tUi, getUiErrorMessage],
   );
 
   const uploadDocument = useCallback(
     async (id: string, file: File) => {
       if (!brandId) {
-        patch(id, { status: 'error', error: 'No brand selected' });
+        patch(id, { status: 'error', error: tUi('m_1a2a61a123') });
         return;
       }
       try {
@@ -118,11 +124,11 @@ export function useChatAttachments({
       } catch (error) {
         patch(id, {
           status: 'error',
-          error: error instanceof Error ? error.message : 'Upload failed',
+          error: getUiErrorMessage(error),
         });
       }
     },
-    [brandId, patch, scopeKey],
+    [brandId, patch, scopeKey, tUi, getUiErrorMessage],
   );
 
   const upload = useCallback(
@@ -169,8 +175,8 @@ export function useChatAttachments({
             status: tooLarge ? 'error' : 'uploading',
             error: tooLarge
               ? kind === 'document'
-                ? `Larger than ${MAX_DOCUMENT_MB} MB`
-                : `Larger than ${formatAttachmentSize(MAX_ATTACHMENT_BYTES)}`
+                ? tUi('m_1ba6712152', { v0: String(MAX_DOCUMENT_MB) })
+                : tUi('m_624c3144df', { v0: String(formatAttachmentSize(MAX_ATTACHMENT_BYTES)) })
               : undefined,
           },
         });
@@ -188,16 +194,16 @@ export function useChatAttachments({
       if (documents.length > 0) {
         const description =
           documents.length === 1
-            ? `"${documents[0].attachment.name}" is available to the agent for 14 days. Save it to Knowledge in Settings to keep it permanently.`
-            : `${documents.length} documents are available to the agent for 14 days. Save them to Knowledge in Settings to keep them permanently.`;
+            ? tUi('m_0506bb2b57', { v0: String(documents[0].attachment.name) })
+            : tUi('m_3fb43bcaa6', { v0: String(documents.length) });
         show({
-          title: 'Added for this conversation',
+          title: tUi('m_4a974bd920'),
           description,
           variant: 'info',
           durationMs: 10_000,
           dedupeKey: 'chat-ephemeral-doc-notice',
           action: {
-            label: 'Open Knowledge',
+            label: tUi('m_4345c3f1ed'),
             onClick: () => window.open('/settings?section=knowledge', '_blank', 'noopener'),
           },
         });
@@ -209,7 +215,7 @@ export function useChatAttachments({
         }
       }
     },
-    [show, upload],
+    [show, upload, tUi],
   );
 
   // Watch ingest for documents still indexing. Without this the chip would never leave
@@ -249,8 +255,7 @@ export function useChatAttachments({
 
       const status = typeof raw.status === 'string' ? raw.status : null;
       const progressStep = typeof raw.progress_step === 'string' ? raw.progress_step : null;
-      const errorMessage =
-        typeof raw.error_message === 'string' ? raw.error_message : 'Indexing failed';
+      const errorMessage = getUiErrorMessage({code:raw.error_code});
 
       if (status === 'ready' || progressStep === 'ready') {
         setFiles((previous) =>
@@ -335,7 +340,7 @@ export function useChatAttachments({
           file.documentId &&
           indexingIds.includes(file.documentId) &&
           indexingHeartbeatRef.current[file.documentId] <= staleBefore
-            ? { ...file, status: 'error', error: 'Indexing timed out' }
+            ? { ...file, status: 'error', error: tUi('m_a374f104bb') }
             : file,
         ),
       );

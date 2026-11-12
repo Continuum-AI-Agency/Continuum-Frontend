@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { createTranslator, NextIntlClientProvider } from 'next-intl';
 import type * as React from 'react';
+import { render } from '@/i18n/__tests__/render';
 import type { PublishAccount } from '@/lib/organic/publishTargets';
+import commonEn from '../../../../messages/common/en.json';
+import commonEs from '../../../../messages/common/es.json';
+import commonPt from '../../../../messages/common/pt-BR.json';
+import en from '../../../../messages/organic/en.json';
+import es from '../../../../messages/organic/es.json';
+import pt from '../../../../messages/organic/pt-BR.json';
 import { ReadinessLine, ReviewFooter, ReviewIdentityRow } from './DraftReviewChrome';
 
 afterEach(cleanup);
@@ -367,3 +375,62 @@ describe('ReviewIdentityRow', () => {
     TIMEOUT_MS,
   );
 });
+
+for (const [locale, messages, common] of [
+  ['en', en, commonEn],
+  ['pt-BR', pt, commonPt],
+  ['es', es, commonEs],
+] as const) {
+  const t = createTranslator({
+    locale,
+    namespace: 'organic',
+    messages: { organic: messages },
+    onError: (error) => {
+      throw error;
+    },
+  });
+  it(`${locale}: names the account radio group in the UI language and keyboard selection preserves raw account IDs`, async () => {
+    const accounts = [ACME_A, ACME_B];
+    const before = structuredClone(accounts);
+    const onSelect = mock((_id: string) => {});
+    const view = render(
+      <NextIntlClientProvider
+        locale={locale}
+        timeZone="UTC"
+        messages={{ organic: messages, common }}
+        onError={(error) => {
+          throw error;
+        }}
+      >
+        <ReviewIdentityRow
+          platform="instagram"
+          accounts={accounts}
+          selectedAccountId="acct-a"
+          onSelectAccount={onSelect}
+          summary="Authored date and content summary"
+          menu={null}
+        />
+      </NextIntlClientProvider>,
+    );
+    const trigger = view.getByRole('button', {
+      name: t('platformAccountValue', { platform: 'Instagram', account: '@acme_a' }),
+    });
+    expect(trigger.getAttribute('data-account-id')).toBe('acct-a');
+    fireEvent.click(trigger);
+    const group = view.getByRole('radiogroup', {
+      name: t('platformAccountGroup', { platform: 'Instagram' }),
+    });
+    expect(view.getByText('Authored date and content summary')).toBeTruthy();
+    const first = within(group).getByRole('radio', { name: '@acme_a' });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    await act(async () => {});
+    const second = within(group).getByRole('radio', { name: '@acme_b' });
+    expect(second.getAttribute('aria-checked')).toBe('true');
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.keyDown(second, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('acct-b');
+    expect(accounts).toEqual(before);
+  });
+}

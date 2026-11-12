@@ -13,6 +13,7 @@ import type {
   MediaCollection,
   MediaSearchResultItem,
 } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { fetchLibraryCollections } from '@/lib/library/collections';
 import {
@@ -27,6 +28,31 @@ const MIN_SEMANTIC_QUERY = 2;
 
 export type MediaSourceFolder = { value: SourceFilterValue; label: string };
 type MentionSource = AgentMentionReference['source'];
+export type MediaMentionText = ReturnType<typeof useTranslations<'library'>>;
+
+const sourceKeys = {
+  all: 'mentionAllMedia',
+  upload: 'sourceUpload',
+  ai_generated: 'sourceAiGenerated',
+  canvas: 'sourceCanvas',
+  inspiration: 'sourceInspiration',
+  meta_ad: 'sourceMetaAd',
+  hyperframe: 'sourceHyperframe',
+  chat_upload: 'sourceChatUpload',
+  clip: 'sourceClip',
+  reel: 'sourceReel',
+  backfill: 'sourceBackfill',
+  figma: 'sourceFigma',
+  forge: 'sourceForge',
+  goal_artifact: 'sourceGoalArtifact',
+} as const satisfies Record<SourceFilterValue, string>;
+
+const kindKeys = {
+  image: 'image_1aa4cb0b',
+  video: 'video_d534be82',
+  audio: 'audio_bc1b8890',
+  file: 'file_50009ce1',
+} as const satisfies Record<MediaAsset['kind'], string>;
 
 // The browsable source folders shown when the user opens "Media library" with
 // no query. Derived from the canonical MEDIA_SOURCES so every composited bucket
@@ -43,6 +69,7 @@ export const MEDIA_COLLECTION_FOLDER_PREFIX = 'media-collection:';
 export function mediaAssetToMentionSuggestion(
   asset: MediaAsset,
   referenceSource: MentionSource = 'organic',
+  uiText?: MediaMentionText,
 ): AgentMentionSuggestion {
   const label = asset.title ?? asset.storagePath.split('/').pop() ?? asset.id;
   const previewUrl = asset.signedUrl ?? asset.thumbnailUrl ?? null;
@@ -73,9 +100,11 @@ export function mediaAssetToMentionSuggestion(
     label,
     type: 'media_asset',
     source: referenceSource,
-    group: MEDIA_GROUP,
-    description: [asset.kind, asset.description].filter(Boolean).join(' · '),
-    badge: asset.kind,
+    group: uiText ? uiText('mentionMediaLibrary') : MEDIA_GROUP,
+    description: [uiText ? uiText(kindKeys[asset.kind]) : asset.kind, asset.description]
+      .filter(Boolean)
+      .join(' · '),
+    badge: uiText ? uiText(kindKeys[asset.kind]) : asset.kind,
     reference,
     preview: {
       url: previewUrl,
@@ -89,14 +118,15 @@ export function mediaAssetToMentionSuggestion(
 export function sourceFolderToSuggestion(
   folder: MediaSourceFolder,
   referenceSource: MentionSource = 'organic',
+  uiText?: MediaMentionText,
 ): AgentMentionSuggestion {
   return {
     key: `${MEDIA_SOURCE_FOLDER_PREFIX}${folder.value}`,
-    label: folder.label,
+    label: uiText ? uiText(sourceKeys[folder.value]) : folder.label,
     type: 'media_asset',
     source: referenceSource,
-    group: MEDIA_GROUP,
-    childrenLabel: 'Browse creatives',
+    group: uiText ? uiText('mentionMediaLibrary') : MEDIA_GROUP,
+    childrenLabel: uiText ? uiText('mentionBrowseCreatives') : 'Browse creatives',
     isFolder: true,
   };
 }
@@ -104,14 +134,19 @@ export function sourceFolderToSuggestion(
 export function collectionToSuggestion(
   collection: MediaCollection,
   referenceSource: MentionSource = 'organic',
+  uiText?: MediaMentionText,
 ): AgentMentionSuggestion {
   return {
     key: `${MEDIA_COLLECTION_FOLDER_PREFIX}${collection.id}`,
     label: collection.name,
     type: 'media_asset',
     source: referenceSource,
-    group: MEDIA_GROUP,
-    childrenLabel: collection.kind === 'smart' ? 'Smart collection' : 'Collection',
+    group: uiText ? uiText('mentionMediaLibrary') : MEDIA_GROUP,
+    childrenLabel: uiText
+      ? uiText(collection.kind === 'smart' ? 'mentionSmartCollection' : 'mentionCollection')
+      : collection.kind === 'smart'
+        ? 'Smart collection'
+        : 'Collection',
     isFolder: true,
   };
 }
@@ -148,6 +183,7 @@ export type FetchMediaMentionAssetsInput = {
   query?: string;
   limit?: number;
   referenceSource?: MentionSource;
+  uiText?: MediaMentionText;
 };
 
 // Lists library assets as mention suggestions. A query runs semantic search
@@ -157,7 +193,15 @@ export type FetchMediaMentionAssetsInput = {
 export async function fetchMediaMentionAssets(
   input: FetchMediaMentionAssetsInput,
 ): Promise<AgentMentionSuggestion[]> {
-  const { brandId, source, collectionId, query, limit = 24, referenceSource = 'organic' } = input;
+  const {
+    brandId,
+    source,
+    collectionId,
+    query,
+    limit = 24,
+    referenceSource = 'organic',
+    uiText,
+  } = input;
   const trimmed = (query ?? '').trim();
 
   if (trimmed.length >= MIN_SEMANTIC_QUERY && !collectionId) {
@@ -176,7 +220,7 @@ export async function fetchMediaMentionAssets(
     if (!response.ok) return [];
     const payload = (await response.json()) as { items?: MediaSearchResultItem[] };
     return (payload.items ?? []).map((item) =>
-      mediaAssetToMentionSuggestion(item.asset, referenceSource),
+      mediaAssetToMentionSuggestion(item.asset, referenceSource, uiText),
     );
   }
 
@@ -185,7 +229,7 @@ export async function fetchMediaMentionAssets(
   if (!response.ok) return [];
   const payload = (await response.json()) as { items?: MediaAsset[] };
   const suggestions = (payload.items ?? []).map((asset) =>
-    mediaAssetToMentionSuggestion(asset, referenceSource),
+    mediaAssetToMentionSuggestion(asset, referenceSource, uiText),
   );
   return filterSuggestionsByQuery(suggestions, trimmed);
 }
@@ -196,10 +240,13 @@ export async function fetchMediaMentionAssets(
 export async function fetchMediaLibraryFolders(
   brandId: string,
   referenceSource: MentionSource = 'organic',
+  uiText?: MediaMentionText,
 ): Promise<AgentMentionSuggestion[]> {
   const collections = await fetchLibraryCollections(brandId).catch(() => []);
   return [
-    ...MEDIA_SOURCE_FOLDERS.map((folder) => sourceFolderToSuggestion(folder, referenceSource)),
-    ...collections.map((collection) => collectionToSuggestion(collection, referenceSource)),
+    ...MEDIA_SOURCE_FOLDERS.map((folder) =>
+      sourceFolderToSuggestion(folder, referenceSource, uiText),
+    ),
+    ...collections.map((collection) => collectionToSuggestion(collection, referenceSource, uiText)),
   ];
 }

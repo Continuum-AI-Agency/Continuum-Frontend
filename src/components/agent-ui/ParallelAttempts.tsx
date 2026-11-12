@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useAgentFormats } from './useAgentFormats';
+
 // One task tried several ways at once: every attempt races as a row with its model, approach and
 // a live bar, then gets a score ring. The best is marked and picked by default; any other
 // finished attempt can be picked instead. Fed from sibling pipeline run receipts.
@@ -29,7 +32,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import { type Attempt, bestAttempt, formatClock, formatUsd } from './model';
+import { type Attempt, bestAttempt } from './model';
 import { initials, ScoreRing } from './parts';
 
 export function ParallelAttempts({
@@ -49,6 +52,9 @@ export function ParallelAttempts({
   title?: string;
   className?: string;
 }) {
+  const { formatClock, formatUsd } = useAgentFormats();
+
+  const uiText = useTranslations('common');
   const best = bestAttempt(attempts);
   const [ownPick, setOwnPick] = useState<string>();
   const pickedAttempt = attempts.find((a) => a.id === (pickedId ?? ownPick ?? best));
@@ -66,15 +72,18 @@ export function ParallelAttempts({
         action={
           racing ? (
             <StatusLabel tone="running">
-              Racing · {finished}/{attempts.length}
+              {uiText('m_976a7f0313')}
+              {finished}/{attempts.length}
             </StatusLabel>
           ) : (
-            <StatusLabel tone="done">All finished</StatusLabel>
+            <StatusLabel tone="done">{uiText('m_5cf3c6eae1')}</StatusLabel>
           )
         }
       >
-        <AgentCardEyebrow label="Parallel attempts" />
-        <AgentCardTitle>{title ?? `Same brief, ${attempts.length} ways`}</AgentCardTitle>
+        <AgentCardEyebrow label={uiText('m_36a39aa588')} />
+        <AgentCardTitle>
+          {title ?? uiText('m_0e6fa57ba4', { v0: String(attempts.length) })}
+        </AgentCardTitle>
       </AgentCardHeader>
       <AgentCardBody className="pt-3 pb-4">
         <ul className="flex flex-col gap-1.5">
@@ -123,19 +132,21 @@ export function ParallelAttempts({
                       {isBest && (
                         <Badge variant="violet" className="px-1.5 text-3xs">
                           <Trophy />
-                          Best
+                          {uiText('m_77003d0727')}
                         </Badge>
                       )}
                       {isPicked && !isBest && (
                         <Badge variant="secondary" className="px-1.5 text-3xs">
                           <Check />
-                          Picked
+                          {uiText('m_9847b3ef47')}
                         </Badge>
                       )}
                     </ItemTitle>
                     <ItemDescription className="truncate text-2xs">
                       {attempt.status === 'failed' ? (
-                        <span className="text-destructive">{attempt.error ?? 'Failed'}</span>
+                        <span className="text-destructive">
+                          {attempt.error ?? uiText('failed_031a8f0')}
+                        </span>
                       ) : (
                         meta.join(' · ')
                       )}
@@ -159,12 +170,12 @@ export function ParallelAttempts({
                     {attempt.status === 'queued' && (
                       <Badge variant="muted" className="text-3xs">
                         <Clock />
-                        Queued
+                        {uiText('queued_661ff40')}
                       </Badge>
                     )}
                     {attempt.status === 'failed' && (
                       <Badge variant="destructive" className="text-3xs">
-                        Failed
+                        {uiText('failed_031a8f0')}
                       </Badge>
                     )}
                   </ItemActions>
@@ -177,14 +188,18 @@ export function ParallelAttempts({
       {pickedAttempt && (
         <CardFooter className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5 text-xs">
           <span className="min-w-0 flex-1 truncate text-muted-foreground">
-            Picked <span className="font-medium text-foreground">{pickedAttempt.label}</span>
+            {uiText('m_8cd082beac')}
+            <span className="font-medium text-foreground">{pickedAttempt.label}</span>
             {pickedAttempt.score !== undefined && (
-              <> · scored {Math.round(pickedAttempt.score * 100)}</>
+              <>
+                {uiText('m_405ba2299b')}
+                {Math.round(pickedAttempt.score * 100)}
+              </>
             )}
           </span>
           {onUse && (
             <Button size="sm" onClick={() => onUse(pickedAttempt)}>
-              Use this one
+              {uiText('m_0a696317e6')}
             </Button>
           )}
         </CardFooter>

@@ -4,6 +4,7 @@ import type { ActionId } from '@continuum/contracts';
 import { createNodeData } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { ImageUp, Sparkles, Upload } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -177,6 +178,8 @@ export function OverlayConfig({
   actionId: ActionId;
   config: Record<string, unknown>;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const patch = useNodeConfigPatch();
   const nodes = useStudioStore((state) => state.nodes);
   const edges = useStudioStore((state) => state.edges);
@@ -262,11 +265,13 @@ export function OverlayConfig({
   return (
     <div className="flex flex-col gap-3">
       <section className="flex flex-col gap-1.5">
-        <Label className="text-xs">Image</Label>
+        <Label className="text-xs">{translateUi('image_1aa4cb0b')}</Label>
         <p className="text-2xs text-muted-foreground">
           {connectedCount > 0
-            ? `${connectedCount} image${connectedCount > 1 ? 's' : ''} wired to this burn-in.`
-            : 'Nothing wired yet — drag one in from the Library, or pick a source below.'}
+            ? translateUi('value0_image_value1_wired_to_this_b_1c943336', {
+                count: Number(connectedCount),
+              })
+            : translateUi('nothing_wired_yet_drag_one_in_from__e95007f3')}
         </p>
         <div className="flex gap-1">
           <Button
@@ -276,8 +281,7 @@ export function OverlayConfig({
             className="h-7 flex-1 text-xs"
             onClick={() => fileRef.current?.click()}
           >
-            <Upload className="mr-1 size-3" />
-            Upload
+            <Upload className="mr-1 size-3" /> {translateUi('upload_865e89de')}{' '}
           </Button>
           <Button
             type="button"
@@ -288,15 +292,14 @@ export function OverlayConfig({
             title={logo.status === 'ready' ? undefined : logo.reason}
             onClick={() => void useBrandLogo()}
           >
-            <Sparkles className="mr-1 size-3" />
-            Brand logo
+            <Sparkles className="mr-1 size-3" /> {translateUi('brand_logo_e458e2b5')}{' '}
           </Button>
         </div>
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
-          aria-label="Upload an overlay image"
+          aria-label={translateUi('upload_an_overlay_image_fb471b8c')}
           className="hidden"
           onChange={(event) => onUpload(event.target.files?.[0])}
         />
@@ -312,7 +315,7 @@ export function OverlayConfig({
       </section>
 
       <section className="flex flex-col gap-1.5">
-        <Label className="text-xs">Position</Label>
+        <Label className="text-xs">{translateUi('position_6d031af1')}</Label>
         <div className="flex items-start gap-2">
           <div className="w-20 shrink-0">
             <PositionPicker value={position} onChange={(next) => write('position', next)} />
@@ -325,22 +328,23 @@ export function OverlayConfig({
           />
         </div>
         <p className="text-2xs text-muted-foreground">
-          Preview assumes a 16:9 clip and a square image.
+          {' '}
+          {translateUi('preview_assumes_a_16_9_clip_and_a_s_74aa8705')}{' '}
         </p>
       </section>
 
       <SliderField
-        label="Size"
+        label={translateUi('size_1af85190')}
         value={scale}
         min={0.02}
         max={1}
         step={0.01}
         format={{ style: 'percent', maximumFractionDigits: 0 }}
-        suffix=" of the frame"
+        suffix={translateUi('frameFractionSuffix')}
         onChange={(next) => write('scale', next)}
       />
       <SliderField
-        label="Edge margin"
+        label={translateUi('edge_margin_ca9bd9f0')}
         value={marginFrac}
         min={0}
         max={0.25}
@@ -349,7 +353,7 @@ export function OverlayConfig({
         onChange={(next) => write('marginFrac', next)}
       />
       <SliderField
-        label="Opacity"
+        label={translateUi('opacity_6062652e')}
         value={opacity}
         min={0}
         max={1}
@@ -360,12 +364,13 @@ export function OverlayConfig({
 
       {isWatermark ? (
         <p className="text-2xs text-muted-foreground">
-          A watermark covers the whole clip. Use Burn In if you want a timed window.
+          {' '}
+          {translateUi('a_watermark_covers_the_whole_clip_u_0c1c2e3f')}{' '}
         </p>
       ) : (
         <section className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <Label className="text-xs">Visible from</Label>
+            <Label className="text-xs">{translateUi('visible_from_438b4c1f')}</Label>
             <Button
               type="button"
               variant="ghost"
@@ -375,32 +380,35 @@ export function OverlayConfig({
                 patch(nodeId, 'action', { config: { ...current, startSec: null, endSec: null } })
               }
             >
-              Whole clip
+              {' '}
+              {translateUi('whole_clip_09e01b53')}{' '}
             </Button>
           </div>
           <div className="flex items-start gap-1">
             {/* null is "unset", which is NOT 0: an empty box means the start of the clip
                 and the end of the clip, and `resolveOverlayWindow` reads it that way. */}
             <NumberScrubField
-              ariaLabel="Burn-in start seconds"
+              ariaLabel={translateUi('burnInStartSeconds')}
               className="flex-1"
-              label="Start"
+              label={translateUi('start_e4bb9f1e')}
               min={0}
               nullable
-              placeholder="Start"
+              placeholder={translateUi('start_e4bb9f1e')}
               step={0.1}
               suffix="s"
               value={startSec}
               onChange={(next) => write('startSec', next)}
             />
-            <span className="self-end pb-2 text-2xs text-muted-foreground">to</span>
+            <span className="self-end pb-2 text-2xs text-muted-foreground">
+              {translateUi('to_663ea1bf')}
+            </span>
             <NumberScrubField
-              ariaLabel="Burn-in end seconds"
+              ariaLabel={translateUi('burnInEndSeconds')}
               className="flex-1"
-              label="End"
+              label={translateUi('end_f4db1e48')}
               min={0}
               nullable
-              placeholder="End"
+              placeholder={translateUi('end_f4db1e48')}
               step={0.1}
               suffix="s"
               value={endSec}

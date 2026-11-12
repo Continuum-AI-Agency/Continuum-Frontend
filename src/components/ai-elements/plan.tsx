@@ -9,6 +9,7 @@ import {
   MessageSquareIcon,
   UserCheckIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { createContext, useContext, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -169,22 +170,25 @@ export const PlanFooter = (props: PlanFooterProps) => (
 
 export type PlanTriggerProps = ComponentProps<typeof CollapsibleTrigger>;
 
-export const PlanTrigger = ({ className, ...props }: PlanTriggerProps) => (
-  <CollapsibleTrigger
-    {...props}
-    render={
-      <Button
-        className={cn('size-8', className)}
-        data-slot="plan-trigger"
-        size="icon"
-        variant="ghost"
-      >
-        <ChevronsUpDownIcon className="size-4" />
-        <span className="sr-only">Toggle plan</span>
-      </Button>
-    }
-  />
-);
+export const PlanTrigger = ({ className, ...props }: PlanTriggerProps) => {
+  const tUi = useTranslations('common');
+  return (
+    <CollapsibleTrigger
+      {...props}
+      render={
+        <Button
+          className={cn('size-8', className)}
+          data-slot="plan-trigger"
+          size="icon"
+          variant="ghost"
+        >
+          <ChevronsUpDownIcon className="size-4" />
+          <span className="sr-only">{tUi('m_846b5393f6')}</span>
+        </Button>
+      }
+    />
+  );
+};
 
 export type PlanFeedbackProps = Omit<ComponentProps<'div'>, 'onSubmit'> & {
   onFeedback?: (feedback: string) => void;
@@ -194,18 +198,22 @@ export type PlanFeedbackProps = Omit<ComponentProps<'div'>, 'onSubmit'> & {
 
 export const PlanFeedback = ({
   onFeedback,
-  placeholder = 'Provide feedback on this plan...',
+  placeholder: uiProvidedPlaceholder,
   disabled,
   className,
   ...props
 }: PlanFeedbackProps) => {
+  const tUi = useTranslations('common');
+const placeholder=uiProvidedPlaceholder??tUi('m_6ddfa43b62');
+
+
   const [value, setValue] = useState('');
 
   return (
     <div className={cn('mt-4 space-y-3', className)} {...props}>
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <MessageSquareIcon className="size-3" />
-        <span>Human Feedback</span>
+        <span>{tUi('m_88b211e322')}</span>
       </div>
       <div className="relative">
         <textarea
@@ -225,7 +233,7 @@ export const PlanFeedback = ({
             setValue('');
           }}
         >
-          Send Feedback
+          {tUi('m_083a7a6a0c')}
         </Button>
       </div>
     </div>

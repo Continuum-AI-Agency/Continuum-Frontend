@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { BrandBookResponse } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,

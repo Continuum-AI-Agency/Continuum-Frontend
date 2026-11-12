@@ -1,3 +1,5 @@
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
 // The middle of a platform-specific recommendation card: its title and the evidence line that
 // only Google or TikTok has. The chrome around it — chips, impact, the action and "Ask Jaina" —
 // stays in AccountRead, so a Google card and a Meta card differ only where their platforms do.
@@ -78,15 +80,6 @@ function CardAction({ card, target }: { card: PlatformCard; target?: PlatformCar
   );
 }
 
-const AD_STRENGTH_LABEL = {
-  POOR: 'Poor',
-  AVERAGE: 'Average',
-  GOOD: 'Good',
-  EXCELLENT: 'Excellent',
-  PENDING: 'Pending',
-  UNSPECIFIED: 'Unrated',
-} as const;
-
 function Evidence({ children, testId }: { children: React.ReactNode; testId: string }) {
   return (
     <p className="text-muted-foreground text-sm" data-testid={testId}>
@@ -96,6 +89,7 @@ function Evidence({ children, testId }: { children: React.ReactNode; testId: str
 }
 
 function OpenInGoogleAds({ href }: { href: string }) {
+  const uiText = useTranslations('scale');
   return (
     <a
       className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'gap-1.5')}
@@ -104,31 +98,23 @@ function OpenInGoogleAds({ href }: { href: string }) {
       rel="noopener noreferrer"
       target="_blank"
     >
-      Open in Google Ads
+      {uiText('open_in_google_ads_0131249')}
       <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
     </a>
   );
 }
 
 function GoogleDeliveryEvidence({ card }: { card: GoogleDeliveryCard }) {
-  const budget =
-    card.budget_per_day != null
-      ? ` Budget ${formatCurrency(card.budget_per_day, card.currency)}/day.`
-      : '';
-  const disapproved =
-    card.disapproved_ads > 0
-      ? ` ${countLabel(card.disapproved_ads)} ${card.disapproved_ads === 1 ? 'ad' : 'ads'} disapproved.`
-      : '';
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   return (
     <div className="space-y-2">
       <Evidence testId="platform-card-delivery">
-        Google says: {card.reasons.map(googleReasonInWords).join('; ')}.{disapproved}
-        {budget}
+        {uiText('platformGoogleDeliveryEvidence',{reasons:card.reasons.map(code=>googleReasonInWords(code,uiText)).join('; '),hasDisapproved:card.disapproved_ads>0?'yes':'no',count:card.disapproved_ads,hasBudget:card.budget_per_day!=null?'yes':'no',budget:card.budget_per_day!=null?formatCurrency(card.budget_per_day,card.currency,uiLocale):''})}
       </Evidence>
       {card.account_wide ? (
         <p className="text-muted-foreground text-xs" data-testid="platform-card-account-wide">
-          Every enabled campaign is dark, so this is one cause for the whole account, not a problem
-          in {card.campaign_name} alone.
+          {uiText.rich('sentence_fdcdefcd3ae9', { v0: card.campaign_name })}
         </p>
       ) : null}
       <OpenInGoogleAds href={googleDeliveryHref(card.disapproved_ads)} />
@@ -137,10 +123,11 @@ function GoogleDeliveryEvidence({ card }: { card: GoogleDeliveryCard }) {
 }
 
 function TikTokDeliveryEvidence({ card }: { card: TikTokDeliveryCard }) {
+  const uiText = useTranslations('scale');
   if (card.rejected_ads.length === 0) {
     return (
       <Evidence testId="platform-card-delivery">
-        TikTok gives no review reason for it. Check the ad group in TikTok Ads Manager.
+        {uiText('tiktok_gives_no_review_reason_for_it_check_th_026c164')}
       </Evidence>
     );
   }
@@ -150,18 +137,24 @@ function TikTokDeliveryEvidence({ card }: { card: TikTokDeliveryCard }) {
         {card.rejected_ads.map((ad, index) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: a rejection carries no id and never reorders
           <li className="text-foreground" data-testid="platform-card-rejection" key={index}>
-            TikTok's review:{' '}
-            {ad.reasons.length > 0
-              ? ad.reasons.map((reason) => `"${reason}"`).join(', ')
-              : 'no reason given'}
-            .
-            {ad.suggestion ? (
-              <span className="text-muted-foreground"> Its suggestion: "{ad.suggestion}"</span>
-            ) : null}
+            {uiText.rich('sentence_3ffa71f054b1', {
+              v0:
+                ad.reasons.length > 0
+                  ? ad.reasons.map((reason) => `"${reason}"`).join(', ')
+                  : uiText('no_reason_given_bdb1872'),
+              v1: () =>
+                ad.suggestion ? (
+                  <span className="text-muted-foreground">
+                    {uiText.rich('sentence_7222497d4abf', { v0: ad.suggestion })}
+                  </span>
+                ) : null,
+            })}
           </li>
         ))}
       </ul>
-      <p className="text-muted-foreground text-xs">Fix it in TikTok Ads Manager.</p>
+      <p className="text-muted-foreground text-xs">
+        {uiText('fix_it_in_tiktok_ads_manager_0f72143')}
+      </p>
     </div>
   );
 }
@@ -175,6 +168,8 @@ function NegativeTermsEvidence({
   onAddNegatives?: AddNegatives;
   action?: PlatformCardAction;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const [reviewing, setReviewing] = useState(false);
   const [chosen, setChosen] = useState<string[] | null>(null);
   const every = card.terms.map((row) => row.term);
@@ -195,10 +190,10 @@ function NegativeTermsEvidence({
       <table className="w-full text-sm" data-testid="platform-card-terms">
         <thead>
           <tr className="text-left text-muted-foreground text-xs">
-            <th className="font-normal">Search term</th>
-            <th className="text-right font-normal">Spend</th>
-            <th className="text-right font-normal">Clicks</th>
-            <th className="text-right font-normal">Conversions</th>
+            <th className="font-normal">{uiText('search_term_c474ada')}</th>
+            <th className="text-right font-normal">{uiText('spend_85f3d55')}</th>
+            <th className="text-right font-normal">{uiText('clicks_921fc98')}</th>
+            <th className="text-right font-normal">{uiText('conversions_236c262')}</th>
           </tr>
         </thead>
         <tbody>
@@ -206,17 +201,19 @@ function NegativeTermsEvidence({
             <tr data-testid="platform-card-term" key={row.term}>
               <td className="text-foreground">"{row.term}"</td>
               <td className="text-right tabular-nums">
-                {formatCurrency(row.spend, card.currency)}
+                {formatCurrency(row.spend, card.currency, uiLocale)}
               </td>
-              <td className="text-right tabular-nums">{countLabel(row.clicks)}</td>
-              <td className="text-right tabular-nums">{countLabel(row.conversions)}</td>
+              <td className="text-right tabular-nums">{countLabel(row.clicks, uiLocale)}</td>
+              <td className="text-right tabular-nums">{countLabel(row.conversions, uiLocale)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <Evidence testId="platform-card-negatives">
-        Adding them as {card.match_type === 'EXACT' ? 'exact' : 'phrase'} negatives stops about{' '}
-        {formatCurrency(card.savings_per_day, card.currency)}/day.
+        {uiText.rich('sentence_a320fc6109dd', {
+          match: card.match_type,
+          savings: formatCurrency(card.savings_per_day, card.currency, uiLocale),
+        })}
       </Evidence>
       {add && reviewing ? (
         <NegativeTermsReview
@@ -258,7 +255,7 @@ function NegativeTermsEvidence({
               type="button"
               variant="secondary"
             >
-              {negativesLabel(every.length)}
+              {negativesLabel(every.length, uiText)}
             </Button>
           )}
           <Button
@@ -268,7 +265,7 @@ function NegativeTermsEvidence({
             type="button"
             variant="ghost"
           >
-            Choose terms
+            {uiText('choose_terms_21bbafd')}
           </Button>
         </div>
       ) : null}
@@ -286,17 +283,36 @@ function VariantEvidence({
   onAddNegatives?: AddNegatives;
   action?: PlatformCardAction;
 }) {
+  const uiText = useTranslations('scale');
+  const AD_STRENGTH_LABEL = useMemo(
+    () =>
+      ({
+        POOR: uiText('platformStrengthPoor'),
+        AVERAGE: uiText('platformStrengthAverage'),
+        GOOD: uiText('platformStrengthGood'),
+        EXCELLENT: uiText('platformStrengthExcellent'),
+        PENDING: uiText('pending_331551b'),
+        UNSPECIFIED: uiText('platformStrengthUnrated'),
+      }) as const,
+    [uiText],
+  );
+
+  const uiLocale = useLocale();
   switch (card.variant) {
     case 'google_budget_limited': {
-      const projection = budgetProjectionLabel(card);
+      const projection = budgetProjectionLabel(card, uiText, uiLocale);
       return (
         <div className="space-y-1">
           <Evidence testId="platform-card-budget">
-            Campaign budget {formatCurrency(card.budget_per_day, card.currency)}/day,{' '}
-            {percentLabel(card.budget_lost_impression_share)} of impressions lost to budget.{' '}
-            {card.proposed_budget_per_day != null
-              ? `Proposed: ${formatCurrency(card.proposed_budget_per_day, card.currency)}/day.`
-              : 'No increase proposed.'}
+            {uiText.rich('sentence_4b189efcfd2f', {
+              budget: formatCurrency(card.budget_per_day, card.currency, uiLocale),
+              lost: percentLabel(card.budget_lost_impression_share, uiLocale),
+              proposed: card.proposed_budget_per_day != null ? 'yes' : 'no',
+              nextBudget:
+                card.proposed_budget_per_day != null
+                  ? formatCurrency(card.proposed_budget_per_day, card.currency, uiLocale)
+                  : '',
+            })}
           </Evidence>
           {projection ? (
             <p className="text-foreground text-sm" data-testid="platform-card-projection">
@@ -315,54 +331,61 @@ function VariantEvidence({
                 <span className="font-medium">{group.name}</span>
                 {group.ad_strength ? (
                   <span className="text-muted-foreground">
-                    {' '}
-                    · ad strength {AD_STRENGTH_LABEL[group.ad_strength]}
+                    {uiText.rich('sentence_2abd7ae6d841', {
+                      v0: AD_STRENGTH_LABEL[group.ad_strength],
+                    })}
                   </span>
                 ) : null}
                 <span className="text-muted-foreground">
                   {' '}
                   ·{' '}
                   {group.missing.length > 0
-                    ? `missing ${group.missing.join(', ')}`
-                    : 'nothing missing'}
+                    ? uiText('template_e56b7ec51e43', { v0: group.missing.join(', ') })
+                    : uiText('nothing_missing_2407ac2')}
                 </span>
               </li>
             ))}
           </ul>
-          <p className="text-muted-foreground text-xs">{PMAX_NOTE}</p>
+          <p className="text-muted-foreground text-xs">{uiText('platformNotePmax')}</p>
         </div>
       );
     case 'google_video_readonly':
       return (
         <div className="space-y-2">
-          <Evidence testId="platform-card-readonly">{VIDEO_READONLY_NOTE}</Evidence>
+          <Evidence testId="platform-card-readonly">{uiText('platformNoteVideo')}</Evidence>
           <OpenInGoogleAds href={googleAdsCampaignHref(card.campaign_id)} />
         </div>
       );
     case 'tiktok_creative_fatigue':
       return (
         <Evidence testId="platform-card-fatigue">
-          Ad group "{card.ad_group_name}": the same people keep seeing the same video.
-          {card.replacement
-            ? ` "${card.replacement.name}" runs at ${percentLabel(card.replacement.ctr)} CTR.`
-            : ''}
+          {uiText.rich('sentence_789ed24c285f', {
+            name: card.ad_group_name,
+            hasReplacement: card.replacement ? 'yes' : 'no',
+            replacement: card.replacement?.name ?? '',
+            ctr: card.replacement ? percentLabel(card.replacement.ctr, uiLocale) : '',
+          })}
         </Evidence>
       );
     case 'meta_creative_fatigue':
       return (
         <Evidence testId="platform-card-fatigue">
-          Ad set "{card.ad_set_name}": the same people keep seeing the same creative.
-          {card.replacement
-            ? ` "${card.replacement.name}" runs at ${percentLabel(card.replacement.ctr)} CTR.`
-            : ''}
+          {uiText.rich('sentence_9e9861187c2a', {
+            name: card.ad_set_name,
+            hasReplacement: card.replacement ? 'yes' : 'no',
+            replacement: card.replacement?.name ?? '',
+            ctr: card.replacement ? percentLabel(card.replacement.ctr, uiLocale) : '',
+          })}
         </Evidence>
       );
     case 'tiktok_scheduled_decrease':
       return (
         <Evidence testId="platform-card-scheduled">
-          TikTok already spent {formatCurrency(card.spent_today, card.currency)} today, so it
-          refuses a budget under {formatCurrency(card.floor, card.currency)} (105% of today's spend)
-          until midnight. The decrease lands at {scheduledLabel(card.effective_at, card.timezone)}.
+          {uiText.rich('sentence_7e0085829533', {
+            v0: formatCurrency(card.spent_today, card.currency, uiLocale),
+            v1: formatCurrency(card.floor, card.currency, uiLocale),
+            v2: scheduledLabel(card.effective_at, card.timezone, uiText, uiLocale),
+          })}
         </Evidence>
       );
     case 'cross_platform_move':
@@ -378,22 +401,26 @@ function VariantEvidence({
                 <PlatformChip platform={leg.platform} />
                 <span className="text-foreground">{leg.entity_name}</span>
                 <span className="text-muted-foreground tabular-nums">
-                  {formatCurrency(leg.from_per_day, card.currency)} →{' '}
-                  {formatCurrency(leg.to_per_day, card.currency)}/day
+                  {uiText.rich('sentence_e1f0064ca5d3', {
+                    v0: formatCurrency(leg.from_per_day, card.currency, uiLocale),
+                    v1: formatCurrency(leg.to_per_day, card.currency, uiLocale),
+                  })}
                 </span>
                 <span className="font-medium tabular-nums" data-testid="platform-card-leg-change">
-                  {legChangeLabel(leg)}
+                  {legChangeLabel(leg, uiText, uiLocale)}
                 </span>
                 {leg.scheduled_at ? (
                   <span className="text-muted-foreground text-xs">
-                    scheduled for {scheduledLabel(leg.scheduled_at, null)}
+                    {uiText.rich('sentence_afbca6306fe1', {
+                      v0: scheduledLabel(leg.scheduled_at, null, uiText, uiLocale),
+                    })}
                   </span>
                 ) : null}
               </li>
             ))}
           </ul>
           <p className="text-muted-foreground text-xs" data-testid="platform-card-approval-note">
-            {CROSS_PLATFORM_APPROVAL_NOTE}
+            {uiText('platformNoteCross')}
           </p>
         </div>
       );
@@ -402,34 +429,37 @@ function VariantEvidence({
     case 'google_promote_term':
       return (
         <Evidence testId="platform-card-promote">
-          {card.matched_keyword
-            ? `It comes in through "${card.matched_keyword}". `
-            : 'It comes in through a broader keyword. '}
-          As an exact keyword in "{card.ad_group_name}" it gets its own bid and its own ad.
+          {uiText.rich('sentence_bdbaa68277e5', {
+            hasKeyword: card.matched_keyword ? 'yes' : 'no',
+            keyword: card.matched_keyword ?? '',
+            group: card.ad_group_name,
+          })}
         </Evidence>
       );
     case 'google_bid_target': {
-      const label = (value: number) => bidTargetLabel(value, card.strategy, card.currency);
+      const label = (value: number) => bidTargetLabel(value, card.strategy, card.currency, uiLocale);
       return (
         <div className="space-y-1">
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm" data-testid="platform-card-bid">
             <div className="flex gap-1">
-              <dt className="text-muted-foreground">Current target</dt>
+              <dt className="text-muted-foreground">{uiText('current_target_d797871')}</dt>
               <dd className="font-medium tabular-nums">{label(card.current_target)}</dd>
             </div>
             <div className="flex gap-1">
-              <dt className="text-muted-foreground">Actual, {card.window_days} days</dt>
+              <dt className="text-muted-foreground">
+                {uiText.rich('sentence_90e44768d228', { v0: card.window_days })}
+              </dt>
               <dd className="font-medium tabular-nums">
-                {card.actual != null ? label(card.actual) : 'not enough data'}
+                {card.actual != null ? label(card.actual) : uiText('not_enough_data_459c028')}
               </dd>
             </div>
             <div className="flex gap-1">
-              <dt className="text-muted-foreground">Proposed</dt>
+              <dt className="text-muted-foreground">{uiText('proposed_9b0c660')}</dt>
               <dd className="font-medium tabular-nums">{label(card.proposed_target)}</dd>
             </div>
           </dl>
           <p className="text-muted-foreground text-xs" data-testid="platform-card-cooldown">
-            {bidCooldownNote(card.days_since_last_change)}
+            {bidCooldownNote(card.days_since_last_change, uiText)}
           </p>
         </div>
       );
@@ -437,53 +467,65 @@ function VariantEvidence({
     case 'google_low_quality_keyword':
       return (
         <Evidence testId="platform-card-quality">
-          {card.match_type.charAt(0) + card.match_type.slice(1).toLowerCase()} match in ad group "
-          {card.ad_group_name}" · Quality Score {card.quality_score}/10. A keyword this low pays
-          more per click and shows less often.
+          {uiText.rich('sentence_2f530e58cade', {
+            match: card.match_type,
+            group: card.ad_group_name,
+            score: card.quality_score,
+          })}
         </Evidence>
       );
     case 'tiktok_hook_retention':
       return (
         <Evidence testId="platform-card-hook">
-          2-second hold {percentLabel(card.hold_2s)} against {percentLabel(card.portfolio_hold_2s)}{' '}
-          for the portfolio, over {countLabel(card.impressions)} impressions in {card.days_live}{' '}
-          {card.days_live === 1 ? 'day' : 'days'} in "{card.ad_group_name}". The opening loses
-          people before the message lands.
+          {uiText.rich('sentence_6d61e27468e7', {
+            hold: percentLabel(card.hold_2s, uiLocale),
+            portfolio: percentLabel(card.portfolio_hold_2s, uiLocale),
+            impressions: countLabel(card.impressions, uiLocale),
+            days: card.days_live,
+            group: card.ad_group_name,
+          })}
         </Evidence>
       );
     case 'tiktok_spark_candidate':
       return (
         <div className="space-y-1">
           <Evidence testId="platform-card-spark">
-            "{card.post_caption}" · {countLabel(card.views)} views ·{' '}
-            {percentLabel(card.engagement_rate)} engagement
-            {card.account_percentile != null
-              ? ` · better than ${Math.round(card.account_percentile)}% of the account's posts`
-              : ''}
-            {card.target_ad_group_name ? ` · would run in "${card.target_ad_group_name}"` : ''}
+            {uiText.rich('sentence_a39c3060facb', {
+              caption: card.post_caption,
+              views: countLabel(card.views, uiLocale),
+              engagement: percentLabel(card.engagement_rate, uiLocale),
+              hasPercentile: card.account_percentile != null ? 'yes' : 'no',
+              percentile: Math.round(card.account_percentile ?? 0),
+              hasTarget: card.target_ad_group_name ? 'yes' : 'no',
+              target: card.target_ad_group_name ?? '',
+            })}
           </Evidence>
-          <p className="text-muted-foreground text-xs">{SPARK_NOTE}</p>
+          <p className="text-muted-foreground text-xs">{uiText('platformNoteSpark')}</p>
         </div>
       );
     case 'tiktok_budget_below_learning':
       return (
         <Evidence testId="platform-card-learning">
-          TikTok documents a daily budget of {card.required_multiple}× the cost per result for this
-          goal
-          {card.cost_per_result != null
-            ? `; at ${formatCurrency(card.cost_per_result, card.currency)} per result that is ${formatCurrency(card.required_budget_per_day, card.currency)}/day`
-            : `: ${formatCurrency(card.required_budget_per_day, card.currency)}/day`}
-          . {countLabel(card.results_so_far)} {card.results_so_far === 1 ? 'result' : 'results'} so
-          far.
+          {uiText.rich('sentence_10da9a6a57d4', {
+            multiple: card.required_multiple,
+            hasCost: card.cost_per_result != null ? 'yes' : 'no',
+            cost:
+              card.cost_per_result != null
+                ? formatCurrency(card.cost_per_result, card.currency, uiLocale)
+                : '',
+            budget: formatCurrency(card.required_budget_per_day, card.currency, uiLocale),
+            results: card.results_so_far,
+          })}
         </Evidence>
       );
     case 'tiktok_attribution_window':
       return (
         <div className="space-y-1">
-          <Evidence testId="platform-card-attribution">{ATTRIBUTION_WINDOW_NOTE}</Evidence>
+          <Evidence testId="platform-card-attribution">{uiText('platformNoteAttribution')}</Evidence>
           <p className="text-muted-foreground text-xs">
-            Match the windows in TikTok Ads Manager or in{' '}
-            {PLATFORM_NAMES[card.compared_to.platform]} and the comparison comes back.
+            {uiText.rich('sentence_2e0d36cb26fc', {
+              v0: PLATFORM_NAMES[card.compared_to.platform],
+            })}
           </p>
         </div>
       );
@@ -494,22 +536,26 @@ function VariantEvidence({
     case 'google_ad_drag':
       return (
         <Evidence testId="platform-card-ad-drag">
-          {card.winner
-            ? `"${card.winner.label}" converts at ${formatCurrency(card.winner.cost_per_result, card.currency)} in the same ad group. `
-            : ''}
-          Pausing it leaves {countLabel(card.ads_remaining)} enabled{' '}
-          {card.ads_remaining === 1 ? 'ad' : 'ads'}.
+          {uiText.rich('sentence_e4bd43baef8c', {
+            hasWinner: card.winner ? 'yes' : 'no',
+            winner: card.winner?.label ?? '',
+            cost: card.winner
+              ? formatCurrency(card.winner.cost_per_result, card.currency, uiLocale)
+              : '',
+            ads: card.ads_remaining,
+          })}
         </Evidence>
       );
     case 'google_ad_winner':
       return (
         <div className="space-y-2">
           <Evidence testId="platform-card-ad-winner">
-            {countLabel(card.winner.conversions)} conversions in {card.window_days} days.
-            {card.best_assets.length > 0
-              ? ` Google rates these texts Best: ${card.best_assets.map((text) => `"${text}"`).join(', ')}.`
-              : ''}{' '}
-            Write a new ad from it in Google Ads.
+            {uiText.rich('sentence_0f8407739522', {
+              conversions: countLabel(card.winner.conversions, uiLocale),
+              days: card.window_days,
+              hasAssets: card.best_assets.length > 0 ? 'yes' : 'no',
+              assets: card.best_assets.map((text) => `"${text}"`).join(', '),
+            })}
           </Evidence>
           <OpenInGoogleAds href={GOOGLE_ADS_CAMPAIGNS_HREF} />
         </div>
@@ -518,10 +564,13 @@ function VariantEvidence({
       return (
         <div className="space-y-2">
           <Evidence testId="platform-card-saturation">
-            {codeLabel(card.channel_type)} campaign · frequency {countLabel(card.frequency)} against
-            a cap of {countLabel(card.frequency_cap)}
-            {card.unique_users != null ? ` · ${countLabel(card.unique_users)} people` : ''}. Widen
-            or rotate the audience in Google Ads.
+            {uiText.rich('sentence_cc1993641aaa', {
+              channel: codeLabel(card.channel_type, uiText),
+              frequency: countLabel(card.frequency, uiLocale),
+              cap: countLabel(card.frequency_cap, uiLocale),
+              hasUsers: card.unique_users != null ? 'yes' : 'no',
+              users: card.unique_users != null ? countLabel(card.unique_users, uiLocale) : '',
+            })}
           </Evidence>
           <OpenInGoogleAds href={GOOGLE_ADS_CAMPAIGNS_HREF} />
         </div>
@@ -536,12 +585,12 @@ function VariantEvidence({
                 data-testid="platform-card-asset"
                 key={`${asset.field_type}:${asset.label}`}
               >
-                {pmaxAssetLine(asset, card.currency)}
+                {pmaxAssetLine(asset, card.currency, uiText, uiLocale)}
               </li>
             ))}
           </ul>
           <p className="text-muted-foreground text-xs" data-testid="platform-card-assets-note">
-            {PMAX_ASSETS_NOTE}
+            {uiText('platformNotePmaxAssets')}
           </p>
           <OpenInGoogleAds href={GOOGLE_ADS_CAMPAIGNS_HREF} />
         </div>
@@ -560,6 +609,8 @@ export function PlatformCardBody({
    *  own and the caller's button (if any) stands. */
   action?: PlatformCardAction;
 }) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   const mark = markedPlatformOf(card);
   return (
     <div className="space-y-2" data-testid="platform-card" data-variant={card.variant}>
@@ -575,7 +626,7 @@ export function PlatformCardBody({
             <PlatformIcon platform={mark} />
           </span>
         ) : null}
-        {mark ? <span>{platformCardTitle(card)}</span> : platformCardTitle(card)}
+        {mark ? <span>{platformCardTitle(card, uiText, uiLocale)}</span> : platformCardTitle(card, uiText, uiLocale)}
       </h3>
       <VariantEvidence action={action} card={card} onAddNegatives={onAddNegatives} />
       {card.variant === 'google_negative_terms' ? null : <CardAction card={card} target={action} />}

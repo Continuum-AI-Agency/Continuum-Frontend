@@ -77,3 +77,21 @@ export function resolveSection(value: string | string[] | undefined | null): Sec
   if (candidate === 'brand-book') return 'brand-intelligence';
   return isSectionKey(candidate) ? candidate : DEFAULT_SECTION;
 }
+
+export const sectionMessageKeys = {
+  activation: 'sectionActivation',
+  general: 'sectionGeneral',
+  projects: 'sectionProjects',
+  'brand-intelligence': 'sectionBrandIntelligence',
+  skills: 'sectionSkills',
+  prompts: 'sectionPrompts',
+  integrations: 'sectionIntegrations',
+  knowledge: 'sectionKnowledge',
+  billing: 'sectionBilling',
+  profile: 'sectionProfile',
+  connections: 'sectionConnections',
+  activity: 'sectionActivity',
+  brands: 'sectionBrands',
+  notifications: 'sectionNotifications',
+  drive: 'sectionDrive',
+} as const satisfies Record<SectionKey, string>;

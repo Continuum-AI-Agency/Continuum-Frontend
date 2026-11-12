@@ -6,6 +6,7 @@ import {
   type KeyboardCoordinateGetter,
   type UniqueIdentifier,
 } from '@dnd-kit/core';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -106,22 +107,38 @@ const KNOWN_FORMATS = postFormatOptions([]).map((option) => option.toLowerCase()
 export function crossPlatformDropRefusal(
   draft: Pick<OrganicCalendarDraft, 'format' | 'platforms' | 'groupMembers'>,
   platform: OrganicPlatformTag,
+  translate?: (
+    key:
+      | 'dropChangePlatforms'
+      | 'dropStoriesInstagram'
+      | 'dropYoutubeVideo'
+      | 'dropUnsupportedFormat',
+    values?: { platform: string; format: string },
+  ) => string,
 ): string | null {
   if ((draft.groupMembers?.length ?? 0) > 1) {
     return draft.platforms.includes(platform)
       ? null
-      : 'Change its platforms with "Change platforms" on the post';
+      : (translate?.('dropChangePlatforms') ??
+          'Change its platforms with "Change platforms" on the post');
   }
   if (draft.platforms.length === 1 && draft.platforms[0] === platform) return null;
   const format = draft.format.trim().toLowerCase();
   // Stated outright: a Story draft can come from the agent even where the picker offers none.
-  if (format === 'story') return platform === 'instagram' ? null : 'Stories only post to Instagram';
+  if (format === 'story')
+    return platform === 'instagram'
+      ? null
+      : (translate?.('dropStoriesInstagram') ?? 'Stories only post to Instagram');
   if (!KNOWN_FORMATS.includes(format)) return null;
   if (postFormatOptions([platform]).some((option) => option.toLowerCase() === format)) {
     return null;
   }
-  if (platform === 'youtube') return 'YouTube takes video reels only';
-  return `${postPlatformLabel(platform)} does not take a ${draft.format}`;
+  if (platform === 'youtube')
+    return translate?.('dropYoutubeVideo') ?? 'YouTube takes video reels only';
+  return (
+    translate?.('dropUnsupportedFormat', { platform: postPlatformLabel(platform), format }) ??
+    `${postPlatformLabel(platform)} does not take a ${draft.format}`
+  );
 }
 
 function buildSeededDraft({
@@ -179,6 +196,8 @@ export function useCalendarDnD(
   selectedIds: string[],
   rescheduler: UseRescheduleDraftResult,
 ) {
+  const uiText = useTranslations('organic');
+
   const { show } = useToast();
   const { addDraft } = useCalendarStore(useShallow((state) => ({ addDraft: state.addDraft })));
   const [activeDragDraft, setActiveDragDraft] = React.useState<OrganicCalendarDraft | null>(null);
@@ -235,12 +254,12 @@ export function useCalendarDnD(
           const draft = draftsById.get(draftId);
           const refusal =
             draft && plannerCell.platform
-              ? crossPlatformDropRefusal(draft, plannerCell.platform)
+              ? crossPlatformDropRefusal(draft, plannerCell.platform, uiText)
               : null;
           if (refusal) {
             show({
               title: refusal,
-              description: `"${draft?.title || 'Untitled'}" stays where it was.`,
+              description: uiText('draftStays', { title: draft?.title || 'Untitled' }),
               variant: 'warning',
             });
             return;
@@ -272,7 +291,7 @@ export function useCalendarDnD(
         }
       }
     },
-    [daysById, draftsById, platformAccountIds, selectedIds, rescheduler, show],
+    [daysById, draftsById, platformAccountIds, selectedIds, rescheduler, show, uiText],
   );
 
   const handleNativeDrop = React.useCallback(
@@ -292,8 +311,12 @@ export function useCalendarDnD(
       const targetDay = daysByIdRef.current.get(dayId);
       if (!targetDay) return;
 
+      // The schedule keys are protocol weekdays; the visible day label follows the UI locale.
+      const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][
+        new Date(`${targetDay.id}T12:00:00`).getDay()
+      ];
       const fallbackPlatform = (ORGANIC_BETA_LAUNCH_SCHEDULE[
-        targetDay.label as keyof typeof ORGANIC_BETA_LAUNCH_SCHEDULE
+        weekday as keyof typeof ORGANIC_BETA_LAUNCH_SCHEDULE
       ] ?? 'instagram') as OrganicPlatformTag;
 
       const platform = platformKey ?? fallbackPlatform;
@@ -329,14 +352,18 @@ export function useCalendarDnD(
       addDraft(dayId, seededDraft);
 
       show({
-        title: existingSeeded ? 'Duplicate trend seeded' : 'Placeholder created',
+        title: uiText(existingSeeded?'duplicateTrendSeeded':'placeholderCreated'),
         description: existingSeeded
-          ? `"${data.title ?? 'Trend'}" already has a placeholder on ${targetDay.label}. Added another.`
-          : `"${data.title ?? 'Trend'}" added to ${targetDay.label}, ${targetDay.dateLabel}`,
+          ? uiText('placeholderAddedAgain', { title: data.title ?? uiText('trend_9e21771'), day: targetDay.label })
+          : uiText('placeholderAdded', {
+              title: data.title ?? uiText('trend_9e21771'),
+              day: targetDay.label,
+              date: targetDay.dateLabel,
+            }),
         variant: 'info',
       });
     },
-    [addDraft, platformAccountIds, show],
+    [addDraft, platformAccountIds, show, uiText],
   );
 
   return {

@@ -1,6 +1,8 @@
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { enqueueCopyGeneration } from '@/lib/organic/draftEnrichment';
 import { useCalendarStore } from '@/lib/organic/store';
 import type { OrganicCalendarDraft } from '../primitives/types';
@@ -20,6 +22,8 @@ export function useDraftGeneration({
   brandProfileId?: string;
   drafts: OrganicCalendarDraft[];
 }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('organic');
   const {
     gridStatus,
     setGridError,
@@ -71,17 +75,20 @@ export function useDraftGeneration({
           regenerate: true,
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Regeneration failed. Retry or clear this slot.';
+        const message = formatUiError(error);
         updateDraftById(draftId, (current) => ({
           ...current,
           status: 'failed',
           generationError: message,
         }));
-        showToast({ title: 'Could not regenerate', description: message, variant: 'error' });
+        showToast({
+          title: uiText('could_not_regenerate_8cc285c'),
+          description: message,
+          variant: 'error',
+        });
       }
     },
-    [brandProfileId, setGridError, showToast, updateDraftById],
+    [brandProfileId, setGridError, showToast, updateDraftById, uiText, formatUiError],
   );
 
   const handleClearFailure = React.useCallback(

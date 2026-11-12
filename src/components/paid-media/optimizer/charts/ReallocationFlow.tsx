@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // Per-ad-set reallocation flow — which ad sets gained budget and which lost it in
 // the latest cycle, as a sortable InsightDataTable. Each row keeps the diverging
 // bar (gain right/green, loss left/red) INSIDE its change cell, so the visual
@@ -14,7 +19,7 @@
 
 import type { AdSetSnapshot, CycleItemRow, OptimizationObjective } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { intFmt } from '@/components/charts/chart-formatters';
+import { useChartFormatters } from '@/components/charts/use-chart-formatters';
 import {
   type InsightColumn,
   InsightDataTable,
@@ -50,15 +55,24 @@ export function ReallocationFlow({
   snapshotById,
   budgetSource,
 }: ReallocationFlowProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const { intFmt } = useChartFormatters();
   const { gaining, losing, maxAbs, totalMoved, totalFreed, net, movedCount } =
     splitReallocation(items);
   const movedIds = new Set([...gaining, ...losing].map((row) => row.adsetId));
 
   if (movedCount === 0) {
-    return <ChartEmpty message="No budget moved this cycle — allocations held steady." />;
+    return <ChartEmpty message={uiText('no_budget_moved_this_cycle_allocations_held_s_95a69d2')} />;
   }
 
-  const metric = objective ? getOptimizationMetricDefinition(objective) : null;
+  const metric = objective
+    ? localizeOptimizationMetricDefinition(
+        getOptimizationMetricDefinition(objective),
+        optimizerText,
+      )
+    : null;
   const rows = items
     .filter((item) => movedIds.has(item.adset_id))
     .map((item) =>
@@ -70,10 +84,10 @@ export function ReallocationFlow({
     );
 
   const columns: InsightColumn<OptimizerAdsetRow>[] = [
-    nameColumn(),
+    nameColumn(uiText),
     {
       id: 'change',
-      header: 'Change',
+      header: uiText('change_c0bf75b'),
       align: 'right',
       sortValue: (row) => row.changeAbs ?? 0,
       cell: (row) => <ChangeCell currency={currency} maxAbs={maxAbs} row={row} />,
@@ -87,7 +101,7 @@ export function ReallocationFlow({
         header: metric.costLabel,
         align: 'right',
         sortValue: (row) => row.cost ?? -1,
-        cell: (row) => (row.cost != null ? formatCpa(row.cost, currency) : DASH),
+        cell: (row) => (row.cost != null ? formatCpa(row.cost, currency, uiLocale) : DASH),
       },
       {
         id: 'results',
@@ -106,34 +120,44 @@ export function ReallocationFlow({
           reallocation. A non-zero net on a budget-neutral portfolio is the signal. */}
       <div className="space-y-0.5">
         <p className="text-xs text-muted-foreground tabular-nums">
-          <span className="text-success">+{formatCurrency(totalMoved, currency)}</span> to{' '}
-          {gaining.length} ·{' '}
-          <span className="text-destructive">−{formatCurrency(totalFreed, currency)}</span> from{' '}
-          {losing.length} · net{' '}
-          <span
-            className={cn(
-              Math.abs(net) < 1
-                ? 'text-muted-foreground'
-                : net > 0
-                  ? 'text-success'
-                  : 'text-destructive',
-            )}
-          >
-            {net >= 0 ? '+' : '−'}
-            {formatCurrency(Math.abs(net), currency)}
-          </span>{' '}
-          across {movedCount} {movedCount === 1 ? 'ad set' : 'ad sets'}
+          {uiText.rich('sentence_0a1d48949a5a', {
+            gained: () => (
+              <span className="text-success">
+                +{formatCurrency(totalMoved, currency, uiLocale)}
+              </span>
+            ),
+            gaining: gaining.length,
+            freed: () => (
+              <span className="text-destructive">
+                −{formatCurrency(totalFreed, currency, uiLocale)}
+              </span>
+            ),
+            losing: losing.length,
+            net: () => (
+              <span
+                className={cn(
+                  Math.abs(net) < 1
+                    ? 'text-muted-foreground'
+                    : net > 0
+                      ? 'text-success'
+                      : 'text-destructive',
+                )}
+              >
+                {net >= 0 ? '+' : '−'}
+                {formatCurrency(Math.abs(net), currency, uiLocale)}
+              </span>
+            ),
+            count: movedCount,
+          })}
         </p>
         {budgetSource === 'observed' && Math.abs(net) >= 1 ? (
           <p className="text-xs text-warning">
-            This portfolio reallocates within current spend, so the net should be about zero. A gap
-            this size usually means ad-set budgets changed in Meta since the last cycle.
+            {uiText('this_portfolio_reallocates_within_current_spe_17a6592')}
           </p>
         ) : null}
         {budgetSource === 'fixed' && net <= -1 ? (
           <p className="text-xs text-muted-foreground">
-            Total spend is coming down because this portfolio targets a fixed daily budget. Switch
-            it to &ldquo;Match current spend&rdquo; in Manage to reallocate instead.
+            {uiText('total_spend_is_coming_down_because_this_portf_90e5cb8')}
           </p>
         ) : null}
       </div>
@@ -156,6 +180,7 @@ function ChangeCell({
   maxAbs: number;
   currency?: string | null;
 }) {
+  const uiLocale = useLocale();
   const change = row.changeAbs ?? 0;
   const positive = change > 0;
   const width = Math.max(4, pct(Math.abs(change), maxAbs));
@@ -179,7 +204,7 @@ function ChangeCell({
         )}
       >
         {positive ? '+' : '−'}
-        {formatCurrency(Math.abs(change), currency)}
+        {formatCurrency(Math.abs(change), currency, uiLocale)}
         <span className="text-xs text-muted-foreground">{pctLabel}</span>
       </span>
     </div>

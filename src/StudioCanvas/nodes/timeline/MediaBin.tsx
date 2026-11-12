@@ -2,6 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { Image, Music2, Plus, Video, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,8 @@ function BinTile({
   onPlace: (source: TimelineInputSource) => void;
   onRemove?: (sourceId: string) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `${BIN_DRAG_PREFIX}${source.nodeId}`,
     data: { type: 'bin', sourceNodeId: source.nodeId, kind: source.kind },
@@ -91,7 +94,9 @@ function BinTile({
           event.stopPropagation();
           onPlace(source);
         }}
-        aria-label={`Add ${source.label} to the timeline`}
+        aria-label={translateUi('add_value0_to_the_timeline_1dc43811', {
+          value0: String(source.label),
+        })}
       >
         <Plus className="h-3.5 w-3.5" />
       </Button>
@@ -106,7 +111,9 @@ function BinTile({
             event.stopPropagation();
             onRemove(source.nodeId);
           }}
-          aria-label={`Remove ${source.label} from the media bin`}
+          aria-label={translateUi('remove_value0_from_the_media_bin_c53c365b', {
+            value0: String(source.label),
+          })}
         >
           <X className="h-3.5 w-3.5" />
         </Button>
@@ -126,15 +133,20 @@ export function MediaBin({
   onRemove?: (sourceId: string) => void;
   action?: ReactNode;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <div className="flex h-full flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-semibold text-muted-foreground">Media bin</div>
+        <div className="text-xs font-semibold text-muted-foreground">
+          {translateUi('media_bin_5d11b2e0')}
+        </div>
         {action}
       </div>
       {pool.length === 0 ? (
         <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 p-4 text-center text-2xs text-muted-foreground">
-          Wire image, video, or audio nodes into this editor to place them here.
+          {' '}
+          {translateUi('wire_image_video_or_audio_nodes_int_95fb00c4')}{' '}
         </div>
       ) : (
         <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto pr-1">

@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // The portfolio's name line, in two halves (P1, "Lectura continua"):
 //
@@ -74,6 +77,7 @@ export function PortfolioHeaderBar({
   name,
   tabs,
 }: PortfolioHeaderBarProps) {
+  const uiText = useTranslations('scale');
   const SecondaryIcon = header.secondary ? SECONDARY_ICON[header.secondary.kind] : null;
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2" data-testid="portfolio-header">
@@ -134,7 +138,7 @@ export function PortfolioHeaderBar({
         ) : null}
         <Button disabled={running} onClick={onRun} size="sm" type="button" variant="cta">
           <RefreshCwIcon className={cn(running && 'animate-spin')} />
-          Run now
+          {uiText('run_now_0991397')}
         </Button>
       </div>
     </div>
@@ -142,6 +146,11 @@ export function PortfolioHeaderBar({
 }
 
 export function PortfolioFactsLine({ header, onEditSetting }: PortfolioFactsLineProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+
   const chips = LINE_SETTINGS.flatMap((setting) =>
     header.chips.filter((chip) => chip.setting === setting),
   );
@@ -167,13 +176,15 @@ export function PortfolioFactsLine({ header, onEditSetting }: PortfolioFactsLine
           data-setting={chip.setting}
           data-testid="header-chip"
           onClick={() => onEditSetting(chip.setting)}
-          title={`Edit the ${chip.label.toLowerCase()} in Manage`}
+          title={uiText('template_88d6e768fef4', { v0: chip.label.toLowerCase() })}
           type="button"
         >
           {/* The objective arrives as the metric's own label ("conversations"); the line
            *  names it in the words the sentences use. */}
           {chip.setting === 'objective'
-            ? `objective: ${resultNouns(chip.value, chip.value).many}`
+            ? uiText('template_79c5c0a9de97', {
+                v0: resultNouns(chip.value, chip.value, optimizerText).many,
+              })
             : chip.value}
         </button>
       ),

@@ -2,7 +2,7 @@
 
 import type { ClientRenderJob } from '@continuum/contracts';
 import { ChevronDown, Cpu, ExternalLink, Film, Loader2, RotateCcw, Square } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useRouter } from '@/i18n/navigation';
 import { useClientRenderQueue } from '@/lib/client-render/ClientRenderProvider';
 
 const VISIBLE_STATES = new Set<ClientRenderJob['state']>([
@@ -33,6 +34,8 @@ const KIND_LABEL: Record<ClientRenderJob['kind'], string> = {
 };
 
 export function LibraryRenderQueue() {
+  const translateUi = useUiTranslations('library');
+
   const queue = useClientRenderQueue();
   const router = useRouter();
   const [consentJob, setConsentJob] = useState<ClientRenderJob | null>(null);
@@ -74,12 +77,18 @@ export function LibraryRenderQueue() {
           />
           <div className="min-w-0 flex-1">
             <h2 id="library-render-queue-title" className="text-sm font-semibold">
-              Jobs
+              {' '}
+              {translateUi('jobs_2f17a0f8')}{' '}
             </h2>
             <p className="text-xs text-muted-foreground">
               {failed > 0
-                ? `${failed} failed · ${jobs.length} on this device`
-                : `${jobs.length} waiting on this device`}
+                ? translateUi('value0_failed_value1_on_this_device_4c140e5b', {
+                    value0: String(failed),
+                    value1: String(jobs.length),
+                  })
+                : translateUi('value0_waiting_on_this_device_9be5cafa', {
+                    value0: String(jobs.length),
+                  })}
             </p>
           </div>
           <span className="text-xs tabular-nums text-muted-foreground">{jobs.length}</span>
@@ -108,8 +117,12 @@ export function LibraryRenderQueue() {
                   <div>
                     <h3 className="truncate text-sm font-semibold">{job.title}</h3>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {job.inputs.length} durable input{job.inputs.length === 1 ? '' : 's'} ·{' '}
-                      {job.phase ?? (job.state === 'ready' ? 'Waiting for an operator' : job.state)}
+                      {job.inputs.length} {translateUi('durable_input_4de54763')}
+                      {job.inputs.length === 1 ? '' : 's'} ·{' '}
+                      {job.phase ??
+                        (job.state === 'ready'
+                          ? translateUi('waiting_for_an_operator_55735fa7')
+                          : job.state)}
                     </p>
                   </div>
 
@@ -131,7 +144,7 @@ export function LibraryRenderQueue() {
                       type="button"
                       size="icon-xs"
                       variant="ghost"
-                      aria-label="View render source"
+                      aria-label={translateUi('view_render_source_4948f59f')}
                       onClick={() => window.location.assign(job.executionSpec.origin.viewHref)}
                     >
                       <ExternalLink />
@@ -144,8 +157,7 @@ export function LibraryRenderQueue() {
                         disabled={!queue.canExecute(job)}
                         onClick={() => setConsentJob(job)}
                       >
-                        <Cpu />
-                        Render
+                        <Cpu /> {translateUi('render_6d89eb7d')}{' '}
                       </Button>
                     ) : null}
                     {job.state === 'failed' ? (
@@ -156,8 +168,7 @@ export function LibraryRenderQueue() {
                         variant="outline"
                         onClick={() => void queue.retry(job)}
                       >
-                        <RotateCcw />
-                        Retry
+                        <RotateCcw /> {translateUi('retry_942087cc')}{' '}
                       </Button>
                     ) : null}
                     {active && local ? (
@@ -168,13 +179,13 @@ export function LibraryRenderQueue() {
                         variant="outline"
                         onClick={() => void queue.stop(job)}
                       >
-                        <Square />
-                        Stop
+                        <Square /> {translateUi('stop_cae7d57b')}{' '}
                       </Button>
                     ) : null}
                     {active && !local ? (
                       <span className="ml-auto text-xs text-muted-foreground">
-                        On another device
+                        {' '}
+                        {translateUi('on_another_device_d0db529f')}{' '}
                       </span>
                     ) : null}
                   </div>
@@ -188,19 +199,20 @@ export function LibraryRenderQueue() {
       <Dialog open={Boolean(consentJob)} onOpenChange={(open) => !open && setConsentJob(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Use this device to render?</DialogTitle>
+            <DialogTitle>{translateUi('use_this_device_to_render_b69fdd33')}</DialogTitle>
             <DialogDescription>
-              Rendering uses this device&apos;s CPU/GPU. Keep this tab open. One job runs at a time.
-              You can stop at any time; unfinished jobs return to the shared queue.
+              {' '}
+              {translateUi('rendering_uses_this_device_s_cpu_gp_56dddc4f')}{' '}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConsentJob(null)}>
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
             <Button type="button" disabled={starting} onClick={() => void confirm()}>
-              {starting ? <Loader2 className="animate-spin" /> : <Cpu />}
-              Claim and render
+              {starting ? <Loader2 className="animate-spin" /> : <Cpu />}{' '}
+              {translateUi('claim_and_render_c8654218')}{' '}
             </Button>
           </DialogFooter>
         </DialogContent>

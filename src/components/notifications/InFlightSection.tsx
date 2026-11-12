@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // The live half of the notification box. Durable notifications below it are a record of
 // things that already happened; this is work that is happening now, and it is the only
 // place in the app where an organic generation and a Jaina report can be seen together.
@@ -14,9 +16,9 @@ import {
   XCircleIcon,
   XIcon,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useRouter } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import type { InFlightJob, UseInFlightJobsResult } from './useInFlightJobs';
 
@@ -53,6 +55,7 @@ function InFlightRow({
   onDownload: (job: InFlightJob) => void;
   onNavigate: (href: string) => void;
 }) {
+  const uiText = useTranslations('common');
   return (
     <div className="flex items-center gap-2 rounded-md px-3 py-2 transition-colors hover:bg-muted/50">
       <StatusIcon job={job} />
@@ -86,7 +89,7 @@ function InFlightRow({
 
       {job.canCancel && (
         <Button
-          aria-label={`Stop ${job.title}`}
+          aria-label={uiText('m_be8fb05712', { v0: String(job.title) })}
           className="size-5 shrink-0 p-0 text-muted-foreground hover:text-destructive"
           onClick={() => onCancel(job)}
           size="sm"
@@ -104,7 +107,7 @@ function InFlightRow({
           variant="ghost"
         >
           <RefreshCwIcon className="size-3" />
-          Retry
+          {uiText('retry_942087c')}
         </Button>
       )}
 
@@ -116,7 +119,7 @@ function InFlightRow({
           variant="ghost"
         >
           <DownloadIcon className="size-3" />
-          Open
+          {uiText('open_ed077f3')}
         </Button>
       )}
 
@@ -127,7 +130,7 @@ function InFlightRow({
           size="sm"
           variant="ghost"
         >
-          Open
+          {uiText('open_ed077f3')}
         </Button>
       )}
     </div>
@@ -141,6 +144,8 @@ export function InFlightSection({
   feed: UseInFlightJobsResult;
   onNavigate?: () => void;
 }) {
+  const tUi = useTranslations('common');
+
   const router = useRouter();
   const { jobs, runningCount, windowStats } = feed;
 
@@ -155,10 +160,12 @@ export function InFlightSection({
     <div className="mb-2 border-b border-border/60 pb-2">
       <div className="mb-1 flex items-center justify-between gap-2 px-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          In flight
+          {tUi('m_58b6dc18cf')}
         </p>
         <span className="text-3xs tabular-nums text-muted-foreground/80">
-          {runningCount > 0 ? `${runningCount} running` : 'All settled'}
+          {runningCount > 0
+            ? tUi('m_ec898d4e2f', { v0: String(runningCount) })
+            : tUi('m_d4be1325e5')}
         </span>
       </div>
 
@@ -177,9 +184,12 @@ export function InFlightSection({
 
       {windowStats && (
         <p className="mt-1 px-1 text-3xs tabular-nums text-muted-foreground/70">
-          {windowStats.made} made · {windowStats.completed} completed
-          {windowStats.failed > 0 ? ` · ${windowStats.failed} failed` : ''} · last{' '}
-          {windowStats.windowMinutes}m
+          {windowStats.made}
+          {tUi('m_697de63c5b')}
+          {windowStats.completed}
+          {tUi('m_bf9fb8c448')}
+          {windowStats.failed > 0 ? tUi('m_3c4ad95422', { v0: String(windowStats.failed) }) : ''}
+          {tUi('m_fb85b3781d')} {windowStats.windowMinutes}m
         </p>
       )}
     </div>

@@ -1,4 +1,5 @@
 'use client';
+
 import type {
   CreativeOutputManifest,
   CycleItemRow,
@@ -6,6 +7,7 @@ import type {
   PlatformId,
   PortfolioConfig,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Data layer for the Paid Media Optimizer surface. Every authenticated RPC and
 // Edge read is owned by React Query: the cache has deliberate freshness windows,
@@ -30,7 +32,6 @@ import {
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
   type AdsetTargeting,
-  type InactiveAdsetWindows,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -66,6 +67,7 @@ import {
   type EnrollResult,
   EnrollResultSchema,
   flightOf,
+  type InactiveAdsetWindows,
   type InsightState,
   OptimizerActionRowSchema,
   OptimizerAdsetInventoryEnvelopeSchema,
@@ -2382,20 +2384,25 @@ export function useCurrentMoves(
   adAccountId: string,
   items: CycleItemRow[],
 ): CurrentMoves {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const enrolled = useOptimizerEnrolledAdsets(portfolio.id);
   const rosterIds = useMemo(
     () => (enrolled.isSuccess ? new Set(enrolled.data.map((row) => row.adset_id)) : null),
     [enrolled.isSuccess, enrolled.data],
   );
   const unnamed = useMemo(
-    () => currentMoves(items, portfolio, rosterIds),
-    [items, portfolio, rosterIds],
+    () => currentMoves(items, portfolio, rosterIds, undefined, uiText, uiLocale),
+    [items, portfolio, rosterIds, uiText, uiLocale],
   );
   const leftRoster = unnamed.notes.size > 0;
   const enrollments = useOptimizerAccountEnrollments(leftRoster ? brandId : null, adAccountId);
   return useMemo(
-    () => (leftRoster ? currentMoves(items, portfolio, rosterIds, enrollments.data) : unnamed),
-    [leftRoster, items, portfolio, rosterIds, enrollments.data, unnamed],
+    () =>
+      leftRoster
+        ? currentMoves(items, portfolio, rosterIds, enrollments.data, uiText, uiLocale)
+        : unnamed,
+    [leftRoster, items, portfolio, rosterIds, enrollments.data, unnamed, uiText, uiLocale],
   );
 }
 

@@ -1,8 +1,10 @@
 'use client';
 
 import { type OmniGenRequest, omniGenStreamFrameSchema } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { getApiUrl } from '@/lib/api/config';
 import { authedSseHeaders } from '@/lib/api/sseHeaders';
 import {
@@ -43,6 +45,12 @@ type ExecutionResult = {
 };
 
 export function useWorkflowExecution() {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+  const translationRef = useRef(translateUi);
+  translationRef.current = translateUi;
+
   const [streamState, setStreamState] = useState<ExecutionStreamState>({ status: 'idle' });
   const activeControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeReadersRef = useRef<Map<string, ReadableStreamDefaultReader<Uint8Array>>>(new Map());
@@ -129,7 +137,7 @@ export function useWorkflowExecution() {
           // A billing refusal already has its Buy credits / Upgrade toast; the node says why.
           const refusal = await notifyPaymentRequiredResponse(res);
           if (refusal) {
-            const { title } = generationErrorCopy(refusal.error);
+            const { title } = generationErrorCopy(refusal.error, undefined, translateUi);
             setStreamState({ status: 'error', error: title, currentNodeId: nodeId });
             return { success: false, error: title, errorCode: refusal.error };
           }
@@ -409,11 +417,11 @@ export function useWorkflowExecution() {
               }
 
               if (eventName === 'error') {
-                const message = parsed.message ?? 'Stream error';
+                const message = parsed.message ?? translateUi('stream_error_38f63d7c');
                 streamError = { message, code: parsed.code };
                 setStreamState((prev) => ({ ...prev, status: 'error', error: message }));
                 if (!notifyStreamPaymentRequired(parsed.code)) {
-                  const copy = generationErrorCopy(parsed.code, message);
+                  const copy = generationErrorCopy(parsed.code, message, translateUi);
                   show({ title: copy.title, description: copy.guidance, variant: 'error' });
                 }
               }
@@ -467,15 +475,15 @@ export function useWorkflowExecution() {
 
         return { success: false, error: 'No output received from generation' };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('Generation failed', message);
+        const message = uiErrorText(error);
+        console.error(translateUi('generation_failed_78257562'), message);
         setStreamState({ status: 'error', error: message, currentNodeId: nodeId });
         if (!isCancelledRef.current) {
           const description = message.includes('Failed to fetch')
-            ? 'Unable to reach the AI Studio API. Check your API base URL and that the backend is running.'
+            ? translateUi('unable_to_reach_the_ai_studio_api_c_13f964d1')
             : message;
           show({
-            title: 'Generation failed',
+            title: translateUi('generation_failed_78257562'),
             description,
             variant: 'error',
           });
@@ -486,7 +494,7 @@ export function useWorkflowExecution() {
         activeReadersRef.current.delete(nodeId);
       }
     },
-    [show],
+    [show, translateUi, uiErrorText],
   );
 
   const executeGeneration = useCallback(
@@ -620,7 +628,11 @@ export function useWorkflowExecution() {
 
         if (streamError) {
           if (!billingRefused) {
-            show({ title: 'Omni generation failed', description: streamError, variant: 'error' });
+            show({
+              title: translateUi('omni_generation_failed_0c757f6c'),
+              description: streamError,
+              variant: 'error',
+            });
           }
           return { success: false, error: streamError, interactionId };
         }
@@ -629,9 +641,13 @@ export function useWorkflowExecution() {
         }
         return { success: true, output, interactionId, assetId, durationSec };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = uiErrorText(error);
         if (!isCancelledRef.current) {
-          show({ title: 'Omni generation failed', description: message, variant: 'error' });
+          show({
+            title: translateUi('omni_generation_failed_0c757f6c'),
+            description: message,
+            variant: 'error',
+          });
         }
         setStreamState({ status: 'error', error: message, currentNodeId: nodeId });
         return { success: false, error: message };
@@ -640,10 +656,13 @@ export function useWorkflowExecution() {
         releaseController(nodeId, controller);
       }
     },
-    [resolveInitUrl, registerController, releaseController, show],
+    [resolveInitUrl, registerController, releaseController, show, uiErrorText, translateUi],
   );
 
   return {
+    get translateUi() {
+      return translationRef.current;
+    },
     streamState,
     executeGeneration,
     executeVideoExtension,

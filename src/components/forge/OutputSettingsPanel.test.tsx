@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { EncodeSettings } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type ReactNode, useState } from 'react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 import {
   cleanup,
   fireEvent,
@@ -8,13 +14,7 @@ import {
   screen,
   waitFor,
   within,
-} from '@testing-library/react';
-import { type ReactNode, useState } from 'react';
-import {
-  chooseOption,
-  installPickerDomGlobals,
-  openSelect,
-} from '@/components/automations/workspace/pickers/pickerTestHarness';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { forgeQueryKeys } from './queryKeys';
 
 const contract = () => ({

@@ -28,6 +28,7 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { Fragment, type ReactNode, type Ref, useId, useMemo, useState } from 'react';
 import { draftDropTarget, type SelectedFile } from '@/components/forge/AiVariationsDialog';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
@@ -97,6 +98,8 @@ export function TemplatePicker({
   onChange: (ref: string) => void;
   onHighlight?: (template: ApiRenderTemplateSummary) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [open, setOpen] = useState(false);
   // Controlled because cmdk only reports a highlight change for a controlled value.
   const [highlighted, setHighlighted] = useState('');
@@ -138,7 +141,7 @@ export function TemplatePicker({
             size="sm"
             variant="outline"
             className="w-64 justify-between gap-1.5"
-            aria-label="Template"
+            aria-label={translateUi('template_0575f29d')}
           >
             <span className="truncate">{current ? templateLabel(current) : placeholder}</span>
             <ChevronDown className="size-3.5 shrink-0" aria-hidden />
@@ -155,9 +158,12 @@ export function TemplatePicker({
             if (template) onHighlight?.(template);
           }}
         >
-          <CommandInput placeholder="Search templates…" aria-label="Search templates" />
+          <CommandInput
+            placeholder={translateUi('search_templates_9eb0054d')}
+            aria-label={translateUi('search_templates_04b9835b')}
+          />
           <CommandList>
-            <CommandEmpty>No template matches.</CommandEmpty>
+            <CommandEmpty>{translateUi('no_template_matches_7e5eeb05')}</CommandEmpty>
             {groups.map(({ heading, templates: members }) => (
               <CommandGroup key={heading ?? 'all'} heading={heading ?? undefined}>
                 {/* Keyed and valued by the REF. Two templates can share a key — 133 exists in two
@@ -186,7 +192,9 @@ export function TemplatePicker({
                       </span>
                       {/* Null means nobody checked, which must not read as "none missing". */}
                       {template.fontsMissing ? (
-                        <Badge variant="warning">{template.fontsMissing} fonts missing</Badge>
+                        <Badge variant="warning">
+                          {template.fontsMissing} {translateUi('fonts_missing_e24f938e')}
+                        </Badge>
                       ) : null}
                       {ref === currentRef ? <Check aria-hidden /> : null}
                     </CommandItem>
@@ -310,6 +318,10 @@ export function RenderToolbar({
   /** The set holds an unconfirmed render: Render opens it, and says so. */
   heldLabel?: string;
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const current = templates.find(
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
   );
@@ -323,17 +335,22 @@ export function RenderToolbar({
         )
       : []);
   return (
-    <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Render">
+    <div
+      className="flex flex-wrap items-center gap-2"
+      role="toolbar"
+      data-render-toolbar
+      aria-label={translateUi('render_6d89eb7d')}
+    >
       <Control className="max-w-full min-w-0 flex-wrap">
         <TemplatePicker
           templates={templates}
           currentRef={currentRef}
           placeholder={
             templatesLoading
-              ? 'Loading templates…'
+              ? translateUi('loading_templates_3800ee71')
               : templates.length
-                ? 'Choose a template'
-                : 'No renderable templates yet'
+                ? translateUi('choose_a_template_329a8ef3')
+                : translateUi('no_renderable_templates_yet_dcf5a1ed')
           }
           onChange={onTemplateChange}
           onHighlight={onTemplateHighlight}
@@ -354,21 +371,24 @@ export function RenderToolbar({
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  aria-label="Template settings"
+                  aria-label={translateUi('template_settings_5a053b14')}
                   onClick={onOpenTemplateSettings}
                 >
                   <Settings2 className="size-4" aria-hidden />
                 </Button>
               }
             />
-            <TooltipContent>Template settings — layers, variants, revisions</TooltipContent>
+            <TooltipContent>
+              {translateUi('template_settings_layers_variants_r_c56f6bd3')}
+            </TooltipContent>
           </Tooltip>
         ) : null}
         {ready && siblings.length > 0 ? (
           <label className="flex items-center gap-1.5 text-xs">
-            Variant
+            {' '}
+            {translateUi('variant_3f19fe84')}{' '}
             <select
-              aria-label="Template source variant"
+              aria-label={translateUi('template_source_variant_04aa003a')}
               value={currentRef}
               onChange={(event) => onTemplateChange(event.target.value)}
               className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
@@ -389,18 +409,20 @@ export function RenderToolbar({
         ) : null}
         {ready && variants.length > 1 && onVariantChange ? (
           <label className="flex items-center gap-1.5 text-xs">
-            Artboard
+            {' '}
+            {translateUi('artboard_6536eef7')}{' '}
             <select
-              aria-label="Artboard"
+              aria-label={translateUi('artboard_6536eef7')}
               value={variant === null ? 'mixed:' : variant}
               onChange={(event) => onVariantChange(event.target.value)}
               className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
               disabled={busy !== null}
             >
-              <option value="">All artboards</option>
+              <option value="">{translateUi('all_artboards_bc5dc688')}</option>
               {variant === null ? (
                 <option value="mixed:" disabled>
-                  Mixed selections
+                  {' '}
+                  {translateUi('mixed_selections_0403cf49')}{' '}
                 </option>
               ) : null}
               {variants.map((item) => (
@@ -425,24 +447,24 @@ export function RenderToolbar({
                     size="sm"
                     variant="outline"
                     className="gap-1.5"
-                    title="Add rows — or drop files here to draft them with AI"
+                    title={translateUi('add_rows_or_drop_files_here_to_draf_b8d62494')}
                     {...draftDropTarget(canAddRows ? onDraftWithAi : null)}
                   >
-                    <Plus className="size-3.5" aria-hidden /> Add
+                    <Plus className="size-3.5" aria-hidden /> {translateUi('add_9fd728c6')}{' '}
                     <ChevronDown className="size-3.5" aria-hidden />
                   </Button>
                 }
               />
               <DropdownMenuContent align="start" className="w-56">
                 <DropdownMenuItem disabled={!canAddRows} onClick={onAddRow}>
-                  <Plus aria-hidden /> Blank row
+                  <Plus aria-hidden /> {translateUi('blank_row_a35c43ee')}{' '}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={!canAddRows} onClick={() => onDraftWithAi()}>
-                  <Sparkles aria-hidden /> Draft with AI…
+                  <Sparkles aria-hidden /> {translateUi('draft_with_ai_27ee7657')}{' '}
                 </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger disabled={inputSets.length === 0 || !canAddRows}>
-                    <FolderOpen aria-hidden /> From saved inputs
+                    <FolderOpen aria-hidden /> {translateUi('from_saved_inputs_2104de04')}{' '}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="w-56">
                     {inputSets.map((set) => (
@@ -455,13 +477,13 @@ export function RenderToolbar({
                 {layerSwitches.length > 0 ? (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
-                      <Eye aria-hidden /> Switch a layer per row
+                      <Eye aria-hidden /> {translateUi('switch_a_layer_per_row_621d6fc7')}{' '}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-64">
                       <DropdownMenuGroup>
                         <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
-                          Adds a Shown / Hidden column to this template. Every row starts as
-                          designed.
+                          {' '}
+                          {translateUi('adds_a_shown_hidden_column_to_this__1e2fefe5')}{' '}
                         </DropdownMenuLabel>
                         {layerSwitches.map((variable) => (
                           <DropdownMenuItem
@@ -484,25 +506,27 @@ export function RenderToolbar({
               <DropdownMenuTrigger
                 render={
                   <Button type="button" size="sm" variant="outline" className="gap-1.5">
-                    <Upload className="size-3.5" aria-hidden /> Import
+                    <Upload className="size-3.5" aria-hidden /> {translateUi('import_2cff9baa')}{' '}
                     <ChevronDown className="size-3.5" aria-hidden />
                   </Button>
                 }
               />
               <DropdownMenuContent align="start" className="w-72">
                 <DropdownMenuItem onClick={onUpload}>
-                  <Upload aria-hidden /> Upload CSV or XLSX…
+                  <Upload aria-hidden /> {translateUi('upload_csv_or_xlsx_f1301fab')}{' '}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDownloadTemplate}>
-                  <Download aria-hidden /> Download spreadsheet template
+                  <Download aria-hidden /> {translateUi(
+                    'download_spreadsheet_template_be1dfcc7',
+                  )}{' '}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="flex gap-1.5 font-normal text-muted-foreground">
                     <ClipboardPaste className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                     <span className="text-2xs">
-                      Or paste rows onto the grid: copy a header line of variable names and the rows
-                      under it straight from a spreadsheet.
+                      {' '}
+                      {translateUi('or_paste_rows_onto_the_grid_copy_a__ef4c25e9')}{' '}
                     </span>
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
@@ -513,7 +537,7 @@ export function RenderToolbar({
           <Control className="ml-auto">
             <span
               role="status"
-              aria-label="Save status"
+              aria-label={translateUi('save_status_a371cfda')}
               title={saveStatus?.phase === 'failed' ? saveStatus.reason : undefined}
               className={cn(
                 'max-w-96 truncate text-2xs tabular-nums',
@@ -521,18 +545,26 @@ export function RenderToolbar({
               )}
             >
               {saveStatus?.phase === 'saving'
-                ? 'Saving…'
+                ? translateUi('saving_23e39291')
                 : saveStatus?.phase === 'failed'
-                  ? `Couldn’t save: ${saveStatus.reason}${saveStatus.retrying ? ' Retrying…' : ''}`
+                  ? translateUi('couldn_t_save_value0_value1_e970f1cd', {
+                      value0: String(saveStatus.reason),
+                      value1: String(saveStatus.retrying ? translateUi('retrying_ad08a5b4') : ''),
+                    })
                   : dirty
-                    ? 'Unsaved changes'
+                    ? translateUi('unsaved_changes_a710c2b9')
                     : saveStatus?.phase === 'saved'
-                      ? `Saved · ${formatRelativeTime(saveStatus.at)}`
+                      ? translateUi('saved_value0_25d8c5ca', {
+                          value0: String(
+                            formatRelativeTime(saveStatus.at, undefined, currentUiLocale),
+                          ),
+                        })
                       : null}
             </span>
             {saveStatus?.phase === 'failed' && saveStatus.onRepair ? (
               <Button type="button" size="xs" variant="outline" onClick={saveStatus.onRepair}>
-                Open template
+                {' '}
+                {translateUi('open_template_42b4387d')}{' '}
               </Button>
             ) : saveStatus?.phase === 'failed' && !saveStatus.retrying && saveStatus.onRetry ? (
               <Button
@@ -542,7 +574,8 @@ export function RenderToolbar({
                 disabled={busy !== null}
                 onClick={saveStatus.onRetry}
               >
-                Retry save
+                {' '}
+                {translateUi('retry_save_71fdfa79')}{' '}
               </Button>
             ) : null}
             <RenderButton
@@ -570,6 +603,8 @@ function CheckpointPicker({
   templateRef: string | null;
   onChange: (ref: string | null) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const live = graph.live;
   if (!live) return null;
   const others = graph.rows.filter((row) => !row.live);
@@ -582,11 +617,13 @@ function CheckpointPicker({
             size="sm"
             variant="ghost"
             className="gap-1.5 px-2 text-xs"
-            aria-label="Checkpoint"
+            aria-label={translateUi('checkpoint_ee325afd')}
           >
             <GitCommitHorizontal className="size-3.5" aria-hidden />
             <span className="font-mono">{shortSha(live.id)}</span>
-            <span className="text-muted-foreground">{templateRef ? 'pinned' : 'live'}</span>
+            <span className="text-muted-foreground">
+              {templateRef ? translateUi('pinned_3fab5c18') : translateUi('live_247610f4')}
+            </span>
             <ChevronDown className="size-3.5" aria-hidden />
           </Button>
         }
@@ -594,18 +631,22 @@ function CheckpointPicker({
       <DropdownMenuContent align="start" className="w-80">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
-            Which checkpoint of this template renders
+            {' '}
+            {translateUi('which_checkpoint_of_this_template_r_d9412270')}{' '}
           </DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={templateRef ?? 'live'}
             onValueChange={(value) => onChange(value === 'live' ? null : value)}
           >
             <DropdownMenuRadioItem value="live">
-              Follow live — whatever is live when it renders
+              {' '}
+              {translateUi('follow_live_whatever_is_live_when_i_55d24408')}{' '}
             </DropdownMenuRadioItem>
             {graph.liveRef ? (
               <DropdownMenuRadioItem value={graph.liveRef}>
-                Pin {live.kind.toLowerCase()} {shortSha(live.id)} — refuse if live moves
+                {' '}
+                {translateUi('pin_ff1cee74')} {live.kind.toLowerCase()} {shortSha(live.id)}{' '}
+                {translateUi('refuse_if_live_moves_cccf6821')}{' '}
               </DropdownMenuRadioItem>
             ) : null}
           </DropdownMenuRadioGroup>
@@ -615,7 +656,8 @@ function CheckpointPicker({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
-                Not live — make one live to render from it
+                {' '}
+                {translateUi('not_live_make_one_live_to_render_fr_5b92aee4')}{' '}
               </DropdownMenuLabel>
               {others.map((row) => (
                 <DropdownMenuItem key={row.id} disabled>
@@ -660,6 +702,8 @@ function RenderButton({
   /** The set holds an unconfirmed render: Render opens it, and says so. */
   heldLabel?: string;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const hintId = useId();
   const showHint = disabled && selectedCount > 0 && Boolean(fireHint);
   const button = (
@@ -680,8 +724,11 @@ function RenderButton({
       {heldLabel
         ? heldLabel
         : selectedCount
-          ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
-          : 'Render'}
+          ? translateUi('render_value0_value1_efa99af8', {
+              value0: String(plural(selectedCount, 'row')),
+              value1: String(plural(files.total, 'file')),
+            })
+          : translateUi('render_6d89eb7d')}
     </Button>
   );
   const content =
@@ -701,7 +748,8 @@ function RenderButton({
           {files.replacements ? (
             <span>
               {files.byRatio.length ? '· ' : ''}
-              {plural(files.replacements, 'ad replacement')}, one file each
+              {plural(files.replacements, 'ad replacement')}
+              {translateUi('one_file_each_940efb14')}{' '}
             </span>
           ) : null}
         </TooltipContent>

@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { MotionTimeline } from './MotionTimeline';
 
 const project = editorProjectV2Schema.parse({

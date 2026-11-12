@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { LayerEditorLayer } from '../../types';
 import { hasShaderStack, shaderStackFromClipEffects } from '../../utils/render/shaderStack';
 
@@ -13,6 +14,8 @@ export function ShaderLayerImage({
   src: string;
   style: CSSProperties;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string>();
   const stack = useMemo(() => shaderStackFromClipEffects(layer.effects), [layer.effects]);
@@ -44,7 +47,7 @@ export function ShaderLayerImage({
         context.clearRect(0, 0, layer.sourceWidth, layer.sourceHeight);
         context.drawImage(rendered, 0, 0, layer.sourceWidth, layer.sourceHeight);
       } catch (problem) {
-        if (!cancelled) setError(problem instanceof Error ? problem.message : String(problem));
+        if (!cancelled) setError(uiErrorText(problem));
       } finally {
         source?.close();
         rendered?.close();
@@ -53,7 +56,7 @@ export function ShaderLayerImage({
     return () => {
       cancelled = true;
     };
-  }, [enabled, layer.sourceHeight, layer.sourceWidth, src, stack]);
+  }, [enabled, layer.sourceHeight, layer.sourceWidth, src, stack, uiErrorText]);
 
   if (!enabled) {
     return (

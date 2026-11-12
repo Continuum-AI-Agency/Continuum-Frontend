@@ -5,10 +5,14 @@ import type {
   ListAutomationTemplatesResponse,
 } from '@continuum/contracts';
 import { ArrowRight, LoaderCircle, Plus, Sparkles } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { createWorkflowAutomation, fetchAutomationTemplates } from '@/lib/automations/automations';
+import { automationTemplateDisplay } from '@/lib/automations/template-display';
 import { createAutomationWorkflowNode } from './automationNodeCatalog';
 
 type Template = ListAutomationTemplatesResponse['templates'][number];
@@ -31,6 +35,8 @@ const createBlankWorkflow = (): AutomationWorkflowDefinition => ({
 });
 
 export function AutomationTemplateGallery({ brandId }: { brandId: string }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('automations');
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [creatingId, setCreatingId] = useState<string | null>(null);
@@ -44,13 +50,13 @@ export function AutomationTemplateGallery({ brandId }: { brandId: string }) {
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Could not load workflow templates');
+          setError(formatUiError(cause));
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, formatUiError]);
 
   const createDraft = (
     id: string,
@@ -67,7 +73,7 @@ export function AutomationTemplateGallery({ brandId }: { brandId: string }) {
       .then((automation) => router.push(`/automations/${automation.id}`))
       .catch((cause: unknown) => {
         setCreatingId(null);
-        setError(cause instanceof Error ? cause.message : 'Could not create workflow draft');
+        setError(formatUiError(cause));
       });
   };
 
@@ -75,38 +81,45 @@ export function AutomationTemplateGallery({ brandId }: { brandId: string }) {
     <section className="mt-8">
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-violet-500" />
-        <h2 className="text-sm font-medium">Start from a template</h2>
+        <h2 className="text-sm font-medium">{uiText('start_from_a_template_8e9184c')}</h2>
       </div>
       {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <article className="rounded-xl border border-violet-500/25 bg-violet-500/[0.035] p-5">
-          <h3 className="font-medium">Blank canvas</h3>
+          <h3 className="font-medium">{uiText('blank_canvas_d719689')}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Start with a manual trigger and construct the workflow directly—no agent conversation
-            required.
+            {uiText('start_with_a_manual_trigger_and_construct_the_34a1bfe')}
           </p>
-          <p className="mt-4 text-xs text-muted-foreground">1 node · 0 connections</p>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {uiText('1_node_0_connections_9626bd0')}
+          </p>
           <Button
             size="sm"
             className="mt-4"
             disabled={creatingId !== null}
             onClick={() => createDraft('blank', 'Untitled workflow', createBlankWorkflow())}
           >
-            {creatingId === 'blank' ? (
-              <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            Create blank workflow
+            {uiText.rich('sentence_45d022a6a89e', {
+              v0: () =>
+                creatingId === 'blank' ? (
+                  <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                ),
+            })}
           </Button>
         </article>
         {templates.map((template) => (
           <article key={template.id} className="rounded-xl border border-border bg-card p-5">
-            <h3 className="font-medium">{template.name}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{template.description}</p>
+            <h3 className="font-medium">{automationTemplateDisplay(template, uiText).name}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {automationTemplateDisplay(template, uiText).description}
+            </p>
             <p className="mt-4 text-xs text-muted-foreground">
-              {template.definition.nodes.length} nodes · {template.definition.edges.length}{' '}
-              connections
+              {uiText('m_c9be816ad1', {
+                nodes: template.definition.nodes.length,
+                edges: template.definition.edges.length,
+              })}
             </p>
             <Button
               size="sm"
@@ -115,12 +128,14 @@ export function AutomationTemplateGallery({ brandId }: { brandId: string }) {
               disabled={creatingId !== null}
               onClick={() => createDraft(template.id, template.name, template.definition)}
             >
-              {creatingId === template.id ? (
-                <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ArrowRight className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Create editable draft
+              {uiText.rich('sentence_162ef5d3b999', {
+                v0: () =>
+                  creatingId === template.id ? (
+                    <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ArrowRight className="mr-1.5 h-3.5 w-3.5" />
+                  ),
+              })}
             </Button>
           </article>
         ))}

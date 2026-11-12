@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // What your selection will actually DO, said before you create the portfolio.
 //
 // Surfaced as an ALWAYS-VISIBLE hint under the Budget and Target fields, plus an issue list —
@@ -69,20 +71,23 @@ function IssueText({ brandId, issue }: { brandId: string; issue: SetupAdviceIssu
 
 function Hint({
   label,
-  value,
+  displayValue,
   onUse,
   disabled,
 }: {
   label: string;
-  value: string;
+  displayValue: string;
   onUse: () => void;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className="truncate">
-        Suggested <span className="font-medium text-foreground tabular-nums">{value}</span> —{' '}
-        {label}
+        {uiText.rich('sentence_8d2963a7a4cc', {
+          v0: () => <span className="font-medium text-foreground tabular-nums">{displayValue}</span>,
+          v1: label,
+        })}
       </span>
       <Button
         type="button"
@@ -92,13 +97,16 @@ function Hint({
         onClick={onUse}
         className="h-5 shrink-0 gap-1 px-1.5 text-xs"
       >
-        Use
-        <span
-          aria-hidden="true"
-          className="rounded border border-border/70 bg-background px-1 text-xs"
-        >
-          ⇥
-        </span>
+        {uiText.rich('sentence_5ef3d1772cfa', {
+          v0: () => (
+            <span
+              aria-hidden="true"
+              className="rounded border border-border/70 bg-background px-1 text-xs"
+            >
+              ⇥
+            </span>
+          ),
+        })}
       </Button>
     </p>
   );
@@ -151,11 +159,16 @@ export function BudgetHint({
   onUse: (value: string) => void;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+
+  const uiLocale = useLocale();
   if (advice.suggestedDailyTotal == null) return null;
   return (
     <Hint
-      label={`what these ${advice.selectedCount} ad sets run today`}
-      value={`${formatCurrency(advice.suggestedDailyTotal, currency)}/day`}
+      label={uiText('template_37f4f6a8aec9', { v0: advice.selectedCount })}
+      displayValue={uiText('helper_34dd8b60efe4', {
+        v0: formatCurrency(advice.suggestedDailyTotal, currency, uiLocale),
+      })}
       disabled={disabled}
       onUse={() => onUse(String(advice.suggestedDailyTotal))}
     />
@@ -174,11 +187,13 @@ export function TargetHint({
   onUse: (value: string) => void;
   disabled?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (advice.suggestedTarget == null) return null;
   return (
     <Hint
-      label="the blended actual across your selection"
-      value={formatCurrency(advice.suggestedTarget, currency)}
+      label={uiText('the_blended_actual_across_your_selection_f226ae9')}
+      displayValue={formatCurrency(advice.suggestedTarget, currency, uiLocale)}
       disabled={disabled}
       onUse={() => onUse(String(advice.suggestedTarget))}
     />
@@ -205,6 +220,8 @@ export function SetupAdvisor({
   onUseBudget: (value: string) => void;
   onUseTarget: (value: string) => void;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (advice.issues.length === 0) return null;
 
   // The repair is what makes a warning worth reading. Every issue that names ad sets can
@@ -219,13 +236,13 @@ export function SetupAdvisor({
     }
     if (issue.code === 'target_defaulted' && advice.suggestedTarget != null) {
       return {
-        label: `Use ${formatCurrency(advice.suggestedTarget, currency)}`,
+        label: `Use ${formatCurrency(advice.suggestedTarget, currency, uiLocale)}`,
         run: () => onUseTarget(String(advice.suggestedTarget)),
       };
     }
     if (issue.code === 'budget_below_current' && advice.suggestedDailyTotal != null) {
       return {
-        label: `Use ${formatCurrency(advice.suggestedDailyTotal, currency)}/day`,
+        label: `Use ${formatCurrency(advice.suggestedDailyTotal, currency, uiLocale)}/day`,
         run: () => onUseBudget(String(advice.suggestedDailyTotal)),
       };
     }
@@ -242,7 +259,7 @@ export function SetupAdvisor({
               variant={issue.severity === 'warn' ? 'warning' : 'secondary'}
               className="mt-px shrink-0 text-xs"
             >
-              {issue.severity === 'warn' ? 'Check' : 'FYI'}
+              {issue.severity === 'warn' ? uiText('check_9d60841') : uiText('fyi_3050d21')}
             </Pill>
             <span className="min-w-0 text-muted-foreground">
               <IssueText brandId={brandId} issue={issue} />

@@ -1,5 +1,6 @@
 'use client';
 import { Check, Plus, SquarePen, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 import React, { useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -17,6 +18,8 @@ export function CanvasRoomsTabs({
   activeRoomId,
   onRoomChange,
 }: CanvasRoomsTabsProps) {
+  const translateUi = useUiTranslations('studio');
+
   const { rooms, isLoading, createRoom, deleteRoom, updateRoomName } =
     useCanvasRooms(brandProfileId);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
@@ -102,7 +105,8 @@ export function CanvasRoomsTabs({
                 <span className="whitespace-nowrap">{room.name}</span>
                 {room.kind === 'planner' ? (
                   <span className="rounded border border-border/70 px-1 py-0.5 text-3xs uppercase tracking-wide text-muted-foreground">
-                    Planner
+                    {' '}
+                    {translateUi('planner_38581d18')}{' '}
                   </span>
                 ) : null}
                 {isActive && room.kind !== 'planner' && (
@@ -150,7 +154,8 @@ export function CanvasRoomsTabs({
               align="center"
               className="bg-popover text-2xs text-popover-foreground"
             >
-              New Workspace
+              {' '}
+              {translateUi('new_workspace_0ece3208')}{' '}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

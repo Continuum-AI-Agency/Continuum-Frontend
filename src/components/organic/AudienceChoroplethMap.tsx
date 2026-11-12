@@ -1,6 +1,7 @@
 'use client';
 
 import type { FeatureCollection, Geometry } from 'geojson';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import {
   ChoroplethChart,
@@ -9,6 +10,7 @@ import {
   type ChoroplethFeatureProperties,
   ChoroplethGraticule,
   ChoroplethTooltip,
+  type ChoroplethTooltipProps,
 } from '@/components/charts/choropleth';
 import {
   type AudienceCountryDatum,
@@ -37,6 +39,17 @@ function bucketColor(value: number, max: number): string {
   return SCALE_VARS[step] ?? SCALE_VARS[0];
 }
 
+/** Display-only callbacks: follower values and feature identities remain source data. */
+export function audienceTooltipPresentation(
+  translate: ReturnType<typeof useTranslations<'organic'>>,
+): Pick<ChoroplethTooltipProps, 'formatValue' | 'valueLabel'> {
+  return {
+    formatValue: (value) =>
+      value > 0 ? translate('audienceFollowers', { count: value }) : translate('audienceNoData'),
+    valueLabel: translate('audience_545c023'),
+  };
+}
+
 // A shaded world choropleth of followers by country. Countries with no audience
 // data render in the muted "no data" tone; the rest ramp through the brand
 // violet scale. Hover reveals the country + follower count.
@@ -47,6 +60,8 @@ export function AudienceChoroplethMap({
   data: AudienceCountryDatum[];
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
+  const tooltip = useMemo(() => audienceTooltipPresentation(uiText), [uiText]);
   const featureCollection = useMemo(() => buildAudienceChoropleth(data), [data]);
   const max = useMemo(() => maxAudienceValue(featureCollection), [featureCollection]);
 
@@ -69,12 +84,9 @@ export function AudienceChoroplethMap({
         strokeWidth={0.4}
       />
       <ChoroplethTooltip
-        formatValue={(value) =>
-          value > 0 ? `${value.toLocaleString()} followers` : 'No audience data'
-        }
+        {...tooltip}
         getFeatureName={(feature) => audienceProps(feature).name}
         getFeatureValue={(feature) => audienceProps(feature).value}
-        valueLabel="Audience"
       />
     </ChoroplethChart>
   );

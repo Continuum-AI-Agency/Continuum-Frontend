@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { formatFigure, validateTemplateBlock } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render,englishMessages } from '@/i18n/__tests__/render';
+import {NextIntlClientProvider} from 'next-intl';
+import scalePt from '../../../../../messages/scale/pt-BR.json';
 import {
   type AnswerTemplateBlockV2,
   type CheckpointReportV2,
@@ -173,4 +176,14 @@ describe('WeeklyReport in the J2 card', () => {
     expect(answer?.querySelector('[data-testid="weekly-report"]')).not.toBeNull();
     expect(container.querySelector('[data-template-part="justification"]')).not.toBeNull();
   });
+});
+
+describe('weekly report chrome and source language',()=>{
+ it('localizes chrome while preserving a nonempty supplied inactive-objective note',()=>{
+  const before=JSON.stringify(block);
+  const {container,getByTestId}=render(<NextIntlClientProvider locale="pt-BR" timeZone="UTC" messages={{...englishMessages,scale:scalePt}}><TemplateBlock block={block} isStreaming={false}/></NextIntlClientProvider>);
+  expect(getByTestId('weekly-report-header').textContent).toContain('Período A');
+  expect(container.querySelector('[data-objective="purchases"] [data-testid="weekly-report-no-active"]')?.textContent).toBe('No active campaigns in either period.');
+  expect(JSON.stringify(block)).toBe(before);
+ });
 });

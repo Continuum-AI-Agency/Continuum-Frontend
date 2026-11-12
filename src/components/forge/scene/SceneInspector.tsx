@@ -2,6 +2,7 @@
 
 import type { BlendField } from '@continuum/contracts';
 import { ChevronRight, RotateCcw } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -144,6 +145,8 @@ function FieldRow({
   onChange,
   onReset,
 }: RowProps & { field: BlendField; shown: string }) {
+  const translateUi = useUiTranslations('forge');
+
   const label = sceneFieldLabel(field);
   const changed = field.key in changes;
   return (
@@ -169,8 +172,8 @@ function FieldRow({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={`Reset ${label}`}
-            title="Back to the file's value"
+            aria-label={translateUi('reset_value0_4b5672a3', { value0: String(label) })}
+            title={translateUi('back_to_the_file_s_value_a5a9772f')}
             onClick={() => onReset(field.key)}
           >
             <RotateCcw aria-hidden />
@@ -220,18 +223,30 @@ function SearchResults({
   query,
   ...row
 }: RowProps & { fields: readonly BlendField[]; query: string }) {
+  const translateUi = useUiTranslations('forge');
+
   const matches = searchSceneFields(fields, query);
   if (!matches.length) {
-    return <p className="m-0 p-3 text-xs text-muted-foreground">No field matches “{query}”.</p>;
+    return (
+      <p className="m-0 p-3 text-xs text-muted-foreground">
+        {translateUi('no_field_matches_dac74625')}
+        {query}”.
+      </p>
+    );
   }
   const more = matches.length - SEARCH_LIMIT;
   return (
-    <section aria-label="Matching fields" className="flex flex-col gap-1 p-2">
+    <section
+      aria-label={translateUi('matching_fields_c0b6467f')}
+      className="flex flex-col gap-1 p-2"
+    >
       {matches.slice(0, SEARCH_LIMIT).map((field) => (
         <FieldRow key={field.key} field={field} shown={field.name} {...row} />
       ))}
       {more > 0 ? (
-        <p className="m-0 px-1.5 text-xs text-muted-foreground">{more} more — refine the search</p>
+        <p className="m-0 px-1.5 text-xs text-muted-foreground">
+          {more} {translateUi('more_refine_the_search_63a6ab69')}
+        </p>
       ) : null}
     </section>
   );
@@ -247,18 +262,24 @@ export function SceneInspector({
   camera: string | null;
   cameras: ReadonlySet<string>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [search, setSearch] = useState('');
   const query = useDebounce(search.trim());
   const groups = groupSceneFields(fields, camera, cameras);
   if (!groups.length) {
-    return <p className="p-3 text-xs text-muted-foreground">This file exposes no fields.</p>;
+    return (
+      <p className="p-3 text-xs text-muted-foreground">
+        {translateUi('this_file_exposes_no_fields_29359480')}
+      </p>
+    );
   }
   return (
     <div className="flex flex-col">
       <div className="border-b border-border p-2">
         <Input
-          aria-label="Search fields"
-          placeholder="Search fields or objects"
+          aria-label={translateUi('search_fields_ae021540')}
+          placeholder={translateUi('search_fields_or_objects_731e65b7')}
           className="h-8 text-xs"
           value={search}
           onChange={(event) => setSearch(event.target.value)}

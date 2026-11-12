@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+
 // The Home overview: one strip with the goals this brand measures itself by, then one block per
 // module. Performance + shows where the main goal's results came from, Organic + the week's
 // reach and engagement, Creative + the best and the worst ad by cost per main-goal result.
@@ -14,16 +17,16 @@ import {
   resolveHomeObjectives,
 } from '@continuum/contracts';
 import { ArrowUpRight, ImageOff } from 'lucide-react';
-import Link from 'next/link';
 import { useMemo, useState, useTransition } from 'react';
 import {
   resetHomeObjectivesAction,
   saveHomeObjectivesAction,
-} from '@/app/(post-auth)/dashboard/actions';
+} from '@/app/[locale]/(post-auth)/dashboard/actions';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
+import { Link } from '@/i18n/navigation';
 import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrganicSnapshot';
 import { cn } from '@/lib/utils';
 import { formatCount, formatFigure, formatMoney, formatRatio } from './format';
@@ -56,6 +59,8 @@ export function ModuleCard({
   href: string;
   children: React.ReactNode;
 }) {
+  const tUi = useTranslations('dashboard');
+
   return (
     <section
       data-home-module={accent}
@@ -72,7 +77,8 @@ export function ModuleCard({
           href={href}
           className="hit-area inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
         >
-          Open <ArrowUpRight className="size-3" />
+          {tUi('m_79d37e2805')}
+          <ArrowUpRight className="size-3" />
         </Link>
       </header>
       {children}
@@ -108,12 +114,13 @@ function Bars({ rows }: { rows: { name: string; value: number; label: string }[]
 /** A block with nothing to show. With `onRetry` it is a block whose READ failed: an alert that
  *  says so and offers the read again, never quiet grey text that reads like an empty week. */
 function Unavailable({ children, onRetry }: { children: React.ReactNode; onRetry?: () => void }) {
+  const uiText = useTranslations('dashboard');
   if (!onRetry) return <p className="text-xs text-muted-foreground">{children}</p>;
   return (
     <p className="text-destructive-ink text-xs" role="alert">
       {children}{' '}
       <Button className="h-5 px-1 text-xs" onClick={onRetry} size="sm" type="button" variant="link">
-        Retry
+        {uiText('retry_942087c')}
       </Button>
     </p>
   );
@@ -130,6 +137,7 @@ export function CreativeSlot({
   image: string | null | undefined;
   valueLabel: string;
 }) {
+  const uiText = useTranslations('dashboard');
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <span
@@ -138,7 +146,7 @@ export function CreativeSlot({
           tone === 'best' ? 'text-success-ink' : 'text-destructive-ink',
         )}
       >
-        {tone === 'best' ? 'Best' : 'Worst'}
+        {tone === 'best' ? uiText('best_c47d21c') : uiText('worst_0d7bf19')}
       </span>
       {row ? (
         <>
@@ -164,7 +172,7 @@ export function CreativeSlot({
         </>
       ) : (
         <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-border text-center text-2xs text-muted-foreground">
-          No second ad with results this week
+          {uiText('no_second_ad_with_results_this_week_52a7787')}
         </div>
       )}
     </div>
@@ -172,6 +180,9 @@ export function CreativeSlot({
 }
 
 export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows }: Props) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('dashboard');
   const [scope, setScope] = useState<string>(HOME_PROFILE_BRAND_SCOPE);
   const [rows, setRows] = useState<HomeProfileRow[]>(profileRows);
   const [, startSaving] = useTransition();
@@ -198,9 +209,17 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
   const objectives = resolved.objectives;
   const primary =
     objectives.find((objective) => objective.role === 'primary') ?? objectives[0] ?? null;
+  const primaryDisplayLabel = primary
+    ? resolved.source === 'inferred'
+      ? localizeDashboardCopy(primary.label, uiText)
+      : primary.label
+    : uiText('results_c099142');
   const figures = totals ? objectives.map((objective) => objectiveFigure(objective, totals)) : [];
   const spendFigure = totals
-    ? objectiveFigure({ id: 'spend', label: 'Spend', metric: 'spend', role: 'secondary' }, totals)
+    ? objectiveFigure(
+        { id: 'spend', label: uiText('spend_85f3d55'), metric: 'spend', role: 'secondary' },
+        totals,
+      )
     : null;
 
   const campaigns = useTopCampaigns(brandId, scopedAccounts, primary?.metric ?? null, attempt);
@@ -220,7 +239,8 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
       const result = await saveHomeObjectivesAction(brandId, scope, next);
       if (!result.ok) {
         setRows(previous);
-        toast.error(result.message);
+        console.error('Home preference save failed', result.message);
+        toast.error(uiText('m_48cae1e392'));
       }
     });
   };
@@ -232,7 +252,8 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
       const result = await resetHomeObjectivesAction(brandId, scope);
       if (!result.ok) {
         setRows(previous);
-        toast.error(result.message);
+        console.error('Home preference save failed', result.message);
+        toast.error(uiText('m_48cae1e392'));
       }
     });
   };
@@ -279,26 +300,26 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
   const primaryCostLabel = primary ? HOME_OBJECTIVE_METRICS[primary.metric].costLabel : null;
   const creativeRankLabel = primary
     ? primaryCostLabel
-      ? costLabelFor(primary, primaryCostLabel).toLowerCase()
-      : primary.label.toLowerCase()
+      ? costLabelFor(primary, primaryCostLabel, uiText)
+      : primaryDisplayLabel
     : 'results';
 
   const creativeValueLabel = (row: RankedWithAccount) =>
     row.kpi_unit === 'currency'
-      ? formatMoney(row.kpi_value, currency)
+      ? formatMoney(row.kpi_value, currency, uiLocale)
       : row.kpi_unit === 'multiplier'
-        ? formatRatio(row.kpi_value)
-        : formatCount(row.kpi_value);
+        ? formatRatio(row.kpi_value, uiLocale)
+        : formatCount(row.kpi_value, uiLocale);
 
   return (
     <div data-home-overview className="flex min-w-0 flex-col gap-4 px-[var(--card-pad)] py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-col">
           <span className="text-xs font-medium text-foreground">
-            Last 7 days, compared with the 7 before
+            {uiText('last_7_days_compared_with_the_7_before_b8a92d0')}
           </span>
           <span className="text-2xs text-muted-foreground">
-            {sourceNote}
+            {localizeDashboardCopy(sourceNote, uiText)}
             {scopeHasOwnRow ? (
               <>
                 {' · '}
@@ -307,7 +328,9 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
                   className="underline-offset-2 hover:underline"
                   onClick={resetObjectives}
                 >
-                  {scope === HOME_PROFILE_BRAND_SCOPE ? 'Use suggested goals' : 'Use brand goals'}
+                  {scope === HOME_PROFILE_BRAND_SCOPE
+                    ? uiText('use_suggested_goals_7b23cf4')
+                    : uiText('use_brand_goals_2f71cf7')}
                 </button>
               </>
             ) : null}
@@ -315,14 +338,14 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
         </div>
         {adAccounts.length > 1 ? (
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="sr-only">Ad accounts in view</span>
+            <span className="sr-only">{uiText('ad_accounts_in_view_267e2b2')}</span>
             <select
               id="home-scope"
               value={scope}
               onChange={(event) => setScope(event.target.value)}
               className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
             >
-              <option value={HOME_PROFILE_BRAND_SCOPE}>All ad accounts</option>
+              <option value={HOME_PROFILE_BRAND_SCOPE}>{uiText('all_ad_accounts_7ddf3cc')}</option>
               {adAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.name}
@@ -334,7 +357,7 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
       </div>
 
       {adAccounts.length === 0 ? (
-        <Unavailable>Connect a Meta ad account to see paid results and goals here.</Unavailable>
+        <Unavailable>{uiText('connect_a_meta_ad_account_to_see_paid_results_14799d2')}</Unavailable>
       ) : totalsState.status === 'loading' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((index) => (
@@ -343,10 +366,11 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
         </div>
       ) : totalsState.status === 'error' ? (
         <Unavailable onRetry={retry}>
-          Couldn't load paid results — the ad platform didn't answer. Try again in a minute.
+          {uiText('couldn_t_load_paid_results_the_ad_platform_di_c8d520e')}
         </Unavailable>
       ) : (
         <ObjectiveStrip
+          inferredLabels={resolved.source === 'inferred'}
           figures={
             spendFigure && objectives.every((o) => o.metric !== 'spend') && objectives.length < 3
               ? [...figures, spendFigure]
@@ -359,28 +383,30 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <ModuleCard title="Performance +" accent="perf" href="/scale">
+        <ModuleCard title={uiText('performance_3e2ddb7')} accent="perf" href="/scale">
           {primaryFigure?.available && primaryFigure.value !== null ? (
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-semibold tabular-nums">
-                {formatFigure(primaryFigure.value, primaryFigure.unit, currency)}
+                {formatFigure(primaryFigure.value, primaryFigure.unit, currency, uiLocale)}
               </span>
-              <span className="text-xs text-muted-foreground">{primary?.label.toLowerCase()}</span>
+              <span className="text-xs text-muted-foreground">{primaryDisplayLabel}</span>
               {primaryFigure.deltaPct !== null ? (
                 <DeltaBadge value={primaryFigure.deltaPct} />
               ) : null}
             </div>
           ) : null}
           <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-            Campaigns that brought the most {primary?.label.toLowerCase() ?? 'results'}
+            {uiText.rich('sentence_2d5382f519f5', { v0: () => primaryDisplayLabel })}
           </span>
           {campaigns.status === 'loading' ? (
             <Skeleton className="h-24 bg-muted/70" />
           ) : campaigns.status === 'error' ? (
-            <Unavailable onRetry={retry}>Couldn't load campaigns right now.</Unavailable>
+            <Unavailable onRetry={retry}>
+              {uiText('couldn_t_load_campaigns_right_now_852a827')}
+            </Unavailable>
           ) : campaigns.data.length === 0 ? (
             <Unavailable>
-              No campaign brought {primary?.label.toLowerCase() ?? 'results'} this week.
+              {uiText.rich('sentence_173cf4a0eeb5', { v0: () => primaryDisplayLabel })}
             </Unavailable>
           ) : (
             <Bars
@@ -389,20 +415,24 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
                 value: row.kpi_value,
                 label:
                   row.kpi_unit === 'currency'
-                    ? formatMoney(row.kpi_value, currency)
-                    : formatCount(row.kpi_value),
+                    ? formatMoney(row.kpi_value, currency, uiLocale)
+                    : formatCount(row.kpi_value, uiLocale),
               }))}
             />
           )}
         </ModuleCard>
 
-        <ModuleCard title="Organic +" accent="org" href="/organic?tab=metrics">
+        <ModuleCard title={uiText('organic_18f83db')} accent="org" href="/organic?tab=metrics">
           {organicAccounts.length === 0 ? (
-            <Unavailable>Connect Instagram or Facebook to see organic reach here.</Unavailable>
+            <Unavailable>
+              {uiText('connect_instagram_or_facebook_to_see_organic__636454e')}
+            </Unavailable>
           ) : organic.status === 'loading' ? (
             <Skeleton className="h-32 bg-muted/70" />
           ) : organic.status === 'error' || reach.every((item) => item.value === null) ? (
-            <Unavailable onRetry={retry}>Couldn't load organic results right now.</Unavailable>
+            <Unavailable onRetry={retry}>
+              {uiText('couldn_t_load_organic_results_right_now_06a8efb')}
+            </Unavailable>
           ) : (
             <>
               <div className="flex flex-wrap gap-x-5 gap-y-2">
@@ -410,11 +440,11 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
                   item.value === null ? null : (
                     <div key={item.metricId} className="flex flex-col">
                       <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                        {item.label}
+                        {localizeDashboardCopy(item.label, uiText)}
                       </span>
                       <span className="flex items-baseline gap-1.5">
                         <span className="text-xl font-semibold tabular-nums">
-                          {formatCount(item.value)}
+                          {formatCount(item.value, uiLocale)}
                         </span>
                         {item.metricId === 'reach' && reachDelta !== null ? (
                           <DeltaBadge value={reachDelta} />
@@ -426,14 +456,13 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
               </div>
               {organicAccounts.every((account) => account.platform !== 'instagram') ? (
                 <p className="text-2xs text-muted-foreground">
-                  Only a Facebook Page is connected. Connect Instagram to see its reach and new
-                  followers here.
+                  {uiText('only_a_facebook_page_is_connected_connect_ins_6e843e4')}
                 </p>
               ) : null}
               {reachByPlatform.length > 0 ? (
                 <>
                   <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                    Reach by account
+                    {uiText('reach_by_account_bb47c44')}
                   </span>
                   <ul className="flex flex-col gap-1.5">
                     {reachByPlatform.map((row) => {
@@ -446,7 +475,9 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
                           <span className="truncate text-muted-foreground">
                             {row.name} <span className="capitalize">· {row.platform}</span>
                           </span>
-                          <span className="font-mono tabular-nums">{formatCount(row.value)}</span>
+                          <span className="font-mono tabular-nums">
+                            {formatCount(row.value, uiLocale)}
+                          </span>
                           <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
                             <span
                               className="block h-full rounded-full bg-emerald-500/80"
@@ -463,17 +494,19 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
           )}
         </ModuleCard>
 
-        <ModuleCard title="Creative +" accent="cre" href="/library">
+        <ModuleCard title={uiText('creative_b5be5d8')} accent="cre" href="/library">
           <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-            Ads ranked by {creativeRankLabel}
+            {uiText.rich('sentence_7360b7d3bbf6', { v0: () => creativeRankLabel })}
           </span>
           {creatives.status === 'loading' ? (
             <Skeleton className="h-40 bg-muted/70" />
           ) : creatives.status === 'error' ? (
-            <Unavailable onRetry={retry}>Couldn't load ads right now.</Unavailable>
+            <Unavailable onRetry={retry}>
+              {uiText('couldn_t_load_ads_right_now_99682b6')}
+            </Unavailable>
           ) : !creatives.data.best ? (
             <Unavailable>
-              No ad brought {primary?.label.toLowerCase() ?? 'results'} this week.
+              {uiText.rich('sentence_488be2fa2885', { v0: () => primaryDisplayLabel })}
             </Unavailable>
           ) : (
             <div className="grid grid-cols-2 gap-3">

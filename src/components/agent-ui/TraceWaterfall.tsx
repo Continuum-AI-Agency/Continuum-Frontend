@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useAgentFormats } from './useAgentFormats';
+
 // Where the time and money of one agent run went: every agent, LLM call and tool call as a bar
 // on the run's clock over a tick grid, branches folding into their parent with cost rolled up,
 // the slowest finished call marked. Running steps grow as the host advances `nowMs`.
@@ -19,9 +22,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import {
-  formatClock,
-  formatTokens,
-  formatUsd,
   niceTicks,
   orderSpans,
   type RunSpan,
@@ -32,18 +32,25 @@ import {
 } from './model';
 import { DetailRows, RollingTokens, RollingUsd, SpanBar, StatBand } from './parts';
 
-export const SPAN_KIND: Record<
-  RunSpan['kind'],
-  { icon: typeof Bot; label: string; bar: string; swatch: string }
-> = {
+export const SPAN_KIND = {
   agent: {
     icon: Bot,
-    label: 'Agent',
+    labelKey: 'm_5ce2e6f402' as const,
     bar: 'bg-muted-foreground/25',
     swatch: 'bg-muted-foreground/40',
   },
-  llm: { icon: Sparkles, label: 'LLM call', bar: 'bg-primary', swatch: 'bg-primary' },
-  tool: { icon: Wrench, label: 'Tool call', bar: 'bg-primary/40', swatch: 'bg-primary/40' },
+  llm: {
+    icon: Sparkles,
+    labelKey: 'm_76f6d0bb8d' as const,
+    bar: 'bg-primary',
+    swatch: 'bg-primary',
+  },
+  tool: {
+    icon: Wrench,
+    labelKey: 'm_e313188e62' as const,
+    bar: 'bg-primary/40',
+    swatch: 'bg-primary/40',
+  },
 };
 
 export function SpanKindTile({ span }: { span: RunSpan }) {
@@ -79,6 +86,9 @@ export function TraceWaterfall({
   title?: string;
   className?: string;
 }) {
+  const { formatClock, formatTokens, formatUsd } = useAgentFormats();
+
+  const uiText = useTranslations('common');
   const now = nowMs ?? Math.max(0, ...spans.map((s) => s.endMs ?? s.startMs));
   const rows = useMemo(() => orderSpans(spans), [spans]);
   const slowest = useMemo(() => slowestSpan(spans), [spans]);
@@ -88,7 +98,7 @@ export function TraceWaterfall({
   const length = Math.max(summary.durationMs, 1);
   const ticks = niceTicks(summary.durationMs);
   const frac = (ms: number) => (ms - summary.startMs) / length;
-  const heading = title ?? rows[0]?.span.detail ?? 'Agent run';
+  const heading = title ?? rows[0]?.span.detail ?? uiText('m_f5b3ee27f4');
 
   const toggle = (id: string) =>
     setCollapsed((prev) => {
@@ -104,36 +114,38 @@ export function TraceWaterfall({
         <AgentCardHeader
           action={
             summary.live ? (
-              <StatusLabel tone="running">Running</StatusLabel>
+              <StatusLabel tone="running">{uiText('running_f4ccae2')}</StatusLabel>
             ) : spans.length > 0 ? (
-              <StatusLabel tone="done">Finished</StatusLabel>
+              <StatusLabel tone="done">{uiText('m_355bcc577d')}</StatusLabel>
             ) : (
-              <StatusLabel>Waiting</StatusLabel>
+              <StatusLabel>{uiText('waiting_6e293a8')}</StatusLabel>
             )
           }
         >
-          <AgentCardEyebrow label="Run trace" />
+          <AgentCardEyebrow label={uiText('run_trace_20a6ebc')} />
           <AgentCardTitle>{heading}</AgentCardTitle>
         </AgentCardHeader>
         <StatBand
           className="mt-3"
           stats={[
-            { label: 'Duration', value: formatClock(summary.durationMs) },
-            { label: 'Cost', value: <RollingUsd value={summary.costUsd} /> },
-            { label: 'Tokens', value: <RollingTokens value={summary.tokens} /> },
+            { label: uiText('duration_4fc52a3'), value: formatClock(summary.durationMs) },
+            { label: uiText('cost_204a5eb'), value: <RollingUsd value={summary.costUsd} /> },
+            { label: uiText('tokens_a039dfb'), value: <RollingTokens value={summary.tokens} /> },
             {
-              label: 'Calls',
+              label: uiText('m_0a19b7e26b'),
               value: summary.llmCalls + summary.toolCalls,
               hint: `${summary.llmCalls} LLM · ${summary.toolCalls} tool`,
             },
-            { label: 'Errors', value: summary.errors, danger: summary.errors > 0 },
+            { label: uiText('m_805e86a8cb'), value: summary.errors, danger: summary.errors > 0 },
           ]}
         />
         <AgentCardBody className="py-3">
           {spans.length === 0 ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">No steps yet.</p>
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              {uiText('m_8fa85ac9ab')}
+            </p>
           ) : (
-            <table aria-label="Run trace" className="w-full table-fixed text-xs">
+            <table aria-label={uiText('run_trace_20a6ebc')} className="w-full table-fixed text-xs">
               <colgroup>
                 <col className="w-2/5" />
                 <col />
@@ -143,7 +155,7 @@ export function TraceWaterfall({
               <thead>
                 <tr className="text-3xs uppercase tracking-wide text-muted-foreground">
                   <th scope="col" className="pb-1.5 text-left font-medium">
-                    Step
+                    {uiText('m_dc416e1088')}
                   </th>
                   <th scope="col" className="px-3 pb-1.5 font-medium">
                     <div className="relative h-3">
@@ -162,10 +174,10 @@ export function TraceWaterfall({
                     </div>
                   </th>
                   <th scope="col" className="pb-1.5 text-right font-medium">
-                    Time
+                    {uiText('time_33b9347')}
                   </th>
                   <th scope="col" className="pb-1.5 text-right font-medium">
-                    Cost
+                    {uiText('cost_204a5eb')}
                   </th>
                 </tr>
               </thead>
@@ -189,7 +201,7 @@ export function TraceWaterfall({
                                 type="button"
                                 onClick={() => toggle(span.id)}
                                 aria-expanded={!folded}
-                                aria-label={`${folded ? 'Expand' : 'Collapse'} ${span.name}`}
+                                aria-label={`${folded ? uiText('expand_07548c2') : uiText('collapse_be6eb1f')} ${span.name}`}
                                 className="grid size-4 shrink-0 place-items-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                               >
                                 <ChevronRight
@@ -212,7 +224,7 @@ export function TraceWaterfall({
                             {span.id === slowest && (
                               <Badge variant="warning" className="px-1.5 text-3xs">
                                 <Timer />
-                                Slowest
+                                {uiText('m_b70a21cd9f')}
                               </Badge>
                             )}
                             {span.detail && (
@@ -248,7 +260,10 @@ export function TraceWaterfall({
                                     <span className="font-medium">{span.name}</span>
                                     <DetailRows
                                       rows={[
-                                        ['Kind', span.detail ?? SPAN_KIND[span.kind].label],
+                                        [
+                                          'Kind',
+                                          span.detail ?? uiText(SPAN_KIND[span.kind].labelKey),
+                                        ],
                                         [
                                           'Window',
                                           `${formatClock(span.startMs)} → ${formatClock(end)}`,
@@ -285,10 +300,10 @@ export function TraceWaterfall({
           {(['llm', 'tool', 'agent'] as const).map((kind) => (
             <span key={kind} className="flex items-center gap-1.5">
               <span className={cn('h-1.5 w-3 rounded-full', SPAN_KIND[kind].swatch)} />
-              {SPAN_KIND[kind].label}
+              {uiText(SPAN_KIND[kind].labelKey)}
             </span>
           ))}
-          <span className="ml-auto">Point at a bar for its window, tokens and cost</span>
+          <span className="ml-auto">{uiText('m_84f2ac8872')}</span>
         </div>
       </AgentArtifactCard>
     </TooltipProvider>

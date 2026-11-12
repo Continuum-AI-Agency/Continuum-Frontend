@@ -1,6 +1,7 @@
 'use client';
 
 import type { LanguageModelUsage } from 'ai';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps, ReactElement } from 'react';
 import { createContext, useContext, useMemo } from 'react';
 import { getUsage } from 'tokenlens';
@@ -52,6 +53,8 @@ export const Context = ({ usedTokens, maxTokens, usage, modelId, ...props }: Con
 };
 
 const ContextIcon = () => {
+  const tUi = useTranslations('common');
+
   const { usedTokens, maxTokens } = useContextValue();
   const circumference = 2 * Math.PI * ICON_RADIUS;
   const usedPercent = usedTokens / maxTokens;
@@ -59,7 +62,7 @@ const ContextIcon = () => {
 
   return (
     <svg
-      aria-label="Model context usage"
+      aria-label={tUi('m_e756ab128f')}
       height="20"
       role="img"
       style={{ color: 'currentcolor' }}
@@ -176,6 +179,8 @@ export const ContextContentFooter = ({
   className,
   ...props
 }: ContextContentFooterProps) => {
+  const tUi = useTranslations('common');
+
   const { modelId, usage } = useContextValue();
   const costUSD = modelId
     ? getUsage({
@@ -201,7 +206,7 @@ export const ContextContentFooter = ({
     >
       {children ?? (
         <>
-          <span className="text-muted-foreground">Total cost</span>
+          <span className="text-muted-foreground">{tUi('m_2f69970f70')}</span>
           <span>{totalCost}</span>
         </>
       )}
@@ -212,6 +217,7 @@ export const ContextContentFooter = ({
 export type ContextInputUsageProps = ComponentProps<'div'>;
 
 export const ContextInputUsage = ({ className, children, ...props }: ContextInputUsageProps) => {
+  const uiText = useTranslations('common');
   const { usage, modelId } = useContextValue();
   const inputTokens = usage?.inputTokens ?? 0;
 
@@ -236,7 +242,7 @@ export const ContextInputUsage = ({ className, children, ...props }: ContextInpu
 
   return (
     <div className={cn('flex items-center justify-between text-xs', className)} {...props}>
-      <span className="text-muted-foreground">Input</span>
+      <span className="text-muted-foreground">{uiText('input_36ecb4f')}</span>
       <TokensWithCost costText={inputCostText} tokens={inputTokens} />
     </div>
   );
@@ -245,6 +251,7 @@ export const ContextInputUsage = ({ className, children, ...props }: ContextInpu
 export type ContextOutputUsageProps = ComponentProps<'div'>;
 
 export const ContextOutputUsage = ({ className, children, ...props }: ContextOutputUsageProps) => {
+  const uiText = useTranslations('common');
   const { usage, modelId } = useContextValue();
   const outputTokens = usage?.outputTokens ?? 0;
 
@@ -269,7 +276,7 @@ export const ContextOutputUsage = ({ className, children, ...props }: ContextOut
 
   return (
     <div className={cn('flex items-center justify-between text-xs', className)} {...props}>
-      <span className="text-muted-foreground">Output</span>
+      <span className="text-muted-foreground">{uiText('output_b2439bc')}</span>
       <TokensWithCost costText={outputCostText} tokens={outputTokens} />
     </div>
   );
@@ -282,6 +289,8 @@ export const ContextReasoningUsage = ({
   children,
   ...props
 }: ContextReasoningUsageProps) => {
+  const tUi = useTranslations('common');
+
   const { usage, modelId } = useContextValue();
   const reasoningTokens = usage?.outputTokenDetails?.reasoningTokens ?? 0;
 
@@ -306,7 +315,7 @@ export const ContextReasoningUsage = ({
 
   return (
     <div className={cn('flex items-center justify-between text-xs', className)} {...props}>
-      <span className="text-muted-foreground">Reasoning</span>
+      <span className="text-muted-foreground">{tUi('m_e272c597fd')}</span>
       <TokensWithCost costText={reasoningCostText} tokens={reasoningTokens} />
     </div>
   );
@@ -315,6 +324,8 @@ export const ContextReasoningUsage = ({
 export type ContextCacheUsageProps = ComponentProps<'div'>;
 
 export const ContextCacheUsage = ({ className, children, ...props }: ContextCacheUsageProps) => {
+  const tUi = useTranslations('common');
+
   const { usage, modelId } = useContextValue();
   const cacheTokens = usage?.inputTokenDetails?.cacheReadTokens ?? 0;
 
@@ -339,7 +350,7 @@ export const ContextCacheUsage = ({ className, children, ...props }: ContextCach
 
   return (
     <div className={cn('flex items-center justify-between text-xs', className)} {...props}>
-      <span className="text-muted-foreground">Cache</span>
+      <span className="text-muted-foreground">{tUi('m_50338b3b24')}</span>
       <TokensWithCost costText={cacheCostText} tokens={cacheTokens} />
     </div>
   );

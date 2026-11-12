@@ -1,3 +1,5 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 // The ad-set table's "vs target" column (P1, "Lectura continua"): a small inline bar of each
 // ad set's cost against the portfolio's target, and the signed distance beside it. Only the
 // portfolio detail mounts it, and only when a target exists — a bar against nothing is noise.
@@ -23,20 +25,33 @@ export function vsTarget(cost: number | null, target: number | null): VsTarget |
   return { ratio, fill: Math.min(ratio, 1), over: ratio > 1 };
 }
 
-const signedPercent = (ratio: number): string => {
+const percentFormatters = new Map<UiLocale, Intl.NumberFormat>();
+const signedPercent = (ratio: number, locale: UiLocale = 'en'): string => {
   const delta = Math.round((ratio - 1) * 100);
-  return delta > 0 ? `+${delta}%` : `${delta}%`;
+  if (locale === 'en') return delta > 0 ? `+${delta}%` : `${delta}%`;
+  let formatter = percentFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+      signDisplay: 'exceptZero',
+    });
+    percentFormatters.set(locale, formatter);
+  }
+  return formatter.format((Object.is(delta, -0) ? 0 : delta) / 100);
 };
 
 export function vsTargetColumn(opts: {
   target: number;
   metric: OptimizationMetricDefinition;
   currency: string | null | undefined;
-}): InsightColumn<OptimizerAdsetRow> {
-  const { target, metric, currency } = opts;
+  locale?: UiLocale;
+  translate?: ReturnType<typeof useTranslations<'scale'>>;
+}, uiLocale:UiLocale='en'): InsightColumn<OptimizerAdsetRow> {
+  const { target, metric, currency, locale = 'en', translate } = opts;
   return {
     id: 'vs-target',
-    header: 'vs target',
+    header: translate ? translate('vs_target_header') : 'vs target',
     align: 'right',
     sortValue: (row) => (row.freezeReason ? -1 : (vsTarget(row.cost, target)?.ratio ?? -1)),
     cell: (row) => {
@@ -47,12 +62,20 @@ export function vsTargetColumn(opts: {
           className="inline-flex items-center justify-end gap-2"
           data-testid="vs-target"
           data-over={read.over}
-          title={`${metric.costLabel} ${formatCpa(row.cost, currency)} against a ${formatCpa(target, currency)} target`}
+          title={
+            translate
+              ? translate('vs_target_tooltip', {
+                  metric: metric.costLabel,
+                  cost: formatCpa(row.cost, currency, locale),
+                  target: formatCpa(target, currency, locale),
+                })
+              : `${metric.costLabel} ${formatCpa(row.cost, currency, uiLocale)} against a ${formatCpa(target, currency, uiLocale)} target`
+          }
         >
           <span
             className={cn('text-xs tabular-nums', read.over ? 'text-destructive' : 'text-success')}
           >
-            {signedPercent(read.ratio)}
+            {signedPercent(read.ratio, locale)}
           </span>
           <span aria-hidden className="relative h-1.5 w-16 overflow-hidden rounded-full bg-muted">
             <span

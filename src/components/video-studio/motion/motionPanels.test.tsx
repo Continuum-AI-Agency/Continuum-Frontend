@@ -6,7 +6,13 @@ import {
   TEXT_TEMPLATE_IDS,
   type VideoEditorOpName,
 } from '@continuum/contracts';
-import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { EasingCurveEditor } from '@/StudioCanvas/nodes/timeline/motion/EasingCurveEditor';
 import { createPlayheadStore } from '@/StudioCanvas/nodes/timeline/workspace/playheadStore';

@@ -1,4 +1,6 @@
 'use client';
+import type {useTranslations} from 'next-intl';
+type ScaleCopy=ReturnType<typeof useTranslations<'scale'>>;
 
 // Which action kinds a portfolio may execute on each platform: optimizer_get_portfolio_platform_
 // actions and optimizer_set_portfolio_platform_actions (20261008180000), over
@@ -153,3 +155,6 @@ export function useSetPortfolioPlatformActions(portfolioId: string) {
       queryClient.invalidateQueries({ queryKey: platformActionsQueryKey(portfolioId) }),
   });
 }
+
+const ACTION_KIND_MESSAGE_KEYS={set_status:['platformKindStatusLabel','platformKindStatusDescription'],set_budget:['platformKindBudgetLabel','platformKindBudgetDescription'],set_bid_target:['platformKindBidLabel','platformKindBidDescription'],add_negatives:['platformKindNegativesLabel','platformKindNegativesDescription'],add_keyword:['platformKindKeywordsLabel','platformKindKeywordsDescription']} as const satisfies Record<ActionKind,readonly [Parameters<ScaleCopy>[0],Parameters<ScaleCopy>[0]]>;
+export function platformActionCopy(kind:ActionKind,translate:ScaleCopy):{label:string;explanation:string}{const keys=ACTION_KIND_MESSAGE_KEYS[kind];return{label:translate(keys[0]),explanation:translate(keys[1])}}

@@ -4,6 +4,7 @@
 // structured object is the source of truth (persisted backend-side via the
 // composite); edits to these sections are out of scope here.
 import type { BrandGuidelines, BrandStrategy } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import type { AgentPreviewBuckets } from '../state/agentPreview';
 import { CardSurface } from './CardSurface';
@@ -20,10 +21,13 @@ function auditScore(audit: unknown): number | null {
 }
 
 function ScoreChip({ score }: { score: number | null }) {
+  const tUi = useTranslations('onboarding');
+
   if (score === null) return null;
   return (
     <Badge variant="secondary" className="text-xs">
-      Score {score}
+      {tUi('m_93d630bb95')}
+      {score}
     </Badge>
   );
 }
@@ -38,6 +42,8 @@ function ChipList({ label, items }: { label: string; items?: string[] | null }) 
 }
 
 function StrategyBody({ strategy }: { strategy: BrandStrategy }) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div className="flex flex-col gap-2 text-sm">
       {strategy.promise?.headline ? (
@@ -46,11 +52,15 @@ function StrategyBody({ strategy }: { strategy: BrandStrategy }) {
       {strategy.positioning?.statement ? (
         <p className="m-0 text-muted-foreground">{strategy.positioning.statement}</p>
       ) : null}
-      <ChipList label="Pillars" items={strategy.message_pillars?.map((pillar) => pillar.pillar)} />
-      <ChipList label="Traits" items={strategy.personality?.traits} />
+      <ChipList
+        label={tUi('m_2727a73fb1')}
+        items={strategy.message_pillars?.map((pillar) => pillar.pillar)}
+      />
+      <ChipList label={tUi('m_d1a616085a')} items={strategy.personality?.traits} />
       {strategy.taglines?.primary ? (
         <p className="m-0 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Tagline:</span> {strategy.taglines.primary}
+          <span className="font-medium text-foreground">{tUi('m_bfabbcabdb')}</span>{' '}
+          {strategy.taglines.primary}
         </p>
       ) : null}
     </div>
@@ -58,14 +68,19 @@ function StrategyBody({ strategy }: { strategy: BrandStrategy }) {
 }
 
 function GuidelinesBody({ guidelines }: { guidelines: BrandGuidelines }) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <ChipList label="Do" items={guidelines.voice_rules?.dos} />
-      <ChipList label="Don't" items={guidelines.voice_rules?.donts} />
-      <ChipList label="Avoid" items={guidelines.messaging_guardrails?.banned_words} />
-      <ChipList label="Prefer" items={guidelines.messaging_guardrails?.preferred_terms} />
+      <ChipList label={tUi('m_22bdf47be3')} items={guidelines.voice_rules?.dos} />
+      <ChipList label={tUi('m_bfed24b7dd')} items={guidelines.voice_rules?.donts} />
+      <ChipList label={tUi('m_33fc27cf0a')} items={guidelines.messaging_guardrails?.banned_words} />
       <ChipList
-        label="Content pillars"
+        label={tUi('m_13f66243ef')}
+        items={guidelines.messaging_guardrails?.preferred_terms}
+      />
+      <ChipList
+        label={tUi('m_c5a309f176')}
         items={guidelines.content_pillars?.map((pillar) => pillar.pillar)}
       />
     </div>
@@ -82,14 +97,16 @@ export function StrategyGuidelinesRow({
   settled?: boolean;
   onRetry?: () => void;
 }) {
+  const tUi = useTranslations('onboarding');
+
   const strategy = buckets?.strategy ?? null;
   const guidelines = buckets?.guidelines ?? null;
 
   return (
-    <HorizontalRow label="Brand strategy" layout="grid">
+    <HorizontalRow label={tUi('m_a8015b8e67')} layout="grid">
       <CardSurface
-        title="Strategy"
-        badge="Positioning"
+        title={tUi('m_69fb26dda8')}
+        badge={tUi('dimensionPositioning')}
         status={buckets?.sectionStatus.strategy}
         isEmpty={!strategy}
         settled={settled}
@@ -111,8 +128,8 @@ export function StrategyGuidelinesRow({
       </CardSurface>
 
       <CardSurface
-        title="Guidelines"
-        badge="Operating rules"
+        title={tUi('m_141d1d74d8')}
+        badge={tUi('dnaBadgeOperatingRules')}
         status={buckets?.sectionStatus.guidelines}
         isEmpty={!guidelines}
         settled={settled}

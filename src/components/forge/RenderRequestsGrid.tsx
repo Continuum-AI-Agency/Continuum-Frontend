@@ -48,6 +48,7 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight, ClipboardPaste, Loader2, Send, Undo2, X } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDefaultLayout } from 'react-resizable-panels';
 import {
@@ -168,6 +169,7 @@ import {
 } from '@/components/forge/requestCells';
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
 import { checkpointGraph } from '@/components/forge/templateCheckpoints';
+import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -184,6 +186,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 import {
   fetchTemplateLineage,
@@ -479,6 +482,14 @@ export function RenderRequestsGrid({
   /** Jump to the template behind this set on the Templates tab (the shell switches tabs). */
   onOpenTemplate?: (intent: ForgeTemplateIntent) => void;
 }) {
+  const presentForge = useForgePresentationText();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   // A Final is the fleet's `test: false`; the backend refuses it to anyone but an owner or admin.
   const brandContext = useActiveBrandContext();
@@ -729,7 +740,9 @@ export function RenderRequestsGrid({
       .catch((error: unknown) => {
         if (cancelled) return;
         setTemplates([]);
-        setProblem(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+        setProblem(
+          describeRenderDiscoveryFailure(error instanceof Error ? error.message : '', presentForge),
+        );
       })
       .finally(() => {
         if (!cancelled) setBusy(null);
@@ -737,7 +750,7 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, queryClient, templatesEpoch]);
+  }, [brandId, queryClient, templatesEpoch, presentForge]);
 
   // A loaded set or draft carries Library pins but not their thumbnails or pixel sizes — those
   // are browser-side facts. Look each asset up once so cells, fit checks and the preview have
@@ -866,7 +879,10 @@ export function RenderRequestsGrid({
           value: queryClient.getQueryData<Awaited<ReturnType<typeof apiRendersApi.listInputSets>>>(
             reads.inputSets.queryKey,
           ),
-          error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+          error: describeRenderDiscoveryFailure(
+            error instanceof Error ? error.message : '',
+            presentForge,
+          ),
         })),
       queryClient
         .fetchQuery(reads.renderSets)
@@ -875,7 +891,10 @@ export function RenderRequestsGrid({
           value: queryClient.getQueryData<Awaited<ReturnType<typeof apiRendersApi.listRenderSets>>>(
             reads.renderSets.queryKey,
           ),
-          error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+          error: describeRenderDiscoveryFailure(
+            error instanceof Error ? error.message : '',
+            presentForge,
+          ),
         })),
     ])
       .then(([next, setsResult, savedSetsResult]) => {
@@ -925,7 +944,9 @@ export function RenderRequestsGrid({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+        toast.error(
+          describeRenderDiscoveryFailure(error instanceof Error ? error.message : '', presentForge),
+        );
         setInputSetLoad({
           phase: 'error',
           error: 'Input sets could not be loaded.',
@@ -946,7 +967,16 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, selection, templateKey, contractBindingId, queryClient, showRows, openSet]);
+  }, [
+    brandId,
+    selection,
+    templateKey,
+    contractBindingId,
+    queryClient,
+    showRows,
+    openSet,
+    presentForge,
+  ]);
 
   const retryInputSets = async () => {
     if (!contract) return;
@@ -973,7 +1003,10 @@ export function RenderRequestsGrid({
       setInputSetLoad((current) => ({
         ...current,
         phase: 'error',
-        error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        error: describeRenderDiscoveryFailure(
+          error instanceof Error ? error.message : '',
+          presentForge,
+        ),
         refreshing: false,
       }));
     }
@@ -1018,7 +1051,10 @@ export function RenderRequestsGrid({
       setRenderSetLoad((current) => ({
         ...current,
         phase: 'error',
-        error: describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
+        error: describeRenderDiscoveryFailure(
+          error instanceof Error ? error.message : '',
+          presentForge,
+        ),
         refreshing: false,
       }));
     }
@@ -1151,7 +1187,7 @@ export function RenderRequestsGrid({
         [...(variables ?? []), ...linkedFields],
         effectiveValues(rows, row.id),
       );
-      const errors = validateRow(variables ?? [], rendered.values);
+      const errors = validateRow(variables ?? [], rendered.values, translateUi);
       const rowCalls: Array<{ override: RenderOverride; message: string; key?: string }> = [];
       for (const problem of rendered.problems)
         if (problem.overridable)
@@ -1165,7 +1201,7 @@ export function RenderRequestsGrid({
       if (rowCalls.length) callsByRow.set(row.id, rowCalls);
     }
     return { clientErrors: errorsByRow, calls: callsByRow };
-  }, [rows, variables, linkedFields]);
+  }, [rows, variables, linkedFields, translateUi]);
 
   // --- row operations ---------------------------------------------------------------------
   // ponytail: reuse the inheritance walk per row; cache it if large sets make this slow.
@@ -1188,7 +1224,9 @@ export function RenderRequestsGrid({
     const current = latestRows.current;
     if (current.length + added.length > MAX_BATCH_ROWS) {
       toast.error(
-        `A render set supports at most ${MAX_BATCH_ROWS} rows, including forks. Nothing was added.`,
+        translateUi('a_render_set_supports_at_most_value_898f7567', {
+          value0: String(MAX_BATCH_ROWS),
+        }),
       );
       return false;
     }
@@ -1210,7 +1248,9 @@ export function RenderRequestsGrid({
     const parents = current.filter((row) => ids.includes(row.id));
     if (parents.some((row) => rowDepth(current, row.id) >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH)) {
       toast.error(
-        `Forks go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep. Nothing was added.`,
+        translateUi('forks_go_at_most_value0_levels_deep_fd53df7b', {
+          value0: String(FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH),
+        }),
       );
       return;
     }
@@ -1228,7 +1268,11 @@ export function RenderRequestsGrid({
     if (!contract) return;
     const current = latestRows.current;
     if (current.length >= MAX_BATCH_ROWS) {
-      toast.error(`A render set supports at most ${MAX_BATCH_ROWS} rows. Nothing was added.`);
+      toast.error(
+        translateUi('a_render_set_supports_at_most_value_8d30736a', {
+          value0: String(MAX_BATCH_ROWS),
+        }),
+      );
       return;
     }
     const { rows: next, added } = addSibling(
@@ -1249,7 +1293,7 @@ export function RenderRequestsGrid({
     const id = focusRowId.current;
     const input = id
       ? gridBox.current?.querySelector<HTMLInputElement>(
-          `tr[data-row-id="${id}"] input[aria-label="Row name"]`,
+          `tr[data-row-id="${id}"] input[data-row-name-input]`,
         )
       : null;
     if (!input) return;
@@ -1288,7 +1332,7 @@ export function RenderRequestsGrid({
     replaceRows(current.filter((row) => !gone.has(row.id)));
     toast.success(deletedMessage(picked, gone.size), {
       action: {
-        label: 'Undo',
+        label: translateUi('undo_a8283ade'),
         onClick: () => {
           if (history.current.past.at(-1) === before) undo();
         },
@@ -1351,7 +1395,11 @@ export function RenderRequestsGrid({
           .flatMap((revision) =>
             revision.publications.map((target) => ({
               id: `${revision.id}:${target.bindingId}:${target.templateKey}`,
-              label: `${variant.name} · Revision ${revision.number}${revision.publications.length > 1 ? ` · ${target.templateKey}` : ''}`,
+              label: translateUi('value0_revision_value1_value2_e8af889d', {
+                value0: String(variant.name),
+                value1: String(revision.number),
+                value2: String(revision.publications.length > 1 ? ` · ${target.templateKey}` : ''),
+              }),
               ref: {
                 templateId: variant.templateId,
                 variantId: variant.variantId,
@@ -1405,7 +1453,7 @@ export function RenderRequestsGrid({
           renderSetId: saved.id,
         });
         void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
-        toast.success('Set now uses the selected template revision.');
+        toast.success(translateUi('set_now_uses_the_selected_template__84413847'));
       } else {
         confirmDiscard(() => {
           setTemplateRevision(picked.ref);
@@ -1418,7 +1466,9 @@ export function RenderRequestsGrid({
       setPickedRevision('');
     } catch (cause) {
       toast.error(
-        cause instanceof Error ? cause.message : 'Rows need attention before changing revision.',
+        cause instanceof Error
+          ? cause.message
+          : translateUi('rows_need_attention_before_changing_dc01443e'),
       );
     } finally {
       setRevisionChangeBusy(false);
@@ -1470,7 +1520,7 @@ export function RenderRequestsGrid({
           });
           made.push(created.name);
         } catch (error) {
-          refused.push(`${name}: ${describeRenderDiscoveryFailure(error)}`);
+          refused.push(`${name}: ${describeRenderDiscoveryFailure(error, presentForge)}`);
         }
       }
     } finally {
@@ -1479,9 +1529,13 @@ export function RenderRequestsGrid({
     void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
     if (made.length)
       toast.success(
-        `Made ${made.length === 1 ? 'a set' : `${made.length} sets`}: ${made.join(', ')}`,
+        translateUi('made_value0_value1_60a7db48', {
+          value0: String(made.length === 1 ? translateUi('a_set_67c61cb3') : `${made.length} sets`),
+          value1: String(made.join(', ')),
+        }),
       );
-    if (refused.length) toast.error(`Not made — ${refused.join('; ')}`);
+    if (refused.length)
+      toast.error(translateUi('not_made_value0_0fe1bc8f', { value0: String(refused.join('; ')) }));
   };
   const currentSource = sourceVariants?.find(
     (item) => item.assetId === contract?.template.sourceAssetId,
@@ -1503,16 +1557,15 @@ export function RenderRequestsGrid({
   // template — the same edit as "Ask per row" in the template's Variables. Rows that never set
   // it keep rendering what the file has.
   const askSwitch = async (_variable: ApiRenderVariable) => {
-    toast.info('Open Edit layers to expose this field, save a template revision, then publish it.');
+    toast.info(translateUi('open_edit_layers_to_expose_this_fie_c2f6dea3'));
   };
 
   const saveAsInputs = (id: string) => {
     const row = latestRows.current.find((item) => item.id === id);
     if (!contract || !row) return;
     setNameRequest({
-      title: 'Save as inputs',
-      description:
-        'Saves what this row renders with — its own values and everything it inherits — as a reusable input set.',
+      title: translateUi('save_as_inputs_b47d5e52'),
+      description: translateUi('saves_what_this_row_renders_with_it_5c518632'),
       initialName: row.label || 'Untitled inputs',
       confirmLabel: 'Save inputs',
       onConfirm: async (name) => {
@@ -1529,10 +1582,15 @@ export function RenderRequestsGrid({
             queryKey: forgeQueryKeys.inputSets(brandId, contract.template.key),
             exact: true,
           });
-          toast.success(`Saved “${name}”`);
+          toast.success(translateUi('saved_value0_f085d930', { value0: String(name) }));
           setNameRequest(null);
         } catch (error) {
-          toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+          toast.error(
+            describeRenderDiscoveryFailure(
+              error instanceof Error ? error.message : '',
+              presentForge,
+            ),
+          );
         }
       },
     });
@@ -1581,7 +1639,7 @@ export function RenderRequestsGrid({
       rows: current.slice(0, MAX_BATCH_ROWS).map((row) => ({
         id: row.id,
         parentId: row.parentId,
-        label: row.label.trim() || 'Untitled',
+        label: row.label.trim() || translateUi('untitled_f59ab8d1'),
         outputIds: effectiveOutputIds(latestRows.current, row.id),
         values: effectiveValues(latestRows.current, row.id),
       })),
@@ -1597,7 +1655,11 @@ export function RenderRequestsGrid({
     if (!contract) return;
     const result = applyAssistOps(latestRows.current, response.ops ?? [], allOutputIdsOf(contract));
     if (result.rows.length > MAX_BATCH_ROWS) {
-      toast.error(`A render set supports at most ${MAX_BATCH_ROWS} rows. Nothing was changed.`);
+      toast.error(
+        translateUi('a_render_set_supports_at_most_value_2f696b4a', {
+          value0: String(MAX_BATCH_ROWS),
+        }),
+      );
       return;
     }
     const before = history.current.past.at(-1);
@@ -1620,9 +1682,9 @@ export function RenderRequestsGrid({
     }
     if (changed) {
       const mark = history.current.past.at(-1);
-      toast.success(response.reply || 'Done', {
+      toast.success(response.reply || translateUi('done_11a6767d'), {
         action: {
-          label: 'Undo',
+          label: translateUi('undo_a8283ade'),
           onClick: () => {
             if (history.current.past.at(-1) === mark) undo();
           },
@@ -1645,18 +1707,20 @@ export function RenderRequestsGrid({
     // produced nothing is a failure the person has to see rather than an empty success toast.
     const described = notes.length
       ? {
-          description: `${notes.slice(0, 3).join('; ')}${notes.length > 3 ? ` (+${notes.length - 3} more)` : ''}`,
+          description: `${notes.slice(0, 3).join('; ')}${notes.length > 3 ? translateUi('value0_more_86f3b0c4', { value0: String(notes.length - 3) }) : ''}`,
         }
       : undefined;
     if (drafted.length === 0) {
-      toast.error('Nothing usable came back — try again, or write a brief.', described);
+      toast.error(translateUi('nothing_usable_came_back_try_again__ef8f1cce'), described);
       return;
     }
     if (!appendRows(drafted)) return;
     setExpanded(true);
     setPreviewRowId(drafted[0]?.id ?? null);
     toast.success(
-      `${drafted.length} ${drafted.length === 1 ? 'row' : 'rows'} proposed — keep the ones you want`,
+      translateUi('value0_value1_proposed_keep_the_one_2d9bef1a', {
+        count: Number(drafted.length),
+      }),
       described,
     );
   };
@@ -1715,7 +1779,7 @@ export function RenderRequestsGrid({
             ...(activeSetRef.current ? { renderSetId: activeSetRef.current.id } : {}),
             parent: {
               id: row.id,
-              label: row.label.trim() || 'Untitled',
+              label: row.label.trim() || translateUi('untitled_f59ab8d1'),
               values: effectiveValues(current, row.id),
             },
             varyKeys,
@@ -1724,11 +1788,11 @@ export function RenderRequestsGrid({
       );
       acceptDrafts(responses);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
+      const message = uiErrorText(error);
       toast.error(
         message.includes('suggest_unavailable')
-          ? 'The AI writer is unavailable right now. Try again in a few minutes, or add rows by hand.'
-          : describeRenderDiscoveryFailure(message),
+          ? translateUi('the_ai_writer_is_unavailable_right__04e8eb12')
+          : describeRenderDiscoveryFailure(message, presentForge),
       );
     } finally {
       setGenerating(null);
@@ -1763,7 +1827,7 @@ export function RenderRequestsGrid({
         setAiDraft({
           parent: {
             id,
-            label: row.label.trim() || 'Untitled',
+            label: row.label.trim() || translateUi('untitled_f59ab8d1'),
             values: effectiveValues(latestRows.current, id),
           },
           // Arriving from a cell, the dialog opens with only that key ticked.
@@ -1933,11 +1997,12 @@ export function RenderRequestsGrid({
       });
       adoptSet(created, rowsToSave);
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
-      if (announce) toast.success(`Saved “${created.name}”`);
+      if (announce)
+        toast.success(translateUi('saved_value0_f085d930', { value0: String(created.name) }));
       return created;
     } catch (error) {
       if (rethrow) throw error;
-      toast.error(describeRenderDiscoveryFailure(error));
+      toast.error(describeRenderDiscoveryFailure(error, presentForge));
       return null;
     }
   };
@@ -1974,7 +2039,9 @@ export function RenderRequestsGrid({
     const next = [...restoreRows(fromRenderSetRows(merged), current), ...local];
     replaceRows(next);
     void rehydrateMedia(next);
-    toast.info(`“${fresh.name}” changed elsewhere; both sets of edits are kept.`);
+    toast.info(
+      translateUi('value0_changed_elsewhere_both_sets__e65de92d', { value0: String(fresh.name) }),
+    );
     return fresh;
   };
 
@@ -1989,8 +2056,7 @@ export function RenderRequestsGrid({
     const submitted = latestRows.current;
     const set = activeSetRef.current;
     if (!set && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft)) {
-      if (announce)
-        toast.error('Saved render sets are unavailable. Retry the list or create a named set.');
+      if (announce) toast.error(translateUi('saved_render_sets_are_unavailable_r_93c26ec3'));
       return null;
     }
     if (proposedIds(submitted).size === submitted.length) return set;
@@ -2013,17 +2079,18 @@ export function RenderRequestsGrid({
         });
         adoptSet(saved, submitted);
         void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
-        if (announce) toast.success(`Saved “${saved.name}”`);
+        if (announce)
+          toast.success(translateUi('saved_value0_f085d930', { value0: String(saved.name) }));
         setSaveState({ phase: 'idle' });
         return saved;
       } catch (error) {
-        const message = error instanceof Error ? error.message : '';
+        const message = uiErrorText(error);
         if (set && message.includes('render_set_revision_conflict')) {
           const merged = await resolveConflict(set, submitted);
           setSaveState({ phase: 'idle' });
           return merged;
         }
-        const reason = describeRenderDiscoveryFailure(error);
+        const reason = describeRenderDiscoveryFailure(error, presentForge);
         setSaveState({
           phase: 'failed',
           reason,
@@ -2112,10 +2179,10 @@ export function RenderRequestsGrid({
     if (busy || !bindingId || rows.length === 0) return;
     if (!activeSet && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft) && contract) {
       setNameRequest({
-        title: 'Save render set',
+        title: translateUi('save_render_set_e36b8d04'),
         description: renderSetLoad.initialFailed
-          ? 'Saved sets could not be checked. Give this set a name to save your rows.'
-          : 'Your edited rows are not assigned to a saved set. Name them here or choose a set.',
+          ? translateUi('saved_sets_could_not_be_checked_giv_db4c1545')
+          : translateUi('your_edited_rows_are_not_assigned_t_b75d0d1a'),
         initialName: 'New set',
         confirmLabel: 'Save set',
         onConfirm: async (name) => {
@@ -2163,13 +2230,13 @@ export function RenderRequestsGrid({
       setRenderSets((sets) => sets.map((item) => (item.id === updated.id ? updated : item)));
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
+      const message = uiErrorText(error);
       if (message.includes('render_set_revision_conflict')) {
         const fresh = await apiRendersApi.getRenderSet(brandId, set.id).catch(() => null);
         if (fresh)
           setRenderSets((sets) => sets.map((item) => (item.id === fresh.id ? fresh : item)));
-        toast.error('This set changed elsewhere. Reload it before saving again.');
-      } else toast.error(describeRenderDiscoveryFailure(message));
+        toast.error(translateUi('this_set_changed_elsewhere_reload_i_2386f5aa'));
+      } else toast.error(describeRenderDiscoveryFailure(message, presentForge));
       if (rethrow) throw error;
     }
   };
@@ -2190,7 +2257,7 @@ export function RenderRequestsGrid({
     });
     if (!created) return;
     showRows(copy, copy, contract);
-    toast.success(`Duplicated as “${created.name}”`);
+    toast.success(translateUi('duplicated_as_value0_e0844f1c', { value0: String(created.name) }));
   };
 
   /** A kept version as a new set. The set it came from is never written back over. */
@@ -2205,14 +2272,14 @@ export function RenderRequestsGrid({
       (revision.templateRevision.templateKey !== contract.template.key ||
         revision.templateRevision.bindingId !== bindingId)
     ) {
-      toast.info('Load the historical template revision before restoring this set.');
+      toast.info(translateUi('load_the_historical_template_revisi_9e701211'));
       return;
     }
     const restored = revision.templateRevision
       ? fromRenderSetRows(revision.rows)
       : rebaseRows(fromRenderSetRows(revision.rows), contract).rows;
     const created = await createSet(
-      `${revision.name} (restored ${formatRelativeTime(revision.savedAt)})`,
+      `${revision.name} (restored ${formatRelativeTime(revision.savedAt, undefined, currentUiLocale)})`,
       restored,
       {
         announce: false,
@@ -2230,7 +2297,7 @@ export function RenderRequestsGrid({
     if (!created) return;
     showRows(restored, restored, contract);
     setHistoryFor(null);
-    toast.success(`Restored as “${created.name}”`);
+    toast.success(translateUi('restored_as_value0_a9d9a251', { value0: String(created.name) }));
   };
 
   const deleteSet = async (set: ForgeRenderSet, confirmed = false) => {
@@ -2239,12 +2306,14 @@ export function RenderRequestsGrid({
       await apiRendersApi.deleteRenderSet(brandId, set.id);
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
     } catch (error) {
-      toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
+      toast.error(
+        describeRenderDiscoveryFailure(error instanceof Error ? error.message : '', presentForge),
+      );
       return;
     }
     const remaining = renderSets.filter((item) => item.id !== set.id);
     setRenderSets(remaining);
-    toast.success(`Deleted “${set.name}”`);
+    toast.success(translateUi('deleted_value0_fee7f4ae', { value0: String(set.name) }));
     if (set.id !== activeSet?.id) return;
     if (remaining[0]) loadRenderSet(remaining[0]);
     else {
@@ -2344,7 +2413,7 @@ export function RenderRequestsGrid({
     };
     for (const row of rows) {
       const status = statuses.get(row.id);
-      const label = row.label || 'Untitled';
+      const label = row.label || translateUi('untitled_f59ab8d1');
       if (status?.state === 'invalid') {
         const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
         if (Object.keys(status.errors).every((key) => missing.includes(key)))
@@ -2361,12 +2430,16 @@ export function RenderRequestsGrid({
       } else if (status?.state === 'unchecked' && status.findings.length) {
         counts.review += 1;
         for (const item of status.findings)
-          note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), label);
+          note(
+            `${item.code}:${item.variableKey ?? ''}`,
+            explainFinding(item, labelOf, translateUi),
+            label,
+          );
       } else if (status?.state === 'unchecked' && fitLoading) counts.checking += 1;
       else counts.ready += 1;
     }
     return { ...counts, findings: [...findings.entries()] };
-  }, [rows, statuses, variables, fitLoading]);
+  }, [rows, statuses, variables, fitLoading, translateUi]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   // Where renders go: the brand's rooms and ad accounts, the open set's defaults, each row's own.
   const destinations = useDeliveryDestinations(brandId);
@@ -2475,7 +2548,15 @@ export function RenderRequestsGrid({
     return index > 0 ? shown[index - 1]! : null;
   };
   const actionContext: GridActionContext | null = contract
-    ? { rows, selectedIds, contract, actions, hiddenColumns, generating: generating !== null }
+    ? {
+        rows,
+        selectedIds,
+        contract,
+        actions,
+        hiddenColumns,
+        generating: generating !== null,
+        translate: translateUi,
+      }
     : null;
   // Render opens the confirmation over the selected rows that can render, and lists the rest with
   // why: a wrong value, or a refusal no tick can override, leaves its row behind, never the batch.
@@ -2512,21 +2593,21 @@ export function RenderRequestsGrid({
   const canRender = !updateRequired && !renderingProposed && selected.length <= MAX_BATCH_ROWS;
   const readyToFire = Boolean(userId) && (held !== null || (canRender && selectedReady.length > 0));
   const fireHint = !userId
-    ? SIGNED_OUT
+    ? presentForge(SIGNED_OUT)
     : held
-      ? HELD_SET
+      ? presentForge(HELD_SET)
       : updateRequired
-        ? 'Update this set to the current template first'
+        ? translateUi('renderUpdateTemplateFirst')
         : renderingProposed
-          ? 'Keep or discard the proposed rows first'
+          ? translateUi('renderResolveProposedRows')
           : selected.length === 0
-            ? 'Select the rows to render'
+            ? translateUi('renderSelectRows')
             : selected.length > MAX_BATCH_ROWS
-              ? `At most ${MAX_BATCH_ROWS} renders per batch`
+              ? translateUi('renderBatchLimit', { count: MAX_BATCH_ROWS })
               : selectedReady.length === 0
                 ? skipReason(selected[0]!)
                 : skipped.length
-                  ? `${skipped.length} selected ${skipped.length === 1 ? 'row' : 'rows'} can’t render and ${skipped.length === 1 ? 'is' : 'are'} skipped`
+                  ? translateUi('renderSkippedRows', { count: skipped.length })
                   : null;
 
   // --- drag and drop ----------------------------------------------------------------------
@@ -2567,8 +2648,10 @@ export function RenderRequestsGrid({
     if (!moved.ok) {
       toast.error(
         moved.reason === 'cycle'
-          ? 'A row cannot move under one of its own forks. Nothing moved.'
-          : `Forks go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep. Nothing moved.`,
+          ? translateUi('a_row_cannot_move_under_one_of_its__b7806762')
+          : translateUi('forks_go_at_most_value0_levels_deep_295bb1aa', {
+              value0: String(FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH),
+            }),
       );
       return;
     }
@@ -2614,7 +2697,7 @@ export function RenderRequestsGrid({
       setSubset({
         rowIds: selectedReady.map((row) => row.id),
         skippedRows: skipped.map((row) => ({
-          label: row.label.trim() || 'Untitled',
+          label: row.label.trim() || translateUi('untitled_f59ab8d1'),
           message: skipReason(row),
         })),
       });
@@ -2647,10 +2730,13 @@ export function RenderRequestsGrid({
     const unsent = firedRows.filter(({ job }) => job.status === 'failed' && !job.taskUid);
     if (unsent.length)
       toast.error(
-        `${unsent.length} ${unsent.length === 1 ? 'row was' : 'rows were'} not sent — the render service refused ${unsent.length === 1 ? 'it' : 'them'}.`,
+        translateUi('value0_value1_not_sent_the_render_s_4268ceec', {
+          count: Number(unsent.length),
+          reason: String(unsent.length === 1 ? 'it' : 'them'),
+        }),
         {
           action: {
-            label: `Resend ${unsent.length}`,
+            label: translateUi('resend_value0_cb674e64', { value0: String(unsent.length) }),
             onClick: () => {
               setRowSelection(Object.fromEntries(unsent.map(({ rowId }) => [rowId, true])));
               setSubset(null);
@@ -2678,7 +2764,7 @@ export function RenderRequestsGrid({
     const refused = picked.flatMap((row) => {
       const status = statuses.get(row.id);
       return status?.state === 'refused'
-        ? [{ label: row.label.trim() || 'Untitled', message: status.reason }]
+        ? [{ label: row.label.trim() || translateUi('untitled_f59ab8d1'), message: status.reason }]
         : [];
     });
     const chosen = picked.filter((row) => statuses.get(row.id)?.state !== 'refused');
@@ -2686,14 +2772,14 @@ export function RenderRequestsGrid({
       skippedRows: [...(subset?.skippedRows ?? []), ...refused],
       rows: chosen.map((row) => ({
         rowId: row.id,
-        label: row.label.trim() || 'Untitled',
+        label: row.label.trim() || translateUi('untitled_f59ab8d1'),
         labelPath: rowBreadcrumb(rows, row.id),
         outputIds: effectiveOutputIds(rows, row.id),
         ...(row.delivery ? { delivery: toPreflightDelivery(row.delivery) } : {}),
       })),
       records: chosen.map(
         (row): ApiRenderBatchRecord => ({
-          label: row.label.trim() || 'Untitled',
+          label: row.label.trim() || translateUi('untitled_f59ab8d1'),
           renderSetId: activeSet.id,
           renderSetRowId: row.id,
           expectedRenderSetRevision: activeSet.revision,
@@ -2708,7 +2794,7 @@ export function RenderRequestsGrid({
       ),
       calls: chosen.flatMap((row) => calls.get(row.id) ?? []),
     };
-  }, [confirming, subset, activeSet, rows, rowSelection, calls, statuses]);
+  }, [confirming, subset, activeSet, rows, rowSelection, calls, statuses, translateUi]);
 
   // --- keyboard ---------------------------------------------------------------------------
   /** The same column's field one row down (or up), selected for typing over. */
@@ -2793,7 +2879,7 @@ export function RenderRequestsGrid({
         !target ||
         target === document.body ||
         Boolean(box && (box.contains(target) || target.contains(box))) ||
-        Boolean(target.closest('[role="toolbar"][aria-label="Render"]'));
+        Boolean(target.closest('[data-render-toolbar]'));
       const key = event.key.toLowerCase();
       if (key === 's') {
         event.preventDefault();
@@ -2820,21 +2906,27 @@ export function RenderRequestsGrid({
           {activeSet?.templateRevision ? (
             <span>
               {pinnedRevisionLabel
-                ? `${pinnedRevisionLabel.variant.name} · Revision ${pinnedRevisionLabel.revision.number}`
-                : `Revision ${activeSet.templateRevision.revisionId.slice(0, 8)}`}{' '}
-              · pinned to this set
+                ? translateUi('value0_revision_value1_b3f8983b', {
+                    value0: String(pinnedRevisionLabel.variant.name),
+                    value1: String(pinnedRevisionLabel.revision.number),
+                  })
+                : translateUi('revision_value0_76f40621', {
+                    value0: String(activeSet.templateRevision.revisionId.slice(0, 8)),
+                  })}{' '}
+              {translateUi('pinned_to_this_set_b23bb654')}{' '}
             </span>
           ) : null}
           <label className="flex items-center gap-2">
-            Variant revision
+            {' '}
+            {translateUi('variant_revision_e804ec1f')}{' '}
             <select
-              aria-label="Published template revision"
+              aria-label={translateUi('published_template_revision_02172571')}
               className="h-8 max-w-64 rounded-md border bg-background px-2"
               value={pickedRevision}
               disabled={revisionChangeBusy || needsSave}
               onChange={(event) => setPickedRevision(event.target.value)}
             >
-              <option value="">Choose a published revision</option>
+              <option value="">{translateUi('choose_a_published_revision_056a46ff')}</option>
               {publishedRevisions.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}
@@ -2848,20 +2940,25 @@ export function RenderRequestsGrid({
             disabled={!pickedRevision || revisionChangeBusy || needsSave}
             onClick={() => void changeRevision()}
           >
-            {activeSet ? 'Change set template revision' : 'Load template revision'}
+            {activeSet
+              ? translateUi('change_set_template_revision_bfde4c62')
+              : translateUi('load_template_revision_f9a32780')}
           </Button>
           {activeSet && otherVariantHeads.length ? (
             <Button
               size="xs"
               variant="outline"
               disabled={revisionChangeBusy || needsSave}
-              title="Copies this set's rows to a new set on every other published variant, pinned to its published revision."
+              title={translateUi('copies_this_set_s_rows_to_a_new_set_21862fc3')}
               onClick={() => void runOnVariants()}
             >
-              Run on{' '}
+              {' '}
+              {translateUi('run_on_f4b4b028')}{' '}
               {otherVariantHeads.length === 1
-                ? '1 other variant'
-                : `${otherVariantHeads.length} other variants`}
+                ? translateUi('1_other_variant_da69703f')
+                : translateUi('value0_other_variants_8de66a37', {
+                    count: Number(otherVariantHeads.length),
+                  })}
             </Button>
           ) : null}
         </div>
@@ -2965,12 +3062,12 @@ export function RenderRequestsGrid({
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
-          <AlertTitle>Input sets could not be loaded</AlertTitle>
+          <AlertTitle>{translateUi('input_sets_could_not_be_loaded_f18ba24b')}</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>
               {inputSetLoad.hasData
-                ? 'Showing the last loaded input sets.'
-                : 'The input set list is unknown; an empty result has not been assumed.'}
+                ? translateUi('showing_the_last_loaded_input_sets_9a9cfe45')
+                : translateUi('the_input_set_list_is_unknown_an_em_808f1832')}
             </span>
             <Button
               type="button"
@@ -2979,19 +3076,21 @@ export function RenderRequestsGrid({
               disabled={inputSetLoad.refreshing}
               onClick={() => void retryInputSets()}
             >
-              {inputSetLoad.refreshing ? 'Retrying…' : 'Retry'}
+              {inputSetLoad.refreshing
+                ? translateUi('retrying_a16c8b1c')
+                : translateUi('retry_942087cc')}
             </Button>
           </AlertDescription>
         </Alert>
       ) : null}
       {contract && renderSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
-          <AlertTitle>Saved render sets could not be loaded</AlertTitle>
+          <AlertTitle>{translateUi('saved_render_sets_could_not_be_load_d40b261f')}</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>
               {renderSetLoad.hasData
-                ? 'Showing the last loaded sets. Your rows are preserved while you retry.'
-                : 'Saved sets are unknown. Your rows are preserved; use New set to save with a name.'}
+                ? translateUi('showing_the_last_loaded_sets_your_r_a1464d2f')
+                : translateUi('saved_sets_are_unknown_your_rows_ar_c803bce5')}
             </span>
             <Button
               type="button"
@@ -3000,29 +3099,31 @@ export function RenderRequestsGrid({
               disabled={renderSetLoad.refreshing}
               onClick={() => void retryRenderSets()}
             >
-              {renderSetLoad.refreshing ? 'Retrying…' : 'Retry'}
+              {renderSetLoad.refreshing
+                ? translateUi('retrying_a16c8b1c')
+                : translateUi('retry_942087cc')}
             </Button>
           </AlertDescription>
         </Alert>
       ) : null}
       {contract && renderSetLoad.phase === 'ready' && renderSetLoad.unassignedDraft ? (
         <Alert className="shrink-0 py-2">
-          <AlertTitle>Your edited rows are not assigned to a saved set</AlertTitle>
+          <AlertTitle>{translateUi('your_edited_rows_are_not_assigned_t_5ebc2f8d')}</AlertTitle>
           <AlertDescription>
-            Choose an existing set, or use Save to create a named set. Your rows will stay here
-            until you choose.
+            {' '}
+            {translateUi('choose_an_existing_set_or_use_save__feab5ff6')}{' '}
           </AlertDescription>
         </Alert>
       ) : null}
       {problem ? <p className="text-xs text-destructive">{problem}</p> : null}
       {updateRequired && activeSet ? (
         <section
-          aria-label="Older template"
+          aria-label={translateUi('older_template_631ab51f')}
           className="flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs"
         >
           <p className="min-w-0 flex-1">
-            “{activeSet.name}” was saved for an earlier version of this template. Updating it
-            removes what this version no longer has: {rebaseDrops.join(', ')}.
+            “{activeSet.name}
+            {translateUi('was_saved_for_an_earlier_version_of_244f46b2')} {rebaseDrops.join(', ')}.
           </p>
           <Button
             type="button"
@@ -3041,22 +3142,24 @@ export function RenderRequestsGrid({
               if (!askIfHeld(activeSet, () => void update())) void update();
             }}
           >
-            Update set
+            {' '}
+            {translateUi('update_set_d5491ff4')}{' '}
           </Button>
         </section>
       ) : null}
 
       {conflict ? (
         <section
-          aria-label="Changed elsewhere"
+          aria-label={translateUi('changed_elsewhere_719c3d46')}
           className="flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs"
         >
           <p className="min-w-0 flex-1">
-            “{conflict.name}” was changed elsewhere, on some of the same rows you changed here.
-            Autosave is paused until you choose.
+            “{conflict.name}
+            {translateUi('was_changed_elsewhere_on_some_of_th_446dfd1e')}{' '}
           </p>
           <Button type="button" size="xs" variant="outline" onClick={() => loadRenderSet(conflict)}>
-            Load their version
+            {' '}
+            {translateUi('load_their_version_00c60e1b')}{' '}
           </Button>
           <Button
             type="button"
@@ -3067,25 +3170,31 @@ export function RenderRequestsGrid({
               await createSet(`${conflict.name} (mine)`, mine);
             }}
           >
-            Keep mine as a new set
+            {' '}
+            {translateUi('keep_mine_as_a_new_set_7da75732')}{' '}
           </Button>
         </section>
       ) : null}
       {generating || proposed.size ? (
         <section
-          aria-label="Proposed rows"
+          aria-label={translateUi('proposed_rows_68d27e44')}
           className="flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs"
         >
           {generating ? (
             <p className="flex min-w-0 flex-1 items-center gap-1.5">
-              <Loader2 className="size-3 animate-spin" aria-hidden />
-              Drafting {generating.count} {generating.count === 1 ? 'variation' : 'variations'} of{' '}
-              {generating.of}…
+              <Loader2 className="size-3 animate-spin" aria-hidden />{' '}
+              {translateUi('drafting_1f91c1e4')} {generating.count}{' '}
+              {generating.count === 1
+                ? translateUi('variation_819b60bb')
+                : translateUi('variations_925a391b')}{' '}
+              {translateUi('of_28391d3b')} {generating.of}…
             </p>
           ) : (
             <p className="min-w-0 flex-1">
-              {proposed.size} proposed {proposed.size === 1 ? 'row' : 'rows'} · not saved until you
-              keep {proposed.size === 1 ? 'it' : 'them'}.
+              {proposed.size} {translateUi('proposed_81e766d8')}{' '}
+              {proposed.size === 1 ? translateUi('row_634768da') : translateUi('rows_bc51e9e6')}{' '}
+              {translateUi('not_saved_until_you_keep_a6428997')}{' '}
+              {proposed.size === 1 ? translateUi('it_2ad8a704') : translateUi('them_c9a8dc33')}.
             </p>
           )}
           <Button
@@ -3102,7 +3211,8 @@ export function RenderRequestsGrid({
               )
             }
           >
-            Keep all
+            {' '}
+            {translateUi('keep_all_9b80a741')}{' '}
           </Button>
           <Button
             type="button"
@@ -3118,7 +3228,8 @@ export function RenderRequestsGrid({
               )
             }
           >
-            Discard all
+            {' '}
+            {translateUi('discard_all_5f30ee87')}{' '}
           </Button>
         </section>
       ) : null}
@@ -3142,11 +3253,14 @@ export function RenderRequestsGrid({
                   size="xs"
                   variant="ghost"
                   className="h-6 max-w-[60ch] truncate px-1.5 font-normal text-muted-foreground"
-                  title="Where this set's renders go — click to change"
+                  title={translateUi('where_this_set_s_renders_go_click_t_403a4eb3')}
                   onClick={() => setSettingsFor(activeSet)}
                 >
                   <span className="truncate">
-                    → {web ? 'Library' : deliverySummary(setSettings, slackName, roomNames)}
+                    →{' '}
+                    {web
+                      ? translateUi('library_dc20b3d5')
+                      : deliverySummary(setSettings, slackName, roomNames)}
                   </span>
                 </Button>
               ) : null
@@ -3184,11 +3298,13 @@ export function RenderRequestsGrid({
             }}
           />
           <section
-            aria-label="Selected rows"
+            aria-label={translateUi('selected_rows_2f1b6ecc')}
             hidden={selected.length === 0}
             className="flex shrink-0 flex-wrap items-center gap-1 rounded-md border bg-muted/30 px-2 py-1 text-xs"
           >
-            <span className="mr-1 font-medium tabular-nums">{selected.length} selected</span>
+            <span className="mr-1 font-medium tabular-nums">
+              {selected.length} {translateUi('selected_d7cbbb68')}
+            </span>
             {/* The same actions as a row's menus, acting on every selected row. */}
             {actionContext
               ? selectionActions(actionContext, selectedIds, { counted: false })
@@ -3214,7 +3330,9 @@ export function RenderRequestsGrid({
                   <PopoverTrigger
                     render={
                       <Button type="button" size="xs" variant="ghost">
-                        <Send data-icon="inline-start" /> Send to ad set…
+                        <Send data-icon="inline-start" /> {translateUi(
+                          'send_to_ad_set_f720ee36',
+                        )}{' '}
                       </Button>
                     }
                   />
@@ -3243,18 +3361,19 @@ export function RenderRequestsGrid({
                   disabled={!selected.some((row) => row.delivery)}
                   title={
                     setSettings.metaTarget
-                      ? 'Back to the set’s default ad set'
-                      : 'Back to the Library only — this set has no default ad set'
+                      ? translateUi('back_to_the_set_s_default_ad_set_eb330b50')
+                      : translateUi('back_to_the_library_only_this_set_h_b59740bb')
                   }
                   onClick={() => changeDelivery(selectedIds, null)}
                 >
-                  <Undo2 data-icon="inline-start" /> Use set default
+                  <Undo2 data-icon="inline-start" /> {translateUi('use_set_default_0accd8c3')}{' '}
                 </Button>
                 <Popover>
                   <PopoverTrigger
                     render={
                       <Button type="button" size="xs" variant="ghost">
-                        <ClipboardPaste data-icon="inline-start" /> Ad targets…
+                        <ClipboardPaste data-icon="inline-start" />{' '}
+                        {translateUi('ad_targets_b3645622')}{' '}
                       </Button>
                     }
                   />
@@ -3267,7 +3386,7 @@ export function RenderRequestsGrid({
                       meta={destinations.meta}
                       rows={selected.map((row) => ({
                         rowId: row.id,
-                        label: row.label.trim() || 'Untitled',
+                        label: row.label.trim() || translateUi('untitled_f59ab8d1'),
                         labelPath: rowBreadcrumb(rows, row.id),
                         outputIds: effectiveOutputIds(rows, row.id),
                         ...(row.delivery ? { delivery: toPreflightDelivery(row.delivery) } : {}),
@@ -3291,7 +3410,7 @@ export function RenderRequestsGrid({
               size="icon-xs"
               variant="ghost"
               className="ml-auto"
-              aria-label="Clear selection"
+              aria-label={translateUi('clear_selection_cea4d2e0')}
               onClick={() => setRowSelection({})}
             >
               <X aria-hidden />
@@ -3341,8 +3460,12 @@ export function RenderRequestsGrid({
                               }
                             : undefined
                         }
-                        groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${ready} ready • ${selected.length} selected`}
-                        empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
+                        groupHeader={translateUi('requestGridGroupHeader', {
+                          count: rows.length,
+                          ready,
+                          selected: selected.length,
+                        })}
+                        empty={translateUi('requestGridEmpty')}
                       />
                     </RowDropHintContext.Provider>
                   </SortableContext>
@@ -3368,7 +3491,7 @@ export function RenderRequestsGrid({
                 </div>
                 {/* The previewed row's fields at the pane's full width: room for long copy. */}
                 <section
-                  aria-label="Fields"
+                  aria-label={translateUi('fields_616f48c1')}
                   className="flex max-h-[40%] shrink-0 flex-col border-t border-border"
                 >
                   <Button
@@ -3386,12 +3509,12 @@ export function RenderRequestsGrid({
                       <ChevronDown className="size-3" aria-hidden />
                     ) : (
                       <ChevronRight className="size-3" aria-hidden />
-                    )}
-                    Fields
+                    )}{' '}
+                    {translateUi('fields_616f48c1')}{' '}
                     <span className="min-w-0 truncate font-normal normal-case tracking-normal">
                       {previewId
                         ? (rows.find((row) => row.id === previewId)?.label ?? '')
-                        : 'Pick a row'}
+                        : translateUi('pick_a_row_f86f72db')}
                     </span>
                   </Button>
                   {fieldsOpen && previewId ? (
@@ -3406,7 +3529,7 @@ export function RenderRequestsGrid({
           {/* One line under the grid: what is ready, and on request every reason a row is not. */}
           <details className="group shrink-0 rounded-md border text-xs">
             <summary
-              aria-label="Readiness"
+              aria-label={translateUi('readiness_d53d98c1')}
               className="flex h-8 cursor-pointer list-none items-center gap-2 px-[var(--card-pad)]"
             >
               <ChevronRight
@@ -3418,7 +3541,8 @@ export function RenderRequestsGrid({
               </span>
               {fit.state === 'unmeasured' && rows.length ? (
                 <span className="min-w-0 truncate text-muted-foreground">
-                  · Layout fit isn’t measured for this template — rows can still render
+                  {' '}
+                  {translateUi('layout_fit_isn_t_measured_for_this__74050533')}{' '}
                 </span>
               ) : null}
               {fireHint && selected.length ? (
@@ -3431,17 +3555,18 @@ export function RenderRequestsGrid({
                   {readiness.findings.map(([key, finding]) => (
                     <li key={key}>
                       {contract.variables.find((variable) => variable.key === key)?.label ??
-                        'Check'}
+                        translateUi('check_9d60841e')}
                       : {finding.message} — {finding.rows.join(', ')}
                     </li>
                   ))}
                 </ul>
               ) : null}
               <p>
-                To add a field or change the layout, ask a designer to update the template.
+                {' '}
+                {translateUi('to_add_a_field_or_change_the_layout_7a9ca81a')}{' '}
                 {contract.template.contractSource === 'template_forge'
                   ? ''
-                  : ' This template sets no text limits, so check long text in the preview.'}
+                  : translateUi('this_template_sets_no_text_limits_s_c6161378')}
               </p>
             </div>
           </details>
@@ -3466,7 +3591,8 @@ export function RenderRequestsGrid({
         </>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-          Choose a template to set up renders.
+          {' '}
+          {translateUi('choose_a_template_to_set_up_renders_5491f196')}{' '}
         </div>
       )}
       {contract ? (
@@ -3547,7 +3673,7 @@ export function RenderRequestsGrid({
         title={nameRequest?.title ?? ''}
         description={nameRequest?.description}
         initialName={nameRequest?.initialName ?? ''}
-        confirmLabel={nameRequest?.confirmLabel ?? 'Save'}
+        confirmLabel={nameRequest?.confirmLabel ?? translateUi('save_1509f561')}
         onConfirm={(name) => nameRequest?.onConfirm(name)}
         onOpenChange={(open) => {
           if (open) return;
@@ -3561,13 +3687,13 @@ export function RenderRequestsGrid({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unconfirmed render</AlertDialogTitle>
+            <AlertDialogTitle>{translateUi('unconfirmed_render_c4a6f394')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {heldConfirmCopy(heldConfirm?.copy ?? false)}
+              {heldConfirmCopy(heldConfirm?.copy ?? false, translateUi)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 const action = heldConfirm;
@@ -3575,7 +3701,8 @@ export function RenderRequestsGrid({
                 action?.run();
               }}
             >
-              Continue
+              {' '}
+              {translateUi('continue_31fbef16')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3586,17 +3713,19 @@ export function RenderRequestsGrid({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsaved edits?</AlertDialogTitle>
+            <AlertDialogTitle>{translateUi('discard_unsaved_edits_b090da02')}</AlertDialogTitle>
             <AlertDialogDescription>
               {proposed.size
-                ? 'Proposed rows are saved only once you keep them; these will be lost.'
+                ? translateUi('proposed_rows_are_saved_only_once_y_37ca2bd1')
                 : activeSet
-                  ? `Changes to “${activeSet.name}” could not be saved and will be lost.`
-                  : 'These rows were never saved to a render set.'}
+                  ? translateUi('changes_to_value0_could_not_be_save_56efbe7f', {
+                      value0: String(activeSet.name),
+                    })
+                  : translateUi('these_rows_were_never_saved_to_a_re_e5ab9dd1')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogCancel>{translateUi('keep_editing_e76fd2ad')}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
@@ -3605,7 +3734,8 @@ export function RenderRequestsGrid({
                 action?.();
               }}
             >
-              Discard
+              {' '}
+              {translateUi('discard_eb1a70e3')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -3,7 +3,12 @@ import { afterEach, describe, expect, mock, test } from 'bun:test';
 const uploadBrandFont = mock(async () => ({ family: 'Heading Now', format: 'otf', bytes: 4 }));
 mock.module('@/lib/library/templateSources', () => ({ uploadBrandFont }));
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 
 afterEach(() => {

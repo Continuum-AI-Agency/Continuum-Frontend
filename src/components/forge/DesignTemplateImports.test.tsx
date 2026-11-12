@@ -8,7 +8,7 @@ import {
   renderHook,
   screen,
   waitFor,
-} from '@testing-library/react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const importDesign = mock(
   async (): Promise<DesignImportResponse> => ({

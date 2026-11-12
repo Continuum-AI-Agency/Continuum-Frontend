@@ -60,7 +60,13 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { SharedTemplateDetail } from './SharedTemplateDetail';
 import type { SharedTemplate } from './TemplateCard';
 

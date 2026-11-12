@@ -41,8 +41,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   useCallback,
   useEffect,
@@ -51,6 +50,7 @@ import {
   useRef,
   useState,
   useTransition,
+  useMemo as useUiConfigMemo,
 } from 'react';
 import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
 import {
@@ -70,6 +70,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { useRouter } from '@/i18n/navigation';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import {
   createLibraryCollectionOperation,
@@ -102,6 +103,7 @@ import { useProjects } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
+import AssetDetailModal from './detail/AssetDetailMessages';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
@@ -134,19 +136,21 @@ import { useAssetFieldValues } from './views/useAssetFieldValues';
 import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
 
 // The detail stage (zoom, players, waveforms) loads when an asset is opened, not with the grid.
-const AssetDetailModal = dynamic(
-  () => import('./detail/AssetDetailModal').then((module) => module.AssetDetailModal),
-  { ssr: false, loading: () => null },
-);
 
 const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip,.psd,.ai';
 
-const LAYOUT_TABS = [
-  { id: 'grid', label: 'Grid', Icon: LayoutGrid },
-  { id: 'list', label: 'List', Icon: List },
-  { id: 'board', label: 'Board', Icon: Columns3 },
-  { id: 'reel', label: 'Reel', Icon: GalleryHorizontalEnd },
-] as const;
+function useLocalLayoutTabsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value = [
+      { id: 'grid', label: translateConfig('grid_0d7d12ac'), Icon: LayoutGrid },
+      { id: 'list', label: translateConfig('list_6f202f54'), Icon: List },
+      { id: 'board', label: translateConfig('board_4816cbfd'), Icon: Columns3 },
+      { id: 'reel', label: translateConfig('reel_9cb145e8'), Icon: GalleryHorizontalEnd },
+    ] as const;
+    return value;
+  }, [translateConfig]);
+}
 
 type Props = {
   brandId: string;
@@ -180,6 +184,10 @@ export function LibraryViewer({
   initialViewConfig = {},
   initialTrashOpen = false,
 }: Props) {
+  const LAYOUT_TABS = useLocalLayoutTabsMessages();
+
+  const translateUi = useUiTranslations('library');
+
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const selectedCollectionId = initialBrowseQuery.collectionId ?? null;
@@ -321,11 +329,11 @@ export function LibraryViewer({
 
   const isSearching = searchResults !== null;
   const emptyHint = isSearching
-    ? 'No results. Try a different search.'
+    ? translateUi('librarySearchEmptyHint')
     : filteredProjectNames.length === 1
-      ? `Nothing in ${filteredProjectNames[0]} yet. Select assets and use Tag to add them.`
+      ? translateUi('libraryProjectEmptyHint', { project: filteredProjectNames[0]! })
       : filteredProjectNames.length > 1
-        ? 'Nothing in these projects yet. Select assets and use Tag to add them.'
+        ? translateUi('libraryProjectsEmptyHint')
         : undefined;
   const displayedAssets = (() => {
     const rows = isSearching ? searchResults!.map((r) => r.asset) : assets;
@@ -622,7 +630,7 @@ export function LibraryViewer({
 
   const onStackDrop = useCallback(
     (target: MediaAsset, sourceAssetIds: string[]) => {
-      void stackDroppedAssets(brandId, target, sourceAssetIds).then((stacked) => {
+      void stackDroppedAssets(brandId, target, sourceAssetIds, translateUi).then((stacked) => {
         if (!stacked) return;
         setSelectedAssetIds((current) => {
           const next = new Set(current);
@@ -632,7 +640,7 @@ export function LibraryViewer({
         refreshAssets();
       });
     },
-    [brandId, refreshAssets],
+    [brandId, refreshAssets, translateUi],
   );
 
   const collectionDrop = useCollectionAssetDrop({
@@ -813,7 +821,13 @@ export function LibraryViewer({
           mode: 'add',
         })
           .then(() => router.refresh())
-          .catch(() => toast.error(`${file.name} uploaded, but could not be filed in its folder`));
+          .catch(() =>
+            toast.error(
+              translateUi('value0_uploaded_but_could_not_be_fi_58443fbd', {
+                value0: String(file.name),
+              }),
+            ),
+          );
       }
       setAssetRevision((revision) => revision + 1);
       router.refresh();
@@ -822,7 +836,7 @@ export function LibraryViewer({
         onSelectDestination('templates');
       }
     },
-    [brandId, importDesign, onSelectDestination, router],
+    [brandId, importDesign, onSelectDestination, router, translateUi],
   );
   const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload, moveUpload } =
     useMediaUpload(brandId, { onUploaded });
@@ -847,7 +861,9 @@ export function LibraryViewer({
           const { expandDesignArchives } = await import('@/components/forge/designArchive');
           files = await expandDesignArchives(files);
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : 'Could not open the ZIP');
+          toast.error(
+            error instanceof Error ? error.message : translateUi('could_not_open_the_zip_4b43b056'),
+          );
           return;
         }
       }
@@ -859,7 +875,7 @@ export function LibraryViewer({
       }
       if (media.length > 0) void uploadFiles(media);
     },
-    [showTemplates, uploadFiles],
+    [showTemplates, uploadFiles, translateUi],
   );
 
   const routeFolderFiles = useCallback(
@@ -879,11 +895,11 @@ export function LibraryViewer({
         }
         router.refresh();
       } catch {
-        toast.error('Could not recreate the folders as collections; uploading the files anyway');
+        toast.error(translateUi('could_not_recreate_the_folders_as_c_313cbfae'));
       }
       routeUploadFiles(entries.map((entry) => entry.file));
     },
-    [brandId, routeUploadFiles, router],
+    [brandId, routeUploadFiles, router, translateUi],
   );
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -915,7 +931,7 @@ export function LibraryViewer({
       <div
         className="flex shrink-0 items-center gap-1 border-b border-border px-4 pt-2"
         role="tablist"
-        aria-label="Library sections"
+        aria-label={translateUi('library_sections_47f7820e')}
       >
         {(['media', 'inspiration'] as const).map((id) => (
           <button
@@ -982,12 +998,12 @@ export function LibraryViewer({
             <PageHeader
               title={
                 showTypography
-                  ? 'Typography'
+                  ? translateUi('typography_cab94aba')
                   : showPipelines
-                    ? 'Pipelines'
+                    ? translateUi('pipelines_d1a8fffe')
                     : showTemplates
-                      ? 'Templates'
-                      : (activeCollection?.name ?? browseTitle ?? 'Home')
+                      ? translateUi('templates_56b564b7')
+                      : (activeCollection?.name ?? browseTitle ?? translateUi('home_3a786953'))
               }
               action={
                 showTemplates ? undefined : (
@@ -1019,12 +1035,13 @@ export function LibraryViewer({
                         variant="outline"
                         size="sm"
                         disabled
-                        title="Figma import is work in progress"
+                        title={translateUi('figma_import_is_work_in_progress_8bbcf081')}
                       >
                         <FigmaIcon className="size-4" />
-                        <span className="hidden sm:inline">Figma</span>
+                        <span className="hidden sm:inline">{translateUi('figma_ce460410')}</span>
                         <span className="rounded bg-muted px-1 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          WIP
+                          {' '}
+                          {translateUi('wip_a9e0ba49')}{' '}
                         </span>
                       </Button>
                       <Button
@@ -1032,11 +1049,11 @@ export function LibraryViewer({
                         variant={showBoundingBoxes ? 'secondary' : 'outline'}
                         size="sm"
                         onClick={() => setShowBoundingBoxes((v) => !v)}
-                        title="Toggle detected-object overlays"
+                        title={translateUi('toggle_detected_object_overlays_8440eb01')}
                         className="active:scale-[0.96] [transition-property:scale]"
                       >
                         <ScanSearch className="size-4" />
-                        <span className="hidden sm:inline">Objects</span>
+                        <span className="hidden sm:inline">{translateUi('objects_de5236ee')}</span>
                       </Button>
                       <Button
                         type="button"
@@ -1048,10 +1065,10 @@ export function LibraryViewer({
                           setTrashOpen(!trashOpen);
                           setTrashUrl(!trashOpen);
                         }}
-                        title="Recently deleted assets"
+                        title={translateUi('recently_deleted_assets_28ee870d')}
                       >
                         <Trash2 className="size-4" />
-                        <span className="hidden sm:inline">Trash</span>
+                        <span className="hidden sm:inline">{translateUi('trash_c560122a')}</span>
                       </Button>
                       <Button
                         type="button"
@@ -1059,10 +1076,10 @@ export function LibraryViewer({
                         size="sm"
                         data-testid="library-upload-folder"
                         onClick={() => folderInputRef.current?.click()}
-                        title="Upload a folder: its subfolders become nested collections"
+                        title={translateUi('upload_a_folder_its_subfolders_beco_ccb35d25')}
                       >
                         <FolderUp className="size-4" />
-                        <span className="hidden sm:inline">Folder</span>
+                        <span className="hidden sm:inline">{translateUi('folder_74ccd433')}</span>
                       </Button>
                       <Button
                         type="button"
@@ -1070,8 +1087,7 @@ export function LibraryViewer({
                         onClick={() => fileInputRef.current?.click()}
                         className="active:scale-[0.96] [transition-property:scale]"
                       >
-                        <Upload className="size-4" />
-                        Upload
+                        <Upload className="size-4" /> {translateUi('upload_865e89de')}{' '}
                       </Button>
                     </div>
                   </div>
@@ -1165,7 +1181,11 @@ export function LibraryViewer({
                   value={optimisticSort}
                   onValueChange={(value: LibrarySort) => pushFilters({ sort: value })}
                 >
-                  <SelectTrigger size="sm" aria-label="Sort library" className="h-8">
+                  <SelectTrigger
+                    size="sm"
+                    aria-label={translateUi('sort_library_758242ba')}
+                    className="h-8"
+                  >
                     <SelectValue
                       items={Object.fromEntries(
                         sortOptions.map((option) => [option.value, option.label]),
@@ -1191,13 +1211,17 @@ export function LibraryViewer({
                       pushFilters({ performanceWindow: value })
                     }
                   >
-                    <SelectTrigger size="sm" aria-label="Performance window" className="h-8 w-24">
+                    <SelectTrigger
+                      size="sm"
+                      aria-label={translateUi('performance_window_26ecaf3d')}
+                      className="h-8 w-24"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="end">
-                      <SelectItem value="d7">7 days</SelectItem>
-                      <SelectItem value="d14">14 days</SelectItem>
-                      <SelectItem value="d30">30 days</SelectItem>
+                      <SelectItem value="d7">{translateUi('7_days_7f920bb6')}</SelectItem>
+                      <SelectItem value="d14">{translateUi('14_days_60acc36e')}</SelectItem>
+                      <SelectItem value="d30">{translateUi('30_days_ffd72805')}</SelectItem>
                     </SelectContent>
                   </Select>
                 ) : null}
@@ -1212,7 +1236,7 @@ export function LibraryViewer({
                 <div
                   className="flex items-center gap-1 rounded-lg border border-border p-0.5"
                   role="tablist"
-                  aria-label="Library layout"
+                  aria-label={translateUi('library_layout_8c36578f')}
                 >
                   {LAYOUT_TABS.map(({ id, label, Icon }) => (
                     <button
@@ -1302,7 +1326,8 @@ export function LibraryViewer({
 
             {!isPaid && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600 dark:text-amber-400">
-                Upgrade to a paid plan to enable AI analysis, descriptions, and semantic search.
+                {' '}
+                {translateUi('upgrade_to_a_paid_plan_to_enable_ai_788a2b29')}{' '}
               </div>
             )}
 
@@ -1359,8 +1384,8 @@ export function LibraryViewer({
                       p_project_ids on the listing route, which is not this change. */}
                   {initialBrowseQuery.projectIds.length > 0 ? (
                     <p className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                      Board view doesn&apos;t filter by project yet — switch to Grid to see only
-                      this project&apos;s assets.
+                      {' '}
+                      {translateUi('board_view_doesn_t_filter_by_projec_8cd4b914')}{' '}
                     </p>
                   ) : null}
                   <LibraryBoardView
@@ -1485,7 +1510,9 @@ export function LibraryViewer({
                   <div className="flex flex-col items-center gap-2 text-primary">
                     <Upload className="size-7" />
                     <span className="text-sm font-medium">
-                      {showTemplates ? 'Drop to add template' : 'Drop to upload'}
+                      {showTemplates
+                        ? translateUi('drop_to_add_template_4c581e40')
+                        : translateUi('drop_to_upload_936e6ec1')}
                     </span>
                   </div>
                 </motion.div>
@@ -1506,6 +1533,8 @@ function ThenBySortControl({
   value: readonly LibrarySortSpec[];
   onChange: (thenBy: LibrarySortSpec[]) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const labelOf = (key: string) =>
     LIBRARY_THEN_BY_KEYS.find((option) => option.value === key)?.label ?? key;
   const unused = LIBRARY_THEN_BY_KEYS.filter(
@@ -1519,7 +1548,8 @@ function ThenBySortControl({
             type="button"
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground hover:bg-accent"
           >
-            Then by
+            {' '}
+            {translateUi('then_by_98f781d8')}{' '}
             {value.length > 0 ? (
               <span className="rounded-full bg-primary/10 px-1.5 text-primary">{value.length}</span>
             ) : null}
@@ -1543,7 +1573,10 @@ function ThenBySortControl({
                     ),
                   )
                 }
-                aria-label={`${label}: ${ascending ? 'ascending' : 'descending'}. Reverse`}
+                aria-label={translateUi('value0_value1_reverse_1796eac8', {
+                  value0: String(label),
+                  value1: String(ascending ? 'ascending' : 'descending'),
+                })}
                 className="rounded-md px-2 py-1 text-sm hover:bg-accent"
               >
                 {ascending ? '↑' : '↓'}
@@ -1551,7 +1584,9 @@ function ThenBySortControl({
               <button
                 type="button"
                 onClick={() => onChange(value.filter((_, at) => at !== index))}
-                aria-label={`Stop sorting by ${label}`}
+                aria-label={translateUi('stop_sorting_by_value0_6ade1d14', {
+                  value0: String(label),
+                })}
                 className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <X className="size-3.5" />
@@ -1564,8 +1599,12 @@ function ThenBySortControl({
             value={null}
             onValueChange={(key: LibrarySortKey) => onChange([...value, { key, dir: 'desc' }])}
           >
-            <SelectTrigger size="sm" aria-label="Add a sort key" className="h-8 w-full">
-              <SelectValue placeholder="Add a sort key" />
+            <SelectTrigger
+              size="sm"
+              aria-label={translateUi('add_a_sort_key_cfb31cfb')}
+              className="h-8 w-full"
+            >
+              <SelectValue placeholder={translateUi('add_a_sort_key_cfb31cfb')} />
             </SelectTrigger>
             <SelectContent>
               {unused.map((option) => (

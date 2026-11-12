@@ -9,6 +9,7 @@ import {
   getStraightPath,
   useReactFlow,
 } from '@xyflow/react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { memo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -76,12 +77,25 @@ export const DataTypeEdge = memo(
     data,
     markerEnd,
   }: EdgeProps) => {
+    const translateUi = useUiTranslations('studio');
+
     const { deleteElements } = useReactFlow();
     const [showDetails, setShowDetails] = useState(false);
     const [showReconnectHint, setShowReconnectHint] = useState(false);
     const edgeData = data as DataTypeEdgeData | undefined;
 
     const dataType = edgeData?.dataType || 'text';
+    const dataTypeLabel = translateUi(
+      (
+        {
+          text: 'text_71988c4d',
+          image: 'image_1aa4cb0b',
+          video: 'video_d534be82',
+          audio: 'audio_bc1b8890',
+          document: 'document_d6bd8c0a',
+        } as const
+      )[dataType],
+    );
     const isActive = edgeData?.isActive ?? false;
     const isDotted = edgeData?.isDotted ?? false;
     const pathType = edgeData?.pathType || 'bezier';
@@ -146,13 +160,16 @@ export const DataTypeEdge = memo(
               }}
             >
               <div className="studio-handle-pill rounded-md px-2 py-1 text-2xs font-medium uppercase tracking-tight shadow-sm">
-                {edgeData?.label ?? dataType}
+                {edgeData?.label ?? dataTypeLabel}
               </div>
               {selected ? (
                 <div
                   className="nodrag nowheel mt-1 flex min-w-max items-center gap-1 rounded-md border border-border bg-background p-1 text-xs shadow-sm"
                   role="toolbar"
-                  aria-label={`Connection from ${source} to ${target}`}
+                  aria-label={translateUi('connection_from_value0_to_value1_7337eeb1', {
+                    value0: String(source),
+                    value1: String(target),
+                  })}
                 >
                   <Button
                     type="button"
@@ -162,7 +179,8 @@ export const DataTypeEdge = memo(
                     aria-expanded={showDetails}
                     onClick={() => setShowDetails((value) => !value)}
                   >
-                    Inspect
+                    {' '}
+                    {translateUi('inspect_e0723a86')}{' '}
                   </Button>
                   <Button
                     type="button"
@@ -171,7 +189,8 @@ export const DataTypeEdge = memo(
                     className="h-7 px-2 text-xs"
                     onClick={() => setShowReconnectHint(true)}
                   >
-                    Reconnect
+                    {' '}
+                    {translateUi('reconnect_bf8a9eab')}{' '}
                   </Button>
                   <Button
                     type="button"
@@ -180,16 +199,18 @@ export const DataTypeEdge = memo(
                     className="h-7 px-2 text-xs text-destructive"
                     onClick={() => void deleteElements({ edges: [{ id }] })}
                   >
-                    Delete
+                    {' '}
+                    {translateUi('delete_e2d0a549')}{' '}
                   </Button>
                   {showDetails ? (
                     <span className="px-1 text-muted-foreground">
-                      {source} → {target} · {dataType}
+                      {source} → {target} · {dataTypeLabel}
                     </span>
                   ) : null}
                   {showReconnectHint ? (
                     <span className="px-1 text-muted-foreground" role="status">
-                      Drag either endpoint to a compatible port.
+                      {' '}
+                      {translateUi('drag_either_endpoint_to_a_compatibl_c0ad6ea9')}{' '}
                     </span>
                   ) : null}
                 </div>

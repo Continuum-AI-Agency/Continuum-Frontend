@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
@@ -24,6 +25,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from '@/components/ui/toast-imperative';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { decideApprovals } from '@/lib/library/approvalDecisions';
 import { decideRenderApproval, fetchRenderApprovals } from '@/lib/library/renderApprovals';
 import { cn } from '@/lib/utils';
@@ -47,17 +50,15 @@ import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 // and never folds itself, so deciding the last batch leaves its outcome in view. Past decisions
 // alone start folded; once the person toggles it, it stays where they put it.
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: 'Waiting on you',
-  approved: 'Publishing…',
-  published: 'Published, paused',
-  // Approved, but the workspace has Meta writes switched off. Not a publish, and
-  // saying so is the point.
-  previewed: 'Approved — Meta writes are off',
-  rejected: 'Rejected',
-  failed: 'Publishing failed',
-  expired: 'Expired',
-};
+const STATUS_KEYS = {
+  pending: 'approvalStatusWaiting',
+  approved: 'approvalStatusPublishing',
+  published: 'approvalStatusPublished',
+  previewed: 'approvalStatusPreviewed',
+  rejected: 'rejected_aea4a04a',
+  failed: 'approvalStatusFailed',
+  expired: 'expired_424a2551',
+} as const;
 
 // Theme tokens (hex, so the Tailwind token classes — never `hsl(var(--x))`).
 const STATUS_TONE: Record<string, string> = {
@@ -76,13 +77,6 @@ const VIA_LABEL: Record<RenderApprovalDecidedVia, string> = {
   whatsapp: 'WhatsApp',
   system: 'Continuum',
   library: 'Library',
-};
-
-// The reconciler's reason codes in words; an unmapped reason is shown as written.
-const REASON_COPY: Record<string, string> = {
-  expired: 'Nobody decided before the package expired.',
-  publish_interrupted_check_meta:
-    'Publishing was interrupted. Check Ads Manager before sending it again.',
 };
 
 /** Re-read quickly while a decision is still being relayed; otherwise the usual slow poll. */
@@ -134,27 +128,37 @@ function useApprovalRenders(brandId: string, enabled: boolean) {
 export const waitingCount = (approvals: RenderApproval[] | undefined) =>
   approvals?.filter((approval) => approval.status === 'pending').length;
 
-const when = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const when = (iso: string, locale: UiLocale = 'en') =>
+  new Date(iso).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
-function decidedLine(approval: RenderApproval): string | null {
+type ForgeText = ReturnType<typeof useUiTranslations<'forge'>>;
+function decidedLine(approval: RenderApproval, locale: UiLocale, t: ForgeText): string | null {
   if (!approval.decidedAt) return null;
   const who = approval.decidedByDisplayName ?? approval.decidedByName;
-  const via = approval.decidedVia ? VIA_LABEL[approval.decidedVia] : null;
-  return [
-    'Decided',
-    who ? `by ${who}` : null,
-    via ? `via ${via}` : null,
-    `· ${when(approval.decidedAt)}`,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const via =
+    approval.decidedVia === 'library'
+      ? t('library_dc20b3d5')
+      : approval.decidedVia
+        ? VIA_LABEL[approval.decidedVia]
+        : null;
+  return t('approvalDecidedLine', {
+    hasWho: who ? 'yes' : 'no',
+    who: who ?? '',
+    hasVia: via ? 'yes' : 'no',
+    via: via ?? '',
+    time: when(approval.decidedAt, locale),
+  });
 }
 
-function reasonText(approval: RenderApproval): string | null {
+function reasonText(approval: RenderApproval, t: ForgeText): string | null {
   if (approval.status === 'pending') return null;
   const reason = approval.decisionReason ?? (approval.status === 'expired' ? 'expired' : null);
-  return reason ? (REASON_COPY[reason] ?? reason) : null;
+  // Free-form reasons written by a person remain authored content.
+  return reason === 'expired'
+    ? t('approvalReasonExpired')
+    : reason === 'publish_interrupted_check_meta'
+      ? t('approvalReasonInterrupted')
+      : reason;
 }
 
 type Entry = RenderApproval | { packageId: string; approvals: RenderApproval[] };
@@ -196,6 +200,10 @@ function ApprovalCard({
   busy: boolean;
   onDecide: (id: string, decision: 'approve' | 'reject') => void;
 }) {
+  const calendarLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const first = approval.files[0];
   // The ledger's copy of the file this approval shows: its poster and 480p, not the fleet's original.
   const rendered = first ? outputs?.find((output) => sameFile(output.url, first.url)) : undefined;
@@ -204,10 +212,10 @@ function ApprovalCard({
   const pending = approval.status === 'pending';
   const destination =
     approval.action === 'replace' && approval.adId
-      ? `ad ${approval.adId}`
+      ? translateUi('approvalDestinationAd', { id: approval.adId })
       : approval.adsetId
-        ? `ad set ${approval.adsetId}`
-        : 'its ad set';
+        ? translateUi('approvalDestinationAdset', { id: approval.adsetId })
+        : translateUi('approvalDestinationOwnAdset');
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-start">
@@ -226,14 +234,15 @@ function ApprovalCard({
         ) : first ? (
           <img
             src={rendered ? thumbnailSrc(rendered) : first.url}
-            alt="Rendered creative"
+            alt={translateUi('rendered_creative_ee63a43a')}
             loading="lazy"
             decoding="async"
             className="h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
-            No preview
+            {' '}
+            {translateUi('no_preview_4b8bacd8')}{' '}
           </div>
         )}
       </div>
@@ -241,11 +250,13 @@ function ApprovalCard({
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={cn('text-xs', STATUS_TONE[approval.status])}>
-            {STATUS_LABEL[approval.status] ?? approval.status}
+            {translateUi(STATUS_KEYS[approval.status])}
           </Badge>
-          <span className="text-xs text-muted-foreground">Publishes to {destination}</span>
           <span className="text-xs text-muted-foreground">
-            {approval.files.length} file{approval.files.length === 1 ? '' : 's'}
+            {translateUi('publishes_to_174bb972')} {destination}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {translateUi('approvalFiles', { count: approval.files.length })}
           </span>
           {approval.groupKey ? (
             <Badge variant="secondary" className="text-xs">
@@ -263,14 +274,18 @@ function ApprovalCard({
           <p className="line-clamp-3 text-sm text-foreground/90">{first.adCopy}</p>
         ) : null}
 
-        {reasonText(approval) ? (
-          <p className="text-xs text-muted-foreground">{reasonText(approval)}</p>
+        {reasonText(approval, translateUi) ? (
+          <p className="text-xs text-muted-foreground">{reasonText(approval, translateUi)}</p>
         ) : null}
-        {decidedLine(approval) ? (
-          <p className="text-xs text-muted-foreground">{decidedLine(approval)}</p>
+        {decidedLine(approval, calendarLocale, translateUi) ? (
+          <p className="text-xs text-muted-foreground">
+            {decidedLine(approval, calendarLocale, translateUi)}
+          </p>
         ) : null}
         {pending && approval.expiresAt && !approval.packageId ? (
-          <p className="text-xs text-muted-foreground">Expires {when(approval.expiresAt)}</p>
+          <p className="text-xs text-muted-foreground">
+            {translateUi('expires_f6725f3a')} {when(approval.expiresAt, calendarLocale)}
+          </p>
         ) : null}
 
         {pending ? (
@@ -280,8 +295,8 @@ function ApprovalCard({
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <CheckCircle2 className="mr-1 h-3 w-3" />
-              )}
-              Approve and publish paused
+              )}{' '}
+              {translateUi('approve_and_publish_paused_ad6bf111')}{' '}
             </Button>
             <Button
               size="sm"
@@ -289,8 +304,7 @@ function ApprovalCard({
               disabled={busy}
               onClick={() => onDecide(approval.id, 'reject')}
             >
-              <XCircle className="mr-1 h-3 w-3" />
-              Reject
+              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_ab604a36')}{' '}
             </Button>
           </div>
         ) : null}
@@ -316,6 +330,10 @@ function ApprovalPackage({
   onDecide: (id: string, decision: Decision) => void;
   onDecideAll: (packageId: string, ids: string[], decision: Decision) => void;
 }) {
+  const calendarLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const pendingIds = approvals
     .filter((approval) => approval.status === 'pending')
     .map((approval) => approval.id);
@@ -323,24 +341,27 @@ function ApprovalPackage({
   const deciding = busyId === packageId;
   const expiresAt = approvals.find((approval) => approval.expiresAt)?.expiresAt ?? null;
   const expired = expiresAt !== null && Date.parse(expiresAt) <= Date.now();
-  const variations = `${approvals.length} variation${approvals.length === 1 ? '' : 's'}`;
+  const variations = translateUi('approvalVariations', { count: approvals.length });
   return (
     <section
-      aria-label={`Approval package, ${variations}`}
+      aria-label={translateUi('approval_package_value0_96405376', { value0: String(variations) })}
       className="space-y-2 rounded-lg border border-dashed p-2"
     >
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs">
         <span className="inline-flex items-center gap-1.5 font-medium">
-          <Package className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-          Package · {variations}
+          <Package className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />{' '}
+          {translateUi('package_e943f25d')} {variations}
         </span>
         <span className="text-muted-foreground">
-          {waiting ? `${waiting} waiting` : 'All decided'}
+          {waiting
+            ? translateUi('value0_waiting_243a8a63', { count: Number(waiting) })
+            : translateUi('all_decided_587977f1')}
         </span>
         {expiresAt ? (
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             <Clock className="h-3 w-3" aria-hidden />
-            {expired ? 'Expired' : 'Expires'} {when(expiresAt)}
+            {expired ? translateUi('expired_424a2551') : translateUi('expires_f6725f3a')}{' '}
+            {when(expiresAt, calendarLocale)}
           </span>
         ) : null}
         {waiting > 1 ? (
@@ -354,8 +375,8 @@ function ApprovalPackage({
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <CheckCircle2 className="mr-1 h-3 w-3" />
-              )}
-              Approve all {waiting}
+              )}{' '}
+              {translateUi('approve_all_ae067b68')} {waiting}
             </Button>
             <Button
               size="sm"
@@ -363,8 +384,7 @@ function ApprovalPackage({
               disabled={busyId !== null}
               onClick={() => onDecideAll(packageId, pendingIds, 'reject')}
             >
-              <XCircle className="mr-1 h-3 w-3" />
-              Reject all
+              <XCircle className="mr-1 h-3 w-3" /> {translateUi('reject_all_adba2523')}{' '}
             </Button>
           </span>
         ) : null}
@@ -383,6 +403,9 @@ function ApprovalPackage({
 }
 
 export function PendingApprovals({ brandId }: { brandId: string }) {
+  const uiErrorText = useUiErrorMessage();
+  const translateUi = useUiTranslations('forge');
+
   const [busyId, setBusyId] = useState<string | null>(null);
   const [open, setOpen] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
@@ -393,13 +416,15 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
   const loadAlert = approvalQuery.isError ? (
     <Alert variant="destructive" className="py-2">
       <AlertTitle>
-        {approvalQuery.data ? 'Approvals could not be refreshed' : 'Approvals could not be loaded'}
+        {approvalQuery.data
+          ? translateUi('approvals_could_not_be_refreshed_8296eb17')
+          : translateUi('approvals_could_not_be_loaded_5ea08751')}
       </AlertTitle>
       <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
         <span>
           {approvalQuery.data
-            ? 'Showing the last loaded approvals.'
-            : 'Pending approval status is unknown until the list loads.'}
+            ? translateUi('showing_the_last_loaded_approvals_ec974281')
+            : translateUi('pending_approval_status_is_unknown__798a2f00')}
         </span>
         <Button
           type="button"
@@ -408,7 +433,9 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
           disabled={approvalQuery.isFetching}
           onClick={() => void approvalQuery.refetch()}
         >
-          {approvalQuery.isFetching ? 'Retrying…' : 'Retry'}
+          {approvalQuery.isFetching
+            ? translateUi('retrying_a16c8b1c')
+            : translateUi('retry_942087cc')}
         </Button>
       </AlertDescription>
     </Alert>
@@ -430,25 +457,27 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
         const status = result.approval.status;
         toast.success(
           status === 'approved'
-            ? 'Approved. Publishing now — the outcome appears here in a moment.'
+            ? translateUi('approved_publishing_now_the_outcome_c23bd0e7')
             : status === 'published'
-              ? 'Published as a paused ad.'
+              ? translateUi('published_as_a_paused_ad_62b6f835')
               : status === 'previewed'
-                ? 'Approved — Meta writes are switched off for this workspace, so nothing was published.'
+                ? translateUi('approved_meta_writes_are_switched_o_420dffad')
                 : status === 'rejected'
-                  ? 'Rejected. Nothing was published.'
-                  : `Recorded, but publishing did not complete: ${result.deliveryReason ?? 'see the render log'}`,
+                  ? translateUi('rejected_nothing_was_published_1df64808')
+                  : translateUi('recorded_but_publishing_did_not_com_9dbc262d', {
+                      value0: String(translateUi('see_the_render_log_4229bc1a')),
+                    }),
         );
         void queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
       } catch (error) {
-        // The server's refusal, as written: it says why this person cannot decide this batch.
-        toast.error(error instanceof Error ? error.message : 'That decision did not go through.');
+        console.error('[PendingApprovals] Decision failed', error);
+        toast.error(uiErrorText(error));
         void queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
       } finally {
         setBusyId(null);
       }
     },
-    [approvalKey, brandId, queryClient],
+    [approvalKey, brandId, queryClient, translateUi, uiErrorText],
   );
 
   const onDecideAll = useCallback(
@@ -460,28 +489,43 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
         const missed = results.filter((result) => result.outcome !== 'decided');
         const done =
           decision === 'approve'
-            ? `Approved ${decided}. Publishing now — the outcomes appear here in a moment.`
-            : `Rejected ${decided}. Nothing was published.`;
+            ? translateUi('approvalApprovedSummary', { count: decided })
+            : translateUi('approvalRejectedSummary', { count: decided });
         if (missed.length === 0) toast.success(done);
         // Someone else deciding one first is a normal race; say how many, and the first reason.
-        else
-          toast.warning(`${done} ${missed.length} not decided: ${missed[0]?.error ?? ''}`.trim());
+        else {
+          console.warn('[PendingApprovals] Some decisions were refused', missed);
+          toast.warning(
+            translateUi('approvalPartialSummary', {
+              done,
+              count: missed.length,
+              outcome: missed[0]?.outcome ?? 'refused',
+            }),
+          );
+        }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Those decisions did not go through.');
+        console.error('[PendingApprovals] Package decisions failed', error);
+        toast.error(uiErrorText(error));
       } finally {
         void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
         void queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
         setBusyId(null);
       }
     },
-    [approvalKey, brandId, queryClient],
+    [approvalKey, brandId, queryClient, translateUi, uiErrorText],
   );
 
   if (approvalQuery.isPending && approvalQuery.data === undefined)
-    return <p className="py-1 text-xs text-muted-foreground">Loading approvals…</p>;
+    return (
+      <p className="py-1 text-xs text-muted-foreground">
+        {translateUi('loading_approvals_5a7ee168')}
+      </p>
+    );
   if (approvalQuery.data === undefined) return loadAlert;
   if (approvals.length === 0)
-    return loadAlert ? <section aria-label="Pending approvals status">{loadAlert}</section> : null;
+    return loadAlert ? (
+      <section aria-label={translateUi('pending_approvals_status_8c08b365')}>{loadAlert}</section>
+    ) : null;
 
   const waiting = waitingCount(approvals) ?? 0;
   if (open === null && waiting > 0) setOpen(true);
@@ -497,10 +541,13 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
           />
           <ShieldCheck className="h-4 w-4 shrink-0 text-warning" aria-hidden />
           <span className="font-medium text-sm">
-            Pending approvals{waiting > 0 ? ` (${waiting})` : ''}
+            {' '}
+            {translateUi('pending_approvals_0405f4b6')}
+            {waiting > 0 ? ` (${waiting})` : ''}
           </span>
           <span className="truncate text-xs text-muted-foreground">
-            Rendered creatives waiting for a person before they become ads.
+            {' '}
+            {translateUi('rendered_creatives_waiting_for_a_pe_cf22b62e')}{' '}
           </span>
         </CollapsibleTrigger>
       </h2>

@@ -2,6 +2,8 @@
 
 import { CheckCircle, File, Loader2, Upload, X } from 'lucide-react';
 import Image from 'next/image';
+import {useLocale,useTranslations} from 'next-intl';
+import {useUiErrorMessage} from '@/i18n/errors';
 import { createContext, type PropsWithChildren, useCallback, useContext } from 'react';
 import { Button } from '@/components/ui/button';
 import type { UseSupabaseUploadReturn } from '@/hooks/use-supabase-upload';
@@ -63,6 +65,9 @@ const Dropzone = ({
   );
 };
 const DropzoneContent = ({ className }: { className?: string }) => {
+  const uiText = useTranslations('common');
+ const uiLocale=useLocale();const getUiErrorMessage=useUiErrorMessage();
+ const formatSize=(bytes:number)=>formatBytes(bytes,2).replace(/^[\d.]+/,n=>new Intl.NumberFormat(uiLocale,{maximumFractionDigits:2}).format(Number(n)));
   const {
     files,
     setFiles,
@@ -89,7 +94,7 @@ const DropzoneContent = ({ className }: { className?: string }) => {
       <div className={cn('flex flex-row items-center gap-x-2 justify-center', className)}>
         <CheckCircle size={16} className="text-primary" />
         <p className="text-primary text-sm">
-          Successfully uploaded {files.length} file{files.length > 1 ? 's' : ''}
+          {uiText('m_f4732088ed',{count:files.length})}
         </p>
       </div>
     );
@@ -131,20 +136,21 @@ const DropzoneContent = ({ className }: { className?: string }) => {
                 <p className="text-xs text-destructive">
                   {file.errors
                     .map((e) =>
-                      e.message.startsWith('File is larger than')
-                        ? `File is larger than ${formatBytes(maxFileSize, 2)} (Size: ${formatBytes(file.size, 2)})`
-                        : e.message,
+                      e.code==='file-too-large'?uiText('m_da453e496a',{maximum:formatSize(maxFileSize),size:formatSize(file.size)}):e.code==='file-invalid-type'?uiText('m_949a95b1b8'):e.code==='file-too-small'?uiText('m_9ba62c07b0'):getUiErrorMessage(e),
                     )
                     .join(', ')}
                 </p>
               ) : loading && !isSuccessfullyUploaded ? (
-                <p className="text-xs text-muted-foreground">Uploading…</p>
+                <p className="text-xs text-muted-foreground">{uiText('uploading_5ce44dd')}</p>
               ) : fileError ? (
-                <p className="text-xs text-destructive">Failed to upload: {fileError.message}</p>
+                <p className="text-xs text-destructive">
+                  {uiText('m_8cbe01ad08')}
+                  {getUiErrorMessage(fileError)}
+                </p>
               ) : isSuccessfullyUploaded ? (
-                <p className="text-xs text-primary">Uploaded</p>
+                <p className="text-xs text-primary">{uiText('uploaded_3cc3767')}</p>
               ) : (
-                <p className="text-xs text-muted-foreground">{formatBytes(file.size, 2)}</p>
+                <p className="text-xs text-muted-foreground">{formatSize(file.size)}</p>
               )}
             </div>
 
@@ -153,7 +159,8 @@ const DropzoneContent = ({ className }: { className?: string }) => {
                 size="icon"
                 variant="link"
                 className="shrink-0 justify-self-end text-muted-foreground hover:text-foreground"
-                onClick={() => handleRemoveFile(file.name)}
+                aria-label={uiText('m_df7193a589',{name:file.name})}
+ onClick={() => handleRemoveFile(file.name)}
               >
                 <X />
               </Button>
@@ -163,8 +170,7 @@ const DropzoneContent = ({ className }: { className?: string }) => {
       })}
       {exceedMaxFiles && (
         <p className="text-sm text-left mt-2 text-destructive">
-          You may upload only up to {maxFiles} files, please remove {files.length - maxFiles} file
-          {files.length - maxFiles > 1 ? 's' : ''}.
+          {uiText('m_20487e645c',{maximum:maxFiles,excess:files.length-maxFiles})}
         </p>
       )}
       {files.length > 0 && !exceedMaxFiles && (
@@ -177,10 +183,10 @@ const DropzoneContent = ({ className }: { className?: string }) => {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Uploading...
+                {uiText('m_070e328ec8')}
               </>
             ) : (
-              <>Upload files</>
+              <>{uiText('m_41aca16f90')}</>
             )}
           </Button>
         </div>
@@ -190,6 +196,10 @@ const DropzoneContent = ({ className }: { className?: string }) => {
 };
 
 const DropzoneEmptyState = ({ className }: { className?: string }) => {
+  const tUi = useTranslations('common');
+ const uiLocale=useLocale();
+ const formatSize=(bytes:number)=>formatBytes(bytes,2).replace(/^[\d.]+/,n=>new Intl.NumberFormat(uiLocale,{maximumFractionDigits:2}).format(Number(n)));
+
   const { maxFiles, maxFileSize, inputRef, isSuccess } = useDropzoneContext();
 
   if (isSuccess) {
@@ -200,21 +210,24 @@ const DropzoneEmptyState = ({ className }: { className?: string }) => {
     <div className={cn('flex flex-col items-center gap-y-1 text-xs leading-tight', className)}>
       <Upload size={16} className="text-muted-foreground" />
       <p className="text-xs">
-        Upload{maxFiles && maxFiles > 1 ? ` ${maxFiles}` : ''} file
-        {!maxFiles || maxFiles > 1 ? 's' : ''}
+        {tUi('m_cc6f4f6c17',{unlimited:!maxFiles?'yes':'no',count:maxFiles??0})}
       </p>
       <div className="flex flex-col items-center gap-y-0.5 text-xs">
         <p className="text-muted-foreground">
-          Drag & drop or{' '}
-          <a
+          {tUi('m_33e92dd69b')}{' '}
+          <button
+            type="button"
             onClick={() => inputRef.current?.click()}
             className="underline cursor-pointer transition hover:text-foreground"
           >
-            select
-          </a>
+            {tUi('m_81448fe273')}
+          </button>
         </p>
         {maxFileSize !== Number.POSITIVE_INFINITY && (
-          <p className="text-muted-foreground">Max: {formatBytes(maxFileSize, 2)}</p>
+          <p className="text-muted-foreground">
+            {tUi('m_f0a855f72e')}
+            {formatSize(maxFileSize)}
+          </p>
         )}
       </div>
     </div>

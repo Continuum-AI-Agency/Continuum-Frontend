@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { render } from '@/i18n/__tests__/render';
 import {
   CARDS,
   campaignsBeforeE1,
@@ -134,8 +135,9 @@ describe('QualityScoreMapView', () => {
       />,
     );
     expect(document.body.textContent).toContain(
-      'The Google Ads Quality Score read did not answer.',
+      'An unexpected error occurred. Please try again.',
     );
+ expect(document.body.textContent).not.toContain('The Google Ads Quality Score read did not answer.');
   });
 });
 
@@ -296,7 +298,7 @@ describe('PmaxHealthView', () => {
     cleanup();
     view({ ...pmaxFixture(), signals: null, rejected: [] });
     expect(screen.getByTestId('pmax-unread').textContent).toBe(
-      '— The Google read came back incomplete',
+      '— The Google read came back incomplete. Refresh and try again.',
     );
     expect(document.body.textContent).toContain(PMAX_NOT_READ);
   });

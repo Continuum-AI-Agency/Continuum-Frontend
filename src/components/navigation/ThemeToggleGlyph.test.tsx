@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { render } from '@testing-library/react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render, renderToStaticMarkup } from '@/i18n/__tests__/render';
 
 import { ThemeToggleGlyph, ThemeToggleText } from './ThemeToggleGlyph';
 

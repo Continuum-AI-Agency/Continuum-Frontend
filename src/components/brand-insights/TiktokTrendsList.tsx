@@ -1,4 +1,5 @@
 'use client';
+import {useLocale,useTranslations} from 'next-intl';
 
 // TikTok trends in the brand's markets, from TikTok's official Discovery API. Top videos
 // come with no metrics (TikTok returns none), so they are shown as links, never scored.
@@ -11,11 +12,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useTiktokTrends } from '@/lib/api/competitorSpy';
 import { ApiError } from '@/lib/api/errors';
 
-const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+
 const VIDEO_ROWS = 10;
 
 function RankChange({ value }: { value: string }) {
-  if (value === 'NEW') return <span className="text-xs text-emerald-600">new</span>;
+  const tUi = useTranslations('common');
+
+  if (value === 'NEW')
+    return <span className="text-xs text-emerald-600">{tUi('m_c2a6b03f19')}</span>;
   const delta = Number(value);
   if (!Number.isFinite(delta) || delta === 0) return null;
   // Read as places gained when positive; the tiktok trends bench checks this against
@@ -24,7 +28,7 @@ function RankChange({ value }: { value: string }) {
   return (
     <span className={delta > 0 ? 'text-xs text-emerald-600' : 'text-xs text-rose-600'}>
       <Icon className="inline h-3 w-3" aria-hidden />
-      <span className="sr-only">{delta > 0 ? 'up' : 'down'} </span>
+      <span className="sr-only">{delta > 0 ? tUi('m_7c0a25c06e') : tUi('m_77346d0447')} </span>
       {Math.abs(delta)}
     </span>
   );
@@ -37,6 +41,9 @@ function HashtagRow({
   hashtag: TiktokTrendingHashtag;
   showVideos: boolean;
 }) {
+  const tUi = useTranslations('common');
+
+  const compact = new Intl.NumberFormat(useLocale(),{notation:'compact',maximumFractionDigits:1});
   const competitorVideos = hashtag.videos.filter((v) => v.isCompetitor);
   return (
     <li className="border-b px-3 py-2 last:border-0">
@@ -52,13 +59,19 @@ function HashtagRow({
           </p>
         </div>
         <div className="shrink-0 text-right text-xs">
-          <p className="font-medium">{compact.format(hashtag.views)} views</p>
-          <p className="text-muted-foreground">{compact.format(hashtag.posts)} posts · 7d</p>
+          <p className="font-medium">
+            {compact.format(hashtag.views)}
+            {tUi('m_487a2574f2')}
+          </p>
+          <p className="text-muted-foreground">
+            {compact.format(hashtag.posts)}
+            {tUi('m_751313520f')}
+          </p>
         </div>
       </div>
       {competitorVideos.length > 0 ? (
         <Badge variant="secondary" className="mt-1 text-xs">
-          Competitor in top videos:{' '}
+          {tUi('m_d569145b3d')}{' '}
           {[...new Set(competitorVideos.map((v) => `@${v.authorHandle}`))].join(', ')}
         </Badge>
       ) : null}
@@ -72,7 +85,7 @@ function HashtagRow({
                 rel="noreferrer"
                 className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
               >
-                {video.authorHandle ? `@${video.authorHandle}` : 'TikTok video'}
+                {video.authorHandle ? `@${video.authorHandle}` : tUi('m_8d8894c9f4')}
                 {video.caption ? ` — ${video.caption}` : ''}
               </a>
             </li>
@@ -84,6 +97,8 @@ function HashtagRow({
 }
 
 function Keywords({ keywords }: { keywords: TiktokTrendsResponse['keywords'] }) {
+  const tUi = useTranslations('common');
+
   const trending = keywords.filter((k) => k.trending);
   const byQuery = new Map<string, string[]>();
   for (const k of keywords) {
@@ -94,7 +109,7 @@ function Keywords({ keywords }: { keywords: TiktokTrendsResponse['keywords'] }) 
       {trending.length > 0 ? (
         <div>
           <p className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
-            Trending searches
+            {tUi('m_525b27e56f')}
           </p>
           <div className="flex flex-wrap gap-1">
             {trending.map((k) => (
@@ -108,7 +123,8 @@ function Keywords({ keywords }: { keywords: TiktokTrendsResponse['keywords'] }) 
       {[...byQuery].map(([query, labels]) => (
         <div key={query}>
           <p className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
-            People search around {query}
+            {tUi('m_2b421ba632')}
+            {query}
           </p>
           <div className="flex flex-wrap gap-1">
             {labels.map((label) => (
@@ -124,6 +140,8 @@ function Keywords({ keywords }: { keywords: TiktokTrendsResponse['keywords'] }) 
 }
 
 export function TiktokTrendsList({ brandId, enabled }: { brandId?: string; enabled: boolean }) {
+  const tUi = useTranslations('common');
+
   const { data, error, isLoading } = useTiktokTrends(brandId, enabled);
 
   if (isLoading) {
@@ -139,18 +157,12 @@ export function TiktokTrendsList({ brandId, enabled }: { brandId?: string; enabl
     const notConfigured = error instanceof ApiError && error.status === 503;
     return (
       <p className="text-muted-foreground px-3 py-4 text-sm">
-        {notConfigured
-          ? 'TikTok trends are not connected yet.'
-          : 'TikTok trends could not be loaded right now.'}
+        {notConfigured ? tUi('m_3134fe0cb7') : tUi('m_9bce787b2c')}
       </p>
     );
   }
   if (!data || (data.hashtags.length === 0 && data.keywords.length === 0)) {
-    return (
-      <p className="text-muted-foreground px-3 py-4 text-sm">
-        No TikTok trends for this brand&apos;s markets yet.
-      </p>
-    );
+    return <p className="text-muted-foreground px-3 py-4 text-sm">{tUi('m_fbb302dc69')}</p>;
   }
 
   return (

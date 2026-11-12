@@ -1,8 +1,20 @@
 'use client';
-import { RotateCw, Search } from 'lucide-react';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import {
+  dashboardActionLabel,
+  dashboardScopeLabel,
+  dashboardStatusLabel,
+} from './dashboardPresentation';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { RotateCw, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
+import { useMemo } from 'react';
 import { CreativeSwapComparison } from '@/components/dco/CreativeSwapComparison';
 import { EmptyState, ErrorRetryState } from '@/components/shared/state';
 import { Badge } from '@/components/ui/badge';
@@ -60,15 +72,6 @@ const STATUS_ORDER: Record<ActionStatus, number> = {
   EXECUTED: 5,
 };
 
-const QUICK_VIEW_LABEL: Record<QuickView, string> = {
-  all: 'All events',
-  attention: 'Needs attention',
-  pending: 'Pending',
-  successful: 'Successful',
-  campaign: 'Campaign scope',
-  adset: 'Ad set scope',
-};
-
 const CREATIVE_SWITCH_ACTION_TYPES = new Set<ActionLog['actionType']>([
   'SWITCH_CREATIVE',
   'CREATIVE_SWITCH_EXTERNAL',
@@ -97,8 +100,8 @@ type CreativeSwapUrls = {
   after: string;
 };
 
-function formatTimestamp(isoString: string): string {
-  return new Date(isoString).toLocaleString('en-US', {
+function formatTimestamp(isoString: string, uiLocale: UiLocale = 'en'): string {
+  return new Date(isoString).toLocaleString(uiLocale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -106,8 +109,8 @@ function formatTimestamp(isoString: string): string {
   });
 }
 
-function summarizeAction(log: ActionLog): string {
-  if (log.error) return log.error;
+function summarizeAction(log: ActionLog, uiTranslate: ScaleCopy): string {
+  if (log.error) return uiTranslate('dashboardActionFailed');
   if (log.decisionNote) return log.decisionNote;
 
   const payloadEntries = Object.entries(log.paramsChanged ?? {});
@@ -116,7 +119,10 @@ function summarizeAction(log: ActionLog): string {
     return `${firstKey}: ${String(firstValue)}`;
   }
 
-  return `${log.actionType} applied on ${log.scopeType.toLowerCase()} scope`;
+  return uiTranslate('dashboardActionApplied', {
+    action: dashboardActionLabel(log.actionType, uiTranslate),
+    scope: dashboardScopeLabel(log.scopeType, uiTranslate),
+  });
 }
 
 function badgeVariantForStatus(status: ActionStatus): 'destructive' | 'secondary' | 'outline' {
@@ -176,6 +182,20 @@ export function DCOActionAlertsBox({
   className,
   onRefresh,
 }: DCOActionAlertsBoxProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const QUICK_VIEW_LABEL: Record<QuickView, string> = useMemo(
+    () => ({
+      all: uiText('dashboardAllEvents'),
+      attention: uiText('needs_attention_c1ebc78'),
+      pending: uiText('pending_331551b'),
+      successful: uiText('dashboardSuccessful'),
+      campaign: uiText('dashboardCampaignScope'),
+      adset: uiText('dashboardAdSetScope'),
+    }),
+    [uiText],
+  );
+
   const [search, setSearch] = React.useState('');
   const [commandOpen, setCommandOpen] = React.useState(false);
   const [sortMode, setSortMode] = React.useState<SortMode>('newest');
@@ -211,11 +231,14 @@ export function DCOActionAlertsBox({
         log.actionType,
         log.status,
         log.scopeType,
+        dashboardActionLabel(log.actionType, uiText),
+        dashboardStatusLabel(log.status, uiText),
+        dashboardScopeLabel(log.scopeType, uiText),
         log.metaCampaignId ?? '',
         log.metaAdsetId ?? '',
         log.decisionNote ?? '',
         log.error ?? '',
-        summarizeAction(log),
+        summarizeAction(log, uiText),
       ]
         .join(' ')
         .toLowerCase();
@@ -238,15 +261,13 @@ export function DCOActionAlertsBox({
       if (severityGap !== 0) return severityGap;
       return new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime();
     });
-  }, [logs, quickView, scopeFilter, search, sortMode, statusFilter]);
+  }, [logs, quickView, scopeFilter, search, sortMode, statusFilter, uiText]);
 
   const commandRows = React.useMemo(() => filteredLogs.slice(0, 8), [filteredLogs]);
 
-  const contextLabel = campaignId
-    ? 'Campaign context'
-    : metaAccountId
-      ? 'Account context'
-      : 'Brand context';
+  const contextLabel = uiText('dashboardContextLabel', {
+    scope: campaignId ? 'campaign' : metaAccountId ? 'account' : 'brand',
+  });
 
   const handleRefresh = React.useCallback(() => {
     refresh();
@@ -289,16 +310,16 @@ export function DCOActionAlertsBox({
             onValueChange={(value) => setStatusFilter(value as StatusFilter)}
           >
             <SelectTrigger className="h-8 w-[8.5rem] text-xs">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={uiText('status_920e413')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All status</SelectItem>
-              <SelectItem value="FAILED">Failed</SelectItem>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="REJECTED">Rejected</SelectItem>
-              <SelectItem value="APPROVED">Approved</SelectItem>
-              <SelectItem value="SUCCESS">Success</SelectItem>
-              <SelectItem value="EXECUTED">Executed</SelectItem>
+              <SelectItem value="all">{uiText('all_status_32b9b2c')}</SelectItem>
+              <SelectItem value="FAILED">{uiText('failed_031a8f0')}</SelectItem>
+              <SelectItem value="PENDING">{uiText('pending_331551b')}</SelectItem>
+              <SelectItem value="REJECTED">{uiText('rejected_aea4a04')}</SelectItem>
+              <SelectItem value="APPROVED">{uiText('approved_87b42e4')}</SelectItem>
+              <SelectItem value="SUCCESS">{uiText('success_c88a0b9')}</SelectItem>
+              <SelectItem value="EXECUTED">{uiText('executed_3aa8b68')}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -307,27 +328,27 @@ export function DCOActionAlertsBox({
             onValueChange={(value) => setScopeFilter(value as ScopeFilter)}
           >
             <SelectTrigger className="h-8 w-[8rem] text-xs">
-              <SelectValue placeholder="Scope" />
+              <SelectValue placeholder={uiText('scope_b073f6c')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All scope</SelectItem>
-              <SelectItem value="GLOBAL">Global</SelectItem>
-              <SelectItem value="ACCOUNT">Account</SelectItem>
-              <SelectItem value="CAMPAIGN">Campaign</SelectItem>
-              <SelectItem value="ADSET">Ad Set</SelectItem>
-              <SelectItem value="AD">Ad</SelectItem>
+              <SelectItem value="all">{uiText('all_scope_1f811cf')}</SelectItem>
+              <SelectItem value="GLOBAL">{uiText('global_a258b30')}</SelectItem>
+              <SelectItem value="ACCOUNT">{uiText('account_7e1b0d5')}</SelectItem>
+              <SelectItem value="CAMPAIGN">{uiText('campaign_268286d')}</SelectItem>
+              <SelectItem value="ADSET">{uiText('ad_set_8fa52e4')}</SelectItem>
+              <SelectItem value="AD">{uiText('ad_1d97c9f')}</SelectItem>
             </SelectContent>
           </Select>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
             <SelectTrigger className="h-8 w-[8.5rem] text-xs">
-              <SelectValue placeholder="Sort" />
+              <SelectValue placeholder={uiText('sort_bec6903')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="newest">Newest</SelectItem>
-              <SelectItem value="oldest">Oldest</SelectItem>
-              <SelectItem value="severity">Severity</SelectItem>
-              <SelectItem value="action">Action type</SelectItem>
+              <SelectItem value="newest">{uiText('newest_d15efa1')}</SelectItem>
+              <SelectItem value="oldest">{uiText('oldest_505dc45')}</SelectItem>
+              <SelectItem value="severity">{uiText('severity_5e9f981')}</SelectItem>
+              <SelectItem value="action">{uiText('action_type_03af15a')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -337,9 +358,12 @@ export function DCOActionAlertsBox({
         <div className="space-y-2 border-b border-border/70 p-2">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold">DCO Actions</div>
+              <div className="text-sm font-semibold">{uiText('dco_actions_4e1fede')}</div>
               <p className="text-xs text-muted-foreground">
-                {pagination.totalCount} total events · {filteredLogs.length} visible
+                {uiText.rich('sentence_67fae59f31ef', {
+                  v0: pagination.totalCount,
+                  v1: filteredLogs.length,
+                })}
               </p>
             </div>
             <Button
@@ -348,7 +372,7 @@ export function DCOActionAlertsBox({
               className="h-8 w-8"
               onClick={handleRefresh}
               disabled={isLoading}
-              aria-label="Refresh alerts"
+              aria-label={uiText('refresh_alerts_157e675')}
             >
               <RotateCw className={cn('h-4 w-4', isLoading ? 'animate-spin' : undefined)} />
             </Button>
@@ -360,41 +384,45 @@ export function DCOActionAlertsBox({
               onValueChange={setSearch}
               onFocus={() => setCommandOpen(true)}
               onBlur={() => setCommandOpen(false)}
-              placeholder="Command search: action, campaign, ad set, status..."
+              placeholder={uiText('command_search_action_campaign_ad_set_status_3f60eae')}
             />
             {commandOpen ? (
               <CommandList
                 className="max-h-[140px]"
                 onMouseDown={(event) => event.preventDefault()}
               >
-                <CommandGroup heading="Quick commands">
+                <CommandGroup heading={uiText('quick_commands_ff858c3')}>
                   <CommandItem onSelect={() => setStatusFilter('FAILED')}>
-                    Show failed only
+                    {uiText('show_failed_only_8d37336')}
                   </CommandItem>
                   <CommandItem onSelect={() => setStatusFilter('PENDING')}>
-                    Show pending only
+                    {uiText('show_pending_only_d002fcb')}
                   </CommandItem>
                   <CommandItem onSelect={() => setQuickView('campaign')}>
-                    Limit to campaign scope
+                    {uiText('limit_to_campaign_scope_d3009b5')}
                   </CommandItem>
                   <CommandItem onSelect={() => setQuickView('adset')}>
-                    Limit to ad set scope
+                    {uiText('limit_to_ad_set_scope_67c9299')}
                   </CommandItem>
                 </CommandGroup>
                 <CommandSeparator />
-                <CommandGroup heading="Matching actions">
+                <CommandGroup heading={uiText('matching_actions_2455fa5')}>
                   {commandRows.map((log) => (
                     <CommandItem
                       key={`alert-command-${log.id}`}
                       onSelect={() => setSearch(`${log.actionType} ${log.metaCampaignId ?? ''}`)}
                     >
                       <Search className="h-3.5 w-3.5" />
-                      <span className="truncate">{log.actionType}</span>
-                      <span className="ml-auto text-2xs text-muted-foreground">{log.status}</span>
+                      <span className="truncate">
+                        {dashboardActionLabel(log.actionType, uiText)}
+                      </span>
+                      <span className="ml-auto text-2xs text-muted-foreground">
+                        {dashboardStatusLabel(log.status, uiText)}
+                      </span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
-                <CommandEmpty>No matching commands.</CommandEmpty>
+                <CommandEmpty>{uiText('no_matching_commands_4ea8244')}</CommandEmpty>
               </CommandList>
             ) : null}
           </Command>
@@ -403,7 +431,7 @@ export function DCOActionAlertsBox({
         <div className="flex-1 min-h-0">
           {error ? (
             <ErrorRetryState
-              title="Couldn't load DCO actions"
+              title={uiText('couldn_t_load_dco_actions_2776eae')}
               message={error}
               onRetry={handleRefresh}
               className="m-2 min-h-[220px]"
@@ -418,14 +446,14 @@ export function DCOActionAlertsBox({
             logs.length === 0 ? (
               <EmptyState
                 className="m-2 min-h-[220px]"
-                headline="DCO actions will appear here"
-                description="Once optimization runs, budget moves, creative swaps, and audience tests land here with rationale and status."
+                headline={uiText('dashboardActionsEmpty')}
+                description={uiText('once_optimization_runs_budget_moves_creative__7627c8e')}
               />
             ) : (
               <EmptyState
                 className="m-2 min-h-[220px]"
-                headline="No actions match these filters"
-                description="Adjust the status, scope, or search filters to see more events."
+                headline={uiText('dashboardActionsNoMatch')}
+                description={uiText('adjust_the_status_scope_or_search_filters_to__3140e95')}
               />
             )
           ) : (
@@ -433,12 +461,12 @@ export function DCOActionAlertsBox({
               <Table className="text-xs">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
-                    <TableHead className="w-[130px]">Time</TableHead>
-                    <TableHead className="w-[110px]">Status</TableHead>
-                    <TableHead className="w-[170px]">Action</TableHead>
-                    <TableHead className="w-[110px]">Scope</TableHead>
-                    <TableHead className="w-[200px]">Entity</TableHead>
-                    <TableHead>Detail</TableHead>
+                    <TableHead className="w-[130px]">{uiText('time_33b9347')}</TableHead>
+                    <TableHead className="w-[110px]">{uiText('status_920e413')}</TableHead>
+                    <TableHead className="w-[170px]">{uiText('action_64cff13')}</TableHead>
+                    <TableHead className="w-[110px]">{uiText('scope_b073f6c')}</TableHead>
+                    <TableHead className="w-[200px]">{uiText('entity_2ed3bb6')}</TableHead>
+                    <TableHead>{uiText('detail_fb5f27d')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -453,23 +481,35 @@ export function DCOActionAlertsBox({
                           onMouseLeave={() => setHoveredRowId(null)}
                         >
                           <TableCell className="text-xs text-muted-foreground">
-                            <div>{formatTimestamp(log.occurredAt)}</div>
-                            <div>{formatRelativeTime(log.occurredAt)}</div>
+                            <div>{formatTimestamp(log.occurredAt, uiLocale)}</div>
+                            <div>{formatRelativeTime(log.occurredAt, undefined, uiLocale)}</div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={badgeVariantForStatus(log.status)}>{log.status}</Badge>
+                            <Badge variant={badgeVariantForStatus(log.status)}>
+                              {dashboardStatusLabel(log.status, uiText)}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="font-medium">{log.actionType}</TableCell>
-                          <TableCell>{log.scopeType}</TableCell>
+                          <TableCell className="font-medium">
+                            {dashboardActionLabel(log.actionType, uiText)}
+                          </TableCell>
+                          <TableCell>{dashboardScopeLabel(log.scopeType, uiText)}</TableCell>
                           <TableCell className="text-muted-foreground">
-                            <div>Campaign: {log.metaCampaignId ?? '--'}</div>
-                            <div>Ad set: {log.metaAdsetId ?? '--'}</div>
+                            <div>
+                              {uiText.rich('sentence_b7e112e8911a', {
+                                v0: log.metaCampaignId ?? '--',
+                              })}
+                            </div>
+                            <div>
+                              {uiText.rich('sentence_82ffc5148390', {
+                                v0: log.metaAdsetId ?? '--',
+                              })}
+                            </div>
                           </TableCell>
                           <TableCell className="max-w-[360px] whitespace-normal text-foreground">
-                            <div>{summarizeAction(log)}</div>
+                            <div>{summarizeAction(log, uiText)}</div>
                             {creativeSwapUrls ? (
                               <div className="mt-1 text-2xs text-muted-foreground">
-                                Hover to view creative comparison
+                                {uiText('hover_to_view_creative_comparison_6683999')}
                               </div>
                             ) : null}
                           </TableCell>
@@ -517,10 +557,13 @@ export function DCOActionAlertsBox({
             onClick={() => goToPage(Math.max(1, pagination.page - 1))}
             disabled={!pagination.hasPrevPage || isLoading}
           >
-            Previous
+            {uiText('previous_a57b08a')}
           </Button>
           <span className="text-muted-foreground">
-            Page {pagination.page} / {pagination.totalPages || 1}
+            {uiText.rich('sentence_51e015524070', {
+              v0: pagination.page,
+              v1: pagination.totalPages || 1,
+            })}
           </span>
           <Button
             variant="ghost"
@@ -531,7 +574,7 @@ export function DCOActionAlertsBox({
             }
             disabled={!pagination.hasNextPage || isLoading}
           >
-            Next
+            {uiText('next_1ff57a2')}
           </Button>
         </div>
       </section>

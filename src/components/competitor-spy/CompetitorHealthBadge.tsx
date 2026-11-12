@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Per-competitor operational health chip for Brand Spy (IMP-009 / FEAT-009).
 // Renders the shared health-chip projection as a toned pill and, on hover/focus,
 // explains what the state means, how to fix it, and the setup diagnostics behind
@@ -21,11 +26,15 @@ const TONE_CLASS: Record<CompetitorHealthTone, string> = {
   neutral: 'border-border bg-muted text-muted-foreground',
 };
 
-function lastSyncedLabel(iso: string | null): string {
-  if (!iso) return 'Not synced yet';
+function lastSyncedLabel(
+  iso: string | null,
+  uiLocale: UiLocale,
+  uiText: ReturnType<typeof useTranslations<'competitor'>>,
+): string {
+  if (!iso) return localizeCompetitorCopy('Not synced yet', uiText);
   const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return 'Not synced yet';
-  return `Synced ${formatRelativeTime(parsed)}`;
+  if (Number.isNaN(parsed.getTime())) return localizeCompetitorCopy('Not synced yet', uiText);
+  return uiText('m_01d62c94da', { time: formatRelativeTime(parsed, undefined, uiLocale) });
 }
 
 export function CompetitorHealthBadge({
@@ -37,9 +46,12 @@ export function CompetitorHealthBadge({
   adsFound?: number | null;
   className?: string;
 }) {
-  const chip = competitorHealthChip(competitor, adsFound);
-  const guidance = competitorHealthGuidance(chip.state);
-  const synced = lastSyncedLabel(chip.last_synced_at);
+  const uiText = useTranslations('competitor');
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const chip = competitorHealthChip(competitor, adsFound, uiText);
+  const guidance = competitorHealthGuidance(chip.state, uiText);
+  const synced = lastSyncedLabel(chip.last_synced_at, uiLocale, uiText);
   const error = competitor.metaPageResolutionError ?? null;
   const descriptionId = useId();
 
@@ -68,16 +80,18 @@ export function CompetitorHealthBadge({
           <p className="mt-0.5 text-xs text-muted-foreground">{guidance}</p>
           <dl className="mt-2 space-y-0.5 text-xs">
             <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Last sync</dt>
+              <dt className="text-muted-foreground">{uiText('last_sync_71967fc')}</dt>
               <dd className="tabular-nums">{synced}</dd>
             </div>
             {typeof adsFound === 'number' ? (
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Ads found</dt>
-                <dd className="tabular-nums">{adsFound}</dd>
+                <dt className="text-muted-foreground">{uiText('ads_found_7f50683')}</dt>
+                <dd className="tabular-nums">{adsFound.toLocaleString(uiLocale)}</dd>
               </div>
             ) : null}
-            {error ? <p className="mt-1 text-destructive">{error}</p> : null}
+            {error ? (
+              <p className="mt-1 text-destructive">{formatUiError({ code: error })}</p>
+            ) : null}
           </dl>
         </TooltipContent>
       </Tooltip>

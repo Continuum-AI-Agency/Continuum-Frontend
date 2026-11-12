@@ -3,6 +3,7 @@
 import { format, parseISO } from 'date-fns';
 import { Bell, Calendar as CalendarIcon, Info, Plus, RotateCw } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import type { DateRange } from 'react-day-picker';
 import { PendingActivityTabs } from '@/components/approvals/PendingActivityTabs';
@@ -37,8 +38,8 @@ import { DCOActionAlertsBox } from './DCOActionAlertsBox';
 import { LinkedInInsightsPanel } from './LinkedInInsightsPanel';
 import {
   buildDefaultCustomRange,
+  getTimeRangeOptions,
   type PaidMediaTimeRange,
-  TIME_RANGE_OPTIONS,
   type TimePreset,
   toMetricsRange,
 } from './timeRange';
@@ -77,6 +78,7 @@ export function PaidMediaDashboard({
   onPlatformChange,
   onCreateNewCampaign,
 }: PaidMediaDashboardProps) {
+  const uiText = useTranslations('scale');
   const loadCampaignPerformance = usePaidMediaPerformanceStore(
     (state) => state.loadCampaignPerformance,
   );
@@ -333,18 +335,18 @@ export function PaidMediaDashboard({
     <>
       {loadState.status === 'loading-campaigns' ? (
         <span className="rounded border border-border/70 bg-background px-1.5 py-0.5 text-2xs text-muted-foreground">
-          Loading
+          {uiText('loading_dc38088')}
         </span>
       ) : null}
 
       <Select value={platform} onValueChange={(value) => handlePlatformChange(value as Platform)}>
         <SelectTrigger className="min-h-8 min-w-[110px] text-xs">
-          <SelectValue placeholder="Select platform" />
+          <SelectValue placeholder={uiText('select_platform_cd4b40b')} />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="meta">Meta</SelectItem>
           <SelectItem value="google-ads">Google Ads</SelectItem>
-          <SelectItem value="linkedin">LinkedIn Ads</SelectItem>
+          <SelectItem value="linkedin">{uiText('linkedin_ads_e7e06ad')}</SelectItem>
           <SelectItem value="openai">OpenAI Ads</SelectItem>
           <SelectItem value="dv360" disabled>
             DV360
@@ -360,12 +362,12 @@ export function PaidMediaDashboard({
         disabled={platform !== 'openai' || !onCreateNewCampaign}
         title={
           platform === 'openai'
-            ? 'Build a new OpenAI campaign on the canvas'
-            : 'Hand-building campaigns is OpenAI Ads only for now — ask Jaina to build a Meta or Google campaign.'
+            ? uiText('build_a_new_openai_campaign_on_the_canvas_707c62c')
+            : uiText('hand_building_campaigns_is_openai_ads_only_fo_f0a8626')
         }
       >
         <Plus className="h-3 w-3" />
-        Create new
+        {uiText('create_new_9f3df75')}
       </Button>
 
       <Select
@@ -373,10 +375,21 @@ export function PaidMediaDashboard({
         onValueChange={(value) => handleTimeRangeChange(value as TimePreset)}
       >
         <SelectTrigger className="min-h-8 min-w-[120px] text-xs">
-          <SelectValue placeholder="Select time range" />
+          <SelectValue placeholder={uiText('select_time_range_37ad885')} />
         </SelectTrigger>
         <SelectContent>
-          {TIME_RANGE_OPTIONS.map((option) => (
+          {getTimeRangeOptions((value) =>
+            uiText(
+              (
+                {
+                  last_7d: 'last_7_days_0603dec',
+                  last_14d: 'last_14_days_d9f1e16',
+                  last_30d: 'last_30_days_f8f03fb',
+                  custom: 'custom_range_add9164',
+                } as const
+              )[value],
+            ),
+          ).map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
@@ -437,7 +450,7 @@ export function PaidMediaDashboard({
                 setSelectedCampaignIndexId('all');
               }}
             >
-              New index
+              {uiText('new_index_692d89d')}
             </Button>
           }
         />
@@ -466,7 +479,7 @@ export function PaidMediaDashboard({
               className="h-8 text-xs"
             >
               <Bell className="mr-1.5 h-3.5 w-3.5" />
-              Alerts
+              {uiText('alerts_f62e926')}
             </Button>
           }
         />
@@ -494,23 +507,25 @@ export function PaidMediaDashboard({
               variant="ghost"
               size="icon-sm"
               className="h-8 w-8 text-muted-foreground"
-              aria-label="Chart attribution"
+              aria-label={uiText('chart_attribution_e0510f7')}
             >
               <Info className="h-4 w-4" />
             </Button>
           }
         />
         <PopoverContent align="end" className="w-72 text-xs text-muted-foreground">
-          Charting library provided by{' '}
-          <a
-            href="https://www.tradingview.com/lightweight-charts/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-foreground underline underline-offset-2"
-          >
-            TradingView Lightweight Charts
-          </a>
-          .
+          {uiText.rich('sentence_cd9f92652509', {
+            v0: () => (
+              <a
+                href="https://www.tradingview.com/lightweight-charts/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                TradingView Lightweight Charts
+              </a>
+            ),
+          })}
         </PopoverContent>
       </Popover>
 
@@ -520,7 +535,7 @@ export function PaidMediaDashboard({
         onClick={handleRefresh}
         disabled={loadState.status === 'loading-campaigns'}
         className="h-8 w-8"
-        aria-label="Refresh campaigns"
+        aria-label={uiText('refresh_campaigns_7cb2d81')}
       >
         <RotateCw className={loadState.status === 'loading-campaigns' ? 'animate-spin' : ''} />
       </Button>
@@ -541,11 +556,11 @@ export function PaidMediaDashboard({
             size="sm"
             variant="outline"
             className="h-7 shrink-0 border-destructive/40 bg-background/80 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            aria-label="Retry campaigns"
+            aria-label={uiText('retry_campaigns_f0f86e6')}
             onClick={() => void loadCampaigns(true)}
           >
             <RotateCw className="h-3.5 w-3.5" />
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </div>
       ) : null}
@@ -592,10 +607,11 @@ export function PaidMediaDashboard({
                 />
               ) : platform !== 'meta' ? (
                 <div className="rounded-lg border border-border/70 bg-background px-3 py-2">
-                  <p className="text-sm font-medium text-foreground">Platform insights</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {uiText('platform_insights_559e405')}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Performance KPIs, trends, and ranked entities are loaded above. Narrative
-                    insight panels are available for Meta and LinkedIn.
+                    {uiText('performance_kpis_trends_and_ranked_entities_a_dac2e16')}
                   </p>
                 </div>
               ) : selectedCampaignId ? (
@@ -618,7 +634,7 @@ export function PaidMediaDashboard({
           </div>
         ) : (
           <div className="grid h-full min-h-[18rem] place-items-center rounded-lg border border-dashed border-border/70 bg-background/70 p-6 text-center text-sm text-muted-foreground">
-            Select an ad account to view campaigns.
+            {uiText('select_an_ad_account_to_view_campaigns_0f192dd')}
           </div>
         )}
       </div>

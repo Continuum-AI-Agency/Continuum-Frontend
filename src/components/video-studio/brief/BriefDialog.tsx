@@ -11,7 +11,7 @@ import {
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import { Film, Sparkles, TriangleAlert } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -40,9 +40,12 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { type StudioVideoOrigin, studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import { cn } from '@/lib/utils';
+import { useStudioMetadata } from '@/StudioCanvas/hooks/useStudioMetadata';
 import { isPermanentError } from '../export/variantExports';
 import { formatDuration, signAsset } from '../sources/PoolAssetCard';
 import type { VideoStudioContext } from '../types';
@@ -76,7 +79,6 @@ const KIND_ITEMS = Object.fromEntries(
   EDITOR_CUT_KINDS.map((kind) => [kind, CUT_KIND_LABELS[kind]]),
 );
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const terminal = (status: DraftStatus | null) =>
   status?.state === 'completed' || status?.state === 'failed';
 
@@ -93,6 +95,9 @@ function FootageRow({
   disabled: boolean;
   onToggle: () => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const displayLocale = useLocale();
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const id = `brief-footage-${asset.assetId}`;
   return (
@@ -111,11 +116,13 @@ function FootageRow({
           <Film className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <span className="min-w-0 flex-1 truncate">{asset.title}</span>
           {asset.origin !== 'project' ? (
-            <span className="shrink-0 text-2xs text-muted-foreground">from {asset.origin}</span>
+            <span className="shrink-0 text-2xs text-muted-foreground">
+              {translateUi('from_75857a45')} {asset.origin}
+            </span>
           ) : null}
           {asset.durationSec ? (
             <span className="shrink-0 tabular-nums text-muted-foreground">
-              {formatDuration(asset.durationSec)}
+              {formatDuration(asset.durationSec, displayLocale)}
             </span>
           ) : null}
         </HoverCardTrigger>
@@ -207,6 +214,13 @@ export function BriefDialog({
   onDrafted: () => void;
   onRunningChange: (running: boolean) => void;
 }): React.ReactNode {
+  const registryText = useStudioMetadata();
+  const displayLocale = useLocale();
+  const errorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
+  const uiText = useTranslations('common');
   const router = useRouter();
   const { show } = useToast();
   const { projectId } = studio;
@@ -265,7 +279,11 @@ export function BriefDialog({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const failed = (message: string) => {
       if (!latest.current.open) {
-        latest.current.show({ title: 'First cut failed', description: message, variant: 'error' });
+        latest.current.show({
+          title: translateUi('first_cut_failed_4cd95693'),
+          description: message,
+          variant: 'error',
+        });
       }
     };
     const undo = (toRevision: number) =>
@@ -274,13 +292,15 @@ export function BriefDialog({
         .then(() => {
           latest.current.onDrafted();
           latest.current.show({
-            title: 'First cut undone',
-            description: `Restored revision ${toRevision}.`,
+            title: translateUi('first_cut_undone_a2796084'),
+            description: translateUi('restored_revision_value0_5391dc31', {
+              value0: String(toRevision),
+            }),
           });
         })
         .catch((undoError: unknown) =>
           latest.current.show({
-            title: 'Undo failed',
+            title: translateUi('undo_failed_c7abe568'),
             description: errorText(undoError),
             variant: 'error',
           }),
@@ -292,10 +312,15 @@ export function BriefDialog({
       const warnings = done.warnings ?? [];
       const toRevision = beforeRevision.current;
       latest.current.show({
-        title: variants.length > 1 ? `${variants.length} first cuts ready` : 'First cut ready',
+        title:
+          variants.length > 1
+            ? translateUi('value0_first_cuts_ready_60b6f3e7', { count: Number(variants.length) })
+            : translateUi('first_cut_ready_ea5c32e4'),
         description: [
           variants
-            .map((variant) => `${variant.label} ${formatDuration(variant.durationSec)}`)
+            .map(
+              (variant) => `${variant.label} ${formatDuration(variant.durationSec, displayLocale)}`,
+            )
             .join(' · '),
           ...warnings,
         ].join(' — '),
@@ -303,7 +328,7 @@ export function BriefDialog({
         durationMs: 15_000,
         ...(toRevision === null
           ? {}
-          : { action: { label: 'Undo', onClick: () => void undo(toRevision) } }),
+          : { action: { label: uiText('undo_a8283ad'), onClick: () => void undo(toRevision) } }),
       });
     };
     const tick = async () => {
@@ -312,13 +337,16 @@ export function BriefDialog({
         if (cancelled) return;
         setStatus(next);
         setError(null);
-        if (next.state === 'failed') return failed(next.error ?? 'The draft failed.');
+        if (next.state === 'failed') return failed(translateUi('draftFailedFallback'));
         if (next.state === 'completed') return await completed(next);
       } catch (pollError) {
         if (cancelled) return;
+        console.warn('[BriefDialog] Draft status read failed', pollError);
         if (isPermanentError(pollError)) {
-          setStatus({ jobId, state: 'failed', error: errorText(pollError) });
-          return failed(errorText(pollError));
+          const message = errorText(pollError);
+          setStatus({ jobId, state: 'failed' });
+          setError(message);
+          return failed(message);
         }
         setError(errorText(pollError));
       }
@@ -330,7 +358,7 @@ export function BriefDialog({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [jobId, projectId]);
+  }, [jobId, projectId, translateUi, errorText, displayLocale]);
 
   // draft_cut cuts video only: a finished cut's music bed is on the timeline but is not footage.
   const footage = useMemo(() => {
@@ -354,14 +382,17 @@ export function BriefDialog({
   const projectPreset = platformExportPresetIdSchema.safeParse(
     studio.project.exportSettings.presetId,
   );
+  const kindItems = Object.fromEntries(
+    EDITOR_CUT_KINDS.map((kind) => [kind, registryText(CUT_KIND_LABELS[kind])]),
+  );
   const formatItems: Record<string, string> = {
-    [KEEP_FORMAT]: `As the project (${
-      projectPreset.success
-        ? PLATFORM_EXPORT_PRESETS[projectPreset.data].label
-        : `${studio.project.canvas.width}×${studio.project.canvas.height}`
-    })`,
+    [KEEP_FORMAT]: translateUi('projectFormatOption', {
+      format: projectPreset.success
+        ? registryText(PLATFORM_EXPORT_PRESETS[projectPreset.data].label)
+        : studio.project.canvas.width + '×' + studio.project.canvas.height,
+    }),
     ...Object.fromEntries(
-      PLATFORM_EXPORT_PRESET_IDS.map((id) => [id, PLATFORM_EXPORT_PRESETS[id].label]),
+      PLATFORM_EXPORT_PRESET_IDS.map((id) => [id, registryText(PLATFORM_EXPORT_PRESETS[id].label)]),
     ),
   };
 
@@ -383,6 +414,7 @@ export function BriefDialog({
       setStatus({ jobId: started.jobId, state: started.state });
       setJobId(started.jobId);
     } catch (startError) {
+      console.error('[BriefDialog] Draft start failed', startError);
       setError(errorText(startError));
     } finally {
       setStarting(false);
@@ -398,21 +430,22 @@ export function BriefDialog({
   };
 
   const progress = status?.progress !== undefined ? Math.round(status.progress * 100) : null;
-  const failure = status?.state === 'failed' ? (status.error ?? 'The draft failed.') : error;
+  const failure =
+    status?.state === 'failed' ? (error ?? translateUi('draftFailedFallback')) : error;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl" data-testid="brief-dialog">
         <DialogHeader>
-          <DialogTitle>First cut</DialogTitle>
+          <DialogTitle>{translateUi('first_cut_e5063f71')}</DialogTitle>
           <DialogDescription>
-            Say what you want. Every spoken line is read, the strongest are cut to your goal, then
-            finished and formatted — variant A here, the rest as sibling edits.
+            {' '}
+            {translateUi('say_what_you_want_every_spoken_line_a3467a4a')}{' '}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="brief-text">What do you want?</Label>
+          <Label htmlFor="brief-text">{translateUi('what_do_you_want_3e17dbf9')}</Label>
           <Textarea
             id="brief-text"
             value={text}
@@ -421,7 +454,7 @@ export function BriefDialog({
             className="min-h-20 resize-none text-sm"
             onChange={(event) => setTyped(event.target.value)}
           />
-          <fieldset className="flex flex-wrap gap-1.5" aria-label="Goals">
+          <fieldset className="flex flex-wrap gap-1.5" aria-label={uiText('goals_116cd39')}>
             {GOAL_CHIPS.map((chip) => {
               const active = chipActive(chip.patch, fields);
               return (
@@ -435,7 +468,7 @@ export function BriefDialog({
                   className={cn('h-7 rounded-full px-3 text-xs', active && 'ring-1 ring-primary')}
                   onClick={() => patch(chip.patch)}
                 >
-                  {chip.label}
+                  {registryText(chip.label)}
                 </Button>
               );
             })}
@@ -444,28 +477,36 @@ export function BriefDialog({
 
         <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           <div className="grid grid-cols-[5rem_1fr] items-center gap-2">
-            <Label className="text-xs">Kind</Label>
+            <Label className="text-xs">{uiText('kind_f5387f9')}</Label>
             <Select<EditorCutKind>
               value={fields.kind}
               onValueChange={(kind) => patch({ kind })}
               disabled={drafting}
             >
-              <SelectTrigger size="sm" className="w-full text-xs" aria-label="Kind">
-                <SelectValue items={KIND_ITEMS} />
+              <SelectTrigger
+                size="sm"
+                className="w-full text-xs"
+                aria-label={uiText('kind_f5387f9')}
+              >
+                <SelectValue items={kindItems} />
               </SelectTrigger>
               <SelectContent>
                 {EDITOR_CUT_KINDS.map((kind) => (
                   <SelectItem key={kind} value={kind} className="text-xs">
-                    {CUT_KIND_LABELS[kind]}
+                    {registryText(CUT_KIND_LABELS[kind])}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-[5rem_1fr] items-center gap-2">
-            <Label className="text-xs">Format</Label>
+            <Label className="text-xs">{uiText('format_2f34366')}</Label>
             <Select<FormatChoice> value={format} onValueChange={setFormat} disabled={drafting}>
-              <SelectTrigger size="sm" className="w-full text-xs" aria-label="Format">
+              <SelectTrigger
+                size="sm"
+                className="w-full text-xs"
+                aria-label={uiText('format_2f34366')}
+              >
                 <SelectValue items={formatItems} />
               </SelectTrigger>
               <SelectContent>
@@ -478,9 +519,9 @@ export function BriefDialog({
             </Select>
           </div>
           <div className="grid grid-cols-[5rem_1fr_2.5rem] items-center gap-2">
-            <Label className="text-xs">Length</Label>
+            <Label className="text-xs">{translateUi('length_adc95605')}</Label>
             <Slider
-              aria-label="Length in seconds"
+              aria-label={translateUi('length_in_seconds_3b8e12b5')}
               min={5}
               max={180}
               step={1}
@@ -495,13 +536,13 @@ export function BriefDialog({
             </span>
           </div>
           <div className="grid grid-cols-[5rem_1fr] items-center gap-2">
-            <Label className="text-xs">Variants</Label>
+            <Label className="text-xs">{uiText('variants_63d2643')}</Label>
             <ToggleGroup
               type="single"
               variant="outline"
               size="sm"
               spacing={0}
-              aria-label="Variants"
+              aria-label={uiText('variants_63d2643')}
               value={String(fields.variants)}
               onValueChange={(value) => {
                 const count = Number(value as string);
@@ -517,7 +558,8 @@ export function BriefDialog({
           </div>
           <div className="flex items-center justify-between gap-2 sm:col-span-2">
             <Label htmlFor="brief-captions" className="text-xs">
-              Word-timed captions
+              {' '}
+              {translateUi('word_timed_captions_3626d2db')}{' '}
             </Label>
             <Switch
               id="brief-captions"
@@ -531,39 +573,43 @@ export function BriefDialog({
 
         <fieldset
           className="flex flex-col gap-2 rounded-md border p-3"
-          aria-label="Finish"
+          aria-label={translateUi('finish_a6c7a84b')}
           data-testid="brief-finish"
         >
-          <legend className="px-1 text-xs font-medium">Finish</legend>
+          <legend className="px-1 text-xs font-medium">{translateUi('finish_a6c7a84b')}</legend>
           <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
             <FinishSwitch
               id="brief-music"
-              label="Music"
-              hint="A bed that dips under the speech"
+              label={uiText('music_6eb00b4')}
+              hint={translateUi('execution_closure_aa5fbd65')}
               checked={finish.music}
               disabled={drafting}
               onChange={(music) => finishWith({ music })}
             />
             <FinishSwitch
               id="brief-hook-title"
-              label="Hook title"
-              hint="A headline over the opening"
+              label={translateUi('hook_title_1a3e5923')}
+              hint={translateUi('execution_closure_1b9f639e')}
               checked={finish.hookTitle}
               disabled={drafting}
               onChange={(hookTitle) => finishWith({ hookTitle })}
             />
             <FinishSwitch
               id="brief-broll"
-              label="B-roll"
-              hint="From your Graph and project media"
+              label={translateUi('b_roll_814c745d')}
+              hint={translateUi('execution_closure_486ea3d7')}
               checked={finish.broll}
               disabled={drafting}
               onChange={(broll) => finishWith({ broll })}
             />
             <FinishSwitch
               id="brief-brand-captions"
-              label="Brand captions"
-              hint={captions ? "In your brand's type and colours" : 'Needs word-timed captions'}
+              label={translateUi('brand_captions_922292eb')}
+              hint={
+                captions
+                  ? translateUi('in_your_brand_s_type_and_colours_ca08edb7')
+                  : translateUi('needs_word_timed_captions_8e315814')
+              }
               checked={captions && finish.brandCaptions}
               disabled={drafting || !captions}
               onChange={(brandCaptions) => finishWith({ brandCaptions })}
@@ -573,15 +619,18 @@ export function BriefDialog({
             <div className="flex flex-col gap-1.5">
               <Input
                 inputSize="sm"
-                aria-label="Music mood"
-                placeholder="Mood — or leave it to the brief"
+                aria-label={translateUi('music_mood_a620eb21')}
+                placeholder={translateUi('mood_or_leave_it_to_the_brief_3b66c874')}
                 value={finish.mood}
                 maxLength={300}
                 disabled={drafting}
                 className="text-xs"
                 onChange={(event) => finishWith({ mood: event.target.value })}
               />
-              <fieldset className="flex flex-wrap gap-1.5" aria-label="Moods">
+              <fieldset
+                className="flex flex-wrap gap-1.5"
+                aria-label={translateUi('moods_6bae2b46')}
+              >
                 {MOOD_CHIPS.map((mood) => {
                   const active = finish.mood === mood;
                   return (
@@ -608,11 +657,11 @@ export function BriefDialog({
         </fieldset>
 
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium">Footage it will use</span>
+          <span className="text-xs font-medium">{translateUi('footage_it_will_use_b7e0a3e0')}</span>
           {footage.length === 0 ? (
             <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-              Drop a video or recording on the workspace first — a first cut is made from its spoken
-              lines.
+              {' '}
+              {translateUi('drop_a_video_or_recording_on_the_wo_79b2b5ea')}{' '}
             </p>
           ) : (
             <ul className="max-h-40 overflow-y-auto rounded-md border" data-testid="brief-footage">
@@ -636,7 +685,9 @@ export function BriefDialog({
           )}
           {tooMany ? (
             <p className="text-xs text-destructive" data-testid="brief-too-many">
-              A first cut reads at most {MAX_SOURCES} clips — untick {chosen.length - MAX_SOURCES}.
+              {' '}
+              {translateUi('a_first_cut_reads_at_most_7af20171')} {MAX_SOURCES}{' '}
+              {translateUi('clips_untick_a626b31b')} {chosen.length - MAX_SOURCES}.
             </p>
           ) : null}
         </div>
@@ -645,7 +696,10 @@ export function BriefDialog({
           <div className="flex flex-col gap-1.5" data-testid="brief-progress">
             <Progress value={progress} />
             <span className="text-xs text-muted-foreground" data-testid="brief-phase">
-              {status?.phase ?? (status?.state === 'running' ? 'Drafting' : 'Queued')}
+              {status?.phase ??
+                (status?.state === 'running'
+                  ? translateUi('drafting_1f91c1e4')
+                  : translateUi('queued_661ff40a'))}
               {progress !== null ? ` · ${progress}%` : '…'}
             </span>
           </div>
@@ -668,7 +722,7 @@ export function BriefDialog({
                 >
                   <span className="w-4 shrink-0 font-semibold">{variant.label}</span>
                   <span className="w-10 shrink-0 tabular-nums text-muted-foreground">
-                    {formatDuration(variant.durationSec)}
+                    {formatDuration(variant.durationSec, displayLocale)}
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     {variant.headline ? (
@@ -684,7 +738,8 @@ export function BriefDialog({
                     className="h-6 shrink-0 px-2 text-2xs"
                     onClick={() => openVariant(variant)}
                   >
-                    Open {variant.label}
+                    {' '}
+                    {translateUi('open_ed077f3d')} {variant.label}
                   </Button>
                 </li>
               ))}
@@ -709,8 +764,8 @@ export function BriefDialog({
               <Sparkles data-icon="inline-start" />
             )}
             {drafting
-              ? 'Drafting…'
-              : `Draft ${fields.variants} cut${fields.variants > 1 ? 's' : ''}`}
+              ? translateUi('drafting_bafe3bfa')
+              : translateUi('draft_value0_cut_value1_62779d61', { count: Number(fields.variants) })}
           </Button>
         </DialogFooter>
       </DialogContent>

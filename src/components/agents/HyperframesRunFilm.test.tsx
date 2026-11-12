@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AgentDelegatedFrameData, AgentRunEventDto } from '@continuum/contracts';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 
 // Full-module mocks spread over the real exports: a partial mock.module deletes the

@@ -1,4 +1,5 @@
 'use client';
+import { useAnswerLanguage } from '../answerLanguageContext';
 
 // What to do, ranked — read as the product's own register rather than as a spreadsheet.
 //
@@ -72,14 +73,15 @@ const isCurrencyCode = (unit: string | null): unit is string => !!unit && /^[A-Z
  * Nothing is appended: the metric name and the window are the LABEL beside it, and gluing a
  * unit onto a value the formatter already carried is how a screen ships "$88.40 USD".
  */
-function evidenceFigure(evidence: ActionRow['evidence']): string {
+function evidenceFigure(evidence: ActionRow['evidence'], reportLocale: string = 'en'): string {
   if (typeof evidence.value !== 'number') return evidence.value;
   return isCurrencyCode(evidence.unit)
-    ? formatValue(evidence.value, 'currency', { currency: evidence.unit })
-    : formatValue(evidence.value, 'number');
+    ? formatValue(evidence.value, 'currency', { locale: reportLocale, currency: evidence.unit })
+    : formatValue(evidence.value, 'number', { locale: reportLocale });
 }
 
 export default function ActionsBlock({ block }: ActionsBlockProps) {
+  const reportLocale = useAnswerLanguage();
   return (
     <section
       className={JAINA_MODULE.decision}
@@ -106,7 +108,7 @@ export default function ActionsBlock({ block }: ActionsBlockProps) {
               data-testid="actions-figure"
             >
               <span className={cn(JAINA_TYPE.figure, 'text-foreground')}>
-                {evidenceFigure(row.evidence)}
+                {evidenceFigure(row.evidence, reportLocale)}
               </span>
               <span className="text-foreground">
                 {row.evidence.metric} · {row.evidence.window}

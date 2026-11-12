@@ -13,7 +13,15 @@ import {
   publishTargetVerdicts,
 } from '@continuum/contracts';
 
-export type PlatformVerdict = Pick<PublishTargetVerdict, 'available' | 'reason'>;
+type PlatformUiReason =
+  | { code: 'connect' | 'reconnect' }
+  | { code: 'format'; format: PublishFormat }
+  | { code: 'caption'; length: number; max: number };
+
+export type PlatformVerdict = Pick<PublishTargetVerdict, 'available' | 'reason'> & {
+  /** Presentation metadata derived from the canonical verdict, without parsing English prose. */
+  uiReason?: PlatformUiReason;
+};
 
 export function platformVerdicts(input: {
   /** A `PublishFormat` or any stored format string ('Reel', 'carousel post', …). */
@@ -31,9 +39,25 @@ export function platformVerdicts(input: {
     accounts: input.accounts,
   });
   return Object.fromEntries(
-    verdicts.map(({ platform, available, reason }) => [
-      platform,
-      input.selected.includes(platform) ? { available: true, reason: null } : { available, reason },
-    ]),
+    verdicts.map(
+      ({ platform, available, reason, connected, needsReauth, formatSupported, caption }) => [
+        platform,
+        input.selected.includes(platform)
+          ? { available: true, reason: null }
+          : {
+              available,
+              reason,
+              ...(!available
+                ? {
+                    uiReason: !connected
+                      ? { code: needsReauth ? 'reconnect' : 'connect' }
+                      : !formatSupported
+                        ? { code: 'format', format: matchPublishFormat(input.format) ?? 'POST' }
+                        : { code: 'caption', length: caption.length, max: caption.maxLength },
+                  }
+                : {}),
+            },
+      ],
+    ),
   ) as Record<PublishPlatform, PlatformVerdict>;
 }

@@ -2,8 +2,11 @@
 
 import { ArrowRightLeftIcon, BotIcon, BrainIcon, WrenchIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import * as React from 'react';
-import { formatDurationMs, TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
+import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
 import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Trace } from '@/components/ui/trace';
@@ -14,6 +17,7 @@ import {
   buildThinkingSegments,
   clusterToolEntries,
   formatAgentLabel,
+  humanizeStage,
   formatThoughtDuration,
   formatToolLabel,
   type ResolvedToolEntry,
@@ -78,8 +82,6 @@ export function LatestJainaThought({ reasoning, isStreaming }: LatestJainaThough
   );
 }
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count !== 1 ? 's' : ''}`;
-
 /** A sub-agent the turn spawned, live: what it is calling now, or how long it took. */
 function AgentStatusLine({
   agent,
@@ -90,6 +92,9 @@ function AgentStatusLine({
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const duration = (ms: number) => formatDecimal(ms / 1000, 1, uiLocale) + 's';
   const toolCount = agent.workerToolRefs?.length ?? 0;
   const isDone = Boolean(agent.completeStatus);
 
@@ -98,23 +103,23 @@ function AgentStatusLine({
   if (!isDone && lastRef && !resolveToolResultFromRef(lastRef, toolResults)) {
     const call = resolveToolCallFromRef(lastRef, toolCalls);
     const name = call?.name ?? lastRef.replace(/^name:/, '');
-    latestActivity = name ? `${formatToolLabel(name)}…` : null;
+    latestActivity = name ? `${formatToolLabel(name, uiText, call?.display_name)}…` : null;
   }
 
   const description = isDone
     ? [
-        toolCount > 0 ? plural(toolCount, 'tool') : null,
-        agent.durationMs !== undefined ? formatDurationMs(agent.durationMs) : null,
+        toolCount > 0 ? uiText('jainaToolCount', { count: toolCount }) : null,
+        agent.durationMs !== undefined ? duration(agent.durationMs) : null,
       ]
         .filter(Boolean)
         .join(' · ')
-    : (latestActivity ?? (toolCount > 0 ? plural(toolCount, 'tool') : null));
+    : (latestActivity ?? (toolCount > 0 ? uiText('jainaToolCount', { count: toolCount }) : null));
 
   return (
     <TraceStep
       status={agent.completeStatus === 'failed' ? 'error' : isDone ? undefined : 'running'}
       icon={<BotIcon />}
-      title={agent.agentLabel}
+      title={formatAgentLabel(agent.agentId, uiText, agent.agentLabel)}
       description={description || undefined}
     />
   );
@@ -122,6 +127,10 @@ function AgentStatusLine({
 
 /** One tool call. Expandable only when it failed, to show why. */
 function ToolEntryLine({ entry, isStreaming }: { entry: ResolvedToolEntry; isStreaming: boolean }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const duration = (ms: number) => formatDecimal(ms / 1000, 1, uiLocale) + 's';
   const result = entry.toolResult;
   // A call with no result after the stream ended never returned — dim it rather than spin forever.
   const status: TraceStepStatus | undefined =
@@ -133,8 +142,8 @@ function ToolEntryLine({ entry, isStreaming }: { entry: ResolvedToolEntry; isStr
           : 'pending'
         : undefined;
   const description = [
-    result?.cached ? 'cached' : null,
-    result?.duration_ms !== undefined ? formatDurationMs(result.duration_ms) : null,
+    result?.cached ? uiText('jainaCached') : null,
+    result?.duration_ms !== undefined ? duration(result.duration_ms) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -143,11 +152,17 @@ function ToolEntryLine({ entry, isStreaming }: { entry: ResolvedToolEntry; isStr
     <TraceStep
       status={status}
       icon={<WrenchIcon />}
-      title={formatToolLabel(entry.name)}
+      title={formatToolLabel(entry.name, uiText, entry.toolCall?.display_name)}
       description={description || undefined}
     >
+      <figure
+        className="m-0 block text-2xs text-muted-foreground"
+        aria-label={uiText('jainaTechnicalTool')}
+      >
+        <code>{entry.name}</code>
+      </figure>
       {entry.state === 'error' && result?.error ? (
-        <p className="text-xs text-destructive">{result.error}</p>
+        <p className="text-xs text-destructive">{formatUiError(result.error)}</p>
       ) : undefined}
     </TraceStep>
   );
@@ -166,12 +181,16 @@ function SegmentSteps({
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const duration = (ms: number) => formatDecimal(ms / 1000, 1, uiLocale) + 's';
   if (segment.kind === 'thought') {
     return (
       <TraceStep
         status={isStreaming && isLast ? 'running' : undefined}
         icon={<BrainIcon />}
-        title="Reasoning"
+        title={uiText('reasoning_d8211e2')}
         defaultOpen
       >
         <div className="space-y-3">
@@ -193,7 +212,7 @@ function SegmentSteps({
   }
 
   if (segment.kind === 'handoff') {
-    const agent = formatAgentLabel(segment.to);
+    const agent = formatAgentLabel(segment.to, uiText);
     return (
       <TraceStep
         status={
@@ -205,7 +224,9 @@ function SegmentSteps({
         }
         icon={<ArrowRightLeftIcon />}
         title={
-          segment.status === 'started' ? `Delegating to ${agent}` : `${agent} ${segment.status}`
+          segment.status === 'started'
+            ? uiText('template_abf12bf9e46d', { v0: agent })
+            : uiText('jainaHandoffStatus', { name: agent, status: segment.status })
         }
       >
         {segment.objective ? <p className="text-xs">{segment.objective}</p> : undefined}
@@ -219,9 +240,9 @@ function SegmentSteps({
       : [];
     const description = [
       segment.completeStatus && segment.completeStatus !== 'completed'
-        ? segment.completeStatus
+        ? uiText('jainaAgentStatus', { status: segment.completeStatus })
         : null,
-      segment.durationMs !== undefined ? formatDurationMs(segment.durationMs) : null,
+      segment.durationMs !== undefined ? duration(segment.durationMs) : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -236,14 +257,18 @@ function SegmentSteps({
               : undefined
         }
         icon={<ArrowRightLeftIcon />}
-        title={`Delegated to ${segment.agentLabel}`}
+        title={uiText('template_dd8a75cfb856', {
+          v0: formatAgentLabel(segment.agentId, uiText, segment.agentLabel),
+        })}
         description={description || undefined}
       >
         <div className="space-y-2 text-xs">
           {segment.taskDescription ? (
             <p className="text-foreground/70">{segment.taskDescription}</p>
           ) : null}
-          {segment.error ? <p className="text-destructive">{segment.error}</p> : null}
+          {segment.error ? (
+            <p className="text-destructive">{formatUiError(segment.error)}</p>
+          ) : null}
           {workerEntries.length > 0 ? (
             <Trace>
               {workerEntries.map((entry) => (
@@ -277,13 +302,15 @@ function SegmentSteps({
             key={cluster.key}
             status={status}
             icon={<WrenchIcon />}
-            title={formatToolLabel(cluster.name)}
-            description={[
-              plural(cluster.entries.length, 'call'),
-              cluster.errorCount > 0 ? `${cluster.errorCount} failed` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+            title={formatToolLabel(
+              cluster.name,
+              uiText,
+              cluster.entries[0]?.toolCall?.display_name,
+            )}
+            description={uiText('jainaCalls', {
+              count: cluster.entries.length,
+              failed: cluster.errorCount,
+            })}
           >
             <Trace>
               {cluster.entries.map((entry) => (
@@ -303,6 +330,7 @@ export function ThinkingWindow({
   toolResults,
   isStreaming,
 }: ThinkingWindowProps) {
+  const uiText = useTranslations('scale');
   // ChatGPT-style: stay collapsed by default (both while streaming and after),
   // surfacing only the header + the latest-thought ticker. The full trace is
   // expand-on-demand. A manual toggle sticks for this message's lifetime.
@@ -326,10 +354,10 @@ export function ThinkingWindow({
     if (!isStreaming) return null;
     for (let i = reasoning.length - 1; i >= 0; i--) {
       const stage = reasoning[i].stage;
-      if (stage && stage !== 'thinking' && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
+      if (stage && stage !== 'thinking' && STAGE_LABELS[stage]) return humanizeStage(stage, uiText);
     }
     return null;
-  }, [reasoning, isStreaming]);
+  }, [reasoning, isStreaming, uiText]);
 
   const thoughtCount = segments.reduce(
     (count, segment) => (segment.kind === 'thought' ? count + segment.entries.length : count),
@@ -341,8 +369,8 @@ export function ThinkingWindow({
   );
 
   const doneLabel = React.useMemo(
-    () => formatThoughtDuration(reasoning) ?? 'Reasoning trace',
-    [reasoning],
+    () => formatThoughtDuration(reasoning, uiText) ?? 'Reasoning trace',
+    [reasoning, uiText],
   );
 
   // While streaming, render the header from t=0 so "Thinking…" appears the instant
@@ -352,8 +380,8 @@ export function ThinkingWindow({
 
   const summary = [
     currentStage,
-    toolCount > 0 ? plural(toolCount, 'tool') : null,
-    thoughtCount > 0 ? plural(thoughtCount, 'thought') : null,
+    toolCount > 0 ? uiText('jainaToolCount', { count: toolCount }) : null,
+    thoughtCount > 0 ? uiText('jainaThoughtCount', { count: thoughtCount }) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -369,7 +397,7 @@ export function ThinkingWindow({
           status={isStreaming ? 'running' : undefined}
           icon={<SparkleSpinner isActive={isStreaming} className="text-foreground/60" />}
           iconClassName="size-auto"
-          title={isStreaming ? 'Thinking…' : doneLabel}
+          title={isStreaming ? uiText('thinking_a02f1ce') : doneLabel}
           description={summary || undefined}
           open={isOpen}
           onOpenChange={setUserOverride}

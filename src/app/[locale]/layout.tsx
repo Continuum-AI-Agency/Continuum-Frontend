@@ -1,0 +1,116 @@
+import { GeistMono } from 'geist/font/mono';
+import { GeistSans } from 'geist/font/sans';
+import type { Metadata, Viewport } from 'next';
+import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
+import { FeatureMessages } from '@/i18n/FeatureMessages';
+import { isUiLocale, uiLocales } from '@/i18n/config';
+import '../globals.css';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+import { ClientOnly } from '@/components/ui/ClientOnly';
+import { VersionBanner } from '@/components/version-banner';
+import { PointerOrigin } from '../../components/shared/PointerOrigin';
+import { ThemeProvider } from '../../components/theme-provider';
+
+const baseMetadata: Metadata = {
+  title: 'Continuum AI',
+  description: 'Continuum AI – Build, orchestrate, and ship Marketing experiences fast.',
+  // Installable as a standalone home-screen app: iOS (16.4+) only grants Web Push to one.
+  // manifest.json, not Next's /manifest.webmanifest, because the proxy matcher skips .json.
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, title: 'Continuum', statusBarStyle: 'default' },
+};
+
+export function generateStaticParams() {
+  return uiLocales.map((locale) => ({ locale }));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isUiLocale(locale)) notFound();
+  const t = await getTranslations({ locale, namespace: 'common' });
+  return { ...baseMetadata, description: t('appDescription') };
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+};
+
+function NoFlashScript() {
+  const script = `
+    (function() {
+      try {
+        var storedValue = localStorage.getItem('theme');
+        var stored = storedValue;
+        try { stored = storedValue ? JSON.parse(storedValue) : null; } catch (_) {}
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var appearance = stored === 'dark'
+          ? 'dark'
+          : stored === 'system'
+            ? (prefersDark ? 'dark' : 'light')
+            : 'light';
+        var root = document.documentElement;
+        if (appearance === 'dark') {
+          root.setAttribute('data-theme', 'dark');
+          root.style.colorScheme = 'dark';
+          root.classList.remove('light');
+          root.classList.add('dark');
+        } else {
+          root.setAttribute('data-theme', 'light');
+          root.style.colorScheme = 'light';
+          root.classList.remove('dark');
+          root.classList.add('light');
+        }
+      } catch (_) {}
+    })();
+  `;
+  // biome-ignore lint/security/noDangerouslySetInnerHtml: Inline theme bootstrapping prevents auth-page theme flash before React hydrates.
+  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+}
+
+export default async function RootLayout({
+  children,
+  params,
+}: Readonly<{
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}>) {
+  const { locale } = await params;
+  if (!isUiLocale(locale)) notFound();
+  return (
+    <html
+      lang={locale}
+      dir="ltr"
+      suppressHydrationWarning
+      className={`${GeistSans.variable} ${GeistMono.variable} light`}
+      data-theme="light"
+      style={{ colorScheme: 'light' }}
+    >
+      <head>
+        {/* Slack App Suggestions: when a trycontinuum.ai link is posted in a workspace that does
+            not have Continuum installed, Slack offers the app. Harmless everywhere else. */}
+        <meta name="slack-app-id" content="A0B5DUYF7T4" />
+        <NoFlashScript />
+      </head>
+      <body className="antialiased">
+        <FeatureMessages scope="app/[locale]/layout.tsx"><ThemeProvider>
+          <PointerOrigin />
+          <VersionBanner />
+          <div className="relative z-10">{children}</div>
+        </ThemeProvider></FeatureMessages>
+        {/* Both call `useParams()`/`useSearchParams()` to report the parameterized route pattern.
+            Under Cache Components that reads URL data during prerender, so every dynamic route lost
+            its static shell to CLIENT_HOOK_DYNAMIC. A `<Suspense>` boundary here does not clear it
+            (measured). Neither reports anything before hydration anyway, so gate them on mount. */}
+        <ClientOnly>
+          <Analytics />
+          <SpeedInsights />
+        </ClientOnly>
+      </body>
+    </html>
+  );
+}

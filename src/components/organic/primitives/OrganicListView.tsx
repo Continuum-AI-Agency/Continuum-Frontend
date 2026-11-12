@@ -1,5 +1,7 @@
 'use client';
+
 import { Check, ChevronDown, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
@@ -54,9 +56,10 @@ type OrganicListViewProps = {
 
 /** Provenance tag for drafts that belong to a bulk content plan. */
 function PlannedBadge() {
+  const uiText = useTranslations('organic');
   return (
     <span className="rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-blue-500/15 text-blue-600 dark:text-blue-400">
-      Planned
+      {uiText('planned_fb6f7c9')}
     </span>
   );
 }
@@ -156,6 +159,7 @@ const DraftRow = React.memo(function DraftRow({
   onDelete: (draftId: string) => void;
   onRegenerate?: (draftId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   const framePlatform = draft.platforms[0] ?? 'instagram';
   const beginEditingDraft = useCalendarStore((state) => state.beginEditingDraft);
   const caption = useCardCaption(draft);
@@ -181,7 +185,9 @@ const DraftRow = React.memo(function DraftRow({
                 >
                   <Checkbox
                     checked={isMultiSelected}
-                    aria-label={`Select ${draft.title || 'Untitled'}`}
+                    aria-label={uiText('selectPostLabel', {
+                      title: draft.title || uiText('untitled_f59ab8d'),
+                    })}
                     onClick={(e) => e.stopPropagation()}
                     onCheckedChange={() => onToggle(draft.id)}
                     // Base UI marks a ticked box `data-checked`; `data-[state=checked]` never matched,
@@ -197,7 +203,7 @@ const DraftRow = React.memo(function DraftRow({
                       className="max-w-[40%] shrink-0 text-xs text-muted-foreground"
                     />
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                      {draft.title || 'Untitled'}
+                      {draft.title || uiText('untitled_f59ab8d')}
                     </span>
                     {caption && (
                       <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
@@ -214,7 +220,7 @@ const DraftRow = React.memo(function DraftRow({
                     <StatusBadge status={draft.status} />
                     <button
                       type="button"
-                      aria-label="Remove"
+                      aria-label={uiText('remove_c3812fc')}
                       onClick={(e) => {
                         e.stopPropagation();
                         onDelete(draft.id);
@@ -232,14 +238,16 @@ const DraftRow = React.memo(function DraftRow({
         <ContextMenuContent className="w-48">
           <ContextMenuItem onSelect={() => beginEditingDraft(draft.id)}>
             <Pencil className="mr-2 h-3.5 w-3.5" />
-            Open in editor
+            {uiText('open_in_editor_ea1d0f0')}
           </ContextMenuItem>
           {onRegenerate && draft.status !== 'streaming' && (
             <>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
                 <Zap className="mr-2 h-3.5 w-3.5" />
-                {draft.status === 'failed' ? 'Retry generation' : 'Regenerate'}
+                {draft.status === 'failed'
+                  ? uiText('retry_generation_9331330')
+                  : uiText('regenerate_1651031')}
               </ContextMenuItem>
             </>
           )}
@@ -249,7 +257,7 @@ const DraftRow = React.memo(function DraftRow({
             onSelect={() => onDelete(draft.id)}
           >
             <Trash2 className="mr-2 h-3.5 w-3.5" />
-            Delete
+            {uiText('delete_e2d0a54')}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -269,6 +277,7 @@ const BacklogRow = React.memo(function BacklogRow({
   onSelect: (draftId: string) => void;
   onDelete: (draftId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   const caption = useCardCaption(draft);
   return (
     <HoverCard openDelay={300} closeDelay={120}>
@@ -292,7 +301,7 @@ const BacklogRow = React.memo(function BacklogRow({
                 className="max-w-[40%] shrink-0 text-xs text-muted-foreground"
               />
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                {draft.title || 'Untitled'}
+                {draft.title || uiText('untitled_f59ab8d')}
               </span>
               {caption && (
                 <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
@@ -302,11 +311,11 @@ const BacklogRow = React.memo(function BacklogRow({
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <span className="text-2xs uppercase tracking-wide text-muted-foreground/60">
-                Backlog
+                {uiText('backlog_bf986e9')}
               </span>
               <button
                 type="button"
-                aria-label="Remove"
+                aria-label={uiText('remove_c3812fc')}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(draft.id);
@@ -331,15 +340,16 @@ function QuickCreateRow({
   onSubmit: (title: string) => void;
   onCancel: () => void;
 }) {
+  const uiText = useTranslations('organic');
   const [value, setValue] = React.useState('');
   return (
     <div className="flex items-center gap-2 border-b border-border/40 bg-muted/20 px-4 py-2">
       <Input
         autoFocus
-        aria-label="Post idea"
+        aria-label={uiText('post_idea_1e3e860')}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Post idea..."
+        placeholder={uiText('post_idea_5d53bb0')}
         className="h-7 flex-1 text-sm"
         onKeyDown={(e) => {
           if (e.key === 'Enter' && value.trim()) onSubmit(value.trim());
@@ -349,7 +359,7 @@ function QuickCreateRow({
       <Button
         type="button"
         size="sm"
-        aria-label="Save post idea"
+        aria-label={uiText('save_post_idea_80dcded')}
         className="h-7 px-2"
         disabled={!value.trim()}
         onClick={() => {
@@ -379,6 +389,7 @@ export function OrganicListView({
   onAddBacklogDraft,
   onDeleteBacklogDraft,
 }: OrganicListViewProps) {
+  const uiText = useTranslations('organic');
   const [collapsed, setCollapsed] = React.useState<GroupState>({});
   const [creating, setCreating] = React.useState<string | null>(null);
   const bulkDeleteDrafts = useCalendarStore((s) => s.bulkDeleteDrafts);
@@ -474,7 +485,7 @@ export function OrganicListView({
   }> = [
     {
       key: 'backlog',
-      label: 'Backlog',
+      label: uiText('backlog_bf986e9'),
       count: backlogDrafts.length,
       colorClass: 'text-muted-foreground',
       showAdd: true,
@@ -494,7 +505,7 @@ export function OrganicListView({
           ))}
           {backlogDrafts.length === 0 && creating !== 'backlog' && (
             <div className="px-4 py-3 text-xs text-muted-foreground/60">
-              No backlog items. Add ideas here to schedule later.
+              {uiText('no_backlog_items_add_ideas_here_to_schedule_l_e8a4c98')}
             </div>
           )}
         </>
@@ -506,7 +517,7 @@ export function OrganicListView({
       ? [
           {
             key: 'unscheduled',
-            label: 'Unscheduled',
+            label: uiText('unscheduled_42eee02'),
             count: unscheduledDrafts.length,
             colorClass: 'text-muted-foreground',
             showAdd: false,
@@ -531,7 +542,7 @@ export function OrganicListView({
       : []),
     {
       key: 'draft',
-      label: 'Draft',
+      label: uiText('draft_ebf12ef'),
       count: draftDrafts.length,
       colorClass: 'text-amber-600 dark:text-amber-500',
       showAdd: true,
@@ -560,7 +571,7 @@ export function OrganicListView({
           ))}
           {draftDrafts.length === 0 && creating !== 'draft' && (
             <div className="px-4 py-3 text-xs text-muted-foreground/60">
-              No drafts this week. Use the + button or generate content.
+              {uiText('no_drafts_this_week_use_the_button_or_generat_cabbf3b')}
             </div>
           )}
         </>
@@ -568,7 +579,7 @@ export function OrganicListView({
     },
     {
       key: 'scheduled',
-      label: 'Scheduled',
+      label: uiText('scheduled_4724f34'),
       count: scheduledDrafts.length,
       colorClass: 'text-emerald-600 dark:text-emerald-500',
       showAdd: false,
@@ -587,7 +598,7 @@ export function OrganicListView({
           ))}
           {scheduledDrafts.length === 0 && (
             <div className="px-4 py-3 text-xs text-muted-foreground/60">
-              No scheduled posts yet. Approve drafts to schedule them.
+              {uiText('no_scheduled_posts_yet_approve_drafts_to_sche_85a725d')}
             </div>
           )}
         </>
@@ -595,7 +606,7 @@ export function OrganicListView({
     },
     {
       key: 'published',
-      label: 'Published',
+      label: uiText('published_2ef42ec'),
       count: publishedDrafts.length,
       colorClass: 'text-emerald-700 dark:text-emerald-600',
       showAdd: false,
@@ -614,7 +625,7 @@ export function OrganicListView({
           ))}
           {publishedDrafts.length === 0 && (
             <div className="px-4 py-3 text-xs text-muted-foreground/60">
-              No published posts yet.
+              {uiText('no_published_posts_yet_a83bf96')}
             </div>
           )}
         </>
@@ -655,7 +666,7 @@ export function OrganicListView({
                     type="button"
                     size="icon-sm"
                     variant="ghost"
-                    aria-label={`Add ${label}`}
+                    aria-label={uiText('addLabel', { label: label })}
                     onClick={(e) => {
                       e.stopPropagation();
                       setCreating(key);

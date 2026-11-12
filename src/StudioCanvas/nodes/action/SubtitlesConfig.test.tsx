@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // Base UI's Switch is a popup-free primitive but still relies on browser APIs the DOM shim
 // does not provide; a checkbox stands in so the assertions stay about THIS component.

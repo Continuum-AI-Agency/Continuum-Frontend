@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { UseDraftMediaPlacementResult } from '@/components/organic/hooks/useDraftMediaPlacement';
+import { render } from '@/i18n/__tests__/render';
 
 mock.module('next/image', () => ({
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,

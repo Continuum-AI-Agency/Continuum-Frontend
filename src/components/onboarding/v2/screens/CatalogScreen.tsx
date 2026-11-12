@@ -1,5 +1,8 @@
 'use client';
 
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // The product-catalog step — the front door of `POST /api/media/elements/catalog`.
 //
 // Three things this screen refuses to do, each because the endpoint was built so it
@@ -69,6 +72,11 @@ const newKey = (): string =>
     : `draft-${Math.random().toString(36).slice(2)}`;
 
 export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('onboarding');
+  const uiLocale = useLocale();
+
   const { brandId } = useOnboarding();
   const { show } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -95,8 +103,8 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
       const skipped = files.length - images.length;
       if (skipped > 0) {
         show({
-          title: 'Images only',
-          description: `${skipped} file${skipped === 1 ? '' : 's'} skipped — a product row needs a photo.`,
+          title: tUi('m_14b6f63ab0'),
+          description: tUi('productImagesSkipped', { count: skipped }),
           variant: 'error',
         });
       }
@@ -121,8 +129,8 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
           ]);
         } catch (error) {
           show({
-            title: `Couldn't add ${file.name}`,
-            description: error instanceof Error ? error.message : 'The upload failed.',
+            title: tUi('m_ee6c2b80e7', { v0: String(file.name) }),
+            description: error instanceof Error ? uiErrorMessage(error) : tUi('m_820bc61e81'),
             variant: 'error',
           });
         } finally {
@@ -130,7 +138,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
         }
       }
     },
-    [brandId, show],
+    [brandId, show, tUi, uiErrorMessage],
   );
 
   const handleImport = async () => {
@@ -148,10 +156,10 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
       const response = await importElementCatalog({
         brandId,
         category: 'product',
-        rows: drafts.map((draft) => buildCatalogRow(draft).row),
+        rows: drafts.map((draft) => buildCatalogRow(draft, undefined, uiLocale).row),
       });
 
-      setSummary(summarizeImport(response, heldSlugs));
+      setSummary(summarizeImport(response, heldSlugs, tUi));
       setRejected(
         response.rejected.map((row) => ({
           index: row.index,
@@ -166,8 +174,8 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
       setDrafts((prev) => prev.filter((_, index) => rejectedIndexes.has(index)));
     } catch (error) {
       show({
-        title: "Couldn't import your catalog",
-        description: error instanceof Error ? error.message : 'Please try again.',
+        title: tUi('m_3284f442c9'),
+        description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
         variant: 'error',
       });
     } finally {
@@ -176,8 +184,8 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
   };
 
   const importLabel = importing
-    ? 'Importing…'
-    : `Import ${drafts.length} product${drafts.length === 1 ? '' : 's'}`;
+    ? tUi('m_820599da89')
+    : tUi('importProductCount', { count: drafts.length });
 
   return (
     <div className="flex flex-1 justify-center px-4 py-12 md:px-8">
@@ -185,24 +193,20 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
         <div className="mb-8 text-center">
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--primary)_22%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] px-3 py-1 text-xs font-semibold text-[var(--primary)]">
             <Package className="h-3 w-3" />
-            Step 3 of {totalSteps}
+            {tUi('m_e043eb1430')}
+            {totalSteps}
           </div>
           <div className="flex items-center justify-center gap-2">
             <h1 className="text-balance text-[1.75rem] font-bold leading-tight tracking-tight text-foreground md:text-[2.5rem]">
-              Your products
+              {tUi('m_bea0eec6ce')}
             </h1>
-            <HelpPopover label="What are products for?">
-              <p className="font-semibold text-foreground">What are products for?</p>
-              <p className="text-muted-foreground">
-                A product you add here becomes a reusable subject. Attach it to a creative and
-                Continuum uses your real photos and your real facts instead of inventing a stand-in.
-                Names, prices and links are optional — the photos are what matter.
-              </p>
+            <HelpPopover label={tUi('m_89e5cd6e70')}>
+              <p className="font-semibold text-foreground">{tUi('m_89e5cd6e70')}</p>
+              <p className="text-muted-foreground">{tUi('m_b0cb06077a')}</p>
             </HelpPopover>
           </div>
           <p className="mx-auto mt-3 max-w-lg text-[0.875rem] leading-relaxed text-muted-foreground">
-            Optional. If you sell something, add photos of it — everything else can wait. If you
-            don&apos;t, skip this step; nothing later needs it.
+            {tUi('m_5a2327862f')}
           </p>
         </div>
 
@@ -210,7 +214,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
             keyboard path. Same shape as the documents step. */}
         {/* biome-ignore lint/a11y/noStaticElementInteractions: drop target, with a button alternative inside */}
         <section
-          aria-label="Product photos"
+          aria-label={tUi('m_510d899392')}
           data-testid="catalog-dropzone"
           onDragEnter={(event) => {
             event.preventDefault();
@@ -245,13 +249,9 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
             }}
           />
           <p className="text-sm text-foreground">
-            {drafts.length === 0
-              ? 'Drop product photos here — one photo per product to start.'
-              : 'Drop more photos to add another product.'}
+            {drafts.length === 0 ? tUi('m_c8773d8b4d') : tUi('m_edc9279760')}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            JPG, PNG or WebP. Front-on shots read best; you can add more angles per product later.
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{tUi('m_e2042bdbf7')}</p>
           <Button
             type="button"
             variant="outline"
@@ -261,9 +261,7 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
             disabled={uploading > 0}
           >
             <UploadSimple className="mr-1.5 h-4 w-4" />
-            {uploading > 0
-              ? `Uploading ${uploading} photo${uploading === 1 ? '' : 's'}…`
-              : 'Add photos'}
+            {uploading > 0 ? tUi('productUploading', { count: uploading }) : tUi('m_a59893579b')}
           </Button>
         </section>
 
@@ -296,12 +294,12 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
           {/* Every disabled control explains its own disabled-ness. */}
           <p className="text-xs text-muted-foreground" data-testid="catalog-import-hint">
             {drafts.length === 0
-              ? 'Add at least one product photo — that is all an import needs.'
+              ? tUi('m_a42649f809')
               : uploading > 0
-                ? 'Waiting for the photos still uploading.'
+                ? tUi('m_5c31632086')
                 : importing
-                  ? 'Importing — this stays open until every row has an answer.'
-                  : 'Re-running is safe: a product we already hold is updated, not duplicated.'}
+                  ? tUi('m_8ef5f9dd7c')
+                  : tUi('m_6039857502')}
           </p>
         </div>
 
@@ -317,10 +315,18 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
               {summary.headline}
             </p>
             <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
-              <Count label="Added" value={summary.added} testId="catalog-count-added" />
-              <Count label="Updated" value={summary.updated} testId="catalog-count-updated" />
               <Count
-                label="Not imported"
+                label={tUi('m_b68734c259')}
+                value={summary.added}
+                testId="catalog-count-added"
+              />
+              <Count
+                label={tUi('m_f2f8570ddd')}
+                value={summary.updated}
+                testId="catalog-count-updated"
+              />
+              <Count
+                label={tUi('m_67edb75bd9')}
                 value={summary.rejected}
                 testId="catalog-count-rejected"
               />
@@ -337,13 +343,16 @@ export function CatalogScreen({ totalSteps, onBusyChange }: CatalogScreenProps) 
                   >
                     <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                       <Warning className="h-4 w-4 shrink-0 text-amber-600" />
-                      <span className="tabular-nums">Product {row.index + 1}</span>
+                      <span className="tabular-nums">
+                        {tUi('m_c553701d90')}
+                        {row.index + 1}
+                      </span>
                       {row.name ? (
                         <span className="text-muted-foreground">— {row.name}</span>
                       ) : null}
                     </p>
                     <p className="mt-0.5 pl-[1.375rem] text-xs text-muted-foreground">
-                      {rejectionDetail(row.issues)}
+                      {rejectionDetail(row.issues, tUi)}
                     </p>
                   </li>
                 ))}
@@ -381,7 +390,12 @@ function DraftRow({
   onChange: (patch: Partial<CatalogProductDraft>) => void;
   onRemove: () => void;
 }) {
-  const priceReading = readPrice(draft.price);
+  const tUi = useTranslations('onboarding');
+  const uiLocale = useLocale();
+  const format = useFormatter();
+  const priceExample = format.number(19.99, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const priceReading = readPrice(draft.price, undefined, uiLocale);
   return (
     <li
       className="rounded-lg border border-border p-3"
@@ -405,7 +419,7 @@ function DraftRow({
           <div className="flex items-center gap-2">
             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{position}</span>
             <Input
-              aria-label={`Product ${position} name`}
+              aria-label={tUi('m_fd8fb8fa84', { v0: String(position) })}
               data-testid="catalog-name"
               value={draft.name}
               disabled={disabled}
@@ -416,7 +430,7 @@ function DraftRow({
               type="button"
               variant="ghost"
               size="sm"
-              aria-label={`Remove product ${position}`}
+              aria-label={tUi('m_3daab7107c', { v0: String(position) })}
               data-testid="catalog-remove"
               disabled={disabled}
               onClick={onRemove}
@@ -426,35 +440,35 @@ function DraftRow({
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <Field
-              label="SKU"
+              label={tUi('m_d59192b9c8')}
               testId="catalog-sku"
               value={draft.sku}
               disabled={disabled}
-              placeholder="Optional"
+              placeholder={tUi('m_0c6c4102d4')}
               onChange={(sku) => onChange({ sku })}
             />
             <Field
-              label="Price"
+              label={tUi('m_3e8248e32e')}
               testId="catalog-price"
               value={draft.price}
               disabled={disabled}
-              placeholder="Optional — e.g. 19.99"
+              placeholder={tUi('catalogPricePlaceholder', { example: priceExample })}
               onChange={(price) => onChange({ price })}
             />
             <Field
-              label="Product page"
+              label={tUi('m_ae6ca73ad5')}
               testId="catalog-url"
               value={draft.productUrl}
               disabled={disabled}
-              placeholder="Optional — https://…"
+              placeholder={tUi('catalogUrlPlaceholder')}
               onChange={(productUrl) => onChange({ productUrl })}
             />
             <Field
-              label="Variants"
+              label={tUi('m_1bc3d368f8')}
               testId="catalog-variants"
               value={draft.variants}
               disabled={disabled}
-              placeholder="Optional — Small, Medium, Large"
+              placeholder={tUi('m_fec16ea2bf')}
               onChange={(variants) => onChange({ variants })}
             />
           </div>
@@ -464,7 +478,8 @@ function DraftRow({
               className="text-xs text-amber-700 dark:text-amber-500"
               data-testid="catalog-price-issue"
             >
-              Price left off — we could not read “{priceReading.raw}”. {priceReading.reason}
+              {tUi('m_9e232b3ca1')}
+              {priceReading.raw}”. {tUi(priceReading.reason, { example: priceExample })}
             </p>
           )}
         </div>

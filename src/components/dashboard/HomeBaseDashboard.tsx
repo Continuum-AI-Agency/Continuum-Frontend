@@ -1,10 +1,12 @@
 'use client';
 
 import { motion, useReducedMotion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import { FirstRunSetup } from '@/components/dashboard/first-run/FirstRunSetup';
 import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+import { useRouter } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -54,6 +56,7 @@ export function HomeBaseDashboard({
   setup,
   brandBookRefreshedAt = null,
 }: Props) {
+  const uiText = useTranslations('dashboard');
   const router = useRouter();
   const [, startTransition] = React.useTransition();
   const shouldReduceMotion = useReducedMotion();
@@ -105,11 +108,11 @@ export function HomeBaseDashboard({
 
             <div className="flex shrink-0 items-center gap-2">
               <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Dashboard view
+                {uiText('dashboard_view_f9d4b29')}
               </span>
               <nav
                 className="inline-flex rounded-md border border-border bg-background p-0.5"
-                aria-label="Dashboard view options"
+                aria-label={uiText('dashboard_view_options_f3d55db')}
               >
                 {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
                   const config = DASHBOARD_VIEWS[view];
@@ -131,7 +134,7 @@ export function HomeBaseDashboard({
                       style={{ transitionProperty: 'background-color, color, scale' }}
                       aria-pressed={isActive}
                     >
-                      {config.label}
+                      {localizeDashboardCopy(config.label, uiText)}
                     </button>
                   );
                 })}
@@ -140,7 +143,7 @@ export function HomeBaseDashboard({
           </>
         ) : (
           <h1 className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Get started
+            {uiText('get_started_61e8d44')}
           </h1>
         )}
       </div>
@@ -157,7 +160,7 @@ export function HomeBaseDashboard({
             {firstRunSetup ? (
               <div className="flex items-center gap-2 px-[var(--card-pad)]">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Your live data
+                  {uiText('your_live_data_a338995')}
                 </span>
                 <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
               </div>

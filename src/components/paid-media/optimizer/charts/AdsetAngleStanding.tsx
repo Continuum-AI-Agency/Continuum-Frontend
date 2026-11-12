@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import type { UiLocale } from '@/i18n/config';
+
 // One executable row per ad set: what angle its next creative should run, and why. Rendered
 // in a portfolio's detail and, across the whole ad account, in Creative Insights.
 //
@@ -29,21 +33,31 @@ type AdsetAngleStandingProps = {
   emptyMessage?: string;
 };
 
-const VERDICT_META: Record<AngleVerdict, { label: string; tone: string }> = {
-  double_down: { label: 'Double down', tone: 'text-emerald-600 dark:text-emerald-400' },
-  rebuild_craft: { label: 'Rebuild the craft', tone: 'text-amber-600 dark:text-amber-400' },
-  introduce: { label: 'Introduce', tone: 'text-primary-ink' },
-  insufficient: { label: 'Needs a variant', tone: 'text-muted-foreground' },
-};
-
-const DEFAULT_EMPTY =
-  'Angle standing appears once this portfolio has enrolled ad sets with analyzed creatives.';
-
-function pct(value: number): string {
-  return `${Math.round(value * 100)}%`;
+function pct(value: number, locale: UiLocale): string {
+  return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
+    Math.round(value * 100) / 100,
+  );
 }
 
 function AngleRow({ row, currency }: { row: AdsetAngleRow; currency?: string | null }) {
+  const uiText = useTranslations('scale');
+  const VERDICT_META: Record<AngleVerdict, { label: string; tone: string }> = useMemo(
+    () => ({
+      double_down: {
+        label: uiText('double_down_5c8d3be'),
+        tone: 'text-emerald-600 dark:text-emerald-400',
+      },
+      rebuild_craft: {
+        label: uiText('rebuild_the_craft_bdb1ce4'),
+        tone: 'text-amber-600 dark:text-amber-400',
+      },
+      introduce: { label: uiText('introduce_317dca7'), tone: 'text-primary-ink' },
+      insufficient: { label: uiText('needs_a_variant_959b82a'), tone: 'text-muted-foreground' },
+    }),
+    [uiText],
+  );
+
+  const uiLocale = useLocale();
   const meta = VERDICT_META[row.verdict];
   const recommended = row.recommendedAngle;
   const current = row.currentAngle;
@@ -66,7 +80,9 @@ function AngleRow({ row, currency }: { row: AdsetAngleRow; currency?: string | n
         </TooltipContent>
       </Tooltip>
       <span className="min-w-0 truncate text-muted-foreground text-xs">
-        now: {current ? angleName(current.value) : 'no labelled ads'}
+        {uiText.rich('sentence_3e8033217eea', {
+          v0: current ? angleName(current.value, uiText) : uiText('no_labelled_ads_b88e2be'),
+        })}
       </span>
       <span
         aria-hidden="true"
@@ -78,13 +94,15 @@ function AngleRow({ row, currency }: { row: AdsetAngleRow; currency?: string | n
         {recommended ? (
           <>
             <span className="sr-only">{meta.label}: </span>
-            {angleName(recommended.value)}
+            {angleName(recommended.value, uiText)}
           </>
         ) : (
           meta.label
         )}
         {row.confidence === 'thin' ? (
-          <span className="ml-1.5 font-normal text-xs text-muted-foreground">thin</span>
+          <span className="ml-1.5 font-normal text-xs text-muted-foreground">
+            {uiText('thin_1a0dc22')}
+          </span>
         ) : null}
       </span>
       <div className="min-w-0 space-y-0.5">
@@ -92,14 +110,24 @@ function AngleRow({ row, currency }: { row: AdsetAngleRow; currency?: string | n
         {recommended ? (
           <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground tabular-nums">
             <span>
-              wins {pct(recommended.winRate)} of {recommended.eligibleAds} ads
+              {uiText.rich('sentence_785aeeb6eeb6', {
+                v0: pct(recommended.winRate, uiLocale),
+                v1: recommended.eligibleAds,
+              })}
             </span>
             {recommended.spendShare != null ? (
-              <span>{pct(recommended.spendShare)} of spend</span>
+              <span>
+                {uiText.rich('sentence_6eb570fe6c34', {
+                  v0: pct(recommended.spendShare, uiLocale),
+                })}
+              </span>
             ) : null}
             {row.adsetMedianCpa != null ? (
               <span>
-                beat {formatCpa(row.adsetMedianCpa, currency)} {row.kpi}
+                {uiText.rich('sentence_137f8f12324c', {
+                  v0: formatCpa(row.adsetMedianCpa, currency, uiLocale),
+                  v1: row.kpi,
+                })}
               </span>
             ) : null}
           </p>
@@ -110,8 +138,9 @@ function AngleRow({ row, currency }: { row: AdsetAngleRow; currency?: string | n
 }
 
 export function AdsetAngleStanding({ rows, currency, emptyMessage }: AdsetAngleStandingProps) {
+  const uiText = useTranslations('scale');
   if (rows.length === 0) {
-    return <ChartEmpty message={emptyMessage ?? DEFAULT_EMPTY} />;
+    return <ChartEmpty message={emptyMessage ?? uiText('angleStandingEmpty')} />;
   }
 
   const sorted = sortAngleRows(rows);
@@ -124,8 +153,8 @@ export function AdsetAngleStanding({ rows, currency, emptyMessage }: AdsetAngleS
     <div className="@container/angles space-y-2">
       <p className="text-muted-foreground text-xs">
         {actionable.length > 0
-          ? `${actionable.length} of ${sorted.length} ad ${sorted.length === 1 ? 'set has' : 'sets have'} a clear next angle`
-          : 'No ad set has enough compared ads yet — ship a second variant somewhere to start measuring.'}
+          ? uiText('template_83581d7dccff', { count: actionable.length, total: sorted.length })
+          : uiText('no_ad_set_has_enough_compared_ads_yet_ship_a__31fe2ae')}
       </p>
       {actionable.length > 0 ? (
         <div className="flex flex-col">
@@ -137,10 +166,13 @@ export function AdsetAngleStanding({ rows, currency, emptyMessage }: AdsetAngleS
       {thin.length > 0 ? (
         <details className="group text-xs" data-testid="angle-standing-thin">
           <summary className="hit-area cursor-pointer list-none text-muted-foreground hover:text-foreground">
-            {thin.length} ad {thin.length === 1 ? 'set needs' : 'sets need'} a second variant before
-            an angle can be called
-            <span className="group-open:hidden"> · show</span>
-            <span className="hidden group-open:inline"> · hide</span>
+            {uiText.rich('sentence_cf200269e62e', {
+              count: thin.length,
+              show: () => <span className="group-open:hidden">{uiText('show_80c1e60')}</span>,
+              hide: () => (
+                <span className="hidden group-open:inline">{uiText('hide_bda1fdc')}</span>
+              ),
+            })}
           </summary>
           <div className="mt-1 flex flex-col">
             {thin.map((row) => (

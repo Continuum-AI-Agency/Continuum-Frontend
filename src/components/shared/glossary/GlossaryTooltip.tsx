@@ -1,4 +1,5 @@
 'use client';
+import {useTranslations} from 'next-intl';
 
 // Wraps an advanced term in a tooltip carrying its plain-English definition
 // (IMP-018). Defaults its visible label to the canonical term name and marks the
@@ -10,7 +11,7 @@ import { type ReactNode, useId } from 'react';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { GLOSSARY_TERMS, type GlossaryTermKey } from './terms';
+import { glossaryEntry, type GlossaryTermKey } from './terms';
 
 type GlossaryTooltipProps = {
   termKey: GlossaryTermKey;
@@ -25,7 +26,8 @@ export function GlossaryTooltip({
   side = 'top',
   className,
 }: GlossaryTooltipProps) {
-  const entry = GLOSSARY_TERMS[termKey];
+  const t=useTranslations('common');
+ const entry=glossaryEntry(termKey,t);
   const descriptionId = useId();
 
   return (

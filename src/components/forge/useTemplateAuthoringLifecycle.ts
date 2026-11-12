@@ -3,8 +3,8 @@
 import type {
   TemplateAuthoringArtifact,
   TemplateAuthoringArtifactCommit,
-  TemplateAuthoringDraft,
   TemplateAuthoringDocument,
+  TemplateAuthoringDraft,
   TemplateAuthoringNativeRender,
   TemplateAuthoringNativeRenderRequest,
   TemplateAuthoringPreparation,
@@ -13,6 +13,7 @@ import type {
 } from '@continuum/contracts';
 import { outputFormatsOfParse } from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   commitTemplateAuthoringArtifact,
   compileTemplateAuthoring,
@@ -25,7 +26,15 @@ import {
 } from '@/lib/library/templateSources';
 import type { LayerDraftSyncStatus } from './layerDraft';
 
-type AuthoringLifecycleState = 'idle' | 'waiting' | 'compiling' | 'preparing' | 'rendering' | 'needs-input' | 'ready' | 'failed';
+type AuthoringLifecycleState =
+  | 'idle'
+  | 'waiting'
+  | 'compiling'
+  | 'preparing'
+  | 'rendering'
+  | 'needs-input'
+  | 'ready'
+  | 'failed';
 
 type UseTemplateAuthoringLifecycleArgs = {
   active: boolean;
@@ -50,8 +59,26 @@ type TemplateAuthoringLifecycle = {
   canPublish: boolean;
   retry: () => Promise<void>;
   review: () => Promise<boolean>;
-  commit: (request: Omit<TemplateAuthoringArtifactCommit, 'artifactId' | 'expectedDraftRevision' | 'sourceChecksum' | 'commandDigest' | 'packageChecksum'>) => Promise<TemplateAuthoringArtifact | null>;
-  reviewAndCommit: (request: Omit<TemplateAuthoringArtifactCommit, 'artifactId' | 'expectedDraftRevision' | 'sourceChecksum' | 'commandDigest' | 'packageChecksum'>) => Promise<TemplateAuthoringArtifact | null>;
+  commit: (
+    request: Omit<
+      TemplateAuthoringArtifactCommit,
+      | 'artifactId'
+      | 'expectedDraftRevision'
+      | 'sourceChecksum'
+      | 'commandDigest'
+      | 'packageChecksum'
+    >,
+  ) => Promise<TemplateAuthoringArtifact | null>;
+  reviewAndCommit: (
+    request: Omit<
+      TemplateAuthoringArtifactCommit,
+      | 'artifactId'
+      | 'expectedDraftRevision'
+      | 'sourceChecksum'
+      | 'commandDigest'
+      | 'packageChecksum'
+    >,
+  ) => Promise<TemplateAuthoringArtifact | null>;
 };
 
 type PublishTarget = {
@@ -70,7 +97,11 @@ type PublishAttempt = { signature: string; promise: Promise<TemplateAuthoringArt
 const sameHash = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 
 function sameScope(left: TemplateAuthoringScope, right: TemplateAuthoringScope) {
-  return left.brandId === right.brandId && left.assetId === right.assetId && left.baseVersionId === right.baseVersionId;
+  return (
+    left.brandId === right.brandId &&
+    left.assetId === right.assetId &&
+    left.baseVersionId === right.baseVersionId
+  );
 }
 
 function assertArtifactPins(
@@ -83,7 +114,8 @@ function assertArtifactPins(
     !sameScope(artifact.scope, scope) ||
     artifact.draftRevision !== revision ||
     !sameHash(artifact.sourceChecksum, sourceChecksum)
-  ) throw new Error('The prepared package did not match this private draft revision.');
+  )
+    throw new Error('The prepared package did not match this private draft revision.');
 }
 
 function assertPreparationPins(
@@ -97,7 +129,8 @@ function assertPreparationPins(
     !sameHash(preparation.sourceChecksum, artifact.sourceChecksum) ||
     !sameHash(preparation.commandDigest, artifact.commandDigest) ||
     !sameHash(preparation.packageChecksum, artifact.packageChecksum)
-  ) throw new Error('Preparation returned a package for a different draft revision.');
+  )
+    throw new Error('Preparation returned a package for a different draft revision.');
 }
 
 function nativeRequestsFor(
@@ -106,17 +139,26 @@ function nativeRequestsFor(
   parse: TemplatePreview | null | undefined,
 ): TemplateAuthoringNativeRenderRequest[] {
   if (!sourceDocument) return [];
-  const compositions = new Map(sourceDocument.compositions.map((composition) => [composition.name, composition]));
+  const compositions = new Map(
+    sourceDocument.compositions.map((composition) => [composition.name, composition]),
+  );
   const pairs = outputFormatsOfParse(parse).flatMap((format) => {
     const composition = compositions.get(format.id);
     if (
-      !composition || composition.compId === null ||
-      typeof composition.durationSec !== 'number' || !Number.isFinite(composition.durationSec) ||
-      typeof composition.frameRate !== 'number' || !Number.isFinite(composition.frameRate) || composition.frameRate <= 0
-    ) return [];
+      !composition ||
+      composition.compId === null ||
+      typeof composition.durationSec !== 'number' ||
+      !Number.isFinite(composition.durationSec) ||
+      typeof composition.frameRate !== 'number' ||
+      !Number.isFinite(composition.frameRate) ||
+      composition.frameRate <= 0
+    )
+      return [];
     const frameCount = Math.ceil(composition.durationSec * composition.frameRate - 1e-9);
     if (frameCount < 1) return [];
-    const frameIndices = [...new Set([0, Math.floor((frameCount - 1) / 2), frameCount - 1])].sort((a, b) => a - b);
+    const frameIndices = [...new Set([0, Math.floor((frameCount - 1) / 2), frameCount - 1])].sort(
+      (a, b) => a - b,
+    );
     return [{ compId: composition.compId, formatId: format.id, frameIndices }];
   });
   if (!pairs.length) return [];
@@ -167,6 +209,8 @@ export function useTemplateAuthoringLifecycle({
   sourceDocument,
   parse,
 }: UseTemplateAuthoringLifecycleArgs): TemplateAuthoringLifecycle {
+  const uiErrorText = useUiErrorMessage();
+
   const [state, setState] = useState<AuthoringLifecycleState>('idle');
   const [artifact, setArtifact] = useState<TemplateAuthoringArtifact | null>(null);
   const [preparation, setPreparation] = useState<TemplateAuthoringPreparation | null>(null);
@@ -181,14 +225,30 @@ export function useTemplateAuthoringLifecycle({
 
   const sourceChecksum = persistedDraft?.sourceChecksum ?? sourceDocument?.sourceChecksum ?? null;
   const key = useMemo(
-    () => scope && sourceChecksum ? `${scope.brandId}:${scope.assetId}:${scope.baseVersionId}:${revision}:${sourceChecksum}` : '',
+    () =>
+      scope && sourceChecksum
+        ? `${scope.brandId}:${scope.assetId}:${scope.baseVersionId}:${revision}:${sourceChecksum}`
+        : '',
     [scope, revision, sourceChecksum],
   );
-  const draftIsCurrent = !!scope && !!persistedDraft && persistedDraft.revision === revision &&
-    sameScope(persistedDraft.scope, scope) && !persistedDraft.requiresReconciliation &&
-    !!sourceChecksum && sameHash(persistedDraft.sourceChecksum, sourceChecksum);
-  const eligible = active && enabled && !!scope && !!sourceChecksum && revision > 0 &&
-    syncStatus === 'saved' && !draftDirty && draftIsCurrent && persistedDraft!.commands.length > 0;
+  const draftIsCurrent =
+    !!scope &&
+    !!persistedDraft &&
+    persistedDraft.revision === revision &&
+    sameScope(persistedDraft.scope, scope) &&
+    !persistedDraft.requiresReconciliation &&
+    !!sourceChecksum &&
+    sameHash(persistedDraft.sourceChecksum, sourceChecksum);
+  const eligible =
+    active &&
+    enabled &&
+    !!scope &&
+    !!sourceChecksum &&
+    revision > 0 &&
+    syncStatus === 'saved' &&
+    !draftDirty &&
+    draftIsCurrent &&
+    persistedDraft!.commands.length > 0;
 
   useEffect(() => {
     generation.current += 1;
@@ -200,46 +260,81 @@ export function useTemplateAuthoringLifecycle({
     setError(null);
   }, [key]);
 
-  const currentArtifact = artifact && scope && sourceChecksum &&
-    artifact.draftRevision === revision && sameScope(artifact.scope, scope) &&
-    sameHash(artifact.sourceChecksum, sourceChecksum) && artifact.state !== 'invalidated'
-    ? artifact
-    : null;
-  const currentPreparation = preparation && currentArtifact &&
+  const currentArtifact =
+    artifact &&
+    scope &&
+    sourceChecksum &&
+    artifact.draftRevision === revision &&
+    sameScope(artifact.scope, scope) &&
+    sameHash(artifact.sourceChecksum, sourceChecksum) &&
+    artifact.state !== 'invalidated'
+      ? artifact
+      : null;
+  const currentPreparation =
+    preparation &&
+    currentArtifact &&
     preparation.artifactId === currentArtifact.artifactId &&
     preparation.draftRevision === currentArtifact.draftRevision &&
     sameHash(preparation.sourceChecksum, currentArtifact.sourceChecksum) &&
     sameHash(preparation.commandDigest, currentArtifact.commandDigest) &&
     sameHash(preparation.packageChecksum, currentArtifact.packageChecksum)
-    ? preparation
-    : null;
-  const currentRenders = useMemo(() => currentArtifact ? renders.filter((render) =>
-    render.artifactId === currentArtifact.artifactId &&
-    render.draftRevision === currentArtifact.draftRevision &&
-    sameHash(render.sourceChecksum, currentArtifact.sourceChecksum) &&
-    sameHash(render.commandDigest, currentArtifact.commandDigest) &&
-    sameHash(render.packageChecksum, currentArtifact.packageChecksum),
-  ) : [], [currentArtifact, renders]);
+      ? preparation
+      : null;
+  const currentRenders = useMemo(
+    () =>
+      currentArtifact
+        ? renders.filter(
+            (render) =>
+              render.artifactId === currentArtifact.artifactId &&
+              render.draftRevision === currentArtifact.draftRevision &&
+              sameHash(render.sourceChecksum, currentArtifact.sourceChecksum) &&
+              sameHash(render.commandDigest, currentArtifact.commandDigest) &&
+              sameHash(render.packageChecksum, currentArtifact.packageChecksum),
+          )
+        : [],
+    [currentArtifact, renders],
+  );
   const isCurrent = !!currentArtifact && eligible;
-  const verificationPassed = !!currentArtifact &&
+  const verificationPassed =
+    !!currentArtifact &&
     Object.values(currentArtifact.verification).every((value) => value === 'passed') &&
     currentArtifact.verification.nativeAfterEffects === 'passed';
-  const nativeEvidencePassed = currentRenders.length > 0 &&
-    currentRenders.every((render) => render.state === 'completed' && render.frames.length > 0 && render.frames.every((frame) => !frame.stale));
-  const canReview = eligible && !!currentArtifact && currentArtifact.state === 'prepared' &&
-    verificationPassed && currentPreparation?.state === 'review_ready' && nativeEvidencePassed;
-  const canPublish = canReview || (eligible && !!currentArtifact && currentArtifact.state === 'reviewed' &&
-    verificationPassed && currentPreparation?.state === 'review_ready' && nativeEvidencePassed);
-  publishTarget.current = currentArtifact && scope ? {
-    generation: generation.current,
-    key,
-    revision,
-    artifactId: currentArtifact.artifactId,
-    sourceChecksum: currentArtifact.sourceChecksum,
-    commandDigest: currentArtifact.commandDigest,
-    packageChecksum: currentArtifact.packageChecksum,
-    eligible,
-  } : null;
+  const nativeEvidencePassed =
+    currentRenders.length > 0 &&
+    currentRenders.every(
+      (render) =>
+        render.state === 'completed' &&
+        render.frames.length > 0 &&
+        render.frames.every((frame) => !frame.stale),
+    );
+  const canReview =
+    eligible &&
+    !!currentArtifact &&
+    currentArtifact.state === 'prepared' &&
+    verificationPassed &&
+    currentPreparation?.state === 'review_ready' &&
+    nativeEvidencePassed;
+  const canPublish =
+    canReview ||
+    (eligible &&
+      !!currentArtifact &&
+      currentArtifact.state === 'reviewed' &&
+      verificationPassed &&
+      currentPreparation?.state === 'review_ready' &&
+      nativeEvidencePassed);
+  publishTarget.current =
+    currentArtifact && scope
+      ? {
+          generation: generation.current,
+          key,
+          revision,
+          artifactId: currentArtifact.artifactId,
+          sourceChecksum: currentArtifact.sourceChecksum,
+          commandDigest: currentArtifact.commandDigest,
+          packageChecksum: currentArtifact.packageChecksum,
+          eligible,
+        }
+      : null;
 
   const run = useCallback(async () => {
     if (!eligible || !scope || !persistedDraft || !sourceChecksum || !key) return;
@@ -261,21 +356,30 @@ export function useTemplateAuthoringLifecycle({
       }
 
       setState('preparing');
-      const nextPreparation = await prepareTemplateAuthoringArtifact(scope.assetId, nextArtifact.artifactId, scope, {
-        artifactId: nextArtifact.artifactId,
-        expectedDraftRevision: nextArtifact.draftRevision,
-        sourceChecksum: nextArtifact.sourceChecksum,
-        commandDigest: nextArtifact.commandDigest,
-        packageChecksum: nextArtifact.packageChecksum,
-      });
+      const nextPreparation = await prepareTemplateAuthoringArtifact(
+        scope.assetId,
+        nextArtifact.artifactId,
+        scope,
+        {
+          artifactId: nextArtifact.artifactId,
+          expectedDraftRevision: nextArtifact.draftRevision,
+          sourceChecksum: nextArtifact.sourceChecksum,
+          commandDigest: nextArtifact.commandDigest,
+          packageChecksum: nextArtifact.packageChecksum,
+        },
+      );
       if (!isLive()) return;
       assertPreparationPins(nextPreparation, nextArtifact);
       setPreparation(nextPreparation);
 
       if (nextPreparation.state !== 'review_ready') {
-        setState(nextPreparation.state === 'needs_input' || nextPreparation.state === 'failed' || nextPreparation.state === 'stale'
-          ? 'needs-input'
-          : 'preparing');
+        setState(
+          nextPreparation.state === 'needs_input' ||
+            nextPreparation.state === 'failed' ||
+            nextPreparation.state === 'stale'
+            ? 'needs-input'
+            : 'preparing',
+        );
         return;
       }
 
@@ -287,27 +391,53 @@ export function useTemplateAuthoringLifecycle({
       setState('rendering');
       const started: TemplateAuthoringNativeRender[] = [];
       for (const request of requests) {
-        const render = await requestTemplateAuthoringNativeRender(scope.assetId, nextArtifact.artifactId, scope, request);
+        const render = await requestTemplateAuthoringNativeRender(
+          scope.assetId,
+          nextArtifact.artifactId,
+          scope,
+          request,
+        );
         if (!isLive()) return;
-        if (render.artifactId !== nextArtifact.artifactId || render.draftRevision !== nextArtifact.draftRevision ||
-            !sameHash(render.sourceChecksum, nextArtifact.sourceChecksum) ||
-            !sameHash(render.commandDigest, nextArtifact.commandDigest) ||
-            !sameHash(render.packageChecksum, nextArtifact.packageChecksum))
-          throw new Error('Native sample render returned evidence for a different private package.');
+        if (
+          render.artifactId !== nextArtifact.artifactId ||
+          render.draftRevision !== nextArtifact.draftRevision ||
+          !sameHash(render.sourceChecksum, nextArtifact.sourceChecksum) ||
+          !sameHash(render.commandDigest, nextArtifact.commandDigest) ||
+          !sameHash(render.packageChecksum, nextArtifact.packageChecksum)
+        )
+          throw new Error(
+            'Native sample render returned evidence for a different private package.',
+          );
         started.push(render);
-        setRenders((current) => [...current.filter((item) => item.requestDigest !== render.requestDigest), render]);
+        setRenders((current) => [
+          ...current.filter((item) => item.requestDigest !== render.requestDigest),
+          render,
+        ]);
       }
       if (started.some((render) => render.state === 'needs_input')) setState('needs-input');
       else if (started.every((render) => render.state === 'completed')) {
-        setArtifact(await fetchTemplateAuthoringArtifact(scope.assetId, nextArtifact.artifactId, scope));
+        setArtifact(
+          await fetchTemplateAuthoringArtifact(scope.assetId, nextArtifact.artifactId, scope),
+        );
         setState('ready');
       } else setState('rendering');
     } catch (reason) {
       if (!isLive()) return;
-      setError(reason instanceof Error ? reason.message : 'Private package preparation failed.');
+      setError(uiErrorText(reason));
       setState('failed');
     }
-  }, [eligible, scope, persistedDraft, sourceChecksum, key, revision, currentArtifact, sourceDocument, parse]);
+  }, [
+    eligible,
+    scope,
+    persistedDraft,
+    sourceChecksum,
+    key,
+    revision,
+    currentArtifact,
+    sourceDocument,
+    parse,
+    uiErrorText,
+  ]);
   runRef.current = run;
 
   useEffect(() => {
@@ -321,53 +451,82 @@ export function useTemplateAuthoringLifecycle({
 
   useEffect(() => {
     if (!scope || !currentArtifact || !currentPreparation || !isCurrent) return;
-    const shouldPollPreparation = ['pending', 'submitted', 'running'].includes(currentPreparation.state);
-    const shouldPollRenders = currentRenders.some((render) => ['submitted', 'running'].includes(render.state));
-    const shouldPollArtifact = currentArtifact.state === 'pending' || shouldPollPreparation ||
+    const shouldPollPreparation = ['pending', 'submitted', 'running'].includes(
+      currentPreparation.state,
+    );
+    const shouldPollRenders = currentRenders.some((render) =>
+      ['submitted', 'running'].includes(render.state),
+    );
+    const shouldPollArtifact =
+      currentArtifact.state === 'pending' ||
+      shouldPollPreparation ||
       (currentArtifact.state === 'prepared' && currentArtifact.commit !== null);
     if (!shouldPollPreparation && !shouldPollRenders && !shouldPollArtifact) return;
     const timer = window.setTimeout(() => {
       const runGeneration = generation.current;
       void Promise.all([
         shouldPollArtifact
-          ? fetchTemplateAuthoringArtifact(scope.assetId, currentArtifact.artifactId, scope).then((value) => {
-              if (runGeneration === generation.current && value.artifactId === currentArtifact.artifactId &&
+          ? fetchTemplateAuthoringArtifact(scope.assetId, currentArtifact.artifactId, scope).then(
+              (value) => {
+                if (
+                  runGeneration === generation.current &&
+                  value.artifactId === currentArtifact.artifactId &&
                   value.draftRevision === currentArtifact.draftRevision &&
                   sameHash(value.sourceChecksum, currentArtifact.sourceChecksum) &&
                   sameHash(value.commandDigest, currentArtifact.commandDigest) &&
-                  sameHash(value.packageChecksum, currentArtifact.packageChecksum))
-                setArtifact(value);
-            })
+                  sameHash(value.packageChecksum, currentArtifact.packageChecksum)
+                )
+                  setArtifact(value);
+              },
+            )
           : Promise.resolve(),
         shouldPollPreparation
-          ? fetchTemplateAuthoringPreparation(scope.assetId, currentArtifact.artifactId, scope).then((value) => {
+          ? fetchTemplateAuthoringPreparation(
+              scope.assetId,
+              currentArtifact.artifactId,
+              scope,
+            ).then((value) => {
               if (runGeneration === generation.current) setPreparation(value);
             })
           : Promise.resolve(),
-        ...currentRenders.filter((render) => ['submitted', 'running'].includes(render.state)).map((render) =>
-          fetchTemplateAuthoringNativeRender(scope.assetId, currentArtifact.artifactId, render.renderId, scope).then((value) => {
-            if (runGeneration === generation.current) {
-              setRenders((current) => current.map((item) => item.renderId === value.renderId ? value : item));
-              if (value.state === 'completed' && value.frames.length) {
-                void fetchTemplateAuthoringArtifact(scope.assetId, currentArtifact.artifactId, scope)
-                  .then((next) => { if (runGeneration === generation.current) setArtifact(next); });
+        ...currentRenders
+          .filter((render) => ['submitted', 'running'].includes(render.state))
+          .map((render) =>
+            fetchTemplateAuthoringNativeRender(
+              scope.assetId,
+              currentArtifact.artifactId,
+              render.renderId,
+              scope,
+            ).then((value) => {
+              if (runGeneration === generation.current) {
+                setRenders((current) =>
+                  current.map((item) => (item.renderId === value.renderId ? value : item)),
+                );
+                if (value.state === 'completed' && value.frames.length) {
+                  void fetchTemplateAuthoringArtifact(
+                    scope.assetId,
+                    currentArtifact.artifactId,
+                    scope,
+                  ).then((next) => {
+                    if (runGeneration === generation.current) setArtifact(next);
+                  });
+                }
               }
-            }
-          }),
-        ),
+            }),
+          ),
       ]).catch((reason: unknown) => {
-        if (runGeneration === generation.current)
-          setError(reason instanceof Error ? reason.message : 'Could not refresh private preparation status.');
+        if (runGeneration === generation.current) setError(uiErrorText(reason));
       });
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [scope, currentArtifact, currentPreparation, currentRenders, isCurrent]);
+  }, [scope, currentArtifact, currentPreparation, currentRenders, isCurrent, uiErrorText]);
 
   useEffect(() => {
     if (!currentArtifact || !currentPreparation || !currentRenders.length) return;
     if (currentRenders.some((render) => render.state === 'needs_input')) setState('needs-input');
     else if (currentRenders.every((render) => render.state === 'completed')) setState('ready');
-    else if (currentRenders.some((render) => ['submitted', 'running'].includes(render.state))) setState('rendering');
+    else if (currentRenders.some((render) => ['submitted', 'running'].includes(render.state)))
+      setState('rendering');
   }, [currentArtifact, currentPreparation, currentRenders]);
 
   const retry = useCallback(async () => {
@@ -384,121 +543,181 @@ export function useTemplateAuthoringLifecycle({
   const review = useCallback(async () => {
     if (!canReview || !currentArtifact || !scope) return false;
     try {
-      const reviewed = await reviewTemplateAuthoringArtifact(scope.assetId, currentArtifact.artifactId, scope, {
-        artifactId: currentArtifact.artifactId,
-        expectedDraftRevision: currentArtifact.draftRevision,
-        sourceChecksum: currentArtifact.sourceChecksum,
-        commandDigest: currentArtifact.commandDigest,
-        packageChecksum: currentArtifact.packageChecksum,
-      });
+      const reviewed = await reviewTemplateAuthoringArtifact(
+        scope.assetId,
+        currentArtifact.artifactId,
+        scope,
+        {
+          artifactId: currentArtifact.artifactId,
+          expectedDraftRevision: currentArtifact.draftRevision,
+          sourceChecksum: currentArtifact.sourceChecksum,
+          commandDigest: currentArtifact.commandDigest,
+          packageChecksum: currentArtifact.packageChecksum,
+        },
+      );
       assertArtifactPins(reviewed, scope, revision, currentArtifact.sourceChecksum);
       setArtifact(reviewed);
       return reviewed.state === 'reviewed';
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not review this private package.');
+      setError(uiErrorText(reason));
       return false;
     }
-  }, [canReview, currentArtifact, scope, revision]);
+  }, [canReview, currentArtifact, scope, revision, uiErrorText]);
 
-  const commit = useCallback(async (
-    request: Omit<TemplateAuthoringArtifactCommit, 'artifactId' | 'expectedDraftRevision' | 'sourceChecksum' | 'commandDigest' | 'packageChecksum'>,
-  ) => {
-    if (!currentArtifact || currentArtifact.state !== 'reviewed' || !scope) return null;
-    const committed = await commitTemplateAuthoringArtifact(scope.assetId, currentArtifact.artifactId, scope, {
-      artifactId: currentArtifact.artifactId,
-      expectedDraftRevision: currentArtifact.draftRevision,
-      sourceChecksum: currentArtifact.sourceChecksum,
-      commandDigest: currentArtifact.commandDigest,
-      packageChecksum: currentArtifact.packageChecksum,
-      ...request,
-    });
-    assertArtifactPins(committed, scope, revision, currentArtifact.sourceChecksum);
-    setArtifact(committed);
-    return committed;
-  }, [currentArtifact, scope, revision]);
+  const commit = useCallback(
+    async (
+      request: Omit<
+        TemplateAuthoringArtifactCommit,
+        | 'artifactId'
+        | 'expectedDraftRevision'
+        | 'sourceChecksum'
+        | 'commandDigest'
+        | 'packageChecksum'
+      >,
+    ) => {
+      if (!currentArtifact || currentArtifact.state !== 'reviewed' || !scope) return null;
+      const committed = await commitTemplateAuthoringArtifact(
+        scope.assetId,
+        currentArtifact.artifactId,
+        scope,
+        {
+          artifactId: currentArtifact.artifactId,
+          expectedDraftRevision: currentArtifact.draftRevision,
+          sourceChecksum: currentArtifact.sourceChecksum,
+          commandDigest: currentArtifact.commandDigest,
+          packageChecksum: currentArtifact.packageChecksum,
+          ...request,
+        },
+      );
+      assertArtifactPins(committed, scope, revision, currentArtifact.sourceChecksum);
+      setArtifact(committed);
+      return committed;
+    },
+    [currentArtifact, scope, revision],
+  );
 
-  const reviewAndCommit = useCallback((
-    request: Omit<TemplateAuthoringArtifactCommit, 'artifactId' | 'expectedDraftRevision' | 'sourceChecksum' | 'commandDigest' | 'packageChecksum'>,
-  ): Promise<TemplateAuthoringArtifact | null> => {
-    if (!canPublish || !currentArtifact || !scope) return Promise.resolve(null);
-    const target: PublishTarget = {
-      generation: generation.current,
-      key,
-      revision,
-      artifactId: currentArtifact.artifactId,
-      sourceChecksum: currentArtifact.sourceChecksum,
-      commandDigest: currentArtifact.commandDigest,
-      packageChecksum: currentArtifact.packageChecksum,
-      eligible,
-    };
-    const signature = JSON.stringify([target.key, target.artifactId, target.revision, target.sourceChecksum,
-      target.commandDigest, target.packageChecksum, request]);
-    if (publishAttempt.current)
-      return publishAttempt.current.signature === signature
-        ? publishAttempt.current.promise
-        : Promise.resolve(null);
+  const reviewAndCommit = useCallback(
+    (
+      request: Omit<
+        TemplateAuthoringArtifactCommit,
+        | 'artifactId'
+        | 'expectedDraftRevision'
+        | 'sourceChecksum'
+        | 'commandDigest'
+        | 'packageChecksum'
+      >,
+    ): Promise<TemplateAuthoringArtifact | null> => {
+      if (!canPublish || !currentArtifact || !scope) return Promise.resolve(null);
+      const target: PublishTarget = {
+        generation: generation.current,
+        key,
+        revision,
+        artifactId: currentArtifact.artifactId,
+        sourceChecksum: currentArtifact.sourceChecksum,
+        commandDigest: currentArtifact.commandDigest,
+        packageChecksum: currentArtifact.packageChecksum,
+        eligible,
+      };
+      const signature = JSON.stringify([
+        target.key,
+        target.artifactId,
+        target.revision,
+        target.sourceChecksum,
+        target.commandDigest,
+        target.packageChecksum,
+        request,
+      ]);
+      if (publishAttempt.current)
+        return publishAttempt.current.signature === signature
+          ? publishAttempt.current.promise
+          : Promise.resolve(null);
 
-    const sameTargetIsCurrent = () => {
-      const latest = publishTarget.current;
-      return generation.current === target.generation && !!latest && latest.eligible &&
-        latest.generation === target.generation && latest.key === target.key &&
-        latest.revision === target.revision && latest.artifactId === target.artifactId &&
-        sameHash(latest.sourceChecksum, target.sourceChecksum) &&
-        sameHash(latest.commandDigest, target.commandDigest) &&
-        sameHash(latest.packageChecksum, target.packageChecksum);
-    };
-    const pins = {
-      artifactId: target.artifactId,
-      expectedDraftRevision: target.revision,
-      sourceChecksum: target.sourceChecksum,
-      commandDigest: target.commandDigest,
-      packageChecksum: target.packageChecksum,
-    };
-    const attempt = (async () => {
-      try {
-        if (!sameTargetIsCurrent()) return null;
-        const reviewed = currentArtifact.state === 'reviewed'
-          ? currentArtifact
-          : await reviewTemplateAuthoringArtifact(scope.assetId, target.artifactId, scope, pins);
-        assertArtifactPins(reviewed, scope, target.revision, target.sourceChecksum);
-        if (reviewed.artifactId !== target.artifactId ||
+      const sameTargetIsCurrent = () => {
+        const latest = publishTarget.current;
+        return (
+          generation.current === target.generation &&
+          !!latest &&
+          latest.eligible &&
+          latest.generation === target.generation &&
+          latest.key === target.key &&
+          latest.revision === target.revision &&
+          latest.artifactId === target.artifactId &&
+          sameHash(latest.sourceChecksum, target.sourceChecksum) &&
+          sameHash(latest.commandDigest, target.commandDigest) &&
+          sameHash(latest.packageChecksum, target.packageChecksum)
+        );
+      };
+      const pins = {
+        artifactId: target.artifactId,
+        expectedDraftRevision: target.revision,
+        sourceChecksum: target.sourceChecksum,
+        commandDigest: target.commandDigest,
+        packageChecksum: target.packageChecksum,
+      };
+      const attempt = (async () => {
+        try {
+          if (!sameTargetIsCurrent()) return null;
+          const reviewed =
+            currentArtifact.state === 'reviewed'
+              ? currentArtifact
+              : await reviewTemplateAuthoringArtifact(
+                  scope.assetId,
+                  target.artifactId,
+                  scope,
+                  pins,
+                );
+          assertArtifactPins(reviewed, scope, target.revision, target.sourceChecksum);
+          if (
+            reviewed.artifactId !== target.artifactId ||
             !sameHash(reviewed.commandDigest, target.commandDigest) ||
             !sameHash(reviewed.packageChecksum, target.packageChecksum) ||
             reviewed.state !== 'reviewed' ||
             !Object.values(reviewed.verification).every((value) => value === 'passed') ||
-            reviewed.verification.nativeAfterEffects !== 'passed')
-          throw new Error('Review did not return the exact verified package.');
-        if (!sameTargetIsCurrent()) return null;
-        setArtifact(reviewed);
+            reviewed.verification.nativeAfterEffects !== 'passed'
+          )
+            throw new Error('Review did not return the exact verified package.');
+          if (!sameTargetIsCurrent()) return null;
+          setArtifact(reviewed);
 
-        const committed = await commitTemplateAuthoringArtifact(scope.assetId, target.artifactId, scope, {
-          ...pins,
-          ...request,
-        });
-        assertArtifactPins(committed, scope, target.revision, target.sourceChecksum);
-        if (committed.artifactId !== target.artifactId ||
+          const committed = await commitTemplateAuthoringArtifact(
+            scope.assetId,
+            target.artifactId,
+            scope,
+            {
+              ...pins,
+              ...request,
+            },
+          );
+          assertArtifactPins(committed, scope, target.revision, target.sourceChecksum);
+          if (
+            committed.artifactId !== target.artifactId ||
             !sameHash(committed.commandDigest, target.commandDigest) ||
-            !sameHash(committed.packageChecksum, target.packageChecksum))
-          throw new Error('Version publication returned a different private package.');
-        if (committed.state !== 'committed' || !committed.commit ||
-            !sameHash(committed.commit.packageChecksum, target.packageChecksum))
-          throw new Error('The exact reviewed package was not confirmed as published.');
-        // Once the exact server-side CAS succeeds, later edits belong to the next
-        // draft revision and must not hide confirmation for this published package.
-        if (sameTargetIsCurrent()) setArtifact(committed);
-        return committed;
-      } catch (reason) {
-        if (sameTargetIsCurrent())
-          setError(reason instanceof Error ? reason.message : 'Could not publish this private package.');
-        return null;
-      }
-    })();
-    const promise = attempt.finally(() => {
-      if (publishAttempt.current?.signature === signature) publishAttempt.current = null;
-    });
-    publishAttempt.current = { signature, promise };
-    return promise;
-  }, [canPublish, currentArtifact, scope, key, revision, eligible]);
+            !sameHash(committed.packageChecksum, target.packageChecksum)
+          )
+            throw new Error('Version publication returned a different private package.');
+          if (
+            committed.state !== 'committed' ||
+            !committed.commit ||
+            !sameHash(committed.commit.packageChecksum, target.packageChecksum)
+          )
+            throw new Error('The exact reviewed package was not confirmed as published.');
+          // Once the exact server-side CAS succeeds, later edits belong to the next
+          // draft revision and must not hide confirmation for this published package.
+          if (sameTargetIsCurrent()) setArtifact(committed);
+          return committed;
+        } catch (reason) {
+          if (sameTargetIsCurrent()) setError(uiErrorText(reason));
+          return null;
+        }
+      })();
+      const promise = attempt.finally(() => {
+        if (publishAttempt.current?.signature === signature) publishAttempt.current = null;
+      });
+      publishAttempt.current = { signature, promise };
+      return promise;
+    },
+    [canPublish, currentArtifact, scope, key, revision, eligible, uiErrorText],
+  );
 
   return {
     state: eligible ? state : 'idle',

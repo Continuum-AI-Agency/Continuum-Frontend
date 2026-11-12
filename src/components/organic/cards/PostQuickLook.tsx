@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Rich hover quick-look shown in the gallery HoverCard. Surfaces the adaptive
 // metric set for the post's media type, a 7-day per-post trend sparkline (with a
@@ -18,7 +19,7 @@ import { deltaTone, formatDateTime } from '../organic-format';
 import {
   buildPostMetricSeries,
   countNumericSeriesPoints,
-  POST_COMPARISON_UNLOCK_COPY,
+  POST_COMPARISON_UNLOCK_DAYS,
   POST_HISTORY_ACCOUNT_STANDIN_COPY,
   POST_HISTORY_EMPTY_COPY,
   POST_HISTORY_TRACKED_DAYS,
@@ -71,8 +72,10 @@ export function PostQuickLook({
   accountSeries?: Array<{ date: string; value: number | undefined }>;
   loading?: boolean;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const kind = resolveCardMediaKind(post);
-  const descriptors = React.useMemo(() => getCardMetricSet(post), [post]);
+  const descriptors = React.useMemo(() => getCardMetricSet(post, uiText), [post, uiText]);
   const comparisons = React.useMemo(() => postPeriodComparisons(post), [post]);
 
   const primary = descriptors.filter((d) => d.emphasis === 'primary');
@@ -100,22 +103,24 @@ export function PostQuickLook({
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <span className="rounded bg-muted/60 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {MEDIA_KIND_LABEL[kind]}
+              {uiText('mediaKindLabel', { kind })}
             </span>
             {post.isBoosted ? (
               <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                Boosted
+                {uiText('boosted_c1f1c88')}
               </span>
             ) : null}
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">{formatDateTime(post.timestamp)}</span>
+            <span className="text-xs text-muted-foreground">
+              {formatDateTime(post.timestamp, uiLocale)}
+            </span>
             {post.permalink ? (
               <a
                 href={post.permalink}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Open post on platform"
+                aria-label={uiText('open_post_on_platform_9c31e55')}
                 className="text-muted-foreground transition-colors hover:text-foreground"
               >
                 <ExternalLink className="size-3.5" aria-hidden />
@@ -134,8 +139,8 @@ export function PostQuickLook({
           <>
             <p className="text-2xs leading-snug text-muted-foreground">
               {Object.keys(comparisons).length > 0
-                ? 'All-time totals · change shown vs the previous 7 days'
-                : `All-time totals · ${POST_COMPARISON_UNLOCK_COPY}`}
+                ? uiText('all_time_totals_change_shown_vs_the_previous__696cfa3')
+                : uiText('postAllTimeNoComparison', { days: POST_COMPARISON_UNLOCK_DAYS })}
             </p>
             <div
               className={cn('grid gap-1.5', primary.length >= 3 ? 'grid-cols-3' : 'grid-cols-2')}
@@ -181,7 +186,9 @@ export function PostQuickLook({
           {trendState === 'post' ? (
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">7-day trend</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {uiText('7_day_trend_f505fb9')}
+                </span>
                 <span className="text-2xs text-muted-foreground">{seriesKey}</span>
               </div>
               <Sparkline
@@ -190,18 +197,25 @@ export function PostQuickLook({
                 width={300}
                 height={36}
                 className="w-full"
-                ariaLabel={`${seriesKey} 7-day trend`}
+                ariaLabel={uiText('metricSevenDayTrend', { metric: seriesKey })}
               />
               {trendDays < POST_HISTORY_TRACKED_DAYS ? (
                 <p className="text-xs leading-snug text-muted-foreground">
-                  {postHistoryProgressCopy(trendDays)}
+                  {uiText('postHistoryProgress', {
+                    tracked: trendDays,
+                    days: POST_HISTORY_TRACKED_DAYS,
+                  })}
                 </p>
               ) : null}
             </div>
           ) : trendState === 'account' ? (
             <div className="space-y-1">
               <p className="text-xs leading-snug text-muted-foreground">
-                {POST_HISTORY_ACCOUNT_STANDIN_COPY} {postHistoryProgressCopy(trendDays)}
+                {uiText('postHistoryAccountStandin')}{' '}
+                {uiText('postHistoryProgress', {
+                  tracked: trendDays,
+                  days: POST_HISTORY_TRACKED_DAYS,
+                })}
               </p>
               <Sparkline
                 values={(accountSeries ?? []).map((point) => point.value)}
@@ -209,11 +223,13 @@ export function PostQuickLook({
                 width={300}
                 height={36}
                 className="w-full"
-                ariaLabel="account trend"
+                ariaLabel={uiText('accountTrendAria')}
               />
             </div>
           ) : (
-            <p className="text-xs leading-snug text-muted-foreground">{POST_HISTORY_EMPTY_COPY}</p>
+            <p className="text-xs leading-snug text-muted-foreground">
+              {uiText('postHistoryEmpty')}
+            </p>
           )}
         </div>
 

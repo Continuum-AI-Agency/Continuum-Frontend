@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { Edge } from '@xyflow/react';
+import { createTranslator } from 'next-intl';
+import studioMessages from '../../../messages/studio/en.json';
+import esMessages from '../../../messages/studio/es.json';
+import ptMessages from '../../../messages/studio/pt-BR.json';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import * as spliceWorkerClientModule from '../workers/spliceWorkerClient';
@@ -10,6 +14,7 @@ import {
   executeWorkflow,
 } from './executeWorkflow';
 import { computeGenerationSignature } from './generationSignature';
+import { workflowNodeError } from './workflowUiFailure';
 
 const rehydrateWorkflowMediaNodes = mock(async (input: StudioNode[]) => input);
 
@@ -57,6 +62,11 @@ describe('executeWorkflow', () => {
       return { success: true, output: { type: 'text', value: 'enriched' } };
     }),
   ) => ({
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration,
     executeVideoExtension,
     executeEnrichment,
@@ -66,6 +76,49 @@ describe('executeWorkflow', () => {
     releaseController: () => {},
     isExecuting: true,
     error: null,
+  });
+
+  it('localizes real preflight guidance and reformats the same node failure after a locale change', async () => {
+    for (const locale of ['pt-BR', 'es'] as const) {
+      useStudioStore.setState({
+        nodes: [
+          {
+            id: 'generator',
+            type: 'nanoGen',
+            position: { x: 0, y: 0 },
+            data: { model: 'nano-banana', positivePrompt: '' },
+          },
+        ],
+        edges: [],
+        brandId: 'brand-test',
+      });
+      const generate = mock(async () => ({ success: true }));
+      const show = mock();
+      const translateUi = createTranslator({
+        locale,
+        messages: { studio: locale === 'pt-BR' ? ptMessages : esMessages },
+        namespace: 'studio',
+      });
+      await executeWorkflow({ ...buildControls(generate), translateUi, show } as never);
+      expect(generate).not.toHaveBeenCalled();
+      expect(show).toHaveBeenCalledTimes(1);
+      expect(show.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          title: locale === 'pt-BR' ? 'O fluxo precisa de entrada.' : 'El flujo necesita entrada',
+        }),
+      );
+      const node = useStudioStore.getState().nodes[0];
+      expect(node.data.error).toBe('Missing required prompt');
+      expect(workflowNodeError(node.data, translateUi)).toBe(
+        locale === 'pt-BR' ? 'Falta o prompt obrigatório' : 'Falta el prompt obligatorio',
+      );
+      const other = createTranslator({
+        locale: 'es',
+        messages: { studio: esMessages },
+        namespace: 'studio',
+      });
+      expect(workflowNodeError(node.data, other)).toBe('Falta el prompt obligatorio');
+    }
   });
 
   it('should execute a linear workflow', async () => {
@@ -2258,7 +2311,9 @@ describe('collectPublisherHandoffs', () => {
       { id: 'draft', position: { x: 0, y: 0 }, data: {}, type: 'plannerDraft' },
       { id: 'pub', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
-    const edges: Edge[] = [{ id: 'e1', source: 'draft', sourceHandle: 'draft', target: 'pub', targetHandle: 'draft-in' }];
+    const edges: Edge[] = [
+      { id: 'e1', source: 'draft', sourceHandle: 'draft', target: 'pub', targetHandle: 'draft-in' },
+    ];
 
     const handoffs = collectPublisherHandoffs(nodes, edges, ['draft']);
     expect(handoffs).toEqual([
@@ -2291,7 +2346,10 @@ describe('collectPublisherHandoffs', () => {
       { id: 'c', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
       { id: 'd', position: { x: 0, y: 0 }, data: {}, type: 'organicPublish' },
     ];
-    expect(collectPublisherHandoffs(nodes, []).map((handoff) => handoff.nodeId)).toEqual(['b', 'd']);
+    expect(collectPublisherHandoffs(nodes, []).map((handoff) => handoff.nodeId)).toEqual([
+      'b',
+      'd',
+    ]);
   });
 });
 
@@ -2299,6 +2357,11 @@ describe('Canvas V3 runtime branches', () => {
   // The action branch registers a real AbortController so a long re-encode can be
   // cancelled, so the stub has to provide those two.
   const controls = () => ({
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration: mock(async () => ({
       success: true,
       output: { type: 'image', base64: 'gen', mimeType: 'image/png' },
@@ -2492,8 +2555,18 @@ describe('MCP-built nanoGen graph resolves its reference image (gate regression)
       output: { type: 'image', base64: 'generated', mimeType: 'image/png' },
     }));
     return {
+      translateUi: createTranslator({
+        locale: 'en',
+        messages: { studio: studioMessages },
+        namespace: 'studio',
+      }),
       executeGeneration,
       controls: {
+        translateUi: createTranslator({
+          locale: 'en',
+          messages: { studio: studioMessages },
+          namespace: 'studio',
+        }),
         executeGeneration,
         executeVideoExtension: mock(async () => ({ success: true })),
         executeEnrichment: mock(async () => ({
@@ -2659,6 +2732,11 @@ describe('executeWorkflow — omniGen payload', () => {
       };
     });
     const controls = {
+      translateUi: createTranslator({
+        locale: 'en',
+        messages: { studio: studioMessages },
+        namespace: 'studio',
+      }),
       executeGeneration: mock(async () => ({ success: true })),
       executeVideoExtension: mock(async () => ({ success: true })),
       executeEnrichment: mock(async () => ({ success: true })),
@@ -2862,6 +2940,11 @@ describe('an edge that exists is never reported as missing', () => {
     ).filter((input) => input.handle === handle).length;
 
   const controls = () => ({
+    translateUi: createTranslator({
+      locale: 'en',
+      messages: { studio: studioMessages },
+      namespace: 'studio',
+    }),
     executeGeneration: mock(async () => ({
       success: true,
       output: { type: 'image', base64: 'gen', mimeType: 'image/png' },
@@ -3034,17 +3117,15 @@ describe('an edge that exists is never reported as missing', () => {
       },
       { id: 'gen', position: { x: 0, y: 0 }, type: 'nanoGen', data: { model: 'nano-banana' } },
     ] as unknown as StudioNode[]);
-    useStudioStore
-      .getState()
-      .setEdges([
-        {
-          id: 'e1',
-          source: 'bat',
-          target: 'gen',
-          sourceHandle: 'collection',
-          targetHandle: 'prompt',
-        },
-      ]);
+    useStudioStore.getState().setEdges([
+      {
+        id: 'e1',
+        source: 'bat',
+        target: 'gen',
+        sourceHandle: 'collection',
+        targetHandle: 'prompt',
+      },
+    ]);
 
     const c = controls();
     c.executeGeneration.mockImplementation(async () => ({

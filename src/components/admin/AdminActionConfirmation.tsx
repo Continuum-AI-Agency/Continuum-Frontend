@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 import {
@@ -44,6 +46,7 @@ export function AdminActionConfirmation({
   requireTypedEmail = false,
   onConfirm,
 }: AdminActionConfirmationProps) {
+  const uiText = useTranslations('admin');
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const [typedEmail, setTypedEmail] = useState('');
@@ -65,18 +68,21 @@ export function AdminActionConfirmation({
         </AlertDialogHeader>
         {needsEmail ? (
           <Label className="flex flex-col gap-2 text-sm">
-            Type <span className="font-mono text-xs">{targetEmail}</span> to confirm
+            {uiText.rich('m_3e9da08fe8', {
+              emailSlot: (chunks) => <span className="font-mono text-xs">{chunks}</span>,
+              email: targetEmail ?? '',
+            })}
             <Input
               value={typedEmail}
               onChange={(event) => setTypedEmail(event.target.value)}
-              aria-label={`Type ${targetEmail} to confirm`}
+              aria-label={uiText('m_5b0b628ed4', { v0: String(targetEmail) })}
               autoComplete="off"
               spellCheck={false}
             />
           </Label>
         ) : null}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
           {/* AlertDialogAction is a plain Button, not a Close: confirming closes explicitly. */}
           <AlertDialogAction
             disabled={!confirmed}

@@ -5,6 +5,10 @@
 // be the same object, validated the same way. The contract in `@continuum/contracts` owns
 // the shape; this owns the half-typed form on the way to it.
 
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 import type { AnalogObjective, ConversionDescriptor } from '@continuum/contracts';
 import { conversionDescriptorSchema, inferAnalog } from '@continuum/contracts';
 
@@ -64,15 +68,39 @@ export function descriptorDraftFrom(
  */
 export function buildConversionDescriptor(
   draft: ConversionDescriptorDraft,
+  uiTranslate?: ScaleCopy,
 ): { descriptor: ConversionDescriptor } | { error: string } {
-  if (draft.event_id.trim() === '') return { error: 'Name the event as the platform reports it.' };
-  if (draft.result_label.trim() === '') return { error: 'Say what you call one of these.' };
-  if (draft.cost_label.trim() === '') return { error: 'Say what you call the cost of one.' };
+  if (draft.event_id.trim() === '')
+    return {
+      error: uiTranslate
+        ? uiTranslate('conversionRequired', { field: 'event' })
+        : 'Name the event as the platform reports it.',
+    };
+  if (draft.result_label.trim() === '')
+    return {
+      error: uiTranslate
+        ? uiTranslate('conversionRequired', { field: 'result' })
+        : 'Say what you call one of these.',
+    };
+  if (draft.cost_label.trim() === '')
+    return {
+      error: uiTranslate
+        ? uiTranslate('conversionRequired', { field: 'cost' })
+        : 'Say what you call the cost of one.',
+    };
   if (draft.typical_lag_days.trim() === '') {
-    return { error: 'Say how many days it usually takes to arrive.' };
+    return {
+      error: uiTranslate
+        ? uiTranslate('conversionRequired', { field: 'lag' })
+        : 'Say how many days it usually takes to arrive.',
+    };
   }
   if (draft.events_per_week.trim() === '') {
-    return { error: 'Say roughly how many land in a week.' };
+    return {
+      error: uiTranslate
+        ? uiTranslate('conversionRequired', { field: 'events' })
+        : 'Say roughly how many land in a week.',
+    };
   }
   const typical_lag_days = Number(draft.typical_lag_days);
   const events_per_week = Number(draft.events_per_week);
@@ -92,7 +120,13 @@ export function buildConversionDescriptor(
     carries_revenue: draft.carries_revenue,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'That conversion cannot be saved yet.' };
+    return {
+      error: uiTranslate
+        ? uiTranslate('conversionInvalid', {
+            field: String(parsed.error.issues[0]?.path[0] ?? 'other'),
+          })
+        : (parsed.error.issues[0]?.message ?? 'That conversion cannot be saved yet.'),
+    };
   }
   return { descriptor: parsed.data };
 }
@@ -120,3 +154,7 @@ export const ANALOG_LABEL: Record<AnalogObjective, string> = {
   signup: 'a signup',
   lead: 'a lead',
 };
+
+export function analogLabel(analog: AnalogObjective, t: ScaleCopy): string {
+  return t('conversionAnalog', { analog });
+}

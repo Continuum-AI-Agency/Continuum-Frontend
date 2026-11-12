@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // The Google tab reads once, on the producer's window. While the producer is still answering it
 // reads nothing: a read on the fallback first was thrown away, and between UTC midnight and the

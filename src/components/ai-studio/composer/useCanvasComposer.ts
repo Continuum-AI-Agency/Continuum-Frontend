@@ -19,6 +19,7 @@ import {
   isTerminalAgentRunStatus,
 } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { streamCanvasComposer } from '@/lib/ai-studio/composer/streamCanvasComposer';
 import { http } from '@/lib/api/http';
@@ -242,6 +243,8 @@ const upsertComposerStoreRun = (
 };
 
 export function useCanvasComposer(brandProfileId: string | undefined, roomId: string | undefined) {
+  const uiErrorText = useUiErrorMessage();
+
   const [turns, setTurns] = useState<ComposerTurn[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const activeRunRef = useRef<ActiveComposerRun | null>(null);
@@ -447,11 +450,11 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
         updateLastTurn((state) => ({
           ...state,
           status: 'error',
-          error: err instanceof Error ? err.message : 'The composer failed.',
+          error: uiErrorText(err),
         }));
       }
     },
-    [brandProfileId, roomId, updateLastTurn, cancel],
+    [brandProfileId, roomId, updateLastTurn, cancel, uiErrorText],
   );
 
   const state = turns.at(-1)?.state ?? IDLE_COMPOSER_STATE;

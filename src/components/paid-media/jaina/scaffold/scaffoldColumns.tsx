@@ -1,6 +1,7 @@
 'use client';
-
+import type { useTranslations } from 'next-intl';
 import type { InsightColumn } from '@/components/dashboard/datatable/InsightDataTable';
+import type { UiLocale } from '@/i18n/config';
 import {
   type ScaffoldAdSetRow,
   scaffoldStatusRank,
@@ -9,6 +10,7 @@ import {
 import { DerivedEmpty, DerivedValue } from './DerivedValue';
 import { ScaffoldStatusPill } from './ScaffoldStatusPill';
 import { formatDailyBudget } from './scaffoldBudget';
+import { localizeScaffoldCopy, scaffoldChoiceLabel } from './scaffoldPlanView';
 
 /**
  * The ad-set columns.
@@ -35,16 +37,19 @@ const placementLabel = (placement: string[] | undefined) => {
 
 export const buildScaffoldAdSetColumns = (
   currency: string | null = null,
+  t?: ReturnType<typeof useTranslations<'scale'>>,
+  locale: UiLocale = 'en',
+  formatError: (error: unknown) => string = String,
 ): InsightColumn<ScaffoldAdSetRow>[] => [
   {
     id: 'status',
-    header: 'Status',
+    header: t ? localizeScaffoldCopy('Status', t) : 'Status',
     sortValue: (row) => scaffoldStatusRank(row.status),
     cell: (row) => <ScaffoldStatusPill status={row.status} />,
   },
   {
     id: 'name',
-    header: 'Ad set',
+    header: t ? localizeScaffoldCopy('Ad set', t) : 'Ad set',
     sortValue: (row) => row.name,
     cellClassName: 'max-w-[22rem]',
     cell: (row) => (
@@ -53,7 +58,7 @@ export const buildScaffoldAdSetColumns = (
           {row.name}
         </DerivedValue>
         {row.errorMessage ? (
-          <span className="truncate text-destructive text-xs" title={row.errorMessage}>
+          <span className="truncate text-destructive text-xs" title={formatError(row.errorMessage)}>
             {row.errorMessage}
           </span>
         ) : null}
@@ -62,7 +67,7 @@ export const buildScaffoldAdSetColumns = (
   },
   {
     id: 'budget',
-    header: 'Budget',
+    header: t ? localizeScaffoldCopy('Budget', t) : 'Budget',
     align: 'right',
     sortValue: (row) => row.dailyBudgetMinorUnits ?? -1,
     cell: (row) => (
@@ -74,46 +79,64 @@ export const buildScaffoldAdSetColumns = (
         }
         className="whitespace-nowrap tabular-nums"
       >
-        {formatDailyBudget(row.dailyBudgetMinorUnits, currency)}
+        {formatDailyBudget(row.dailyBudgetMinorUnits, currency, t, locale)}
       </DerivedValue>
     ),
   },
   {
     id: 'product',
-    header: 'Product',
+    header: t ? localizeScaffoldCopy('Product', t) : 'Product',
     sortValue: (row) => row.productKey ?? '',
     cell: (row) => row.productKey ?? <DerivedEmpty />,
   },
   {
     id: 'angle',
-    header: 'Angle',
+    header: t ? localizeScaffoldCopy('Angle', t) : 'Angle',
     sortValue: (row) => row.angleKey ?? '',
     cell: (row) => row.angleKey ?? <DerivedEmpty />,
   },
   {
     id: 'funnel',
-    header: 'Funnel',
+    header: t ? localizeScaffoldCopy('Funnel', t) : 'Funnel',
     sortValue: (row) => row.choices.funnelStage ?? '',
-    cell: (row) => row.choices.funnelStage ?? <DerivedEmpty />,
+    cell: (row) =>
+      row.choices.funnelStage ? (
+        t ? (
+          scaffoldChoiceLabel(row.choices.funnelStage, t)
+        ) : (
+          row.choices.funnelStage
+        )
+      ) : (
+        <DerivedEmpty />
+      ),
   },
   {
     id: 'optimization',
-    header: 'Optimization',
+    header: t ? localizeScaffoldCopy('Optimization', t) : 'Optimization',
     sortValue: (row) => row.choices.optimizationGoal ?? '',
-    cell: (row) => row.choices.optimizationGoal ?? <DerivedEmpty />,
+    cell: (row) =>
+      row.choices.optimizationGoal ? (
+        t ? (
+          scaffoldChoiceLabel(row.choices.optimizationGoal, t)
+        ) : (
+          row.choices.optimizationGoal
+        )
+      ) : (
+        <DerivedEmpty />
+      ),
   },
   {
     id: 'placement',
-    header: 'Placement',
+    header: t ? localizeScaffoldCopy('Placement', t) : 'Placement',
     cell: (row) => placementLabel(row.choices.placement) ?? <DerivedEmpty />,
   },
   {
     id: 'billing',
-    header: 'Billing',
+    header: t ? localizeScaffoldCopy('Billing', t) : 'Billing',
     cell: (row) =>
       row.derived.billingEvent ? (
         <DerivedValue reason="A pure function of the optimization goal — it is not chosen separately.">
-          {row.derived.billingEvent}
+          {t ? scaffoldChoiceLabel(row.derived.billingEvent, t) : row.derived.billingEvent}
         </DerivedValue>
       ) : (
         // Not a gap: the ad-set create schema REJECTS a billing_event key, because it is
@@ -124,9 +147,9 @@ export const buildScaffoldAdSetColumns = (
   },
   {
     id: 'targeting',
-    header: 'Targeting',
+    header: t ? localizeScaffoldCopy('Targeting', t) : 'Targeting',
     cell: (row) => {
-      const summary = targetingSummary(row.derived.targeting);
+      const summary = targetingSummary(row.derived.targeting, t, locale);
       return summary ? (
         <DerivedValue reason="Compiled from the audience group this ad set points at.">
           {summary}
@@ -138,7 +161,7 @@ export const buildScaffoldAdSetColumns = (
   },
   {
     id: 'ads',
-    header: 'Ads',
+    header: t ? localizeScaffoldCopy('Ads', t) : 'Ads',
     align: 'right',
     sortValue: (row) => row.ads.length,
     cell: (row) => {
@@ -147,7 +170,7 @@ export const buildScaffoldAdSetColumns = (
       ).length;
       return (
         <span className="tabular-nums">
-          {created}/{row.ads.length}
+          {created.toLocaleString(locale)}/{row.ads.length.toLocaleString(locale)}
         </span>
       );
     },

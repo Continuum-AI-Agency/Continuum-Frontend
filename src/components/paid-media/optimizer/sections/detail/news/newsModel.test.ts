@@ -1,3 +1,7 @@
+import {createTranslator} from 'next-intl';
+import enNews from '../../../../../../../messages/scale/en.json';
+import ptNews from '../../../../../../../messages/scale/pt-BR.json';
+import esNews from '../../../../../../../messages/scale/es.json';
 import { describe, expect, it } from 'bun:test';
 import type { CycleItemRow, PortfolioBrief } from '@continuum/contracts';
 import type { HeroView } from '../heroModel';
@@ -300,4 +304,27 @@ describe('the tag each finding is listed under', () => {
     ).toEqual({ label: 'Budget', tone: 'muted', detail: 'cut' });
     expect(tagOf('audience')).toMatchObject({ label: 'Audience', tone: 'muted' });
   });
+});
+
+describe('localized news presentation preserves report content',()=>{
+ for(const locale of ['en','pt-BR','es'] as const){
+  it(`localizes only local fallback chrome in ${locale}`,()=>{
+   const messages={en:enNews,'pt-BR':ptNews,es:esNews};
+   const t=createTranslator({locale,namespace:'scale',messages:{scale:messages[locale]}});
+   const stored=view({brief:brief({model:'deterministic'})});
+   const before=JSON.stringify(stored);
+   const rendered=buildPortfolioNews({view:stored,items:[item()],target:70},t,locale);
+   expect(rendered.lead.claim).toBe(stored.brief.hero.headline);
+   expect(rendered.lead.reason).toBe(stored.brief.hero.why);
+   const fallback={...stored,source:'fallback' as const};
+   const localized=buildPortfolioNews({view:fallback,items:[item()],target:70},t,locale);
+   expect(localized.lead.subject).toBe('Cold');
+   expect(localized.lead.claim).toContain('USD');
+   expect(localized.lead.reason).toBe(stored.brief.hero.why);
+   expect(localized.lead.id).toBe(rendered.lead.id);
+   if(locale==='pt-BR')expect(localized.lead.claim).toContain('orçamento');
+   if(locale==='es')expect(localized.lead.claim).toContain('presupuesto');
+   expect(JSON.stringify(stored)).toBe(before);
+  });
+ }
 });

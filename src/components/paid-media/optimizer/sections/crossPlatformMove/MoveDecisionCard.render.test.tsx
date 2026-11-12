@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // Spread the real module: mock.module replaces it for the whole process.
 const realOptimizerData = await import('../../useOptimizerData');
@@ -202,14 +203,14 @@ describe('MoveDecisionCard', () => {
     ]);
     expect(within(card).getByTestId('move-state').textContent).toBe('reverted automatically');
     expect(within(card).getByTestId('move-explainer').textContent).toContain(
-      'Google refused: BUDGET_BELOW_PER_DAY_MINIMUM',
+      "The budget is under Google's daily minimum.",
     );
     const states = within(card)
       .getAllByTestId('move-leg-state')
       .map((el) => el.textContent);
     expect(states).toEqual([
       'applied, then $900.00 MXN → $1,000.00 MXN reverted',
-      'refused: BUDGET_BELOW_PER_DAY_MINIMUM',
+      "The budget is under Google's daily minimum.",
     ]);
     expect(within(card).queryByRole('button', { name: /Undo/ })).toBeNull();
     expect(within(card).queryByTestId('move-leg-undo-waiting')).toBeNull();
@@ -242,16 +243,18 @@ describe('MoveDecisionCard', () => {
     expect(card.getAttribute('data-move-state')).toBe('stranded');
     expect(within(card).getByTestId('move-state').textContent).toBe('stuck — autopilot paused');
     const explainer = within(card).getByTestId('move-explainer').textContent ?? '';
-    expect(explainer).toContain('Meta refused: OAuthException 190');
+    expect(explainer).toContain('A leg failed and so did its revert.');
     expect(explainer).toContain('TikTok is up to $10.68 MXN/day lower and Meta did not go up');
     expect(explainer).toContain('Autopilot is paused on this portfolio until someone checks it.');
     const states = within(card)
       .getAllByTestId('move-leg-state')
       .map((el) => el.textContent);
     expect(states).toEqual([
-      'applied; the revert was refused: 40001 No permission',
-      'refused: OAuthException 190',
+      'applied; the revert was refused',
+      'Reconnect the ad account before trying again.',
     ]);
+    expect(card.textContent).toContain('OAuthException 190');
+    expect(card.textContent).toContain('40001 No permission');
     expect(within(card).queryByRole('button', { name: /Undo/ })).toBeNull();
   });
 

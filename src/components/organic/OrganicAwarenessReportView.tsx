@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { formatDecimal } from '@/lib/format/decimal';
+
 // AI-Awareness report: a compact, self-describing block array (summary / top posts
 // / content-type / narrative) rendered flat inside one card. Top-post rows link to
 // the live post with a hover preview (see AwarenessTopPostRow), content-type bars
@@ -21,8 +24,6 @@ import { cn } from '@/lib/utils';
 import { AwarenessTopPostRow } from './awareness/AwarenessTopPostRow';
 import type { AwarenessContentTypeRow, AwarenessTopPost } from './awareness/types';
 
-const nf = new Intl.NumberFormat('en-US');
-
 type Comparison = Record<string, { percentageChange?: number } | undefined> | null | undefined;
 
 type PostDetailPlatform = OrganicMetricPlatform;
@@ -37,6 +38,7 @@ function deltaFor(comparison: Comparison, keys: string[]): number | null {
 }
 
 function SummaryDelta({ delta }: { delta: number | null }) {
+  const uiLocale = useLocale();
   if (delta === null) return null;
   return (
     <span
@@ -46,23 +48,33 @@ function SummaryDelta({ delta }: { delta: number | null }) {
       )}
     >
       <PillDelta delta={delta} />
-      {Math.abs(delta).toFixed(1)}%
+      {formatDecimal(Math.abs(delta), 1, uiLocale)}%
     </span>
   );
 }
 
 function SummaryBlock({ data }: { data: Record<string, unknown> }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const comparison = data.comparison as Comparison;
   const metrics: Array<{ label: string; value: number; delta: number | null }> = [
-    { label: 'Reach', value: Number(data.reach ?? 0), delta: deltaFor(comparison, ['reach']) },
-    { label: 'Views', value: Number(data.views ?? 0), delta: deltaFor(comparison, ['views']) },
     {
-      label: 'Engagement',
+      label: uiText('reach_2068b81'),
+      value: Number(data.reach ?? 0),
+      delta: deltaFor(comparison, ['reach']),
+    },
+    {
+      label: uiText('views_69c4045'),
+      value: Number(data.views ?? 0),
+      delta: deltaFor(comparison, ['views']),
+    },
+    {
+      label: uiText('engagement_ea68771'),
       value: Number(data.engagement ?? 0),
       delta: deltaFor(comparison, ['totalInteractions', 'engagement', 'accountsEngaged']),
     },
     {
-      label: 'Comments',
+      label: uiText('comments_355f79f'),
       value: Number(data.comments ?? 0),
       delta: deltaFor(comparison, ['comments']),
     },
@@ -72,7 +84,7 @@ function SummaryBlock({ data }: { data: Record<string, unknown> }) {
       {metrics.map((metric) => (
         <div key={metric.label} className="rounded-lg bg-muted/40 px-3 py-2">
           <span className="block text-xl font-semibold tabular-nums tracking-tight leading-tight">
-            {nf.format(metric.value)}
+            {metric.value.toLocaleString(uiLocale)}
           </span>
           <span className="block text-xs text-muted-foreground leading-none">{metric.label}</span>
           <SummaryDelta delta={metric.delta} />
@@ -95,10 +107,11 @@ function TopPostsBlock({
   loadingPostId: string | null;
   onRequestDetail?: (postId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
   if (posts.length === 0) {
     return (
       <span className="text-xs text-muted-foreground">
-        No reel hook rates available for this window yet.
+        {uiText('no_reel_hook_rates_available_for_this_window__7abdea5')}
       </span>
     );
   }
@@ -121,22 +134,28 @@ function TopPostsBlock({
   );
 }
 
-function contentTypeTooltip(row: AwarenessContentTypeRow): string {
+function contentTypeTooltip(
+  row: AwarenessContentTypeRow,
+  translate: ReturnType<typeof useTranslations<'organic'>>,
+): string {
   const parts: string[] = [];
-  if (typeof row.posts === 'number')
-    parts.push(`${row.posts} ${row.posts === 1 ? 'post' : 'posts'}`);
-  if (typeof row.reach === 'number') parts.push(`reach ${nf.format(row.reach)}`);
-  if (typeof row.engagement === 'number') parts.push(`eng ${nf.format(row.engagement)}`);
-  if (typeof row.comments === 'number') parts.push(`${nf.format(row.comments)} comments`);
-  return parts.join(' · ') || 'No breakdown available';
+  if (typeof row.posts === 'number') parts.push(translate('awarenessPosts', { count: row.posts }));
+  if (typeof row.reach === 'number') parts.push(translate('awarenessReach', { value: row.reach }));
+  if (typeof row.engagement === 'number')
+    parts.push(translate('awarenessEngagement', { value: row.engagement }));
+  if (typeof row.comments === 'number')
+    parts.push(translate('awarenessComments', { count: row.comments }));
+  return parts.join(' · ') || translate('awarenessNoBreakdown');
 }
 
 function ContentTypeBlock({ rows }: { rows: AwarenessContentTypeRow[] }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const withViews = rows.filter((row) => (row.views ?? 0) > 0);
   if (withViews.length === 0) {
     return (
       <span className="text-xs text-muted-foreground">
-        No content-type performance for this window.
+        {uiText('no_content_type_performance_for_this_window_64f0550')}
       </span>
     );
   }
@@ -148,13 +167,13 @@ function ContentTypeBlock({ rows }: { rows: AwarenessContentTypeRow[] }) {
         const views = row.views ?? 0;
         const share = total > 0 ? Math.round((views / total) * 100) : 0;
         return (
-          <li key={row.contentType}>
+          <li key={uiText('contentKindLabel', { kind: row.contentType.toLowerCase() })}>
             <Tooltip>
               <TooltipTrigger
                 render={
                   <div className="flex cursor-default items-center gap-3">
                     <span className="w-16 shrink-0 truncate text-xs font-medium capitalize">
-                      {row.contentType}
+                      {uiText('contentKindLabel', { kind: row.contentType.toLowerCase() })}
                     </span>
                     <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted/50">
                       <span
@@ -163,7 +182,7 @@ function ContentTypeBlock({ rows }: { rows: AwarenessContentTypeRow[] }) {
                       />
                     </span>
                     <span className="w-14 shrink-0 text-right text-xs tabular-nums">
-                      {nf.format(views)}
+                      {views.toLocaleString(uiLocale)}
                     </span>
                     <span className="w-8 shrink-0 text-right text-2xs text-muted-foreground tabular-nums">
                       {share}%
@@ -171,7 +190,7 @@ function ContentTypeBlock({ rows }: { rows: AwarenessContentTypeRow[] }) {
                   </div>
                 }
               />
-              <TooltipContent>{contentTypeTooltip(row)}</TooltipContent>
+              <TooltipContent>{contentTypeTooltip(row, uiText)}</TooltipContent>
             </Tooltip>
           </li>
         );
@@ -256,6 +275,7 @@ export function OrganicAwarenessReportView({
   platform?: PostDetailPlatform;
   posts?: OrganicPost[];
 }) {
+  const uiText = useTranslations('organic');
   const [open, setOpen] = React.useState(true);
 
   const canHydratePosts = Boolean(brandId && integrationAccountId && platform);
@@ -284,11 +304,10 @@ export function OrganicAwarenessReportView({
       <div className="rounded-lg border border-dashed border-subtle bg-surface/60">
         <div className="px-4 py-6">
           <span className="block text-sm font-medium">
-            AI-Awareness report builds with your data
+            {uiText('ai_awareness_report_builds_with_your_data_cfdc0d2')}
           </span>
           <span className="mt-1 block text-xs text-muted-foreground">
-            Once analytics run for this account, the flash-lite agents summarize what changed — top
-            hooks, content-type shifts, and the week&apos;s momentum.
+            {uiText('once_analytics_run_for_this_account_the_flash_3508947')}
           </span>
         </div>
       </div>
@@ -300,7 +319,7 @@ export function OrganicAwarenessReportView({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <span className="block text-sm font-semibold">AI-Awareness</span>
+            <span className="block text-sm font-semibold">{uiText('ai_awareness_3c2f088')}</span>
             <span className="text-xs text-muted-foreground">
               {report.windowStart} – {report.windowEnd}
             </span>
@@ -313,7 +332,7 @@ export function OrganicAwarenessReportView({
                 disabled={isRefreshing}
                 className="rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isRefreshing ? 'Refreshing…' : 'Refresh'}
+                {isRefreshing ? uiText('refreshing_1c0def7') : uiText('refresh_0e91610')}
               </button>
             ) : null}
             <button
@@ -322,7 +341,7 @@ export function OrganicAwarenessReportView({
               className="rounded-md border border-subtle px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
               aria-expanded={open}
             >
-              {open ? 'Hide' : 'Show'}
+              {open ? uiText('hide_ac20a57') : uiText('show_0df6f1c')}
             </button>
           </div>
         </div>

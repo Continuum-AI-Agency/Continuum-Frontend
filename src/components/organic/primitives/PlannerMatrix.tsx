@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -165,6 +166,7 @@ export function PlannerMatrix({
   onCreatePost,
   onSelectPost,
 }: PlannerMatrixProps) {
+  const uiText = useTranslations('organic');
   const gridStatus = useCalendarStore((state) => state.gridStatus);
   const gridProgress = useCalendarStore((state) => state.gridProgress);
 
@@ -222,7 +224,7 @@ export function PlannerMatrix({
           >
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-xs font-semibold text-primary/80 uppercase tracking-wide">
-                {gridProgress.stage ?? 'Generating content'}
+                {gridProgress.stage ?? uiText('generating_content_ad36d4a')}
               </p>
               <span className="text-xs text-muted-foreground">{gridProgress.percent}%</span>
             </div>
@@ -245,7 +247,7 @@ export function PlannerMatrix({
         className="grid grid-cols-[6rem_repeat(7,minmax(0,1fr))] @max-[66rem]/planner-matrix:grid-cols-[3rem_repeat(7,minmax(0,1fr))] @max-[40rem]/planner-matrix:min-w-[54rem]"
       >
         <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r-2 border-b-2 border-border/50 bg-muted px-2 py-2 text-xs font-semibold uppercase tracking-wide text-foreground">
-          <span className="@max-[66rem]/planner-matrix:sr-only">Platform</span>
+          <span className="@max-[66rem]/planner-matrix:sr-only">{uiText('platform_c78ffe1')}</span>
         </div>
 
         {days.map((day) => (
@@ -300,7 +302,7 @@ export function PlannerMatrix({
                   variant="outline"
                   className="h-4 border-muted-foreground/30 bg-muted px-1 text-xs text-muted-foreground @max-[66rem]/planner-matrix:sr-only"
                 >
-                  soon
+                  {uiText('soon_4a75414')}
                 </Badge>
               ) : !platform.canCreate ? (
                 // A bare "view" was the row's only content on an empty read-only channel,
@@ -314,7 +316,7 @@ export function PlannerMatrix({
                           variant="muted"
                           className="h-4 cursor-help px-1 text-xs @max-[66rem]/planner-matrix:sr-only"
                         >
-                          Read-only
+                          {uiText('read_only_72bb908')}
                         </Badge>
                       }
                     />
@@ -415,8 +417,8 @@ export function PlannerMatrix({
               onClick={() => setShowInactivePlatforms((current) => !current)}
             >
               {showInactivePlatforms
-                ? 'Hide inactive platforms'
-                : `Show ${inactivePlatforms.length} inactive platform${inactivePlatforms.length === 1 ? '' : 's'}`}
+                ? uiText('hide_inactive_platforms_7337591')
+                : uiText('showInactivePlatforms', { count: inactivePlatforms.length })}
             </Button>
           </div>
         ) : null}

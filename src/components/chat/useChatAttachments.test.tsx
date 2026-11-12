@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const uploadMediaAsset = mock(async () => ({
   assetId: 'asset-9',

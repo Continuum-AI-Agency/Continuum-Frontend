@@ -1,5 +1,9 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 export { describeRenderDiscoveryFailure } from './api-render/renderDiscoveryCopy';
 
 import type {
@@ -91,6 +95,12 @@ export function ApiRenderBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<ApiRenderNodeData>>) {
+  const presentForge = useForgePresentationText();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const brandId = useStudioStore((state) => state.brandId);
   const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
   const edges = useStudioStore((state) => state.edges);
@@ -201,8 +211,8 @@ export function ApiRenderBlock({
           !cancelled &&
           setError(
             cause instanceof Error
-              ? describeRenderDiscoveryFailure(cause.message)
-              : 'Render discovery failed',
+              ? describeRenderDiscoveryFailure(cause.message, presentForge)
+              : translateUi('render_discovery_failed_a1346c0f'),
           ),
       )
       .finally(() => {
@@ -211,7 +221,7 @@ export function ApiRenderBlock({
     return () => {
       cancelled = true;
     };
-  }, [brandId, setError]);
+  }, [brandId, setError, translateUi, presentForge]);
 
   // Jobs have exactly ONE loader. Two effects both calling the list raced, and the loser
   // overwrote the tracked-id recovery that makes a batch survive a reload — nothing
@@ -295,12 +305,12 @@ export function ApiRenderBlock({
           status: 'idle',
         });
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Template contract failed');
+        setError(uiErrorText(cause));
       } finally {
         setBusy(false);
       }
     },
-    [brandId, patchData, setError],
+    [brandId, patchData, setError, uiErrorText],
   );
 
   // Delivery is the caller's choice, and the contract says variables come from exactly one
@@ -348,7 +358,7 @@ export function ApiRenderBlock({
         : [
             {
               key: 'current',
-              label: 'Current values',
+              label: translateUi('current_values_a62ae9a0'),
               values: resolveApiRenderVariables({ nodeId: id, data, nodes, edges }).variables,
             },
           ];
@@ -463,7 +473,7 @@ export function ApiRenderBlock({
     if (!brandId || !data.templateKey || !data.contractHash) return;
     const delivery = deliveryBlock();
     if (delivery === null) {
-      setError('Choose a campaign and ad set, or switch Meta delivery off.');
+      setError(translateUi('choose_a_campaign_and_ad_set_or_swi_49790e66'));
       return;
     }
     if (!data.inputSetId && batchIds.length === 0 && variations.errors.length > 0) {
@@ -507,8 +517,10 @@ export function ApiRenderBlock({
           status: 'submitting',
         });
         show({
-          title: `${renderCount(batch.jobs.length)} queued`,
-          description: 'Each result will be saved to this brand’s Library.',
+          title: translateUi('value0_queued_3dddf693', {
+            value0: String(renderCount(batch.jobs.length)),
+          }),
+          description: translateUi('each_result_will_be_saved_to_this_b_db5278e8'),
           variant: 'success',
         });
       } else {
@@ -525,10 +537,10 @@ export function ApiRenderBlock({
           status: job.status,
         });
         show({
-          title: 'Render queued',
+          title: translateUi('render_queued_9290b4a8'),
           description: deliveryEnabled
-            ? 'The Meta ad remains paused.'
-            : 'The result will be saved to this brand’s Library.',
+            ? translateUi('the_meta_ad_remains_paused_7de84acb')
+            : translateUi('the_result_will_be_saved_to_this_br_08c94d30'),
           variant: 'success',
         });
       }
@@ -536,8 +548,8 @@ export function ApiRenderBlock({
     } catch (cause) {
       const message =
         cause instanceof Error
-          ? describeRenderDiscoveryFailure(cause.message)
-          : 'Render submission failed';
+          ? describeRenderDiscoveryFailure(cause.message, presentForge)
+          : translateUi('render_submission_failed_ac763675');
       setError(message);
       patchData({ status: 'failed', error: message });
     } finally {
@@ -559,6 +571,9 @@ export function ApiRenderBlock({
     setError,
     show,
     variations,
+
+    translateUi,
+    presentForge,
   ]);
 
   const templatesOffered = canOfferTemplates(workspace);
@@ -588,7 +603,7 @@ export function ApiRenderBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeTitleBar icon={Clapperboard} label="API Render">
+        <NodeTitleBar icon={Clapperboard} label={translateUi('api_render_2d0ecb54')}>
           <NodeBadge>{renderCount(variationCount)}</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 text-xs">
@@ -598,7 +613,9 @@ export function ApiRenderBlock({
               success. */}
           <div className="flex items-center gap-1.5">
             <span className="truncate text-2xs text-muted-foreground">
-              {chosenTemplate?.environment ?? workspace?.workspace ?? 'No workspace'}
+              {chosenTemplate?.environment ??
+                workspace?.workspace ??
+                translateUi('no_workspace_fce263d3')}
             </span>
             {workspace ? (
               <Tooltip>
@@ -622,7 +639,9 @@ export function ApiRenderBlock({
                   className="nodrag w-full justify-between font-normal"
                 >
                   <span className="truncate">
-                    {chosenTemplate ? templateLabel(chosenTemplate) : 'Choose template…'}
+                    {chosenTemplate
+                      ? templateLabel(chosenTemplate)
+                      : translateUi('choose_template_4434b20f')}
                   </span>
                   <ChevronsUpDown data-icon="inline-end" aria-hidden />
                 </Button>
@@ -630,9 +649,9 @@ export function ApiRenderBlock({
             />
             <PopoverContent className="nodrag w-80 p-0" align="start">
               <Command>
-                <CommandInput placeholder="Search templates…" />
+                <CommandInput placeholder={translateUi('search_templates_9eb0054d')} />
                 <CommandList>
-                  <CommandEmpty>No template matches.</CommandEmpty>
+                  <CommandEmpty>{translateUi('no_template_matches_7e5eeb05')}</CommandEmpty>
                   <CommandGroup>
                     {templates.map((template) => (
                       <CommandItem
@@ -649,7 +668,7 @@ export function ApiRenderBlock({
                           <span className="truncate">{templateLabel(template)}</span>
                           <span className="flex flex-wrap items-center gap-1">
                             {template.contractSource === 'template_forge' ? (
-                              <Badge variant="violet">Forge</Badge>
+                              <Badge variant="violet">{translateUi('forge_8899ecd1')}</Badge>
                             ) : null}
                             {template.ratios.slice(0, 4).map((ratio) => (
                               <Badge key={ratio} variant="muted">
@@ -659,7 +678,9 @@ export function ApiRenderBlock({
                             {/* Null means nobody checked, which must not read as "none
                                 missing" — so only a real count is shown. */}
                             {template.fontsMissing ? (
-                              <Badge variant="warning">{template.fontsMissing} fonts missing</Badge>
+                              <Badge variant="warning">
+                                {template.fontsMissing} {translateUi('fonts_missing_e24f938e')}
+                              </Badge>
                             ) : null}
                           </span>
                         </span>
@@ -728,44 +749,52 @@ export function ApiRenderBlock({
           ) : templatesOffered ? (
             <Empty className="border-0 py-6">
               <EmptyHeader>
-                <EmptyTitle className="text-xs">No template chosen</EmptyTitle>
+                <EmptyTitle className="text-xs">
+                  {translateUi('no_template_chosen_4c47b9c2')}
+                </EmptyTitle>
                 <EmptyDescription className="text-2xs">
-                  Pick one to see what it needs and where the artwork lands.
+                  {' '}
+                  {translateUi('pick_one_to_see_what_it_needs_and_w_0ddfb0ee')}{' '}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : null}
 
           {data.templateKey ? (
-            <section aria-label="Render options" className="nodrag flex flex-col gap-2 text-xs">
+            <section
+              aria-label={translateUi('render_options_33926b4a')}
+              className="nodrag flex flex-col gap-2 text-xs"
+            >
               <RadioGroup
-                aria-label="Render as"
+                aria-label={translateUi('render_as_b696ffa7')}
                 value={final ? 'final' : 'proof'}
                 onValueChange={(value) => setFinal(value === 'final')}
                 className="flex gap-4"
               >
                 <Label>
-                  <RadioGroupItem value="proof" />
-                  Proof
+                  <RadioGroupItem value="proof" /> {translateUi('proof_7fbb3ccf')}{' '}
                 </Label>
                 <Label>
-                  <RadioGroupItem value="final" disabled={!mayRenderFinal} />
-                  Final
+                  <RadioGroupItem value="final" disabled={!mayRenderFinal} />{' '}
+                  {translateUi('final_f4ed8fa6')}{' '}
                 </Label>
               </RadioGroup>
               {!mayRenderFinal ? (
-                <p className="text-muted-foreground">A brand owner or admin can render a Final.</p>
+                <p className="text-muted-foreground">
+                  {translateUi('a_brand_owner_or_admin_can_render_a_cf35a130')}
+                </p>
               ) : null}
               <Label className="text-xs">
                 <Checkbox
                   checked={acceptMissingFonts}
                   onCheckedChange={(checked) => setAcceptMissingFonts(checked === true)}
-                />
-                Allow font substitution for this render
+                />{' '}
+                {translateUi('allow_font_substitution_for_this_re_d183df9e')}{' '}
               </Label>
               {acceptMissingFonts ? (
                 <p role="status" className="text-warning">
-                  The worker may substitute typefaces. Review the rendered text before delivery.
+                  {' '}
+                  {translateUi('the_worker_may_substitute_typefaces_9ae2b04e')}{' '}
                 </p>
               ) : null}
             </section>
@@ -783,7 +812,7 @@ export function ApiRenderBlock({
 
           <div className="mt-auto flex items-center gap-2 border-t border-border/60 pt-2">
             <span className="text-2xs text-muted-foreground">
-              {renderCount(variationCount)} · saves to Library
+              {renderCount(variationCount)} {translateUi('saves_to_library_81f7cddb')}{' '}
             </span>
             <Button
               size="sm"
@@ -793,10 +822,10 @@ export function ApiRenderBlock({
             >
               {busy ? (
                 <>
-                  <Spinner data-icon="inline-start" /> Submitting…
+                  <Spinner data-icon="inline-start" /> {translateUi('submitting_49195f55')}{' '}
                 </>
               ) : (
-                `Render ${variationCount}`
+                translateUi('render_value0_aba29037', { value0: String(variationCount) })
               )}
             </Button>
           </div>

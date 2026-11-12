@@ -14,8 +14,9 @@
 // debounced, and only when the change can actually move what is on screen.
 
 import type { MediaCollection } from '@continuum/contracts';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
+import { useRouter } from '@/i18n/navigation';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 const REFRESH_DEBOUNCE_MS = 250;

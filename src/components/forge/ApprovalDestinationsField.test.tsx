@@ -7,8 +7,14 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import type { RenderApprovalDestination } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const SLACK_ROOM: RenderApprovalDestination = {

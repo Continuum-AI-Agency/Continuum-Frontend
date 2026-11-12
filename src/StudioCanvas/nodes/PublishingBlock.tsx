@@ -14,25 +14,34 @@ import {
   type Node as ReactFlowNode,
 } from '@xyflow/react';
 import { Copy, Megaphone, Send, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useMemo as useUiConfigMemo } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { PublisherNodeData, StudioNode } from '../types';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 import { NodeBadge, NodeTitleBar } from './NodeChrome';
 import { publishingApi } from './publish/publishingApi';
 import { resolvePublishingAssets } from './publish/resolvePublishingAssets';
 
-const FORMAT_OPTIONS: Array<{ value: CanvasPublishingFormat; label: string }> = [
-  { value: 'image', label: 'Post / Image' },
-  { value: 'carousel', label: 'Carousel' },
-  { value: 'video', label: 'Reel / Video' },
-];
+function useLocalFormatOptionsMessages() {
+  const translateConfig = useUiTranslations('studio');
+  return useUiConfigMemo(() => {
+    const value: Array<{ value: CanvasPublishingFormat; label: string }> = [
+      { value: 'image', label: translateConfig('post_image_3e6849df') },
+      { value: 'carousel', label: translateConfig('carousel_37219fbc') },
+      { value: 'video', label: translateConfig('reel_video_8e93551f') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 const randomSlot = (order: number) => ({
   id: crypto.randomUUID?.() ?? `asset-${Date.now()}-${order}`,
@@ -60,6 +69,12 @@ export function PaidPublisherBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<PublisherNodeData>>) {
+  const FORMAT_OPTIONS = useLocalFormatOptionsMessages();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNode = useStudioStore((state) => state.updateNode);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -208,8 +223,10 @@ export function PaidPublisherBlock({
           error: undefined,
         });
         show({
-          title: result.requiresApproval ? 'Active ad replacement ready' : 'Paused ad draft ready',
-          description: 'Review the selected ad and click Confirm replacement to apply it.',
+          title: result.requiresApproval
+            ? translateUi('active_ad_replacement_ready_3582ac05')
+            : translateUi('paused_ad_draft_ready_b5585370'),
+          description: translateUi('review_the_selected_ad_and_click_co_441ddd10'),
           variant: 'warning',
         });
       } else {
@@ -223,20 +240,23 @@ export function PaidPublisherBlock({
           error: undefined,
         });
         show({
-          title: 'Ad creative replaced',
-          description:
-            'The ad now uses a new immutable creative; the previous creative is retained for restore.',
+          title: translateUi('ad_creative_replaced_b5c06e38'),
+          description: translateUi('the_ad_now_uses_a_new_immutable_cre_63242762'),
           variant: 'success',
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Replacement failed';
+      const message = uiErrorText(error);
       patchData({ error: message, confirmToken: undefined });
-      show({ title: 'Could not replace creative', description: message, variant: 'warning' });
+      show({
+        title: translateUi('could_not_replace_creative_b8a8b8e5'),
+        description: message,
+        variant: 'warning',
+      });
     } finally {
       setActionPending(false);
     }
-  }, [assets, brandId, data, format, patchData, show]);
+  }, [assets, brandId, data, format, patchData, show, uiErrorText, translateUi]);
 
   const actionDisabled = actionPending || !assetsReady || !data.targetAdId;
 
@@ -259,7 +279,7 @@ export function PaidPublisherBlock({
         handles={{ target: false, source: false }}
         className="h-full w-full overflow-hidden p-0"
       >
-        <NodeTitleBar icon={Megaphone} label="Paid Ad">
+        <NodeTitleBar icon={Megaphone} label={translateUi('paid_ad_204bde5d')}>
           <NodeBadge>Meta</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5 text-xs">
@@ -270,15 +290,15 @@ export function PaidPublisherBlock({
             className="-mx-1.5 -mt-1.5 border-b border-border/60 bg-muted/50 px-2 py-1 text-2xs text-muted-foreground"
           >
             {data.publishedAt
-              ? 'Delivered — ad creative replaced.'
-              : 'Delivery handoff — a canvas run never publishes this. Deliver below.'}
+              ? translateUi('delivered_ad_creative_replaced_d21fe15c')
+              : translateUi('delivery_handoff_a_canvas_run_never_5b17a56d')}
           </p>
 
           <select
             className="nodrag h-8 rounded-md border border-border bg-background px-2"
             value={format}
             onChange={(event) => changeFormat(event.target.value as CanvasPublishingFormat)}
-            aria-label="Creative format"
+            aria-label={translateUi('creative_format_f211a169')}
           >
             {FORMAT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -289,7 +309,9 @@ export function PaidPublisherBlock({
 
           {format === 'carousel' ? (
             <div className="flex items-center justify-between text-2xs text-muted-foreground">
-              <span>{handles.length} ordered cards</span>
+              <span>
+                {handles.length} {translateUi('ordered_cards_8c1c24e7')}
+              </span>
               <span className="flex gap-1">
                 <button
                   type="button"
@@ -310,7 +332,9 @@ export function PaidPublisherBlock({
           ) : null}
 
           <p className="truncate text-2xs text-muted-foreground">
-            {data.adAccountId ? `Meta account ${data.adAccountId}` : 'Resolving Meta account…'}
+            {data.adAccountId
+              ? translateUi('meta_account_value0_c37c14e2', { value0: String(data.adAccountId) })
+              : translateUi('resolving_meta_account_f151c8e1')}
           </p>
           {data.campaignId ? (
             <button
@@ -326,7 +350,8 @@ export function PaidPublisherBlock({
                 })
               }
             >
-              Campaign: {data.campaignName ?? data.campaignId} ×
+              {' '}
+              {translateUi('campaign_29834104')} {data.campaignName ?? data.campaignId} ×
             </button>
           ) : null}
           {data.adsetId ? (
@@ -342,19 +367,22 @@ export function PaidPublisherBlock({
                 })
               }
             >
-              Ad set: {data.adsetName ?? data.adsetId} ×
+              {' '}
+              {translateUi('ad_set_27fc35cc')} {data.adsetName ?? data.adsetId} ×
             </button>
           ) : null}
 
           <Input
             className="nodrag h-8 text-xs"
-            placeholder={`Search ${paidLevel}s`}
+            placeholder={translateUi('paidTargetSearch', { level: paidLevel })}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
 
           <div className="nodrag -mx-1.5 min-h-0 flex-1 overflow-y-auto border-y border-border/60">
-            {loading ? <p className="p-2 text-muted-foreground">Searching…</p> : null}
+            {loading ? (
+              <p className="p-2 text-muted-foreground">{translateUi('searching_c31723ab')}</p>
+            ) : null}
             {searchError ? <p className="p-2 text-destructive">{searchError}</p> : null}
             {!loading && !searchError
               ? paidTargets.map((target) => (
@@ -386,15 +414,21 @@ export function PaidPublisherBlock({
                 ))
               : null}
             {!loading && !searchError && paidTargets.length === 0 ? (
-              <p className="p-2 text-muted-foreground">No {paidLevel}s match this search.</p>
+              <p className="p-2 text-muted-foreground">
+                {translateUi('paidTargetEmpty', { level: paidLevel })}
+              </p>
             ) : null}
           </div>
 
           <p className={cn('text-2xs', assetsReady ? 'text-muted-foreground' : 'text-amber-600')}>
-            {assets.length}/{expectedAssetCount} Library assets connected
+            {assets.length}/{expectedAssetCount} {translateUi(
+              'library_assets_connected_f3532389',
+            )}{' '}
           </p>
           {data.error ? (
-            <p className="rounded bg-destructive/10 p-2 text-2xs text-destructive">{data.error}</p>
+            <p className="rounded bg-destructive/10 p-2 text-2xs text-destructive">
+              {workflowNodeError(data, translateUi)}
+            </p>
           ) : null}
           <Button
             className="nodrag h-8 w-full text-xs"
@@ -408,10 +442,10 @@ export function PaidPublisherBlock({
           >
             <Send className="mr-1.5" />
             {actionPending
-              ? 'Working…'
+              ? translateUi('working_5474eef8')
               : data.confirmToken
-                ? 'Confirm replacement'
-                : 'Preview replacement'}
+                ? translateUi('confirm_replacement_60b87460')
+                : translateUi('preview_replacement_bb66a07b')}
           </Button>
           <div className="flex justify-end gap-1">
             <Button

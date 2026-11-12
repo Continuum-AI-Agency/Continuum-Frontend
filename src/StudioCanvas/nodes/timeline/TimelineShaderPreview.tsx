@@ -1,6 +1,8 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type CSSProperties, type RefObject, useEffect, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   type ClipEffectSpec,
   filterString,
@@ -32,6 +34,10 @@ export function TimelineShaderPreview({
   canvasSize?: { width: number; height: number };
   style?: CSSProperties;
 }) {
+  const translateUi = useUiTranslations('studio');
+
+  const uiErrorText = useUiErrorMessage();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<ImageBitmap>();
   const [error, setError] = useState<string>();
@@ -66,14 +72,14 @@ export function TimelineShaderPreview({
         if (cancelled) loaded.close();
         else setImage(loaded);
       } catch (problem) {
-        if (!cancelled) setError(problem instanceof Error ? problem.message : String(problem));
+        if (!cancelled) setError(uiErrorText(problem));
       }
     })();
     return () => {
       cancelled = true;
       loaded?.close();
     };
-  }, [enabled, imageUrl]);
+  }, [enabled, imageUrl, uiErrorText]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -139,7 +145,7 @@ export function TimelineShaderPreview({
         if (!image) canvas.dataset.sourceSec = String(videoRef.current?.currentTime);
         setError(undefined);
       } catch (problem) {
-        if (!cancelled) setError(problem instanceof Error ? problem.message : String(problem));
+        if (!cancelled) setError(uiErrorText(problem));
       } finally {
         rendered?.close();
       }
@@ -158,6 +164,7 @@ export function TimelineShaderPreview({
     videoRef,
     canvasSize?.width,
     canvasSize?.height,
+    uiErrorText,
   ]);
 
   if (!enabled) return null;
@@ -167,7 +174,7 @@ export function TimelineShaderPreview({
         ref={canvasRef}
         className="pointer-events-none absolute inset-0 h-full w-full object-contain"
         style={style}
-        aria-label="Media effect preview"
+        aria-label={translateUi('media_effect_preview_bfaef742')}
         data-testid="media-effect-preview"
       />
       {error ? (

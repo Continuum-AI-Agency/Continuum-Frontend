@@ -8,6 +8,7 @@
 
 import type { MediaReviewStatus, ReviewCustomState, ReviewStateLabel } from '@continuum/contracts';
 import { Loader2, Plus, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +46,8 @@ type Props = {
 };
 
 export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const current = useReviewStateLabels(brandId);
   const currentCustom = useReviewCustomStates(brandId);
   // The draft lives in a ref that every edit replaces synchronously, and a counter
@@ -123,7 +126,11 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
       setBrandReviewStates(brandId, await saveReviewStateLabels(brandId, labels, customStates));
       onOpenChange(false);
     } catch (error) {
-      toast.error(`Saving status labels failed · ${(error as Error).message}`);
+      toast.error(
+        translateUi('saving_status_labels_failed_value0_92d23b15', {
+          value0: String((error as Error).message),
+        }),
+      );
     } finally {
       setSaving(false);
     }
@@ -140,10 +147,10 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-sm">Status labels</DialogTitle>
+          <DialogTitle className="text-sm">{translateUi('status_labels_6d7434bf')}</DialogTitle>
           <DialogDescription className="text-xs">
-            How each review state reads for this brand, everywhere a status shows, and the
-            brand&apos;s own states within them.
+            {' '}
+            {translateUi('how_each_review_state_reads_for_thi_aec84b9e')}{' '}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
@@ -151,14 +158,14 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
             <div key={state} className="flex items-center gap-2">
               <input
                 type="color"
-                aria-label={`Colour for ${state}`}
+                aria-label={translateUi('colour_for_value0_20ca3a84', { value0: String(state) })}
                 data-review-state={state}
                 value={draft[state].color}
                 onChange={(event) => edit(state, { color: event.target.value })}
                 className="size-8 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0.5"
               />
               <Input
-                aria-label={`Label for ${state}`}
+                aria-label={translateUi('label_for_value0_aec6fcf3', { value0: String(state) })}
                 data-review-state={state}
                 value={draft[state].label}
                 maxLength={40}
@@ -170,7 +177,7 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
         </div>
         <div className="flex flex-col gap-2 border-t border-border pt-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium">Custom states</p>
+            <p className="text-xs font-medium">{translateUi('custom_states_7de35b1c')}</p>
             <Button
               type="button"
               variant="ghost"
@@ -193,14 +200,13 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
                 });
               }}
             >
-              <Plus className="size-3" />
-              Add
+              <Plus className="size-3" /> {translateUi('add_9fd728c6')}{' '}
             </Button>
           </div>
           {customDraft.length === 0 ? (
             <p className="text-2xs text-muted-foreground">
-              Your own states, each counted as one of the five above (e.g. “Legal review” as In
-              review).
+              {' '}
+              {translateUi('your_own_states_each_counted_as_one_0aafdc1d')}{' '}
             </p>
           ) : null}
           {customDraft.map((state, index) => (
@@ -212,25 +218,31 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
             >
               <input
                 type="color"
-                aria-label={`Colour for custom state ${index + 1}`}
+                aria-label={translateUi('colour_for_custom_state_value0_d652815e', {
+                  value0: String(index + 1),
+                })}
                 value={state.color}
                 onChange={(event) => editCustom(state.key, { color: event.target.value })}
                 className="size-8 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0.5"
               />
               <Input
-                aria-label={`Custom state ${index + 1} name`}
+                aria-label={translateUi('custom_state_value0_name_ff1f706a', {
+                  value0: String(index + 1),
+                })}
                 value={state.label}
                 maxLength={40}
-                placeholder="State name"
+                placeholder={translateUi('state_name_9fc9942d')}
                 onChange={(event) => editCustom(state.key, { label: event.target.value })}
                 className="h-8 min-w-0 flex-1 text-xs"
               />
               <select
-                aria-label={`Custom state ${index + 1} counts as`}
+                aria-label={translateUi('custom_state_value0_counts_as_8919e11a', {
+                  value0: String(index + 1),
+                })}
                 value={state.baseStatus}
                 disabled={Boolean(state.id)}
                 title={
-                  state.id ? 'A saved state keeps its base; add a new state instead' : undefined
+                  state.id ? translateUi('a_saved_state_keeps_its_base_add_a__2cf9dffb') : undefined
                 }
                 onChange={(event) =>
                   editCustom(state.key, { baseStatus: event.target.value as MediaReviewStatus })
@@ -248,7 +260,9 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
                 variant="ghost"
                 size="icon"
                 className="size-7 shrink-0 text-muted-foreground"
-                aria-label={`Remove custom state ${index + 1}`}
+                aria-label={translateUi('remove_custom_state_value0_e6c795e7', {
+                  value0: String(index + 1),
+                })}
                 onClick={() => {
                   touched.current.custom = true;
                   if (state.id) touched.current.removed.add(state.id);
@@ -264,11 +278,12 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
         </div>
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            Cancel
+            {' '}
+            {translateUi('cancel_19766ed6')}{' '}
           </Button>
           <Button type="button" size="sm" disabled={saving || invalid} onClick={() => void save()}>
-            {saving && <Loader2 className="size-3.5 animate-spin" />}
-            Save labels
+            {saving && <Loader2 className="size-3.5 animate-spin" />}{' '}
+            {translateUi('save_labels_78956453')}{' '}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,6 +4,7 @@ import type { ApiRenderSlackChannel, OptimizerPingDestination } from '@continuum
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon, ChevronsUpDownIcon, Lock, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,6 +21,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 import {
   disableOptimizerNotifications,
@@ -39,8 +41,13 @@ const settingsKey = (brandId: string) => ['optimizer-notifications', brandId] as
 
 export function OptimizerNotificationsSection({
   brandId,
-  brandName = 'this brand',
+  brandName: providedBrandName,
 }: OptimizerNotificationsSectionProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+  const brandName = providedBrandName ?? tUi('m_0380f51a7b');
+
   const { show } = useToast();
   const queryClient = useQueryClient();
   const [channelPickerOpen, setChannelPickerOpen] = useState(false);
@@ -66,7 +73,7 @@ export function OptimizerNotificationsSection({
   const failed = (title: string) => (error: unknown) =>
     show({
       title,
-      description: error instanceof Error ? error.message : 'Refresh and try again.',
+      description: error instanceof Error ? uiErrorMessage(error) : tUi('m_41848a0e55'),
       variant: 'error',
     });
 
@@ -85,15 +92,18 @@ export function OptimizerNotificationsSection({
     onSuccess: (next) => {
       queryClient.setQueryData(settingsKey(brandId), next);
       show({
-        title: 'Optimizer notifications updated',
+        title: tUi('m_ee3437a5eb'),
         description:
           next.destination === 'channel'
-            ? `Budget changes for ${brandName} will post in #${next.channelName ?? 'the channel you picked'}.`
-            : `Budget changes for ${brandName} will arrive in your Slack DMs.`,
+            ? tUi('m_554acd5a3e', {
+                v0: String(brandName),
+                v1: String(next.channelName ?? tUi('m_2900885654')),
+              })
+            : tUi('m_6bee1b3e66', { v0: String(brandName) }),
         variant: 'success',
       });
     },
-    onError: failed('Could not update optimizer notifications'),
+    onError: failed(tUi('m_076a4d35b7')),
   });
 
   const disable = useMutation({
@@ -107,12 +117,12 @@ export function OptimizerNotificationsSection({
         connectionId: null,
       });
       show({
-        title: 'Optimizer notifications off',
-        description: `Continuum will not message you about ${brandName}'s budget changes.`,
+        title: tUi('m_8477db5358'),
+        description: tUi('m_c997323464', { v0: String(brandName) }),
         variant: 'success',
       });
     },
-    onError: failed('Could not switch optimizer notifications off'),
+    onError: failed(tUi('m_7b966cdd81')),
   });
 
   const busy = save.isPending || disable.isPending;
@@ -131,7 +141,7 @@ export function OptimizerNotificationsSection({
 
   if (settings.isLoading) {
     return (
-      <div role="status" aria-label="Loading optimizer notification settings" className="space-y-3">
+      <div role="status" aria-label={tUi('m_f0cb7c5817')} className="space-y-3">
         <Skeleton className="h-10 w-full rounded-md" />
       </div>
     );
@@ -142,10 +152,10 @@ export function OptimizerNotificationsSection({
       <div className="flex items-start justify-between gap-4 py-1">
         <p className="flex items-center gap-2 text-sm font-medium">
           <TriangleAlert className="size-4 text-warning" />
-          Optimizer notification settings could not be loaded
+          {tUi('m_79d2c54296')}
         </p>
         <Button type="button" size="sm" variant="outline" onClick={() => void settings.refetch()}>
-          Retry
+          {tUi('m_9f5cd8a2e8')}
         </Button>
       </div>
     );
@@ -157,16 +167,17 @@ export function OptimizerNotificationsSection({
     <div className="divide-y divide-border/60">
       <div className="flex items-center justify-between gap-3 py-2.5">
         <div className="min-w-0">
-          <p className="text-sm font-medium">Tell me when the optimizer moves budget</p>
+          <p className="text-sm font-medium">{tUi('m_79d11adae6')}</p>
           <p className="text-xs text-muted-foreground">
-            A Slack message each time Continuum changes {brandName}&rsquo;s ad set budgets, with
-            what changed and why. Off unless you turn it on.
+            {tUi('m_d1fa9a99c1')}
+            {brandName}
+            {tUi('m_adc8328c1c')}
           </p>
         </div>
         <Switch
           checked={enabled}
           disabled={busy}
-          aria-label="Optimizer Slack notifications"
+          aria-label={tUi('m_dedf5fc3f6')}
           onCheckedChange={(checked) => {
             if (checked) save.mutate({ destination: 'dm' });
             else disable.mutate();
@@ -195,11 +206,11 @@ export function OptimizerNotificationsSection({
           >
             <Label className="flex items-center gap-2 text-sm font-normal">
               <RadioGroupItem value="dm" disabled={busy} />
-              Send it to me as a direct message
+              {tUi('m_4dba23b229')}
             </Label>
             <Label className="flex items-center gap-2 text-sm font-normal">
               <RadioGroupItem value="channel" disabled={busy} />
-              Post it in a Slack channel
+              {tUi('m_6690196403')}
             </Label>
           </RadioGroup>
 
@@ -213,14 +224,14 @@ export function OptimizerNotificationsSection({
                       variant="outline"
                       role="combobox"
                       aria-expanded={channelPickerOpen}
-                      aria-label="Slack channel"
+                      aria-label={tUi('m_11670ab399')}
                       disabled={busy}
                       className="w-full justify-between font-normal"
                     >
                       <span className="truncate">
                         {settings.data?.channelName
-                          ? `#${settings.data.channelName}`
-                          : 'Pick a channel'}
+                          ? tUi('m_748dde3000', { v0: String(settings.data.channelName) })
+                          : tUi('m_de93ca88d2')}
                       </span>
                       <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
                     </Button>
@@ -228,14 +239,14 @@ export function OptimizerNotificationsSection({
                 />
                 <PopoverContent className="w-[300px] p-0" align="start">
                   <Command>
-                    <CommandInput placeholder="Search channels…" />
+                    <CommandInput placeholder={tUi('m_61d6e4198e')} />
                     <CommandList>
                       <CommandEmpty>
                         {channels.isLoading
-                          ? 'Loading channels…'
+                          ? tUi('m_293b4ed20a')
                           : channels.isError
-                            ? 'Slack did not return a channel list.'
-                            : 'No channel found.'}
+                            ? tUi('m_685a8cf38c')
+                            : tUi('m_f30e4e5025')}
                       </CommandEmpty>
                       <CommandGroup>
                         {(channels.data?.channels ?? []).map((channel) => (
@@ -277,31 +288,29 @@ export function OptimizerNotificationsSection({
                   <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
                   <span>
                     {slackNotReady.message === 'slack_not_installed'
-                      ? 'Continuum is no longer installed in this brand’s Slack workspace.'
+                      ? tUi('m_21a4092a2a')
                       : slackNotReady.status === 403
-                        ? 'Only brand owners, admins and operators can pick a Slack channel.'
-                        : 'No Slack workspace is connected to this brand yet.'}{' '}
+                        ? tUi('m_048b1ec8c7')
+                        : tUi('m_1cc499c036')}{' '}
                     <Link
                       href={SLACK_SETTINGS_PATH}
                       className="font-medium text-primary underline-offset-4 hover:underline"
                     >
-                      Open Slack settings
+                      {tUi('m_e67f0d04b2')}
                     </Link>
                   </span>
                 </p>
               ) : unreachableChannel ? (
                 <p className="flex items-start gap-2 text-xs leading-5 text-warning">
                   <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-                  Continuum is not in #{selectedChannel?.name}. Invite the Continuum app to that
-                  channel in Slack, or these messages will not arrive.
+                  {tUi('m_9da6446db2')}
+                  {selectedChannel?.name}
+                  {tUi('m_68c9aa4d67')}
                 </p>
               ) : (
                 // Slack only lists a private channel to an app that is already in it, so a
                 // missing private channel looks identical to one that does not exist.
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Private channels appear here only after you invite the Continuum app to them in
-                  Slack.
-                </p>
+                <p className="text-xs leading-5 text-muted-foreground">{tUi('m_da1212d5aa')}</p>
               )}
             </div>
           ) : null}

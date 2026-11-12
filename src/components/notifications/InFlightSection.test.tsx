@@ -1,10 +1,11 @@
+import { render } from '@/i18n/__tests__/render';
 // The in-flight feed is the answer to "I started something and walked away". These tests
 // hold the two things that made the old per-page tickers untrustworthy: a row must name the
 // WORK (not a job id or a bare platform), and a failure must offer the way out rather than
 // just reporting itself.
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 
 mock.module('next/navigation', () => ({ useRouter: () => ({ push: mock() }) }));
 

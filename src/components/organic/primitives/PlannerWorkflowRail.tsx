@@ -1,14 +1,8 @@
 import { Check, Lightbulb } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 export type PlannerStage = 'plan' | 'generate' | 'review' | 'schedule';
-
-const STAGES: Array<{ id: PlannerStage; label: string }> = [
-  { id: 'plan', label: 'Plan' },
-  { id: 'generate', label: 'Generate' },
-  { id: 'review', label: 'Review' },
-  { id: 'schedule', label: 'Schedule' },
-];
 
 type ResolvePlannerStageInput = {
   draftsCount: number;
@@ -37,11 +31,19 @@ export function PlannerWorkflowRail({
   currentStage: PlannerStage;
   insight?: string;
 }) {
+  const uiText = useTranslations('organic');
+  const STAGES: Array<{ id: PlannerStage; label: string }> = [
+    { id: 'plan', label: uiText('plan_fa8ed0b') },
+    { id: 'generate', label: uiText('generate_49e49bb') },
+    { id: 'review', label: uiText('review_aff0766') },
+    { id: 'schedule', label: uiText('schedule_f4830a1') },
+  ];
+
   const currentIndex = STAGES.findIndex((stage) => stage.id === currentStage);
 
   return (
     <nav
-      aria-label="Content workflow"
+      aria-label={uiText('content_workflow_797b834')}
       className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
     >
       {/* No min-w-0 on the list or its items: squeezed below their content, a stage's label
@@ -84,7 +86,7 @@ export function PlannerWorkflowRail({
       {insight ? (
         <div
           role="note"
-          aria-label="Planning insight"
+          aria-label={uiText('planning_insight_9885e50')}
           className="flex max-w-lg items-start gap-1.5 border-border text-xs leading-snug text-muted-foreground max-sm:basis-full sm:border-l sm:pl-3"
         >
           <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />

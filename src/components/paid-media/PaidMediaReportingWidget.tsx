@@ -1,7 +1,8 @@
 'use client';
-import { PieChart, RotateCw } from 'lucide-react';
 
-import React, { useCallback, useState } from 'react';
+import { PieChart, RotateCw } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Pill } from '@/components/kibo-ui/pill';
 import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
@@ -24,6 +25,9 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -87,21 +91,6 @@ type MetricCard = {
   format: 'currency' | 'number' | 'percent';
 };
 
-const METRIC_LABELS: Record<MetricKey, string> = {
-  spend: 'Spend',
-  roas: 'ROAS',
-  impressions: 'Impressions',
-  clicks: 'Clicks',
-  ctr: 'CTR',
-  cpc: 'CPC',
-  cpa: 'CPA',
-  // GA4 sessions/conversions merged into the paid trend line by date (brand/
-  // property-level, same regardless of the selected campaign — see
-  // paid-media-metrics/README.md).
-  gaSessions: 'GA Sessions',
-  gaConversions: 'GA Conversions',
-};
-
 type PaidMetricsTrendRow = PaidMetricsResponse['trends'][number];
 
 // Pure per-day value for the currently expanded metric-card's trend chart.
@@ -130,10 +119,11 @@ function formatValue(
   value: number,
   type: 'currency' | 'number' | 'percent',
   currency: string | null,
+  locale: UiLocale = 'en',
 ) {
-  if (type === 'currency') return formatCurrency(value, currency);
-  if (type === 'percent') return `${value.toFixed(2)}%`;
-  return new Intl.NumberFormat('en-US').format(value);
+  if (type === 'currency') return formatCurrency(value, currency, locale);
+  if (type === 'percent') return `${formatDecimal(value, 2, locale)}%`;
+  return new Intl.NumberFormat(locale).format(value);
 }
 
 /** Whole-number metrics print as counts and are stamped as such; ROAS is a 'number' card that
@@ -147,23 +137,25 @@ const COUNT_METRICS: ReadonlySet<MetricKey> = new Set([
 
 /** A short axis tick: `$1.2k` only when the money is USD; a bare `1.2k` otherwise — never a
  *  `$` the account did not earn. */
-function axisMoney(value: number, currency: string | null): string {
-  const body = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
+function axisMoney(value: number, currency: string | null, locale: UiLocale = 'en'): string {
+  const body = value >= 1000 ? `${formatDecimal(value / 1000, 1, locale)}k` : String(value);
   return currency === 'USD' ? `$${body}` : body;
 }
 
-function formatPercent(value?: number) {
+function formatPercent(value?: number, locale: UiLocale = 'en') {
   if (value === undefined) return null;
-  const rounded = Math.abs(value).toFixed(1);
+  const rounded = formatDecimal(Math.abs(value), 1, locale);
   return `${value >= 0 ? '+' : '-'}${rounded}%`;
 }
 
 function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const { trends, range } = data;
 
   const chartConfig = {
-    spend: { label: 'Spend', color: 'var(--color-primary)' },
-    roas: { label: 'ROAS', color: 'var(--color-secondary)' },
+    spend: { label: uiText('spend_85f3d55'), color: 'var(--color-primary)' },
+    roas: { label: uiText('roas_b81bd97'), color: 'var(--color-secondary)' },
   } satisfies ChartConfig;
 
   const trendChartConfig = {
@@ -176,7 +168,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
     <div className="pt-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h4 className="text-lg font-semibold">Daily Performance Trends</h4>
+          <h4 className="text-lg font-semibold">{uiText('daily_performance_trends_39380ab')}</h4>
           <span className="text-sm text-muted-foreground">
             {range.since} → {range.until}
           </span>
@@ -186,7 +178,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-subtle bg-surface">
           <div className="p-3">
-            <p className="mb-2 text-sm text-muted-foreground">Daily Spend</p>
+            <p className="mb-2 text-sm text-muted-foreground">{uiText('daily_spend_36ee25b')}</p>
             <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
               <LineChart data={trends}>
                 <CartesianGrid vertical={false} />
@@ -195,7 +187,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) =>
-                    new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    new Date(value).toLocaleDateString(uiLocale, { month: 'short', day: 'numeric' })
                   }
                 />
                 <YAxis tickLine={false} axisLine={false} />
@@ -203,7 +195,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                   content={
                     <ChartTooltipContent
                       labelFormatter={(label) =>
-                        new Date(label).toLocaleDateString('en-US', {
+                        new Date(label).toLocaleDateString(uiLocale, {
                           month: 'long',
                           day: 'numeric',
                         })
@@ -226,7 +218,9 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
 
         <div className="rounded-lg border border-subtle bg-surface">
           <div className="p-3">
-            <p className="mb-2 text-sm text-muted-foreground">Return on Ad Spend (ROAS)</p>
+            <p className="mb-2 text-sm text-muted-foreground">
+              {uiText('return_on_ad_spend_roas_7852da1')}
+            </p>
             <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
               <LineChart data={trends}>
                 <CartesianGrid vertical={false} />
@@ -235,7 +229,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) =>
-                    new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    new Date(value).toLocaleDateString(uiLocale, { month: 'short', day: 'numeric' })
                   }
                 />
                 <YAxis tickLine={false} axisLine={false} />
@@ -243,7 +237,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
                   content={
                     <ChartTooltipContent
                       labelFormatter={(label) =>
-                        new Date(label).toLocaleDateString('en-US', {
+                        new Date(label).toLocaleDateString(uiLocale, {
                           month: 'long',
                           day: 'numeric',
                         })
@@ -332,6 +326,8 @@ export function PaidMediaReportingWidget({
   selectedMetric,
   onSelectedMetricChange,
 }: Props) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const [platform, setPlatform] = useState<Platform>('meta');
   const [viewMode, setViewMode] = React.useState<ViewMode>('overview');
   const [state, setState] = React.useState<LoadState>({ status: 'idle' });
@@ -493,11 +489,11 @@ export function PaidMediaReportingWidget({
         console.error('Error fetching metrics:', error);
         setState({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Failed to load metrics',
+          message: formatUiError(error),
         });
       }
     },
-    [brandId, platform, selectedAdAccount],
+    [brandId, platform, selectedAdAccount, formatUiError],
   );
 
   // Load campaigns when ad account changes
@@ -546,9 +542,12 @@ export function PaidMediaReportingWidget({
                 <PieChart />
               </Pill>
               <div>
-                <span className="font-medium">Paid Media Performance</span>
+                <span className="font-medium">{uiText('paid_media_performance_0874e5e')}</span>
                 <span className="block text-sm text-muted-foreground">
-                  {selectedCampaign ? 'Campaign view' : 'Select campaign'} · {viewMode}
+                  {selectedCampaign
+                    ? uiText('campaign_view_120c42d')
+                    : uiText('select_campaign_4b24468')}{' '}
+                  · {viewMode}
                 </span>
               </div>
             </div>
@@ -556,7 +555,7 @@ export function PaidMediaReportingWidget({
             <div className="flex items-center gap-2">
               <Select value={platform} onValueChange={(value) => setPlatform(value as Platform)}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select platform" />
+                  <SelectValue placeholder={uiText('select_platform_cd4b40b')} />
                 </SelectTrigger>
                 <SelectContent>
                   {platforms.map((platformOption) => (
@@ -566,7 +565,7 @@ export function PaidMediaReportingWidget({
                       disabled={!platformOption.active}
                     >
                       {platformOption.name}
-                      {!platformOption.active && ' (Coming Soon)'}
+                      {!platformOption.active && uiText('coming_soon_7c7f811')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -577,8 +576,8 @@ export function PaidMediaReportingWidget({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="overview">Overview</SelectItem>
-                  <SelectItem value="trends">Trends</SelectItem>
+                  <SelectItem value="overview">{uiText('overview_d4b1ea5')}</SelectItem>
+                  <SelectItem value="trends">{uiText('trends_e856c6c')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -589,7 +588,7 @@ export function PaidMediaReportingWidget({
                 disabled={
                   state.status.startsWith('loading') || (!selectedAdAccount && !selectedCampaign)
                 }
-                title="Refresh data"
+                title={uiText('refresh_data_894c866')}
               >
                 <RotateCw className={state.status.startsWith('loading') ? 'animate-spin' : ''} />
               </Button>
@@ -608,14 +607,16 @@ export function PaidMediaReportingWidget({
               <SelectTrigger className="min-w-[200px]">
                 <SelectValue
                   placeholder={
-                    adAccounts.length === 0 ? 'No Ad Accounts Available' : 'Select Ad Account'
+                    adAccounts.length === 0
+                      ? uiText('no_ad_accounts_available_ada98b1')
+                      : uiText('select_ad_account_b2a30d1')
                   }
                 />
               </SelectTrigger>
               <SelectContent>
                 {adAccounts.length === 0 ? (
                   <SelectItem value="no-accounts" disabled>
-                    No ad accounts available
+                    {uiText('no_ad_accounts_available_cb25673')}
                   </SelectItem>
                 ) : (
                   adAccounts.map((account) => (
@@ -635,14 +636,16 @@ export function PaidMediaReportingWidget({
               <SelectTrigger className="min-w-[200px]">
                 <SelectValue
                   placeholder={
-                    campaigns.length === 0 ? 'No Campaigns Available' : 'Select Campaign'
+                    campaigns.length === 0
+                      ? uiText('no_campaigns_available_d19d029')
+                      : uiText('select_campaign_caf1575')
                   }
                 />
               </SelectTrigger>
               <SelectContent>
                 {campaigns.length === 0 ? (
                   <SelectItem value="no-campaigns" disabled>
-                    No campaigns available
+                    {uiText('no_campaigns_available_8d541d5')}
                   </SelectItem>
                 ) : (
                   campaigns.map((campaign) => (
@@ -668,32 +671,32 @@ export function PaidMediaReportingWidget({
               viewMode={viewMode}
               message={
                 isLoadingAccounts
-                  ? 'Loading ad accounts...'
+                  ? uiText('loading_ad_accounts_b085a18')
                   : state.status === 'loading-campaigns'
-                    ? 'Loading campaigns...'
-                    : 'Loading metrics...'
+                    ? uiText('loading_campaigns_0c8164a')
+                    : uiText('loading_metrics_cdd5e29')
               }
             />
           ) : adAccounts.length === 0 ? (
             <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3">
               <p className="text-center text-base text-muted-foreground">
-                No Ad Accounts Available
+                {uiText('no_ad_accounts_available_ada98b1')}
               </p>
               <p className="text-center text-sm text-muted-foreground">
-                Connect an ad account to load paid metrics.
+                {uiText('connect_an_ad_account_to_load_paid_metrics_180373a')}
               </p>
             </div>
           ) : !selectedCampaign ? (
             <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-3">
               <p className="text-center text-base text-muted-foreground">
                 {selectedAdAccount && campaigns.length === 0
-                  ? 'No Campaigns Available'
-                  : 'Select a Campaign'}
+                  ? uiText('no_campaigns_available_d19d029')
+                  : uiText('select_a_campaign_8065887')}
               </p>
               <p className="text-center text-sm text-muted-foreground">
                 {selectedAdAccount && campaigns.length === 0
-                  ? 'No active campaigns in this account.'
-                  : 'Pick a campaign to load metrics.'}
+                  ? uiText('no_active_campaigns_in_this_account_69418ef')
+                  : uiText('pick_a_campaign_to_load_metrics_1eb107d')}
               </p>
             </div>
           ) : state.status === 'success' ? (
@@ -729,21 +732,51 @@ export function MetricsPanel({
   expandedMetric: MetricKey;
   onMetricSelect: (key: MetricKey) => void;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const METRIC_LABELS: Record<MetricKey, string> = useMemo(
+    () => ({
+      spend: uiText('spend_85f3d55'),
+      roas: uiText('roas_b81bd97'),
+      impressions: uiText('impressions_c6310e9'),
+      clicks: uiText('clicks_921fc98'),
+      ctr: uiText('ctr_07fce34'),
+      cpc: 'CPC',
+      cpa: 'CPA',
+      // GA4 sessions/conversions merged into the paid trend line by date (brand/
+      // property-level, same regardless of the selected campaign — see
+      // paid-media-metrics/README.md).
+      gaSessions: uiText('ga_sessions_ec10442'),
+      gaConversions: uiText('ga_conversions_fc8bc8f'),
+    }),
+    [uiText],
+  );
+
   const { metrics, comparison, range, trends } = data;
   // The payload's own currency label first, the account record's second, bare when neither.
   const currency = data.currency ?? accountCurrency ?? null;
 
   const metricCards: MetricCard[] = [
-    { key: 'spend', label: 'Spend', value: metrics.spend, format: 'currency' },
-    { key: 'roas', label: 'ROAS', value: metrics.roas, format: 'number' },
-    { key: 'ctr', label: 'CTR', value: metrics.ctr, format: 'percent' },
+    { key: 'spend', label: uiText('spend_85f3d55'), value: metrics.spend, format: 'currency' },
+    { key: 'roas', label: uiText('roas_b81bd97'), value: metrics.roas, format: 'number' },
+    { key: 'ctr', label: uiText('ctr_07fce34'), value: metrics.ctr, format: 'percent' },
     { key: 'cpc', label: 'CPC', value: metrics.cpc, format: 'currency' },
-    { key: 'impressions', label: 'Impressions', value: metrics.impressions, format: 'number' },
-    { key: 'clicks', label: 'Clicks', value: metrics.clicks, format: 'number' },
-    { key: 'gaSessions', label: 'GA Sessions', value: metrics.gaSessions, format: 'number' },
+    {
+      key: 'impressions',
+      label: uiText('impressions_c6310e9'),
+      value: metrics.impressions,
+      format: 'number',
+    },
+    { key: 'clicks', label: uiText('clicks_921fc98'), value: metrics.clicks, format: 'number' },
+    {
+      key: 'gaSessions',
+      label: uiText('ga_sessions_ec10442'),
+      value: metrics.gaSessions,
+      format: 'number',
+    },
     {
       key: 'gaConversions',
-      label: 'GA Conversions',
+      label: uiText('ga_conversions_fc8bc8f'),
       value: metrics.gaConversions,
       format: 'number',
     },
@@ -784,7 +817,7 @@ export function MetricsPanel({
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {metricCards.map((item) => {
             const delta = comparison?.[item.key]?.percentageChange;
-            const formattedDelta = formatPercent(delta);
+            const formattedDelta = formatPercent(delta, uiLocale);
             const isActive = expandedKey === item.key;
             // Colour by what the move MEANS, not by its sign. CPC is one of these cards and
             // a CPC that fell — the good outcome — used to render destructive-red.
@@ -832,7 +865,7 @@ export function MetricsPanel({
                               )
                             : {})}
                       >
-                        {formatValue(item.value, item.format, currency)}
+                        {formatValue(item.value, item.format, currency, uiLocale)}
                       </div>
                       {formattedDelta ? (
                         <span
@@ -888,7 +921,9 @@ export function MetricsPanel({
           <div className="flex min-h-0 flex-1 flex-col p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div>
-                <h3 className="text-base font-semibold">{expandedLabel} Trend</h3>
+                <h3 className="text-base font-semibold">
+                  {uiText.rich('sentence_55344c4eea78', { v0: expandedLabel })}
+                </h3>
                 <span className="text-xs text-muted-foreground">
                   {range.since} → {range.until}
                 </span>
@@ -904,7 +939,7 @@ export function MetricsPanel({
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) =>
-                      new Date(value).toLocaleDateString('en-US', {
+                      new Date(value).toLocaleDateString(uiLocale, {
                         month: 'short',
                         day: 'numeric',
                       })
@@ -920,7 +955,7 @@ export function MetricsPanel({
                       if (typeof value !== 'number') return String(value);
                       if (expandedKey === 'ctr' || expandedKey === 'roas') return value.toFixed(1);
                       if (expandedKey === 'spend' || expandedKey === 'cpc') {
-                        return axisMoney(value, currency);
+                        return axisMoney(value, currency, uiLocale);
                       }
                       return value >= 1000 ? (value / 1000).toFixed(1) + 'k' : String(value);
                     }}
@@ -929,7 +964,7 @@ export function MetricsPanel({
                     content={
                       <ChartTooltipContent
                         labelFormatter={(label) =>
-                          new Date(label).toLocaleDateString('en-US', {
+                          new Date(label).toLocaleDateString(uiLocale, {
                             month: 'long',
                             day: 'numeric',
                           })

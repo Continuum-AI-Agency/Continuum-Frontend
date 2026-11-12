@@ -1,4 +1,6 @@
 'use client';
+import {useTranslations} from 'next-intl';
+
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
@@ -34,13 +36,16 @@ const labelAlignClass: Record<GaugeLabelAlign, string> = {
 
 export function GaugeLabelShell({
   centerValue,
-  defaultLabel = 'Total',
+  defaultLabel: uiProvidedDefaultLabel,
   prefix,
   suffix,
   formatOptions = defaultChartStatFlowFormat,
   align = 'center',
   className,
 }: GaugeLabelShellProps) {
+const defaultUiText=useTranslations('common');
+const defaultLabel=uiProvidedDefaultLabel??defaultUiText('total_c9b3c38');
+
   return (
     <div
       className={cn(

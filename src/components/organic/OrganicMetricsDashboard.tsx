@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import React from 'react';
 import {
   CartesianGrid,
@@ -37,7 +38,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { formatDecimal } from '@/lib/format/decimal';
 import { freshnessFromSyncedAt } from '@/lib/freshness/freshnessMeta';
+import { type OrganicMetricMessageKey, organicMetricLabel } from '@/lib/organic/metricLabels';
 import { organicPlatformLabel } from '@/lib/organic/platforms';
 
 const OrganicAudienceLocationMapCard = dynamic(
@@ -239,8 +244,14 @@ const RANGE_LABEL_OVERRIDES: Partial<Record<OrganicDateRangePreset, string>> = {
 
 type KpiMetric = { key: OrganicMetricId; label: string; format?: 'count' | 'percent' };
 
-function getKpiConfig(platform: MetricsPlatform): KpiMetric[] {
-  return kpiConfigForPlatform(platform);
+function getKpiConfig(
+  platform: MetricsPlatform,
+  translate?: (key: OrganicMetricMessageKey) => string,
+): KpiMetric[] {
+  const metrics = kpiConfigForPlatform(platform);
+  return translate
+    ? metrics.map((metric) => ({ ...metric, label: organicMetricLabel(metric.key, translate) }))
+    : metrics;
 }
 const genderChartConfig = {
   value: { label: 'Followers', color: 'var(--primary)' },
@@ -378,11 +389,6 @@ type ComparisonBasis = 'period' | 'day';
 
 type BasisComparison = { comparison: MetricComparison; basis: ComparisonBasis };
 
-const COMPARISON_BASIS_LABEL: Record<ComparisonBasis, string> = {
-  period: 'vs previous period',
-  day: 'vs previous day',
-};
-
 function comparisonFromMap(
   map: OrganicMetricsResponse['comparison'],
   metricKey: keyof OrganicMetrics,
@@ -458,11 +464,24 @@ function getPostPreviewUrl(post: OrganicPost) {
 // The three numbers the gallery exists to show. Rendered on the card face because
 // per-post performance is the only reason to open this view, and the card used to
 // carry none of it.
-function postFaceMetrics(post: OrganicPost): MetricStripItem[] {
+function postFaceMetrics(
+  post: OrganicPost,
+  locale: UiLocale,
+  translate: ReturnType<typeof useTranslations<'organic'>>,
+): MetricStripItem[] {
   return [
-    { label: 'Reach', value: formatCompactNumber(post.metrics?.reach) },
-    { label: 'Views', value: formatCompactNumber(post.metrics?.views) },
-    { label: 'Engagement', value: formatCompactNumber(post.metrics?.totalInteractions) },
+    {
+      label: translate('cardMetric_reach'),
+      value: formatCompactNumber(post.metrics?.reach, locale),
+    },
+    {
+      label: translate('cardMetric_views'),
+      value: formatCompactNumber(post.metrics?.views, locale),
+    },
+    {
+      label: translate('cardMetric_engagement'),
+      value: formatCompactNumber(post.metrics?.totalInteractions, locale),
+    },
   ];
 }
 
@@ -481,6 +500,8 @@ function PostGalleryCard({
   onRecoverMedia?: (postId: string) => void;
   platform?: MetricsPlatform;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const preview = getPostPreviewUrl(post);
   // TikTok and YouTube only expose a thumbnail (no playable file), so they render
   // as a still + permalink rather than an inline <video>.
@@ -510,7 +531,7 @@ function PostGalleryCard({
       transition={{ duration: 0.26, ease: [0.2, 0.8, 0.2, 1] }}
       type="button"
       onClick={onSelect}
-      aria-label={`Open analytics for ${post.title ?? post.mediaType ?? post.id}`}
+      aria-label={uiText('openPostAnalytics', { post: post.title ?? post.mediaType ?? post.id })}
       className={cn(
         'group relative block w-full overflow-hidden rounded-xl border border-border bg-surface text-left transition-[transform,box-shadow,opacity,border-color] duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1',
@@ -542,7 +563,7 @@ function PostGalleryCard({
               <PostMediaPreviewImage
                 postId={post.id}
                 src={preview}
-                alt={post.title ?? post.caption ?? 'Post media'}
+                alt={post.title ?? post.caption ?? uiText('post_media_27a8b3f')}
                 className="h-full w-full object-contain outline outline-1 outline-black/10 dark:outline-white/10"
                 onRecover={onRecoverMedia}
               />
@@ -570,33 +591,43 @@ function PostGalleryCard({
           )
         ) : (
           <div className="h-full w-full flex items-center justify-center">
-            <span className="text-xs text-muted-foreground">Media preview unavailable</span>
+            <span className="text-xs text-muted-foreground">
+              {uiText('media_preview_unavailable_045101c')}
+            </span>
           </div>
         )}
 
         <div className="absolute left-2 top-2 flex items-center gap-1">
           {platform === 'youtube' ? (
             <Pill variant={isYouTubeShort(post) ? 'warning' : 'violet'}>
-              {isYouTubeShort(post) ? 'Short' : 'Video'}
+              {isYouTubeShort(post) ? uiText('short_f5d61ea') : uiText('video_d534be8')}
             </Pill>
           ) : (
             <Pill variant={video ? 'violet' : carousel ? 'warning' : 'muted'}>
-              {video ? 'Reel/Video' : carousel ? 'Carousel' : 'Post'}
+              {video
+                ? uiText('reel_video_2d14634')
+                : carousel
+                  ? uiText('carousel_37219fb')
+                  : uiText('post_a555462')}
             </Pill>
           )}
           {carousel ? (
-            <Pill variant="muted">{(post.carouselMedia?.length ?? 0) || 1} slides</Pill>
+            <Pill variant="muted">
+              {uiText.rich('sentence_85fa345ad646', {
+                count: (post.carouselMedia?.length ?? 0) || 1,
+              })}
+            </Pill>
           ) : null}
-          {post.trial ? <Pill variant="violet">Trial</Pill> : null}
+          {post.trial ? <Pill variant="violet">{uiText('trial_98a66e9')}</Pill> : null}
         </div>
         {post.isBoosted ? (
           <Pill className="absolute right-2 top-2" variant="warning">
-            Boosted
+            {uiText('boosted_c1f1c88')}
           </Pill>
         ) : null}
         {loading ? (
           <Pill className="absolute bottom-2 right-2" variant="teal">
-            Loading details...
+            {uiText('loading_details_eefe44f')}
           </Pill>
         ) : null}
       </div>
@@ -605,11 +636,11 @@ function PostGalleryCard({
         {loading && isAllZeroPost(post) ? (
           <Skeleton className="h-4 w-full rounded" />
         ) : (
-          <MetricStrip items={postFaceMetrics(post)} />
+          <MetricStrip items={postFaceMetrics(post, uiLocale, uiText)} />
         )}
         {post.trial ? <TrialVerdictLine trial={post.trial} /> : null}
         <span className="mt-1 block text-2xs text-muted-foreground">
-          {formatDateTime(post.timestamp)}
+          {formatDateTime(post.timestamp, uiLocale)}
         </span>
       </div>
     </motion.button>
@@ -628,25 +659,32 @@ const TRIAL_STATUS_PILL: Record<
 
 /** A trial is judged against the account's ordinary reels on hook rate, never on raw reach. */
 function TrialVerdictLine({ trial }: { trial: PostTrial }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const status = trialStatusOf(trial);
-  const { label, variant } = TRIAL_STATUS_PILL[status];
+  const { variant } = TRIAL_STATUS_PILL[status];
   const verdict = trial.verdict;
   return (
     <div className="mt-1.5 space-y-1" title={verdict?.reason}>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Pill variant={variant}>{label}</Pill>
+        <Pill variant={variant}>{uiText('trialStateLabel', { status })}</Pill>
         {verdict?.hookRate != null && verdict.medianHookRate != null ? (
           <span className="text-2xs tabular-nums text-muted-foreground">
-            Hook {verdict.hookRate.toFixed(1)}% vs {verdict.medianHookRate.toFixed(1)}% median
+            {uiText('sentence_b723a9d8d548', {
+              hook: formatDecimal(verdict.hookRate, 1, uiLocale),
+              median: formatDecimal(verdict.medianHookRate, 1, uiLocale),
+            })}
           </span>
         ) : status === 'measuring' ? (
-          <span className="text-2xs text-muted-foreground">Judged 3 days after posting</span>
+          <span className="text-2xs text-muted-foreground">
+            {uiText('judged_3_days_after_posting_13b2428')}
+          </span>
         ) : null}
       </div>
       {verdict ? <span className="sr-only">{verdict.reason}</span> : null}
       {trialNextStepOf(trial) === 'graduate_in_app' ? (
         <span className="block text-2xs text-foreground text-pretty">
-          Share it to followers in the Instagram app.
+          {uiText('share_it_to_followers_in_the_instagram_app_e094d02')}
         </span>
       ) : null}
     </div>
@@ -703,27 +741,29 @@ function TikTokEmbed({ videoId, permalink }: { videoId: string; permalink: strin
 function buildPostSnapshotStripItems(
   post: OrganicPost,
   metricComparisons: Partial<Record<string, MetricComparison>>,
+  locale: UiLocale,
+  translate: ReturnType<typeof useTranslations<'organic'>>,
 ): MetricStripItem[] {
   const windowed = (key: 'views' | 'engagement' | 'comments') =>
-    metricComparisons[key] ? formatNumber(metricComparisons[key]?.current) : NO_DATA;
+    metricComparisons[key] ? formatNumber(metricComparisons[key]?.current, locale) : NO_DATA;
 
   const items: MetricStripItem[] = [
     {
-      label: 'Reach (Lifetime)',
-      value: formatNumber(post.metrics?.reach),
+      label: translate('reachLifetime'),
+      value: formatNumber(post.metrics?.reach, locale),
     },
     {
-      label: 'Views (7d)',
+      label: translate('viewsSevenDays'),
       value: windowed('views'),
       deltaPct: metricComparisons.views?.percentageChange,
     },
     {
-      label: 'Engagement (7d)',
+      label: translate('engagementSevenDays'),
       value: windowed('engagement'),
       deltaPct: metricComparisons.engagement?.percentageChange,
     },
     {
-      label: 'Comments (7d)',
+      label: translate('commentsSevenDays'),
       value: windowed('comments'),
       deltaPct: metricComparisons.comments?.percentageChange,
     },
@@ -734,22 +774,31 @@ function buildPostSnapshotStripItems(
     post.metrics?.reelsVideoViewTotalTime !== undefined
   ) {
     items.push(
-      { label: 'Avg Watch Time', value: formatWatchTime(post.metrics?.reelsAvgWatchTime) },
-      { label: 'Total Watch Time', value: formatWatchTime(post.metrics?.reelsVideoViewTotalTime) },
+      {
+        label: translate('averageWatchTime'),
+        value: formatWatchTime(post.metrics?.reelsAvgWatchTime, locale),
+      },
+      {
+        label: translate('totalWatchTime'),
+        value: formatWatchTime(post.metrics?.reelsVideoViewTotalTime, locale),
+      },
     );
   }
 
   const hookRate = calculateHookRate(post);
   if (hookRate !== undefined) {
     items.push({
-      label: 'Hook Rate',
-      value: `${hookRate.toFixed(1)}%`,
+      label: translate('hookRate'),
+      value: `${formatDecimal(hookRate, 1, locale)}%`,
       valueColor: hookRateTextColor(hookRate),
     });
   }
 
   if (typeof post.metrics?.retentionRate === 'number') {
-    items.push({ label: 'Retention', value: `${post.metrics.retentionRate.toFixed(1)}%` });
+    items.push({
+      label: translate('retention'),
+      value: `${formatDecimal(post.metrics.retentionRate, 1, locale)}%`,
+    });
   }
 
   return items;
@@ -774,6 +823,8 @@ function PostSnapshotPanel({
   onRecoverMedia?: (postId: string) => void;
   platform?: MetricsPlatform;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const preview = getPostPreviewUrl(post);
   // TikTok and YouTube only expose a thumbnail (no playable file), so they render
   // as a still + permalink rather than an inline <video>.
@@ -804,14 +855,16 @@ function PostSnapshotPanel({
     >
       <div className="h-full bg-surface">
         <SectionHeader
-          title="Post Snapshot"
+          title={uiText('post_snapshot_0cba5eb')}
           meta={
-            <span className="text-xs text-muted-foreground">{formatDateTime(post.timestamp)}</span>
+            <span className="text-xs text-muted-foreground">
+              {formatDateTime(post.timestamp, uiLocale)}
+            </span>
           }
           action={
             <div className="flex items-center gap-1">
-              {post.isBoosted ? <Pill variant="warning">Boosted</Pill> : null}
-              {loading ? <Pill variant="teal">Refreshing</Pill> : null}
+              {post.isBoosted ? <Pill variant="warning">{uiText('boosted_c1f1c88')}</Pill> : null}
+              {loading ? <Pill variant="teal">{uiText('refreshing_f92e2ad')}</Pill> : null}
             </div>
           }
         />
@@ -851,16 +904,16 @@ function PostSnapshotPanel({
                 <PostMediaPreviewImage
                   postId={post.id}
                   src={preview}
-                  alt={post.title ?? post.caption ?? 'Selected post'}
+                  alt={post.title ?? post.caption ?? uiText('selected_post_4e7c5d9')}
                   className="max-h-[320px] min-h-[180px] w-full object-contain"
                   onRecover={onRecoverMedia}
-                  fallbackLabel="Preview unavailable for this post"
+                  fallbackLabel={uiText('preview_unavailable_for_this_post_f5bc96f')}
                 />
               )
             ) : (
               <div className="flex min-h-[180px] items-center justify-center">
                 <span className="text-xs text-muted-foreground">
-                  Preview unavailable for this post
+                  {uiText('preview_unavailable_for_this_post_f5bc96f')}
                 </span>
               </div>
             )}
@@ -874,7 +927,9 @@ function PostSnapshotPanel({
                 ))}
               </div>
             ) : (
-              <MetricStrip items={buildPostSnapshotStripItems(post, metricComparisons)} />
+              <MetricStrip
+                items={buildPostSnapshotStripItems(post, metricComparisons, uiLocale, uiText)}
+              />
             )}
           </div>
 
@@ -892,20 +947,27 @@ function PostSnapshotPanel({
                         : 'text-muted-foreground',
                     )}
                     onClick={() => onMetricSelect(metricKey)}
-                    aria-label={`Show ${POST_METRIC_LABELS[metricKey]} trend`}
+                    aria-label={uiText('showMetricTrend', {
+                      metric: uiText('postMetricLabel', { metric: metricKey }),
+                    })}
                     aria-pressed={selectedMetric === metricKey}
                   >
-                    {POST_METRIC_LABELS[metricKey]}
+                    {uiText('postMetricLabel', { metric: metricKey })}
                   </button>
                 ))}
               </div>
-              <span className="px-1 text-xs text-muted-foreground">Last 7 days</span>
+              <span className="px-1 text-xs text-muted-foreground">
+                {uiText('last_7_days_0603dec')}
+              </span>
             </div>
             {metricsPending ? (
               <Skeleton className="h-24 w-full rounded-lg" />
             ) : hasPostSeries ? (
               <>
-                <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
+                <ChartContainer
+                  config={{ value: { ...drilldownChartConfig.value, label: uiText('chartValue') } }}
+                  className="h-24 w-full"
+                >
                   <LineChart data={series}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="date" hide />
@@ -931,16 +993,26 @@ function PostSnapshotPanel({
                 </ChartContainer>
                 {trendDays < POST_HISTORY_TRACKED_DAYS ? (
                   <span className="mt-1 block text-xs text-muted-foreground">
-                    {postHistoryProgressCopy(trendDays)}
+                    {uiText('postHistoryProgress', {
+                      tracked: trendDays,
+                      days: POST_HISTORY_TRACKED_DAYS,
+                    })}
                   </span>
                 ) : null}
               </>
             ) : hasAccountSeries ? (
               <div className="space-y-1">
                 <span className="block text-xs text-muted-foreground">
-                  {POST_HISTORY_ACCOUNT_STANDIN_COPY} {postHistoryProgressCopy(trendDays)}
+                  {uiText('postHistoryAccountStandin')}{' '}
+                  {uiText('postHistoryProgress', {
+                    tracked: trendDays,
+                    days: POST_HISTORY_TRACKED_DAYS,
+                  })}
                 </span>
-                <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
+                <ChartContainer
+                  config={{ value: { ...drilldownChartConfig.value, label: uiText('chartValue') } }}
+                  className="h-24 w-full"
+                >
                   <LineChart data={accountSeries}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="date" hide />
@@ -958,14 +1030,16 @@ function PostSnapshotPanel({
                 </ChartContainer>
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground">{POST_HISTORY_EMPTY_COPY}</span>
+              <span className="text-xs text-muted-foreground">{uiText('postHistoryEmpty')}</span>
             )}
           </div>
 
           <PostCommentsPanel comments={post.comments} />
 
           <span className="block text-xs line-clamp-8">
-            {post.caption?.trim().length ? post.caption : 'Caption unavailable for this post.'}
+            {post.caption?.trim().length
+              ? post.caption
+              : uiText('caption_unavailable_for_this_post_51fa537')}
           </span>
         </div>
       </div>
@@ -1000,14 +1074,14 @@ function MetricCard({
   platform?: string;
   rangePreset?: string;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const comparison = basisComparison?.comparison ?? null;
   const pctChange = comparison?.percentageChange;
   const direction = trendDirection(pctChange);
   // No comparison ran, so nothing is claimed. A 'FLAT' chip beside a missing
   // delta asserted a measured no-change that never happened.
-  const basisLabel = basisComparison
-    ? COMPARISON_BASIS_LABEL[basisComparison.basis]
-    : 'no comparison available';
+  const basisLabel = uiText('comparisonBasis', { basis: basisComparison?.basis ?? 'none' });
   const interactive = Boolean(onClick);
   const hasInsights = insights && insights.length > 0;
   const pinSuggestion =
@@ -1036,7 +1110,11 @@ function MetricCard({
     >
       {pinSuggestion ? (
         <div className="absolute right-1 top-1 z-10">
-          <PinToAgentButton suggestions={pinSuggestion} iconOnly label={`Add ${label} to agent`} />
+          <PinToAgentButton
+            suggestions={pinSuggestion}
+            iconOnly
+            label={uiText('addMetricToAgent', { label: label })}
+          />
         </div>
       ) : null}
       <button
@@ -1058,7 +1136,7 @@ function MetricCard({
             {hasInsights ? (
               <span
                 className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
-                title="Insights available"
+                title={uiText('insights_available_6b1aca1')}
               />
             ) : null}
           </div>
@@ -1071,7 +1149,7 @@ function MetricCard({
                 direction === 'flat' ? 'bg-muted text-muted-foreground' : '',
               )}
             >
-              {direction === 'flat' ? 'no change' : direction}
+              {direction === 'flat' ? uiText('no_change_5d69f9d') : direction}
             </span>
           ) : null}
         </div>
@@ -1083,9 +1161,9 @@ function MetricCard({
         >
           {format === 'percent'
             ? typeof value === 'number'
-              ? `${value.toFixed(1)}%`
+              ? `${formatDecimal(value, 1, uiLocale)}%`
               : NO_DATA
-            : formatNumber(value)}
+            : formatNumber(value, uiLocale)}
         </span>
         {compact ? (
           <span
@@ -1100,7 +1178,7 @@ function MetricCard({
                     : 'text-muted-foreground',
             )}
           >
-            {formatPercentChange(pctChange)}
+            {formatPercentChange(pctChange, uiLocale)}
           </span>
         ) : (
           <div className="flex items-center justify-between gap-2">
@@ -1116,7 +1194,7 @@ function MetricCard({
                       : 'text-muted-foreground',
               )}
             >
-              {formatPercentChange(pctChange)}
+              {formatPercentChange(pctChange, uiLocale)}
             </span>
             <span className="text-xs text-muted-foreground leading-none">{basisLabel}</span>
           </div>
@@ -1140,7 +1218,9 @@ function MetricCard({
         align="start"
         className="w-[min(20rem,calc(100vw-2rem))] max-h-[min(70svh,26rem)] overflow-y-auto p-3"
       >
-        <span className="mb-2 block text-sm font-medium">{label} Insights</span>
+        <span className="mb-2 block text-sm font-medium">
+          {uiText.rich('sentence_c07c27c38367', { v0: () => label })}
+        </span>
         <div className="flex flex-col gap-2">
           {insights.map((insight, i) => (
             <div key={i} className="flex items-start gap-2">
@@ -1179,15 +1259,17 @@ function YoutubeTypeSummaryStrip({
   posts: OrganicPost[];
   filter: YoutubePostTypeFilter;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const summary = summarizeYoutubeTypeMetrics(posts);
   const countLabel = filter === 'shorts' ? 'Shorts' : filter === 'videos' ? 'Videos' : 'Posts';
   const stats: Array<{ label: string; value: string }> = [
     { label: countLabel, value: `${summary.count}` },
-    { label: 'Views', value: formatNumber(summary.views) },
-    { label: 'Likes', value: formatNumber(summary.likes) },
-    { label: 'Comments', value: formatNumber(summary.comments) },
+    { label: uiText('views_69c4045'), value: formatNumber(summary.views, uiLocale) },
+    { label: uiText('likes_cca0662'), value: formatNumber(summary.likes, uiLocale) },
+    { label: uiText('comments_355f79f'), value: formatNumber(summary.comments, uiLocale) },
     {
-      label: 'Avg view %',
+      label: uiText('avg_view_4fe4aa1'),
       value: summary.avgHookRate !== undefined ? `${summary.avgHookRate.toFixed(1)}%` : NO_DATA,
     },
   ];
@@ -1210,19 +1292,24 @@ function YoutubeTypeSummaryStrip({
 // Account-level Shorts-vs-Videos performance split (data.contentTypePerformance,
 // from the Analytics creatorContentType dimension).
 function YoutubeContentTypeSplitCard({ performance }: { performance: ContentTypePerformance[] }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   if (performance.length === 0) return null;
   const maxViews = Math.max(1, ...performance.map((row) => row.views ?? 0));
   return (
     <div className="bg-surface">
       <div className="p-3">
-        <span className="mb-2 block text-sm font-medium">Shorts vs Videos</span>
+        <span className="mb-2 block text-sm font-medium">{uiText('shorts_vs_videos_a5c1e8b')}</span>
         <div className="flex flex-col gap-3">
           {performance.map((row) => (
             <div key={row.contentType}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm">{row.contentType}</span>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {formatNumber(row.views ?? 0)} views · {formatNumber(row.engagement ?? 0)} eng
+                  {uiText.rich('sentence_6c53ea763cb6', {
+                    v0: () => formatNumber(row.views ?? 0, uiLocale),
+                    v1: () => formatNumber(row.engagement ?? 0, uiLocale),
+                  })}
                 </span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
@@ -1271,6 +1358,8 @@ function AudienceCard({
   demographicsLoading,
   hidden,
 }: AudienceCardProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const followers = audienceBreakdown.followers;
   const nonFollowers = audienceBreakdown.nonFollowers;
   const followersPct =
@@ -1297,17 +1386,17 @@ function AudienceCard({
 
   return (
     <div className={cn('rounded-lg border border-border bg-surface', hidden && '!hidden')}>
-      <SectionHeader title="Audience" />
+      <SectionHeader title={uiText('audience_545c023')} />
       <div className="p-3">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
           <div className="flex flex-col items-center gap-3">
             <span className="self-start text-xs text-muted-foreground uppercase tracking-wide">
-              Followers Breakdown
+              {uiText('followers_breakdown_60e7d65')}
             </span>
             {audienceTotal === 0 ? (
               <div className="flex items-center justify-center h-64 w-full max-w-xs">
                 <span className="text-xs text-muted-foreground">
-                  Followers breakdown unavailable.
+                  {uiText('followers_breakdown_unavailable_ebd56b1')}
                 </span>
               </div>
             ) : (
@@ -1316,7 +1405,7 @@ function AudienceCard({
                   orientation="arc"
                   value={followersPct ?? 0}
                   centerValue={audienceTotal}
-                  defaultLabel="Total Audience"
+                  defaultLabel={uiText('total_audience_1cd1574')}
                   activeFill="var(--primary)"
                   inactiveFill="var(--muted)"
                   className="h-64 w-full max-w-xs"
@@ -1324,12 +1413,12 @@ function AudienceCard({
                 <MetricStrip
                   items={[
                     {
-                      label: 'Followers',
-                      value: `${formatNumber(followers)} · ${formatRate(followersPct)}`,
+                      label: uiText('followers_a145ab3'),
+                      value: `${formatNumber(followers, uiLocale)} · ${formatRate(followersPct, uiLocale)}`,
                     },
                     {
-                      label: 'Non-followers',
-                      value: `${formatNumber(nonFollowers)} · ${formatRate(nonFollowersPct)}`,
+                      label: uiText('non_followers_e5b623a'),
+                      value: `${formatNumber(nonFollowers, uiLocale)} · ${formatRate(nonFollowersPct, uiLocale)}`,
                     },
                   ]}
                 />
@@ -1339,7 +1428,7 @@ function AudienceCard({
 
           <div className="flex flex-col items-center gap-3">
             <span className="self-start text-xs text-muted-foreground uppercase tracking-wide">
-              Gender
+              {uiText('gender_a04630e')}
             </span>
             {demographicsLoading ? (
               <div className="flex flex-col items-center gap-2">
@@ -1347,10 +1436,17 @@ function AudienceCard({
                 <Skeleton className="h-3 w-32 rounded" />
               </div>
             ) : genderDemographics.length === 0 ? (
-              <span className="text-xs text-muted-foreground">Gender breakdown unavailable.</span>
+              <span className="text-xs text-muted-foreground">
+                {uiText('gender_breakdown_unavailable_9def8fd')}
+              </span>
             ) : (
               <>
-                <ChartContainer config={genderChartConfig} className="h-48 w-48">
+                <ChartContainer
+                  config={{
+                    value: { ...genderChartConfig.value, label: uiText('chartFollowers') },
+                  }}
+                  className="h-48 w-48"
+                >
                   <PieChart>
                     <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                     <Pie
@@ -1377,14 +1473,16 @@ function AudienceCard({
                                 y={(viewBox.cy ?? 0) - 8}
                                 className="fill-foreground text-lg font-semibold"
                               >
-                                {genderLeadPct !== null ? formatRate(genderLeadPct) : NO_DATA}
+                                {genderLeadPct !== null
+                                  ? formatRate(genderLeadPct, uiLocale)
+                                  : NO_DATA}
                               </tspan>
                               <tspan
                                 x={viewBox.cx}
                                 y={(viewBox.cy ?? 0) + 12}
                                 className="fill-muted-foreground text-2xs uppercase tracking-wide"
                               >
-                                {genderLeadEntry?.label ?? 'Gender'}
+                                {genderLeadEntry?.label ?? uiText('gender_a04630e')}
                               </tspan>
                             </text>
                           );
@@ -1406,7 +1504,7 @@ function AudienceCard({
                         </span>
                       </div>
                       <span className="text-xs font-medium font-mono">
-                        {formatNumber(entry.value)}
+                        {formatNumber(entry.value, uiLocale)}
                       </span>
                     </div>
                   ))}
@@ -1417,12 +1515,16 @@ function AudienceCard({
 
           <div className="min-w-0 sm:col-span-2 xl:col-span-1">
             <div className="flex justify-between items-baseline mb-2">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">Age</span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                {uiText('age_39b7370')}
+              </span>
               {peakAgeBand && ageTotal > 0 ? (
                 <span className="text-xs text-muted-foreground">
-                  Peak <span className="font-medium text-foreground">{peakAgeBand.label}</span>
-                  {' · '}
-                  {formatRate((peakAgeBand.value / ageTotal) * 100)}
+                  {uiText.rich('audiencePeak', {
+                    label: peakAgeBand.label,
+                    share: formatRate((peakAgeBand.value / ageTotal) * 100, uiLocale),
+                    band: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+                  })}
                 </span>
               ) : null}
             </div>
@@ -1438,7 +1540,9 @@ function AudienceCard({
                 ))}
               </div>
             ) : ageDemographics.length === 0 ? (
-              <span className="text-xs text-muted-foreground">Age breakdown unavailable.</span>
+              <span className="text-xs text-muted-foreground">
+                {uiText('age_breakdown_unavailable_6ba8520')}
+              </span>
             ) : (
               <div className="flex flex-col gap-3 pr-1">
                 {ageDemographics.map((entry) => (
@@ -1446,7 +1550,7 @@ function AudienceCard({
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm">{entry.label}</span>
                       <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                        {formatNumber(entry.value)}
+                        {formatNumber(entry.value, uiLocale)}
                       </span>
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
@@ -1512,6 +1616,8 @@ function Dashboard({
   scrollRootRef: React.RefObject<HTMLDivElement | null>;
   linkedPostId?: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const [selectedPostId, setSelectedPostId] = React.useState<string | null>(null);
   const [showAllKpis, setShowAllKpis] = React.useState(false);
   const [selectedAccountMetric, setSelectedAccountMetric] =
@@ -1605,26 +1711,26 @@ function Dashboard({
   // the card as a static headline tile instead of offering an empty chart.
   const graphableAccountMetrics = React.useMemo(() => {
     const set = new Set<keyof OrganicMetrics>();
-    for (const metric of getKpiConfig(platform)) {
+    for (const metric of getKpiConfig(platform, uiText)) {
       if (isTrendKeyGraphable(data.trends, ACCOUNT_TREND_MAP[metric.key])) {
         set.add(metric.key);
       }
     }
     return set;
-  }, [data.trends, platform]);
+  }, [data.trends, platform, uiText]);
 
   // Keep the drilldown pointed at a metric that actually graphs: if the active
   // selection isn't in this platform's KPI set or isn't graphable yet, fall back
   // to the first graphable KPI (leaves the empty-state text only when none are).
   React.useEffect(() => {
-    const config = getKpiConfig(platform);
+    const config = getKpiConfig(platform, uiText);
     const stillValid =
       config.some((metric) => metric.key === selectedAccountMetric) &&
       graphableAccountMetrics.has(selectedAccountMetric);
     if (stillValid) return;
     const firstGraphable = config.find((metric) => graphableAccountMetrics.has(metric.key));
     if (firstGraphable) setSelectedAccountMetric(firstGraphable.key);
-  }, [platform, graphableAccountMetrics, selectedAccountMetric]);
+  }, [platform, graphableAccountMetrics, selectedAccountMetric, uiText]);
 
   const accountSeries = buildAccountMetricSeries({
     data,
@@ -1659,7 +1765,7 @@ function Dashboard({
     metricKey: selectedPostMetric,
   });
   const selectedAccountMetricLabel =
-    getKpiConfig(platform).find((metric) => metric.key === selectedAccountMetric)?.label ??
+    getKpiConfig(platform, uiText).find((metric) => metric.key === selectedAccountMetric)?.label ??
     String(selectedAccountMetric);
   const isAccountView = viewMode === 'account';
   const isPostsView = viewMode === 'posts';
@@ -1751,7 +1857,7 @@ function Dashboard({
       ) : null}
       {isAccountView && rangePreset === 'today' ? (
         <span className="mb-1 block text-xs text-muted-foreground">
-          Today so far — deltas compare today (partial) against yesterday.
+          {uiText('today_so_far_deltas_compare_today_partial_aga_e36a3e8')}
         </span>
       ) : null}
       {isAccountView ? (
@@ -1763,7 +1869,7 @@ function Dashboard({
             variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
             className="grid grid-cols-1 gap-2 sm:grid-cols-3"
           >
-            {getKpiConfig(platform)
+            {getKpiConfig(platform, uiText)
               .slice(0, showAllKpis ? undefined : 3)
               .map((metric) => (
                 <motion.div
@@ -1785,7 +1891,7 @@ function Dashboard({
                     format={metric.format}
                     basisComparison={metricComparisonFor(data, metric.key)}
                     active={selectedAccountMetric === metric.key}
-                    ariaLabel={`Account metric ${metric.label}`}
+                    ariaLabel={uiText('accountMetricAria', { metric: metric.label })}
                     metricKey={String(metric.key)}
                     platform={platform}
                     rangePreset={rangePreset}
@@ -1801,7 +1907,7 @@ function Dashboard({
                 </motion.div>
               ))}
           </motion.div>
-          {getKpiConfig(platform).length > 3 ? (
+          {getKpiConfig(platform, uiText).length > 3 ? (
             <Button
               variant="ghost"
               size="sm"
@@ -1810,8 +1916,8 @@ function Dashboard({
               onClick={() => setShowAllKpis((value) => !value)}
             >
               {showAllKpis
-                ? 'Show key metrics'
-                : `Show all ${getKpiConfig(platform).length} metrics`}
+                ? uiText('show_key_metrics_30af84c')
+                : uiText('showAllMetrics', { count: getKpiConfig(platform, uiText).length })}
             </Button>
           ) : null}
         </div>
@@ -1822,17 +1928,19 @@ function Dashboard({
       {isAccountView ? (
         <div className="bg-surface">
           <SectionHeader
-            title="Metric Drilldown"
+            title={uiText('metric_drilldown_f980266')}
             meta={
               <span className="text-xs text-muted-foreground">
-                Independent chart window · {selectedAccountMetricLabel} ·{' '}
-                {formatDateRangeLabel(accountAxisLabelRange)}
+                {uiText.rich('sentence_3f3109146178', {
+                  v0: () => selectedAccountMetricLabel,
+                  v1: () => formatDateRangeLabel(accountAxisLabelRange, uiLocale),
+                })}
               </span>
             }
             action={
               <div className="flex items-center gap-2">
                 <span className="hidden text-2xs uppercase tracking-wide text-muted-foreground sm:inline">
-                  Chart window
+                  {uiText('chart_window_1133c16')}
                 </span>
                 {visiblePosts.length > 0 ? (
                   <label
@@ -1840,12 +1948,12 @@ function Dashboard({
                     className="flex cursor-pointer select-none items-center gap-1 text-xs text-muted-foreground"
                   >
                     <Flag size={12} className="text-primary" />
-                    <span className="hidden sm:inline">Posts</span>
+                    <span className="hidden sm:inline">{uiText('posts_a80811c')}</span>
                     <Switch
                       id="organic-account-post-flags"
                       checked={showPostFlags}
                       onCheckedChange={setShowPostFlags}
-                      aria-label="Toggle post activity markers"
+                      aria-label={uiText('toggle_post_activity_markers_fd2274b')}
                     />
                   </label>
                 ) : null}
@@ -1859,10 +1967,10 @@ function Dashboard({
                         : 'text-muted-foreground',
                     )}
                     onClick={() => setDrilldownWindow('7d')}
-                    aria-label="Show seven day window"
+                    aria-label={uiText('show_seven_day_window_c6d6c95')}
                     aria-pressed={drilldownWindow === '7d'}
                   >
-                    7d
+                    {uiText('7d_a7c7426')}
                   </button>
                   <button
                     type="button"
@@ -1873,10 +1981,10 @@ function Dashboard({
                         : 'text-muted-foreground',
                     )}
                     onClick={() => setDrilldownWindow('30d')}
-                    aria-label="Show thirty day window"
+                    aria-label={uiText('show_thirty_day_window_1607958')}
                     aria-pressed={drilldownWindow === '30d'}
                   >
-                    30d
+                    {uiText('30d_e3ba17e')}
                   </button>
                 </div>
               </div>
@@ -1885,24 +1993,28 @@ function Dashboard({
           <div className="p-3">
             {dataCurrentThrough === undefined ? (
               <span className="text-sm text-muted-foreground">
-                No metric history is available for this metric in the selected window.
+                {uiText('no_metric_history_is_available_for_this_metri_d76518d')}
               </span>
             ) : (
               <>
                 <span className="mb-2 block text-xs text-muted-foreground">
-                  This chart keeps its own {drilldownWindow === '30d' ? '30-day' : '7-day'} window,
-                  separate from the Overview date range. Data current through{' '}
-                  {formatShortDate(dataCurrentThrough)}.
+                  {uiText.rich('sentence_dec1996ec5ca', {
+                    v0: () =>
+                      drilldownWindow === '30d'
+                        ? uiText('30_day_7a9c1c9')
+                        : uiText('7_day_ee8a068'),
+                    v1: () => formatShortDate(dataCurrentThrough, uiLocale),
+                  })}
                 </span>
                 <ChartContainer
-                  config={drilldownChartConfig}
+                  config={{ value: { ...drilldownChartConfig.value, label: uiText('chartValue') } }}
                   className="h-[min(42vh,24rem)] min-h-64 w-full"
                 >
                   <LineChart data={accountSeries}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis
                       dataKey="date"
-                      tickFormatter={(value) => formatShortDate(value)}
+                      tickFormatter={(value) => formatShortDate(value, uiLocale)}
                       minTickGap={20}
                     />
                     <YAxis />
@@ -1980,10 +2092,10 @@ function Dashboard({
             <Alert className="m-3 w-auto">
               <AlertDescription>
                 {hasMorePosts || loadingMorePosts
-                  ? 'Finding the published post in account history…'
+                  ? uiText('finding_the_published_post_in_account_history_5352b60')
                   : loadMorePostsError
-                    ? 'Post performance is unavailable because older posts could not load. Retry below.'
-                    : 'Post performance is unavailable for this post in the available account history.'}
+                    ? uiText('post_performance_is_unavailable_because_older_b7939c8')
+                    : uiText('post_performance_is_unavailable_for_this_post_7569492')}
               </AlertDescription>
             </Alert>
           ) : null}
@@ -1995,8 +2107,8 @@ function Dashboard({
               {visiblePosts.length === 0 ? (
                 <span className="text-sm text-muted-foreground">
                   {platform === 'youtube' && youtubePostType !== 'all'
-                    ? `No ${youtubePostType === 'shorts' ? 'Shorts' : 'videos'} were found for this channel in the selected window.`
-                    : 'No posts were found for this account in the selected window.'}
+                    ? uiText('youtubeNoFormatPosts', { format: youtubePostType })
+                    : uiText('no_posts_were_found_for_this_account_in_the_s_fbab16d')}
                 </span>
               ) : (
                 <div className="mx-auto w-full">
@@ -2019,25 +2131,29 @@ function Dashboard({
                             >
                               <TabsList className="inline-flex h-8 w-auto rounded-lg border border-border bg-muted/20 p-0.5">
                                 <TabsTrigger value="posts" className="px-3 text-xs">
-                                  Posts
+                                  {uiText('posts_a80811c')}
                                 </TabsTrigger>
                                 <TabsTrigger value="trials" className="px-3 text-xs">
-                                  Trials ({trialPosts.length})
+                                  {uiText.rich('sentence_eb84cd0ed580', {
+                                    v0: () => trialPosts.length,
+                                  })}
                                 </TabsTrigger>
                               </TabsList>
                             </Tabs>
                           ) : null}
                           <span className="text-xs text-muted-foreground text-pretty">
                             {postLaneShown === 'trials'
-                              ? 'Trial reels reached non-followers only, so they are ranked by their verdict against your ordinary reels.'
+                              ? uiText('trial_reels_reached_non_followers_only_so_the_04d5724')
                               : ordinaryPosts.length === 0
-                                ? 'Every post in this window went out as a trial reel. Open Trials.'
-                                : 'Posts load newest first and go deeper as you scroll.'}
+                                ? uiText('every_post_in_this_window_went_out_as_a_trial_c5326f7')
+                                : uiText('posts_load_newest_first_and_go_deeper_as_you__234de83')}
                           </span>
                         </div>
                         {postLaneShown === 'posts' ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">Sort</span>
+                            <span className="text-xs text-muted-foreground">
+                              {uiText('sort_bec6903')}
+                            </span>
                             <Select
                               value={postSortKey}
                               onValueChange={(v) => setPostSortKey(v as PostSortKey)}
@@ -2046,11 +2162,15 @@ function Dashboard({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="recent">Recent</SelectItem>
-                                <SelectItem value="hookRate">Hook Rate</SelectItem>
-                                <SelectItem value="views">Views</SelectItem>
-                                <SelectItem value="reach">Reach</SelectItem>
-                                <SelectItem value="engagement">Engagement</SelectItem>
+                                <SelectItem value="recent">{uiText('recent_690dbe9')}</SelectItem>
+                                <SelectItem value="hookRate">
+                                  {uiText('hook_rate_ab16c04')}
+                                </SelectItem>
+                                <SelectItem value="views">{uiText('views_69c4045')}</SelectItem>
+                                <SelectItem value="reach">{uiText('reach_2068b81')}</SelectItem>
+                                <SelectItem value="engagement">
+                                  {uiText('engagement_ea68771')}
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -2144,20 +2264,26 @@ function Dashboard({
                                 onClick={() => onLoadMorePosts?.()}
                               >
                                 <RotateCw className="mr-1.5" aria-hidden />
-                                Retry
+                                {uiText('retry_942087c')}
                               </Button>
                             </div>
                           ) : loadingMorePosts ? (
                             <span className="text-xs text-muted-foreground">
-                              Loading {formatDateRangeLabel(nextPostWindowRange)}...
+                              {uiText.rich('sentence_6e6d0980b0f8', {
+                                v0: () => formatDateRangeLabel(nextPostWindowRange, uiLocale),
+                              })}
                             </span>
                           ) : hasMorePosts ? (
                             <span className="text-xs text-muted-foreground">
-                              Scroll to load {formatDateRangeLabel(nextPostWindowRange)}
+                              {uiText.rich('sentence_7268277ed9ca', {
+                                v0: () => formatDateRangeLabel(nextPostWindowRange, uiLocale),
+                              })}
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground">
-                              End of feed — {POST_GALLERY_MAX_DAYS} days of history.
+                              {uiText.rich('sentence_e1e8263ef183', {
+                                count: POST_GALLERY_MAX_DAYS,
+                              })}
                             </span>
                           )}
                         </div>
@@ -2195,6 +2321,8 @@ export function OrganicMetricsDashboard({
   initialPlatform = 'instagram',
   brandInsights = null,
 }: Props) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('organic');
   const searchParams = useSearchParams();
   const linkedPlatform =
     searchParams.get('tab') === 'metrics' ? searchParams.get('platform') : null;
@@ -2402,11 +2530,7 @@ export function OrganicMetricsDashboard({
       // "Loading previous 30d..." with no state, no retry, and no explanation.
       if (isOrganicAnalyticsCancellation(error)) return;
       const window = postWindowRange(nextOffset);
-      setPostWindowError(
-        error instanceof Error
-          ? error.message
-          : `Could not load posts from ${formatDateRangeLabel(window)}.`,
-      );
+      setPostWindowError(formatUiError(error));
     } finally {
       if (postWindowAbortRef.current === controller) postWindowAbortRef.current = null;
       setLoadingMorePostWindows(false);
@@ -2418,6 +2542,7 @@ export function OrganicMetricsDashboard({
     postWindowOffset,
     selectedAccountId,
     viewMode,
+    formatUiError,
   ]);
 
   const handleRefresh = React.useCallback(() => {
@@ -2535,13 +2660,13 @@ export function OrganicMetricsDashboard({
           });
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to export organic report.';
+        const message = formatUiError(error);
         setReportError(message);
       } finally {
         setExportingReportFormat(null);
       }
     },
-    [brandId, exportTarget],
+    [brandId, exportTarget, formatUiError],
   );
 
   React.useEffect(() => {
@@ -2587,7 +2712,7 @@ export function OrganicMetricsDashboard({
           if (!postsData) {
             setState({
               status: 'error',
-              message: 'Unable to load post windows for the selected range.',
+              message: uiText('unable_to_load_post_windows_for_the_selected__ac1b1bb'),
             });
             return;
           }
@@ -2599,8 +2724,7 @@ export function OrganicMetricsDashboard({
           setState({ status: 'success', data: postsData });
         } catch (error) {
           if (cancelled) return;
-          const message =
-            error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
+          const message = formatUiError(error);
           const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
           const retryAfter = (error as { retryAfter?: number }).retryAfter;
           setState({ status: 'error', message, errorCode, retryAfter });
@@ -2632,10 +2756,7 @@ export function OrganicMetricsDashboard({
         })
         .catch((error) => {
           if (!cancelled) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : `Unable to load ${platform} organic metrics.`;
+            const message = formatUiError(error);
             const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
             const retryAfter = (error as { retryAfter?: number }).retryAfter;
             setKpisState({ status: 'error', message, errorCode, retryAfter });
@@ -2659,8 +2780,7 @@ export function OrganicMetricsDashboard({
           })
           .catch((error) => {
             if (!cancelled) {
-              const message =
-                error instanceof Error ? error.message : 'Unable to load demographics.';
+              const message = formatUiError(error);
               const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
               const retryAfter = (error as { retryAfter?: number }).retryAfter;
               setDemographicsState({ status: 'error', message, errorCode, retryAfter });
@@ -2683,7 +2803,17 @@ export function OrganicMetricsDashboard({
     return () => {
       cancelled = true;
     };
-  }, [brandId, fetchPostsWindow, platform, rangePreset, reloadTick, selectedAccountId, viewMode]);
+  }, [
+    brandId,
+    fetchPostsWindow,
+    platform,
+    rangePreset,
+    reloadTick,
+    selectedAccountId,
+    viewMode,
+    uiText,
+    formatUiError,
+  ]);
 
   const dashboardData = React.useMemo(() => {
     if (viewMode === 'compare') return null;
@@ -2734,16 +2864,19 @@ export function OrganicMetricsDashboard({
   const exportBlockHint = React.useMemo(() => {
     if (viewMode === 'compare' && compareSelection.length > 1) {
       return {
-        reason: `A report covers one account at a time, and ${compareSelection.length} are selected here.`,
+        reason: uiText('oneAccountReport', { count: compareSelection.length }),
         unlocks: 'CSV, HTML, and Continuum Report email for a single account',
       };
     }
-    return describeExportBlock({
-      hasAccount: Boolean(exportTarget),
-      isLoading: isLoadingView,
-      isExporting: exportingReportFormat !== null,
-      platformLabel: PLATFORM_LABELS[platform],
-    });
+    return describeExportBlock(
+      {
+        hasAccount: Boolean(exportTarget),
+        isLoading: isLoadingView,
+        isExporting: exportingReportFormat !== null,
+        platformLabel: PLATFORM_LABELS[platform],
+      },
+      uiText,
+    );
   }, [
     compareSelection.length,
     exportTarget,
@@ -2751,6 +2884,7 @@ export function OrganicMetricsDashboard({
     isLoadingView,
     platform,
     viewMode,
+    uiText,
   ]);
 
   return (
@@ -2788,12 +2922,12 @@ export function OrganicMetricsDashboard({
                 }
               >
                 <SelectTrigger className="h-8 w-[7.5rem] text-xs">
-                  {rangeLabel(rangePreset)}
+                  {uiText('organicRangeLabel', { preset: rangePreset })}
                 </SelectTrigger>
                 <SelectContent>
                   {RANGE_OPTIONS.map((preset) => (
                     <SelectItem key={preset} value={preset}>
-                      {rangeLabel(preset)}
+                      {uiText('organicRangeLabel', { preset })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -2803,7 +2937,7 @@ export function OrganicMetricsDashboard({
 
           <div className="flex items-center gap-2">
             <span className="hidden text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
-              Metrics view
+              {uiText('metrics_view_ac4e63f')}
             </span>
             <Tabs
               value={viewMode}
@@ -2827,28 +2961,28 @@ export function OrganicMetricsDashboard({
             >
               <TabsList
                 className="inline-flex h-8 w-auto rounded-lg border border-border bg-muted/20 p-0.5"
-                aria-label="Organic metrics view"
+                aria-label={uiText('organic_metrics_view_b7ec8f9')}
               >
                 <TabsTrigger
                   value="account"
                   className="px-3 text-xs"
                   data-tour-id="metrics-view-account"
                 >
-                  Overview
+                  {uiText('overview_d4b1ea5')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="posts"
                   className="px-3 text-xs"
                   data-tour-id="metrics-view-posts"
                 >
-                  Post performance
+                  {uiText('post_performance_bc3bb69')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="compare"
                   className="px-3 text-xs"
                   data-tour-id="metrics-view-compare"
                 >
-                  Compare accounts
+                  {uiText('compare_accounts_e2f2c54')}
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -2862,13 +2996,13 @@ export function OrganicMetricsDashboard({
             >
               <TabsList className="inline-flex h-8 w-auto rounded-lg border border-border bg-muted/20 p-0.5">
                 <TabsTrigger value="all" className="px-3 text-xs">
-                  All
+                  {uiText('all_a52ace4')}
                 </TabsTrigger>
                 <TabsTrigger value="shorts" className="px-3 text-xs">
-                  Shorts
+                  {uiText('shorts_3c784a1')}
                 </TabsTrigger>
                 <TabsTrigger value="videos" className="px-3 text-xs">
-                  Videos
+                  {uiText('videos_c9a9639')}
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -2889,11 +3023,14 @@ export function OrganicMetricsDashboard({
             hint={
               viewMode === 'compare'
                 ? null
-                : describeRefreshBlock({
-                    hasAccount: Boolean(selectedAccountId),
-                    isLoading: isLoadingView || isPending,
-                    platformLabel: PLATFORM_LABELS[platform],
-                  })
+                : describeRefreshBlock(
+                    {
+                      hasAccount: Boolean(selectedAccountId),
+                      isLoading: isLoadingView || isPending,
+                      platformLabel: PLATFORM_LABELS[platform],
+                    },
+                    uiText,
+                  )
             }
           >
             <Button
@@ -2906,7 +3043,7 @@ export function OrganicMetricsDashboard({
                   ? isPending
                   : !selectedAccountId || isLoadingView || isPending
               }
-              aria-label="Refresh organic analytics"
+              aria-label={uiText('refresh_organic_analytics_b23791c')}
             >
               <RotateCw className={cn(isLoadingView && 'animate-spin')} />
             </Button>
@@ -2921,11 +3058,13 @@ export function OrganicMetricsDashboard({
                   <Button
                     variant="outline"
                     disabled={!exportTarget || isLoadingView || exportingReportFormat !== null}
-                    aria-label="Open organic report export or email options"
+                    aria-label={uiText('open_organic_report_export_or_email_options_74d50c5')}
                     className="h-8 px-2 text-xs"
                   >
                     <Download className={cn(exportingReportFormat !== null && 'animate-pulse')} />
-                    {exportingReportFormat !== null ? 'Exporting…' : 'Export or Email'}
+                    {exportingReportFormat !== null
+                      ? uiText('exporting_a2dd9cb')
+                      : uiText('export_or_email_3ac2a7e')}
                   </Button>
                 }
               />
@@ -2936,7 +3075,7 @@ export function OrganicMetricsDashboard({
                   }}
                   disabled={exportingReportFormat !== null}
                 >
-                  Export CSV
+                  {uiText('export_csv_91f71c1')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {
@@ -2944,7 +3083,7 @@ export function OrganicMetricsDashboard({
                   }}
                   disabled={exportingReportFormat !== null}
                 >
-                  Export HTML
+                  {uiText('export_html_17f681a')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -2954,7 +3093,7 @@ export function OrganicMetricsDashboard({
                   disabled={exportingReportFormat !== null}
                 >
                   <Send className="mr-2 h-3.5 w-3.5" aria-hidden />
-                  Email Continuum Report
+                  {uiText('email_continuum_report_fed107b')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -2989,8 +3128,7 @@ export function OrganicMetricsDashboard({
           )) ? (
           <Alert className="m-3 w-auto">
             <AlertDescription>
-              Post performance is unavailable because the linked account is not connected to this
-              brand.
+              {uiText('post_performance_is_unavailable_because_the_l_140a6f2')}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -3006,8 +3144,7 @@ export function OrganicMetricsDashboard({
         ) : platformAccounts.length === 0 ? (
           <Alert className="border-secondary/30 bg-secondary/10">
             <AlertDescription className="text-foreground text-pretty">
-              No {PLATFORM_LABELS[platform]} account is connected for this brand yet. Connect one in
-              Integrations to unlock reporting.
+              {uiText.rich('sentence_abdf494698f0', { v0: () => PLATFORM_LABELS[platform] })}
             </AlertDescription>
           </Alert>
         ) : (
@@ -3080,8 +3217,7 @@ export function OrganicMetricsDashboard({
                 transition={{ duration: 0.18 }}
               >
                 <span className="text-sm text-foreground text-pretty">
-                  Choose {articleFor(PLATFORM_LABELS[platform])} {PLATFORM_LABELS[platform]} account
-                  above to see your report.
+                  {uiText.rich('sentence_227c2978518b', { platform: PLATFORM_LABELS[platform] })}
                 </span>
               </motion.div>
             )}

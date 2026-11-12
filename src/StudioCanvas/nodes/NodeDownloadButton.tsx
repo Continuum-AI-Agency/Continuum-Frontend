@@ -11,6 +11,7 @@
 // missing an affordance; a node that HAS produced and offers no way to save it is.
 
 import { Download } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { downloadAsset } from '../utils/downloadAsset';
@@ -32,10 +33,13 @@ export const NODE_DOWNLOAD_BUTTON_CLASS =
   'nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100';
 
 export function NodeDownloadButton({ nodeType, data, baseName, label, className }: Props) {
+  const translateUi = useUiTranslations('studio');
+
   const source = exportSourceFromNodeData({ type: nodeType, data });
   if (!source) return null;
 
-  const accessibleName = label ?? `Download ${source.kind === 'video' ? 'clip' : 'image'}`;
+  const accessibleName =
+    label ?? translateUi(source.kind === 'video' ? 'nodeDownloadClip' : 'nodeDownloadImage');
 
   return (
     <Button
@@ -49,12 +53,13 @@ export function NodeDownloadButton({ nodeType, data, baseName, label, className 
       onClick={(event) => {
         event.stopPropagation();
         downloadAsset({
+          translate: translateUi,
           data: source.ref,
           baseName,
           fallbackExtension: source.kind === 'video' ? 'mp4' : 'png',
         });
       }}
-      title="Download Output"
+      title={translateUi('download_output_b86e2324')}
       aria-label={accessibleName}
     >
       <Download className="h-4 w-4" />

@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Browsing past runs used to be impossible inside the workspace: `?run=` had to
 // be known already, and it only ever arrived from a report email's deep link.
 // This is that missing list — the second tab of the right rail.
@@ -56,6 +60,9 @@ function RunHistoryRow({
   onToggleReport: () => void;
   source: RunHistorySource;
 }) {
+  const uiText = useTranslations('automations');
+  const uiLocale = useLocale();
+  const getUiErrorMessage = useUiErrorMessage();
   const status = AUTOMATION_RUN_STATUS_PILL[run.status];
   const report = source.useRunReport(run.runId, expanded);
   const reportText = report.data?.output?.text ?? run.output?.text ?? '';
@@ -72,27 +79,27 @@ function RunHistoryRow({
           type="button"
           onClick={onFocus}
           aria-current={focused ? 'true' : undefined}
-          aria-label={`Show run ${run.runId} on the canvas`}
+          aria-label={uiText('showRunOnCanvas', { id: run.runId })}
           className="flex w-full flex-col items-start gap-1 rounded-md px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="flex w-full items-center gap-2">
             <Pill className="gap-1.5">
               <PillIndicator variant={status.variant} pulse={status.pulse} />
-              {status.label}
+              {localizeAutomationsCopy(status.label, uiText)}
             </Pill>
-            {focused ? <Badge variant="outline">On canvas</Badge> : null}
+            {focused ? <Badge variant="outline">{uiText('on_canvas_b558b86')}</Badge> : null}
             <span className="ml-auto shrink-0 font-mono text-2xs text-muted-foreground">
               {run.runId.slice(0, 8)}
             </span>
           </span>
           <span className="block w-full truncate text-xs text-muted-foreground">
-            {describeAutomationRun(run)}
+            {describeAutomationRun(run, uiLocale, uiText)}
           </span>
         </button>
 
         <div className="flex items-center gap-2 border-t border-border/60 px-3 py-1.5">
           <span className="text-xs text-muted-foreground">
-            {AUTOMATION_EMAIL_STATUS_LABEL[run.emailStatus]}
+            {localizeAutomationsCopy(AUTOMATION_EMAIL_STATUS_LABEL[run.emailStatus], uiText)}
           </span>
           {run.status === 'completed' ? (
             <Button
@@ -107,14 +114,14 @@ function RunHistoryRow({
               ) : (
                 <ChevronRight data-icon="inline-start" aria-hidden="true" />
               )}
-              {expanded ? 'Hide report' : 'View report'}
+              {expanded ? uiText('hide_report_a198131') : uiText('view_report_45e1eb0')}
             </Button>
           ) : null}
         </div>
 
         {run.status === 'failed' && run.errorMessage ? (
           <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive">
-            {run.errorMessage}
+            {getUiErrorMessage({ code: run.errorMessage })}
           </p>
         ) : null}
 
@@ -128,7 +135,9 @@ function RunHistoryRow({
             ) : reportText.trim() ? (
               <SafeMarkdown content={reportText} className="text-xs leading-5 text-foreground" />
             ) : (
-              <p className="text-xs text-muted-foreground">This run has no report body.</p>
+              <p className="text-xs text-muted-foreground">
+                {uiText('this_run_has_no_report_body_f8e8bb2')}
+              </p>
             )}
           </div>
         ) : null}
@@ -148,6 +157,7 @@ export function RunHistoryPanel({
   onFocusRun: (runId: string) => void;
   source?: RunHistorySource;
 }) {
+  const uiText = useTranslations('automations');
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const { data: runs, isLoading } = source.useRuns(automationId);
   const ordered = sortAutomationRunsNewestFirst(runs ?? []);
@@ -157,11 +167,11 @@ export function RunHistoryPanel({
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <History className="size-3.5 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0">
-          <h2 className="text-xs font-medium">Run history</h2>
+          <h2 className="text-xs font-medium">{uiText('run_history_addf321')}</h2>
           <p className="truncate text-xs text-muted-foreground">
             {isLoading
-              ? 'Loading runs…'
-              : `${ordered.length} run${ordered.length === 1 ? '' : 's'}`}
+              ? uiText('loading_runs_8438ea3')
+              : uiText('m_8dd5f3d792', { count: ordered.length })}
           </p>
         </div>
       </div>
@@ -178,10 +188,9 @@ export function RunHistoryPanel({
               <span className="flex size-10 items-center justify-center rounded-md border bg-muted">
                 <History className="size-4 text-muted-foreground" aria-hidden="true" />
               </span>
-              <h3 className="mt-3 text-sm font-medium">No runs yet</h3>
+              <h3 className="mt-3 text-sm font-medium">{uiText('no_runs_yet_306b45d')}</h3>
               <p className="mt-1 max-w-56 text-xs leading-5 text-muted-foreground">
-                Publish this workflow and use “Run now”, or wait for its schedule. Every run lands
-                here with its report.
+                {uiText('publish_this_workflow_and_use_run_now_or_wait_9ef62dc')}
               </p>
             </div>
           ) : (

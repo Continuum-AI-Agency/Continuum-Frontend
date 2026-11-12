@@ -1,9 +1,12 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { ScaffoldChoices, ScaffoldDerived } from '@/lib/paid-media/scaffoldTree';
 import { targetingSummary } from '@/lib/paid-media/scaffoldTree';
 import { DerivedValue } from './DerivedValue';
+import { localizeScaffoldCopy, scaffoldChoiceLabel } from './scaffoldPlanView';
 
 /**
  * What one scaffold node actually IS, for the hover on its canvas card.
@@ -22,15 +25,16 @@ import { DerivedValue } from './DerivedValue';
 type DetailRow = { label: string; value: ReactNode; derived?: string };
 
 function DetailRows({ rows }: { rows: DetailRow[] }) {
+  const t = useTranslations('scale');
   if (rows.length === 0) return null;
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
       {rows.map((row) => (
         <div key={row.label} className="contents">
-          <dt className="text-muted-foreground">{row.label}</dt>
+          <dt className="text-muted-foreground">{localizeScaffoldCopy(row.label, t)}</dt>
           <dd className="min-w-0 break-words font-medium">
             {row.derived ? (
-              <DerivedValue reason={row.derived}>{row.value}</DerivedValue>
+              <DerivedValue reason={localizeScaffoldCopy(row.derived, t)}>{row.value}</DerivedValue>
             ) : (
               row.value
             )}
@@ -41,16 +45,28 @@ function DetailRows({ rows }: { rows: DetailRow[] }) {
   );
 }
 
-const deliveryRows = (choices: ScaffoldChoices | undefined): DetailRow[] => {
+const deliveryRows = (
+  choices: ScaffoldChoices | undefined,
+  t: ReturnType<typeof useTranslations<'scale'>>,
+): DetailRow[] => {
   if (!choices) return [];
   return [
-    ...(choices.objective ? [{ label: 'Objective', value: choices.objective }] : []),
-    ...(choices.optimizationGoal
-      ? [{ label: 'Optimizing for', value: choices.optimizationGoal }]
+    ...(choices.objective
+      ? [{ label: 'Objective', value: scaffoldChoiceLabel(choices.objective, t) }]
       : []),
-    ...(choices.funnelStage ? [{ label: 'Funnel', value: choices.funnelStage }] : []),
+    ...(choices.optimizationGoal
+      ? [{ label: 'Optimizing for', value: scaffoldChoiceLabel(choices.optimizationGoal, t) }]
+      : []),
+    ...(choices.funnelStage
+      ? [{ label: 'Funnel', value: scaffoldChoiceLabel(choices.funnelStage, t) }]
+      : []),
     ...(choices.placement?.length
-      ? [{ label: 'Placement', value: choices.placement.join(', ') }]
+      ? [
+          {
+            label: 'Placement',
+            value: choices.placement.map((value) => scaffoldChoiceLabel(value, t)).join(', '),
+          },
+        ]
       : []),
   ];
 };
@@ -63,9 +79,13 @@ const deliveryRows = (choices: ScaffoldChoices | undefined): DetailRow[] => {
  * refuse an unpublished audience: a reviewer has to be able to see, before approving,
  * that an ad set points at a group Meta cannot deliver to yet.
  */
-const audienceRows = (derived: ScaffoldDerived | undefined): DetailRow[] => {
+const audienceRows = (
+  derived: ScaffoldDerived | undefined,
+  t: ReturnType<typeof useTranslations<'scale'>>,
+  locale: ReturnType<typeof useLocale>,
+): DetailRow[] => {
   if (!derived) return [];
-  const summary = targetingSummary(derived.targeting);
+  const summary = targetingSummary(derived.targeting, t, locale);
   if (summary) {
     return [
       {
@@ -79,7 +99,7 @@ const audienceRows = (derived: ScaffoldDerived | undefined): DetailRow[] => {
     return [
       {
         label: 'Audience',
-        value: 'Group attached, targeting not compiled yet',
+        value: localizeScaffoldCopy('Group attached, targeting not compiled yet', t),
         derived:
           'Its audiences are not published to Meta yet, so no targeting could be compiled. ' +
           'The build step will refuse until they are.',
@@ -101,15 +121,21 @@ export type ScaffoldCampaignDetail = {
 };
 
 export function ScaffoldCampaignDetail({ data }: { data: ScaffoldCampaignDetail }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const uiError = useUiErrorMessage();
   return (
     <DetailRows
       rows={[
-        ...deliveryRows(data.choices),
-        { label: 'Contains', value: `${data.adSetCount} ad sets · ${data.adCount} ads` },
+        ...deliveryRows(data.choices, uiText),
+        {
+          label: uiText('contains_2eaecb3'),
+          value: uiText('scaffoldNodeCounts', { sets: data.adSetCount, ads: data.adCount }),
+        },
         ...(data.derived?.specialAdCategories?.length
           ? [
               {
-                label: 'Special category',
+                label: uiText('special_category_5beb3eb'),
                 value: data.derived.specialAdCategories.join(', '),
                 derived: 'Declared on the scaffold version; it cannot vary per node.',
               },
@@ -132,19 +158,26 @@ export type ScaffoldAdSetDetail = {
 };
 
 export function ScaffoldAdSetDetail({ data }: { data: ScaffoldAdSetDetail }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const uiError = useUiErrorMessage();
   return (
     <div className="flex flex-col gap-2">
       <DetailRows
         rows={[
-          ...(data.productKey ? [{ label: 'Product', value: data.productKey }] : []),
-          ...(data.angleKey ? [{ label: 'Angle', value: data.angleKey }] : []),
-          ...deliveryRows(data.choices),
-          ...audienceRows(data.derived),
-          { label: 'Ads', value: String(data.adCount) },
+          ...(data.productKey
+            ? [{ label: uiText('product_fb9ef89'), value: data.productKey }]
+            : []),
+          ...(data.angleKey ? [{ label: uiText('angle_1968034'), value: data.angleKey }] : []),
+          ...deliveryRows(data.choices, uiText),
+          ...audienceRows(data.derived, uiText, uiLocale),
+          { label: uiText('ads_9210f3b'), value: data.adCount.toLocaleString(uiLocale) },
           ...idRow('Meta id', data.metaObjectId),
         ]}
       />
-      {data.errorMessage ? <p className="text-destructive text-xs">{data.errorMessage}</p> : null}
+      {data.errorMessage ? (
+        <p className="text-destructive text-xs">{uiError(data.errorMessage)}</p>
+      ) : null}
     </div>
   );
 }
@@ -162,36 +195,49 @@ export type ScaffoldAdDetail = {
 };
 
 /** `creative_media` is Meta's upload receipt: `{ kind, video_id, image_hash, ... }`. */
-const creativeLabel = (media: Record<string, unknown> | null | undefined): string | null => {
+const creativeLabel = (
+  media: Record<string, unknown> | null | undefined,
+  t: ReturnType<typeof useTranslations<'scale'>>,
+): string | null => {
   if (!media) return null;
   const kind = typeof media.kind === 'string' ? media.kind : null;
-  return kind ? `${kind} uploaded to Meta` : 'uploaded to Meta';
+  return t('scaffoldCreativeUploaded', { kind: kind ?? 'other' });
 };
 
 export function ScaffoldAdDetail({ data }: { data: ScaffoldAdDetail }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const uiError = useUiErrorMessage();
   const creative =
-    creativeLabel(data.creativeMedia) ?? (data.creativeAssetId ? 'attached, not uploaded' : null);
+    creativeLabel(data.creativeMedia, uiText) ??
+    (data.creativeAssetId ? localizeScaffoldCopy('attached, not uploaded', uiText) : null);
 
   return (
     <div className="flex flex-col gap-2">
       <DetailRows
         rows={[
-          ...(data.conceptKey ? [{ label: 'Concept', value: data.conceptKey }] : []),
-          ...(data.productKey ? [{ label: 'Product', value: data.productKey }] : []),
-          ...(data.angleKey ? [{ label: 'Angle', value: data.angleKey }] : []),
+          ...(data.conceptKey
+            ? [{ label: uiText('concept_54287be'), value: data.conceptKey }]
+            : []),
+          ...(data.productKey
+            ? [{ label: uiText('product_fb9ef89'), value: data.productKey }]
+            : []),
+          ...(data.angleKey ? [{ label: uiText('angle_1968034'), value: data.angleKey }] : []),
           {
-            label: 'Creative',
-            value: creative ?? 'Not attached yet',
+            label: uiText('creative_2c7e633'),
+            value: creative ?? localizeScaffoldCopy('Not attached yet', uiText),
             ...(creative ? {} : { derived: 'Attach one before the populate step.' }),
           },
           // Delivery is the ad set's, repeated here so a reader hovering an ad does not
           // have to go back up a level to learn who sees it.
-          ...deliveryRows(data.choices),
-          ...audienceRows(data.derived),
+          ...deliveryRows(data.choices, uiText),
+          ...audienceRows(data.derived, uiText, uiLocale),
           ...idRow('Creative id', data.metaCreativeId),
         ]}
       />
-      {data.errorMessage ? <p className="text-destructive text-xs">{data.errorMessage}</p> : null}
+      {data.errorMessage ? (
+        <p className="text-destructive text-xs">{uiError(data.errorMessage)}</p>
+      ) : null}
     </div>
   );
 }

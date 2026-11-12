@@ -8,6 +8,7 @@
 
 import type { MediaAssetVersion } from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { listAssetVersions } from '@/lib/library/versions';
 
 export type UseAssetVersionsResult = {
@@ -21,6 +22,8 @@ export type UseAssetVersionsResult = {
 };
 
 export function useAssetVersions(brandId: string, assetId: string): UseAssetVersionsResult {
+  const uiErrorText = useUiErrorMessage();
+
   const [versions, setVersions] = useState<MediaAssetVersion[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,9 +35,9 @@ export function useAssetVersions(brandId: string, assetId: string): UseAssetVers
       // An empty list, not null: the rail must stop its skeleton and show the
       // failure instead of spinning forever.
       setVersions([]);
-      setError(err instanceof Error ? err.message : 'Loading versions failed');
+      setError(uiErrorText(err));
     }
-  }, [brandId, assetId]);
+  }, [brandId, assetId, uiErrorText]);
 
   useEffect(() => {
     setVersions(null);

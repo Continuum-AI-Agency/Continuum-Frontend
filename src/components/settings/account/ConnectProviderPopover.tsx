@@ -2,6 +2,7 @@
 
 import { Plus, RefreshCw, TriangleAlert, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { FigmaIcon } from '@/components/shared/icons';
@@ -9,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/ToastProvider';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
 import {
   type MetaSyncMode,
   useStartGoogleAccountChooserSync,
@@ -28,11 +30,11 @@ import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
 import { cn } from '@/lib/utils';
 import {
   isProviderComingSoon,
-  PROVIDER_GROUP_DESCRIPTIONS,
   PROVIDER_GROUP_ICONS,
   PROVIDER_GROUP_LABELS,
   PROVIDER_GROUPS,
   type ProviderGroup,
+  providerDescriptionKeys,
 } from '../shell/platformIcons';
 import { OpenAiAdsConnectDialog } from './OpenAiAdsConnectDialog';
 
@@ -53,6 +55,10 @@ export function ConnectProviderPopover({
   figmaAccounts = [],
   children,
 }: ConnectProviderPopoverProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const { show } = useToast();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -115,7 +121,7 @@ export function ConnectProviderPopover({
                   ? xSync
                   : metaSync;
         if (provider === 'figma' && !activeBrandId) {
-          throw new Error('Choose a brand first: Figma connects to the brand you import into.');
+          throw new LocalizedUiError(tUi('m_1d8e4bafad'));
         }
         const syncResponse =
           provider === 'figma'
@@ -133,17 +139,17 @@ export function ConnectProviderPopover({
         const popup = openCenteredPopup(
           syncResponse.url,
           provider === 'linkedin' && options?.linkedinMode === 'organic'
-            ? 'Connect LinkedIn Organic'
+            ? tUi('m_d542b694e1')
             : provider === 'linkedin'
-              ? 'Connect LinkedIn Ads'
+              ? tUi('m_809978fc08')
               : provider === 'facebook' && options?.metaMode === 'instagram'
-                ? 'Connect Instagram'
+                ? tUi('m_772ddb392f')
                 : `Connect ${labelFor(provider)}`,
         );
         if (!popup) {
           show({
-            title: 'Popup blocked',
-            description: 'Allow popups to continue.',
+            title: tUi('m_ee9be85313'),
+            description: tUi('m_4ead0a2ab7'),
             variant: 'error',
           });
           return;
@@ -193,8 +199,8 @@ export function ConnectProviderPopover({
         });
         if (!result.provider || result.provider !== provider) {
           show({
-            title: 'Connection incomplete',
-            description: 'Provider could not be verified.',
+            title: tUi('m_f129f05e48'),
+            description: tUi('m_18228feb69'),
             variant: 'error',
           });
           cleanup();
@@ -212,9 +218,8 @@ export function ConnectProviderPopover({
           // Distinct from a hard failure: the token connected fine, but no
           // Google Ads accounts were found under this identity (see #151).
           show({
-            title: 'Connected, with a note',
-            description:
-              'No Google Ads accounts were found for this account. Use "Connect a different Google account for Ads" if Ads lives under another identity.',
+            title: tUi('m_2ab1a45715'),
+            description: tUi('m_e48e1d2eb1'),
             variant: 'info',
           });
         } else if (result.warning === 'ga4_scope_missing') {
@@ -222,16 +227,14 @@ export function ConnectProviderPopover({
           // usually a connection re-authorized without re-approving the consent
           // screen. No GA4 property can sync until it is granted.
           show({
-            title: 'Connected, without Analytics',
-            description:
-              'Google Analytics access was not granted, so no GA4 properties were synced. Reconnect and approve Analytics to enable them.',
+            title: tUi('m_fc197c7498'),
+            description: tUi('m_02ac837c29'),
             variant: 'info',
           });
         } else if (result.warning === 'ga4_enrichment_failed') {
           show({
-            title: 'Connected, with a note',
-            description:
-              "Couldn't read your Google Analytics properties. Everything else connected — try reconnecting if GA4 data stays missing.",
+            title: tUi('m_2ab1a45715'),
+            description: tUi('m_2feb7998d1'),
             variant: 'info',
           });
         } else if (result.warning === 'meta_partial_sync') {
@@ -239,28 +242,27 @@ export function ConnectProviderPopover({
           // some accounts may be missing (see #154). The asset picker retries a
           // background resync on open, so this is a heads-up, not a failure.
           show({
-            title: 'Connected, with a note',
-            description:
-              "Some Meta accounts may not have loaded. We'll keep trying — reopen the account picker in a moment if any are missing.",
+            title: tUi('m_2ab1a45715'),
+            description: tUi('m_a7b6ecb63a'),
             variant: 'info',
           });
         } else {
           const linkedInLabel =
             provider === 'linkedin'
               ? options?.linkedinMode === 'organic'
-                ? 'LinkedIn Organic'
-                : 'LinkedIn Ads'
+                ? tUi('m_0005cd29e9')
+                : tUi('m_078eea08d1')
               : labelFor(provider);
           show({
-            title: 'Connected',
-            description: `${linkedInLabel} accounts synced.`,
+            title: tUi('m_c2f9b7b489'),
+            description: tUi('m_0e0eb4efb0', { v0: String(linkedInLabel) }),
             variant: 'success',
           });
         }
       } catch (error) {
         show({
-          title: 'Connection failed',
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: tUi('m_202caaa870'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
           variant: 'error',
         });
       } finally {
@@ -281,7 +283,7 @@ export function ConnectProviderPopover({
             children ?? (
               <button
                 type="button"
-                aria-label="Connect a provider"
+                aria-label={tUi('m_6967f288ad')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Plus className="h-4 w-4" />
@@ -291,8 +293,8 @@ export function ConnectProviderPopover({
         />
         <PopoverContent align="end" className="w-80 p-2">
           <div className="px-2 py-1.5">
-            <p className="text-sm font-semibold text-foreground">Connections</p>
-            <p className="text-xs text-muted-foreground">OAuth providers tied to your account.</p>
+            <p className="text-sm font-semibold text-foreground">{tUi('m_8f3509b64e')}</p>
+            <p className="text-xs text-muted-foreground">{tUi('m_bd18789cd9')}</p>
           </div>
           <div className="mt-1 space-y-1">
             {PROVIDER_GROUPS.map((providerId) => {
@@ -323,23 +325,23 @@ export function ConnectProviderPopover({
                         </p>
                         {comingSoon ? (
                           <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
-                            Coming soon
+                            {tUi('m_e4115be258')}
                           </Badge>
                         ) : connected ? (
                           <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
-                            Connected
+                            {tUi('m_c2f9b7b489')}
                           </Badge>
                         ) : null}
                       </div>
                       <p className="truncate text-xs text-muted-foreground">
                         {connected && connectionSummary && connectionSummary.accountNames.length > 0
                           ? connectionSummary.accountNames.join(', ')
-                          : PROVIDER_GROUP_DESCRIPTIONS[providerId]}
+                          : tUi(providerDescriptionKeys[providerId])}
                       </p>
                     </div>
                     {comingSoon ? (
                       <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>
-                        Coming soon
+                        {tUi('m_e4115be258')}
                       </Button>
                     ) : connected ? (
                       <div className="flex items-center gap-1">
@@ -348,7 +350,7 @@ export function ConnectProviderPopover({
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            title="Connect a different Google account for Ads"
+                            title={tUi('m_ee23096935')}
                             onClick={() => handleConnect(providerId, { forceAccountChooser: true })}
                             disabled={isPending}
                           >
@@ -360,11 +362,11 @@ export function ConnectProviderPopover({
                             variant="ghost"
                             size="sm"
                             className="h-7 px-2 text-xs"
-                            title="Connect LinkedIn Organic separately"
+                            title={tUi('m_78b1e9b6f2')}
                             onClick={() => handleConnect(providerId, { linkedinMode: 'organic' })}
                             disabled={isPending}
                           >
-                            Organic
+                            {tUi('m_82f86eb9b4')}
                           </Button>
                         ) : null}
                         {providerId === 'facebook' ? (
@@ -372,18 +374,18 @@ export function ConnectProviderPopover({
                             variant="ghost"
                             size="sm"
                             className="h-7 px-2 text-xs"
-                            title="Connect an Instagram account that has no Facebook Page"
+                            title={tUi('m_6188fb0fe4')}
                             onClick={() => handleConnect(providerId, { metaMode: 'instagram' })}
                             disabled={isPending}
                           >
-                            Instagram only
+                            {tUi('m_c45285b1f3')}
                           </Button>
                         ) : null}
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          title="Reconnect to refresh accounts"
+                          title={tUi('m_3ef08a456b')}
                           onClick={() =>
                             handleConnect(
                               providerId,
@@ -411,11 +413,11 @@ export function ConnectProviderPopover({
                           variant="outline"
                           size="sm"
                           className="h-7 gap-1 px-2 text-xs"
-                          title="Connect an Instagram account that has no Facebook Page"
+                          title={tUi('m_6188fb0fe4')}
                           onClick={() => handleConnect(providerId, { metaMode: 'instagram' })}
                           disabled={isPending}
                         >
-                          Instagram only
+                          {tUi('m_c45285b1f3')}
                         </Button>
                       </div>
                     ) : providerId === 'linkedin' ? (
@@ -428,7 +430,7 @@ export function ConnectProviderPopover({
                           disabled={isPending}
                         >
                           <Plus className="h-3 w-3" />
-                          Ads
+                          {tUi('m_13bad3d96f')}
                         </Button>
                         <Button
                           variant="outline"
@@ -437,7 +439,7 @@ export function ConnectProviderPopover({
                           onClick={() => handleConnect(providerId, { linkedinMode: 'organic' })}
                           disabled={isPending}
                         >
-                          Organic
+                          {tUi('m_82f86eb9b4')}
                         </Button>
                       </div>
                     ) : (
@@ -449,7 +451,7 @@ export function ConnectProviderPopover({
                         disabled={isPending}
                       >
                         <Plus className="h-3 w-3" />
-                        Connect
+                        {tUi('m_b65463cb6a')}
                       </Button>
                     )}
                   </div>
@@ -476,14 +478,12 @@ export function ConnectProviderPopover({
                   <p className="truncate text-sm font-medium text-foreground">Figma</p>
                   {figmaAccounts.length ? (
                     <Badge variant="secondary" className="h-4 px-1.5 text-2xs">
-                      Connected
+                      {tUi('m_c2f9b7b489')}
                     </Badge>
                   ) : null}
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
-                  {figmaAccounts.length
-                    ? figmaAccounts.join(', ')
-                    : 'Frames and Motion as editable templates'}
+                  {figmaAccounts.length ? figmaAccounts.join(', ') : tUi('m_3c07b06510')}
                 </p>
               </div>
               {figmaAccounts.length ? (
@@ -491,7 +491,7 @@ export function ConnectProviderPopover({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  title="Reconnect Figma"
+                  title={tUi('m_36bf799fab')}
                   onClick={() => handleConnect('figma')}
                   disabled={isPending}
                 >
@@ -506,7 +506,7 @@ export function ConnectProviderPopover({
                   disabled={isPending}
                 >
                   <Plus className="h-3 w-3" />
-                  Connect
+                  {tUi('m_b65463cb6a')}
                 </Button>
               )}
             </div>

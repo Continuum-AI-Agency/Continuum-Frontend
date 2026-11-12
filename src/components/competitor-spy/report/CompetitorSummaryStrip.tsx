@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
+
 // Horizontal per-competitor summary cards derived from the angle map's
 // per-competitor rows. Clicking a card opens the competitor profile sheet.
 
@@ -20,7 +23,10 @@ export type CompetitorSummary = {
 // Hooks partition ads (one archetype per ad), so summing activeAdCount over the
 // hook_archetype rows approximates live ads without double counting; when a
 // competitor has no labeled hooks yet, fall back to the max across dimensions.
-export function summarizeCompetitors(rows: CompetitorAngleMapRow[]): CompetitorSummary[] {
+export function summarizeCompetitors(
+  rows: CompetitorAngleMapRow[],
+  translate?: ReturnType<typeof useTranslations<'competitor'>>,
+): CompetitorSummary[] {
   const byCompetitor = new Map<string, CompetitorAngleMapRow[]>();
   for (const row of rows) {
     if (!row.competitorId) continue;
@@ -48,7 +54,9 @@ export function summarizeCompetitors(rows: CompetitorAngleMapRow[]): CompetitorS
           : Math.max(...competitorRows.map((row) => row.activeAdCount), 0);
       return {
         competitorId,
-        name: competitorRows.find((row) => row.competitorName)?.competitorName ?? 'Unknown',
+        name:
+          competitorRows.find((row) => row.competitorName)?.competitorName ??
+          (translate ? localizeCompetitorCopy('Unknown', translate) : 'Unknown'),
         adsLive,
         topHook: topValue(competitorRows, 'hook_archetype'),
         topAngle: topValue(competitorRows, 'angle'),
@@ -65,14 +73,15 @@ export function CompetitorSummaryStrip({
   brandId: string;
   rows: CompetitorAngleMapRow[];
 }) {
-  const summaries = useMemo(() => summarizeCompetitors(rows), [rows]);
+  const uiText = useTranslations('competitor');
+  const summaries = useMemo(() => summarizeCompetitors(rows, uiText), [rows, uiText]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = summaries.find((summary) => summary.competitorId === selectedId) ?? null;
 
   if (summaries.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">
-        Per-competitor breakdowns appear once their ads are labeled.
+        {uiText('per_competitor_breakdowns_appear_once_their_a_337bc9b')}
       </p>
     );
   }
@@ -89,16 +98,18 @@ export function CompetitorSummaryStrip({
           >
             <span className="truncate text-sm font-medium text-foreground">{summary.name}</span>
             <span className="text-2xs tabular-nums text-muted-foreground">
-              {summary.adsLive} ads live
+              {uiText.rich('sentence_4f0d6ff32ca2', { v0: () => summary.adsLive })}
             </span>
             {summary.topHook ? (
               <span className="truncate text-2xs text-muted-foreground">
-                Top hook: <span className="text-foreground">{humanize(summary.topHook)}</span>
+                {uiText('m_9ffd13fa8d')}
+                <span className="text-foreground">{humanize(summary.topHook)}</span>
               </span>
             ) : null}
             {summary.topAngle ? (
               <span className="truncate text-2xs text-muted-foreground">
-                Top angle: <span className="text-foreground">{humanize(summary.topAngle)}</span>
+                {uiText('m_6aed7183db')}
+                <span className="text-foreground">{humanize(summary.topAngle)}</span>
               </span>
             ) : null}
           </button>

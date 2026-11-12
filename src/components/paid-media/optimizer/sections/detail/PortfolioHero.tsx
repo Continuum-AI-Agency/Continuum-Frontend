@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // What a portfolio opens on (P1, "Lectura continua"): a continuous read with no box around
 // it. The bar above it (./PortfolioHeaderLine, mounted by the workspace) carries the name, the
@@ -120,6 +123,10 @@ export function PortfolioHero({
   onEditSetting = () => undefined,
   onReviewDecisions,
 }: PortfolioHeroProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const reduce = useReducedMotion();
   // Play the entrance once per portfolio, not on every refetch.
   const playedFor = React.useRef<string | null>(null);
@@ -128,16 +135,16 @@ export function PortfolioHero({
     playedFor.current = portfolioId;
   }, [portfolioId]);
   const news = React.useMemo(
-    () => buildPortfolioNews({ view, items, target: view.brief.growth.target }),
-    [view, items],
+    () => buildPortfolioNews({ view, items, target: view.brief.growth.target,dailyTotal }, uiText,uiLocale),
+    [view, items, dailyTotal,uiText,uiLocale],
   );
   const tierOf = React.useCallback(
     (perDay: number | null): NewsTier => {
       if (perDay == null || !(perDay > 0)) return null;
       const tier = impactTier(perDay, dailyTotal);
-      return { label: IMPACT_TIER_COPY[tier], tone: TIER_TONE[tier] };
+      return { label: optimizerText(tier==='high'?'impactHigh':tier==='medium'?'impactMedium':'impactLow'), tone: TIER_TONE[tier] };
     },
-    [dailyTotal],
+    [dailyTotal,optimizerText],
   );
 
   const facts = header ? (
@@ -151,7 +158,7 @@ export function PortfolioHero({
           {facts}
           <Skeleton className="h-24 rounded-md" />
           <p className="text-muted-foreground text-xs">
-            Jaina writes her first read after the first cycle.
+            {uiText('jaina_writes_her_first_read_after_the_first_c_0b0f7a8')}
           </p>
           {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
         </div>
@@ -199,20 +206,34 @@ export function PortfolioHero({
   const more = cards.slice(NEWS_ROW_SIZE);
   const anchor =
     headline && !unread
-      ? anchorOf({
-          growth: view.brief.growth,
-          words: headline.words,
-          currency,
-          days: headline.days,
-          beforeAfter: beforeAfter?.model ?? null,
-          figure: view.figure,
-        })
+      ? anchorOf(
+          {
+            locale: uiLocale,
+            translate: optimizerText,
+            growth: view.brief.growth,
+            words: headline.words,
+            currency,
+            days: headline.days,
+            beforeAfter: beforeAfter?.model ?? null,
+            figure: view.figure,
+          },
+          uiText,
+        )
       : null;
   const tiles = headline
-    ? relevantTiles({ headline, brief: view.brief, items, dailyTotal, currency })
+    ? relevantTiles({
+        locale: uiLocale,
+        translate: optimizerText,
+        headline,
+        brief: view.brief,
+        items,
+        dailyTotal,
+        currency,
+      })
     : [];
   const hasModule = Boolean(header || headline || beforeAfter || jaina);
-  const asOf = asOfLine(view.asOf, nextCycleAt, stale) ?? 'Awaiting the first cycle';
+  const asOf =
+    asOfLine(view.asOf, nextCycleAt, stale, optimizerText, uiLocale) ?? 'Awaiting the first cycle';
   const findingCount = cards.length;
 
   return (
@@ -267,9 +288,11 @@ export function PortfolioHero({
 
       <section className="flex flex-col gap-1" data-testid="portfolio-findings">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h3 className="font-semibold text-foreground text-sm">What the Optimizer found</h3>
+          <h3 className="font-semibold text-foreground text-sm">
+            {uiText('what_the_optimizer_found_aab92a4')}
+          </h3>
           <p className="text-muted-foreground text-xs" data-testid="portfolio-findings-meta">
-            {findingCount} finding{findingCount === 1 ? '' : 's'} · {asOf}
+            {uiText.rich('sentence_b19094833ae8', { count: findingCount, date: asOf })}
           </p>
         </div>
         <motion.div className={NEWS_LIST} data-testid="portfolio-news-row" variants={groupVariants}>
@@ -283,9 +306,9 @@ export function PortfolioHero({
           >
             <summary className={TEXT_DISCLOSURE}>
               <span className="group-open:hidden">
-                {more.length} more finding{more.length === 1 ? '' : 's'}
+                {uiText.rich('sentence_7c0aa561b4b6', { count: more.length })}
               </span>
-              <span className="hidden group-open:inline">Fewer findings</span>
+              <span className="hidden group-open:inline">{uiText('fewer_findings_4d7ee8c')}</span>
             </summary>
             <div className={NEWS_LIST}>{more.map(cell)}</div>
           </details>

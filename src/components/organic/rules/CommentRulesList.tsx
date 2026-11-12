@@ -1,4 +1,6 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 
 // The rules list — what someone sees on opening the tab.
 //
@@ -36,12 +38,12 @@ export function ruleState(rule: CommentTriggerRule, now: Date): RuleState {
   return 'live';
 }
 
-const STATE_LABEL: Record<RuleState, string> = {
-  live: 'Active',
-  scheduled: 'Scheduled',
-  expired: 'Ended',
-  off: 'Off',
-};
+const STATE_LABEL = {
+  live: 'ruleStateActive',
+  scheduled: 'ruleStateScheduled',
+  expired: 'ruleStateEnded',
+  off: 'ruleStateOff',
+} as const satisfies Record<RuleState, string>;
 
 const STATE_CLASS: Record<RuleState, string> = {
   live: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -50,18 +52,25 @@ const STATE_CLASS: Record<RuleState, string> = {
   off: 'border-muted-foreground/30 bg-muted text-muted-foreground',
 };
 
-function formatDay(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+function formatDay(iso: string, locale: UiLocale): string {
+  return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 /** The live window in words, or nothing when the rule runs until switched off. */
-function windowLabel(rule: CommentTriggerRule): string | null {
+function windowLabel(
+  rule: CommentTriggerRule,
+  locale: UiLocale,
+  translate: (key: 'ruleWindowFrom' | 'ruleWindowUntil', values: { date: string }) => string,
+): string | null {
   if (rule.activeFrom === null && rule.activeUntil === null) return null;
   if (rule.activeFrom !== null && rule.activeUntil !== null) {
-    return `${formatDay(rule.activeFrom)} – ${formatDay(rule.activeUntil)}`;
+    return `${formatDay(rule.activeFrom, locale)} – ${formatDay(rule.activeUntil, locale)}`;
   }
-  if (rule.activeFrom !== null) return `From ${formatDay(rule.activeFrom)}`;
-  return `Until ${formatDay(rule.activeUntil as string)}`;
+  if (rule.activeFrom !== null)
+    return translate('ruleWindowFrom', { date: formatDay(rule.activeFrom, locale) });
+  return rule.activeUntil === null
+    ? null
+    : translate('ruleWindowUntil', { date: formatDay(rule.activeUntil, locale) });
 }
 
 /** Null, not zero, when the rule has no link or its count has not arrived. */
@@ -83,8 +92,10 @@ function RuleRow({
   isEditing: boolean;
   onEdit: (rule: CommentTriggerRule) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const state = ruleState(rule, now);
-  const window = windowLabel(rule);
+  const window = windowLabel(rule, uiLocale, uiText);
 
   return (
     <button
@@ -100,19 +111,19 @@ function RuleRow({
     >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={cn('h-5 px-1.5 text-2xs', STATE_CLASS[state])}>
-          {STATE_LABEL[state]}
+          {uiText(STATE_LABEL[state])}
         </Badge>
         <span className="text-sm font-medium">
           {rule.matchMode === 'any_comment' ? (
-            <span className="text-muted-foreground">Any comment</span>
+            <span className="text-muted-foreground">{uiText('any_comment_e950036')}</span>
           ) : (
             rule.keywords.join(', ')
           )}
         </span>
         <span className="text-xs text-muted-foreground">
           {rule.postScope === 'all_posts'
-            ? 'on every post'
-            : `on ${rule.platformPostIds.length} post${rule.platformPostIds.length === 1 ? '' : 's'}`}
+            ? uiText('on_every_post_3d14298')
+            : uiText('rulePostScope', { count: rule.platformPostIds.length })}
         </span>
         {window ? <span className="text-xs text-muted-foreground">· {window}</span> : null}
       </div>
@@ -125,8 +136,8 @@ function RuleRow({
             className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums text-foreground"
             title={
               clicks === 0
-                ? 'Nobody has opened this link yet'
-                : `${clicks} ${clicks === 1 ? 'person has' : 'people have'} opened this link`
+                ? uiText('nobody_has_opened_this_link_yet_598120c')
+                : uiText('ruleOpenedLink', { count: clicks })
             }
           >
             <MousePointerClick className="h-3.5 w-3.5 text-muted-foreground" />
@@ -160,6 +171,7 @@ export function CommentRulesList({
   isDisablingAll: boolean;
   now?: Date;
 }) {
+  const uiText = useTranslations('organic');
   const liveCount = rules.filter((rule) => ruleState(rule, now) === 'live').length;
   const statsByLink = React.useMemo(
     () => new Map(linkStats.map((entry) => [entry.linkId, entry])),
@@ -176,16 +188,16 @@ export function CommentRulesList({
         className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 ${PANEL_HEADER_FRAME}`}
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <h2 className={PANEL_TITLE}>Comment rules</h2>
+          <h2 className={PANEL_TITLE}>{uiText('comment_rules_579e3a4')}</h2>
           {liveCount > 0 ? (
             <span className="text-xs leading-none text-muted-foreground">
-              {liveCount} sending automatically
+              {uiText.rich('sentence_34ce920e2a7e', { count: liveCount })}
             </span>
           ) : null}
           {linkStats.length > 0 ? (
             <span className="flex items-center gap-1 text-sm font-medium leading-none tabular-nums text-foreground">
               <MousePointerClick className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              {totalClicks} {totalClicks === 1 ? 'click' : 'clicks'}
+              {uiText('ruleClicks', { count: totalClicks })}
             </span>
           ) : null}
         </div>
@@ -199,30 +211,31 @@ export function CommentRulesList({
               className="gap-1.5 text-destructive hover:text-destructive"
             >
               <Power className="h-3.5 w-3.5" />
-              {isDisablingAll ? 'Turning off…' : 'Turn all off'}
+              {isDisablingAll ? uiText('turning_off_c62412a') : uiText('turn_all_off_59d74fd')}
             </Button>
           ) : null}
           <Button size="sm" onClick={onCreate} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" />
-            New rule
+            {uiText('new_rule_99cd24e')}
           </Button>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <p className="px-4 py-8 text-center text-xs text-muted-foreground">Loading rules…</p>
+          <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+            {uiText('loading_rules_354167f')}
+          </p>
         ) : rules.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <MessageSquare className="h-5 w-5 text-muted-foreground" />
-            <p className="text-sm font-medium">No rules yet</p>
+            <p className="text-sm font-medium">{uiText('no_rules_yet_d29cf78')}</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              A rule watches your posts for a word, replies to the comment, and sends that person a
-              direct message with your link.
+              {uiText('a_rule_watches_your_posts_for_a_word_replies__14d551e')}
             </p>
             <Button size="sm" variant="outline" onClick={onCreate} className="mt-1 gap-1.5">
               <Plus className="h-3.5 w-3.5" />
-              Create the first one
+              {uiText('create_the_first_one_6bd8198')}
             </Button>
           </div>
         ) : (

@@ -1,4 +1,8 @@
 'use client';
+import type {UiLocale} from '@/i18n/config';
+
+
+import { useLocale, useTranslations } from 'next-intl';
 
 // The pieces the action feed's two card shapes share — the featured card on top and the square
 // grid card under it. Both read the same row through the same `actionRows` readers, print money
@@ -50,24 +54,26 @@ const FAMILY_ICON: Record<string, React.ComponentType<{ className?: string }>> =
 };
 
 export function ActionFamilyBadge({ family }: { family: string }) {
+ const uiText=useTranslations('scale');
   const Icon = FAMILY_ICON[family] ?? SlidersHorizontalIcon;
   return (
     <span
       className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
     >
       <Icon aria-hidden="true" className="size-3.5" />
-      {FAMILY_LABEL[family] ?? family}
+      {uiText('actionFamily',{family})}
     </span>
   );
 }
 
 export function ActionRevertedBadge() {
+  const uiText = useTranslations('scale');
   return (
     <span
       className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
     >
       <Undo2Icon aria-hidden="true" className="size-3.5" />
-      Reverted
+      {uiText('reverted_0f0be2b')}
     </span>
   );
 }
@@ -78,14 +84,14 @@ export function ActionRevertedBadge() {
 export function printChangeValue(
   change: ActionChange,
   value: string | number | null,
-  currency: string | null,
+  currency: string | null, uiLocale:UiLocale='en',
 ): string {
   if (value == null) return '—';
   if (change.unit === 'money' && typeof value === 'number') {
-    return formatCurrency(minorToMajor(value, currency), currency);
+    return formatCurrency(minorToMajor(value, currency), currency, uiLocale);
   }
   if (change.unit === 'money_major' && typeof value === 'number') {
-    return formatCurrency(value, currency);
+    return formatCurrency(value, currency, uiLocale);
   }
   return String(value);
 }
@@ -109,6 +115,7 @@ export function actionDeltaPct(change: ActionChange): number | null {
 }
 
 export function ActionDelta({ change, className }: { change: ActionChange; className?: string }) {
+  const uiLocale = useLocale();
   const pct = actionDeltaPct(change);
   if (pct == null) return null;
   const rounded = Math.round(pct);
@@ -121,7 +128,7 @@ export function ActionDelta({ change, className }: { change: ActionChange; class
       )}
       data-testid="action-delta"
     >
-      {formatPercent(rounded, { signed: true })}
+      {formatPercent(rounded, { signed: true }, uiLocale)}
     </span>
   );
 }
@@ -158,11 +165,13 @@ export function ActionEntityId({ id, className }: { id: string; className?: stri
 
 /** The one-line meta every card carries: when, and who. */
 export function ActionMeta({ row }: { row: OptimizerActionFeedRow }) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   return (
     <span className="text-muted-foreground text-xs">
-      <time dateTime={row.ts}>{formatWhen(row.ts)}</time>
+      <time dateTime={row.ts}>{formatWhen(row.ts, uiText, uiLocale)}</time>
       {' · '}
-      <span>{actorLabel(row)}</span>
+      <span>{actorLabel(row,uiText)}</span>
     </span>
   );
 }
@@ -177,6 +186,7 @@ export function ActionRevertControl({
   brandId: string;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const revert = revertState(row);
   // The dialog that is undoing this row stays mounted until it is closed: the feed re-reads the
   // row as reverted as soon as the undo lands, and swapping in the badge then unmounted the
@@ -192,7 +202,7 @@ export function ActionRevertControl({
         currency={currency}
         onOpenChange={setUndoOpen}
         portfolioId={row.portfolio_id as string}
-        title={readActionChange(row).label}
+        title={readActionChange(row, uiText).label}
       />
     );
   }
@@ -212,9 +222,10 @@ export function ActionRevertControl({
 }
 
 export function ActionWhy({ text }: { text: string }) {
+  const uiText = useTranslations('scale');
   return (
     <p className="text-muted-foreground text-sm leading-relaxed">
-      <span className="font-medium text-foreground">Why:</span> {text}
+      <span className="font-medium text-foreground">{uiText('why_ad389aa')}</span> {text}
     </p>
   );
 }
@@ -231,7 +242,9 @@ export function ActionDetailBody({
   currency: string | null;
   entityNames?: ActionEntityNames;
 }) {
-  const change = readActionChange(row);
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
+  const change = readActionChange(row, uiText,uiLocale,currency);
   const entity = actionEntity(row, entityNames);
   const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
@@ -245,32 +258,32 @@ export function ActionDetailBody({
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
         {row.portfolio_name ? (
           <>
-            <dt className="text-muted-foreground text-xs">Portfolio</dt>
+            <dt className="text-muted-foreground text-xs">{uiText('portfolio_1853eb2')}</dt>
             <dd className="min-w-0 truncate">{row.portfolio_name}</dd>
           </>
         ) : null}
         {entity.id ? (
           <>
-            <dt className="text-muted-foreground text-xs">Name</dt>
+            <dt className="text-muted-foreground text-xs">{uiText('name_dcd1d52')}</dt>
             <dd className="min-w-0 truncate">{entity.name}</dd>
           </>
         ) : null}
         {row.entity_id && row.op !== 'setting' ? (
           <>
-            <dt className="text-muted-foreground text-xs">Entity</dt>
+            <dt className="text-muted-foreground text-xs">{uiText('entity_2ed3bb6')}</dt>
             <dd className="min-w-0 truncate font-mono">{row.entity_id}</dd>
           </>
         ) : null}
       </dl>
       <div className="flex flex-wrap items-baseline gap-2">
         <HeroFigure className="font-normal text-muted-foreground" kind="tile">
-          {printChangeValue(change, change.before, currency)}
+          {printChangeValue(change, change.before, currency, uiLocale)}
         </HeroFigure>
         <ArrowRightIcon
           aria-hidden="true"
           className="size-4 shrink-0 self-center text-muted-foreground"
         />
-        <HeroFigure kind="tile">{printChangeValue(change, change.after, currency)}</HeroFigure>
+        <HeroFigure kind="tile">{printChangeValue(change, change.after, currency, uiLocale)}</HeroFigure>
         <ActionDelta change={change} className="text-sm" />
       </div>
       {row.justification ? <ActionWhy text={row.justification} /> : null}

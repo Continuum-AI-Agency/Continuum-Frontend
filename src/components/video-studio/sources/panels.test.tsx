@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import {
   createEditorProjectV2,
+  HEADLESS_CONCEPTS,
   type VideoEditorOpName,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApiError } from '@/lib/api/errors';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE, type VideoStudioContext } from '../types';
 import { GraphPoolPanel } from './GraphPoolPanel';
@@ -205,7 +211,7 @@ describe('QuickStartPanel', () => {
         () => expect(jobRow(view, 'job_gone')?.getAttribute('data-state')).toBe('failed'),
         { timeout: 8_000 },
       );
-      expect(jobRow(view, 'job_gone')?.textContent).toContain('Generation job not found');
+      expect(jobRow(view, 'job_gone')?.textContent).toContain('This item is no longer available.');
       const polls = calls.filter((call) => call.op === 'generate_status').length;
       await new Promise((resolve) => setTimeout(resolve, 3_500));
       expect(calls.filter((call) => call.op === 'generate_status').length).toBe(polls);
@@ -295,7 +301,9 @@ describe('QuickStartPanel', () => {
       fireEvent.click(
         view.container.querySelector('[data-quick-start="headless_concept"]') as HTMLElement,
       );
-      await waitFor(() => expect(document.querySelectorAll('[data-concept]').length).toBe(10));
+      await waitFor(() =>
+        expect(document.querySelectorAll('[data-concept]').length).toBe(HEADLESS_CONCEPTS.length),
+      );
       const generate = view.getByRole('button', { name: 'Generate reel' });
       expect(generate.hasAttribute('disabled')).toBe(true);
       const offer = document.querySelector(

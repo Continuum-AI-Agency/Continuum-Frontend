@@ -8,6 +8,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   ContextMenuCheckboxItem,
   ContextMenuContent,
@@ -68,9 +69,11 @@ export function CanvasContextMenuContent({
   zoomOut: (options?: { duration?: number }) => void;
   fitView: (options?: Record<string, unknown>) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <ContextMenuContent className="w-[clamp(14rem,18vw,18rem)]">
-      <ContextMenuLabel>Canvas Actions</ContextMenuLabel>
+      <ContextMenuLabel>{translateUi('canvas_actions_82b3ca00')}</ContextMenuLabel>
       {/* The hover tree AND a search: category submenus open on hover, and the box on top
           swaps them for cmdk's ranked list the moment there is a query. */}
       <AddNodeCommandPalette
@@ -81,59 +84,54 @@ export function CanvasContextMenuContent({
       />
 
       <ContextMenuItem inset onSelect={openLoadWorkflow}>
-        <FolderOpen className="mr-2 h-4 w-4" />
-        Load Workflow
+        <FolderOpen className="mr-2 h-4 w-4" /> {translateUi('load_workflow_15bb7725')}{' '}
       </ContextMenuItem>
 
       <ContextMenuItem inset onSelect={openInstagram}>
-        <AtSign className="mr-2 h-4 w-4" />
-        Import from Instagram
+        <AtSign className="mr-2 h-4 w-4" /> {translateUi('import_from_instagram_ee939f89')}{' '}
       </ContextMenuItem>
 
       {/* Never disabled: with nothing selected this saves the whole canvas, which is the
           same act the header's Save button performs. */}
       <ContextMenuItem inset onSelect={openSave}>
         <Upload className="mr-2 h-4 w-4" />
-        {hasSelection ? 'Save selection' : 'Save'}
+        {hasSelection ? translateUi('save_selection_dd183ea6') : translateUi('save_1509f561')}
       </ContextMenuItem>
 
       <ContextMenuItem inset disabled={!hasSelection} onSelect={enforceBrandBookOnSelection}>
-        <ShieldCheck className="mr-2 h-4 w-4" />
-        Enforce brand book on selection
+        <ShieldCheck className="mr-2 h-4 w-4" />{' '}
+        {translateUi('enforce_brand_book_on_selection_21b4b2fb')}{' '}
       </ContextMenuItem>
 
       <ContextMenuSub>
         <ContextMenuSubTrigger inset>
-          <ScanLine className="mr-2 h-4 w-4" />
-          View and Interaction
+          <ScanLine className="mr-2 h-4 w-4" /> {translateUi('view_and_interaction_09718797')}{' '}
         </ContextMenuSubTrigger>
         <ContextMenuSubContent className="w-64">
           <ContextMenuCheckboxItem
             checked={interactionMode === 'pan'}
             onClick={() => setInteractionMode('pan')}
           >
-            Pan Mode
-            <ContextMenuShortcut>H</ContextMenuShortcut>
+            {' '}
+            {translateUi('pan_mode_34a65903')} <ContextMenuShortcut>H</ContextMenuShortcut>
           </ContextMenuCheckboxItem>
           <ContextMenuCheckboxItem
             checked={interactionMode === 'select'}
             onClick={() => setInteractionMode('select')}
           >
-            Select Mode
-            <ContextMenuShortcut>V</ContextMenuShortcut>
+            {' '}
+            {translateUi('select_mode_0c9b843c')} <ContextMenuShortcut>V</ContextMenuShortcut>
           </ContextMenuCheckboxItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => zoomIn({ duration: 250 })}>
-            <ZoomIn className="mr-2 h-4 w-4" />
-            Zoom In
+            <ZoomIn className="mr-2 h-4 w-4" /> {translateUi('zoom_in_5a982cf9')}{' '}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => zoomOut({ duration: 250 })}>
-            <ZoomOut className="mr-2 h-4 w-4" />
-            Zoom Out
+            <ZoomOut className="mr-2 h-4 w-4" /> {translateUi('zoom_out_24649ee0')}{' '}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 350 })}>
-            Fit View
-            <ContextMenuShortcut>Shift+F</ContextMenuShortcut>
+            {' '}
+            {translateUi('fit_view_91a2a9f3')} <ContextMenuShortcut>Shift+F</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuSubContent>
       </ContextMenuSub>
@@ -144,8 +142,7 @@ export function CanvasContextMenuContent({
         className="text-destructive focus:bg-destructive/10 focus:text-destructive"
         onClick={clearCanvas}
       >
-        <Trash2 className="mr-2 h-4 w-4" />
-        Clear Canvas
+        <Trash2 className="mr-2 h-4 w-4" /> {translateUi('clear_canvas_8c3f944e')}{' '}
       </ContextMenuItem>
     </ContextMenuContent>
   );

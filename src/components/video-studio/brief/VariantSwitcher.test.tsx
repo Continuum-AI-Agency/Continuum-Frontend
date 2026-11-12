@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { createEditorProjectV2 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { VideoStudioContext } from '../types';
 
 // list_variants is held open, so the test sees the switcher before and after it answers.

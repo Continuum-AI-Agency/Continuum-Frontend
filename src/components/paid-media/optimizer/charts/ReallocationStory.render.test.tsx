@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdSetSnapshot, CycleItemRow } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 const { ReallocationStory } = await import('./ReallocationStory');
 

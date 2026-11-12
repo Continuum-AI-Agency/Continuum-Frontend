@@ -4,6 +4,7 @@
 // Library sidebar and the server-rendered share page render the same thing.
 
 import { FileText } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 export type AttachmentPreviewItem = {
   assetId: string;
@@ -15,6 +16,8 @@ export type AttachmentPreviewItem = {
 };
 
 function Preview({ preview }: { preview: AttachmentPreviewItem }) {
+  const translateUi = useUiTranslations('library');
+
   if (preview.kind === 'image' && preview.url) {
     return (
       <a href={preview.url} target="_blank" rel="noreferrer" title={preview.name}>
@@ -50,7 +53,7 @@ function Preview({ preview }: { preview: AttachmentPreviewItem }) {
         href={preview.url}
         target="_blank"
         rel="noreferrer"
-        title={`Open ${preview.name}`}
+        title={translateUi('open_value0_3dfbdb80', { value0: String(preview.name) })}
         className="relative block h-40 w-56 bg-background"
       >
         {/* The browser's own PDF viewer renders the first page in place; the
@@ -80,9 +83,11 @@ function Preview({ preview }: { preview: AttachmentPreviewItem }) {
 }
 
 export function AttachmentPreviewList({ previews }: { previews: AttachmentPreviewItem[] }) {
+  const translateUi = useUiTranslations('library');
+
   if (previews.length === 0) return null;
   return (
-    <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Attachments">
+    <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label={translateUi('attachments_634de114')}>
       {previews.map((preview) => (
         <li
           key={preview.assetId}

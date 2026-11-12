@@ -3,7 +3,7 @@
 
 import type { ActionId, ShaderEffectV1, ShaderStackV1 } from '@continuum/contracts';
 import { X } from 'lucide-react';
-
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { SliderField } from '@/components/ui/slider-field';
 import { Switch } from '@/components/ui/switch';
 import { ShaderEffectControls } from '../../components/ShaderEffectControls';
 import { useNodeConfigPatch } from '../../hooks/useNodeConfigPatch';
+import { useStudioMetadata } from '../../hooks/useStudioMetadata';
 import {
   type ConfigField,
   configFieldsFor,
@@ -38,14 +39,16 @@ import { SubtitlesConfig } from './SubtitlesConfig';
  *  language, and `startSec`/`endSec` on `video.overlay` and `video.watermark`), so the
  *  UI needs a way to say "unset" that a numeric input cannot express. */
 function ClearFieldButton({ label, onClear }: { label: string; onClear: () => void }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon"
       className="size-7 shrink-0"
-      aria-label={`Clear ${label}`}
-      title="Auto"
+      aria-label={translateUi('clear_value0_9016417b', { value0: String(label) })}
+      title={translateUi('auto_02862497')}
       onClick={onClear}
     >
       <X className="size-3" />
@@ -66,6 +69,9 @@ function ConfigControl({
   controlId: string;
   onChange: (next: unknown) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+  const metadata = useStudioMetadata();
+
   if (field.kind === 'custom') return null;
   if (field.kind === 'boolean') {
     return (
@@ -85,12 +91,12 @@ function ConfigControl({
           onValueChange={(next: string) => onChange(next)}
         >
           <SelectTrigger id={controlId} size="sm" className="h-7 flex-1 text-xs">
-            <SelectValue placeholder={field.nullable ? 'Auto' : undefined} />
+            <SelectValue placeholder={field.nullable ? translateUi('auto_02862497') : undefined} />
           </SelectTrigger>
           <SelectContent>
             {field.options.map((option) => (
               <SelectItem key={option} value={option}>
-                {option}
+                {metadata(option)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -124,7 +130,7 @@ function ConfigControl({
         id={controlId}
         className="h-7 flex-1 text-xs"
         type="text"
-        placeholder={field.nullable ? 'Auto' : undefined}
+        placeholder={field.nullable ? translateUi('auto_02862497') : undefined}
         value={(value as string | null) ?? ''}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -342,26 +348,30 @@ function ShaderActionConfig({
   current: Record<string, unknown>;
   onWrite: (key: string, value: unknown) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const stack = current.shaderStack as ShaderStackV1;
   const mode = current.mode === 'bake' ? 'bake' : 'deferred';
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <Label htmlFor={`action-config-${nodeId}-mode`} className="text-xs">
-          Output
+          {' '}
+          {translateUi('output_b2439bcb')}{' '}
         </Label>
         <Select value={mode} onValueChange={(next: string) => onWrite('mode', next)}>
           <SelectTrigger id={`action-config-${nodeId}-mode`} size="sm" className="h-7 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="deferred">Keep source editable</SelectItem>
-            <SelectItem value="bake">Bake into pixels</SelectItem>
+            <SelectItem value="deferred">{translateUi('keep_source_editable_c8409435')}</SelectItem>
+            <SelectItem value="bake">{translateUi('bake_into_pixels_298e5ef7')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <p className="text-2xs text-muted-foreground">
-        Deferred keeps the source reference and effect settings. Bake creates modified pixels now.
+        {' '}
+        {translateUi('deferred_keeps_the_source_reference_8acbb40f')}{' '}
       </p>
       <ShaderEffectControls
         idPrefix={`action-${nodeId}`}
@@ -393,7 +403,11 @@ export function ActionConfigFields({
   // The op's defaults merged over what is stored, so an unconfigured node shows the
   // values the runner will actually use rather than empty controls.
   const current = parseActionConfig(actionId, config);
-  const fields = fieldsForMode(actionId, configFieldsFor(actionId), current);
+  const metadata = useStudioMetadata();
+  const fields = fieldsForMode(actionId, configFieldsFor(actionId), current).map((field) => ({
+    ...field,
+    label: metadata(field.label),
+  }));
 
   const write = (key: string, value: unknown) => {
     patch(nodeId, 'action', { config: { ...current, [key]: value } });

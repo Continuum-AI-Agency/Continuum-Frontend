@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import { useRef, useState } from 'react';
+import { render } from '@/i18n/__tests__/render';
 
 const reveal = mock(async (_options?: { within?: Element }) => {});
 const destroy = mock(() => {});

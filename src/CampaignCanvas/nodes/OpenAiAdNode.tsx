@@ -1,5 +1,7 @@
 'use client';
+
 import { AlertCircle, CheckCircle2, Copy, MessageSquare, Trash2, XCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { memo, useCallback } from 'react';
 import {
   Node,
@@ -29,6 +31,7 @@ const TITLE_MAX = 50;
 const BODY_MAX = 100;
 
 export const OpenAiAdNode = memo(({ id, data, selected }: CampaignNodeProps<'openai-ad'>) => {
+  const uiText = useTranslations('scale');
   const updateNodeData = useCampaignStore((store) => store.updateNodeData);
   const removeNode = useCampaignStore((store) => store.removeNode);
   const duplicateNode = useCampaignStore((store) => store.duplicateNode);
@@ -71,7 +74,7 @@ export const OpenAiAdNode = memo(({ id, data, selected }: CampaignNodeProps<'ope
                   <MessageSquare className="h-4 w-4" />
                 </div>
                 <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Chat Card
+                  {uiText('chat_card_9b0e291')}
                 </NodeTitle>
               </div>
               <div className="flex items-center gap-1">
@@ -104,14 +107,14 @@ export const OpenAiAdNode = memo(({ id, data, selected }: CampaignNodeProps<'ope
               />
             ) : (
               <div className="flex h-20 w-full items-center justify-center rounded-md border border-dashed text-2xs text-muted-foreground">
-                No image — the ad cannot be created without one
+                {uiText('no_image_the_ad_cannot_be_created_without_one_a61701d')}
               </div>
             )}
 
             <div className="space-y-0.5">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                  Title
+                  {uiText('title_7e8cd20')}
                 </span>
                 <span className={cn('text-3xs', titleOver ? 'text-destructive' : 'opacity-50')}>
                   {data.title?.length ?? 0}/{TITLE_MAX}
@@ -124,7 +127,9 @@ export const OpenAiAdNode = memo(({ id, data, selected }: CampaignNodeProps<'ope
 
             <div className="space-y-0.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-2xs uppercase tracking-wide text-muted-foreground">Body</span>
+                <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+                  {uiText('body_6ccaa64')}
+                </span>
                 <span className={cn('text-3xs', bodyOver ? 'text-destructive' : 'opacity-50')}>
                   {data.body?.length ?? 0}/{BODY_MAX}
                 </span>
@@ -136,7 +141,7 @@ export const OpenAiAdNode = memo(({ id, data, selected }: CampaignNodeProps<'ope
 
             <div className="space-y-0.5">
               <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                Destination
+                {uiText('destination_293d404')}
               </span>
               <div className="truncate text-xs text-muted-foreground">
                 <EditableLabel value={data.targetUrl ?? ''} onSave={handleUrlSave} />
@@ -153,17 +158,22 @@ export const OpenAiAdNode = memo(({ id, data, selected }: CampaignNodeProps<'ope
       </ContextMenuTrigger>
 
       <ContextMenuContent className="w-64">
-        <ContextMenuLabel>Ad Actions</ContextMenuLabel>
+        <ContextMenuLabel>{uiText('ad_actions_f066c13')}</ContextMenuLabel>
         <ContextMenuSeparator />
         <ContextMenuGroup>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
             <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            {uiText('duplicate_02cdaab')}
           </ContextMenuItem>
           <ContextMenuItem variant="destructive" onClick={() => removeNode(id)}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Remove from canvas
-            <ContextMenuItemInfo description="Removing a live ad schedules an archive on the next publish. Archiving cannot be undone." />
+            {uiText.rich('sentence_23658db467b7', {
+              v0: () => <Trash2 className="mr-2 h-4 w-4" />,
+              v1: () => (
+                <ContextMenuItemInfo
+                  description={uiText('removing_a_live_ad_schedules_an_archive_on_th_5814a18')}
+                />
+              ),
+            })}
           </ContextMenuItem>
         </ContextMenuGroup>
       </ContextMenuContent>

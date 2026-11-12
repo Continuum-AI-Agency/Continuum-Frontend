@@ -1,6 +1,7 @@
 'use client';
 
 import type { MediaAsset } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
 import { toast } from '@/components/ui/toast-imperative';
 import { listAssetVersions, stackAssetsOperation } from '@/lib/library/creativeOperations';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -13,6 +14,7 @@ export async function stackDroppedAssets(
   brandId: string,
   target: MediaAsset,
   sourceAssetIds: string[],
+  translate: ReturnType<typeof useTranslations<'library'>>,
 ): Promise<boolean> {
   const name = target.title ?? target.fileName;
   const client = createSupabaseBrowserClient();
@@ -28,10 +30,15 @@ export async function stackDroppedAssets(
       .then((response) => response.versions)
       .catch(() => []);
     const head = versions.find((version) => version.id === result.headVersionId);
-    toast.success(head ? `Stacked into ${name} as v${head.versionNumber}` : `Stacked into ${name}`);
+    toast.success(
+      head
+        ? translate('stackSuccessVersion', { name, version: head.versionNumber })
+        : translate('stackSuccess', { name }),
+    );
     return true;
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : `Stacking into ${name} failed`);
+    console.error('[stackDroppedAssets] failed', error);
+    toast.error(translate('stackFailed', { name }));
     return false;
   }
 }

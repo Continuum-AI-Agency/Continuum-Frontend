@@ -9,10 +9,12 @@
  * would drop whichever landed second.
  */
 
+import { useTranslations } from 'next-intl';
 import { type DragEvent, useCallback, useState } from 'react';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
 import { endAssetDrag, isAssetDrag, readAssetDrag } from '@/components/library/views/assetDrag';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { fetchAssetKinds } from '@/lib/paid-media/jaina-activity-client';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import {
@@ -43,7 +45,11 @@ export type Placement = {
  * then its format follows that asset: a person who drops a video on an image slot means
  * "use this video", not "refuse".
  */
-export function placementFor(current: CreativeData, assets: readonly PickedAsset[]): Placement {
+export function placementFor(
+  current: CreativeData,
+  assets: readonly PickedAsset[],
+  translate?: ReturnType<typeof useTranslations<'scale'>>,
+): Placement {
   const format = current.assetType ?? 'image';
 
   if (format === 'carousel') {
@@ -58,7 +64,12 @@ export function placementFor(current: CreativeData, assets: readonly PickedAsset
       ...(added.length > 0 ? { patch: { cards: [...existing, ...added] } } : {}),
       notice:
         assets.length > added.length
-          ? `A carousel holds at most ${CAROUSEL_MAX_CARDS} cards, so ${assets.length - added.length} were left out.`
+          ? translate
+            ? translate('canvasCarouselLimit', {
+                limit: CAROUSEL_MAX_CARDS,
+                count: assets.length - added.length,
+              })
+            : `A carousel holds at most ${CAROUSEL_MAX_CARDS} cards, so ${assets.length - added.length} were left out.`
           : null,
     };
   }
@@ -79,6 +90,9 @@ const carriesFiles = (event: DragEvent<HTMLElement>) =>
   Array.from(event.dataTransfer?.types ?? []).includes('Files');
 
 export function useCreativeAssetPlacement(nodeId: string) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
+  const [lookupFailure, setLookupFailure] = useState<{ cause: unknown } | null>(null);
   const { activeBrandId } = useActiveBrandContext();
   const [notice, setNotice] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -90,12 +104,13 @@ export function useCreativeAssetPlacement(nodeId: string) {
         | CreativeData
         | undefined;
       if (!current || assets.length === 0) return;
-      const placement = placementFor(current, assets);
+      const placement = placementFor(current, assets, uiText);
+      setLookupFailure(null);
       if (placement.format) store.setCreativeFormat(nodeId, placement.format);
       if (placement.patch) store.updateNodeData(nodeId, placement.patch);
       setNotice(placement.notice);
     },
-    [nodeId],
+    [nodeId, uiText],
   );
 
   const { uploads, uploadFiles } = useMediaUpload(activeBrandId, {
@@ -140,26 +155,31 @@ export function useCreativeAssetPlacement(nodeId: string) {
         return;
       }
       endAssetDrag();
+      setLookupFailure(null);
+      setNotice(null);
       if (payload.brandId !== activeBrandId) {
-        setNotice('That asset belongs to another brand.');
+        setNotice(uiText('canvasAssetOtherBrand'));
         return;
       }
-      void fetchAssetKinds({ brandId: activeBrandId, assetIds: payload.assetIds }).then((kinds) =>
-        place(
-          payload.assetIds.flatMap((id) => {
-            const kind = kinds[id];
-            return kind ? [{ id, kind }] : [];
-          }),
-        ),
-      );
+      void fetchAssetKinds({ brandId: activeBrandId, assetIds: payload.assetIds })
+        .then((kinds) =>
+          place(
+            payload.assetIds.flatMap((id) => {
+              const kind = kinds[id];
+              return kind ? [{ id, kind }] : [];
+            }),
+          ),
+        )
+        .catch((cause: unknown) => setLookupFailure({ cause }));
     },
-    [activeBrandId, place, uploadFiles],
+    [activeBrandId, place, uiText, uploadFiles],
   );
 
   return {
     brandId: activeBrandId,
     place,
-    notice,
+    notice: lookupFailure ? formatUiError(lookupFailure.cause) : notice,
+    lookupError: lookupFailure?.cause,
     uploads,
     uploadFiles,
     dropActive,

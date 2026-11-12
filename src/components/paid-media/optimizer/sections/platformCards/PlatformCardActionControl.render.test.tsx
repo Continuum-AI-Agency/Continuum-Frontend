@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // Spread the real module: mock.module replaces it for the whole process.
 const realOptimizerData = await import('../../useOptimizerData');
@@ -357,7 +358,7 @@ describe('undoing an applied Google write', () => {
     fireEvent.click(within(dialog).getByTestId('platform-card-action-undo'));
     const preview = await screen.findByTestId('platform-card-undo-preview');
     expect(preview.textContent).toBe(
-      'Changed in Google Ads since — not undone. amount_micros reads 1300000000; the write left 1473750000.',
+      'Changed in Google Ads since — not undone. Check Activity before trying again.',
     );
     expect(preview.getAttribute('data-tone')).toBe('refused');
     expect((screen.getByTestId('platform-card-undo-confirm') as HTMLButtonElement).disabled).toBe(

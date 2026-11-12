@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useAgentFormats } from './useAgentFormats';
+
 // The "while you were away" card at the top of a chat thread: how long you were gone, then what
 // needs you, what failed and what is done, one action per row. Got it folds the card into a
 // divider marker that opens it again.
@@ -28,7 +31,7 @@ import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import { RECAP_TONE } from './AgentRecap';
-import { formatAway, groupRecap, RECAP_TONES, type RecapItem } from './model';
+import { groupRecap, RECAP_TONES, type RecapItem } from './model';
 
 const swap = {
   initial: { opacity: 0, y: -4 },
@@ -52,11 +55,19 @@ export function AwaySummary({
   onDismiss?: () => void;
   className?: string;
 }) {
+  const { formatAway } = useAgentFormats();
+
+  const uiText = useTranslations('common');
   const [folded, setFolded] = useState(false);
   const groups = groupRecap(items);
   const rows = RECAP_TONES.flatMap((tone) => groups[tone]);
+  const tallyKeys = {
+    needs: 'm_eaf85da2dc',
+    failed: 'm_6264f9c0ff',
+    done: 'm_1890f32b26',
+  } as const;
   const tally = RECAP_TONES.filter((tone) => groups[tone].length > 0)
-    .map((tone) => `${groups[tone].length} ${RECAP_TONE[tone].label.toLowerCase()}`)
+    .map((tone) => uiText(tallyKeys[tone], { count: groups[tone].length }))
     .join(' · ');
 
   if (rows.length === 0) return null;
@@ -75,7 +86,10 @@ export function AwaySummary({
                 <MarkerIcon>
                   <History className="size-3.5" />
                 </MarkerIcon>
-                <MarkerContent>While you were away · {tally}</MarkerContent>
+                <MarkerContent>
+                  {uiText('m_89c7dfccc1')}
+                  {tally}
+                </MarkerContent>
               </button>
             </Marker>
           </motion.div>
@@ -83,7 +97,7 @@ export function AwaySummary({
           <motion.section
             key="card"
             {...swap}
-            aria-label="While you were away"
+            aria-label={uiText('while_you_were_away_f55eaca')}
             className={className}
           >
             <AgentArtifactCard className="mt-0">
@@ -97,11 +111,13 @@ export function AwaySummary({
                       onDismiss?.();
                     }}
                   >
-                    Got it
+                    {uiText('got_it_5ad3dbd')}
                   </Button>
                 }
               >
-                <AgentCardEyebrow label={`While you were away · ${formatAway(now - since)}`} />
+                <AgentCardEyebrow
+                  label={uiText('m_fd114e3150', { v0: String(formatAway(now - since)) })}
+                />
                 <AgentCardTitle>{tally}</AgentCardTitle>
               </AgentCardHeader>
               <AgentCardBody className="pt-2 pb-3">

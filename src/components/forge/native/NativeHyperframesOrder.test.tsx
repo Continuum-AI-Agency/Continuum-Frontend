@@ -1,7 +1,12 @@
 import { afterEach, expect, test } from 'bun:test';
 import type { HyperframesOrderView } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { NativeHyperframesOrder } from './NativeHyperframesOrder';
 import { nativeOrderDefaults } from './nativeEditorEdits';
 

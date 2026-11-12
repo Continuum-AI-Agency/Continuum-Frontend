@@ -12,6 +12,7 @@
 // optimizer_list_logs); this only chooses which of the two to render.
 
 import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
+import {useTranslations} from 'next-intl';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { OptimizerActionFeed } from './OptimizerActionFeed';
@@ -64,6 +65,7 @@ function Segmented<TValue extends string | number>({
 }
 
 export function OptimizerActivity({ brandId }: { brandId: string }) {
+ const uiText=useTranslations('scale');
   const [feed, setFeed] = useState<ActivityFeed>('actions');
   const [windowDays, setWindowDays] = useState<OptimizerFeedWindowDays>(7);
 
@@ -71,11 +73,11 @@ export function OptimizerActivity({ brandId }: { brandId: string }) {
   // the feed draws that line because only it knows which portfolios it has loaded.
   const controls = (
     <>
-      <Segmented legend="Choose a feed" onChange={setFeed} options={FEEDS} value={feed} />
+      <Segmented legend={uiText('activityChooseFeed')} onChange={setFeed} options={FEEDS.map(feed=>({...feed,label:uiText('activityFeedLabel',{kind:feed.value})}))} value={feed} />
       <Segmented
-        legend="Show events from the last"
+        legend={uiText('activityLastWindow')}
         onChange={setWindowDays}
-        options={WINDOWS}
+        options={WINDOWS.map(window=>({...window,label:uiText('activityWindowShort',{days:window.value})}))}
         value={windowDays}
       />
     </>

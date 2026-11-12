@@ -1,4 +1,5 @@
 'use client';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // What the Google views share: a read as one of three states, the gate that renders them, and a
 // Cell printed as its text or lane A's "—" with its reason (GoogleSection's Missing and
@@ -30,7 +31,7 @@ export function usePendingGoogleCards(brandId: string): PlatformCard[] {
 
 export type ViewRead<T> =
   | { status: 'loading' }
-  | { status: 'error'; message: string; retry?: () => void }
+  | { status: 'error'; message: string; error?: unknown; retry?: () => void }
   | { status: 'ready'; data: T };
 
 export function viewRead<T>(
@@ -40,6 +41,7 @@ export function viewRead<T>(
     return {
       status: 'error',
       message: query.error?.message ?? 'The read did not answer.',
+      error: query.error,
       retry: () => void query.refetch(),
     };
   }
@@ -54,8 +56,10 @@ export function ReadGate<T>({
   read: ViewRead<T>;
   children: (data: T) => ReactNode;
 }) {
+  const uiError = useUiErrorMessage();
   if (read.status === 'loading') return <ChartSkeleton className="h-24" />;
-  if (read.status === 'error') return <ChartError message={read.message} onRetry={read.retry} />;
+  if (read.status === 'error')
+    return <ChartError message={uiError(read.error ?? read.message)} onRetry={read.retry} />;
   return <>{children(read.data)}</>;
 }
 

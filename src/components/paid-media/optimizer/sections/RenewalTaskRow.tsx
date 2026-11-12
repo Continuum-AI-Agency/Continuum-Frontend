@@ -1,4 +1,8 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+import { uiDateFormat } from '@/lib/paid-media/uiDateFormat';
 
 // One approved-renewal task row (mark done / dismiss). Opened when a fatigue
 // recommendation is approved; the engine never auto-refreshes a creative. A hairline row in
@@ -15,16 +19,18 @@ import { useOptimizerEnrolledAdsets, useOptimizerMutations } from '../useOptimiz
 import { KindTag, kindTone, kindWord } from './kindTag';
 import { audienceExpansionPrompt } from './recQueueModel';
 
-const TASK_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-
 type RenewalTaskRowProps = {
   brandId: string;
   task: RenewalTask;
 };
 
 export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const { renewal } = useOptimizerMutations(brandId, null);
-  const { label } = recommendationLabel(task.kind);
+  const { label } = recommendationLabel(task.kind, optimizerText);
   const roster = useOptimizerEnrolledAdsets(task.portfolio_id);
   const adsetName =
     roster.data.find((adset) => adset.adset_id === task.adset_id)?.adset_name?.trim() || null;
@@ -37,11 +43,11 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
     <li className="flex flex-wrap items-start justify-between gap-3 py-3">
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
-          <KindTag tone={kindTone(task.kind)}>{kindWord(task.kind)}</KindTag>
+          <KindTag tone={kindTone(task.kind)}>{kindWord(task.kind, uiText)}</KindTag>
           <span className="font-semibold tracking-tight">{label}</span>
           <span className="text-muted-foreground">·</span>
           <span className="font-semibold tracking-tight" title={task.adset_id}>
-            {adsetName ?? 'an ad set in this portfolio'}
+            {adsetName ?? uiText('an_ad_set_in_this_portfolio_5281f0e')}
           </span>
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -52,10 +58,17 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
             approved, re-asserted by the latest cycle. If a cycle stops raising it, the
             engine closes the task itself. */}
         <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-          opened {TASK_DATE.format(new Date(task.created_at))}
-          {task.last_asserted_at
-            ? ` · still firing as of ${TASK_DATE.format(new Date(task.last_asserted_at))}`
-            : ''}
+          {uiText.rich('sentence_97839b1789b4', {
+            date: uiDateFormat(uiLocale, { month: 'short', day: 'numeric' }).format(
+              new Date(task.created_at),
+            ),
+            hasAssertion: task.last_asserted_at ? 'yes' : 'no',
+            asserted: task.last_asserted_at
+              ? uiDateFormat(uiLocale, { month: 'short', day: 'numeric' }).format(
+                  new Date(task.last_asserted_at),
+                )
+              : '',
+          })}
         </p>
         {task.kind === 'audience_expand' ? (
           // The options with sizes live in Jaina's audience tools; hand the ad set and the
@@ -70,11 +83,10 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
                 ),
               )}
             >
-              Explore options with Jaina →
+              {uiText('explore_options_with_jaina_9697761')}
             </a>{' '}
             <span className="text-muted-foreground">
-              what it targets now, what the account already owns, and catalogue-verified interests,
-              each with an estimated size.
+              {uiText('what_it_targets_now_what_the_account_already__26aa3b4')}
             </span>
           </p>
         ) : null}
@@ -84,7 +96,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
             <p className="leading-relaxed">{brief.brief}</p>
             {brief.groundedOn.length > 0 ? (
               <p>
-                <span className="font-medium text-foreground">Grounded on:</span>{' '}
+                <span className="font-medium text-foreground">{uiText('grounded_on_79d5004')}</span>{' '}
                 {brief.groundedOn.join(' · ')}
               </p>
             ) : null}
@@ -100,7 +112,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
           disabled={isBusy}
           onClick={() => renewal.mutate({ taskId: task.id, status: 'done' })}
         >
-          Mark done
+          {uiText('mark_done_95acc4a')}
         </Button>
         <Button
           type="button"
@@ -110,7 +122,7 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
           disabled={isBusy}
           onClick={() => renewal.mutate({ taskId: task.id, status: 'dismissed' })}
         >
-          Dismiss
+          {uiText('dismiss_48845bf')}
         </Button>
       </div>
     </li>

@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
 // Paid setup diagnostics panel (IMP-010 / BUG-003 / BUG-004). Turns a blocked
 // paid surface ("No ad account selected") into an actionable checklist:
 // connection → permission → assignment → sync, each with the exact CTA to fix
@@ -54,12 +57,6 @@ const STATUS_ICON_CLASS: Record<PaidSetupStepStatus, string> = {
   pending: 'text-muted-foreground',
 };
 
-const PLATFORM_SWITCH_OPTIONS: { value: PaidMediaPlatform; label: string }[] = [
-  { value: 'meta', label: 'Meta Ads' },
-  { value: 'google-ads', label: 'Google Ads' },
-  { value: 'linkedin', label: 'LinkedIn Ads' },
-];
-
 function StepCta({ step, onRetry }: { step: PaidSetupStep; onRetry: () => void }) {
   if (!step.cta) return null;
 
@@ -89,14 +86,27 @@ export function PaidSetupDiagnostics({
   description,
   className,
 }: PaidSetupDiagnosticsProps) {
+  const uiText = useTranslations('scale');
+  const PLATFORM_SWITCH_OPTIONS: { value: PaidMediaPlatform; label: string }[] = useMemo(
+    () => [
+      { value: 'meta', label: 'Meta Ads' },
+      { value: 'google-ads', label: 'Google Ads' },
+      { value: 'linkedin', label: uiText('linkedin_ads_e7e06ad') },
+    ],
+    [uiText],
+  );
+
   const { integrations, isError, refresh } = useBrandIntegrations(brandId);
 
-  const steps = derivePaidSetupSteps({
-    platform,
-    availableAccountCount: countPlatformAccounts(integrations, platform),
-    freshness,
-    loadError: isError,
-  });
+  const steps = derivePaidSetupSteps(
+    {
+      platform,
+      availableAccountCount: countPlatformAccounts(integrations, platform),
+      freshness,
+      loadError: isError,
+    },
+    uiText,
+  );
 
   const handleRetry = () => {
     void refresh();
@@ -105,7 +115,7 @@ export function PaidSetupDiagnostics({
 
   return (
     <section
-      aria-label="Paid setup diagnostics"
+      aria-label={uiText('paid_setup_diagnostics_cb93ed4')}
       className={cn(
         'mx-auto w-full max-w-xl rounded-xl border border-border/70 bg-card/60 p-[var(--card-pad)]',
         className,
@@ -141,7 +151,9 @@ export function PaidSetupDiagnostics({
 
       {onPlatformChange ? (
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
-          <span className="text-xs text-muted-foreground">Looking for a different platform?</span>
+          <span className="text-xs text-muted-foreground">
+            {uiText('looking_for_a_different_platform_fe49519')}
+          </span>
           {PLATFORM_SWITCH_OPTIONS.map((option) => (
             <Button
               key={option.value}

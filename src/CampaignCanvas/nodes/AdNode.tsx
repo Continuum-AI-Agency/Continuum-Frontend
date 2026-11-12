@@ -1,4 +1,5 @@
 'use client';
+
 import {
   AlertCircle,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   Trash2,
   XCircle,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import React, { memo, useCallback, useMemo } from 'react';
 import { Node, NodeContent, NodeHeader, NodeTitle } from '@/components/ai-elements/node';
 import { Badge } from '@/components/ui/badge';
@@ -43,9 +45,14 @@ import {
   DEFAULT_AD_FORMAT,
   isAdFormatCompatibleWithCreativeType,
 } from '../types/adCreativeCompatibility';
+import { localizedNodeOptions } from '../types/nodeOptionPresentation';
 import { AD_FORMATS, CALL_TO_ACTIONS } from '../types/nodeOptions';
 
 export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const callToActionsView = localizedNodeOptions(CALL_TO_ACTIONS, uiText, uiLocale);
+  const adFormatsView = localizedNodeOptions(AD_FORMATS, uiText, uiLocale);
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode, nodes, edges } =
     useCampaignStore();
 
@@ -124,7 +131,7 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
                   <Megaphone className="h-4 w-4" />
                 </div>
                 <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Ad
+                  {uiText('ad_1d97c9f')}
                 </NodeTitle>
               </div>
               <div className="flex items-center gap-1">
@@ -155,8 +162,8 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
             </div>
             <div className="flex items-center gap-1.5">
               <Badge variant="outline" className="text-3xs px-1 py-0 uppercase opacity-70">
-                {AD_FORMATS.find((format) => format.value === selectedAdFormat)?.label ||
-                  'Single Image'}
+                {adFormatsView.find((format) => format.value === selectedAdFormat)?.label ||
+                  uiText('single_image_8fd6bdf')}
               </Badge>
               {data.callToAction && (
                 <Badge
@@ -173,30 +180,38 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
         </Node>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-64">
-        <ContextMenuLabel>Ad Actions</ContextMenuLabel>
+        <ContextMenuLabel>{uiText('ad_actions_f066c13')}</ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleAddCreative}>
-            <Plus className="mr-2 h-4 w-4 text-pink-500" />
-            Add Creative
-            <ContextMenuItemInfo description="Creative is the visual asset (image or video) this ad uses." />
+            {uiText.rich('sentence_f21396fa222b', {
+              v0: () => <Plus className="mr-2 h-4 w-4 text-pink-500" />,
+              v1: () => (
+                <ContextMenuItemInfo
+                  description={uiText('creative_is_the_visual_asset_image_or_video_t_24faada')}
+                />
+              ),
+            })}
           </ContextMenuItem>
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
-        <ContextMenuLabel>Configurations</ContextMenuLabel>
+        <ContextMenuLabel>{uiText('configurations_ae53d36')}</ContextMenuLabel>
 
         <ContextMenuGroup>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
-              <Megaphone className="mr-2 h-4 w-4" />
-              Ad Format
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="Ad format defines how creative is structured in placements."
-              />
+              {uiText.rich('sentence_51b0e89bd552', {
+                v0: () => <Megaphone className="mr-2 h-4 w-4" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    className="ml-2 mr-4"
+                    description={uiText('ad_format_defines_how_creative_is_structured__d288fcf')}
+                  />
+                ),
+              })}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-              {AD_FORMATS.map((format) => (
+              {adFormatsView.map((format) => (
                 <ContextMenuCheckboxItem
                   key={format.value}
                   checked={selectedAdFormat === format.value}
@@ -212,15 +227,18 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
 
           <ContextMenuSub>
             <ContextMenuSubTrigger>
-              <Send className="mr-2 h-4 w-4" />
-              Call to Action
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="Call to action is the primary next-step prompt shown on the ad."
-              />
+              {uiText.rich('sentence_3d1c61728ec7', {
+                v0: () => <Send className="mr-2 h-4 w-4" />,
+                v1: () => (
+                  <ContextMenuItemInfo
+                    className="ml-2 mr-4"
+                    description={uiText('call_to_action_is_the_primary_next_step_promp_55bb9a9')}
+                  />
+                ),
+              })}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-              {CALL_TO_ACTIONS.map((cta) => (
+              {callToActionsView.map((cta) => (
                 <ContextMenuCheckboxItem
                   key={cta.value}
                   checked={
@@ -241,24 +259,32 @@ export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => 
 
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
-            <Copy className="mr-2 h-4 w-4" /> Duplicate
-            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-            <ContextMenuItemInfo
-              className="ml-2"
-              description="A duplicate creates another ad with the same current setup."
-            />
+            {uiText.rich('sentence_cbb73dcd8c7a', {
+              v0: () => <Copy className="mr-2 h-4 w-4" />,
+              v1: () => <ContextMenuShortcut>⌘D</ContextMenuShortcut>,
+              v2: () => (
+                <ContextMenuItemInfo
+                  className="ml-2"
+                  description={uiText('a_duplicate_creates_another_ad_with_the_same__c0edd8f')}
+                />
+              ),
+            })}
           </ContextMenuItem>
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
 
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
-          <Trash2 className="mr-2 h-4 w-4" /> Delete
-          <ContextMenuShortcut>⌫</ContextMenuShortcut>
-          <ContextMenuItemInfo
-            className="ml-2"
-            description="Delete removes this ad object from the current graph."
-          />
+          {uiText.rich('sentence_cab0f08ddea5', {
+            v0: () => <Trash2 className="mr-2 h-4 w-4" />,
+            v1: () => <ContextMenuShortcut>⌫</ContextMenuShortcut>,
+            v2: () => (
+              <ContextMenuItemInfo
+                className="ml-2"
+                description={uiText('delete_removes_this_ad_object_from_the_curren_2c014c8')}
+              />
+            ),
+          })}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

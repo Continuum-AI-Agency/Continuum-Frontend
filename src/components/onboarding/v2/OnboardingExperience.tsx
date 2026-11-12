@@ -3,12 +3,13 @@
 import type { OnboardingIntake, OnboardingSourceResponse } from '@continuum/contracts';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
   approveAndLaunchOnboardingAction,
   approveOnboardingAndStartAnalysisAction,
   completeOnboardingAction,
-} from '@/app/onboarding/actions';
+} from '@/app/[locale]/onboarding/actions';
 import {
   OnboardingProvider,
   useOnboarding,
@@ -16,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useBrandAssignedAccountIds } from '@/hooks/useBrandAssignedAccountIds';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { fetchPreviewLatest, fetchPreviewSnapshot } from '@/lib/onboarding/agentClient';
 import { resolveSafeBrandName } from '@/lib/onboarding/brandName';
 import { persistOnboardingBrandKit } from '@/lib/onboarding/inspirationsClient';
@@ -93,6 +95,10 @@ export function OnboardingExperience(props: OnboardingExperienceProps) {
 }
 
 function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingExperienceProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('onboarding');
+
   const router = useRouter();
   const { show } = useToast();
   const totalSteps = planRequired ? TOTAL_STEPS + 1 : TOTAL_STEPS;
@@ -167,8 +173,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
         await resetState();
       } catch (error) {
         show({
-          title: "Couldn't reset",
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: tUi('m_152b98be3a'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
           variant: 'error',
         });
         return;
@@ -185,9 +191,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     const legacySelectedCount = countSelectedAccounts(state);
     const integrationCount = Math.max(assignedAccountIds.length, legacySelectedCount);
     if (integrationCount === 0 && typeof window !== 'undefined') {
-      const confirmed = window.confirm(
-        "Launch without any integration accounts attached?\n\nYou won't see paid-media or organic data on the dashboard until you connect at least one account in Settings.",
-      );
+      const confirmed = window.confirm(tUi('m_31182ebbf4'));
       if (!confirmed) {
         trackOnboardingEvent('onboarding_launch_clicked', {
           integration_count: 0,
@@ -220,8 +224,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
           await navigate(PLAN_SCREEN);
         } catch (error) {
           show({
-            title: "Couldn't continue",
-            description: error instanceof Error ? error.message : 'Please try again.',
+            title: tUi('m_e6c7d3d651'),
+            description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
             variant: 'error',
           });
         }
@@ -242,11 +246,11 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
         launchInFlightRef.current = false;
         trackOnboardingEvent('onboarding_launch_failed', {
           duration_ms: launchTimer.sinceStart(),
-          message: error instanceof Error ? error.message : 'Unknown error',
+          message: error instanceof Error ? uiErrorMessage(error) : tUi('m_e5fd9aa24c'),
         });
         show({
-          title: 'Launch failed',
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: tUi('m_b9b4bbde58'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
           variant: 'error',
         });
       }
@@ -286,8 +290,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
         await navigate(skipInspirations ? 7 : 6);
       } catch (error) {
         show({
-          title: "Couldn't continue",
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: tUi('m_e6c7d3d651'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
           variant: 'error',
         });
       }
@@ -302,8 +306,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
         await navigate(PLAN_SCREEN);
       } catch (error) {
         show({
-          title: "Couldn't continue",
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: tUi('m_e6c7d3d651'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
           variant: 'error',
         });
       }
@@ -330,11 +334,11 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
       } catch (error) {
         trackOnboardingEvent('onboarding_launch_failed', {
           duration_ms: launchTimer.sinceStart(),
-          message: error instanceof Error ? error.message : 'Unknown error',
+          message: error instanceof Error ? uiErrorMessage(error) : tUi('m_e5fd9aa24c'),
         });
         show({
-          title: 'Launch failed',
-          description: error instanceof Error ? error.message : 'Please try again.',
+          title: tUi('m_b9b4bbde58'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_83a6fd7b78'),
           variant: 'error',
         });
       }
@@ -372,16 +376,13 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
           try {
             return await readOnboardingSource(brandId, intake.url!, signal);
           } catch (error) {
-            sourceFailure = error instanceof Error ? error.message : 'Couldn’t read that source.';
+            sourceFailure = error instanceof Error ? uiErrorMessage(error) : tUi('m_5da20ba082');
             throw error;
           }
         });
         if (generation !== analysisGenerationRef.current) return false;
         if (!source) {
-          setSourceError(
-            sourceFailure ??
-              'Couldn’t read that source. Use brand documents or a business description.',
-          );
+          setSourceError(sourceFailure ?? tUi('m_a1e04bb0d2'));
           await navigate(0);
           return false;
         }
@@ -494,7 +495,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
       void handleIntakeSubmit({
         kind: 'website',
         url: domain,
-        brand_name: state.brand.name || 'My Brand',
+        brand_name: state.brand.name || tUi('m_187a8ec637'),
         description: null,
       });
   };
@@ -507,7 +508,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
         ? {
             kind: 'website' as const,
             url: domain,
-            brand_name: state.brand.name || 'My Brand',
+            brand_name: state.brand.name || tUi('m_187a8ec637'),
             description: null,
           }
         : null);
@@ -518,53 +519,53 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     () => [
       {
         id: 'website' as const,
-        label: 'Your brand',
-        description: 'Tell us where to start',
+        label: tUi('m_db92cb9d1f'),
+        description: tUi('m_61d994c267'),
         state: stepState(screen, 0),
       },
       {
         id: 'documents' as const,
-        label: 'Documents',
-        description: 'Add brand assets',
+        label: tUi('m_687c82861c'),
+        description: tUi('m_3c74052167'),
         state: stepState(screen, 1),
       },
       {
         id: 'catalog' as const,
-        label: 'Products',
-        description: 'Add what you sell',
+        label: tUi('m_fe0a091fdb'),
+        description: tUi('m_31607627b6'),
         state: stepState(screen, 2),
       },
       {
         id: 'integrations' as const,
-        label: 'Connect channels',
-        description: 'Link your accounts',
+        label: tUi('m_7499c1cc20'),
+        description: tUi('m_4a92e5a916'),
         state: stepState(screen, 3),
       },
       {
         id: 'invites' as const,
-        label: 'Invite team',
-        description: 'Bring teammates in',
+        label: tUi('m_0f45901e5b'),
+        description: tUi('m_0550f98fc1'),
         state: stepState(screen, 4),
       },
       {
         id: 'dna' as const,
-        label: 'Brand DNA',
-        description: 'Review and launch',
+        label: tUi('m_087bbcc244'),
+        description: tUi('m_d00209567a'),
         state: stepState(screen, 5),
       },
       ...(planRequired
         ? [
             {
               id: 'plan' as const,
-              label: 'Choose your plan',
-              description: 'Pick a plan to start',
+              label: tUi('m_12a7bc47d4'),
+              description: tUi('m_4c4784f5f3'),
               // The finale (screens 6–7) still belongs to Brand DNA; only the plan screen lights this.
               state: (screen === PLAN_SCREEN ? 'active' : 'pending') as StepperState,
             },
           ]
         : []),
     ],
-    [screen, planRequired],
+    [screen, planRequired, tUi],
   );
 
   const onStepClick = (id: ShellPillId) => {
@@ -686,7 +687,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
             {
               brandId,
               userId: state.members[0]?.id ?? '',
-              brandName: state.brand.name || 'Untitled brand',
+              brandName: state.brand.name || tUi('m_992d3dcc44'),
               websiteUrl: domain,
               voiceTags: state.brand.brandVoiceTags ?? [],
               scrape: null,
@@ -727,7 +728,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
           brand_id: brandId,
           run_id: latest.run_id,
           resumed: true,
-          message: errorMessage ?? 'Preview run failed.',
+          message: errorMessage ?? tUi('m_a90ae1361b'),
         });
       }
     })();
@@ -748,6 +749,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     state.intake,
     state.documents,
     state.previewRequest,
+    tUi,
   ]);
 
   useEffect(() => {
@@ -911,6 +913,8 @@ function useBottomBar({
   designSystemBusy: boolean;
   catalogBusy: boolean;
 }) {
+  const tUi = useTranslations('onboarding');
+
   const { jobs } = useBackgroundJobs();
   const { state } = useOnboarding();
   const documentsBusy = designSystemBusy || intakeDocumentsProcessing(state);
@@ -923,13 +927,11 @@ function useBottomBar({
   }
   if (screen === 1) {
     return {
-      hint: documentsBusy
-        ? 'Reading your brand materials — you can continue when they’re ready.'
-        : 'Add brand assets to ground the analysis in your actual work.',
+      hint: documentsBusy ? tUi('m_cc50cce5b7') : tUi('m_2b9e84eb68'),
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={onChangeUrl}>
-            Change starting source
+            {tUi('m_6f272a275f')}
           </Button>
           <Button
             variant="ghost"
@@ -937,7 +939,7 @@ function useBottomBar({
             onClick={() => void onDocumentsContinue()}
             disabled={documentsBusy || needsDocuments}
           >
-            Skip for now
+            {tUi('m_6fc09607ae')}
           </Button>
           <Button
             variant="default"
@@ -945,7 +947,7 @@ function useBottomBar({
             onClick={() => void onDocumentsContinue()}
             disabled={documentsBusy || needsDocuments}
           >
-            {documentsBusy ? 'Reading brand materials…' : 'Continue →'}
+            {documentsBusy ? tUi('m_9a0ed46ccd') : tUi('m_6c447f2c76')}
           </Button>
         </>
       ),
@@ -953,13 +955,11 @@ function useBottomBar({
   }
   if (screen === 2) {
     return {
-      hint: catalogBusy
-        ? 'Importing your products — this stays open until every row has an answer.'
-        : 'Optional. Add what you sell, or skip — nothing later needs it.',
+      hint: catalogBusy ? tUi('m_654588f9e7') : tUi('m_791fce8034'),
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={() => void navigate(1)}>
-            ← Back
+            {tUi('m_c32ae9f4a7')}
           </Button>
           <Button
             variant="ghost"
@@ -968,7 +968,7 @@ function useBottomBar({
             onClick={() => void navigate(3)}
             disabled={catalogBusy}
           >
-            Skip for now
+            {tUi('m_6fc09607ae')}
           </Button>
           <Button
             variant="default"
@@ -977,7 +977,7 @@ function useBottomBar({
             onClick={() => void navigate(3)}
             disabled={catalogBusy}
           >
-            {catalogBusy ? 'Importing…' : 'Continue →'}
+            {catalogBusy ? tUi('m_820599da89') : tUi('m_6c447f2c76')}
           </Button>
         </>
       ),
@@ -989,13 +989,13 @@ function useBottomBar({
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={() => void navigate(2)}>
-            ← Back
+            {tUi('m_c32ae9f4a7')}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => void navigate(4)}>
-            Skip for now
+            {tUi('m_6fc09607ae')}
           </Button>
           <Button variant="default" size="sm" onClick={() => void navigate(4)}>
-            Continue →
+            {tUi('m_6c447f2c76')}
           </Button>
         </>
       ),
@@ -1003,17 +1003,17 @@ function useBottomBar({
   }
   if (screen === 4) {
     return {
-      hint: 'Add teammates — or invite them later from Settings.',
+      hint: tUi('m_6d55061579'),
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={() => void navigate(3)}>
-            ← Back
+            {tUi('m_c32ae9f4a7')}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => void navigate(5)}>
-            Skip for now
+            {tUi('m_6fc09607ae')}
           </Button>
           <Button variant="default" size="sm" onClick={() => void navigate(5)}>
-            {dnaReady ? 'Reveal Brand DNA →' : 'Continue →'}
+            {dnaReady ? tUi('m_d1f7ce816e') : tUi('m_6c447f2c76')}
           </Button>
         </>
       ),
@@ -1030,7 +1030,7 @@ function useBottomBar({
             onClick={onContinueToInspirations}
             disabled={launching}
           >
-            {launching ? 'Preparing…' : 'Continue →'}
+            {launching ? tUi('m_0b1d6c0b1a') : tUi('m_6c447f2c76')}
           </Button>
         ),
       };
@@ -1039,7 +1039,11 @@ function useBottomBar({
       hint: '',
       actions: (
         <Button variant="success" size="sm" onClick={onLaunch} disabled={launching}>
-          {launching ? 'Launching…' : planRequired ? 'Choose your plan →' : 'Launch Continuum ✦'}
+          {launching
+            ? tUi('m_1eddefabbe')
+            : planRequired
+              ? tUi('m_0a33189eb8')
+              : tUi('m_d3e6a40b88')}
         </Button>
       ),
     };

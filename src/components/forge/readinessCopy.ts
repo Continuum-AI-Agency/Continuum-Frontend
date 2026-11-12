@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ForgeReadinessText = ReturnType<typeof useTranslations<'forge'>>;
+
 import {
   type ApiRenderBatchReadiness,
   type ApiRenderReadinessFinding,
@@ -16,7 +20,26 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
  * What a finding means for the person rendering: what was not checked, why, and what — if
  * anything — makes it checkable. The grid's "Needs review" hover and the tray say the same words.
  */
-export function explainFinding(finding: Finding, labelOf: LabelOf): string {
+export function explainFinding(
+  finding: Finding,
+  labelOf: LabelOf,
+  translate?: ForgeReadinessText,
+): string {
+  if (translate) {
+    const label =
+      labelOf(finding.variableKey) ?? finding.variableKey ?? translate('readinessThisSlot');
+    const key =
+      finding.code === 'BRAND_PALETTE_UNKNOWN'
+        ? 'readinessPaletteUnknown'
+        : finding.code === 'FONT_INVENTORY_UNKNOWN'
+          ? 'readinessFontsUnknown'
+          : finding.code === READINESS_CODE.fitUnknown
+            ? 'readinessPlacementUnknown'
+            : finding.code === READINESS_CODE.checkedAfterRender
+              ? 'readinessAfterRender'
+              : 'readinessUnknownFinding';
+    return translate(key, { label });
+  }
   const label = labelOf(finding.variableKey) ?? finding.variableKey ?? 'This slot';
   switch (finding.code) {
     case 'BRAND_PALETTE_UNKNOWN':
@@ -48,18 +71,71 @@ function shortReason(finding: Finding, labelOf: LabelOf): string {
 }
 
 /** Every distinct reason, once each — the tray's hover lists these. */
-export function readinessReasons(readiness: ApiRenderBatchReadiness, labelOf: LabelOf): string[] {
+export function readinessReasons(
+  readiness: ApiRenderBatchReadiness,
+  labelOf: LabelOf,
+  translate?: ForgeReadinessText,
+): string[] {
   return [
     ...new Set(
       readiness.findings
         .filter((finding) => finding.severity === 'unknown')
-        .map((finding) => explainFinding(finding, labelOf)),
+        .map((finding) => explainFinding(finding, labelOf, translate)),
     ),
   ];
 }
 
 /** The tray's verdict line: what is ready, and when it is not all checked, the reason that is not. */
-export function readinessLine(readiness: ApiRenderBatchReadiness, labelOf: LabelOf): string {
+export function readinessLine(
+  readiness: ApiRenderBatchReadiness,
+  labelOf: LabelOf,
+  translate?: ForgeReadinessText,
+): string {
+  if (translate) {
+    if (readiness.state === 'BLOCKED')
+      return translate('readinessBlocked', { count: readiness.blockedRows });
+    if (readiness.state === 'INCOMPLETE') {
+      const reasons = [
+        ...new Set(
+          readiness.findings.filter(leavesCheckIncomplete).map((finding) => {
+            const label =
+              labelOf(finding.variableKey) ?? finding.variableKey ?? translate('readinessThisSlot');
+            const key =
+              finding.code === 'BRAND_PALETTE_UNKNOWN'
+                ? 'readinessPaletteShort'
+                : finding.code === 'FONT_INVENTORY_UNKNOWN'
+                  ? 'readinessFontsShort'
+                  : finding.code === READINESS_CODE.fitUnknown
+                    ? 'readinessPlacementShort'
+                    : 'readinessUnknownShort';
+            return translate(key, { label });
+          }),
+        ),
+      ];
+      return translate('readinessIncomplete', {
+        count: readiness.unknownRows,
+        reason: reasons[0] ?? translate('readinessUnknownShort'),
+        more: Math.max(0, reasons.length - 1),
+      });
+    }
+    const after = [
+      ...new Set(
+        readiness.findings
+          .filter((finding) => finding.code === READINESS_CODE.checkedAfterRender)
+          .map(
+            (finding) =>
+              labelOf(finding.variableKey) ?? finding.variableKey ?? translate('readinessThisSlot'),
+          ),
+      ),
+    ];
+    return after.length
+      ? translate('readinessCheckedAfter', {
+          count: readiness.totalRows,
+          slots: after.length,
+          label: after[0] ?? '',
+        })
+      : translate('readinessChecked', { count: readiness.totalRows });
+  }
   if (readiness.state === 'BLOCKED')
     return `Blocked · ${plural(readiness.blockedRows, 'row')} can’t render as they are`;
   if (readiness.state === 'INCOMPLETE') {

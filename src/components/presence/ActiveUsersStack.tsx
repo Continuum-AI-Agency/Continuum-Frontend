@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import React from 'react';
 import { AvatarStack } from '@/components/realtime/avatar-stack';
@@ -21,6 +22,8 @@ interface ActiveUsersStackProps {
 }
 
 export function ActiveUsersStack({ onlineUsers, status }: ActiveUsersStackProps) {
+  const tUi = useTranslations('common');
+
   const { user: currentUser } = useSession();
 
   const userMap = new Map(onlineUsers.map((u) => [u.user_id, u]));
@@ -54,7 +57,7 @@ export function ActiveUsersStack({ onlineUsers, status }: ActiveUsersStackProps)
       {status !== 'SUBSCRIBED' && (
         <div
           className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"
-          title="Connecting to realtime..."
+          title={tUi('m_ec96a985ab')}
         />
       )}
       {avatars.length > 0 && <AvatarStack avatars={avatars} />}

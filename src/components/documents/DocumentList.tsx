@@ -9,6 +9,7 @@ import {
 } from '@continuum/contracts';
 import { FileText, Loader2, Plus, Upload } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,13 +21,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { OnboardingState } from '@/lib/onboarding/state';
 import { cn } from '@/lib/utils';
 import { DocumentCategorySelect } from './DocumentCategorySelect';
 import { DocumentRow, PendingRow, ROW_EASE } from './DocumentRow';
 import { DocumentScopeSelect } from './DocumentScopeSelect';
 import type { CategoryFilter, DocumentDensity, DocumentView } from './types';
-import { filterDocumentsByCategory, filterDocumentsByScope, isEphemeral } from './types';
+import {
+  categoryLabel,
+  filterDocumentsByCategory,
+  filterDocumentsByScope,
+  isEphemeral,
+} from './types';
 import { useDocumentActions } from './useDocumentActions';
 import { useDocumentMutations } from './useDocumentMutations';
 import { useDocuments } from './useDocuments';
@@ -65,8 +72,12 @@ export function DocumentManager({
   seed,
   density,
   onStateChange,
-  emptyHint = 'PDFs, slides, sheets, docs, and images become brand context once indexed.',
+  emptyHint: providedEmptyHint,
 }: DocumentManagerProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
+  const emptyHint = providedEmptyHint ?? uiText('documentDefaultHint');
   const { show } = useToast();
   const reduceMotion = useReducedMotion();
   const { documents } = useDocuments(brandId, seed);
@@ -114,15 +125,17 @@ export function DocumentManager({
     if (result.succeeded > 0) {
       show({
         title:
-          result.succeeded === 1 ? 'Document uploaded' : `${result.succeeded} documents uploaded`,
-        description: 'Indexing has started.',
+          result.succeeded === 1
+            ? uiText('m_2c6594a2af')
+            : uiText('m_c967b54992', { v0: String(result.succeeded) }),
+        description: uiText('m_24fd6b25bd'),
         variant: 'success',
       });
     }
     if (result.failed > 0) {
       show({
-        title: 'Upload failed',
-        description: `${result.failed} file${result.failed === 1 ? '' : 's'} could not be uploaded.`,
+        title: uiText('upload_failed_6efc5d2'),
+        description: uiText('m_a5eeb0e47f', { v0: result.failed }),
         variant: 'error',
       });
     }
@@ -134,8 +147,8 @@ export function DocumentManager({
       const signedUrl = await mutations.openSignedUrl(storagePath);
       window.open(signedUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate download link.';
-      show({ title: 'Download failed', description: message, variant: 'error' });
+      const message = getUiErrorMessage(err);
+      show({ title: uiText('download_failed_eae34cc'), description: message, variant: 'error' });
     }
   };
 
@@ -145,8 +158,8 @@ export function DocumentManager({
       const url = await mutations.openInlineUrl(storagePath);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to open document.';
-      show({ title: 'Open failed', description: message, variant: 'error' });
+      const message = getUiErrorMessage(err);
+      show({ title: uiText('m_cdf689c09c'), description: message, variant: 'error' });
     }
   };
 
@@ -156,21 +169,21 @@ export function DocumentManager({
     try {
       await mutations.archiveDocument(documentId, onStateChange);
       show({
-        title: 'Document taken down',
-        description: 'Agents can no longer use it. Restore it from Archived.',
+        title: uiText('m_66558a531a'),
+        description: uiText('m_df02900aa7'),
         variant: 'success',
         action: {
-          label: 'Undo',
+          label: uiText('undo_a8283ad'),
           onClick: () => {
             void mutations
               .restoreDocument(documentId, onStateChange)
-              .catch(() => show({ title: 'Could not restore document', variant: 'error' }));
+              .catch(() => show({ title: uiText('m_de0bc6bc5c'), variant: 'error' }));
           },
         },
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not take down document.';
-      show({ title: 'Take down failed', description: message, variant: 'error' });
+      const message = getUiErrorMessage(err);
+      show({ title: uiText('m_17af345542'), description: message, variant: 'error' });
     }
   };
 
@@ -178,8 +191,8 @@ export function DocumentManager({
     try {
       await mutations.updateCategory(documentId, category, onStateChange);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not update category.';
-      show({ title: 'Update failed', description: message, variant: 'error' });
+      const message = getUiErrorMessage(err);
+      show({ title: uiText('update_failed_e58282f'), description: message, variant: 'error' });
     }
   };
 
@@ -215,7 +228,7 @@ export function DocumentManager({
     // A labelled section rather than a bare div: drag-and-drop is a pointer-only
     // convenience here, and the keyboard-accessible path is the Upload button inside.
     <section
-      aria-label="Brand documents"
+      aria-label={uiText('brand_documents_7bc955e')}
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -325,7 +338,11 @@ function SyncBar({
   /** Hidden in the compact onboarding surface, whose uploads are always permanent. */
   showScope: boolean;
 }) {
-  const summary = formatSummary({ ready, processing, errors });
+  const uiText = useTranslations('common');
+  const summary =
+    ready + processing + errors === 0
+      ? uiText('m_b05a4927a0')
+      : uiText('m_aab232a7d4', { ready, processing, errors });
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/30 px-3 py-2">
       <div className="flex min-w-0 items-center gap-2">
@@ -337,7 +354,7 @@ function SyncBar({
         <DocumentCategorySelect
           value={uploadCategory}
           onChange={onUploadCategoryChange}
-          ariaLabel="Category for new uploads"
+          ariaLabel={uiText('documentNewUploadCategory')}
         />
         <button
           type="button"
@@ -354,7 +371,7 @@ function SyncBar({
           ) : (
             <Plus className="h-3.5 w-3.5" />
           )}
-          {uploading ? 'Uploading…' : 'Upload document'}
+          {uploading ? uiText('uploading_5ce44dd') : uiText('m_73183a7050')}
         </button>
       </div>
     </div>
@@ -368,45 +385,29 @@ function CategoryFilterSelect({
   value: CategoryFilter;
   onChange: (filter: CategoryFilter) => void;
 }) {
+  const tUi = useTranslations('common');
+
   return (
     <Select value={value} onValueChange={(next) => onChange(next as CategoryFilter)}>
       <SelectTrigger
         size="sm"
-        aria-label="Filter documents by category"
+        aria-label={tUi('m_4c37133b5a')}
         className="h-7 gap-1 rounded-full px-2.5 text-xs font-medium"
       >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all" className="text-xs">
-          All categories
+          {tUi('m_060be00f4f')}
         </SelectItem>
         {DOCUMENT_CATEGORY_VALUES.map((category) => (
           <SelectItem key={category} value={category} className="text-xs">
-            {DOCUMENT_CATEGORY_LABELS[category]}
+            {categoryLabel(category, tUi)}
           </SelectItem>
         ))}
       </SelectContent>
     </Select>
   );
-}
-
-function formatSummary({
-  ready,
-  processing,
-  errors,
-}: {
-  ready: number;
-  processing: number;
-  errors: number;
-}): string {
-  const total = ready + processing + errors;
-  if (total === 0) return 'Add files available to this brand.';
-  const parts: string[] = [];
-  if (ready > 0) parts.push(`${ready} ready`);
-  if (processing > 0) parts.push(`${processing} processing`);
-  if (errors > 0) parts.push(`${errors} error${errors === 1 ? '' : 's'}`);
-  return parts.join(' · ');
 }
 
 function ItemPanel({
@@ -455,6 +456,8 @@ function EmptyState({
   dragActive: boolean;
   onBrowse: () => void;
 }) {
+  const tUi = useTranslations('common');
+
   return (
     <div
       className={cn(
@@ -466,7 +469,7 @@ function EmptyState({
         <FileText className="h-5 w-5" aria-hidden />
       </span>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">No documents yet</p>
+        <p className="text-sm font-medium text-foreground">{tUi('m_1837bb9991')}</p>
         <p className="text-xs text-muted-foreground">{hint}</p>
       </div>
       <button
@@ -475,9 +478,9 @@ function EmptyState({
         className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Upload className="h-3.5 w-3.5" />
-        Browse files
+        {tUi('m_524932e050')}
       </button>
-      <p className="text-xs text-muted-foreground">…or drop them anywhere on this card.</p>
+      <p className="text-xs text-muted-foreground">{tUi('m_ad4c78b7ee')}</p>
     </div>
   );
 }

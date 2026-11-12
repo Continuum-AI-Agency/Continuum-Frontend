@@ -2,6 +2,7 @@
 
 import type { RecommendedCompetitor } from '@continuum/contracts';
 import { Check, Plus, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { initials, tileStyle } from './brandVisuals';
 
 export function RecommendedCompetitorCard({
@@ -15,6 +16,7 @@ export function RecommendedCompetitorCard({
   onDismiss: () => void;
   isTracking: boolean;
 }) {
+  const uiText = useTranslations('competitor');
   const { name, instagramHandle, insight, alreadyTracked } = competitor;
   return (
     <article className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3">
@@ -36,7 +38,7 @@ export function RecommendedCompetitorCard({
         <button
           type="button"
           onClick={onDismiss}
-          aria-label={`Dismiss ${name}`}
+          aria-label={uiText('m_fb06e70fe4', { name: name })}
           className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
         >
           <X className="size-3.5" />
@@ -47,7 +49,8 @@ export function RecommendedCompetitorCard({
 
       {alreadyTracked ? (
         <span className="inline-flex items-center gap-1 self-start rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-          <Check className="size-3" /> Tracked
+          <Check className="size-3" />
+          {uiText('m_f453f5a887')}
         </span>
       ) : (
         <button
@@ -56,7 +59,8 @@ export function RecommendedCompetitorCard({
           disabled={isTracking}
           className="inline-flex items-center justify-center gap-1 self-start rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
-          <Plus className="size-3" /> {isTracking ? 'Tracking…' : 'Track'}
+          <Plus className="size-3" />{' '}
+          {isTracking ? uiText('tracking_0ef0411') : uiText('track_051f01f')}
         </button>
       )}
     </article>

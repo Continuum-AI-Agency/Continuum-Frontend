@@ -1,6 +1,7 @@
 'use client';
 
 import { FileText } from '@phosphor-icons/react';
+import { useTranslations } from 'next-intl';
 
 import { DesignSystemCard } from '@/components/design-system/DesignSystemCard';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
@@ -28,6 +29,8 @@ export function DocumentsScreen({
   brandId,
   onDesignSystemBusyChange,
 }: DocumentsScreenProps) {
+  const tUi = useTranslations('onboarding');
+
   const { state } = useOnboarding();
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
@@ -35,25 +38,20 @@ export function DocumentsScreen({
         <div className="mb-8 text-center">
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--primary)_22%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] px-3 py-1 text-xs font-semibold text-[var(--primary)]">
             <FileText className="h-3 w-3" />
-            Step 2 of {totalSteps}
+            {tUi('m_49353e0ab6')}
+            {totalSteps}
           </div>
           <div className="flex items-center justify-center gap-2">
             <h1 className="text-balance text-[1.75rem] font-bold leading-tight tracking-tight text-foreground md:text-[2.5rem]">
-              Brand documents
+              {tUi('m_5552971562')}
             </h1>
-            <HelpPopover label="What documents help?">
-              <p className="font-semibold text-foreground">What documents help?</p>
-              <p className="text-muted-foreground">
-                Anything that captures your brand&apos;s voice or strategy: style guides, prior
-                campaigns, taglines, decks, or product one-pagers. Continuum reads them to ground
-                its analysis in your actual work.
-              </p>
+            <HelpPopover label={tUi('m_db21ef550a')}>
+              <p className="font-semibold text-foreground">{tUi('m_db21ef550a')}</p>
+              <p className="text-muted-foreground">{tUi('m_f2e5366fa2')}</p>
             </HelpPopover>
           </div>
           <p className="mx-auto mt-3 max-w-md text-[0.875rem] leading-relaxed text-muted-foreground">
-            {state.intake?.kind === 'documents'
-              ? 'Upload at least one readable document to ground your Brand DNA in your actual work.'
-              : 'Optional. Add brand materials to strengthen the analysis of your starting source.'}
+            {state.intake?.kind === 'documents' ? tUi('m_a3db8fb612') : tUi('m_e4f06fb898')}
           </p>
         </div>
 

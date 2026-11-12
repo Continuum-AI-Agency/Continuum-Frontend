@@ -6,6 +6,7 @@ import {
   serializeForBroadcast,
   serializeWorkflowSnapshot,
 } from './workflowSerialization';
+import { workflowFailure } from './workflowUiFailure';
 
 const buildNode = (overrides: Partial<StudioNode> = {}): StudioNode => ({
   id: 'node-1',
@@ -42,6 +43,22 @@ describe('workflowSerialization', () => {
 
     const firstNode = snapshot.nodes[0];
     expect(firstNode.data).toEqual({ value: 'hello' });
+  });
+
+  it('drops transient error presentation from persistence and peer broadcasts', () => {
+    const node = buildNode({
+      data: {
+        value: 'keep',
+        error: 'raw diagnostic',
+        errorCode: 'image_blocked',
+        uiFailure: workflowFailure('workflow_missing_required_prompt_fd8a0824'),
+      },
+    });
+    for (const snapshot of [
+      serializeWorkflowSnapshot([node], [], 'bezier'),
+      serializeForBroadcast([node], [], 'bezier'),
+    ])
+      expect(snapshot.nodes[0].data).toEqual({ value: 'keep' });
   });
 
   it('preserves the generation signature across persist and broadcast serialization', () => {

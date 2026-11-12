@@ -275,7 +275,11 @@ mock.module('@/components/forge/useForgeRun', () => ({
 }));
 
 mock.module('@/components/forge/TemplateAuthoringEditor', () => ({
-  TemplateAuthoringEditor: (props: { brandId: string; assetId: string; versionId: string | null }) => (
+  TemplateAuthoringEditor: (props: {
+    brandId: string;
+    assetId: string;
+    versionId: string | null;
+  }) => (
     <div
       data-testid="authoring-source"
       data-source-key={`${props.brandId}:${props.assetId}:${props.versionId ?? ''}`}
@@ -313,12 +317,19 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TemplateDetail } from './TemplateDetail';
 
 installPickerDomGlobals();

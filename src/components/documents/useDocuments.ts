@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnboardingDocument } from '@/lib/onboarding/state';
@@ -66,7 +67,11 @@ function rowToView(row: RealtimeRow): DocumentView {
 
 function mergeRealtimeUpdate(existing: DocumentView, row: RealtimeRow): DocumentView {
   const next = rowToView(row);
-  return { ...existing, ...next };
+  return {
+    ...existing,
+    ...next,
+    uiErrorCode: next.status === 'error' && !next.errorCode ? existing.uiErrorCode : undefined,
+  };
 }
 
 // A document that stops receiving progress for this long while still "processing" is
@@ -99,6 +104,7 @@ function asTimedOut(doc: DocumentView): DocumentView {
     status: 'error',
     progressStep: 'error',
     errorMessage: doc.errorMessage ?? PROCESSING_TIMEOUT_MESSAGE,
+    uiErrorCode: 'PROCESSING_TIMEOUT',
   };
 }
 
@@ -167,6 +173,8 @@ export type DocumentsHandle = {
 };
 
 export function useDocuments(brandId: string, seed: DocumentView[]): DocumentsHandle {
+  const tUi = useTranslations('common');
+
   const [documents, setDocuments] = useState<DocumentView[]>(seed);
   const [loading, setLoading] = useState<boolean>(() => Boolean(brandId));
   // id -> last time the SERVER reported anything about this document.

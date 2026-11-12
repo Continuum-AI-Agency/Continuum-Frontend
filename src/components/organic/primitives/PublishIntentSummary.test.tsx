@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import type { ReactElement } from 'react';
+import { render as renderUI } from '@/i18n/__tests__/render';
+import en from '../../../../messages/organic/en.json';
 import {
   intentAccountName,
   PublishIntentSummary,
@@ -11,6 +15,13 @@ import {
   SyntaxError;
 
 afterEach(cleanup);
+
+const render = (ui: ReactElement) =>
+  renderUI(
+    <NextIntlClientProvider locale="en" timeZone="UTC" messages={{ organic: en }}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
 
 const intent = (overrides: Partial<PublishIntentSummaryData> = {}): PublishIntentSummaryData => ({
   platform: 'instagram',

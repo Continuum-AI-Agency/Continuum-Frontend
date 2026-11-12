@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
+
 // The Home's goal tiles. Each tile shows one objective's figure for the week; a small pencil
 // opens a popover to rename it, measure something else, make it the main goal or remove it.
 // Every change is saved for the scope on screen, so the Home becomes the one the client wants.
@@ -24,9 +27,15 @@ import type { ObjectiveFigure } from './homeOverviewModel';
 
 const METRICS = homeObjectiveMetricSchema.options;
 
-export function costLabelFor(objective: HomeObjective, fallback: string): string {
+export function costLabelFor(
+  objective: HomeObjective,
+  fallback: string,
+  t?: ReturnType<typeof useTranslations<'dashboard'>>,
+): string {
   const meta = HOME_OBJECTIVE_METRICS[objective.metric];
-  if (objective.label === meta.label || meta.unit === 'currency') return fallback;
+  if (objective.label === meta.label || meta.unit === 'currency')
+    return t ? localizeDashboardCopy(fallback, t) : fallback;
+  if (t) return t('m_5e14c2536f', { label: objective.label });
   const [first = '', ...rest] = objective.label.toLowerCase().split(' ');
   const singular = first.endsWith('s') && first.length > 3 ? first.slice(0, -1) : first;
   return `Cost per ${[singular, ...rest].join(' ')}`;
@@ -41,6 +50,7 @@ function ObjectiveEditor({
   objectives: HomeObjective[];
   onChange: (next: HomeObjective[]) => void;
 }) {
+  const uiText = useTranslations('dashboard');
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState(objective.label);
 
@@ -53,7 +63,7 @@ function ObjectiveEditor({
         render={
           <button
             type="button"
-            aria-label={`Edit goal ${objective.label}`}
+            aria-label={uiText('m_9f0a95cb65', { v0: String(objective.label) })}
             className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
           />
         }
@@ -74,7 +84,7 @@ function ObjectiveEditor({
             htmlFor={`goal-name-${objective.id}`}
             className="text-2xs uppercase tracking-wide text-muted-foreground"
           >
-            Name
+            {uiText('name_dcd1d52')}
           </label>
           <Input
             id={`goal-name-${objective.id}`}
@@ -85,7 +95,9 @@ function ObjectiveEditor({
           />
         </form>
         <div className="space-y-1">
-          <span className="text-2xs uppercase tracking-wide text-muted-foreground">Measures</span>
+          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+            {uiText('measures_aabaa8f')}
+          </span>
           <div className="flex flex-wrap gap-1">
             {METRICS.map((metric) => (
               <button
@@ -107,14 +119,14 @@ function ObjectiveEditor({
                     : 'border-border text-muted-foreground hover:text-foreground',
                 )}
               >
-                {HOME_OBJECTIVE_METRICS[metric].label}
+                {localizeDashboardCopy(HOME_OBJECTIVE_METRICS[metric].label, uiText)}
               </button>
             ))}
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-border pt-2">
           {objective.role === 'primary' ? (
-            <span className="text-xs text-muted-foreground">Main goal</span>
+            <span className="text-xs text-muted-foreground">{uiText('main_goal_d846c4d')}</span>
           ) : (
             <Button
               size="sm"
@@ -125,7 +137,8 @@ function ObjectiveEditor({
                 setOpen(false);
               }}
             >
-              <Star className="size-3" /> Make main goal
+              <Star className="size-3" />
+              {uiText('m_2705ef1bc2')}
             </Button>
           )}
           {objectives.length > 1 ? (
@@ -143,7 +156,7 @@ function ObjectiveEditor({
                 setOpen(false);
               }}
             >
-              Remove
+              {uiText('remove_c3812fc')}
             </Button>
           ) : null}
         </div>
@@ -153,16 +166,21 @@ function ObjectiveEditor({
 }
 
 function ObjectiveTile({
+  inferredLabels,
   figure,
   objectives,
   currency,
   onChange,
 }: {
+  inferredLabels?: boolean;
   figure: ObjectiveFigure;
   objectives: HomeObjective[];
   currency: string | null;
   onChange: (next: HomeObjective[]) => void;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('dashboard');
   const { objective } = figure;
   const isPrimary = objective.role === 'primary';
   const cost = figure.cost;
@@ -184,7 +202,7 @@ function ObjectiveTile({
           <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
         ) : null}
         <span className="truncate text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-          {objective.label}
+          {inferredLabels ? localizeDashboardCopy(objective.label, uiText) : objective.label}
         </span>
         <ObjectiveEditor objective={objective} objectives={objectives} onChange={onChange} />
       </div>
@@ -198,25 +216,25 @@ function ObjectiveTile({
                 isPrimary ? 'text-3xl' : 'text-2xl',
               )}
             >
-              {formatFigure(figure.value, figure.unit, currency)}
+              {formatFigure(figure.value, figure.unit, currency, uiLocale)}
             </span>
             {figure.deltaPct !== null ? <DeltaBadge value={figure.deltaPct} /> : null}
           </div>
           <div className="flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground">
             {cost ? (
               <>
-                <span>{costLabelFor(objective, cost.label)}</span>
+                <span>{costLabelFor(objective, cost.label, uiText)}</span>
                 <span className="font-mono tabular-nums text-foreground">
                   {cost.kind === 'ratio'
-                    ? formatRatio(cost.value)
-                    : formatMoney(cost.value, currency)}
+                    ? formatRatio(cost.value, uiLocale)
+                    : formatMoney(cost.value, currency, uiLocale)}
                 </span>
                 {costChange !== null ? (
                   <DeltaBadge value={costChange} goodWhenDown={cost.kind === 'money'} />
                 ) : null}
               </>
             ) : (
-              <span>Last 7 days</span>
+              <span>{uiText('last_7_days_0603dec')}</span>
             )}
           </div>
           {figure.series.length > 1 ? (
@@ -225,13 +243,13 @@ function ObjectiveTile({
               width={160}
               height={24}
               className="mt-1 w-full"
-              label={`${objective.label}, daily`}
+              label={uiText('m_bbbcc85fb5', { v0: String(objective.label) })}
             />
           ) : null}
         </>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Not counted for this account yet. It appears after the next data update.
+          {uiText('not_counted_for_this_account_yet_it_appears_a_e3c8e05')}
         </p>
       )}
     </div>
@@ -239,16 +257,20 @@ function ObjectiveTile({
 }
 
 export function ObjectiveStrip({
+  inferredLabels,
   figures,
   objectives,
   currency,
   onChange,
 }: {
+  inferredLabels?: boolean;
   figures: ObjectiveFigure[];
   objectives: HomeObjective[];
   currency: string | null;
   onChange: (next: HomeObjective[]) => void;
 }) {
+  const tUi = useTranslations('dashboard');
+
   const used = new Set(objectives.map((objective) => objective.metric));
   const nextMetric: HomeObjectiveMetric | undefined = METRICS.find((metric) => !used.has(metric));
 
@@ -256,6 +278,7 @@ export function ObjectiveStrip({
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {figures.map((figure) => (
         <ObjectiveTile
+          inferredLabels={inferredLabels}
           key={figure.objective.id}
           figure={figure}
           objectives={objectives}
@@ -279,7 +302,8 @@ export function ObjectiveStrip({
           }
           className="flex min-h-24 items-center justify-center gap-1 rounded-lg border border-dashed border-border text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
         >
-          <Plus className="size-3.5" /> Add goal
+          <Plus className="size-3.5" />
+          {tUi('m_4e4eccba09')}
         </button>
       ) : null}
     </div>

@@ -2,7 +2,11 @@
 // in place of an emoji glyph or a bordered pill. One map, so the Actions tray and the
 // portfolio's daily read colour the same kind the same way.
 
+import type { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 import { cn } from '@/lib/utils';
 import * as typeScale from '../typeScale';
 
@@ -42,8 +46,8 @@ export function kindTone(kind: string): KindTone {
 }
 
 /** The tag's word for a recommendation kind ("Creative" for every creative-level kind). */
-export function kindWord(kind: string): string {
-  return KIND_WORD[kindTone(kind)];
+export function kindWord(kind: string, t?: ScaleCopy): string {
+  return t ? t('actionKindTag', { tone: kindTone(kind) }) : KIND_WORD[kindTone(kind)];
 }
 
 export function KindTag({

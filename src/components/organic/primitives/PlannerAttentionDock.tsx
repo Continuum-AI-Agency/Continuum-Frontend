@@ -1,10 +1,12 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
+import type { UiLocale } from '@/i18n/config';
 import { postPlatformLabel } from '@/lib/organic/postPlatforms';
 import { cn } from '@/lib/utils';
-import { UNSCHEDULED_DAY_ID } from './calendar-utils';
+import { formatWallClockLabel, UNSCHEDULED_DAY_ID } from './calendar-utils';
 import type { CreatePostOptions, PlannerPlatform } from './planner-platforms';
 import {
   attentionHeading,
@@ -44,17 +46,26 @@ const SECTION_HEADING_CLASS =
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
-function formatDockDay(dayId: string, options: Intl.DateTimeFormatOptions): string {
-  return new Date(`${dayId}T12:00:00`).toLocaleDateString('en-US', options);
+function formatDockDay(
+  dayId: string,
+  options: Intl.DateTimeFormatOptions,
+  locale: UiLocale = 'en',
+): string {
+  return new Date(`${dayId}T12:00:00`).toLocaleDateString(locale, options);
 }
 
-const formatSlotDay = (dayId: string) =>
-  formatDockDay(dayId, { weekday: 'short', month: 'short', day: 'numeric' });
+const formatSlotDay = (dayId: string, locale: UiLocale) =>
+  formatDockDay(dayId, { weekday: 'short', month: 'short', day: 'numeric' }, locale);
 
-function draftWhen(draft: OrganicCalendarDraft, dayId: string): string {
-  if (dayId === UNSCHEDULED_DAY_ID) return 'No date';
-  const weekday = formatDockDay(dayId, { weekday: 'short' });
-  return `${weekday} ${Number(dayId.slice(8, 10))} · ${draft.timeLabel}`;
+function draftWhen(
+  draft: OrganicCalendarDraft,
+  dayId: string,
+  locale: UiLocale,
+  noDate: string,
+): string {
+  if (dayId === UNSCHEDULED_DAY_ID) return noDate;
+  const weekday = formatDockDay(dayId, { weekday: 'short' }, locale);
+  return `${weekday} ${Number(dayId.slice(8, 10))} · ${formatWallClockLabel(draft.timeLabel, locale)}`;
 }
 
 function PlatformMark({ platform, platforms }: { platform: string; platforms: PlannerPlatform[] }) {
@@ -77,12 +88,14 @@ type DraftRowProps = {
 };
 
 function DraftRowContent({ draft, dayId, platforms }: Omit<DraftRowProps, 'onSelect'>) {
-  const title = draft.title || 'Untitled';
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
+  const title = draft.title || uiText('untitled_f59ab8d');
   return (
     <>
       <PlatformMark platform={draft.platforms[0] ?? 'instagram'} platforms={platforms} />
       <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">
-        {draftWhen(draft, dayId)}
+        {draftWhen(draft, dayId, uiLocale, uiText('plannerNoDate'))}
       </span>
       <span className="min-w-0 truncate text-foreground" title={title}>
         {title}
@@ -137,6 +150,7 @@ const AttentionRow = React.memo(function AttentionRow({
     PlannerAttentionDockProps,
     'onSelectDraft' | 'onAddMedia'
   >) {
+  const uiText = useTranslations('organic');
   return (
     <li
       data-dock-item=""
@@ -164,10 +178,12 @@ const AttentionRow = React.memo(function AttentionRow({
           size="xs"
           variant="outline"
           className="shrink-0"
-          aria-label={`Add media to ${draft.title || 'Untitled'}`}
+          aria-label={uiText('addMediaToPost', {
+            title: draft.title || uiText('untitled_f59ab8d'),
+          })}
           onClick={() => onAddMedia(draft.id)}
         >
-          Add media
+          {uiText('add_media_d5d5d26')}
         </Button>
       ) : null}
     </li>
@@ -227,13 +243,17 @@ const LookaheadTile = React.memo(function LookaheadTile({
   platforms: PlannerPlatform[];
   onCreatePost: (options: CreatePostOptions) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const open = openKeys
     ? openKeys.split(',').flatMap((key) => platforms.filter((platform) => platform.key === key))
     : [];
   const dayNumber = Number(dayId.slice(8, 10));
-  const label = `Plan a post for ${formatSlotDay(dayId)} · ${planned} planned · open: ${
-    open.map((platform) => platform.label).join(', ') || 'none'
-  }`;
+  const label = uiText('plannerLookaheadDayAria', {
+    date: formatSlotDay(dayId, uiLocale),
+    count: planned,
+    platforms: open.map((platform) => platform.label).join(', ') || uiText('plannerNoPlatforms'),
+  });
   return (
     <button
       type="button"
@@ -265,7 +285,9 @@ const LookaheadTile = React.memo(function LookaheadTile({
             isToday && 'font-semibold text-foreground',
           )}
         >
-          {showMonth ? formatDockDay(dayId, { month: 'short', day: 'numeric' }) : dayNumber}
+          {showMonth
+            ? formatDockDay(dayId, { month: 'short', day: 'numeric' }, uiLocale)
+            : dayNumber}
         </span>
         {planned > 0 ? (
           <span className="shrink-0 rounded-full bg-foreground/10 px-1.5 text-2xs font-medium tabular-nums text-foreground [@container(height<14rem)]:leading-none">
@@ -295,6 +317,8 @@ export const PlannerAttentionDock = React.memo(function PlannerAttentionDock({
   onAddMedia,
   onCreatePost,
 }: PlannerAttentionDockProps) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const attentionHeadingId = React.useId();
   const lookaheadHeadingId = React.useId();
   const hasAttention = showAttention && dock.attention.length > 0;
@@ -332,7 +356,7 @@ export const PlannerAttentionDock = React.memo(function PlannerAttentionDock({
               className="max-h-[50cqh] min-h-0 overflow-y-auto overscroll-contain pb-1.5 [@container(width>=48rem)]:max-h-none"
             >
               <h2 id={attentionHeadingId} className={SECTION_HEADING_CLASS}>
-                {attentionHeading(dock.attention)}
+                {attentionHeading(dock.attention, uiText)}
               </h2>
               <div className="flex flex-col gap-1 [@container(height<4.5rem)]:hidden">
                 {dock.attention.map((group) => (
@@ -357,16 +381,18 @@ export const PlannerAttentionDock = React.memo(function PlannerAttentionDock({
             )}
           >
             <h2 id={lookaheadHeadingId} className={SECTION_HEADING_CLASS}>
-              {lookaheadHeading(dock.openDays)}
+              {lookaheadHeading(dock.openDays, uiText)}
             </h2>
             <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-[auto_repeat(4,minmax(0,1fr))] gap-1 px-2 [@container(height<14rem)]:grid-rows-[repeat(4,minmax(0,1fr))] [@container(height<14rem)]:gap-0.5 [@container(height<5.5rem)]:hidden">
-              {WEEKDAYS.map((weekday) => (
+              {WEEKDAYS.map((weekday, index) => (
                 <span
                   key={weekday}
                   aria-hidden
                   className="px-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground [@container(height<14rem)]:hidden"
                 >
-                  {weekday}
+                  {new Intl.DateTimeFormat(uiLocale, { weekday: 'short', timeZone: 'UTC' }).format(
+                    new Date(Date.UTC(2026, 0, 5 + index)),
+                  )}
                 </span>
               ))}
               {dock.lookahead.map((day, index) => (

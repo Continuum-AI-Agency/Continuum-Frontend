@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 import type { OrganicCalendarPostedContent } from '@/components/organic/primitives/types';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   type CalendarPostAccountsByPlatform,
   calendarPostsResponseSchema,
@@ -84,6 +85,7 @@ export function useCalendarPostedContent({
   monthAnchorDate,
   accountsByPlatform,
 }: UseCalendarPostedContentParams) {
+  const formatUiError = useUiErrorMessage();
   const queryClient = useQueryClient();
   const [isFetchingExternal, setIsFetchingExternal] = React.useState(false);
   const [externalRanges, setExternalRanges] = React.useState(NO_EXTERNAL_RANGES);
@@ -111,7 +113,8 @@ export function useCalendarPostedContent({
     : null;
   const includeExternal = cacheKey !== null && externalRanges.has(cacheKey);
   const queryKey = React.useMemo(
-    () => calendarPostsQueryKey(brandProfileId, range.start, range.end, accountsKey, includeExternal),
+    () =>
+      calendarPostsQueryKey(brandProfileId, range.start, range.end, accountsKey, includeExternal),
     [accountsKey, brandProfileId, includeExternal, range.end, range.start],
   );
 
@@ -177,7 +180,7 @@ export function useCalendarPostedContent({
       // starting a second, unforced external request.
       setExternalRanges((current) => new Set(current).add(cacheKey));
     } catch (error: unknown) {
-      setExternalError({ cacheKey, message: error instanceof Error ? error.message : LOAD_ERROR });
+      setExternalError({ cacheKey, message: formatUiError(error) });
     } finally {
       setIsFetchingExternal(false);
     }

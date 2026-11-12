@@ -1,4 +1,5 @@
 'use client';
+import {translateControlLabel} from '@/lib/ui/controlLabels';
 
 import { type ChatMediaRef, chatMediaRefKey, chatMediaRefSchema } from '@continuum/contracts';
 import {
@@ -13,6 +14,7 @@ import {
   Video,
   Workflow,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type { AgentMentionReference } from '@/lib/agent-references';
@@ -191,6 +193,7 @@ function MentionHoverBody({
   still?: string | null;
   onStillError?: () => void;
 }) {
+  const uiText = useTranslations('common');
   const meta = (reference.metadata ?? {}) as Record<string, unknown>;
   const preview = previewFromReference(reference);
   const poster = preview.kind === 'video' ? (still ?? posterFromReference(reference)) : null;
@@ -287,7 +290,7 @@ function MentionHoverBody({
             {reference.label}
           </p>
           <p className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
-            {typeLabel(reference.type)}
+            {translateControlLabel(typeLabel(reference.type),uiText)}
             {kind ? ` · ${kind}` : null}
             {category ? ` · ${category}` : null}
           </p>
@@ -312,7 +315,7 @@ function MentionHoverBody({
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {intent === 'optimize_for' ? (
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary">
-              Optimize for
+              {uiText('m_435817655d')}
             </span>
           ) : null}
           {metricLabel || metricKey ? (
@@ -363,7 +366,7 @@ function MentionHoverBody({
       {exemplarSnippets.length > 0 ? (
         <div className="space-y-1 border-t border-border/60 pt-2">
           <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-            Top creatives
+            {uiText('m_3ea03a4229')}
           </p>
           {exemplarSnippets.map((snippet, i) => (
             <p key={`${snippet}-${i}`} className="line-clamp-2 text-xs text-muted-foreground">
@@ -378,7 +381,7 @@ function MentionHoverBody({
                     className="text-sky-500 underline-offset-2 hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    open
+                    {uiText('open_2348f99')}
                   </a>
                 </>
               ) : null}
@@ -399,6 +402,8 @@ function InlineMention({
   fallbackLabel: string;
   stills: ChipStills;
 }) {
+const tUi=useTranslations('common');
+
   const label = reference?.label ?? fallbackLabel.replace(/^@/, '');
   const preview = reference ? previewFromReference(reference) : { url: null, kind: null };
   const visual = reference ? isVisualReference(reference) : false;
@@ -455,7 +460,7 @@ function InlineMention({
           <button
             type="button"
             className="inline align-baseline border-0 bg-transparent p-0 text-left"
-            aria-label={`${typeLabel(reference.type)}: ${label}`}
+            aria-label={`${translateControlLabel(typeLabel(reference.type),tUi)}: ${label}`}
           >
             {trigger}
           </button>

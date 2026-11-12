@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { PortfolioSuggestion } from '@continuum/contracts';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { StepStart } from './StepStart';
 
 // PP-L1V Optimizer Overview EMPTY layout shift (div.divide-y.border-b, CLS 0.29): with no

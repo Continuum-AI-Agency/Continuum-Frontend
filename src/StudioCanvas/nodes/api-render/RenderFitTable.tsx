@@ -1,6 +1,7 @@
 'use client';
 
 import { checkAssetSwap } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,6 +29,8 @@ import { apiRenderVariableLabel } from './resolveApiRenderVariables';
  * also what sends the finished frame to the judge.
  */
 export function RenderFitTable({ data }: { data: ApiRenderNodeData }) {
+  const translateUi = useUiTranslations('studio');
+
   const rows = useMemo(() => {
     const boxes = data.templateLayout?.boxes ?? [];
     return (data.variableDefinitions ?? [])
@@ -49,14 +52,14 @@ export function RenderFitTable({ data }: { data: ApiRenderNodeData }) {
   if (rows.length === 0) return null;
 
   return (
-    <InspectorSection title="Artwork placement">
+    <InspectorSection title={translateUi('artwork_placement_c8c5b1bf')}>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Slot</TableHead>
-              <TableHead>Lands</TableHead>
-              <TableHead>Covers</TableHead>
+              <TableHead>{translateUi('slot_79689782')}</TableHead>
+              <TableHead>{translateUi('lands_09e6b75c')}</TableHead>
+              <TableHead>{translateUi('covers_3f8d88db')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -70,17 +73,19 @@ export function RenderFitTable({ data }: { data: ApiRenderNodeData }) {
                 </TableCell>
                 <TableCell className="align-top">
                   {verdict.state === 'unknown' ? (
-                    <Badge variant="muted">Not measured</Badge>
+                    <Badge variant="muted">{translateUi('not_measured_040f7884')}</Badge>
                   ) : verdict.state === 'clipped' ? (
                     <>
-                      <Badge variant="warning">Clips {verdict.clippedPx?.join('/')} px</Badge>
+                      <Badge variant="warning">
+                        {translateUi('clips_4b782ddc')} {verdict.clippedPx?.join('/')} px
+                      </Badge>
                       <span className="mt-0.5 block text-2xs text-muted-foreground tabular-nums">
                         {verdict.box?.map((n) => Math.round(n)).join(', ')}
                       </span>
                     </>
                   ) : (
                     <>
-                      <Badge variant="success">In canvas</Badge>
+                      <Badge variant="success">{translateUi('in_canvas_59ebd6a5')}</Badge>
                       <span className="mt-0.5 block text-2xs text-muted-foreground tabular-nums">
                         {verdict.box?.map((n) => Math.round(n)).join(', ')}
                       </span>
@@ -100,12 +105,7 @@ export function RenderFitTable({ data }: { data: ApiRenderNodeData }) {
           </TableBody>
         </Table>
       </div>
-      <InspectorNote>
-        Estimated from the uploaded project file — a keyframed layer’s rest state and an off-centre
-        anchor are what the render confirms, and which file the fleet resolves is decided by the
-        root table’s workflow, not by this parse. Anything here that could not be measured sends the
-        finished frame to the judge.
-      </InspectorNote>
+      <InspectorNote> {translateUi('estimated_from_the_uploaded_project_6ffe843a')} </InspectorNote>
     </InspectorSection>
   );
 }

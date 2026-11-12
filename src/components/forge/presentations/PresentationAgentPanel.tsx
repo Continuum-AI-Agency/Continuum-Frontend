@@ -7,6 +7,7 @@ import type {
   PresentationProposal,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -23,16 +24,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { type PresentationScope, presentationsApi } from '@/lib/api/presentations.client';
 import { cn } from '@/lib/utils';
 import { PresentationCanvas } from './PresentationCanvas';
 import type { PresentationEngine } from './presentationEngine';
 
-const promptSchema = z.object({
-  prompt: z.string().trim().min(1, 'Describe how the deck should change.').max(20_000),
-  scope: z.enum(['deck', 'selected']),
-});
-const variantSchema = z.object({ name: z.string().trim().min(1, 'Name this variant.').max(120) });
+const promptSchema = (translateUi: ReturnType<typeof useUiTranslations<'forge'>>) =>
+  z.object({
+    prompt: z.string().trim().min(1, translateUi('validationPresentationPrompt')).max(20_000),
+    scope: z.enum(['deck', 'selected']),
+  });
+const variantSchema = (translateUi: ReturnType<typeof useUiTranslations<'forge'>>) =>
+  z.object({
+    name: z.string().trim().min(1, translateUi('validationPresentationVariant')).max(120),
+  });
 
 export function PresentationAgentPanel({
   scope,
@@ -65,12 +71,16 @@ export function PresentationAgentPanel({
   onCommands: (commands: PresentationCommand[]) => Promise<boolean>;
   editorBusy?: boolean;
 }) {
-  const form = useForm<z.infer<typeof promptSchema>>({
-    resolver: zodResolver(promptSchema),
+  const validationErrorMap = useValidationErrorMap();
+
+  const translateUi = useUiTranslations('forge');
+
+  const form = useForm<z.infer<ReturnType<typeof promptSchema>>>({
+    resolver: zodResolver(promptSchema(translateUi), { error: validationErrorMap }),
     defaultValues: { prompt: '', scope: 'deck' },
   });
-  const variant = useForm<z.infer<typeof variantSchema>>({
-    resolver: zodResolver(variantSchema),
+  const variant = useForm<z.infer<ReturnType<typeof variantSchema>>>({
+    resolver: zodResolver(variantSchema(translateUi), { error: validationErrorMap }),
     defaultValues: { name: '' },
   });
   const [requestBusy, setBusy] = useState(false);
@@ -138,14 +148,17 @@ export function PresentationAgentPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Describe the audience, narrative, and changes you want. Review proposed edits before
-        applying them or saving an independent variant.
+        {' '}
+        {translateUi('describe_the_audience_narrative_and_199a1b79')}{' '}
       </p>
       {document.layouts?.length ? (
         <details>
-          <summary className="cursor-pointer text-sm font-medium">Allowed layouts</summary>
+          <summary className="cursor-pointer text-sm font-medium">
+            {translateUi('allowed_layouts_7dc7428d')}
+          </summary>
           <p className="mt-2 text-xs text-muted-foreground">
-            Choose the layouts agents can use. Save these choices before drafting.
+            {' '}
+            {translateUi('choose_the_layouts_agents_can_use_s_545e505c')}{' '}
           </p>
           <div className="mt-3 flex max-h-48 flex-col gap-2 overflow-y-auto">
             {document.layouts.map((layout) => (
@@ -169,7 +182,9 @@ export function PresentationAgentPanel({
       <form onSubmit={propose}>
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="presentation-agent-scope">Change</FieldLabel>
+            <FieldLabel htmlFor="presentation-agent-scope">
+              {translateUi('change_c0bf75bd')}
+            </FieldLabel>
             <Select
               value={form.watch('scope')}
               onValueChange={(value) => form.setValue('scope', value)}
@@ -185,38 +200,49 @@ export function PresentationAgentPanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="deck">Whole deck</SelectItem>
-                  <SelectItem value="selected">Selected slides</SelectItem>
+                  <SelectItem value="deck">{translateUi('whole_deck_3b452d08')}</SelectItem>
+                  <SelectItem value="selected">
+                    {translateUi('selected_slides_6896c791')}
+                  </SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
           <Field>
-            <FieldLabel htmlFor="presentation-agent-prompt">Brief</FieldLabel>
+            <FieldLabel htmlFor="presentation-agent-prompt">
+              {translateUi('brief_ac40ae1e')}
+            </FieldLabel>
             <Textarea
               id="presentation-agent-prompt"
               rows={5}
               disabled={busy}
-              placeholder="Adapt this deck for our customer pitch. Keep the supplied numbers and brand styling."
+              placeholder={translateUi('adapt_this_deck_for_our_customer_pi_b722136d')}
               {...form.register('prompt')}
             />
             <FieldError errors={[form.formState.errors.prompt]} />
           </Field>
           {dirty ? (
             <Button type="button" variant="outline" onClick={() => void save()}>
-              Save before drafting
+              {' '}
+              {translateUi('save_before_drafting_d95f48cd')}{' '}
             </Button>
           ) : null}
           <Button type="submit" disabled={busy || dirty}>
-            {busy ? 'Drafting variants…' : 'Draft variants'}
+            {busy
+              ? translateUi('drafting_variants_25dfe346')
+              : translateUi('draft_variants_37e5010b')}
           </Button>
         </FieldGroup>
       </form>
       {proposalSet ? (
-        <section aria-label="Proposed variants" className="flex flex-col gap-2">
+        <section
+          aria-label={translateUi('proposed_variants_20072a33')}
+          className="flex flex-col gap-2"
+        >
           {stale ? (
             <p role="status" className="text-xs text-muted-foreground">
-              These proposals refer to an earlier revision. Draft again after saving.
+              {' '}
+              {translateUi('these_proposals_refer_to_an_earlier_40232641')}{' '}
             </p>
           ) : null}
           {proposalSet.proposals.map((proposal) => (
@@ -239,7 +265,7 @@ export function PresentationAgentPanel({
                   {proposal.summary}
                 </span>
                 <span className="text-xs font-normal">
-                  {proposal.commands.length} proposed edits
+                  {proposal.commands.length} {translateUi('proposed_edits_229089d6')}{' '}
                 </span>
               </span>
             </Button>
@@ -247,8 +273,13 @@ export function PresentationAgentPanel({
         </section>
       ) : null}
       {selected && !stale ? (
-        <section aria-label="Variant comparison" className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium">Original and proposed slide</h3>
+        <section
+          aria-label={translateUi('variant_comparison_b79776e5')}
+          className="flex flex-col gap-3"
+        >
+          <h3 className="text-sm font-medium">
+            {translateUi('original_and_proposed_slide_9a985178')}
+          </h3>
           <PresentationCanvas document={document} slideId={slideId} engine={engine} thumbnail />
           {comparison ? (
             <PresentationCanvas
@@ -263,7 +294,8 @@ export function PresentationAgentPanel({
             />
           ) : (
             <p role="status" className="text-xs text-muted-foreground">
-              Rendering proposed changes…
+              {' '}
+              {translateUi('rendering_proposed_changes_d3443839')}{' '}
             </p>
           )}
           <Button
@@ -291,7 +323,8 @@ export function PresentationAgentPanel({
               }
             }}
           >
-            Apply to this deck
+            {' '}
+            {translateUi('apply_to_this_deck_d04c3a5e')}{' '}
           </Button>
         </section>
       ) : null}
@@ -318,7 +351,9 @@ export function PresentationAgentPanel({
       >
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="presentation-variant-name">Variant name</FieldLabel>
+            <FieldLabel htmlFor="presentation-variant-name">
+              {translateUi('variant_name_0f204472')}
+            </FieldLabel>
             <Input id="presentation-variant-name" disabled={busy} {...variant.register('name')} />
             <FieldError errors={[variant.formState.errors.name]} />
           </Field>
@@ -327,16 +362,20 @@ export function PresentationAgentPanel({
             variant="outline"
             disabled={busy || dirty || Boolean(selected && stale)}
           >
-            Save independent variant
+            {' '}
+            {translateUi('save_independent_variant_e2e2ddfd')}{' '}
           </Button>
         </FieldGroup>
       </form>
       {saved ? (
         <p role="status" className="text-sm">
-          Saved “{saved.name}”.{' '}
+          {' '}
+          {translateUi('saved_97d79450')}
+          {saved.name}”.{' '}
           {onOpenVariant ? (
             <Button size="sm" variant="link" onClick={() => onOpenVariant(saved.assetId)}>
-              Open variant
+              {' '}
+              {translateUi('open_variant_a9b56930')}{' '}
             </Button>
           ) : null}
         </p>

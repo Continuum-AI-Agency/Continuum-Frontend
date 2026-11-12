@@ -19,6 +19,7 @@ import {
   MAX_COMMENT_ATTACHMENTS,
 } from '@continuum/contracts';
 import { Globe, Loader2, Lock, Paperclip, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -70,7 +71,7 @@ function detectMentionTrigger(textUpToCaret: string): { start: number; query: st
 
 export function CommentComposer({
   placeholder,
-  submitLabel = 'Post',
+  submitLabel,
   busy = false,
   autoFocus = false,
   brandId,
@@ -80,6 +81,8 @@ export function CommentComposer({
   reviewOptions = false,
   submitDisabled = false,
 }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const [body, setBody] = useState('');
   const [visibility, setVisibility] = useState<CommentVisibilityChoice>('internal');
   const [pending, setPending] = useState<PendingAttachment[]>([]);
@@ -247,7 +250,7 @@ export function CommentComposer({
         )}
       </div>
       {reviewOptions && pending.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5" aria-label="Attachments">
+        <ul className="flex flex-wrap gap-1.5" aria-label={translateUi('attachments_634de114')}>
           {pending.map((item) => (
             <li
               key={item.key}
@@ -272,7 +275,7 @@ export function CommentComposer({
               )}
               <button
                 type="button"
-                aria-label={`Remove ${item.name}`}
+                aria-label={translateUi('remove_value0_3028bf7d', { value0: String(item.name) })}
                 onClick={() => removeAttachment(item.key)}
                 className="absolute bottom-1 right-1 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
               >
@@ -296,10 +299,14 @@ export function CommentComposer({
               aria-pressed={visibility === 'internal'}
               aria-label={
                 visibility === 'internal'
-                  ? 'Internal only — hidden from share links. Click to show to reviewers.'
-                  : 'Visible to share-link reviewers. Click to make internal.'
+                  ? translateUi('internal_only_hidden_from_share_lin_53fd3b7f')
+                  : translateUi('visible_to_share_link_reviewers_cli_4a488f3a')
               }
-              title={visibility === 'internal' ? 'Internal only' : 'Visible to reviewers'}
+              title={
+                visibility === 'internal'
+                  ? translateUi('internal_only_eb9b3c65')
+                  : translateUi('visible_to_reviewers_4a5b7b75')
+              }
               onClick={() => setVisibility((v) => (v === 'internal' ? 'shared' : 'internal'))}
               disabled={busy}
             >
@@ -314,8 +321,8 @@ export function CommentComposer({
               variant="ghost"
               size="icon"
               className="size-7"
-              aria-label="Attach files"
-              title="Attach files"
+              aria-label={translateUi('attach_files_e697cc1e')}
+              title={translateUi('attach_files_e697cc1e')}
               onClick={() => fileInputRef.current?.click()}
               disabled={busy || pending.length >= MAX_COMMENT_ATTACHMENTS}
             >
@@ -338,7 +345,8 @@ export function CommentComposer({
         <div className="ml-auto flex items-center gap-1.5">
           {onCancel && (
             <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
           )}
           <Button
@@ -348,7 +356,7 @@ export function CommentComposer({
             disabled={!trimmed || busy || uploading || submitDisabled}
           >
             {busy && <Loader2 className="size-3.5 animate-spin" />}
-            {submitLabel}
+            {submitLabel ?? translateUi('post_a5554622')}
           </Button>
         </div>
       </div>

@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ElementDetail } from './ElementDetail';
 
 // A signed-preview round trip through react-query does not settle inside

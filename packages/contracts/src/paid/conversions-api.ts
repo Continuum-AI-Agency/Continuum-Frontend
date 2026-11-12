@@ -137,6 +137,7 @@ export const capiEventInputSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['user'],
+        params: { capiCode: 'missing_identifier' },
         message:
           'needs at least one of email, phone, external_id, fbc, fbp, lead_id, or IP + user agent',
       });
@@ -148,6 +149,7 @@ export const capiEventInputSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['event_source_url'],
+        params: { capiCode: 'website_context_required' },
         message: 'website events need event_source_url and client_user_agent',
       });
     }
@@ -158,32 +160,85 @@ export const capiEventInputSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['custom_data'],
+        params: { capiCode: 'purchase_value_currency_required' },
         message: 'Purchase events need value and currency',
       });
     }
   });
 export type CapiEventInput = z.infer<typeof capiEventInputSchema>;
 
-/** Why Meta would refuse this event's time, or null. Checked before sending, per event. */
-export function capiEventTimeProblem(event: CapiEventInput, nowSeconds: number): string | null {
+export const capiEventIssueCodeSchema = z.enum([
+  'invalid_event_fields',
+  'missing_identifier',
+  'website_context_required',
+  'purchase_value_currency_required',
+  'event_time_future',
+  'event_time_too_old',
+]);
+export type CapiEventIssueCode = z.infer<typeof capiEventIssueCodeSchema>;
+export const capiEventIssueSchema = z.object({
+  index: z.number().int().nonnegative(),
+  message: z.string(),
+  code: capiEventIssueCodeSchema.optional(),
+  path: z.array(z.union([z.string(), z.number().int().nonnegative()])).optional(),
+  details: z
+    .object({
+      maxAgeDays: z.number().int().positive().optional(),
+      validationCode: z.string().optional(),
+    })
+    .optional(),
+});
+export type CapiEventIssue = z.infer<typeof capiEventIssueSchema>;
+
+/** Why Meta would refuse this event's time. The diagnostic text remains compatible. */
+export function capiEventTimeIssue(
+  event: CapiEventInput,
+  nowSeconds: number,
+): Omit<CapiEventIssue, 'index'> | null {
   const maxAgeDays =
     event.action_source === 'physical_store'
       ? CAPI_MAX_PHYSICAL_STORE_EVENT_AGE_DAYS
       : CAPI_MAX_EVENT_AGE_DAYS;
-  if (event.event_time > nowSeconds + FUTURE_TOLERANCE_SECONDS) {
-    return 'event_time is in the future';
-  }
-  if (event.event_time < nowSeconds - maxAgeDays * DAY_SECONDS) {
-    return `event_time is older than ${maxAgeDays} days`;
-  }
+  if (event.event_time > nowSeconds + FUTURE_TOLERANCE_SECONDS)
+    return {
+      message: 'event_time is in the future',
+      code: 'event_time_future',
+      path: ['event_time'],
+    };
+  if (event.event_time < nowSeconds - maxAgeDays * DAY_SECONDS)
+    return {
+      message: `event_time is older than ${maxAgeDays} days`,
+      code: 'event_time_too_old',
+      path: ['event_time'],
+      details: { maxAgeDays },
+    };
   return null;
 }
+export function capiEventTimeProblem(event: CapiEventInput, nowSeconds: number): string | null {
+  return capiEventTimeIssue(event, nowSeconds)?.message ?? null;
+}
 
-export const capiEventIssueSchema = z.object({
-  index: z.number().int().nonnegative(),
-  message: z.string(),
-});
-export type CapiEventIssue = z.infer<typeof capiEventIssueSchema>;
+/** Zod diagnostics retain their exact text; stable codes and paths support localized UI. */
+export function capiEventIssueFromValidation(
+  issue: {
+    code: string;
+    message: string;
+    path: readonly PropertyKey[];
+    params?: { capiCode?: unknown };
+  },
+  index: number,
+): CapiEventIssue {
+  const parsed = capiEventIssueCodeSchema.safeParse(issue.params?.capiCode);
+  return {
+    index,
+    message: issue.message,
+    code: parsed.success ? parsed.data : 'invalid_event_fields',
+    path: issue.path.filter(
+      (part): part is string | number => typeof part === 'string' || typeof part === 'number',
+    ),
+    details: { validationCode: issue.code },
+  };
+}
 
 /** The 400 body when any event fails validation; nothing was sent to Meta. */
 export const capiInvalidEventsErrorSchema = z.object({
@@ -361,7 +416,9 @@ const toAmount = (value: unknown): number | undefined => {
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
 };
 
-export type CapiMappedEvent = { ok: true; event: CapiEventInput } | { ok: false; issues: string[] };
+export type CapiMappedEvent =
+  | { ok: true; event: CapiEventInput }
+  | { ok: false; issues: string[]; issueDetails?: CapiEventIssue[] };
 
 /**
  * One sender payload (a webhook body, or a CSV row keyed by header) → one validated event.
@@ -407,6 +464,7 @@ export function applyCapiFieldMap(
   if (parsed.success) return { ok: true, event: parsed.data };
   return {
     ok: false,
+    issueDetails: parsed.error.issues.map((issue) => capiEventIssueFromValidation(issue, 0)),
     issues: parsed.error.issues.map((issue) =>
       issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message,
     ),

@@ -1,4 +1,6 @@
 'use client';
+import {accountDetectorLabel,accountDetectorComparison} from '@/lib/paid-media/accountPresentation';
+import { useLocale, useTranslations } from 'next-intl';
 
 // An optimizer card cited inside a Jaina answer.
 //
@@ -49,23 +51,25 @@ export type OptimizerCardBlockProps = {
 };
 
 function Body({ candidate, currency }: { candidate: AccountCandidate; currency: string | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
   return (
     <div className="min-w-0 space-y-1">
-      <p className="font-semibold text-foreground text-sm">{meta.label}</p>
-      <p className="text-muted-foreground text-xs">{meta.compares}</p>
+      <p className="font-semibold text-foreground text-sm">{accountDetectorLabel(candidate.detector,uiText)}</p>
+      <p className="text-muted-foreground text-xs">{accountDetectorComparison(candidate.detector,uiText)}</p>
       <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
         <span className="font-mono font-semibold text-base text-foreground tabular-nums">
-          {formatCurrency(candidate.impact_per_day, currency)}
+          {formatCurrency(candidate.impact_per_day, currency, uiLocale)}
         </span>
-        <span className="text-foreground">/day</span>
+        <span className="text-foreground">{uiText('day_ea30d1c')}</span>
         <span>· {candidate.result_label}</span>
       </p>
       {candidate.capped_by ? (
         <p className="text-xs text-muted-foreground">
           {candidate.capped_by === 'velocity'
-            ? 'Capped by this objective’s per-cycle limit, not by the gap.'
-            : 'Capped by a guardrail, not by the gap.'}
+            ? uiText('capped_by_this_objective_s_per_cycle_limit_no_2528d9e')
+            : uiText('capped_by_a_guardrail_not_by_the_gap_3d66e50')}
         </p>
       ) : (
         <p className="text-xs text-muted-foreground">{IMPACT_CLASS_COPY[candidate.impact_class]}</p>
@@ -75,8 +79,11 @@ function Body({ candidate, currency }: { candidate: AccountCandidate; currency: 
 }
 
 function Chart({ candidate, currency }: { candidate: AccountCandidate; currency: string | null }) {
+  const uiText = useTranslations('scale');
   if (!candidate.chart) {
-    return <p className="text-xs text-muted-foreground">No chart for this one.</p>;
+    return (
+      <p className="text-xs text-muted-foreground">{uiText('no_chart_for_this_one_8f1f13c')}</p>
+    );
   }
   return (
     <div className="min-w-0 space-y-1">
@@ -105,12 +112,15 @@ function Cleared({
   servingCitedRead?: boolean;
   status?: 'loading' | 'unavailable' | 'ready';
 }) {
+  const uiText = useTranslations('scale');
   // While the read is still in flight nothing is known yet, and the one thing that must NOT
   // happen is a sentence about the finding. The detector's name holds the space.
   if (status === 'loading') {
     return (
       <p className="text-xs text-muted-foreground" data-testid="optimizer-pending">
-        <span className="font-mono">{candidateId.split(':')[0]}</span> — resolving…
+        {uiText.rich('sentence_f2145a2ef891', {
+          v0: () => <span className="font-mono">{candidateId.split(':')[0]}</span>,
+        })}
       </p>
     );
   }
@@ -135,6 +145,7 @@ export function OptimizerCardBlock({
   readDate,
   onOpenRead,
 }: OptimizerCardBlockProps) {
+  const uiText = useTranslations('scale');
   const resolved = card.candidate_ids.map((id) => ({ id, candidate: resolve(id) }));
 
   // A malformed citation — a strip carrying one id, a card carrying two — is a bug upstream,
@@ -142,7 +153,7 @@ export function OptimizerCardBlock({
   if (!citationIsWellFormed(card)) {
     return (
       <p className="text-xs text-muted-foreground" data-testid="optimizer-malformed">
-        A citation arrived that does not match its size.
+        {uiText('a_citation_arrived_that_does_not_match_its_si_5732dad')}
       </p>
     );
   }
@@ -150,14 +161,18 @@ export function OptimizerCardBlock({
   // The provenance line closes the module as plain muted text: no rule above it, no band.
   const foot = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-2 text-xs text-muted-foreground">
-      <span>{readDate ? `read of ${readDate}` : 'from a stored read'}</span>
+      <span>
+        {readDate
+          ? uiText('template_0fe8a6dba380', { v0: readDate })
+          : uiText('from_a_stored_read_2b18595')}
+      </span>
       {onOpenRead ? (
         <button
           className="underline underline-offset-2"
           onClick={() => onOpenRead(card.read_id)}
           type="button"
         >
-          open in the account read
+          {uiText('open_in_the_account_read_6d542f1')}
         </button>
       ) : null}
     </div>

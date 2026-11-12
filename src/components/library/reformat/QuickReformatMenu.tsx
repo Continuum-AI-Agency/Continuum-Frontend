@@ -10,6 +10,7 @@ import {
   type TransformOutputMode,
 } from '@continuum/contracts';
 import { Crop, Expand, Loader2, Scaling } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { ReactElement } from 'react';
 import { useCallback, useState } from 'react';
 import {
@@ -54,6 +55,8 @@ export function useQuickReformat({
   brandId: string | null | undefined;
   onCompleted?(data: ImageReformatCompletedData, preset: ImageReformatPreset): void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [running, setRunning] = useState<string | null>(null);
   const unavailable = !canQuickReformat(asset, brandId);
 
@@ -81,16 +84,20 @@ export function useQuickReformat({
         onCompleted?.(result.data, preset);
         toast.success(
           outputMode === 'new_version'
-            ? `${label} saved as a new version`
-            : `${label} saved to Library`,
+            ? translateUi('value0_saved_as_a_new_version_b24d64bc', { value0: String(label) })
+            : translateUi('value0_saved_to_library_31a785b6', { value0: String(label) }),
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Could not create ${label}`);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translateUi('could_not_create_value0_67dabdaf', { value0: String(label) }),
+        );
       } finally {
         setRunning(null);
       }
     },
-    [asset, brandId, onCompleted, running, unavailable],
+    [asset, brandId, onCompleted, running, unavailable, translateUi],
   );
 
   return { reformat, running, unavailable };
@@ -107,6 +114,8 @@ export function QuickReformatMenu({
   trigger: ReactElement;
   onCompleted?(data: ImageReformatCompletedData, preset: ImageReformatPreset): void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const { reformat, running, unavailable } = useQuickReformat({ asset, brandId, onCompleted });
 
   return (
@@ -118,16 +127,17 @@ export function QuickReformatMenu({
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <Scaling className="size-3.5" />
-          )}
-          Reformat for placement
+          )}{' '}
+          {translateUi('reformat_for_placement_eecace7c')}{' '}
         </DropdownMenuLabel>
         <p className="px-2 pb-2 text-xs text-muted-foreground">
-          The original stays unchanged. Each selection creates a durable Library copy.
+          {' '}
+          {translateUi('the_original_stays_unchanged_each_s_fc4e703d')}{' '}
         </p>
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={unavailable || Boolean(running)}>
-            <Crop className="mr-2 size-3.5" /> Fast crop
+            <Crop className="mr-2 size-3.5" /> {translateUi('fast_crop_6fae1d28')}{' '}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {IMAGE_REFORMAT_PRESETS.map((preset) => (
@@ -142,7 +152,7 @@ export function QuickReformatMenu({
         </DropdownMenuSub>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={unavailable || Boolean(running)}>
-            <Expand className="mr-2 size-3.5" /> Smart expand
+            <Expand className="mr-2 size-3.5" /> {translateUi('smart_expand_7ac343b0')}{' '}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {IMAGE_REFORMAT_PRESETS.map((preset) => (
@@ -158,7 +168,8 @@ export function QuickReformatMenu({
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={unavailable || Boolean(running)}>
-            Save crop as new version
+            {' '}
+            {translateUi('save_crop_as_new_version_0adbf18f')}{' '}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-52">
             {IMAGE_REFORMAT_PRESETS.map((preset) => (

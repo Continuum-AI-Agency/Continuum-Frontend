@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { BrandInsightsGenerateButton } from '@/components/brand-insights/BrandInsightsGenerateButton';
 import { SendPulseButton } from '@/components/dashboard/SendPulseButton';
@@ -23,12 +24,17 @@ export function DashboardBriefing({
   insightsSlot,
   creativesSlot,
 }: DashboardBriefingProps) {
+  const uiText = useTranslations('dashboard');
   return (
     <section className="flex flex-col">
       <div className="flex flex-wrap items-end justify-between gap-2 px-[var(--card-pad)] py-[var(--section-header-pad-block)]">
         <div>
-          <h2 className="text-base font-semibold tracking-tight text-foreground">Overview</h2>
-          <p className="text-xs text-muted-foreground">Your weekly signal. Pick your next move.</p>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">
+            {uiText('overview_d4b1ea5')}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {uiText('your_weekly_signal_pick_your_next_move_7777696')}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <SendPulseButton brandId={brandId} />

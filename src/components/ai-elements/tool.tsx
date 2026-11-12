@@ -3,6 +3,7 @@
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 import { ChevronDown, Code2, Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { createContext, Fragment, type ReactNode, useContext, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 type ToolState = 'input-available' | 'output-available' | 'error' | 'running';
 
-export function getStatusBadge(state: string) {
+export function getStatusBadge(state: string, tUi: ReturnType<typeof useTranslations<'common'>>) {
   switch (state) {
     case 'call':
     case 'running':
@@ -22,7 +23,7 @@ export function getStatusBadge(state: string) {
           variant="outline"
           className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300"
         >
-          Running
+          {tUi('running_f4ccae2')}
         </Badge>
       );
     case 'result':
@@ -32,14 +33,14 @@ export function getStatusBadge(state: string) {
           variant="outline"
           className="border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
         >
-          Success
+          {tUi('m_42a8f651d7')}
         </Badge>
       );
     case 'error':
     case 'output-error':
       return (
         <Badge variant="outline" className="border-transparent bg-destructive/15 text-destructive">
-          Error
+          {tUi('m_7f2f6a15cf')}
         </Badge>
       );
     default:
@@ -175,9 +176,11 @@ function ToolPayload({ label, value }: { label: string; value: unknown }) {
 }
 
 export function ToolInput({ value }: { value: unknown }) {
-  return <ToolPayload label="Input" value={value} />;
+  const uiText = useTranslations('common');
+  return <ToolPayload label={uiText('input_36ecb4f')} value={value} />;
 }
 
 export function ToolOutput({ value }: { value: unknown }) {
-  return <ToolPayload label="Output" value={value} />;
+  const uiText = useTranslations('common');
+  return <ToolPayload label={uiText('output_b2439bc')} value={value} />;
 }

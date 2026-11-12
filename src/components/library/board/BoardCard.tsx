@@ -8,6 +8,7 @@ import type { MediaAsset } from '@continuum/contracts';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { FileIcon } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +60,8 @@ function CardPreview({ asset }: { asset: MediaAsset }) {
 }
 
 export function BoardCardContent({ asset }: { asset: MediaAsset }) {
+  const currentUiLocale = useUiLocale();
+
   return (
     <div className="space-y-1 rounded-md border bg-card p-1.5 text-left shadow-sm">
       <div className="h-20 w-full overflow-hidden rounded bg-muted">
@@ -66,7 +69,7 @@ export function BoardCardContent({ asset }: { asset: MediaAsset }) {
       </div>
       <p className="truncate text-xs font-medium">{asset.title ?? asset.fileName}</p>
       <p className="truncate text-2xs text-muted-foreground">
-        {formatRelativeTime(asset.updatedAt)}
+        {formatRelativeTime(asset.updatedAt, undefined, currentUiLocale)}
       </p>
     </div>
   );
@@ -83,6 +86,8 @@ export function BoardCard({
   selected?: boolean;
   onToggleSelected?: (asset: MediaAsset) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: asset.id,
     data: { type: 'library-asset' },
@@ -114,8 +119,12 @@ export function BoardCard({
           type="button"
           aria-label={
             selected
-              ? `Deselect ${asset.title ?? asset.fileName}`
-              : `Select ${asset.title ?? asset.fileName}`
+              ? translateUi('deselect_value0_0d13bae5', {
+                  value0: String(asset.title ?? asset.fileName),
+                })
+              : translateUi('select_value0_b4b262ae', {
+                  value0: String(asset.title ?? asset.fileName),
+                })
           }
           aria-pressed={selected}
           onClick={(event) => {

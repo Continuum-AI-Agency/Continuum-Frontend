@@ -17,8 +17,8 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table';
 import { ArrowLeft, Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { startTransition, useEffect, useMemo, useState } from 'react';
-import { formatRelativeTime } from '@/components/approvals/formatters';
 import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
 import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
@@ -55,6 +55,7 @@ import {
 } from '@/components/ui/select';
 import { pluralize } from '@/lib/format/pluralize';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
 import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
@@ -105,13 +106,18 @@ const CHECK_TICK: Record<JobCheck['state'], CheckTick> = {
 
 /** Every check as a tick, and the one word a row has room for. */
 function ChecksCell({ job }: { job: ApiRenderJob }) {
-  const checks = renderJobChecks(job, {});
-  const summary = checkSummary(checks);
+  const translateUi = useUiTranslations('forge');
+  const checkLocale = useUiLocale();
+
+  const checks = renderJobChecks(job, {}, Date.now(), { t: translateUi, locale: checkLocale });
+  const summary = checkSummary(checks, translateUi);
   return (
     <span className="flex items-center gap-2" title={summary}>
       <TickBar ticks={checks.map((check) => CHECK_TICK[check.state])} />
       <span className="whitespace-nowrap text-muted-foreground">
-        {summary === 'All checks passed' ? 'Passed' : summary.split(' · ')[0]}
+        {!checks.some((check) => ['fail', 'warn', 'running', 'todo'].includes(check.state))
+          ? translateUi('passed_436fe71b')
+          : summary.split(' · ')[0]}
       </span>
     </span>
   );
@@ -173,6 +179,10 @@ export function RenderJobsGrid({
   /** That template's formats, so each thumbnail and detail shows the right file per format. */
   formats?: PreviewFormat[];
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const [sets, setSets] = useState<ForgeRenderSet[]>([]);
   const [renderSetId, setRenderSetId] = useState<string>('all');
@@ -331,7 +341,7 @@ export function RenderJobsGrid({
       {
         id: 'label',
         accessorFn: nameOf,
-        header: 'Name',
+        header: translateUi('name_dcd1d522'),
         meta: STICKY_LEFT,
         enableSorting: true,
         enableHiding: false,
@@ -352,13 +362,13 @@ export function RenderJobsGrid({
       {
         id: 'set',
         accessorFn: setOf,
-        header: 'Set',
+        header: translateUi('set_b6f6f3ad'),
         enableSorting: true,
         cell: ({ getValue }) => <span className="text-muted-foreground">{getValue<string>()}</span>,
       },
       {
         accessorKey: 'status',
-        header: 'Status',
+        header: translateUi('status_920e413c'),
         enableSorting: true,
         cell: ({ row: { original: job } }) => (
           <span className="flex items-center gap-1.5">
@@ -376,30 +386,30 @@ export function RenderJobsGrid({
       },
       {
         accessorKey: 'createdAt',
-        header: 'Requested',
+        header: translateUi('requested_2d9e2828'),
         sortingFn: 'datetime',
         enableSorting: true,
         cell: ({ getValue }) => (
           <span className="tabular-nums text-muted-foreground" title={getValue<string>()}>
-            {formatRelativeTime(getValue<string>())}
+            {formatRelativeTime(getValue<string>(), undefined, currentUiLocale)}
           </span>
         ),
       },
       {
         id: 'verdict',
-        header: 'Checks',
+        header: translateUi('checks_de07d072'),
         enableSorting: false,
         cell: ({ row: { original: job } }) => <ChecksCell job={job} />,
       },
       {
         id: 'version',
-        header: 'Variant · revision',
+        header: translateUi('variant_revision_a5050560'),
         enableSorting: false,
         cell: ({ row: { original: job } }) => <TemplateVersion job={job} />,
       },
       {
         id: 'outputs',
-        header: 'Files',
+        header: translateUi('files_abc7e989'),
         enableSorting: false,
         cell: ({ row: { original: job } }) => (
           <span className="flex items-center gap-1.5 tabular-nums">
@@ -413,8 +423,12 @@ export function RenderJobsGrid({
                   download={output.fileName}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title={`Download ${output.fileName}`}
-                  aria-label={`Download ${output.fileName}`}
+                  title={translateUi('download_value0_0f5a93c3', {
+                    value0: String(output.fileName),
+                  })}
+                  aria-label={translateUi('download_value0_0f5a93c3', {
+                    value0: String(output.fileName),
+                  })}
                   onClick={(event) => event.stopPropagation()}
                   className="text-primary hover:underline"
                 >
@@ -426,7 +440,7 @@ export function RenderJobsGrid({
       },
       {
         id: 'delivery',
-        header: 'Delivery',
+        header: translateUi('delivery_52bfe584'),
         enableSorting: false,
         cell: ({ row: { original: job } }) => <DeliveryChain job={job} />,
       },
@@ -445,14 +459,14 @@ export function RenderJobsGrid({
         enableHiding: false,
         // The whole sentence, wrapped: a failure cut off mid-sentence hides the part that says why.
         cell: ({ row: { original: job } }) => {
-          const failure = describeRenderJobFailure(job.error);
+          const failure = describeRenderJobFailure(job.error, translateUi);
           return failure ? (
             <p className="m-0 max-w-80 min-w-48 whitespace-normal text-destructive">{failure}</p>
           ) : null;
         },
       },
     ],
-    [sets, formats],
+    [sets, formats, translateUi, currentUiLocale],
   );
 
   const needle = search.trim().toLowerCase();
@@ -530,19 +544,19 @@ export function RenderJobsGrid({
       },
       {
         accessorKey: 'createdAt',
-        header: 'Created',
+        header: translateUi('created_d70b9e24'),
         sortingFn: 'datetime',
         enableSorting: true,
         cell: ({ getValue }) => (
           <span className="tabular-nums text-muted-foreground" title={getValue<string>()}>
-            {formatRelativeTime(getValue<string>())}
+            {formatRelativeTime(getValue<string>(), undefined, currentUiLocale)}
           </span>
         ),
       },
       {
         id: 'template',
         accessorFn: (batch) => templateOf(batch.preview),
-        header: 'Template',
+        header: translateUi('template_0575f29d'),
         enableSorting: true,
         cell: ({ getValue }) => (
           <span className="block max-w-60 min-w-32 truncate font-medium">{getValue<string>()}</span>
@@ -551,13 +565,13 @@ export function RenderJobsGrid({
       {
         id: 'set',
         accessorFn: (batch) => setOf(batch.preview),
-        header: 'Set',
+        header: translateUi('set_b6f6f3ad'),
         enableSorting: true,
         cell: ({ getValue }) => <span className="text-muted-foreground">{getValue<string>()}</span>,
       },
       {
         id: 'pieces',
-        header: 'Pieces',
+        header: translateUi('pieces_dd05d0e2'),
         enableSorting: false,
         cell: ({ row: { original: batch } }) => (
           <span className="whitespace-nowrap tabular-nums">
@@ -567,7 +581,7 @@ export function RenderJobsGrid({
       },
       {
         id: 'status',
-        header: 'Status',
+        header: translateUi('status_920e413c'),
         enableSorting: false,
         cell: ({ row: { original: batch } }) => {
           const status = batchStatus(batch);
@@ -594,7 +608,7 @@ export function RenderJobsGrid({
       },
       {
         id: 'review',
-        header: 'Review',
+        header: translateUi('review_aff0766a'),
         enableSorting: false,
         cell: ({ row: { original: batch } }) => {
           const summary = reviewSummary(
@@ -613,7 +627,7 @@ export function RenderJobsGrid({
         },
       },
     ],
-    [sets, formats, libraryState],
+    [sets, formats, libraryState, currentUiLocale, translateUi],
   );
   const batchTable = useReactTable({
     data: batches,
@@ -681,12 +695,14 @@ export function RenderJobsGrid({
               setOpenBatchId(null);
             }}
           >
-            <ArrowLeft className="size-3.5" aria-hidden /> All batches
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi(
+              'all_batches_8d0b27c3',
+            )}{' '}
           </Button>
           <p className="min-w-0 truncate text-sm font-medium">{openBatchTitle}</p>
           {openBatch ? (
             <span className="text-xs text-muted-foreground">
-              {formatRelativeTime(openBatch.createdAt)}
+              {formatRelativeTime(openBatch.createdAt, undefined, currentUiLocale)}
               {openBatch.createdByEmail ? ` · ${openBatch.createdByEmail}` : ''}
             </span>
           ) : null}
@@ -695,11 +711,11 @@ export function RenderJobsGrid({
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
           {templateKey
-            ? 'Every render of this template, newest first.'
+            ? translateUi('every_render_of_this_template_newes_7a4f2c18')
             : openBatchId
-              ? 'Every render from this Render click.'
-              : 'One row per Render click, from here and from the canvas. Open one to see its renders.'}
-          {pushed ? '' : ' Live updates unavailable — refreshing on a timer.'}
+              ? translateUi('every_render_from_this_render_click_f835b4c3')
+              : translateUi('one_row_per_render_click_from_here__555de35c')}
+          {pushed ? '' : translateUi('live_updates_unavailable_refreshing_53cb4f38')}
         </p>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <div className="relative">
@@ -709,8 +725,8 @@ export function RenderJobsGrid({
             />
             <Input
               type="search"
-              aria-label="Search renders"
-              placeholder="Name, template, set, ad, channel"
+              aria-label={translateUi('search_renders_332edd2c')}
+              placeholder={translateUi('name_template_set_ad_channel_a854c065')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="h-7 w-60 pl-7 text-xs"
@@ -718,16 +734,20 @@ export function RenderJobsGrid({
           </div>
           {!showBatches ? null : (
             <Select value={renderSetId} onValueChange={setRenderSetId}>
-              <SelectTrigger className="h-7 w-44 text-xs" aria-label="Filter by render set">
+              <SelectTrigger
+                className="h-7 w-44 text-xs"
+                aria-label={translateUi('filter_by_render_set_692653b2')}
+              >
                 <SelectValue>
                   {renderSetId === 'all'
-                    ? 'All render sets'
-                    : (sets.find((set) => set.id === renderSetId)?.name ?? 'Render set')}
+                    ? translateUi('all_render_sets_b57e100e')
+                    : (sets.find((set) => set.id === renderSetId)?.name ??
+                      translateUi('render_set_ecd0e66e'))}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="all">All render sets</SelectItem>
+                  <SelectItem value="all">{translateUi('all_render_sets_b57e100e')}</SelectItem>
                   {sets.map((set) => (
                     <SelectItem key={set.id} value={set.id}>
                       {set.name}
@@ -753,7 +773,8 @@ export function RenderJobsGrid({
               }
             }}
           >
-            <Download className="size-3.5" aria-hidden /> Download {downloadable.length || ''}
+            <Download className="size-3.5" aria-hidden /> {translateUi('download_d6eafe82')}{' '}
+            {downloadable.length || ''}
           </Button>
           <Button
             type="button"
@@ -762,7 +783,7 @@ export function RenderJobsGrid({
             className="gap-1.5"
             onClick={() => void refreshJobs().catch(() => undefined)}
           >
-            <RefreshCw className="size-3.5" aria-hidden /> Refresh
+            <RefreshCw className="size-3.5" aria-hidden /> {translateUi('refresh_0e916101')}{' '}
           </Button>
         </div>
       </div>
@@ -776,10 +797,10 @@ export function RenderJobsGrid({
           }}
           empty={
             !loaded
-              ? 'Loading…'
+              ? translateUi('loading_ba3bbbe1')
               : needle && jobs.length
-                ? `No loaded renders match “${search.trim()}”.${hasMore ? ' Load older renders to search further.' : ''}`
-                : 'No renders yet. Set some up on the Render tab.'
+                ? `No loaded renders match “${search.trim()}”.${hasMore ? translateUi('load_older_renders_to_search_furthe_2c86f732') : ''}`
+                : translateUi('no_renders_yet_set_some_up_on_the_r_d81125e6')
           }
         />
       ) : (
@@ -819,19 +840,20 @@ export function RenderJobsGrid({
           onRowClick={(job) => withTransition(() => setOpenId(job.id))}
           empty={
             !loaded
-              ? 'Loading…'
+              ? translateUi('loading_ba3bbbe1')
               : needle && jobs.length
-                ? `No loaded renders match “${search.trim()}”.${hasMore ? ' Load older renders to search further.' : ''}`
+                ? `No loaded renders match “${search.trim()}”.${hasMore ? translateUi('load_older_renders_to_search_furthe_2c86f732') : ''}`
                 : templateKey
-                  ? 'No renders of this template yet.'
-                  : 'No renders yet. Set some up on the Render tab.'
+                  ? translateUi('no_renders_of_this_template_yet_2f5e3dd3')
+                  : translateUi('no_renders_yet_set_some_up_on_the_r_d81125e6')
           }
         />
       )}
       {hasMore && !openBatchId ? (
         <div className="flex justify-center">
           <Button type="button" size="sm" variant="outline" onClick={() => void loadMore()}>
-            Load older renders
+            {' '}
+            {translateUi('load_older_renders_79128701')}{' '}
           </Button>
         </div>
       ) : null}

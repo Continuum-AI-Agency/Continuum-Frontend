@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { formatBrandDisambiguationLines } from '@/components/admin/adminUserListUtils';
 import type { AdminBrandOption } from '@/components/admin/adminUserTypes';
@@ -46,9 +47,11 @@ export function BrandTransferCombobox({
   value,
   onChange,
   placeholder,
-  emptyLabel = 'No brands found.',
+  emptyLabel: providedEmptyLabel,
   id,
 }: BrandTransferComboboxProps) {
+  const uiText = useTranslations('admin');
+  const emptyLabel = providedEmptyLabel ?? uiText('brandTransferEmpty');
   const [open, setOpen] = useState(false);
   const selectedBrand = brands.find((brand) => brand.id === value) ?? null;
   const selectedLines = selectedBrand ? formatBrandDisambiguationLines(selectedBrand) : null;
@@ -85,7 +88,7 @@ export function BrandTransferCombobox({
       />
       <PopoverContent className="w-[360px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search brands, owners, or ids…" />
+          <CommandInput placeholder={uiText('search_brands_owners_or_ids_740e03c')} />
           {/* scrollbar-thin: the list has always scrolled, but the platform's overlay
               scrollbar gave no hint there were more matches below the fold. */}
           <CommandList data-testid="brand-picker-list" className="scrollbar-thin">

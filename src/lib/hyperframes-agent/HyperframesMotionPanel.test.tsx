@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { applyMotionOp, EMPTY_MOTION_DOC, type MotionDoc } from '@continuum/contracts';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { dragOp, HyperframesMotionPanel } from './HyperframesMotionPanel';
 import { withPlayerRuntime } from './playerClock';
 

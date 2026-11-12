@@ -52,7 +52,12 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ProvenancePanel } from './ProvenancePanel';
 
 const BRAND = '11111111-1111-4111-8111-111111111111';

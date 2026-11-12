@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { restoreAccountLocale } from '@/i18n/server';
 import { resolveAuthRedirectPath } from '@/lib/auth/redirect';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -27,8 +28,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
+  const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
   if (!error) {
+    if (data?.user) await restoreAccountLocale(data.user.user_metadata);
     return NextResponse.redirect(new URL(next, origin));
   }
 
@@ -39,6 +41,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     data: { user },
   } = await supabase.auth.getUser();
   if (user) {
+    await restoreAccountLocale(user.user_metadata);
     return NextResponse.redirect(new URL(next, origin));
   }
 

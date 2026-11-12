@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { Skill } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PromptInput } from '@/components/chat/prompt-input';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { createCanvasComposerMentionProvider } from './canvasContextProvider';
 

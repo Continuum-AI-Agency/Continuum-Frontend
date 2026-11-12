@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // The five wired action editors. Each assertion is about the CONFIG that
 // reaches `onChange`: the backend adapters validate these at preflight, so a
 // shape the schema rejects is a failed run, not a form error. Every written
@@ -6,7 +7,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type AutomationWorkflowNode, automationWorkflowNodeSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { createAutomationWorkflowNode } from './automationNodeCatalog';
 import { NodeConfigurationEditor } from './NodeConfigurationEditor';
 import { chooseOption, installPickerDomGlobals, openSelect } from './pickers/pickerTestHarness';

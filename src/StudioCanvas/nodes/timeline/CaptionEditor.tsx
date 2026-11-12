@@ -1,5 +1,6 @@
 'use client';
 
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
@@ -14,6 +15,7 @@ import {
 import { parseCaptionFile, toSrt, toVtt } from '@/lib/clips/captionsInterchange';
 import type { CaptionStyle, CaptionStyleOverride } from '@/lib/clips/clipCaptionStyle';
 import { resolveCaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import { formatDecimal } from '@/lib/format/decimal';
 import {
   type CaptionCue,
   captionCueText,
@@ -51,6 +53,10 @@ export function CaptionEditor({
   onChangeCues,
   onChangeStyle,
 }: Props) {
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('studio');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notices, setNotices] = useState<string[]>([]);
 
@@ -102,16 +108,19 @@ export function CaptionEditor({
     <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-lg border border-border/60 p-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-semibold">Captions</h3>
+          <h3 className="text-xs font-semibold">{translateUi('captions_43bf6af8')}</h3>
           <p className="text-2xs text-muted-foreground">
-            Pick a style, edit copy and timing, mark the words that matter.
+            {' '}
+            {translateUi('pick_a_style_edit_copy_and_timing_m_9cdcd281')}{' '}
           </p>
         </div>
-        <span className="text-2xs tabular-nums text-muted-foreground">{cues.length} cues</span>
+        <span className="text-2xs tabular-nums text-muted-foreground">
+          {cues.length} {translateUi('cues_b15c8e64')}
+        </span>
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-2xs text-muted-foreground">Style</span>
+        <span className="text-2xs text-muted-foreground">{translateUi('style_7e744141')}</span>
         <div className="flex gap-1 overflow-x-auto pb-1">
           {CAPTION_PRESETS.map((preset) => {
             const previewStyle = resolveStyleWithPreset(preset.style);
@@ -121,7 +130,9 @@ export function CaptionEditor({
                 key={preset.id}
                 type="button"
                 aria-pressed={isActive}
-                aria-label={`${preset.label} caption style`}
+                aria-label={translateUi('value0_caption_style_bb1d5fdf', {
+                  value0: String(preset.label),
+                })}
                 title={preset.description}
                 className={`shrink-0 rounded-md border px-2 py-1.5 text-left transition-colors ${
                   isActive ? 'border-primary bg-primary/10' : 'border-border/60 hover:bg-muted/60'
@@ -147,7 +158,7 @@ export function CaptionEditor({
                 <span className="mt-0.5 block text-3xs text-muted-foreground">
                   {previewStyle.animation?.kind && previewStyle.animation.kind !== 'none'
                     ? previewStyle.animation.kind
-                    : 'no motion'}
+                    : translateUi('no_motion_4b1a9b74')}
                 </span>
               </button>
             );
@@ -167,7 +178,8 @@ export function CaptionEditor({
           }}
         />
         <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-          Import SRT/VTT
+          {' '}
+          {translateUi('import_srt_vtt_ab1f65b4')}{' '}
         </Button>
         <Button
           variant="ghost"
@@ -175,7 +187,8 @@ export function CaptionEditor({
           disabled={cues.length === 0}
           onClick={() => download('captions.srt', toSrt(cues), 'application/x-subrip')}
         >
-          Export SRT
+          {' '}
+          {translateUi('export_srt_31a28c6e')}{' '}
         </Button>
         <Button
           variant="ghost"
@@ -183,7 +196,8 @@ export function CaptionEditor({
           disabled={cues.length === 0}
           onClick={() => download('captions.vtt', toVtt(cues, globalStyle), 'text/vtt')}
         >
-          Export VTT
+          {' '}
+          {translateUi('export_vtt_f1358c6b')}{' '}
         </Button>
       </div>
 
@@ -197,24 +211,26 @@ export function CaptionEditor({
 
       <div className="grid grid-cols-2 gap-2 text-2xs">
         <div className="grid gap-1">
-          Text
+          {' '}
+          {translateUi('text_71988c4d')}{' '}
           <ColorField
-            label="Caption text"
+            label={translateUi('caption_text_73ce218c')}
             value={globalStyle.textColor}
             onChange={(textColor) => onChangeStyle({ ...globalStyle, textColor })}
           />
         </div>
         <div className="grid gap-1">
-          Highlight
+          {' '}
+          {translateUi('highlight_07ccd15d')}{' '}
           <ColorField
-            label="Caption highlight"
+            label={translateUi('caption_highlight_2af72d7c')}
             value={globalStyle.highlightColor}
             onChange={(highlightColor) => onChangeStyle({ ...globalStyle, highlightColor })}
           />
         </div>
         <SliderField
           format={{ style: 'percent', maximumFractionDigits: 0 }}
-          label="X position"
+          label={translateUi('x_position_509cea2a')}
           max={0.95}
           min={0.05}
           step={0.01}
@@ -228,7 +244,7 @@ export function CaptionEditor({
         />
         <SliderField
           format={{ style: 'percent', maximumFractionDigits: 0 }}
-          label="Y position"
+          label={translateUi('y_position_307e63d5')}
           max={0.95}
           min={0.05}
           step={0.01}
@@ -251,7 +267,8 @@ export function CaptionEditor({
             onClick={() => onSelect(cue.id)}
           >
             <span className="mr-2 font-mono text-2xs text-muted-foreground">
-              {cue.startSec.toFixed(1)}–{cue.endSec.toFixed(1)}
+              {formatDecimal(cue.startSec, 1, decimalLocale)}–
+              {formatDecimal(cue.endSec, 1, decimalLocale)}
             </span>
             {text}
           </button>
@@ -261,7 +278,8 @@ export function CaptionEditor({
       {selected ? (
         <div className="grid gap-2 border-t border-border/60 pt-3 text-2xs">
           <label className="grid gap-1">
-            Caption copy
+            {' '}
+            {translateUi('caption_copy_712e0c67')}{' '}
             <textarea
               className="min-h-16 resize-y rounded border border-border bg-background p-2 text-xs"
               value={captionCueText(selected)}
@@ -270,7 +288,7 @@ export function CaptionEditor({
           </label>
 
           <div className="grid gap-1">
-            <span>Emphasis — click a word to make it louder</span>
+            <span>{translateUi('emphasis_click_a_word_to_make_it_lo_4782a9e5')}</span>
             <div className="flex flex-wrap gap-1">
               {selected.words.map((word, index) => (
                 <button
@@ -292,7 +310,7 @@ export function CaptionEditor({
 
           <div className="grid grid-cols-2 gap-2">
             <NumberScrubField
-              label="Start"
+              label={translateUi('start_e4bb9f1e')}
               min={0}
               step={0.1}
               suffix="s"
@@ -300,7 +318,7 @@ export function CaptionEditor({
               onChange={(startSec) => updateSelected({ startSec })}
             />
             <NumberScrubField
-              label="End"
+              label={translateUi('end_f4db1e48')}
               min={0}
               step={0.1}
               suffix="s"
@@ -310,17 +328,19 @@ export function CaptionEditor({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="grid gap-1">
-              Cue text
+              {' '}
+              {translateUi('cue_text_7cb7e771')}{' '}
               <ColorField
-                label="Cue text"
+                label={translateUi('cue_text_7cb7e771')}
                 value={resolvedSelectedStyle.textColor}
                 onChange={(textColor) => updateSelectedStyle({ textColor })}
               />
             </div>
             <div className="grid gap-1">
-              Cue highlight
+              {' '}
+              {translateUi('cue_highlight_2c779540')}{' '}
               <ColorField
-                label="Cue highlight"
+                label={translateUi('cue_highlight_2c779540')}
                 value={resolvedSelectedStyle.highlightColor}
                 onChange={(highlightColor) => updateSelectedStyle({ highlightColor })}
               />
@@ -328,7 +348,8 @@ export function CaptionEditor({
           </div>
           <div className="flex justify-end">
             <Button variant="ghost" size="sm" onClick={() => updateSelected({ style: undefined })}>
-              Reset cue style
+              {' '}
+              {translateUi('reset_cue_style_e4e890c0')}{' '}
             </Button>
           </div>
         </div>

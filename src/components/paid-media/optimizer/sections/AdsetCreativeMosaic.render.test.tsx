@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // The media stack below the mosaic is deliberately NOT mocked. Stubbing ChatMedia here
 // would hide the one composition risk that matters — the tile sits inside a Radix
 // HoverCard trigger, and if that trigger swallowed pointerenter, hover-to-play would
@@ -6,7 +7,7 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AdDailyTrend, AdsetAd, PaidAdAngle } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import * as realData from '../useOptimizerData';
 
 // embla and Radix reach for observers happy-dom does not expose. Inert stubs are

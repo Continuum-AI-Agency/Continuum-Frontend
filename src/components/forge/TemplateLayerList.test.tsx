@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TemplateLayerList } from './TemplateLayerList';
 
 describe('TemplateLayerList', () => {
@@ -21,10 +21,7 @@ describe('TemplateLayerList', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New title' }));
     expect(onSelect).toHaveBeenCalledWith('draft:10000000-0000-4000-8000-000000000001');
     fireEvent.click(screen.getByRole('button', { name: 'Bring New title forward' }));
-    expect(onReorder).toHaveBeenCalledWith([
-      'draft:10000000-0000-4000-8000-000000000001',
-      71,
-    ]);
+    expect(onReorder).toHaveBeenCalledWith(['draft:10000000-0000-4000-8000-000000000001', 71]);
   });
 
   test('offers group membership only for explicitly eligible rows', () => {

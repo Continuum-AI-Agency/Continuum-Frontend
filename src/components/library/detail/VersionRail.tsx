@@ -27,6 +27,7 @@ import {
   RotateCcw,
   Ungroup,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import {
@@ -185,35 +186,49 @@ function VersionCard({
   onMoveDown?: () => void;
   onUnstack?: () => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
+  const currentUiLocale = useUiLocale();
+
   const actions = [
     {
       run: onCompare,
-      label: `Compare v${version.versionNumber} with current`,
+      label: translateUi('compare_v_value0_with_current_7a401dd5', {
+        value0: String(version.versionNumber),
+      }),
       icon: Columns2,
       testId: undefined,
     },
     {
       run: onRollback,
-      label: `Roll back to v${version.versionNumber}`,
+      label: translateUi('roll_back_to_v_value0_a58a151e', {
+        value0: String(version.versionNumber),
+      }),
       icon: RotateCcw,
       testId: undefined,
     },
     // The strip runs newest first, so "up" the stack (toward current) is leftward.
     {
       run: onMoveUp,
-      label: `Move v${version.versionNumber} up the stack`,
+      label: translateUi('move_v_value0_up_the_stack_0b1ee383', {
+        value0: String(version.versionNumber),
+      }),
       icon: ChevronLeft,
       testId: 'version-move-up',
     },
     {
       run: onMoveDown,
-      label: `Move v${version.versionNumber} down the stack`,
+      label: translateUi('move_v_value0_down_the_stack_a29cbc24', {
+        value0: String(version.versionNumber),
+      }),
       icon: ChevronRight,
       testId: 'version-move-down',
     },
     {
       run: onUnstack,
-      label: `Unstack v${version.versionNumber} into its own asset`,
+      label: translateUi('unstack_v_value0_into_its_own_asset_18440fa8', {
+        value0: String(version.versionNumber),
+      }),
       icon: Ungroup,
       testId: 'version-unstack',
     },
@@ -233,7 +248,9 @@ function VersionCard({
           type="button"
           onClick={onView}
           aria-pressed={viewing}
-          aria-label={`View v${version.versionNumber}`}
+          aria-label={translateUi('view_v_value0_20c03123', {
+            value0: String(version.versionNumber),
+          })}
           className="block w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <VersionPreview version={version} className="h-20 w-full" />
@@ -243,11 +260,16 @@ function VersionCard({
       )}
       <div className="flex items-center gap-1">
         <Pill variant={version.isHead ? 'default' : 'secondary'}>v{version.versionNumber}</Pill>
-        {version.isHead ? <span className="text-2xs text-muted-foreground">Current</span> : null}
+        {version.isHead ? (
+          <span className="text-2xs text-muted-foreground">{translateUi('current_e0d1b682')}</span>
+        ) : null}
         {version.commentCount > 0 ? (
           <span
             className="ml-auto flex items-center gap-0.5 text-2xs tabular-nums text-muted-foreground"
-            title={`${version.commentCount} comment${version.commentCount === 1 ? '' : 's'} on v${version.versionNumber}`}
+            title={translateUi('value0_comment_value1_on_v_value2_ef2f8bb8', {
+              count: Number(version.commentCount),
+              version: String(version.versionNumber),
+            })}
           >
             <MessageSquare className="size-3" />
             {version.commentCount}
@@ -255,7 +277,7 @@ function VersionCard({
         ) : null}
       </div>
       <p className="truncate text-2xs text-muted-foreground">
-        {formatRelativeTime(version.createdAt)}
+        {formatRelativeTime(version.createdAt, undefined, currentUiLocale)}
         {version.authorName ? ` · ${version.authorName}` : ''}
       </p>
       {actions.length > 0 ? (
@@ -293,6 +315,8 @@ export function VersionRail({
   onVersionsChanged,
   onChanged,
 }: VersionRailProps) {
+  const translateUi = useUiTranslations('library');
+
   const [uploading, setUploading] = useState(false);
   const [uploadPaused, setUploadPaused] = useState(false);
   const [pausedByNetwork, setPausedByNetwork] = useState(false);
@@ -327,7 +351,9 @@ export function VersionRail({
         onProgress: ({ percentage }) => setUploadProgress(percentage),
       });
       onVersionsChanged(result.versions);
-      toast.success(`Version v${result.versionNumber} uploaded`);
+      toast.success(
+        translateUi('version_v_value0_uploaded_0df099f8', { value0: String(result.versionNumber) }),
+      );
       onChanged?.();
       setUploadFile(null);
       resumeStateRef.current = null;
@@ -342,7 +368,11 @@ export function VersionRail({
         setUploadPaused(true);
         setPausedByNetwork(true);
       } else {
-        toast.error(`Version upload failed · ${(err as Error).message}`);
+        toast.error(
+          translateUi('version_upload_failed_value0_56ebea1f', {
+            value0: String((err as Error).message),
+          }),
+        );
       }
     } finally {
       setUploading(false);
@@ -376,10 +406,17 @@ export function VersionRail({
         versionId: target.id,
       });
       onVersionsChanged(result.versions);
-      toast.success(`Rolled back to v${target.versionNumber} (now v${result.versionNumber})`);
+      toast.success(
+        translateUi('rolled_back_to_v_value0_now_v_value_619968ab', {
+          value0: String(target.versionNumber),
+          value1: String(result.versionNumber),
+        }),
+      );
       onChanged?.();
     } catch (err) {
-      toast.error(`Rollback failed · ${(err as Error).message}`);
+      toast.error(
+        translateUi('rollback_failed_value0_99542779', { value0: String((err as Error).message) }),
+      );
     } finally {
       setRollingBack(false);
     }
@@ -396,11 +433,17 @@ export function VersionRail({
         assetId: asset.id,
         versionId: target.id,
       });
-      toast.success(`Unstacked v${target.versionNumber} into a new asset`);
+      toast.success(
+        translateUi('unstacked_v_value0_into_a_new_asset_480e7e08', {
+          value0: String(target.versionNumber),
+        }),
+      );
       onRetry();
       onChanged?.();
     } catch (err) {
-      toast.error(`Unstack failed · ${(err as Error).message}`);
+      toast.error(
+        translateUi('unstack_failed_value0_06e02efb', { value0: String((err as Error).message) }),
+      );
     } finally {
       setRestacking(false);
     }
@@ -419,7 +462,9 @@ export function VersionRail({
       onRetry();
       if (result.headChanged) onChanged?.();
     } catch (err) {
-      toast.error(`Reorder failed · ${(err as Error).message}`);
+      toast.error(
+        translateUi('reorder_failed_value0_d77fff2a', { value0: String((err as Error).message) }),
+      );
     } finally {
       setRestacking(false);
     }
@@ -438,7 +483,9 @@ export function VersionRail({
     <section className="space-y-1.5">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-medium text-muted-foreground">
-          Versions{versions && versions.length > 0 ? ` · ${versions.length}` : ''}
+          {' '}
+          {translateUi('versions_f89ea270')}
+          {versions && versions.length > 0 ? ` · ${versions.length}` : ''}
         </h3>
         <div className="flex items-center gap-1">
           {versions && stacked ? (
@@ -450,8 +497,7 @@ export function VersionRail({
               data-testid="version-compare-open"
               onClick={() => setComparePair({ a: versions[1].id, b: versions[0].id })}
             >
-              <Columns2 className="size-3" />
-              Compare versions
+              <Columns2 className="size-3" /> {translateUi('compare_versions_9e053092')}{' '}
             </Button>
           ) : null}
           {uploading ? (
@@ -463,8 +509,7 @@ export function VersionRail({
               data-testid="version-upload-pause"
               onClick={() => uploadControllerRef.current?.abort()}
             >
-              <Pause className="size-3" />
-              Pause {uploadProgress}%
+              <Pause className="size-3" /> {translateUi('pause_858e4ba7')} {uploadProgress}%
             </Button>
           ) : uploadPaused && uploadFile ? (
             <Button
@@ -476,8 +521,7 @@ export function VersionRail({
               data-paused-by={pausedByNetwork ? 'network' : 'user'}
               onClick={() => void runUpload(uploadFile, resumeStateRef.current)}
             >
-              <Play className="size-3" />
-              Resume {uploadProgress}%
+              <Play className="size-3" /> {translateUi('resume_d640c742')} {uploadProgress}%
             </Button>
           ) : null}
           <Button
@@ -489,7 +533,9 @@ export function VersionRail({
             onClick={() => fileInputRef.current?.click()}
           >
             {uploading ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
-            {asset.kind === 'file' ? 'Upload new version' : 'New version'}
+            {asset.kind === 'file'
+              ? translateUi('upload_new_version_20938652')
+              : translateUi('new_version_7246e01b')}
           </Button>
         </div>
         <input
@@ -515,7 +561,8 @@ export function VersionRail({
             <p className="text-2xs text-destructive">
               {loadError}{' '}
               <button type="button" className="underline" onClick={onRetry}>
-                Retry
+                {' '}
+                {translateUi('retry_942087cc')}{' '}
               </button>
             </p>
           ) : null}
@@ -555,7 +602,8 @@ export function VersionRail({
           </div>
           {versions && versions.length === 0 ? (
             <p className="text-2xs text-muted-foreground">
-              No version history yet — upload a new version to start it.
+              {' '}
+              {translateUi('no_version_history_yet_upload_a_new_0e753835')}{' '}
             </p>
           ) : null}
         </>
@@ -568,17 +616,22 @@ export function VersionRail({
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              Roll back to v{rollbackTarget?.versionNumber}?
+              {' '}
+              {translateUi('roll_back_to_v_a848c873')}
+              {rollbackTarget?.versionNumber}?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              The current file stays in history; v{rollbackTarget?.versionNumber}&apos;s file
-              becomes the new current version.
+              {' '}
+              {translateUi('the_current_file_stays_in_history_v_ea4e6011')}
+              {rollbackTarget?.versionNumber}
+              {translateUi('s_file_becomes_the_new_current_vers_37223b0a')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleRollbackConfirmed()}>
-              Roll back
+              {' '}
+              {translateUi('roll_back_931f703d')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -591,17 +644,20 @@ export function VersionRail({
         <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              Unstack v{unstackTarget?.versionNumber} into its own asset?
+              {' '}
+              {translateUi('unstack_v_09314288')}
+              {unstackTarget?.versionNumber} {translateUi('into_its_own_asset_c6ec149f')}{' '}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              v{unstackTarget?.versionNumber} leaves this stack and appears in the library as a
-              separate asset. The other versions stay here.
+              v{unstackTarget?.versionNumber}{' '}
+              {translateUi('leaves_this_stack_and_appears_in_th_393d62db')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleUnstackConfirmed()}>
-              Unstack
+              {' '}
+              {translateUi('unstack_c59c101f')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

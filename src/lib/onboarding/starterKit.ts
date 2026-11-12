@@ -1,4 +1,16 @@
 'use client';
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+const STARTER_LABEL_KEYS = {
+  Product: 'm_dd3b86d1ef',
+  'Customer character': 'm_3aae608baf',
+  'Visual style': 'm_bc567f33ca',
+  Setting: 'm_fb449f7183',
+  Promo: 'm_e0f4f87da3',
+  'Brand values': 'm_0b91825e50',
+  'Customer story': 'm_9785c7de73',
+} as const;
 
 import {
   type OnboardingInspirationSelection,
@@ -25,13 +37,35 @@ export const STARTER_LABELS: Record<StarterSlotKey, string> = {
   creative_hybrid: 'Customer story',
 };
 
-export function starterStateLine(run: OnboardingStarterRun) {
+export function starterStateLine(
+  run: OnboardingStarterRun,
+  t?: ReturnType<typeof useTranslations<'common'>>,
+  locale: UiLocale = 'en',
+) {
   if (run.status === 'prepared')
-    return 'Your Elements are prepared · Ready to create your first creatives';
+    return t
+      ? t('m_330b432cf3')
+      : 'Your Elements are prepared · Ready to create your first creatives';
   const progress = starterProgress(run);
   const working = STARTER_SLOTS.filter((key) => run.slots[key].status === 'running').map((key) =>
-    STARTER_LABELS[key].toLowerCase(),
+    t
+      ? t(STARTER_LABEL_KEYS[STARTER_LABELS[key] as keyof typeof STARTER_LABEL_KEYS])
+      : STARTER_LABELS[key].toLowerCase(),
   );
+  if (t)
+    return t('m_1012945ef0', {
+      ready: progress.ready,
+      total: progress.total,
+      state: working.length
+        ? 'creating'
+        : progress.active
+          ? 'active'
+          : progress.failed
+            ? 'failed'
+            : 'saved',
+      working: new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(working),
+      failed: progress.failed,
+    });
   return `${progress.ready} of ${progress.total} ready${working.length ? ` · Creating ${working.join(' and ')}` : progress.active ? ' · Preparing your kit' : progress.failed ? ` · ${progress.failed} need attention` : ' · Saved to your library'}`;
 }
 export const retryableStarterSlots = (run: OnboardingStarterRun) =>

@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 import type { PaidMediaTimeRange } from '@/components/paid-media/dashboard/timeRange';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { markFetchFailure, toApiError } from '@/lib/api/errors';
 import type {
   AccountInsightsResponse,
   ComputedInsight,
@@ -104,11 +106,12 @@ function deriveBudgetInsights(pacing: BudgetPacingResponse): ComputedInsight[] {
 }
 
 export function useAccountInsights(params: UseAccountInsightsParams): UseAccountInsightsReturn {
+  const formatUiError = useUiErrorMessage();
   const { brandId, adAccountId, timeRange, enabled = true } = params;
 
   const [data, setData] = React.useState<AccountInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [errorCause, setError] = React.useState<{ error: unknown } | null>(null);
   const [refreshTick, setRefreshTick] = React.useState(0);
 
   const requestIdRef = React.useRef(0);
@@ -138,15 +141,16 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildRequestBody({ brandId, adAccountId, timeRange })),
       signal: insightsController.signal,
-    }).then(async (response) => {
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(
-          (body as Record<string, string>).error ?? `Request failed with status ${response.status}`,
-        );
-      }
-      return response.json() as Promise<AccountInsightsResponse>;
-    });
+    })
+      .catch((cause) => {
+        throw markFetchFailure(cause);
+      })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw await toApiError(response);
+        }
+        return response.json() as Promise<AccountInsightsResponse>;
+      });
 
     const pacingFetch = fetch('/api/paid-media/budget-pacing', {
       method: 'POST',
@@ -154,6 +158,9 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
       body: JSON.stringify({ brandId, adAccountId }),
       signal: pacingController.signal,
     })
+      .catch((cause) => {
+        throw markFetchFailure(cause);
+      })
       .then(async (r) => {
         if (!r.ok) return null;
         return r.json() as Promise<BudgetPacingResponse>;
@@ -173,7 +180,7 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Failed to load insights');
+        setError({ error: err });
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {
@@ -197,7 +204,7 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
     generatedAt: data?.generated_at ?? null,
     expiresAt: data?.expires_at ?? null,
     isLoading,
-    error,
+    error: errorCause ? formatUiError(errorCause.error) : null,
     refresh,
   };
 }

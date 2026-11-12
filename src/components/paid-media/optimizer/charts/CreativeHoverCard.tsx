@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // Deep-look hover card for a single creative. Wraps any trigger (a thumbnail, a
 // legend chip, a hovered timeline point) and reveals the creative in context: its
 // thumbnail, the communication angle + hook Jaina tagged it with, the angle
@@ -80,6 +82,8 @@ export function CreativeHoverCard({
   posterUrl,
   children,
 }: CreativeHoverCardProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const series = trend?.series ?? [];
   const spend = series.reduce((sum, point) => sum + point.spend, 0);
   const lastCpa = series.at(-1)?.cpa ?? null;
@@ -106,7 +110,7 @@ export function CreativeHoverCard({
             <p className="truncate font-medium text-sm">{ad.name ?? ad.id}</p>
             {angle ? (
               <Badge className="text-xs" variant="secondary">
-                {humanize(angle.angle)}
+                {humanize(angle.angle, uiText)}
               </Badge>
             ) : null}
             {ad.status ? <p className="text-xs text-muted-foreground">{ad.status}</p> : null}
@@ -120,7 +124,7 @@ export function CreativeHoverCard({
         {confidence != null ? (
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Angle confidence</span>
+              <span>{uiText('angle_confidence_8284faa')}</span>
               <span className="tabular-nums">{Math.round(confidence * 100)}%</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -136,13 +140,18 @@ export function CreativeHoverCard({
           <div className="flex flex-wrap gap-1 border-border/60 border-t pt-2">
             {virality ? (
               <Badge className="text-xs" variant="secondary">
-                Virality {virality.predicted_overall} · {virality.grade}
-                {virality.prediction_only ? ' · prediction' : ' · observed'}
+                {uiText.rich('sentence_2bc05a2cb8e6', {
+                  v0: virality.predicted_overall,
+                  v1: virality.grade,
+                  v2: virality.prediction_only
+                    ? uiText('prediction_56e4978')
+                    : uiText('observed_7a22a63'),
+                })}
               </Badge>
             ) : null}
             {outcome ? (
               <Badge className="text-xs" variant="outline">
-                {humanize(outcome.decision_kind)} ·{' '}
+                {humanize(outcome.decision_kind, uiText)} ·{' '}
                 {outcome.result ?? `${outcome.delivery_days}/7d`}
               </Badge>
             ) : null}
@@ -152,16 +161,19 @@ export function CreativeHoverCard({
         {series.length >= 2 ? (
           <div className="space-y-1 border-border/60 border-t pt-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
-              <span>Last {series.length}d</span>
+              <span>{uiText.rich('sentence_0e96c4a35d19', { v0: series.length })}</span>
               <span>
-                spend {formatCurrency(spend, currency)} · CPA {formatCpa(lastCpa, currency)}
+                {uiText.rich('sentence_f0c3a00a1796', {
+                  v0: formatCurrency(spend, currency, uiLocale),
+                  v1: formatCpa(lastCpa, currency, uiLocale),
+                })}
               </span>
             </div>
             <Sparkline values={series.map((point) => point.spend)} />
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Per-day creative trend appears once daily metrics load.
+            {uiText('per_day_creative_trend_appears_once_daily_met_cac9329')}
           </p>
         )}
       </HoverCardContent>

@@ -1,12 +1,11 @@
 import type { UpsertGoalCapabilityRouteRequest } from '@continuum/contracts';
 import { campaignResearchTemplate } from '@continuum/contracts';
 import { Bot, CircleAlert, CircleCheck, Route, Users } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Pill } from '@/components/kibo-ui/pill';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
 import { GoalRoutingDialog } from './GoalRoutingDialog';
-
-const label = (value: string): string =>
-  value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+import { goalControlLabel } from './goalControlLabels';
 
 export function GoalExecutionStatus({
   goal,
@@ -15,6 +14,7 @@ export function GoalExecutionStatus({
   goal: GoalWorkspaceView;
   onSaveCapabilityRoute: (input: UpsertGoalCapabilityRouteRequest) => Promise<boolean>;
 }) {
+  const uiText = useTranslations('dashboard');
   const supervisor = goal.supervisor;
   const isCampaignGoal = goal.kind === 'campaign' || goal.kind === campaignResearchTemplate.id;
   const requiredCapabilities = isCampaignGoal
@@ -36,21 +36,27 @@ export function GoalExecutionStatus({
 
   return (
     <section
-      aria-label="Goal execution status"
+      aria-label={uiText('goal_execution_status_8c643ab')}
       className="grid shrink-0 gap-px overflow-hidden rounded-lg border border-border/70 bg-border/70 md:grid-cols-3"
     >
       <div className="bg-card px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-xs font-medium">
             <Bot className="size-3.5 text-primary" />
-            Jaina supervisor
+            {uiText('m_6abb8d3c7b')}
           </p>
           <Pill variant={waiting > 0 ? 'warning' : 'secondary'}>
-            {supervisor ? label(supervisor.portfolioStatus) : 'Preparing'}
+            {supervisor
+              ? goalControlLabel(supervisor.portfolioStatus, uiText)
+              : uiText('preparing_cf1aa6c')}
           </Pill>
         </div>
         <p className="mt-1 text-2xs text-muted-foreground">
-          {running} running · {ready} ready · {waiting} waiting
+          {uiText.rich('sentence_1347b7bb26ff', {
+            v0: () => running,
+            v1: () => ready,
+            v2: () => waiting,
+          })}
         </p>
       </div>
 
@@ -58,12 +64,14 @@ export function GoalExecutionStatus({
         <div className="flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-xs font-medium">
             <Route className="size-3.5" />
-            Dependency graph
+            {uiText('m_bc674d2eea')}
           </p>
-          <Pill variant="secondary">{goal.workNodes.length} nodes</Pill>
+          <Pill variant="secondary">
+            {uiText.rich('sentence_86e747d652a4', { count: goal.workNodes.length })}
+          </Pill>
         </div>
         <p className="mt-1 text-2xs text-muted-foreground">
-          Only satisfied branches enter the bounded execution queue.
+          {uiText('only_satisfied_branches_enter_the_bounded_exe_266dcbb')}
         </p>
       </div>
 
@@ -71,7 +79,7 @@ export function GoalExecutionStatus({
         <div className="flex items-center justify-between gap-2">
           <p className="flex items-center gap-1.5 text-xs font-medium">
             <Users className="size-3.5" />
-            Stakeholder routing
+            {uiText('m_e957a7bea1')}
           </p>
           <div className="flex items-center gap-1">
             <Pill variant={missingCapabilities.length > 0 ? 'warning' : 'success'}>
@@ -88,14 +96,18 @@ export function GoalExecutionStatus({
           {missingCapabilities.length > 0 ? (
             <>
               <CircleAlert className="mt-0.5 size-3 shrink-0 text-warning" />
-              Missing {missingCapabilities.map(label).join(', ')}
+              {uiText('m_aad0a108ff', {
+                capabilities: missingCapabilities
+                  .map((capability) => goalControlLabel(capability, uiText))
+                  .join(', '),
+              })}
             </>
           ) : (
             <>
               <CircleCheck className="mt-0.5 size-3 shrink-0 text-success" />
               {isCampaignGoal
-                ? 'Strategy, budget, creative ops, measurement, and compliance are routed.'
-                : 'Every capability required by this Goal is routed.'}
+                ? uiText('strategy_budget_creative_ops_measurement_and__3d7364f')
+                : uiText('every_capability_required_by_this_goal_is_rou_f9d5a90')}
             </>
           )}
         </p>

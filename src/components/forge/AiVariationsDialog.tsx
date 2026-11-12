@@ -17,13 +17,16 @@ import {
   sheetTable,
 } from '@continuum/contracts';
 import { FolderOpen, Loader2, Paperclip, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
 import { ACCEPTED_DOCUMENT_EXTENSIONS, hasDocumentExtension } from '@/lib/documents/uploadLimits';
 import { folderFilesFromDrop, folderFilesFromInput } from '@/lib/library/folderUpload';
@@ -213,6 +216,12 @@ export function AiDraftDialog({
   /** Take the grid's last step back — the answer just applied. */
   onUndo?: () => void;
 }) {
+  const presentForge = useForgePresentationText();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('forge');
+
   const [sheets, setSheets] = useState<AttachedSheet[]>([]);
   const [answer, setAnswer] = useState<Pick<
     ApiRenderSuggestRowsResponse,
@@ -434,11 +443,11 @@ export function AiDraftDialog({
       });
       setPrompt('');
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
+      const message = uiErrorText(error);
       setProblem(
         message.includes('suggest_unavailable')
           ? 'The assistant is unavailable right now. Try again in a minute, or edit the grid directly.'
-          : describeRenderDiscoveryFailure(message),
+          : describeRenderDiscoveryFailure(message, presentForge),
       );
     } finally {
       setBusy(false);
@@ -512,7 +521,7 @@ export function AiDraftDialog({
       );
       setDrafted(response);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '';
+      const message = uiErrorText(error);
       setProblem(
         message.includes('suggest_unavailable')
           ? 'The AI writer is unavailable right now. Try again in a few minutes, or add rows by hand.'
@@ -520,7 +529,7 @@ export function AiDraftDialog({
             ? message
             : message.includes('render_draft_file_') || message.includes('render_draft_media_')
               ? 'A source file is unavailable. Remove it and try again.'
-              : describeRenderDiscoveryFailure(message),
+              : describeRenderDiscoveryFailure(message, presentForge),
       );
     } finally {
       setBusy(false);
@@ -544,11 +553,14 @@ export function AiDraftDialog({
           anchor={anchor ?? undefined}
           align="start"
           className="max-h-[70vh] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto"
-          aria-label="Review drafted rows"
+          aria-label={translateUi('review_drafted_rows_003d5cbc')}
         >
-          <h2 className="text-sm font-semibold">Some rows failed your brand’s rules</h2>
+          <h2 className="text-sm font-semibold">
+            {translateUi('some_rows_failed_your_brand_s_rules_637a2fa0')}
+          </h2>
           <p className="mt-1 mb-3 text-xs text-muted-foreground">
-            A failed row starts unticked. Keep it if you disagree.
+            {' '}
+            {translateUi('a_failed_row_starts_unticked_keep_i_cf917fe3')}{' '}
           </p>
           <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
             {drafted.rows.map((row) => {
@@ -588,10 +600,13 @@ export function AiDraftDialog({
           </ul>
           <div className="mt-4 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setDrafted(null)}>
-              Back
+              {' '}
+              {translateUi('back_76900f1b')}{' '}
             </Button>
             <Button type="button" disabled={kept === 0} onClick={addChecked}>
-              Add {kept} {kept === 1 ? 'row' : 'rows'}
+              {' '}
+              {translateUi('add_9fd728c6')} {kept}{' '}
+              {kept === 1 ? translateUi('row_634768da') : translateUi('rows_bc51e9e6')}
             </Button>
           </div>
         </PopoverContent>
@@ -605,17 +620,23 @@ export function AiDraftDialog({
         anchor={anchor ?? undefined}
         align="start"
         className="max-h-[70vh] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto"
-        aria-label={parent ? `Vary ${parent.label} with AI` : 'Draft rows with AI'}
+        aria-label={
+          parent
+            ? translateUi('vary_value0_with_ai_c62ad6be', { value0: String(parent.label) })
+            : translateUi('draft_rows_with_ai_896c25c9')
+        }
         onDragOver={(event) => event.preventDefault()}
         onDrop={dropFiles}
       >
         <h2 className="text-sm font-semibold">
-          {parent ? `Vary “${parent.label}” with AI` : 'Draft rows with AI'}
+          {parent
+            ? translateUi('vary_value0_with_ai_f213d4cf', { value0: String(parent.label) })
+            : translateUi('draft_rows_with_ai_896c25c9')}
         </h2>
         <p className="mt-1 mb-4 text-xs text-muted-foreground">
           {assisting
-            ? 'Say what to change — on the selected rows, a row by number, or all of them. Attach a sheet to build rows from it. Changes land in the grid as one undo step; nothing renders.'
-            : 'Add a brief, files, or both. AI chooses the useful rows; review them in the grid before rendering.'}
+            ? translateUi('say_what_to_change_on_the_selected__a4ac01e1')
+            : translateUi('add_a_brief_files_or_both_ai_choose_03723505')}
         </p>
         <div className="flex flex-col gap-3">
           {answer ? (
@@ -648,16 +669,17 @@ export function AiDraftDialog({
                     setAnswer(null);
                   }}
                 >
-                  Undo this change
+                  {' '}
+                  {translateUi('undo_this_change_c1497e90')}{' '}
                 </Button>
               ) : null}
             </div>
           ) : null}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ai-draft-prompt">
-              {assisting ? 'Ask' : 'Brief'}{' '}
+              {assisting ? translateUi('ask_b8c209cd') : translateUi('brief_ac40ae1e')}{' '}
               <span className="font-normal text-muted-foreground">
-                {assisting ? '' : '(optional with files)'}
+                {assisting ? '' : translateUi('optional_with_files_25c7080c')}
               </span>
             </Label>
             <Textarea
@@ -667,12 +689,12 @@ export function AiDraftDialog({
               rows={3}
               placeholder={
                 parent
-                  ? 'Punchier headlines, one per season'
+                  ? translateUi('punchier_headlines_one_per_season_fee811d0')
                   : assisting
                     ? sheets.length
-                      ? 'Build the Card B rows from this sheet'
-                      : 'Odds on row 3 to 1.80 · red box on the higher odd for the selected rows'
-                    : 'Five weekend offers for the summer range, each a different product and headline'
+                      ? translateUi('build_the_card_b_rows_from_this_she_a86c449d')
+                      : translateUi('odds_on_row_3_to_1_80_red_box_on_th_bc027cbc')
+                    : translateUi('five_weekend_offers_for_the_summer__3ac1f7b2')
               }
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={(event) => {
@@ -686,7 +708,7 @@ export function AiDraftDialog({
             multiple
             accept={`${ACCEPTED_DOCUMENT_EXTENSIONS},image/*,video/*`}
             className="sr-only"
-            aria-label="Choose source files"
+            aria-label={translateUi('choose_source_files_2a7f8443')}
             onChange={(event) => {
               const entries = Array.from(event.target.files ?? []).map((file) => ({
                 file,
@@ -702,7 +724,7 @@ export function AiDraftDialog({
             {...{ webkitdirectory: '' }}
             multiple
             className="sr-only"
-            aria-label="Choose source folder"
+            aria-label={translateUi('choose_source_folder_d017adb6')}
             onChange={(event) => {
               uploadFolder(event.target.files);
               event.target.value = '';
@@ -722,7 +744,7 @@ export function AiDraftDialog({
               ) : (
                 <Paperclip className="size-3.5" aria-hidden />
               )}
-              {uploading ? 'Uploading…' : 'Add files'}
+              {uploading ? translateUi('uploading_5ce44dd7') : translateUi('add_files_01792a33')}
             </Button>
             <Button
               type="button"
@@ -732,8 +754,9 @@ export function AiDraftDialog({
               disabled={uploading || busy}
               onClick={() => folderInput.current?.click()}
             >
-              <FolderOpen className="size-3.5" aria-hidden />
-              Add folder
+              <FolderOpen className="size-3.5" aria-hidden /> {translateUi(
+                'add_folder_5bbfc5a6',
+              )}{' '}
             </Button>
           </div>
           {sheets.length ? (
@@ -744,14 +767,16 @@ export function AiDraftDialog({
                   className="flex items-center justify-between gap-2 rounded border px-2 py-1"
                 >
                   <span className="truncate">
-                    {sheet.name} · read here ·{' '}
+                    {sheet.name} {translateUi('read_here_affa2555')}{' '}
                     {sheet.tables.map((table) => `${table.name} (${table.rows.length})`).join(', ')}
                   </span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Remove ${sheet.name}`}
+                    aria-label={translateUi('remove_value0_3028bf7d', {
+                      value0: String(sheet.name),
+                    })}
                     disabled={busy}
                     onClick={() =>
                       setSheets((current) => current.filter((item) => item.name !== sheet.name))
@@ -773,18 +798,20 @@ export function AiDraftDialog({
                   <span className="truncate">
                     {file.name} ·{' '}
                     {file.status === 'error'
-                      ? 'Could not read; remove and add again'
+                      ? translateUi('could_not_read_remove_and_add_again_94b4925e')
                       : file.status === 'ready'
-                        ? `Ready · ${file.id}`
+                        ? translateUi('ready_value0_d233e5c3', { value0: String(file.id) })
                         : file.status === 'processing'
-                          ? 'Reading file…'
-                          : 'Uploading…'}
+                          ? translateUi('reading_file_509b5cf6')
+                          : translateUi('uploading_5ce44dd7')}
                   </span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={`Remove ${file.name}`}
+                    aria-label={translateUi('remove_value0_3028bf7d', {
+                      value0: String(file.name),
+                    })}
                     disabled={busy || uploading}
                     onClick={() =>
                       setFiles((current) => current.filter((item) => item.id !== file.id))
@@ -797,9 +824,10 @@ export function AiDraftDialog({
             </ul>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            PDF, Word, PowerPoint, Excel, CSV, text, images, and video. Files stay in your brand
-            files. Drop files or a folder here. Up to {API_RENDER_DRAFT_DOCUMENTS_MAX} documents and{' '}
-            {API_RENDER_DRAFT_MEDIA_MAX} images or videos.
+            {' '}
+            {translateUi('pdf_word_powerpoint_excel_csv_text__09c4f388')}{' '}
+            {API_RENDER_DRAFT_DOCUMENTS_MAX} {translateUi('documents_and_c36c0203')}{' '}
+            {API_RENDER_DRAFT_MEDIA_MAX} {translateUi('images_or_videos_397cdc31')}{' '}
           </p>
           {problem ? (
             <p role="alert" className="text-sm text-destructive">
@@ -814,7 +842,7 @@ export function AiDraftDialog({
             disabled={busy || uploading}
             onClick={() => onOpenChange(false)}
           >
-            {answer ? 'Done' : 'Cancel'}
+            {answer ? translateUi('done_11a6767d') : translateUi('cancel_19766ed6')}
           </Button>
           {assisting && sheets.length === 0 ? (
             <Button
@@ -823,7 +851,8 @@ export function AiDraftDialog({
               disabled={busy || uploading || maxRows < 1 || !prompt.trim()}
               onClick={() => void draftRows()}
             >
-              Draft new rows
+              {' '}
+              {translateUi('draft_new_rows_c61d61d8')}{' '}
             </Button>
           ) : null}
           <Button
@@ -843,7 +872,11 @@ export function AiDraftDialog({
             ) : (
               <Sparkles className="size-4" aria-hidden />
             )}
-            {assisting ? (!prompt.trim() && sheets.length ? 'Import sheet' : 'Send') : 'Draft'}
+            {assisting
+              ? !prompt.trim() && sheets.length
+                ? translateUi('import_sheet_df54e3fc')
+                : translateUi('send_f6f4688f')
+              : translateUi('draft_ebf12ef4')}
           </Button>
         </div>
       </PopoverContent>
@@ -860,6 +893,8 @@ export function DraftWithAiButton({
   templateKey: string | null;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   return (
     <>
       <Button
@@ -875,12 +910,14 @@ export function DraftWithAiButton({
             : null,
         )}
       >
-        <Sparkles className="size-3.5" aria-hidden />
-        Draft rows with AI
+        <Sparkles className="size-3.5" aria-hidden /> {translateUi(
+          'draft_rows_with_ai_896c25c9',
+        )}{' '}
       </Button>
       {templateKey ? null : (
         <span className="text-xs text-muted-foreground">
-          Available once this template is published.
+          {' '}
+          {translateUi('available_once_this_template_is_pub_7baee5d6')}{' '}
         </span>
       )}
     </>

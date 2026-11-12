@@ -22,8 +22,40 @@ const TOOL_LABELS: Record<string, string> = {
   brandGrounding: 'Brand grounding',
 };
 
-export function formatOrganicToolName(name: string): string {
+const TOOL_MESSAGE_KEYS = {
+  summarizeOrganicDashboardData: 'tool_summarizeOrganicDashboardData',
+  getAccountMetrics: 'tool_getAccountMetrics',
+  getAccountAnalytics: 'tool_getAccountAnalytics',
+  getFacebookOrganicAnalytics: 'tool_getFacebookOrganicAnalytics',
+  getTikTokOrganicAnalytics: 'tool_getTikTokOrganicAnalytics',
+  getAudienceDemographics: 'tool_getAudienceDemographics',
+  getKpiInsights: 'tool_getKpiInsights',
+  getMetricsComparison: 'tool_getMetricsComparison',
+  getMetricsTimeSeries: 'tool_getMetricsTimeSeries',
+  getInteractionBreakdown: 'tool_getInteractionBreakdown',
+  getCalendarPostedContent: 'tool_getCalendarPostedContent',
+  getTopPosts: 'tool_getTopPosts',
+  getFacebookPostDetail: 'tool_getFacebookPostDetail',
+  getTikTokPostDetail: 'tool_getTikTokPostDetail',
+  getTrendsFromDb: 'tool_getTrendsFromDb',
+  listTrends: 'tool_listTrends',
+  getTrend: 'tool_getTrend',
+  listDrafts: 'tool_listDrafts',
+  getDraft: 'tool_getDraft',
+  webSearch: 'tool_webSearch',
+  brandGrounding: 'tool_brandGrounding',
+} as const;
+export type OrganicToolMessageKey =
+  | (typeof TOOL_MESSAGE_KEYS)[keyof typeof TOOL_MESSAGE_KEYS]
+  | 'toolUnknown';
+
+export function formatOrganicToolName(
+  name: string,
+  translate?: (key: OrganicToolMessageKey) => string,
+): string {
   const trimmed = name.trim();
+  if (translate)
+    return translate(TOOL_MESSAGE_KEYS[trimmed as keyof typeof TOOL_MESSAGE_KEYS] ?? 'toolUnknown');
   if (!trimmed) return 'Unknown tool';
   const mapped = TOOL_LABELS[trimmed];
   if (mapped) return mapped;

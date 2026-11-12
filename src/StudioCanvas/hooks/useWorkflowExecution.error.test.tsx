@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { act, cleanup, renderHook } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 
 // The Backend classifies a no-image failure and streams the reason. The canvas then

@@ -65,8 +65,8 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type KeyboardEvent, useMemo, useState } from 'react';
-
 import { GoogleIcon, type IconComponent } from '@/components/shared/icons';
 import {
   Command,
@@ -88,6 +88,7 @@ import {
   ContextMenuSubTrigger,
 } from '@/components/ui/context-menu';
 import type { TechniqueItem } from '@/lib/ai-studio/techniques';
+import { useStudioMetadata } from '../hooks/useStudioMetadata';
 
 import {
   ACTION_FAMILY_LABELS,
@@ -190,10 +191,11 @@ const ALL_ENTRIES: readonly { section: AddNodeGroupSection; row: AddNodeRow }[] 
  */
 const exactLabelMatches = (
   query: string,
+  metadata: (source: string) => string,
 ): readonly { section: AddNodeGroupSection; row: AddNodeRow }[] => {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
-  return ALL_ENTRIES.filter((entry) => entry.row.label.toLowerCase() === needle);
+  return ALL_ENTRIES.filter((entry) => metadata(entry.row.label).toLowerCase() === needle);
 };
 
 /** A technique whose name IS the query pins beside the exact-label node rows. */
@@ -203,29 +205,31 @@ const exactTechniqueMatches = (items: TechniqueItem[], query: string): Technique
   return items.filter((item) => item.name.trim().toLowerCase() === needle);
 };
 
-/** What a technique's row says at the end: its port contract, e.g. "2 in · 1 out". */
-const techniquePortSummary = (item: TechniqueItem): string =>
-  `${item.inputPorts.length} in · ${item.outputPorts.length} out`;
+/** Authored technique names remain unchanged; only application-owned kind labels translate. */
+const TechniqueBody = ({ item }: { item: TechniqueItem }) => {
+  const metadata = useStudioMetadata();
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span>{item.name}</span>
+      <span className="text-xs text-muted-foreground">
+        {metadata(item.kind.charAt(0).toUpperCase() + item.kind.slice(1))}
+      </span>
+    </div>
+  );
+};
 
-const techniqueKindLabel = (item: TechniqueItem): string =>
-  item.kind.charAt(0).toUpperCase() + item.kind.slice(1);
-
-const TechniqueBody = ({ item }: { item: TechniqueItem }) => (
-  <div className="flex min-w-0 flex-col">
-    <span>{item.name}</span>
-    <span className="text-xs text-muted-foreground">{techniqueKindLabel(item)}</span>
-  </div>
-);
-
-/** What rides at the end of the row: who runs it, and for an op, what it runs on.
- *  A held-back op says so there instead — which lane it is matters less than the fact
- *  that clicking it will not do anything. */
-const rowTag = (row: AddNodeRow): string =>
-  row.comingSoon
-    ? 'Coming soon'
-    : row.family
-      ? `${ACTION_FAMILY_LABELS[row.family]} · ${row.tag}`
-      : row.tag;
+const RowTag = ({ row }: { row: AddNodeRow }) => {
+  const metadata = useStudioMetadata();
+  return (
+    <>
+      {row.comingSoon
+        ? metadata('Coming soon')
+        : row.family
+          ? `${metadata(ACTION_FAMILY_LABELS[row.family])} · ${metadata(row.tag)}`
+          : metadata(row.tag)}
+    </>
+  );
+};
 
 /** What a row pre-configures on the node it creates — a video model, or an action's op. */
 const addOptionsFor = (
@@ -239,18 +243,19 @@ const RowLeadingIcon = ({ row, className }: { row: AddNodeRow; className?: strin
   return <Icon className={className} />;
 };
 
-const RowBody = ({ row }: { row: AddNodeRow }) => (
-  <div className="flex min-w-0 flex-col">
-    <span>{row.label}</span>
-    {/* The held-back sentence REPLACES the description: two lines of prose on a row the
-        user cannot click is one line too many, and the reason is what they need. */}
-    {row.comingSoon ? (
-      <span className="text-xs text-muted-foreground">{row.comingSoon}</span>
-    ) : row.desc ? (
-      <span className="text-xs text-muted-foreground">{row.desc}</span>
-    ) : null}
-  </div>
-);
+const RowBody = ({ row }: { row: AddNodeRow }) => {
+  const metadata = useStudioMetadata();
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span>{metadata(row.label)}</span>
+      {row.comingSoon ? (
+        <span className="text-xs text-muted-foreground">{metadata(row.comingSoon)}</span>
+      ) : row.desc ? (
+        <span className="text-xs text-muted-foreground">{metadata(row.desc)}</span>
+      ) : null}
+    </div>
+  );
+};
 
 /** The keys Base UI's menu may act on (arrow navigation, Home/End) once the box is empty. */
 const isMenuNavigationKey = (key: string): boolean =>
@@ -283,11 +288,14 @@ export function AddNodeCommandPalette({
   techniques?: PaletteTechniques;
   onApplyTechnique?: ApplyTechniqueHandler;
 }) {
+  const translateUi = useUiTranslations('studio');
+  const metadata = useStudioMetadata();
+
   const [query, setQuery] = useState('');
   // Presentation-only choice that lives as long as the menu does: the popup unmounts on
   // close, so it starts unticked on every open, like the search box starts empty.
   const [dropCollapsed, setDropCollapsed] = useState(false);
-  const pinned = useMemo(() => exactLabelMatches(query), [query]);
+  const pinned = useMemo(() => exactLabelMatches(query, metadata), [query, metadata]);
   const pinnedKeys = useMemo(
     () => new Set(pinned.map((entry) => addNodeRowKey(entry.row))),
     [pinned],
@@ -317,7 +325,7 @@ export function AddNodeCommandPalette({
   const renderSearchRow = (section: AddNodeGroupSection, row: AddNodeRow) => (
     <CommandItem
       key={addNodeRowKey(row)}
-      value={addNodeSearchValue(section, row)}
+      value={`${addNodeSearchValue(section, row)} ${metadata(section.label)} ${metadata(row.label)} ${row.desc ? metadata(row.desc) : ''}`}
       // The op id and family on the DOM row are what studio-node-palette-bench reads to
       // prove every implemented op is offered exactly once and told apart, in the real
       // bundle. A pinned row keeps the value of the section it really belongs to.
@@ -332,7 +340,9 @@ export function AddNodeCommandPalette({
     >
       <RowLeadingIcon row={row} />
       <RowBody row={row} />
-      <CommandShortcut>{rowTag(row)}</CommandShortcut>
+      <CommandShortcut>
+        <RowTag row={row} />
+      </CommandShortcut>
     </CommandItem>
   );
 
@@ -347,7 +357,12 @@ export function AddNodeCommandPalette({
     >
       <Blocks />
       <TechniqueBody item={item} />
-      <CommandShortcut>{techniquePortSummary(item)}</CommandShortcut>
+      <CommandShortcut>
+        {translateUi('techniquePorts', {
+          inputs: item.inputPorts.length,
+          outputs: item.outputPorts.length,
+        })}
+      </CommandShortcut>
     </CommandItem>
   );
 
@@ -360,7 +375,12 @@ export function AddNodeCommandPalette({
     >
       <Blocks className="mr-2 h-4 w-4" />
       <TechniqueBody item={item} />
-      <ContextMenuShortcut>{techniquePortSummary(item)}</ContextMenuShortcut>
+      <ContextMenuShortcut>
+        {translateUi('techniquePorts', {
+          inputs: item.inputPorts.length,
+          outputs: item.outputPorts.length,
+        })}
+      </ContextMenuShortcut>
     </ContextMenuItem>
   );
 
@@ -369,8 +389,8 @@ export function AddNodeCommandPalette({
       return (
         <ContextMenuItem disabled>
           {techniques.isLoading
-            ? 'Loading…'
-            : 'No techniques yet — select nodes, then Save as technique'}
+            ? translateUi('loading_ba3bbbe1')
+            : translateUi('no_techniques_yet_select_nodes_then_5f458661')}
         </ContextMenuItem>
       );
     }
@@ -382,10 +402,10 @@ export function AddNodeCommandPalette({
     }
     return (
       <>
-        <ContextMenuLabel>Brand</ContextMenuLabel>
+        <ContextMenuLabel>{translateUi('brand_090ed431')}</ContextMenuLabel>
         {brand.map(renderTechniqueMenuRow)}
         <ContextMenuSeparator />
-        <ContextMenuLabel>Premade</ContextMenuLabel>
+        <ContextMenuLabel>{translateUi('premade_8ae29823')}</ContextMenuLabel>
         {premade.map(renderTechniqueMenuRow)}
       </>
     );
@@ -405,7 +425,9 @@ export function AddNodeCommandPalette({
     >
       <RowLeadingIcon row={row} className="mr-2 h-4 w-4" />
       <RowBody row={row} />
-      <ContextMenuShortcut>{rowTag(row)}</ContextMenuShortcut>
+      <ContextMenuShortcut>
+        <RowTag row={row} />
+      </ContextMenuShortcut>
     </ContextMenuItem>
   );
 
@@ -415,7 +437,7 @@ export function AddNodeCommandPalette({
       <ContextMenuSub key={opGroup.key}>
         <ContextMenuSubTrigger inset data-subgroup={opGroup.key}>
           <GroupIcon className="mr-2 h-4 w-4" />
-          {opGroup.label}
+          {metadata(opGroup.label)}
         </ContextMenuSubTrigger>
         <ContextMenuSubContent
           className="nowheel w-72"
@@ -437,8 +459,7 @@ export function AddNodeCommandPalette({
       }}
     >
       <ContextMenuSubTrigger inset>
-        <Plus className="mr-2 h-4 w-4" />
-        Add Node
+        <Plus className="mr-2 h-4 w-4" /> {translateUi('add_node_a70aa008')}{' '}
       </ContextMenuSubTrigger>
       {/* `nowheel` keeps a scroll inside the popup from zooming the React Flow pane; the
           height cap is Base UI's positioner var, so the Action category scrolls instead of
@@ -446,7 +467,7 @@ export function AddNodeCommandPalette({
       <ContextMenuSubContent className="nowheel w-80 p-0" data-testid="add-node-palette">
         <Command onKeyDown={fenceMenuKeys}>
           <CommandInput
-            placeholder="Search nodes…"
+            placeholder={translateUi('search_nodes_0b5b745a')}
             autoFocus
             data-testid="add-node-palette-input"
             value={query}
@@ -454,9 +475,12 @@ export function AddNodeCommandPalette({
           />
           {query ? (
             <CommandList>
-              <CommandEmpty>No node matches that search.</CommandEmpty>
+              <CommandEmpty>{translateUi('no_node_matches_that_search_bd23376a')}</CommandEmpty>
               {pinned.length > 0 || pinnedTechniques.length > 0 ? (
-                <CommandGroup heading="Best match" data-testid="add-node-palette-pinned">
+                <CommandGroup
+                  heading={metadata('Best match')}
+                  data-testid="add-node-palette-pinned"
+                >
                   {pinnedTechniques.map(renderTechniqueSearchRow)}
                   {pinned.map((entry) => renderSearchRow(entry.section, entry.row))}
                 </CommandGroup>
@@ -464,7 +488,10 @@ export function AddNodeCommandPalette({
               {/* Only while there are techniques: cmdk keeps an empty group's heading in
                   the DOM, and the headings are pinned to the catalog's labels. */}
               {unpinnedTechniques.length > 0 ? (
-                <CommandGroup heading="Techniques" data-testid="add-node-palette-techniques">
+                <CommandGroup
+                  heading={metadata('Techniques')}
+                  data-testid="add-node-palette-techniques"
+                >
                   {unpinnedTechniques.map(renderTechniqueSearchRow)}
                 </CommandGroup>
               ) : null}
@@ -474,7 +501,7 @@ export function AddNodeCommandPalette({
                 const rows = section.rows.filter((row) => !pinnedKeys.has(addNodeRowKey(row)));
                 if (rows.length === 0) return null;
                 return (
-                  <CommandGroup key={section.group} heading={section.label}>
+                  <CommandGroup key={section.group} heading={metadata(section.label)}>
                     {rows.map((row) => renderSearchRow(section, row))}
                   </CommandGroup>
                 );
@@ -488,8 +515,7 @@ export function AddNodeCommandPalette({
         {query ? null : (
           <ContextMenuSub>
             <ContextMenuSubTrigger inset data-testid="add-node-techniques-trigger">
-              <Blocks className="mr-2 h-4 w-4" />
-              Techniques
+              <Blocks className="mr-2 h-4 w-4" /> {translateUi('techniques_52551d32')}{' '}
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="nowheel w-72" data-testid="add-node-techniques">
               <ContextMenuCheckboxItem
@@ -497,7 +523,8 @@ export function AddNodeCommandPalette({
                 onCheckedChange={setDropCollapsed}
                 data-testid="add-node-techniques-collapsed"
               >
-                Drop collapsed
+                {' '}
+                {translateUi('drop_collapsed_7258b51e')}{' '}
               </ContextMenuCheckboxItem>
               <ContextMenuSeparator />
               {renderTechniqueRows()}
@@ -516,7 +543,7 @@ export function AddNodeCommandPalette({
                 <ContextMenuSub key={section.group}>
                   <ContextMenuSubTrigger inset>
                     <CategoryIcon className="mr-2 h-4 w-4" />
-                    {section.label}
+                    {metadata(section.label)}
                   </ContextMenuSubTrigger>
                   <ContextMenuSubContent
                     className="nowheel w-72"
@@ -530,7 +557,7 @@ export function AddNodeCommandPalette({
                         <ContextMenuSub key={sub.key}>
                           <ContextMenuSubTrigger inset data-subgroup={sub.key}>
                             <SubIcon className="mr-2 h-4 w-4" />
-                            {sub.label}
+                            {metadata(sub.label)}
                           </ContextMenuSubTrigger>
                           <ContextMenuSubContent
                             className="nowheel w-72"

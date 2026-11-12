@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 import {
   Plan,
@@ -14,7 +15,9 @@ import {
 } from '@/components/ai-elements/plan';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { ConceptCard, FORMAT_LABELS, formatDayLabel } from './ConceptCard';
+import type { UiLocale } from '@/i18n/config';
+import { ConceptCard, formatDayLabel } from './ConceptCard';
+import { conceptFormatLabel } from './conceptLabels';
 import type {
   PipelineCardState,
   PlanEvidence,
@@ -42,23 +45,31 @@ type Props = {
 // collapses to the SAME job on the Backend instead of over-dispatching.
 const makeClientKey = (planId: string, itemId: string): string => `${planId}:${itemId}`;
 
-const EVIDENCE_LABELS: Record<PlanEvidence['kind'], string> = {
-  trend: 'Trend',
-  metric: 'Metric',
-  competitor: 'Competitor',
-  past_draft: 'Past post',
-  brand_doc: 'Brand doc',
-};
+type OrganicText = ReturnType<typeof useTranslations<'organic'>>;
+
+const EVIDENCE_LABEL_KEYS = {
+  trend: 'trend_9e21771',
+  metric: 'metric_2d275a7',
+  competitor: 'conceptEvidenceCompetitor',
+  past_draft: 'conceptEvidencePastPost',
+  brand_doc: 'conceptEvidenceBrandDoc',
+} as const satisfies Record<PlanEvidence['kind'], string>;
 
 /** `weekStart` is a bare YYYY-MM-DD; parsing it as a Date would shift it a day west of UTC. */
-function formatWeekOf(weekStart: string | undefined): string | null {
+function formatWeekOf(
+  weekStart: string | undefined,
+  locale: UiLocale,
+  translate: OrganicText,
+): string | null {
   if (!weekStart) return null;
   const [y, m, d] = weekStart.split('-').map(Number);
   if (!y || !m || !d) return null;
-  return `Week of ${new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })}`;
+  return translate('conceptWeekOf', {
+    date: new Date(y, m - 1, d).toLocaleDateString(locale, {
+      month: 'short',
+      day: 'numeric',
+    }),
+  });
 }
 
 // Brand names, not capitalized wire tokens — a plan header that says "Tiktok" reads
@@ -74,10 +85,12 @@ const PLATFORM_NAMES: Record<string, string> = {
 const platformName = (value: string): string =>
   PLATFORM_NAMES[value] ?? value.charAt(0).toUpperCase() + value.slice(1);
 
-function formatEstimate(seconds: number | undefined): string | null {
+function formatEstimate(seconds: number | undefined, translate: OrganicText): string | null {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return null;
-  if (seconds < 90) return `~${Math.round(seconds)} sec to generate`;
-  return `~${Math.round(seconds / 60)} min to generate`;
+  return translate('conceptGenerationEstimate', {
+    count: seconds < 90 ? Math.round(seconds) : Math.round(seconds / 60),
+    unit: seconds < 90 ? 'second' : 'minute',
+  });
 }
 
 /**
@@ -109,15 +122,22 @@ function orderByDependency(items: PlanItem[]): PlanItem[] {
 }
 
 /** "Mon 25 · Reel" for the one dependency a row actually points at, resolved in-plan. */
-function dependencyLabel(item: PlanItem, byId: Map<string, PlanItem>): string | null {
+function dependencyLabel(
+  item: PlanItem,
+  byId: Map<string, PlanItem>,
+  locale: UiLocale,
+  translate: OrganicText,
+): string | null {
   const parents = (item.dependsOn ?? [])
     .map((id) => byId.get(id))
     .filter((p): p is PlanItem => !!p);
   if (parents.length === 0) return null;
   const first = parents[0];
-  const format = first.format ? (FORMAT_LABELS[first.format] ?? first.format) : null;
-  const label = [formatDayLabel(first.scheduledAt), format].filter(Boolean).join(' · ');
-  return parents.length > 1 ? `${label} +${parents.length - 1} more` : label;
+  const format = first.format ? conceptFormatLabel(first.format, translate) : null;
+  const label = [formatDayLabel(first.scheduledAt, locale), format].filter(Boolean).join(' · ');
+  return parents.length > 1
+    ? translate('conceptDependencyMore', { dependency: label, count: parents.length - 1 })
+    : label;
 }
 
 function resolvePlanStatus(input: { dismissed: boolean; statuses: PlanItemStatus[] }): PlanStatus {
@@ -147,6 +167,8 @@ export function ConceptPlan({
   onGenerateMediaAction,
   onRetryJobAction,
 }: Props) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const [dismissed, setDismissed] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
@@ -177,10 +199,10 @@ export function ConceptPlan({
   const planStatus = resolvePlanStatus({ dismissed, statuses: items.map(resolveStatus) });
   const platforms = [...new Set(items.map((item) => item.platform))];
   const headerMeta = [
-    formatWeekOf(plan?.weekStart),
-    `${items.length} ${items.length === 1 ? 'post' : 'posts'}`,
+    formatWeekOf(plan?.weekStart, uiLocale, uiText),
+    uiText('awarenessPosts', { count: items.length }),
     platforms.length > 0 ? platforms.map(platformName).join(', ') : null,
-    formatEstimate(plan?.estimatedDurationSeconds),
+    formatEstimate(plan?.estimatedDurationSeconds, uiText),
   ].filter((part): part is string => Boolean(part));
 
   const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -206,7 +228,7 @@ export function ConceptPlan({
     <Plan className="mt-2 gap-3" defaultOpen status={planStatus}>
       <PlanHeader className="gap-1">
         <div className="min-w-0">
-          <PlanTitle className="text-sm">{plan?.title || 'Content plan'}</PlanTitle>
+          <PlanTitle className="text-sm">{plan?.title || uiText('content_plan_efeadfa')}</PlanTitle>
           {summary && (
             <PlanDescription className="mt-1 max-w-[68ch] text-xs leading-relaxed">
               {summary}
@@ -228,19 +250,19 @@ export function ConceptPlan({
                       type="button"
                     >
                       <span className="pr-1.5 text-muted-foreground/40">·</span>
-                      Grounded in {evidence.length} {evidence.length === 1 ? 'signal' : 'signals'}
+                      {uiText('groundedSignals', { count: evidence.length })}
                     </button>
                   }
                 />
                 <HoverCardContent align="start" className="w-96 p-3">
                   <p className="mb-2 text-2xs font-medium text-muted-foreground">
-                    What this plan is built on
+                    {uiText('what_this_plan_is_built_on_a2ba9b2')}
                   </p>
                   <ul className="space-y-2">
                     {evidence.map((item, i) => (
                       <li className="text-xs leading-relaxed text-pretty" key={`${item.kind}-${i}`}>
                         <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
-                          {EVIDENCE_LABELS[item.kind] ?? item.kind}
+                          {uiText(EVIDENCE_LABEL_KEYS[item.kind])}
                         </span>
                         <span className="text-foreground/85">{item.summary}</span>
                       </li>
@@ -270,7 +292,7 @@ export function ConceptPlan({
             >
               <ConceptCard
                 concept={item}
-                dependsOnLabel={dependencyLabel(item, byId)}
+                dependsOnLabel={dependencyLabel(item, byId, uiLocale, uiText)}
                 locked={dismissed}
                 onDismiss={() => setDismissedIds((prev) => new Set([...prev, item.itemId]))}
                 onEnrichDraft={onEnrichDraftAction}
@@ -295,7 +317,7 @@ export function ConceptPlan({
             onClick={handleDismissAll}
             variant="ghost"
           >
-            Dismiss all
+            {uiText('dismiss_all_97fac9e')}
           </AgentButton>
           <AgentButton
             disabled={footerLocked}
@@ -303,7 +325,7 @@ export function ConceptPlan({
             onClick={handleGenerateAll}
             variant="primary"
           >
-            Write copy for {pendingVisibleItems.length}
+            {uiText.rich('sentence_726d1496c874', { count: pendingVisibleItems.length })}
           </AgentButton>
         </PlanFooter>
       )}

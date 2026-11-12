@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { ClipEffectSpec } from '../../utils/render/effectSpec';
 import { TimelinePreview } from './TimelinePreview';
 

@@ -5,7 +5,12 @@ import {
   suggestedAnswer,
   type TemplateForgeNeed,
 } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { MappingQuestions } from './MappingQuestions';
 
 afterEach(cleanup);

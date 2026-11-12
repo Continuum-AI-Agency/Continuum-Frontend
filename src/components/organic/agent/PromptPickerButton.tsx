@@ -3,6 +3,7 @@
 import type { Prompt } from '@continuum/contracts';
 import { BookText, Wand2 } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import {
   Command,
@@ -29,6 +30,7 @@ type Props = {
 // deliberately not an agent mention reference the way a skill is. The user can edit the
 // text before sending, and that is the point.
 export function PromptPickerButton({ prompts, onPickAction, isError = false }: Props) {
+  const uiText = useTranslations('organic');
   const [open, setOpen] = useState(false);
 
   // Prompts carry a free-text category; group by it so a growing library stays browsable
@@ -49,22 +51,22 @@ export function PromptPickerButton({ prompts, onPickAction, isError = false }: P
         render={
           <button
             type="button"
-            aria-label="Insert a saved prompt"
+            aria-label={uiText('insert_a_saved_prompt_313c920')}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           >
             <BookText className="h-3.5 w-3.5" />
-            Prompts
+            {uiText('prompts_5f2e66e')}
           </button>
         }
       />
       <PopoverContent align="start" className="w-72 p-0">
         <Command>
-          <CommandInput placeholder="Insert a saved prompt…" />
+          <CommandInput placeholder={uiText('insert_a_saved_prompt_ca1435f')} />
           <CommandList>
             <CommandEmpty>
               {isError
-                ? "Couldn't load saved prompts. Check your connection and try again."
-                : 'No saved prompts yet — save one in Settings to reuse it here.'}
+                ? uiText('couldn_t_load_saved_prompts_check_your_connec_79eb4cd')
+                : uiText('no_saved_prompts_yet_save_one_in_settings_to__34df85e')}
             </CommandEmpty>
             {grouped.map(([category, items]) => (
               <CommandGroup key={category} heading={category}>
@@ -96,7 +98,7 @@ export function PromptPickerButton({ prompts, onPickAction, isError = false }: P
             className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <Wand2 className="h-3 w-3" />
-            Manage prompts
+            {uiText('manage_prompts_95d51e2')}
           </Link>
         </div>
       </PopoverContent>

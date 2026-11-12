@@ -1,3 +1,7 @@
+import {createTranslator} from 'next-intl';
+import enCopy from '../../../../../../messages/scale/en.json';
+import ptCopy from '../../../../../../messages/scale/pt-BR.json';
+import esCopy from '../../../../../../messages/scale/es.json';
 import { describe, expect, it } from 'bun:test';
 import type { ActionRevertResponse } from '@continuum/contracts';
 import type { ApplyActionsResponse } from '../../useOptimizerData';
@@ -477,4 +481,21 @@ describe('undoResultVerdict', () => {
       undoResultVerdict(undoAnswer({ status: 'refused', reason: 'already_reverted' }, false)).text,
     ).toBe('This change was already undone. Nothing was written.');
   });
+});
+
+describe('localized platform actions preserve wire data',()=>{
+ for(const locale of ['en','pt-BR','es'] as const)it(`uses stable refusal codes and exact figures in ${locale}`,()=>{
+  const t=createTranslator({locale,namespace:'scale',messages:{scale:{en:enCopy,'pt-BR':ptCopy,es:esCopy}[locale]}});
+  const response=answer({status:'refused',reason:'preflight_failed:0:guardrail',detail:'bid_target_change: over max_change_pct_per_cycle 0.2'});
+  const before=JSON.stringify(response);
+  const refusal=previewVerdict(response,'MXN',t,locale);
+  expect(refusal.tone).toBe('refused');
+  expect(refusal.text).toContain('20%');
+  expect(refusal.text).not.toContain('max_change_pct_per_cycle');
+  expect(cardActionChange(write(RAISE_GOOGLE_BUDGET),'MXN',t,locale)).toContain(locale==='en'?'1,473.75':locale==='pt-BR'?'1.473,75':'1473,75');
+  const original=JSON.stringify(RAISE_GOOGLE_BUDGET);
+  expect(cardActionTitle(write(RAISE_GOOGLE_BUDGET),t,locale)).toContain('VIVO');
+  expect(JSON.stringify(RAISE_GOOGLE_BUDGET)).toBe(original);
+  expect(JSON.stringify(response)).toBe(before);
+ });
 });

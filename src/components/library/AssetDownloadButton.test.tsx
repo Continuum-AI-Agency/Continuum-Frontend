@@ -4,7 +4,14 @@ import {
   type MediaAsset,
   PSD_STATIC_EXPORT_ROUTE,
 } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { clearLibraryPlaybackCache } from '@/lib/library/libraryPlayback';
 import { registerStageVideo } from '@/lib/library/videoPoster';
 import { AssetDownloadButton } from './AssetDownloadButton';

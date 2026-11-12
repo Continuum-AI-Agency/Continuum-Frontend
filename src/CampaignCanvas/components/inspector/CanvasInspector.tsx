@@ -1,4 +1,7 @@
 'use client';
+import {canvasValidationMessage} from '../../validation/presentation';
+
+import { useTranslations } from 'next-intl';
 
 /*
  * The node inspector: every field of the ONE selected Meta node, off the node.
@@ -68,6 +71,7 @@ const keepDeleteKeysInside = (event: KeyboardEvent<HTMLElement>) => {
 };
 
 export function CanvasInspector() {
+  const uiText = useTranslations('scale');
   const nodes = useCampaignStore((store) => store.nodes);
   const onNodesChange = useCampaignStore((store) => store.onNodesChange);
   const hydration = useCampaignStore((store) => store.hydration);
@@ -77,7 +81,9 @@ export function CanvasInspector() {
   const node = selected.length === 1 ? selected[0] : undefined;
   if (!node || !isMetaNode(node)) return null;
 
-  const { title, icon: Icon, tone } = PRESENTATION[node.type];
+  const { icon: Icon, tone } = PRESENTATION[node.type];
+ const titleKeys={campaign:'campaign_268286d','ad-set':'ad_set_639a64f',ad:'ad_1d97c9f',audience:'audience_545c023',creative:'creative_2c7e633'} as const;
+ const title=uiText(titleKeys[node.type]);
   const errors = node.data.validationErrors ?? [];
 
   return (
@@ -94,7 +100,7 @@ export function CanvasInspector() {
       className="mt-[4.5rem] mr-4 max-h-[calc(100%-11.5rem)] w-[22rem] duration-200 animate-in fade-in slide-in-from-right-2 motion-reduce:animate-none"
     >
       <fieldset
-        aria-label={`${title} settings`}
+        aria-label={uiText('template_7448360943fa', { v0: title })}
         // A save in flight owns the graph: fields read, nothing commits until it lands.
         disabled={editLocked}
         className="min-w-0 disabled:opacity-60"
@@ -107,8 +113,10 @@ export function CanvasInspector() {
       >
         {node.data.provenance && hydration ? (
           <p className="border-b border-border/70 bg-muted/40 px-4 py-2 text-2xs leading-snug text-muted-foreground">
-            Part of “{hydration.scaffoldName}” v{hydration.version}. Edits stay on this canvas until
-            they are saved as a new version.
+            {uiText.rich('sentence_ce1486729a85', {
+              v0: hydration.scaffoldName,
+              v1: hydration.version,
+            })}
           </p>
         ) : null}
         {errors.length > 0 ? (
@@ -117,7 +125,7 @@ export function CanvasInspector() {
             data-testid="inspector-validation-errors"
           >
             {errors.map((error) => (
-              <li key={error}>{error}</li>
+              <li key={error}>{canvasValidationMessage(error,uiText)}</li>
             ))}
           </ul>
         ) : null}

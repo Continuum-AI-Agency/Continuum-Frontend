@@ -1,7 +1,8 @@
 'use client';
 
 import { Loader2, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import {
   AlertDialog,
@@ -16,6 +17,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import {
   type DisconnectPreview,
   disconnectConnection,
@@ -27,10 +30,6 @@ type RemoveConnectionButtonProps = {
   integrationLabel: string;
 };
 
-function countLabel(count: number, singular: string): string {
-  return `${count} ${count === 1 ? singular : `${singular}s`}`;
-}
-
 /**
  * Removing a connection is not reversible and reaches past the person doing it —
  * every brand they shared it with loses access at the same moment. So the blast
@@ -41,6 +40,9 @@ export function RemoveConnectionButton({
   integrationId,
   integrationLabel,
 }: RemoveConnectionButtonProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const router = useRouter();
   const { show } = useToast();
   const [open, setOpen] = React.useState(false);
@@ -55,9 +57,7 @@ export function RemoveConnectionButton({
     setPreviewError(null);
     fetchDisconnectPreview(integrationId)
       .then(setPreview)
-      .catch((error: unknown) =>
-        setPreviewError(error instanceof Error ? error.message : 'Unknown error.'),
-      );
+      .catch((error: unknown) => setPreviewError(getUiErrorMessage(error)));
   };
 
   const handleRemove = async () => {
@@ -65,20 +65,24 @@ export function RemoveConnectionButton({
     try {
       const result = await disconnectConnection(integrationId);
       const pulledFrom =
-        result.brandsRevoked.length > 0 ? ` Pulled from ${result.brandsRevoked.join(', ')}.` : '';
+        result.brandsRevoked.length > 0 ? uiText('m_b1d4268c34',{brands:result.brandsRevoked.join(', ')}) : '';
       const unscheduled =
         result.postsDetached > 0
-          ? ` ${countLabel(result.postsDetached, 'queued post')} moved back to draft.`
+          ? uiText('m_f8644a8c95',{count:result.postsDetached})
           : '';
       show({
-        title: 'Connection removed',
-        description: `${integrationLabel} is disconnected.${pulledFrom}${unscheduled}`,
+        title: uiText('m_144e7d8a58'),
+        description: uiText('m_df2c56ca7e', {
+          v0: String(integrationLabel),
+          v1: String(pulledFrom),
+          v2: String(unscheduled),
+        }),
       });
       router.refresh();
     } catch (error) {
       show({
-        title: 'Could not remove connection',
-        description: error instanceof Error ? error.message : 'Unknown error.',
+        title: uiText('m_fa6d579605'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -102,58 +106,62 @@ export function RemoveConnectionButton({
             ) : (
               <Trash2 className="size-3.5" />
             )}
-            Remove
+            {uiText('remove_c3812fc')}
           </Button>
         }
       />
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Remove {integrationLabel}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Continuum revokes this login at the provider and deletes it from your account. It cannot
-            be undone — reconnecting means a fresh sign-in.
-          </AlertDialogDescription>
+          <AlertDialogTitle>
+            {uiText('m_1680e3e257')}
+            {integrationLabel}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>{uiText('m_3034b39084')}</AlertDialogDescription>
         </AlertDialogHeader>
 
         <div className="text-sm text-muted-foreground">
           {previewError ? (
-            <p className="text-destructive">Could not load what this affects: {previewError}</p>
+            <p className="text-destructive">
+              {uiText('m_aa0faba6af')}
+              {previewError}
+            </p>
           ) : preview ? (
             <ul className="flex flex-col gap-1.5">
-              <li>{countLabel(preview.accountCount, 'account')} disappear from Continuum.</li>
+              <li>
+                {uiText('m_32accb3e5e',{count:preview.accountCount})}
+              </li>
               <li>
                 {preview.brands.length > 0 ? (
                   <>
-                    These brands lose access immediately:{' '}
+                    {uiText('m_c148a40349')}{' '}
                     <span className="text-foreground">
                       {preview.brands.map((brand) => brand.name).join(', ')}
                     </span>
                     .
                   </>
                 ) : (
-                  'No brand is using this connection.'
+                  uiText('m_d9d0805dc9')
                 )}
               </li>
               {preview.queuedPostCount > 0 ? (
                 <li className="text-foreground">
-                  {countLabel(preview.queuedPostCount, 'scheduled post')} will be moved back to
-                  draft so nothing fails at publish time.
+                  {uiText('m_d4cc24bb3d',{count:preview.queuedPostCount})}
                 </li>
               ) : null}
             </ul>
           ) : (
-            <p>Checking what this affects…</p>
+            <p>{uiText('m_cebab3efa8')}</p>
           )}
         </div>
 
         <AlertDialogFooter>
-          <AlertDialogCancel>Keep connection</AlertDialogCancel>
+          <AlertDialogCancel>{uiText('keep_connection_2640513')}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             disabled={!preview}
             onClick={() => void handleRemove()}
           >
-            Remove connection
+            {uiText('m_7312a31a2c')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

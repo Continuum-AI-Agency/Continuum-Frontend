@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { InspirationBrowser } from '@/components/competitors/InspirationBrowser';
 import { Panel } from '@/components/shared/Panel';
@@ -9,9 +10,10 @@ import { CompetitorSpyLink } from './CompetitorSpyLink';
 // toggle, on-demand Sync, per-competitor health summary, and Save-to-board on
 // each card; the full workspace is one click away.
 export function CompetitorOrganicTable({ brandId }: { brandId: string }) {
+  const uiText = useTranslations('dashboard');
   return (
     <Panel
-      title="Competitor organic"
+      title={uiText('competitor_organic_6086eac')}
       className="h-full"
       bodyClassName="flex flex-col"
       action={<CompetitorSpyLink href="/competitor-spy?tab=inspiration" />}

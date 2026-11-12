@@ -7,6 +7,7 @@ import {
   outputFormatsOfParse,
   type RenderOutputFormatCandidate,
 } from '@continuum/contracts';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
 import { RatioGlyph, ratioParts } from '@/components/forge/RatioGlyph';
 import { Badge } from '@/components/ui/badge';
@@ -68,11 +69,11 @@ export type PreviewFrame =
   | { mode: 'none'; message?: string };
 
 type Source = 'rendered' | 'preview' | 'estimate';
-const SOURCE_LABEL: Record<Source, string> = {
-  rendered: 'Rendered',
-  preview: 'Preview',
-  estimate: 'Estimate',
-};
+const SOURCE_LABEL_KEY = {
+  rendered: 'previewSourceRendered',
+  preview: 'previewSourcePreview',
+  estimate: 'previewSourceEstimate',
+} as const;
 
 type ContractOutput = {
   id: string;
@@ -136,8 +137,11 @@ const containerRank = (output: ApiRenderOutput) => {
  * contract order — so a preview shows the file a browser can play before ProRes or MXF.
  */
 export const playableFirst = (outputs: readonly ApiRenderOutput[]) =>
-  [...outputs].sort((a, b) =>
-    Number(Boolean(b.assetId)) - Number(Boolean(a.assetId)) || containerRank(a) - containerRank(b));
+  [...outputs].sort(
+    (a, b) =>
+      Number(Boolean(b.assetId)) - Number(Boolean(a.assetId)) ||
+      containerRank(a) - containerRank(b),
+  );
 
 export function fileForFormat(
   outputs: readonly ApiRenderOutput[],
@@ -153,9 +157,6 @@ export function fileForFormat(
 
 const aspectOf = (format: PreviewFormat): [number, number] =>
   format.width && format.height ? [format.width, format.height] : ratioParts(format.ratio);
-
-const ESTIMATE_CAPTION =
-  'Positions come from your file; text size, line breaks and fonts are estimates.';
 
 export function FormatPreview({
   label,
@@ -179,6 +180,10 @@ export function FormatPreview({
   wellClassName?: string;
   className?: string;
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   // Null until a person picks: then a repaint is shown first when there is one, else the render.
   const [source, setSource] = useState<Source | null>(null);
   const format = formats.find((candidate) => candidate.id === value) ?? formats[0];
@@ -205,31 +210,41 @@ export function FormatPreview({
 
   const badge =
     shown.mode === 'rendered'
-      ? shown.badge ?? (shown.stale
-        ? 'Rendered · before latest edits'
-        : `Rendered · ${formatRelativeTime(shown.at)}`)
+      ? (shown.badge ??
+        (shown.stale
+          ? translateUi('previewRenderedBeforeEdits')
+          : translateUi('previewRenderedAge', {
+              age: formatRelativeTime(shown.at, undefined, currentUiLocale),
+            })))
       : shown.mode === 'preview'
-        ? shown.badge ?? (shown.pending
-          ? 'Preview · updating…'
-          : shown.basedOn === null
-            ? 'Composed from template'
-            : 'Preview')
+        ? (shown.badge ??
+          (shown.pending
+            ? translateUi('previewUpdating')
+            : shown.basedOn === null
+              ? translateUi('previewComposedFromTemplate')
+              : translateUi('previewSourcePreview')))
         : shown.mode === 'estimate'
-          ? 'Estimate · wireframe'
-          : 'No preview';
+          ? translateUi('previewEstimateWireframe')
+          : translateUi('previewNoPreview');
   const problem = warning?.(format) ?? null;
   const caption =
     shown.mode === 'estimate'
-      ? (shown.caption ?? ESTIMATE_CAPTION)
+      ? (shown.caption ?? translateUi('previewEstimateCaption'))
       : shown.mode === 'rendered'
         ? shown.caption
-      : shown.mode === 'preview'
-          ? shown.caption ?? [
+        : shown.mode === 'preview'
+          ? (shown.caption ??
+            [
               shown.basedOn === null
-                ? 'Drawn from the template'
-                : `Based on '${shown.basedOn}' render${shown.at ? ` · ${formatRelativeTime(shown.at)}` : ''}`,
+                ? translateUi('previewDrawnFromTemplate')
+                : translateUi('previewBasedOnRender', {
+                    name: shown.basedOn,
+                    age: shown.at
+                      ? ` · ${formatRelativeTime(shown.at, undefined, currentUiLocale)}`
+                      : '',
+                  }),
               ...(shown.notes ?? []),
-            ].join(' · ')
+            ].join(' · '))
           : null;
 
   return (
@@ -238,7 +253,7 @@ export function FormatPreview({
       className={cn('m-0 flex min-h-0 min-w-0 flex-col gap-1.5 border-0 p-0', className)}
     >
       <ToggleGroup
-        aria-label="Format"
+        aria-label={translateUi('format_2f343666')}
         size="sm"
         variant="outline"
         spacing={1}
@@ -297,7 +312,7 @@ export function FormatPreview({
         >
           {shown.mode === 'none' ? (
             <p className="m-0 flex size-full items-center justify-center p-2 text-center text-xs text-muted-foreground">
-              {shown.message ?? 'No measured layout for this format'}
+              {shown.message ?? translateUi('no_measured_layout_for_this_format_31cc2fa3')}
             </p>
           ) : (
             shown.node
@@ -306,7 +321,7 @@ export function FormatPreview({
         <div className="absolute top-2 right-2 flex items-center gap-1">
           {sources.length > 1 ? (
             <ToggleGroup
-              aria-label="Picture"
+              aria-label={translateUi('picture_9a1c54f5')}
               size="sm"
               variant="outline"
               spacing={0}
@@ -316,7 +331,7 @@ export function FormatPreview({
             >
               {sources.map((entry) => (
                 <ToggleGroupItem key={entry} value={entry} className="h-6 text-2xs">
-                  {SOURCE_LABEL[entry]}
+                  {translateUi(SOURCE_LABEL_KEY[entry])}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>

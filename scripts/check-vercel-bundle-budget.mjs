@@ -20,6 +20,14 @@ function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf8'));
 }
 
+export function visibleRoute(route) {
+  const segments = route
+    .split('/')
+    .filter((segment) => segment && segment !== '[locale]' && !/^\(.*\)$/.test(segment));
+  if (['en', 'pt-BR', 'es'].includes(segments[0])) segments.shift();
+  return '/' + segments.join('/');
+}
+
 // Next writes one row per app route as { route, firstLoadUncompressedJsBytes, firstLoadChunkPaths },
 // unioning every segment's JS (page, layout, ...) so a layout's contribution is counted here. Layouts
 // are segments, not routes, so they can never be rows of their own — budget the route that carries
@@ -28,16 +36,18 @@ function routeFirstLoad(distDirectory, budget) {
   const statistics = path.join(distDirectory, 'diagnostics', 'route-bundle-stats.json');
   if (!existsSync(statistics)) return emittedRouteFirstLoad(distDirectory, budget);
   const rows = readJson(statistics);
-  const row = rows.find((candidate) => candidate.route === budget.route);
-  if (!row) {
+  const matching = rows.filter((candidate) => visibleRoute(candidate.route) === budget.route);
+  if (!matching.length) {
     throw new Error(
       `${budget.name}: no route-bundle-stats row for "${budget.route}" — renamed or removed?`,
     );
   }
   return {
-    actualBytes: row.firstLoadUncompressedJsBytes,
-    gzipBytes: gzipChunks(
-      row.firstLoadChunkPaths.map((file) => path.resolve(projectDirectory, file)),
+    actualBytes: Math.max(...matching.map((row) => row.firstLoadUncompressedJsBytes)),
+    gzipBytes: Math.max(
+      ...matching.map((row) =>
+        gzipChunks(row.firstLoadChunkPaths.map((file) => path.resolve(projectDirectory, file))),
+      ),
     ),
   };
 }
@@ -45,8 +55,24 @@ function routeFirstLoad(distDirectory, budget) {
 // Webpack does not emit Turbopack's route diagnostics. Measure the actual prerendered
 // document and full RSC bootstrap imports instead, including shared runtime files once.
 function emittedRouteFirstLoad(distDirectory, budget) {
+  const results = ['', 'en', 'pt-BR', 'es']
+    .map((locale) => emittedLocaleFirstLoad(distDirectory, budget, locale))
+    .filter(Boolean);
+  if (!results.length)
+    throw new Error(`${budget.name}: no emitted route bootstrap for "${budget.route}"`);
+  return {
+    actualBytes: Math.max(...results.map((result) => result.actualBytes)),
+    gzipBytes: Math.max(...results.map((result) => result.gzipBytes)),
+  };
+}
+
+function emittedLocaleFirstLoad(distDirectory, budget, locale) {
   const appDirectory = path.join(distDirectory, 'server', 'app');
-  const route = budget.route === '/' ? 'index' : budget.route.replace(/^\//, '');
+  const route = locale
+    ? `${locale}${budget.route === '/' ? '' : budget.route}`
+    : budget.route === '/'
+      ? 'index'
+      : budget.route.replace(/^\//, '');
   const routeFile = path.resolve(appDirectory, route);
   assertInside(appDirectory, routeFile);
   const documents = [`${routeFile}.html`, `${routeFile}.segments/_full.segment.rsc`]
@@ -59,8 +85,7 @@ function emittedRouteFirstLoad(distDirectory, budget) {
       ),
     ),
   );
-  if (!chunks.size)
-    throw new Error(`${budget.name}: no emitted route bootstrap for "${budget.route}"`);
+  if (!chunks.size) return null;
   const manifest = readJson(path.join(distDirectory, 'build-manifest.json'));
   if (!Array.isArray(manifest.rootMainFiles))
     throw new Error('build-manifest.json does not contain rootMainFiles');

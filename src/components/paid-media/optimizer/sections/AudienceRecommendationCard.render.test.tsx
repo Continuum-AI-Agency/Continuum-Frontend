@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { audienceCardView, portfolioSpecsFrom } from './audienceCardModel';
 
 // The plan's posters are signed Meta URLs that expire; the card recovers them through the

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useMemo } from 'react';
 
 import {
@@ -19,6 +21,7 @@ export function BrandEventsList({
   platforms = [],
   density = 'default',
 }: BrandEventsListProps) {
+  const uiText = useTranslations('common');
   const normalizedEvents = useMemo(() => {
     const parsed = brandInsightsEventSchema.array().safeParse(events);
     return parsed.success ? parsed.data : [];
@@ -30,26 +33,26 @@ export function BrandEventsList({
         id: event.id,
         title: event.title,
         subtitle: event.description ?? event.opportunity,
-        secondaryValue: event.date ?? 'No date',
+        secondaryValue: event.date ?? uiText('insightNoDate'),
         platforms: event.platforms?.length ? event.platforms : platforms,
         tags: [],
         details: [
-          { label: 'Date', value: event.date },
-          { label: 'Description', value: event.description },
-          { label: 'Opportunity', value: event.opportunity },
+          { label: uiText('date_99c40ab'), value: event.date },
+          { label: uiText('description_526e008'), value: event.description },
+          { label: uiText('m_ff325cb88f'), value: event.opportunity },
         ],
       })),
-    [normalizedEvents, platforms],
+    [normalizedEvents, platforms, uiText],
   );
 
   return (
     <BrandInsightsDataTable
       rows={rows}
-      countLabel="events"
-      searchPlaceholder="Search events"
-      secondaryHeaderLabel="Date"
-      emptyTitle="No dated events yet"
-      emptyDescription="No event opportunities were found in this generation window."
+      formatCount={(count) => uiText('insightCount', { kind: 'events', count })}
+      searchPlaceholder={uiText('insightSearchEvents')}
+      secondaryHeaderLabel={uiText('date_99c40ab')}
+      emptyTitle={uiText('insightNoEvents')}
+      emptyDescription={uiText('insightNoEventsDescription')}
       density={density}
       scrollWithinSection
     />

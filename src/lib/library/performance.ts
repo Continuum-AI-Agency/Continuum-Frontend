@@ -1,3 +1,5 @@
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 // The Creative DNA read, as the Library consumes it: one fetch, plus the number
 // vocabulary the panel renders with.
 //
@@ -72,26 +74,26 @@ export function isMeasured(value: Metric): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-export function formatCount(value: Metric): string {
-  return isMeasured(value) ? Math.round(value).toLocaleString('en-US') : NOT_MEASURED;
+export function formatCount(value: Metric, locale: UiLocale = 'en'): string {
+  return isMeasured(value) ? Math.round(value).toLocaleString(locale) : NOT_MEASURED;
 }
 
-export function formatMoney(value: Metric): string {
+export function formatMoney(value: Metric, locale: UiLocale = 'en'): string {
   if (!isMeasured(value)) return NOT_MEASURED;
-  return `$${value.toLocaleString('en-US', {
+  return `$${value.toLocaleString(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 }
 
 /** Ratio in [0,1] → percent. 0 is a real rate and renders as "0.00%". */
-export function formatRate(value: Metric): string {
-  return isMeasured(value) ? `${(value * 100).toFixed(2)}%` : NOT_MEASURED;
+export function formatRate(value: Metric, locale: UiLocale = 'en'): string {
+  return isMeasured(value) ? `${formatDecimal(value * 100, 2, locale)}%` : NOT_MEASURED;
 }
 
 /** ROAS. A multiple, not a currency: 2.41×. */
-export function formatMultiple(value: Metric): string {
-  return isMeasured(value) ? `${value.toFixed(2)}×` : NOT_MEASURED;
+export function formatMultiple(value: Metric, locale: UiLocale = 'en'): string {
+  return isMeasured(value) ? `${formatDecimal(value, 2, locale)}×` : NOT_MEASURED;
 }
 
 export function versionLabel(versionNumber: number | null | undefined): string {

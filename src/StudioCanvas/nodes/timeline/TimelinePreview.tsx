@@ -1,6 +1,7 @@
 'use client';
 
 import { Pause, Play, Video } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -178,6 +179,8 @@ export function TimelinePreview({
   captionStyle?: CaptionStyle;
   onCaptionPositionChange?: (position: { xFrac: number; yFrac: number }) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   // The SAME resolver the burn-in uses (drawCaptions.ts). The preview used to build its own
   // approximation — hardcoded bold + uppercase, a text-shadow standing in for the stroke, no
   // background at all — which read as "close enough" with one style and becomes a lie the
@@ -228,7 +231,7 @@ export function TimelinePreview({
           // biome-ignore lint/performance/noImgElement: in-memory still preview; next/image adds no value for canvas media
           <img
             src={activeImageUrl}
-            alt="Timeline preview frame"
+            alt={translateUi('timeline_preview_frame_e0cf8c0c')}
             className="absolute inset-0 h-full w-full object-contain"
             style={mediaStyle}
           />
@@ -362,7 +365,9 @@ export function TimelinePreview({
         {isEmpty && totalSec <= 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
             <Video className="h-7 w-7 opacity-30" />
-            <span className="text-xs">Drag clips from the media bin onto the timeline</span>
+            <span className="text-xs">
+              {translateUi('drag_clips_from_the_media_bin_onto__d27681d1')}
+            </span>
           </div>
         ) : null}
       </div>
@@ -374,7 +379,11 @@ export function TimelinePreview({
           className="h-8 w-8"
           onClick={onTogglePlay}
           disabled={totalSec <= 0}
-          aria-label={isPlaying || isPreparing ? 'Pause preview' : 'Play preview'}
+          aria-label={
+            isPlaying || isPreparing
+              ? translateUi('pause_preview_5f457d19')
+              : translateUi('play_preview_a3247032')
+          }
         >
           {isPlaying || isPreparing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>

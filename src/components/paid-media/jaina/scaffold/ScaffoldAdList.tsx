@@ -1,4 +1,6 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 import type { ScaffoldAdSetRow } from '@/lib/paid-media/scaffoldTree';
 import { DerivedValue } from './DerivedValue';
@@ -11,10 +13,12 @@ import { ScaffoldStatusPill } from './ScaffoldStatusPill';
  * sticky-header <tbody> fights the outer table's layout for no gain at three rows.
  */
 export function ScaffoldAdList({ adSet }: { adSet: ScaffoldAdSetRow }) {
+  const uiText = useTranslations('scale');
+  const uiError = useUiErrorMessage();
   if (adSet.ads.length === 0) {
     return (
       <p className="px-1 py-2 text-muted-foreground text-sm">
-        No ads in this ad set yet — they are created at the populate gate.
+        {uiText('no_ads_in_this_ad_set_yet_they_are_created_at_eff46d9')}
       </p>
     );
   }
@@ -34,8 +38,8 @@ export function ScaffoldAdList({ adSet }: { adSet: ScaffoldAdSetRow }) {
               {ad.name}
             </DerivedValue>
             {ad.errorMessage ? (
-              <span className="truncate text-destructive text-xs" title={ad.errorMessage}>
-                {ad.errorMessage}
+              <span className="truncate text-destructive text-xs" title={uiError(ad.errorMessage)}>
+                {uiError(ad.errorMessage)}
               </span>
             ) : null}
           </div>

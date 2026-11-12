@@ -2,6 +2,7 @@
 
 import type { ClientRenderJob } from '@continuum/contracts';
 import { Cpu, ExternalLink, Loader2, RotateCcw, Square } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +27,7 @@ const KIND_LABEL: Record<ClientRenderJob['kind'], string> = {
 };
 
 export function ClientRenderInbox() {
+  const uiText = useTranslations('common');
   const queue = useClientRenderQueue();
   const [consentJob, setConsentJob] = useState<ClientRenderJob | null>(null);
   const [starting, setStarting] = useState(false);
@@ -56,8 +58,8 @@ export function ClientRenderInbox() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={`${queue.readyCount} render jobs ready`}
-                title="Ready to render"
+                aria-label={uiText('m_70ae795703', { v0: String(queue.readyCount) })}
+                title={uiText('ready_to_render_6f40bb0')}
               >
                 <Cpu className="size-4" />
               </Button>
@@ -71,15 +73,13 @@ export function ClientRenderInbox() {
         </span>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Ready to render</DialogTitle>
-            <DialogDescription>
-              Shared brand jobs wait here until an operator chooses to use this device.
-            </DialogDescription>
+            <DialogTitle>{uiText('ready_to_render_6f40bb0')}</DialogTitle>
+            <DialogDescription>{uiText('m_7f338a2f71')}</DialogDescription>
           </DialogHeader>
           <div className="max-h-[55dvh] space-y-2 overflow-y-auto">
             {queue.jobs.length === 0 ? (
               <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                No render jobs are waiting.
+                {uiText('m_effb147303')}
               </div>
             ) : (
               queue.jobs.map((job) => {
@@ -94,10 +94,14 @@ export function ClientRenderInbox() {
                         <div className="truncate text-sm font-semibold">{job.title}</div>
                         <div className="mt-1 text-xs text-muted-foreground">
                           {job.phase ??
-                            (job.state === 'ready' ? 'Waiting for an operator' : job.state)}
+                            (job.state === 'ready'
+                              ? uiText('waiting_for_an_operator_55735fa')
+                              : job.state)}
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
-                          {job.inputs.length} durable input{job.inputs.length === 1 ? '' : 's'}
+                          {job.inputs.length}
+                          {uiText('m_9268243153')}
+                          {job.inputs.length === 1 ? '' : 's'}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
@@ -105,7 +109,7 @@ export function ClientRenderInbox() {
                           type="button"
                           size="icon-xs"
                           variant="ghost"
-                          aria-label="View source"
+                          aria-label={uiText('m_31a7604a3c')}
                           onClick={() => window.location.assign(job.executionSpec.origin.viewHref)}
                         >
                           <ExternalLink />
@@ -117,12 +121,12 @@ export function ClientRenderInbox() {
                             disabled={!queue.canExecute(job)}
                             title={
                               queue.canExecute(job)
-                                ? 'Review consent and claim this job'
-                                : 'Open the source to use its render controls'
+                                ? uiText('m_19b781dbe4')
+                                : uiText('m_9541ddd7db')
                             }
                             onClick={() => setConsentJob(job)}
                           >
-                            Render
+                            {uiText('render_6d89eb7')}
                           </Button>
                         ) : null}
                         {job.state === 'failed' ? (
@@ -133,7 +137,7 @@ export function ClientRenderInbox() {
                             onClick={() => void queue.retry(job)}
                           >
                             <RotateCcw />
-                            Retry
+                            {uiText('retry_942087c')}
                           </Button>
                         ) : null}
                         {active && queue.isRunningLocally(job) ? (
@@ -144,7 +148,7 @@ export function ClientRenderInbox() {
                             onClick={() => void queue.stop(job)}
                           >
                             <Square />
-                            Stop
+                            {uiText('stop_cae7d57')}
                           </Button>
                         ) : null}
                       </div>
@@ -171,19 +175,16 @@ export function ClientRenderInbox() {
       <Dialog open={Boolean(consentJob)} onOpenChange={(open) => !open && setConsentJob(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Use this device to render?</DialogTitle>
-            <DialogDescription>
-              Rendering uses this device&apos;s CPU/GPU. Keep this tab open. One job runs at a time.
-              You can stop at any time; unfinished jobs return to the queue.
-            </DialogDescription>
+            <DialogTitle>{uiText('use_this_device_to_render_b69fdd3')}</DialogTitle>
+            <DialogDescription>{uiText('m_b70a801756')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConsentJob(null)}>
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button type="button" disabled={starting} onClick={() => void confirm()}>
               {starting ? <Loader2 className="animate-spin" /> : <Cpu />}
-              Claim and render
+              {uiText('m_6d2c0923ec')}
             </Button>
           </DialogFooter>
         </DialogContent>

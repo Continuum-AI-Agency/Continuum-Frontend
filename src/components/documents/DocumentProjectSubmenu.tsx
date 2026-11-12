@@ -2,6 +2,7 @@
 
 import type { Project } from '@continuum/contracts';
 import { Check, FolderOpen } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   DropdownMenuItem,
   DropdownMenuSub,
@@ -9,6 +10,7 @@ import {
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { useProjectMemberships, useProjectMutations, useProjects } from '@/lib/projects/hooks';
 import type { DocumentView } from './types';
 
@@ -28,6 +30,9 @@ import type { DocumentView } from './types';
  * existed, was tested, and was unreachable, and a mis-tag was permanent.
  */
 export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc: DocumentView }) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const { projects, isLoading } = useProjects(brandId);
   const { memberships, isFetching: membershipsFetching } = useProjectMemberships(brandId, {
     entityId: doc.id,
@@ -54,17 +59,19 @@ export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc:
         entityIds: [doc.id],
       });
       toast.success(
-        isTagged ? `Removed from ${project.name}` : `Added to ${project.name}`,
+        isTagged
+          ? uiText('m_1226fa963f', { v0: String(project.name) })
+          : uiText('m_c73d760bf0', { v0: String(project.name) }),
         // Naming the consequence, not the row: the point of tagging a document is what the
         // agent then sees, and that is not obvious from "tagged".
         {
           description: isTagged
-            ? 'It is brand baseline again, so every project can see it.'
-            : `Only ${project.name} will see it now; other projects will not.`,
+            ? uiText('m_c1a465a090')
+            : uiText('m_1360c31d13', { v0: String(project.name) }),
         },
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not update the project');
+      toast.error(getUiErrorMessage(error));
     }
   };
 
@@ -72,7 +79,7 @@ export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc:
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <FolderOpen className="mr-2 h-3.5 w-3.5" />
-        Projects
+        {uiText('m_53e890d5f0')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-56">
         {/* Rendered even with nothing to list. Hiding a control when the list is empty is
@@ -82,7 +89,7 @@ export function DocumentProjectSubmenu({ brandId, doc }: { brandId: string; doc:
             missing one, and the projects list is one section away on this same page. */}
         {projects.length === 0 ? (
           <DropdownMenuItem disabled>
-            {isLoading ? 'Loading projects…' : 'No projects yet — create one in Projects'}
+            {isLoading ? uiText('loading_projects_6970a1c') : uiText('m_f837f5f780')}
           </DropdownMenuItem>
         ) : null}
         {projects.map((project) => (

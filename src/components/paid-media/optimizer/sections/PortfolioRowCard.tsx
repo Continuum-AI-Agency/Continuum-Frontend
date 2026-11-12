@@ -1,4 +1,12 @@
 'use client';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // One portfolio as ONE ROW of a live table — Performance+ one-bar redesign, unit L1. The same
 // row primitive draws the Portfolios tab and the Overview's portfolio block, so the two lists
@@ -166,6 +174,8 @@ export function CostVsTargetCell({
   caption?: string;
   testId: string;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const state: TileState = window?.state ?? 'none';
   const cost = window?.costPerResult ?? null;
   const fill = cost != null && target != null && target > 0 ? Math.min(1, cost / target) : null;
@@ -176,17 +186,17 @@ export function CostVsTargetCell({
           className={cn('font-mono font-semibold text-sm', STATE_TONE[state])}
           {...figureProps(figureKey('cost'), cost, currency, 'd7', 'currency')}
         >
-          {window ? formatCpa(cost, currency) : '—'}
+          {window ? formatCpa(cost, currency, uiLocale) : '—'}
         </span>
         {target != null ? (
           <span className="text-muted-foreground text-xs">
             /{' '}
             <span {...figureProps(figureKey('target'), target, currency)}>
-              {formatCpa(target, currency)}
+              {formatCpa(target, currency, uiLocale)}
             </span>
           </span>
         ) : (
-          <span className="text-muted-foreground text-xs">no target</span>
+          <span className="text-muted-foreground text-xs">{uiText('no_target_8581bd7')}</span>
         )}
         {fill != null ? (
           <span
@@ -247,6 +257,7 @@ export function FigureCell({
 
 /** Decisions waiting, as a primary count — the one thing on the row that asks something. */
 export function PendingCell({ count }: { count: number }) {
+  const uiText = useTranslations('scale');
   if (count === 0) {
     return (
       <span className="hidden text-muted-foreground text-sm @[40rem]:block @[40rem]:text-right">
@@ -262,7 +273,9 @@ export function PendingCell({ count }: { count: number }) {
       >
         {count}
       </span>
-      <span className="text-muted-foreground text-xs @[40rem]:hidden">pending</span>
+      <span className="text-muted-foreground text-xs @[40rem]:hidden">
+        {uiText('pending_62a2fed')}
+      </span>
     </span>
   );
 }
@@ -273,15 +286,18 @@ export function PendingCell({ count }: { count: number }) {
  * window is a portfolio no cycle has measured yet. Built from the side as a value, never by
  * parsing the label's words.
  */
-export function stateChipLabel(window: PortfolioWindow | null | undefined): string {
-  if (!window) return 'no cycle yet';
-  if (window.results === 0) return '0 results';
-  if (window.target == null) return 'no target';
+export function stateChipLabel(
+  window: PortfolioWindow | null | undefined,
+  uiTranslate?: ScaleCopy,
+): string {
+  if (!window) return uiTranslate ? uiTranslate('no_cycle_yet_615960f') : 'no cycle yet';
+  if (window.results === 0) return uiTranslate ? uiTranslate('0_results_ff7009f') : '0 results';
+  if (window.target == null) return uiTranslate ? uiTranslate('no_target_8581bd7') : 'no target';
   const side = targetSide(window.vsTargetPct);
   if (side === 'over' || side === 'under') {
     return `${Math.abs(window.vsTargetPct ?? 0)}% ${side}`;
   }
-  return vsTargetLabel(window.vsTargetPct);
+  return vsTargetLabel(window.vsTargetPct, uiTranslate);
 }
 
 const STATUS_TONE: Record<TileState, string> = {
@@ -294,16 +310,17 @@ const STATUS_TONE: Record<TileState, string> = {
 /** The state in words, coloured by verdict. A figure the live read could not supply is the
  *  last cycle's, and says so under the state: "as of Oct 15", plus its age once it is stale. */
 export function StatusCell({ window }: { window: RowFigure | null }) {
+  const uiText = useTranslations('scale');
   const state: TileState = window?.state ?? 'none';
   const chip = (
     <span
       className={cn('font-semibold text-xs @[40rem]:text-right', STATUS_TONE[state])}
       data-testid="portfolio-state-chip"
     >
-      {stateChipLabel(window)}
+      {stateChipLabel(window, uiText)}
     </span>
   );
-  const asOf = figureAsOfText(window);
+  const asOf = figureAsOfText(window, uiText);
   if (!asOf) return chip;
   return (
     <span className="flex flex-col @[40rem]:items-end">
@@ -332,10 +349,12 @@ export function StalenessNote({
   portfolio: PortfolioListItem;
   pacing?: PacingStamp | null;
 }) {
-  const stale = staleLine(portfolio);
-  const roster = rosterLine(portfolio);
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const stale = staleLine(portfolio, uiText);
+  const roster = rosterLine(portfolio, uiText, uiLocale);
   const tone = rosterTone(portfolio);
-  const pacingStale = pacingStaleLine(pacing, portfolio);
+  const pacingStale = pacingStaleLine(pacing, portfolio, uiText, uiLocale);
   if (!stale && !roster && !pacingStale) return null;
   return (
     <>
@@ -438,12 +457,18 @@ export function PortfolioRowCard({
   platforms,
   pacing = null,
 }: PortfolioRowCardProps) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const chips = platforms ? orderPlatforms(platforms) : platform ? [platform] : [];
-  const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective),
+    optimizerText,
+  );
   // The noun is the portfolio's own metric. A window is a read of this portfolio and its kind
   // should agree, but the noun must not depend on it: a window cut for another metric would
   // caption a lead portfolio's cost "per purchase".
-  const words = resultWords(metric.kpiField, metric.resultLabel);
+  const words = resultWords(metric.kpiField, metric.resultLabel, uiText);
   const figureKey = (name: string) => `portfolio-row.${portfolio.id}.${name}`;
 
   return (
@@ -451,7 +476,7 @@ export function PortfolioRowCard({
       cells={
         <>
           <CostVsTargetCell
-            caption={`per ${words.one}`}
+            caption={uiText('template_7e1b3dc28529', { v0: words.one })}
             currency={currency}
             figureKey={figureKey}
             target={window ? window.target : portfolioTarget(portfolio)}
@@ -465,18 +490,18 @@ export function PortfolioRowCard({
             raw={window?.results ?? null}
             testId="portfolio-row-results"
             text={
-              window ? window.results.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'
+              window ? window.results.toLocaleString(uiLocale, { maximumFractionDigits: 0 }) : '—'
             }
             unit="count"
             window="d7"
           />
           <FigureCell
-            caption="spend 7d"
+            caption={uiText('spend_7d_label')}
             currency={currency}
             figureKey={figureKey('spend')}
             raw={window?.spend ?? null}
             testId="portfolio-row-spend"
-            text={window ? formatCurrency(window.spend, currency) : '—'}
+            text={window ? formatCurrency(window.spend, currency, uiLocale) : '—'}
             window="d7"
           />
           <PendingCell count={pendingWorkCount(portfolio)} />
@@ -512,14 +537,16 @@ export function PortfolioRowCard({
                 ))}
               </span>
             ) : null}
-            <span>{humanize(portfolio.objective)}</span>
+            <span>{humanize(portfolio.objective, uiText)}</span>
             <span aria-hidden>·</span>
             <span className="tabular-nums" data-testid="portfolio-row-members">
               {memberCountLabel(portfolio.adset_count, chips)}
             </span>
             <span aria-hidden>·</span>
             <span className="tabular-nums">
-              {formatCurrency(portfolio.daily_total, currency)}/day
+              {uiText.rich('sentence_72ced7255fc0', {
+                v0: formatCurrency(portfolio.daily_total, currency, uiLocale),
+              })}
             </span>
           </div>
         </>

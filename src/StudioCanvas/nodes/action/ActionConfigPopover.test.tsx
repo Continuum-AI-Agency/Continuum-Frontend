@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { cleanup, fireEvent, render } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The real popover and select are Base UI popups. Stubbing them mounts the controls
 // eagerly, which is what these assertions are about — the field descriptors turning

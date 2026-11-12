@@ -24,6 +24,7 @@ export * from './advisor';
 export * from './attribution-ga4';
 // The spreadsheet attribution source (column mapping, sync result, match report).
 export * from './attribution-sheet';
+export * from './audience-proposal-errors';
 // Audience proposals: the daily audience analysis for F2/F3 ad sets, its approval, and
 // what the worker read back from Meta after creating the new ad set.
 export * from './audience-proposals';

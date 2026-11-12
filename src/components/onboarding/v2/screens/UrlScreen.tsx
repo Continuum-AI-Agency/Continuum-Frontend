@@ -6,6 +6,7 @@ import {
   onboardingSocialInputSchema,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -13,59 +14,65 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import { useValidationErrorMap } from '@/i18n/validation';
 import { resolveWebsiteDraftUrl } from '@/lib/onboarding/websiteDraft';
 
-const formSchema = z
-  .object({
-    mode: z.enum(['website', 'social', 'documents', 'description']),
-    brandName: z.string().trim(),
-    url: z.string().trim(),
-    description: z.string().trim(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.mode !== 'website' && !data.brandName) {
-      ctx.addIssue({ code: 'custom', path: ['brandName'], message: 'Enter your brand name.' });
-    }
-    if (
-      data.mode === 'website' &&
-      (!resolveWebsiteDraftUrl(data.url) || onboardingSocialInputSchema.safeParse(data.url).success)
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['url'],
-        message: 'Enter your website URL, or choose Social profile.',
-      });
-    }
-    if (data.mode === 'social' && !onboardingSocialInputSchema.safeParse(data.url).success) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['url'],
-        message: 'Enter an Instagram profile or Facebook business Page URL.',
-      });
-    }
-    if (data.mode === 'description' && !data.description) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['description'],
-        message: 'Tell us what your business does and who it serves.',
-      });
-    }
-    if (data.mode === 'description' && data.description.length > 8000)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['description'],
-        message: 'Keep your business description within 8,000 characters.',
-      });
-    if ((data.mode === 'website' || data.mode === 'social') && data.url.length > 2048)
-      ctx.addIssue({ code: 'custom', path: ['url'], message: 'That URL is too long.' });
-  });
+function createFormSchema(tUi: ReturnType<typeof useTranslations<'onboarding'>>) {
+  return z
+    .object({
+      mode: z.enum(['website', 'social', 'documents', 'description']),
+      brandName: z.string().trim(),
+      url: z.string().trim(),
+      description: z.string().trim(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.mode !== 'website' && !data.brandName) {
+        ctx.addIssue({ code: 'custom', path: ['brandName'], message: tUi('m_174c608886') });
+      }
+      if (
+        data.mode === 'website' &&
+        (!resolveWebsiteDraftUrl(data.url) ||
+          onboardingSocialInputSchema.safeParse(data.url).success)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['url'],
+          message: tUi('m_94af357618'),
+        });
+      }
+      if (data.mode === 'social' && !onboardingSocialInputSchema.safeParse(data.url).success) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['url'],
+          message: tUi('m_abb65d1b5e'),
+        });
+      }
+      if (data.mode === 'description' && !data.description) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['description'],
+          message: tUi('m_763ec0d993'),
+        });
+      }
+      if (data.mode === 'description' && data.description.length > 8000)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['description'],
+          message: tUi('m_1bb1dfefec'),
+        });
+      if ((data.mode === 'website' || data.mode === 'social') && data.url.length > 2048)
+        ctx.addIssue({ code: 'custom', path: ['url'], message: tUi('m_71462f997c') });
+    });
+}
 
-const OPTIONS = [
-  ['website', 'Website'],
-  ['social', 'Social profile'],
-  ['documents', 'Brand documents'],
-  ['description', 'Describe your business'],
-] as const;
+function getSourceOptions(tUi: ReturnType<typeof useTranslations<'onboarding'>>) {
+  return [
+    ['website', tUi('m_2e8a57cc5c')],
+    ['social', tUi('m_ab88a9270a')],
+    ['documents', tUi('m_5552971562')],
+    ['description', tUi('m_070ae0b478')],
+  ] as const;
+}
 
 type UrlScreenProps = {
   defaultUrl?: string | null;
@@ -86,8 +93,15 @@ export function UrlScreen({
   retrying,
   onRetry,
 }: UrlScreenProps) {
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const tUi = useTranslations('onboarding');
+  const validationErrorMap = useValidationErrorMap();
+
+  const OPTIONS = getSourceOptions(tUi);
+
+  const formSchema = createFormSchema(tUi);
+
+  const form = useForm<z.infer<ReturnType<typeof createFormSchema>>>({
+    resolver: zodResolver(formSchema, { error: validationErrorMap }),
     defaultValues: {
       mode:
         defaultIntake?.kind === 'instagram' || defaultIntake?.kind === 'facebook'
@@ -108,11 +122,9 @@ export function UrlScreen({
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-xl">
         <h1 className="mb-3 text-balance text-center text-3xl font-bold leading-tight tracking-tight text-foreground md:text-5xl">
-          Start with your brand
+          {tUi('m_fa0801b70a')}
         </h1>
-        <p className="mb-8 text-center text-muted-foreground">
-          Use what you already have. You don’t need a website to get started.
-        </p>
+        <p className="mb-8 text-center text-muted-foreground">{tUi('m_65d91e8d33')}</p>
         <form
           className="space-y-5"
           onSubmit={form.handleSubmit(async (data) => {
@@ -143,7 +155,7 @@ export function UrlScreen({
             name="mode"
             render={({ field }) => (
               <RadioGroup
-                aria-label="Starting source"
+                aria-label={tUi('m_f22a87aaee')}
                 value={field.value}
                 onValueChange={(value) => {
                   field.onChange(value);
@@ -164,7 +176,7 @@ export function UrlScreen({
           />
           {mode !== 'website' ? (
             <div className="space-y-2">
-              <Label htmlFor="onboarding-brand-name">Brand name</Label>
+              <Label htmlFor="onboarding-brand-name">{tUi('m_6b4b8b5df0')}</Label>
               <Input
                 id="onboarding-brand-name"
                 {...form.register('brandName')}
@@ -177,44 +189,35 @@ export function UrlScreen({
           {mode === 'website' || mode === 'social' ? (
             <div className="space-y-2">
               <Label htmlFor="onboarding-url">
-                {mode === 'website' ? 'Website URL' : 'Social profile URL'}
+                {mode === 'website' ? tUi('m_b32233ad82') : tUi('m_3ae09d3fa1')}
               </Label>
               <Input
                 id="onboarding-url"
                 {...form.register('url')}
-                placeholder={
-                  mode === 'website'
-                    ? 'yourdomain.com'
-                    : 'instagram.com/yourbrand or facebook.com/yourpage'
-                }
+                placeholder={mode === 'website' ? tUi('m_f61ea79122') : tUi('m_4c85f9c281')}
                 aria-invalid={Boolean(form.formState.errors.url)}
                 aria-describedby={fieldError ? 'intake-error' : 'source-help'}
               />
               <p id="source-help" className="text-sm text-muted-foreground">
-                {mode === 'website'
-                  ? 'We’ll read your website to understand your brand.'
-                  : 'Instagram profiles and public Facebook business Pages. You can also use an Instagram @handle.'}
+                {mode === 'website' ? tUi('m_96356e381f') : tUi('m_d8b07c6406')}
               </p>
             </div>
           ) : null}
           {mode === 'description' ? (
             <div className="space-y-2">
-              <Label htmlFor="onboarding-description">What does your business do?</Label>
+              <Label htmlFor="onboarding-description">{tUi('m_73ab2e6783')}</Label>
               <Textarea
                 id="onboarding-description"
                 {...form.register('description')}
                 rows={5}
-                placeholder="What you offer, who you serve, and what makes your brand different."
+                placeholder={tUi('m_b4f25859c3')}
                 aria-invalid={Boolean(form.formState.errors.description)}
                 aria-describedby={fieldError ? 'intake-error' : undefined}
               />
             </div>
           ) : null}
           {mode === 'documents' ? (
-            <p className="text-sm text-muted-foreground">
-              Upload a brand guide, deck, or product document on the next step. We’ll wait until
-              it’s readable before analyzing your brand.
-            </p>
+            <p className="text-sm text-muted-foreground">{tUi('m_f6a2ec65a0')}</p>
           ) : null}
           {fieldError || error ? (
             <div
@@ -225,22 +228,18 @@ export function UrlScreen({
               <p>{fieldError || error}</p>
               {error && onRetry ? (
                 <Button type="button" variant="ghost" size="sm" onClick={onRetry} disabled={busy}>
-                  Try again
+                  {tUi('m_042c862e44')}
                 </Button>
               ) : null}
-              {error ? (
-                <p className="mt-2">
-                  You can choose Brand documents or Describe your business above.
-                </p>
-              ) : null}
+              {error ? <p className="mt-2">{tUi('m_af03bfe7b4')}</p> : null}
             </div>
           ) : null}
           <Button type="submit" size="lg" className="w-full" disabled={busy}>
             {busy
-              ? 'Reading your source…'
+              ? tUi('m_684d0f51f0')
               : mode === 'documents'
-                ? 'Continue to documents'
-                : 'Analyze my brand'}
+                ? tUi('m_dbdb94fca1')
+                : tUi('m_604407d0dd')}
           </Button>
         </form>
       </div>

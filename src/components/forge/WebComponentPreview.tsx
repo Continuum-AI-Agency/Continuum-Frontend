@@ -6,11 +6,13 @@ import type {
   WebComponentOverride,
 } from '@continuum/contracts';
 import { AlertCircle } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import {
   applyPreviewOverrides,
   ForgePreviewBridge,
 } from '@/lib/forge-web-components/previewBridge';
+import { formatDecimal } from '@/lib/format/decimal';
 
 // An imported web component, live: its preview page in a scripts-only sandbox, driven over the
 // bridge at a row's values. The frame is made per load rather than rendered: a bridge clears its
@@ -42,6 +44,10 @@ export function WebComponentPreview({
   web: WebComponentContract;
   values: Readonly<Record<string, ApiRenderInputValue>>;
 }) {
+  const translateUi = useUiTranslations('forge');
+
+  const decimalLocale = useUiLocale();
+
   const hostRef = useRef<HTMLDivElement>(null);
   const [bridge, setBridge] = useState<ForgePreviewBridge | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +139,8 @@ export function WebComponentPreview({
             role="status"
             className="pointer-events-none absolute inset-0 m-0 grid place-items-center text-xs text-muted-foreground"
           >
-            Loading the preview…
+            {' '}
+            {translateUi('loading_the_preview_b737abb4')}{' '}
           </p>
         ) : null}
         {error ? (
@@ -148,7 +155,7 @@ export function WebComponentPreview({
       </div>
       <div className="flex items-center gap-2">
         <input
-          aria-label="Preview time"
+          aria-label={translateUi('preview_time_256fd7cb')}
           type="range"
           min={0}
           max={web.durationSec}
@@ -159,7 +166,8 @@ export function WebComponentPreview({
           className="min-w-0 flex-1 accent-primary"
         />
         <span className="w-24 text-right font-mono text-2xs tabular-nums text-muted-foreground">
-          {timeSec.toFixed(2)} / {web.durationSec.toFixed(2)} s
+          {formatDecimal(timeSec, 2, decimalLocale)} /{' '}
+          {formatDecimal(web.durationSec, 2, decimalLocale)} s
         </span>
       </div>
     </div>

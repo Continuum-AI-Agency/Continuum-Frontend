@@ -1,5 +1,12 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import { useLocale } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import { useQueryClient } from '@tanstack/react-query';
 import {
   DownloadIcon,
@@ -13,10 +20,12 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   type CampaignCreativeRequest,
   creativeCanvasUpdate,
@@ -318,16 +327,28 @@ function matchesJainaMentionQuery(
   return values.some((value) => value?.toLowerCase().includes(normalized));
 }
 
-function formatMetricHint(campaign: CampaignPerformanceRow): string | undefined {
+function formatMetricHint(
+  campaign: CampaignPerformanceRow,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string | undefined {
   const spend = campaign.metrics?.spend;
   const roas = campaign.metrics?.roas;
   if (typeof spend !== 'number' && typeof roas !== 'number') return undefined;
   const parts: string[] = [];
   if (typeof spend === 'number') {
-    parts.push(`$${Math.round(spend).toLocaleString()} spend`);
+    parts.push(
+      uiTranslate
+        ? uiTranslate('helper_a87b7e181295', { v0: Math.round(spend).toLocaleString(uiLocale) })
+        : `$${Math.round(spend).toLocaleString(uiLocale)} spend`,
+    );
   }
   if (typeof roas === 'number') {
-    parts.push(`${roas.toFixed(2)} ROAS`);
+    parts.push(
+      uiTranslate
+        ? uiTranslate('helper_88e52fb165ca', { v0: formatDecimal(roas, 2, uiLocale) })
+        : `${formatDecimal(roas, 2, uiLocale)} ROAS`,
+    );
   }
   return parts.join(' · ');
 }
@@ -354,18 +375,40 @@ function createCampaignSuggestion(
   campaign: CampaignPerformanceRow,
   adAccountId: string,
   options?: { children?: boolean },
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): AgentMentionSuggestion {
-  const metricHint = formatMetricHint(campaign);
+  const metricHint = formatMetricHint(campaign, uiTranslate, uiLocale);
   return {
     key: `${options?.children ? 'campaign-adsets' : 'campaign'}:${campaign.id}`,
-    label: options?.children ? `Ad sets in ${campaign.name}` : campaign.name,
+    label: options?.children
+      ? uiTranslate
+        ? uiTranslate('jainaCampaignAdsets', { name: campaign.name })
+        : `Ad sets in ${campaign.name}`
+      : campaign.name,
     type: 'campaign',
     source: 'jaina',
-    group: options?.children ? 'Ad Sets' : 'Campaigns',
+    group: options?.children
+      ? uiTranslate
+        ? uiTranslate('ad_sets_5d00190')
+        : 'Ad Sets'
+      : uiTranslate
+        ? uiTranslate('campaigns_30e9a08')
+        : 'Campaigns',
     description: [campaign.status, campaign.objective, metricHint].filter(Boolean).join(' · '),
-    badge: options?.children ? 'choose' : 'campaign',
+    badge: options?.children
+      ? uiTranslate
+        ? uiTranslate('jainaChoose')
+        : 'choose'
+      : uiTranslate
+        ? uiTranslate('optimizer_entityCampaign')
+        : 'campaign',
     reference: createCampaignReference(campaign, adAccountId),
-    ...(options?.children ? { childrenLabel: 'Choose an ad set' } : {}),
+    ...(options?.children
+      ? {
+          childrenLabel: uiTranslate ? uiTranslate('jainaCampaignChooseAdset') : 'Choose an ad set',
+        }
+      : {}),
   };
 }
 
@@ -766,6 +809,9 @@ export function JainaChatSurface({
   showAccountScope = true,
   className,
 }: JainaChatSurfaceProps) {
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const { show } = useToast();
   const { integrations } = useBrandIntegrations(brandProfileId);
   // The `/` menu the organic agent shows: Jaina passes typed shortcuts to its headless tools.
@@ -785,12 +831,12 @@ export function JainaChatSurface({
     (notice: Record<string, unknown>) => {
       if (notice.type !== AGENT_RUN_QUEUED) return;
       show({
-        title: 'Queued behind the current turn',
-        description: 'Jaina is still finishing the previous request in this conversation.',
+        title: uiText('queued_behind_the_current_turn_38e200c'),
+        description: uiText('jaina_is_still_finishing_the_previous_request_648b38e'),
         variant: 'info',
       });
     },
-    [show],
+    [show, uiText],
   );
 
   // The optional sub-brand scope. Brand identity is unchanged; what narrows on the Backend
@@ -916,18 +962,22 @@ export function JainaChatSurface({
       .map((message) =>
         projectTranscriptMessage(projectionCacheRef.current, message, {
           isStreaming: message === streamingMessage,
+          uiTranslate: uiText,
           optimisticPlanStatusById,
           deliverySource: historyMessageIds.has(message.id) ? 'hydration_replay' : 'live_render',
         }),
       );
-  }, [uiMessages, isStreaming, optimisticPlanStatusById, historyMessageIds]);
+  }, [uiMessages, isStreaming, optimisticPlanStatusById, historyMessageIds, uiText]);
 
   const uiMessageById = React.useMemo(
     () => new Map(uiMessages.map((message) => [message.id, message])),
     [uiMessages],
   );
 
-  const sessionContent = React.useMemo(() => jainaSessionContent(messages), [messages]);
+  const sessionContent = React.useMemo(
+    () => jainaSessionContent(messages, uiText),
+    [messages, uiText],
+  );
   // PromptInput has no imperative handle; a tray click reaches the composer through this queue.
   const [queuedMentionSuggestions, setQueuedMentionSuggestions] = React.useState<
     AgentMentionSuggestion[]
@@ -956,7 +1006,7 @@ export function JainaChatSurface({
   const isViewedStreaming =
     isStreaming || (viewedSessionStreaming && chatFailure?.canResume !== false);
 
-  const anchors = React.useMemo(() => deriveJainaAnchors(messages), [messages]);
+  const anchors = React.useMemo(() => deriveJainaAnchors(messages, uiText), [messages, uiText]);
   const [shaderState, setShaderState] = React.useState<'visible' | 'sweeping' | 'hidden'>(
     'visible',
   );
@@ -1016,9 +1066,11 @@ export function JainaChatSurface({
           .slice(0, 8);
 
         return [
-          ...filteredCampaigns.map((campaign) => createCampaignSuggestion(campaign, adAccountId)),
           ...filteredCampaigns.map((campaign) =>
-            createCampaignSuggestion(campaign, adAccountId, { children: true }),
+            createCampaignSuggestion(campaign, adAccountId, undefined, uiText, uiLocale),
+          ),
+          ...filteredCampaigns.map((campaign) =>
+            createCampaignSuggestion(campaign, adAccountId, { children: true }, uiText, uiLocale),
           ),
         ];
       },
@@ -1094,11 +1146,11 @@ export function JainaChatSurface({
         }));
       },
     }),
-    [adAccountId, brandProfileId, loadCampaignPerformance, supabase],
+    [adAccountId, brandProfileId, loadCampaignPerformance, supabase, uiText, uiLocale],
   );
   const jainaMentionProvider = React.useMemo(
-    () => withPipelineMentions(campaignMentionProvider, queryClient, brandProfileId),
-    [brandProfileId, campaignMentionProvider, queryClient],
+    () => withPipelineMentions(campaignMentionProvider, queryClient, brandProfileId, uiText),
+    [brandProfileId, campaignMentionProvider, queryClient, uiText],
   );
 
   const setConversationSessionsWithCache = React.useCallback(
@@ -1211,7 +1263,7 @@ export function JainaChatSurface({
         timer = window.setTimeout(pollJob, REPORT_ARTIFACT_POLL_INTERVAL_MS);
       } catch (error) {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : 'Unable to refresh report job.';
+        const message = formatUiError(error);
         setReportArtifactJob((previous) =>
           previous?.jobId === reportArtifactJob.jobId ? { ...previous, error: message } : previous,
         );
@@ -1224,7 +1276,7 @@ export function JainaChatSurface({
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [reportArtifactJob]);
+  }, [reportArtifactJob, formatUiError]);
 
   React.useEffect(() => {
     if (shaderState !== 'sweeping') return;
@@ -1268,15 +1320,14 @@ export function JainaChatSurface({
       window.open(fileUrl, '_blank');
     } catch (error) {
       show({
-        title: 'Report unavailable',
-        description:
-          error instanceof Error ? error.message : 'Unable to open the generated report.',
+        title: uiText('report_unavailable_26b29dc'),
+        description: formatUiError(error),
         variant: 'error',
       });
     } finally {
       setIsReportArtifactDownloading(false);
     }
-  }, [reportArtifactJob, show]);
+  }, [reportArtifactJob, show, formatUiError, uiText]);
 
   const fetchConversationHistory = React.useCallback(
     async (targetSessionId?: string, before?: string) => {
@@ -1527,10 +1578,9 @@ export function JainaChatSurface({
         setShaderState(payload.uiMessages.length > 0 ? 'hidden' : 'visible');
       } catch (error) {
         if (!options?.silent) {
-          const message =
-            error instanceof Error ? error.message : 'Unable to load conversation history.';
+          const message = formatUiError(error);
           show({
-            title: 'History unavailable',
+            title: uiText('history_unavailable_cf319f4'),
             description: message,
             variant: 'error',
           });
@@ -1546,6 +1596,8 @@ export function JainaChatSurface({
       setEarlierCursor,
       showConversation,
       show,
+      uiText,
+      formatUiError,
     ],
   );
 
@@ -1653,8 +1705,8 @@ export function JainaChatSurface({
       // message is what allowed a stale snapshot to overwrite a live answer. The stream carries
       // its own `error` chunk; this path only surfaces the failure and releases the reader.
       show({
-        title: 'Jaina error',
-        description: row.errorMessage || 'Jaina run failed.',
+        title: uiText('jaina_error_0caab8d'),
+        description: formatUiError(row.errorMessage),
         variant: 'error',
       });
       void refreshConversationSessions(activeSessionIdRef.current);
@@ -1663,7 +1715,7 @@ export function JainaChatSurface({
       // actually completed.
       stopChat();
     },
-    [refreshConversationSessions, show, stopChat],
+    [refreshConversationSessions, show, stopChat, uiText, formatUiError],
   );
 
   useJainaRunStatusRealtime({
@@ -1766,8 +1818,8 @@ export function JainaChatSurface({
       }
 
       show({
-        title: 'Canvas updated by Jaina',
-        description: `${envelope.actions.length} change(s) applied to this session.`,
+        title: uiText('canvas_updated_by_jaina_33d268c'),
+        description: uiText('canvas_change_count', { count: envelope.actions.length }),
         variant: 'success',
       });
     }
@@ -1780,6 +1832,7 @@ export function JainaChatSurface({
     liveChatMessage?.toolResults,
     liveMessage,
     userId,
+    uiText,
   ]);
 
   React.useEffect(() => {
@@ -1968,8 +2021,8 @@ export function JainaChatSurface({
 
       if (!adAccountId) {
         show({
-          title: 'Select an ad account',
-          description: 'Jaina needs an ad account context.',
+          title: uiText('select_an_ad_account_738bb84'),
+          description: uiText('jaina_needs_an_ad_account_context_5228bdf'),
           variant: 'warning',
         });
         // Both early returns below tell the caller too. A caller holding optimistic UI
@@ -1992,10 +2045,9 @@ export function JainaChatSurface({
           }
         }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unable to initialize conversation session.';
+        const message = formatUiError(error);
         show({
-          title: 'Conversation setup failed',
+          title: uiText('conversation_setup_failed_7e435af'),
           description: message,
           variant: 'error',
         });
@@ -2103,7 +2155,11 @@ export function JainaChatSurface({
           }
           // A billing refusal is already on screen as the notice with its control.
           if (!paymentRequiredRef.current) {
-            show({ title: 'Request failed', description: message, variant: 'error' });
+            show({
+              title: uiText('request_failed_cfce761'),
+              description: message,
+              variant: 'error',
+            });
           }
           input.onDispatchError?.(message);
         },
@@ -2126,6 +2182,8 @@ export function JainaChatSurface({
       sendTurn,
       setConversationSessionsWithCache,
       userId,
+      uiText,
+      formatUiError,
     ],
   );
 
@@ -2366,8 +2424,8 @@ export function JainaChatSurface({
       if (!adAccountId) return;
       if (isStreaming && targetSessionId === sessionId) {
         show({
-          title: 'Stop current response first',
-          description: 'Finish or stop the current stream before deleting this chat.',
+          title: uiText('stop_current_response_first_2787f40'),
+          description: uiText('finish_or_stop_the_current_stream_before_dele_a80eea3'),
           variant: 'warning',
         });
         return;
@@ -2423,14 +2481,14 @@ export function JainaChatSurface({
         }
 
         show({
-          title: 'Conversation deleted',
-          description: 'This chat and its associated run history were removed.',
+          title: uiText('conversation_deleted_09d6990'),
+          description: uiText('this_chat_and_its_associated_run_history_were_6e50ddb'),
           variant: 'success',
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to delete conversation.';
+        const message = formatUiError(error);
         show({
-          title: 'Delete failed',
+          title: uiText('delete_failed_8727e2b'),
           description: message,
           variant: 'error',
         });
@@ -2447,6 +2505,8 @@ export function JainaChatSurface({
       setUiMessages,
       setConversationSessionsWithCache,
       show,
+      uiText,
+      formatUiError,
     ],
   );
 
@@ -2574,14 +2634,17 @@ export function JainaChatSurface({
             return next;
           });
           show({
-            title: decision === 'approve' ? 'Approval not delivered' : 'Decision not delivered',
-            description: 'Jaina did not receive it. Nothing ran — please answer again.',
+            title:
+              decision === 'approve'
+                ? uiText('approval_not_delivered_3acddb8')
+                : uiText('decision_not_delivered_e98e492'),
+            description: uiText('jaina_did_not_receive_it_nothing_ran_please_a_c87270e'),
             variant: 'error',
           });
         },
       });
     },
-    [dispatchMessage, show],
+    [dispatchMessage, show, uiText],
   );
 
   /**
@@ -2737,15 +2800,15 @@ export function JainaChatSurface({
     try {
       await clearJainaMemory(adAccountId);
       show({
-        title: 'Memory cleared',
-        description: 'Jaina will start fresh for this ad account.',
+        title: uiText('memory_cleared_07bed0c'),
+        description: uiText('jaina_will_start_fresh_for_this_ad_account_ef79368'),
         variant: 'success',
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to clear memory.';
-      show({ title: 'Clear failed', description: message, variant: 'error' });
+      const message = formatUiError(error);
+      show({ title: uiText('clear_failed_0ddb9f1'), description: message, variant: 'error' });
     }
-  }, [adAccountId, show]);
+  }, [adAccountId, show, uiText, formatUiError]);
 
   const handleFocusInput = React.useCallback(() => {
     const textarea = promptInputWrapperRef.current?.querySelector('textarea');
@@ -2860,28 +2923,14 @@ export function JainaChatSurface({
     pendingReportArtifactResponseId === activeResponseId &&
     isStreaming &&
     !reportArtifactJob;
-  const reportArtifactStatusLabel =
-    reportArtifactJob?.status === 'done'
-      ? 'Ready'
-      : reportArtifactJob?.status === 'failed'
-        ? 'Failed'
-        : reportArtifactJob?.status === 'running'
-          ? 'Generating'
-          : reportArtifactJob?.status === 'pending'
-            ? 'Queued'
-            : hasPendingReportArtifactRequest
-              ? 'Starting'
-              : isJainaProMode
-                ? 'Pro on'
-                : 'Pro';
-  const reportArtifactTooltip =
-    reportArtifactJob?.status === 'done'
-      ? 'Open generated Jaina Pro report'
-      : reportArtifactJob?.status === 'failed'
-        ? (reportArtifactJob.error ?? 'Jaina Pro report failed')
-        : reportArtifactJob
-          ? `Jaina Pro report ${reportArtifactJob.status}`
-          : 'Create a Jaina Pro report from this analysis';
+  const reportArtifactStatusLabel = uiText('jainaProStatus', {
+    state:
+      reportArtifactJob?.status ??
+      (hasPendingReportArtifactRequest ? 'starting' : isJainaProMode ? 'enabled' : 'other'),
+  });
+  const reportArtifactTooltip = uiText('jainaProTooltip', {
+    state: reportArtifactJob?.status ?? 'other',
+  });
   const reportArtifactButtonDisabled =
     isInputDisabled ||
     hasPendingReportArtifactRequest ||
@@ -3024,7 +3073,7 @@ export function JainaChatSurface({
                         regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
                         onOpenAccountRead={onOpenAccountRead}
                       />
-                      {milestonesForJainaMessage(message).map((milestone) => (
+                      {milestonesForJainaMessage(message, uiText).map((milestone) => (
                         <ChatMarker
                           key={milestone.id}
                           id={milestone.id}
@@ -3046,12 +3095,12 @@ export function JainaChatSurface({
                           <QueueSectionTrigger>
                             <QueueSectionLabel
                               count={queuedMessages.length}
-                              label="queued messages"
+                              label={uiText('queued_messages_5ba0528')}
                             />
                             <span className="text-xs text-muted-foreground">
                               {isQueueStreaming
-                                ? 'waiting for current response'
-                                : 'next will send now'}
+                                ? uiText('waiting_for_current_response_f217d9e')
+                                : uiText('next_will_send_now_c55dd29')}
                             </span>
                           </QueueSectionTrigger>
                           <QueueSectionContent className="pt-2">
@@ -3070,7 +3119,7 @@ export function JainaChatSurface({
                                               setQueueEditDraft(event.target.value)
                                             }
                                             className="min-h-[74px] resize-none"
-                                            aria-label="Edit queued message"
+                                            aria-label={uiText('edit_queued_message_250ac6f')}
                                           />
                                         ) : (
                                           <QueueItemContent>
@@ -3078,23 +3127,33 @@ export function JainaChatSurface({
                                           </QueueItemContent>
                                         )}
                                         <div className="text-xs text-muted-foreground/90">
-                                          #{index + 1} in queue
-                                          {queuedMessage.canvas ? ' • plan mode' : ''}
-                                          {queuedMessage.forceReportArtifact ? ' • Jaina Pro' : ''}
-                                          {queuedMessage.clarificationId ? ' • clarification' : ''}
+                                          {uiText.rich('sentence_c02bbe5326ce', {
+                                            v0: index + 1,
+                                            v1: queuedMessage.canvas
+                                              ? uiText('plan_mode_0ba3f55')
+                                              : '',
+                                            v2: queuedMessage.forceReportArtifact
+                                              ? uiText('jaina_pro_3e36c74')
+                                              : '',
+                                            v3: queuedMessage.clarificationId
+                                              ? uiText('clarification_b7c73f2')
+                                              : '',
+                                          })}
                                         </div>
                                       </div>
                                       <QueueItemActions>
                                         {isEditing ? (
                                           <>
                                             <QueueItemAction
-                                              aria-label="Save queued message"
+                                              aria-label={uiText('save_queued_message_3d52a0d')}
                                               onClick={handleQueueEditSave}
                                             >
                                               <SaveIcon className="size-3.5" />
                                             </QueueItemAction>
                                             <QueueItemAction
-                                              aria-label="Cancel queued message edit"
+                                              aria-label={uiText(
+                                                'cancel_queued_message_edit_7fac411',
+                                              )}
                                               onClick={handleQueueEditCancel}
                                             >
                                               <XIcon className="size-3.5" />
@@ -3104,7 +3163,9 @@ export function JainaChatSurface({
                                           <>
                                             {index === 0 && canStartQueuedNow ? (
                                               <QueueItemAction
-                                                aria-label="Send queued message now"
+                                                aria-label={uiText(
+                                                  'send_queued_message_now_9a408bb',
+                                                )}
                                                 onClick={() => {
                                                   if (queueDispatchInFlightRef.current) return;
                                                   queueDispatchInFlightRef.current = true;
@@ -3134,13 +3195,13 @@ export function JainaChatSurface({
                                               </QueueItemAction>
                                             ) : null}
                                             <QueueItemAction
-                                              aria-label="Edit queued message"
+                                              aria-label={uiText('edit_queued_message_250ac6f')}
                                               onClick={() => handleQueueEditStart(queuedMessage)}
                                             >
                                               <Edit2Icon className="size-3.5" />
                                             </QueueItemAction>
                                             <QueueItemAction
-                                              aria-label="Remove queued message"
+                                              aria-label={uiText('remove_queued_message_1c99e52')}
                                               onClick={() => handleQueueRemove(queuedMessage.id)}
                                             >
                                               <Trash2Icon className="size-3.5" />
@@ -3175,7 +3236,7 @@ export function JainaChatSurface({
                           }}
                           type="button"
                         >
-                          Try again
+                          {uiText('try_again_d8b8392')}
                         </button>
                       ) : null}
                     </p>
@@ -3184,7 +3245,7 @@ export function JainaChatSurface({
                   <div data-tour-id="paid-jaina-chat" className="w-full">
                     <div className="mb-1 px-1">
                       <AgentDataScopePicker
-                        label="Ad accounts"
+                        label={uiText('ad_accounts_f3e56c3')}
                         options={accountScopeOptions}
                         selectedIds={selectedAdAccountIds}
                         requiredIds={[adAccountId]}
@@ -3201,7 +3262,7 @@ export function JainaChatSurface({
                       inlinePastedText
                       attachmentOnlyPrompt="Analyze the attached media in the context of my paid media."
                       disabled={isInputDisabled}
-                      ariaLabel="Message Jaina"
+                      ariaLabel={uiText('jainaMessageAria')}
                       mentionProvider={jainaMentionProvider}
                       mentionSource="jaina"
                       slashSkills={slashSkills}
@@ -3212,8 +3273,8 @@ export function JainaChatSurface({
                       onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
                       placeholder={
                         pendingClarificationId
-                          ? "Reply to Jaina's question…"
-                          : 'Ask Jaina anything…'
+                          ? uiText('reply_to_jaina_s_question_b2320e2')
+                          : uiText('ask_jaina_anything_962f113')
                       }
                       actions={
                         <TooltipProvider delay={180}>

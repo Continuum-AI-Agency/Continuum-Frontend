@@ -1,8 +1,9 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { type PublishAccountsResponse, publishAccountsResponseSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 
 type RequestArgs = { path: string; method?: string; body?: unknown; schema?: unknown };
 const request = mock(async (_args: RequestArgs): Promise<unknown> => ({ accounts: [] }));

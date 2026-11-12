@@ -1,3 +1,10 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+import { formatCurrencyExact } from '../format';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Pure readers for the optimizer ACTION feed (public.optimizer_list_actions).
 //
 // One normalized row shape carries three families and four unit systems, because before/after
@@ -132,21 +139,32 @@ function termsText(terms: unknown): string | null {
 /** What this row changed, before → after. Never null: a row with no readable before/after
  *  still says WHICH field moved, because "something changed and we won't say what" is the
  *  failure mode this whole feed exists to end. */
-export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
+export function readActionChange(
+  row: OptimizerActionFeedRow,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+  currency: string | null = null,
+): ActionChange {
   switch (row.op) {
     case 'budget':
       return {
-        label: 'Daily budget',
+        label: uiTranslate ? uiTranslate('daily_budget_7b0a1f0') : 'Daily budget',
         unit: 'money',
         before: readMinor(row.before),
         after: readMinor(row.after),
       };
     case 'status':
       return {
-        label: 'Status',
+        label: uiTranslate ? uiTranslate('status_920e413') : 'Status',
         unit: 'text',
-        before: readKey(row.before, 'status'),
-        after: readKey(row.after, 'status'),
+        before:
+          uiTranslate && readKey(row.before, 'status')
+            ? uiTranslate('actionStatus', { status: readKey(row.before, 'status') ?? 'other' })
+            : readKey(row.before, 'status'),
+        after:
+          uiTranslate && readKey(row.after, 'status')
+            ? uiTranslate('actionStatus', { status: readKey(row.after, 'status') ?? 'other' })
+            : readKey(row.after, 'status'),
       };
     case 'setting': {
       // `entity_id` is the audited COLUMN here, and the values are the text the audit stored.
@@ -156,14 +174,18 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
       // move this portfolio is on does.
       if (row.entity_id === 'member_moved') {
         return {
-          label: 'Ad set moved',
+          label: uiTranslate ? uiTranslate('ad_set_moved_8efbf82') : 'Ad set moved',
           unit: 'text',
           before: null,
           after: null,
           sentence:
             after !== null && after === row.portfolio_id
-              ? 'Ad set moved into this portfolio'
-              : 'Ad set moved to another portfolio',
+              ? uiTranslate
+                ? uiTranslate('actionMemberMoved', { into: 'yes' })
+                : 'Ad set moved into this portfolio'
+              : uiTranslate
+                ? uiTranslate('actionMemberMoved', { into: 'no' })
+                : 'Ad set moved to another portfolio',
         };
       }
       const money = settingMoneyUnit(row.entity_id);
@@ -171,27 +193,33 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
         const amount = (value: Record<string, unknown> | null | undefined) =>
           asAmount(readKey(value, 'value'));
         return {
-          label: settingLabel(row.entity_id),
+          label: settingLabel(row.entity_id, uiTranslate),
           unit: money === 'minor' ? 'money' : 'money_major',
           before: amount(row.before),
           after: amount(row.after),
         };
       }
-      const sentence = settingSentence(row.entity_id, after);
+      const sentence = settingSentence(row.entity_id, after, uiTranslate);
       return {
-        label: settingLabel(row.entity_id),
+        label: settingLabel(row.entity_id, uiTranslate),
         unit: 'text',
-        before: settingValue(readKey(row.before, 'value')),
-        after: settingValue(after),
+        before: settingValue(readKey(row.before, 'value'), uiTranslate),
+        after: settingValue(after, uiTranslate),
         ...(sentence ? { sentence } : {}),
       };
     }
     case 'decision':
       return {
-        label: 'Recommendation',
+        label: uiTranslate ? uiTranslate('recommendation_bc92e0e') : 'Recommendation',
         unit: 'text',
-        before: readKey(row.before, 'status'),
-        after: readKey(row.after, 'status'),
+        before:
+          uiTranslate && readKey(row.before, 'status')
+            ? uiTranslate('actionStatus', { status: readKey(row.before, 'status') ?? 'other' })
+            : readKey(row.before, 'status'),
+        after:
+          uiTranslate && readKey(row.after, 'status')
+            ? uiTranslate('actionStatus', { status: readKey(row.after, 'status') ?? 'other' })
+            : readKey(row.after, 'status'),
       };
     // A platform write's own kinds (G4): the audit's prior/target, as the executor stored them.
     case 'bid': {
@@ -200,10 +228,20 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
         const raw = side?.value;
         if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
         // tCPA travels in micros of the account currency; tROAS is a ratio.
-        return roas ? `${Math.round(raw * 100)}%` : (raw / 1_000_000).toFixed(2);
+        return roas
+          ? new Intl.NumberFormat(uiLocale, { style: 'percent', maximumFractionDigits: 0 }).format(
+              Math.round(raw * 100) / 100,
+            )
+          : uiTranslate
+            ? formatCurrencyExact(raw / 1_000_000, currency, 2, uiLocale)
+            : formatDecimal(raw / 1_000_000, 2, uiLocale);
       };
       return {
-        label: roas ? 'Bid target (tROAS)' : 'Bid target (tCPA)',
+        label: uiTranslate
+          ? uiTranslate('actionBidTarget', { roas: roas ? 'yes' : 'no' })
+          : roas
+            ? 'Bid target (tROAS)'
+            : 'Bid target (tCPA)',
         unit: 'text',
         before: value(row.before),
         after: value(row.after),
@@ -211,14 +249,14 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
     }
     case 'negatives':
       return {
-        label: 'Negative keywords',
+        label: uiTranslate ? uiTranslate('negative_keywords_ccd7fe7') : 'Negative keywords',
         unit: 'text',
         before: null,
         after: termsText(row.after?.negatives),
       };
     case 'keyword':
       return {
-        label: 'Keyword',
+        label: uiTranslate ? uiTranslate('keyword_a668022') : 'Keyword',
         unit: 'text',
         before: null,
         after: termsText([row.after?.keyword]),
@@ -236,7 +274,8 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
 
 /** Who authorized it. `actor_kind` comes straight from the RPC — 'autopilot' when the
  *  scheduler wrote it, 'human' when a person did, 'system' when nothing was recorded. */
-export function actorLabel(row: OptimizerActionFeedRow): string {
+export function actorLabel(row: OptimizerActionFeedRow, uiTranslate?: ScaleCopy): string {
+  if (uiTranslate) return uiTranslate('actionActor', { actor: row.actor_kind ?? 'unknown' });
   switch (row.actor_kind) {
     case 'autopilot':
       return 'Autopilot';

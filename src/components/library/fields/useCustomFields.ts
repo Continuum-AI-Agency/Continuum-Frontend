@@ -8,6 +8,7 @@
 
 import type { CustomField } from '@continuum/contracts';
 import { useCallback, useEffect, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { listCustomFields } from '@/lib/library/customFields';
 
 export type UseCustomFieldsResult = {
@@ -20,17 +21,18 @@ export type UseCustomFieldsResult = {
 };
 
 export function useCustomFields(brandId: string): UseCustomFieldsResult {
+  const uiErrorText = useUiErrorMessage();
   const [fields, setFields] = useState<CustomField[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
 
   const load = useCallback(async () => {
     try {
       const next = await listCustomFields({ brandId });
       setFields(next);
-      setError(null);
+      setFailure(null);
     } catch (err) {
       setFields([]);
-      setError((err as Error).message);
+      setFailure(err);
     }
   }, [brandId]);
 
@@ -40,13 +42,13 @@ export function useCustomFields(brandId: string): UseCustomFieldsResult {
       .then((next) => {
         if (!cancelled) {
           setFields(next);
-          setError(null);
+          setFailure(null);
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setFields([]);
-          setError((err as Error).message);
+          setFailure(err);
         }
       });
     return () => {
@@ -54,5 +56,10 @@ export function useCustomFields(brandId: string): UseCustomFieldsResult {
     };
   }, [brandId]);
 
-  return { fields, error, refresh: load, replaceFields: setFields };
+  return {
+    fields,
+    error: failure === null ? null : uiErrorText(failure),
+    refresh: load,
+    replaceFields: setFields,
+  };
 }

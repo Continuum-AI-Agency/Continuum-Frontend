@@ -7,7 +7,7 @@ import type {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import type { LayerDraftChange } from '@/components/forge/layerDraft';
@@ -29,6 +29,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { Link } from '@/i18n/navigation';
+import { useValidationErrorMap } from '@/i18n/validation';
 import {
   fetchNativeHyperframesOrder,
   fetchNativeHyperframesScene,
@@ -92,6 +94,8 @@ function NativeHyperframesSession({
   onBack,
   onDraftChange,
 }: Props) {
+  const translateUi = useUiTranslations('forge');
+
   const [revisionId, setRevisionId] = useState(initialRevisionId);
   const view = useQuery({
     queryKey: forgeQueryKeys.nativeScene(brandId, assetId, revisionId),
@@ -110,7 +114,7 @@ function NativeHyperframesSession({
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3">
         <Alert>
-          <AlertTitle>Native editor unavailable</AlertTitle>
+          <AlertTitle>{translateUi('native_editor_unavailable_49a3c8ce')}</AlertTitle>
           <AlertDescription>{problem(view.error)}</AlertDescription>
         </Alert>
         <HyperframesFilmPanel brandId={brandId} assetId={assetId} name={name} onBack={onBack} />
@@ -120,7 +124,7 @@ function NativeHyperframesSession({
     return (
       <div
         role="status"
-        aria-label="Reading the native scene"
+        aria-label={translateUi('reading_the_native_scene_bcd6d5d7')}
         className="grid min-h-0 flex-1 gap-3 md:grid-cols-2"
       >
         <Skeleton className="h-96" />
@@ -167,6 +171,10 @@ function NativeEditorBody({
   onDraftChange?: LayerDraftChange;
   onSelectRevision: (revisionId: string) => void;
 }) {
+  const validationErrorMap = useValidationErrorMap();
+
+  const translateUi = useUiTranslations('forge');
+
   const client = useQueryClient();
   const variant = variants.find((item) => item.variantId === view.revision.variantId);
   // Defaults belong to the saved scene; a catalog refresh must never reset unsaved copy.
@@ -175,7 +183,7 @@ function NativeEditorBody({
   const [textPage, setTextPage] = useState(0);
   const firstText = textPage * 20;
   const form = useForm<NativeEditorForm>({
-    resolver: zodResolver(nativeEditorFormSchema),
+    resolver: zodResolver(nativeEditorFormSchema, { error: validationErrorMap }),
     defaultValues: defaults,
   });
   const order = useQuery({
@@ -219,7 +227,7 @@ function NativeEditorBody({
           (_, index) => form.getFieldState(`texts.${index}.value`).invalid,
         );
         if (invalidText >= 0) setTextPage(Math.floor(invalidText / 20));
-        setError('Check the highlighted fields before saving.');
+        setError(translateUi('check_the_highlighted_fields_before_d0e36f27'));
         return false;
       }
       const candidate = nativeSaveRequest(
@@ -250,7 +258,7 @@ function NativeEditorBody({
       busy.current = false;
       setSaving(false);
     }
-  }, [canEdit, client, fields, form, onSelectRevision, order.data, variant, view]);
+  }, [canEdit, client, fields, form, onSelectRevision, order.data, variant, view, translateUi]);
   const discard = useCallback(() => {
     form.reset({ ...defaults, orders: nativeOrderDefaults(order.data) });
     setError(null);
@@ -274,33 +282,44 @@ function NativeEditorBody({
     <div className="flex min-h-0 flex-1 flex-col gap-[var(--app-shell-gap)]">
       <PageHeader
         title={name}
-        description={`${view.viewport.width} × ${view.viewport.height} · ${view.clock.frameCount} frames · ${variant?.name ?? 'Saved revision'}`}
+        description={translateUi('value0_value1_value2_frames_value3_8a367c50', {
+          value0: String(view.viewport.width),
+          value1: String(view.viewport.height),
+          value2: String(view.clock.frameCount),
+          value3: String(variant?.name ?? 'Saved revision'),
+        })}
         action={
           <>
             {onBack ? (
               <Button variant="ghost" onClick={onBack}>
-                Back to templates
+                {' '}
+                {translateUi('back_to_templates_1b58f427')}{' '}
               </Button>
             ) : (
               <Link className="text-sm text-primary hover:underline" href="/forge">
-                Templates
+                {' '}
+                {translateUi('templates_56b564b7')}{' '}
               </Link>
             )}
             <Link
               className="text-sm text-primary hover:underline"
               href={nativeEditorHref(view.brandId, view.assetId, view.revision.revisionId)}
             >
-              Saved revision link
+              {' '}
+              {translateUi('saved_revision_link_f75ab4ae')}{' '}
             </Link>
           </>
         }
       />
       <div className="grid min-h-0 flex-1 divide-y divide-border lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
-        <Panel title="Edit saved source" bodyClassName="flex flex-col gap-3 overflow-y-auto">
+        <Panel
+          title={translateUi('edit_saved_source_dbf84a94')}
+          bodyClassName="flex flex-col gap-3 overflow-y-auto"
+        >
           {!canEdit ? (
             <p role="status" className="text-sm text-muted-foreground">
-              This revision uses an older upload and is read-only. Its saved preview and render
-              remain available.
+              {' '}
+              {translateUi('this_revision_uses_an_older_upload__f6bf8d4a')}{' '}
             </p>
           ) : null}
           <form
@@ -317,16 +336,21 @@ function NativeEditorBody({
                   name="target"
                   render={({ field }) => (
                     <Field>
-                      <FieldLabel htmlFor="native-save-target">Save to</FieldLabel>
+                      <FieldLabel htmlFor="native-save-target">
+                        {translateUi('save_to_1daa7df7')}
+                      </FieldLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <SelectTrigger id="native-save-target">
                           <SelectValue items={{ new: 'New variant', current: 'Current variant' }} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="new">New variant</SelectItem>
+                            <SelectItem value="new">
+                              {translateUi('new_variant_a5ad40f9')}
+                            </SelectItem>
                             <SelectItem value="current" disabled={!canUpdate}>
-                              Current variant
+                              {' '}
+                              {translateUi('current_variant_e3460250')}{' '}
                             </SelectItem>
                           </SelectGroup>
                         </SelectContent>
@@ -336,7 +360,9 @@ function NativeEditorBody({
                 />
                 {target === 'new' ? (
                   <Field data-invalid={!!form.formState.errors.name}>
-                    <FieldLabel htmlFor="native-variant-name">Variant name</FieldLabel>
+                    <FieldLabel htmlFor="native-variant-name">
+                      {translateUi('variant_name_0f204472')}
+                    </FieldLabel>
                     <Input
                       id="native-variant-name"
                       maxLength={120}
@@ -353,7 +379,9 @@ function NativeEditorBody({
                       key={field.fieldId}
                       data-invalid={!!form.formState.errors.texts?.[index]?.value}
                     >
-                      <FieldLabel htmlFor={`native-copy-${index}`}>Text {index + 1}</FieldLabel>
+                      <FieldLabel htmlFor={`native-copy-${index}`}>
+                        {translateUi('text_71988c4d')} {index + 1}
+                      </FieldLabel>
                       <Textarea
                         id={`native-copy-${index}`}
                         rows={2}
@@ -363,7 +391,8 @@ function NativeEditorBody({
                       />
                       {field.reveal ? (
                         <FieldDescription>
-                          Preserves the source’s text reveal timing.
+                          {' '}
+                          {translateUi('preserves_the_source_s_text_reveal__524bef47')}{' '}
                         </FieldDescription>
                       ) : null}
                       <FieldError errors={[form.formState.errors.texts?.[index]?.value]} />
@@ -379,10 +408,13 @@ function NativeEditorBody({
                       disabled={textPage === 0}
                       onClick={() => setTextPage((page) => page - 1)}
                     >
-                      Previous text fields
+                      {' '}
+                      {translateUi('previous_text_fields_28d83be8')}{' '}
                     </Button>
                     <span>
-                      Text {firstText + 1}–{Math.min(firstText + 20, fields.length)} of{' '}
+                      {' '}
+                      {translateUi('text_71988c4d')} {firstText + 1}–
+                      {Math.min(firstText + 20, fields.length)} {translateUi('of_28391d3b')}{' '}
                       {fields.length}
                     </span>
                     <Button
@@ -392,7 +424,8 @@ function NativeEditorBody({
                       disabled={firstText + 20 >= fields.length}
                       onClick={() => setTextPage((page) => page + 1)}
                     >
-                      Next text fields
+                      {' '}
+                      {translateUi('next_text_fields_d21c2075')}{' '}
                     </Button>
                   </div>
                 ) : null}
@@ -400,7 +433,9 @@ function NativeEditorBody({
                   {(['width', 'height'] as const).map((dimension) => (
                     <Field key={dimension} data-invalid={!!form.formState.errors[dimension]}>
                       <FieldLabel htmlFor={`native-${dimension}`}>
-                        {dimension === 'width' ? 'Width' : 'Height'}
+                        {dimension === 'width'
+                          ? translateUi('width_3019947b')
+                          : translateUi('height_bfe2eca4')}
                       </FieldLabel>
                       <Input
                         id={`native-${dimension}`}
@@ -419,16 +454,19 @@ function NativeEditorBody({
                   name="orders"
                   render={({ field }) => (
                     <div className="space-y-3">
-                      <p className="text-sm font-medium">Source element order</p>
+                      <p className="text-sm font-medium">
+                        {translateUi('source_element_order_70e4c46c')}
+                      </p>
                       {order.isPending && view.sourceSceneSha256 ? (
                         <p role="status" className="text-xs text-muted-foreground">
-                          Loading saved element order…
+                          {' '}
+                          {translateUi('loading_saved_element_order_7a181f3b')}{' '}
                         </p>
                       ) : null}
                       {order.isError ? (
                         <p role="status" className="text-xs text-muted-foreground">
-                          Element order is unavailable for this source. Copy and size edits remain
-                          available.
+                          {' '}
+                          {translateUi('element_order_is_unavailable_for_th_d81c1b5e')}{' '}
                         </p>
                       ) : null}
                       {order.data ? (
@@ -440,22 +478,26 @@ function NativeEditorBody({
                       ) : null}
                       {order.data?.groups.length ? (
                         <FieldDescription>
-                          Earlier elements come first in the source. Layout, CSS stacking, and
-                          scripts can affect the visible result. Saving recompiles and verifies the
-                          order across the delivery timeline.
+                          {' '}
+                          {translateUi('earlier_elements_come_first_in_the__fed6aead')}{' '}
                         </FieldDescription>
                       ) : null}
                     </div>
                   )}
                 />
                 <FieldDescription>
-                  Saving compiles the original source with these edits. A source script that
-                  overwrites an edit must be resolved before it can be saved.
+                  {' '}
+                  {translateUi('saving_compiles_the_original_source_147768c1')}{' '}
                 </FieldDescription>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit">{saving ? 'Compiling and saving…' : 'Save variant'}</Button>
+                  <Button type="submit">
+                    {saving
+                      ? translateUi('compiling_and_saving_fa53658a')
+                      : translateUi('save_variant_dd7b39f1')}
+                  </Button>
                   <Button type="button" variant="outline" disabled={!dirty} onClick={discard}>
-                    Discard changes
+                    {' '}
+                    {translateUi('discard_changes_f9bfa3dc')}{' '}
                   </Button>
                 </div>
               </FieldGroup>
@@ -463,20 +505,25 @@ function NativeEditorBody({
           </form>
           {error ? (
             <Alert variant="destructive">
-              <AlertTitle>Variant was not saved</AlertTitle>
-              <AlertDescription>{error} Your changes are still here.</AlertDescription>
+              <AlertTitle>{translateUi('variant_was_not_saved_4eb2b1a5')}</AlertTitle>
+              <AlertDescription>
+                {error} {translateUi('your_changes_are_still_here_7cc54870')}
+              </AlertDescription>
             </Alert>
           ) : null}
           {blocked.length ? (
             <details className="text-xs text-muted-foreground">
-              <summary>Source capability limits ({blocked.length})</summary>
+              <summary>
+                {translateUi('source_capability_limits_a5f787ac')}
+                {blocked.length})
+              </summary>
               <ul className="mt-2 space-y-1">
                 {blocked.map((capability, index) => (
                   <li key={`${capability.nodeId}:${capability.operation}:${index}`}>
                     {capability.operation}:{' '}
                     {capability.reason ??
                       (capability.state === 'editable'
-                        ? 'Recompile this source to expose its saved value.'
+                        ? translateUi('recompile_this_source_to_expose_its_3bc6c12e')
                         : capability.state)}
                   </li>
                 ))}
@@ -484,22 +531,26 @@ function NativeEditorBody({
             </details>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            This inspector exposes copy, viewport, and source element order edits. Typography,
-            palette, media, and motion controls are still being qualified.
+            {' '}
+            {translateUi('this_inspector_exposes_copy_viewpor_364ab636')}{' '}
           </p>
-          <Panel title="Variants and revisions" bodyClassName="p-0">
+          <Panel title={translateUi('variants_and_revisions_b7baa6d5')} bodyClassName="p-0">
             {historyError ? (
               <Alert variant="destructive">
-                <AlertTitle>Revision history unavailable</AlertTitle>
+                <AlertTitle>{translateUi('revision_history_unavailable_4b08a875')}</AlertTitle>
                 <AlertDescription>
                   {problem(historyError)}{' '}
                   <Button variant="outline" size="sm" onClick={reloadHistory}>
-                    Retry revisions
+                    {' '}
+                    {translateUi('retry_revisions_95e8bf97')}{' '}
                   </Button>
                 </AlertDescription>
               </Alert>
             ) : null}
-            <ul className="divide-y divide-border text-xs" aria-label="Native variants">
+            <ul
+              className="divide-y divide-border text-xs"
+              aria-label={translateUi('native_variants_731bc86c')}
+            >
               {variants
                 .filter((item) => item.templateId === view.assetId)
                 .map((item) => (
@@ -517,8 +568,11 @@ function NativeEditorBody({
                             }
                             href={nativeEditorHref(view.brandId, view.assetId, revision.id)}
                           >
-                            Revision {revision.number}
-                            {revision.id === item.draftHeadRevisionId ? ' · latest' : ''}
+                            {' '}
+                            {translateUi('revision_2e516d68')} {revision.number}
+                            {revision.id === item.draftHeadRevisionId
+                              ? translateUi('latest_7c912ed3')
+                              : ''}
                           </Link>
                         ))}
                     </div>

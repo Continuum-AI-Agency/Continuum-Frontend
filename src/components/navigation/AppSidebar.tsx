@@ -3,8 +3,8 @@
 import type { ProductCode } from '@continuum/contracts';
 import { ChevronRight, Lock, LogOut, Search } from 'lucide-react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { type ElementType, Suspense, useEffect, useState } from 'react';
 import { TopUpDialog } from '@/components/billing/TopUpDialog';
@@ -35,8 +35,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import { useDeferredDefault } from '@/hooks/useDeferredDefault';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import {
-  AUTOMATIONS_PRODUCTION_DISABLED_REASON,
   type AutomationDeploymentEnvironment,
   canAccessAutomations,
 } from '@/lib/automations/access';
@@ -49,14 +49,10 @@ import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
 import { useCommandPalette } from './CommandPaletteProvider';
-import {
-  APP_NAVIGATION_FOOTER,
-  APP_NAVIGATION_GROUPS,
-  type AppNavigationItem,
-  isRouteActive,
-} from './routes';
+import { type AppNavigationItem, isRouteActive } from './routes';
 import { SidebarBillingWidget, sidebarOpensTopUp } from './SidebarBillingWidget';
 import { ThemeToggleGlyph, ThemeToggleText } from './ThemeToggleGlyph';
+import { useNavigation } from './useNavigation';
 
 type NavBadgeTone = NonNullable<NonNullable<AppNavigationItem['badge']>['tone']>;
 
@@ -147,6 +143,9 @@ type AppSidebarProps = {
 };
 
 function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: AppSidebarProps) {
+  const { groups: APP_NAVIGATION_GROUPS, footer: APP_NAVIGATION_FOOTER } = useNavigation();
+  const uiText = useTranslations('navigation');
+  const commonText = useTranslations('common');
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -174,7 +173,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
     readString(user?.user_metadata?.full_name) ??
     readString(user?.user_metadata?.name) ??
     readString(user?.email?.split('@')[0]) ??
-    'User';
+    commonText('unnamedUser');
   const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
 
   // BUG-198 guard: force-collapse the ephemeral hover-expand once navigation
@@ -439,9 +438,11 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
     // with the plan that unlocks it highlighted. The lock only says so before the click.
     const lockedBy =
       item.product && lockedProducts.includes(item.product)
-        ? (PLAN_NAME_FOR_PRODUCT[item.product] ?? 'an upgrade')
+        ? (PLAN_NAME_FOR_PRODUCT[item.product] ?? uiText('upgradeRequiredFallback'))
         : null;
-    const lockedLabel = lockedBy ? `${item.label} (needs ${lockedBy})` : undefined;
+    const lockedLabel = lockedBy
+      ? uiText('lockedItemLabel', { label: item.label, plan: lockedBy })
+      : undefined;
 
     return (
       <SidebarMenuItem key={item.href}>
@@ -509,14 +510,14 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                         type="button"
                         onClick={() => openPalette(true)}
                         className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] hover:text-[var(--sidebar-foreground)]"
-                        aria-label="Search (⌘K)"
+                        aria-label={uiText('search_k_adc4c57')}
                       >
                         <Search className="h-[14px] w-[14px]" />
                       </button>
                     }
                   />
                   <TooltipContent side="bottom" className="flex items-center gap-2">
-                    Search
+                    {uiText('search')}
                     <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-2xs font-medium opacity-100">
                       ⌘K
                     </kbd>
@@ -551,7 +552,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                                 ...item,
                                 disabled: true,
                                 locked: true,
-                                disabledReason: AUTOMATIONS_PRODUCTION_DISABLED_REASON,
+                                disabledReason: uiText('comingSoon'),
                               }
                             : item,
                         ),
@@ -612,7 +613,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
 
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Sign out"
+                  tooltip={uiText('sign_out_48f0d3d')}
                   size="default"
                   disabled={isPending}
                   onClick={() => logout()}
@@ -620,7 +621,7 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
                 >
                   <LogOut className="!h-[18px] !w-[18px] stroke-[1.8]" />
                   <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                    {isPending ? 'Signing out...' : 'Sign out'}
+                    {isPending ? uiText('signing_out_0436231') : uiText('sign_out_48f0d3d')}
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -630,7 +631,11 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
             <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                  tooltip={
+                    appearance === 'dark'
+                      ? uiText('switch_to_light_mode_c22ea81')
+                      : uiText('switch_to_dark_mode_82de2f8')
+                  }
                   size="default"
                   onClick={toggle}
                   className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"

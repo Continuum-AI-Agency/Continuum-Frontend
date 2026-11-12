@@ -151,10 +151,14 @@ mock.module('next/navigation', () => {
     }),
     useSearchParams: () => new URLSearchParams(),
     usePathname: () => '',
+    useParams: () => ({ locale: 'en' }),
     useSelectedLayoutSegment: () => null,
     useSelectedLayoutSegments: () => [],
     redirect: (url: string) => {
       console.log(`Redirecting to ${url}`);
+    },
+    permanentRedirect: (url: string) => {
+      console.log(`Redirecting permanently to ${url}`);
     },
     notFound: () => {
       console.log('Not found');

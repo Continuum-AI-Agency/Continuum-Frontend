@@ -1,3 +1,5 @@
+import type {useTranslations} from 'next-intl';
+type ScaleCopy=ReturnType<typeof useTranslations<'scale'>>;
 import type { JainaObjectiveStatus } from '@/lib/jaina/schemas';
 
 /**
@@ -83,8 +85,10 @@ const REASON_TEXT: Readonly<Record<string, (details: string | null | undefined) 
 export function objectiveReasonText(
   reasonCode: string | null | undefined,
   details: string | null | undefined,
+  uiTranslate?:ScaleCopy,
 ): string | null {
   if (!reasonCode) return null;
+  if(uiTranslate){if(!Object.hasOwn(REASON_TEXT,reasonCode))return null;const readTypes=['breakdown','trend','metrics','conversions','campaign','adsets','creatives'] as const;const index=READ_LABELS.findIndex(([pattern])=>pattern.test(details??''));return uiTranslate('jainaObjectiveReason',{reason:reasonCode,read:readTypes[index]??'other'});}
   return REASON_TEXT[reasonCode]?.(details) ?? null;
 }
 
@@ -99,3 +103,5 @@ export function summarizeObjectiveProgress(objectives: ReadonlyArray<{ status: s
     total: objectives.length,
   };
 }
+
+export function objectiveStatusLabel(status:JainaObjectiveStatus,uiTranslate?:ScaleCopy):string{return uiTranslate?uiTranslate('jainaObjectiveStatus',{status}):OBJECTIVE_STATUS_LABEL[status]}

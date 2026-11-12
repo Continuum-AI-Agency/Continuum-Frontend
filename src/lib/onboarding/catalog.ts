@@ -1,3 +1,8 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type CatalogTranslator = ReturnType<typeof useTranslations<'onboarding'>>;
+
 // The product-catalog step's pure half: what the brand typed → what the bulk import
 // endpoint is sent, and what its per-row report MEANS.
 //
@@ -33,53 +38,69 @@ export interface CatalogProductDraft {
   previewUrls: string[];
 }
 
+export type PriceIssueCode = 'priceDecimalSeparator' | 'priceAmountFormat' | 'priceOutOfRange';
 export type PriceReading =
   | { ok: true; price: CampaignMoney | null }
-  | { ok: false; raw: string; reason: string };
+  | { ok: false; raw: string; reason: PriceIssueCode };
 
-const PRICE_PATTERN = /^\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?$|^\d+(?:\.\d{1,2})?$/;
+function escapePattern(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-/**
- * "$19.99" → 1999 USD. Empty → no price, which is legal: facts are optional.
- *
- * ponytail: comma-as-decimal locales ("19,99") read as one thousand nine hundred and
- * ninety-nine and are therefore REJECTED rather than guessed — a currency picker per row
- * is the upgrade path, and guessing wrong prints a wrong price on an ad.
- */
-export function readPrice(raw: string, currency = CATALOG_DEFAULT_CURRENCY): PriceReading {
+/** Locale chooses separators; the supplied currency always owns the money unit. */
+export function readPrice(
+  raw: string,
+  currency = CATALOG_DEFAULT_CURRENCY,
+  locale: UiLocale = 'en',
+): PriceReading {
   const typed = raw.trim();
-  if (typed.length === 0) return { ok: true, price: null };
-
-  const bare = typed.replace(/^[^\d]*/, '').replace(/\s/g, '');
-  // Checked BEFORE the shape, because "19,99" fails the shape too and the generic
-  // reason would send a European brand hunting for a typo it did not make.
-  if (/,\d{1,2}$/.test(bare)) {
-    return {
-      ok: false,
-      raw: typed,
-      reason: 'Use a full stop for the decimal — 19.99, not 19,99.',
-    };
+  if (!typed) return { ok: true, price: null };
+  const invalid = (reason: PriceIssueCode): PriceReading => ({ ok: false, raw: typed, reason });
+  if (typed.length > 100) return invalid('priceOutOfRange');
+  const parts = new Intl.NumberFormat(locale).formatToParts(1234567.89);
+  const decimal = parts.find((part) => part.type === 'decimal')?.value ?? '.';
+  const group = parts.find((part) => part.type === 'group')?.value ?? ',';
+  let bare = typed;
+  try {
+    const symbols = new Set([
+      currency.toUpperCase(),
+      ...new Intl.NumberFormat(locale, { style: 'currency', currency })
+        .formatToParts(1)
+        .filter((part) => part.type === 'currency')
+        .map((part) => part.value),
+    ]);
+    if (currency.toUpperCase() === 'USD') symbols.add('$');
+    const token = [...symbols]
+      .sort((a, b) => b.length - a.length)
+      .find(
+        (symbol) =>
+          bare.toUpperCase().startsWith(symbol.toUpperCase()) ||
+          bare.toUpperCase().endsWith(symbol.toUpperCase()),
+      );
+    if (token)
+      bare = bare.toUpperCase().startsWith(token.toUpperCase())
+        ? bare.slice(token.length).trim()
+        : bare.slice(0, -token.length).trim();
+  } catch {
+    return invalid('priceAmountFormat');
   }
-  if (bare.length === 0 || !PRICE_PATTERN.test(bare)) {
-    return {
-      ok: false,
-      raw: typed,
-      reason: 'We read prices as a plain amount — 19.99, or 1,299 — with at most two decimals.',
-    };
+  const integer = `(?:\\d{1,3}(?:${escapePattern(group)}\\d{3})+|\\d+)`;
+  const pattern = new RegExp(`^${integer}(?:${escapePattern(decimal)}\\d{1,2})?$`);
+  if (!pattern.test(bare)) {
+    const wrongDecimal = decimal === '.' ? /,\d{1,2}$/ : /\.\d{1,2}$/;
+    return invalid(wrongDecimal.test(bare) ? 'priceDecimalSeparator' : 'priceAmountFormat');
   }
-
-  const amount = Number(bare.replace(/,/g, ''));
-  if (!Number.isFinite(amount)) {
-    return { ok: false, raw: typed, reason: 'That is not an amount we can read.' };
-  }
-  return { ok: true, price: { amountMinor: Math.round(amount * 100), currency } };
+  const [whole, fraction = ''] = bare.split(decimal);
+  const minor = BigInt(whole.split(group).join('')) * BigInt(100) + BigInt(fraction.padEnd(2, '0'));
+  if (minor > BigInt(Number.MAX_SAFE_INTEGER)) return invalid('priceOutOfRange');
+  return { ok: true, price: { amountMinor: Number(minor), currency } };
 }
 
 export interface CatalogRowBuild {
   /** `unknown` on purpose — the row travels to the server unjudged. */
   row: unknown;
   /** Set when the price could not be read; the row still imports, without a price. */
-  priceIssue: { raw: string; reason: string } | null;
+  priceIssue: { raw: string; reason: PriceIssueCode } | null;
 }
 
 /**
@@ -92,8 +113,9 @@ export interface CatalogRowBuild {
 export function buildCatalogRow(
   draft: CatalogProductDraft,
   currency = CATALOG_DEFAULT_CURRENCY,
+  locale: UiLocale = 'en',
 ): CatalogRowBuild {
-  const reading = readPrice(draft.price, currency);
+  const reading = readPrice(draft.price, currency, locale);
   const sku = draft.sku.trim();
   const productUrl = draft.productUrl.trim();
   const variants = draft.variants
@@ -141,6 +163,7 @@ export interface CatalogImportSummary {
 export function summarizeImport(
   response: ImportElementCatalogResponse,
   heldSlugsBefore: ReadonlySet<string>,
+  translate?: CatalogTranslator,
 ): CatalogImportSummary {
   let added = 0;
   let updated = 0;
@@ -151,6 +174,24 @@ export function summarizeImport(
   const rejected = response.rejected.length;
   const submitted = response.accepted.length + rejected;
 
+  if (translate) {
+    const changes = [
+      added > 0 ? translate('catalogAddedCount', { count: added }) : '',
+      updated > 0 ? translate('catalogUpdatedCount', { count: updated }) : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const landed = changes
+      ? translate('catalogImportedSummary', {
+          accepted: response.accepted.length,
+          submitted,
+          changes,
+        })
+      : translate('catalogNoneImported', { count: submitted });
+    const missed =
+      rejected > 0 ? ` ${translate('catalogRejectedSummary', { count: rejected })}` : '';
+    return { added, updated, rejected, submitted, headline: landed + missed };
+  }
   const parts: string[] = [];
   if (added > 0) parts.push(`${added} added`);
   if (updated > 0) parts.push(`${updated} updated`);
@@ -168,6 +209,17 @@ export function summarizeImport(
 }
 
 /** `product.productUrl: Invalid url` → the sentence a person fixes a spreadsheet with. */
-export function rejectionDetail(issues: readonly string[]): string {
+export function rejectionDetail(issues: readonly string[], translate?: CatalogTranslator): string {
+  if (translate) {
+    if (issues.length === 0) return translate('catalogNoDetails');
+    const keys = issues.map((issue) => {
+      const field = issue.split(':', 1)[0];
+      if (field.startsWith('product.productUrl')) return 'catalogProductUrlInvalid' as const;
+      if (field === 'name') return 'catalogNameRequired' as const;
+      if (field.startsWith('memberAssetIds')) return 'catalogImageRequired' as const;
+      return 'catalogRowInvalid' as const;
+    });
+    return [...new Set(keys)].map((key) => translate(key)).join(' · ');
+  }
   return issues.length > 0 ? issues.join(' · ') : 'The server gave no further detail.';
 }

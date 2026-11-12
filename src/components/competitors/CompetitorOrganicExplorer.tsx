@@ -1,7 +1,9 @@
 'use client';
 
 import type { InspirationSort, OrganicPostPlatform } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { type ReactNode, useMemo, useState } from 'react';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 
 import { useInstagramCompetitorSearch, useInstagramPosts } from '@/lib/api/competitorSpy';
 import { type InstagramLookupErrorKind, instagramLookupErrorKind } from '@/lib/api/errors';
@@ -89,6 +91,8 @@ export function CompetitorOrganicExplorer({
   compact?: boolean;
   className?: string;
 }) {
+  const uiText = useTranslations('competitor');
+  const uiLocale = useLocale();
   const [input, setInput] = useState('');
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [sort, setSort] = useState<InspirationSort>('recent');
@@ -115,7 +119,7 @@ export function CompetitorOrganicExplorer({
 
   const searchError =
     isSearching && search.isError
-      ? SEARCH_ERROR_COPY[instagramLookupErrorKind(search.error)]
+      ? localizeCompetitorCopy(SEARCH_ERROR_COPY[instagramLookupErrorKind(search.error)], uiText)
       : null;
 
   // Tracked-feed staleness: the rows are served for metrics, but their IG CDN
@@ -125,7 +129,12 @@ export function CompetitorOrganicExplorer({
   const firstFault = syncFaults[0];
   const syncFaultNotice =
     !isSearching && !feed.isLoading && firstFault
-      ? `Live previews for ${syncFaults.map((fault) => `@${fault.instagramUsername}`).join(', ')} are unavailable. ${SEARCH_ERROR_COPY[firstFault.kind]}`
+      ? uiText('m_681791360b', {
+          accounts: new Intl.ListFormat(uiLocale).format(
+            syncFaults.map((fault) => `@${fault.instagramUsername}`),
+          ),
+          guidance: localizeCompetitorCopy(SEARCH_ERROR_COPY[firstFault.kind], uiText),
+        })
       : null;
 
   const submit = () => {
@@ -143,7 +152,7 @@ export function CompetitorOrganicExplorer({
     <div className={cn('flex flex-col gap-3', className)}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Segmented
-          label="Platform"
+          label={uiText('platform_c78ffe1')}
           value={platform}
           options={PLATFORM_OPTIONS}
           onChange={setPlatform}
@@ -160,7 +169,7 @@ export function CompetitorOrganicExplorer({
           />
         ) : null}
         <Segmented
-          label="Sort posts"
+          label={uiText('sort_posts_83e975a')}
           value={isSearching && feedSort === 'relevance' ? 'recent' : feedSort}
           options={
             isSearching
@@ -174,7 +183,7 @@ export function CompetitorOrganicExplorer({
 
       {isSearching && activeQuery ? (
         <p className="text-xs text-muted-foreground">
-          Showing results for <span className="font-medium text-foreground">@{activeQuery}</span>
+          {uiText('m_db944daf18', { query: activeQuery ?? '' })}
         </p>
       ) : null}
 
@@ -197,7 +206,11 @@ export function CompetitorOrganicExplorer({
           isError={isSearching ? false : feed.isError}
           gridClassName={gridClassName}
           renderActions={renderActions}
-          emptyText={isSearching ? 'No posts found for that account.' : EMPTY_FEED_TEXT[platform]}
+          emptyText={
+            isSearching
+              ? uiText('no_posts_found_for_that_account_9eb3636')
+              : localizeCompetitorCopy(EMPTY_FEED_TEXT[platform], uiText)
+          }
         />
       )}
     </div>

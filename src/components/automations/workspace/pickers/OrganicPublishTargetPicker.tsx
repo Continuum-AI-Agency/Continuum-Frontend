@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The single connected account a "Publish organic" step posts to.
 //
@@ -9,7 +10,10 @@
 // derived from the brand's assigned integration accounts, so the invalid
 // pairing is simply not expressible.
 
-import { type AutomationSocialPlatform, automationSocialPlatformSchema } from '@continuum/contracts';
+import {
+  type AutomationSocialPlatform,
+  automationSocialPlatformSchema,
+} from '@continuum/contracts';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -39,6 +43,7 @@ const AUTOMATION_PLATFORM_KEYS = ORGANIC_POST_PLATFORM_KEYS.filter(
   (platform): platform is AutomationSocialPlatform =>
     automationSocialPlatformSchema.safeParse(platform).success,
 );
+
 import { cn } from '@/lib/utils';
 import { useOrganicPublishAccountSource } from './defaultPickerSources';
 import { isUnsetId, type PickerSource, RawIdFallbackField } from './pickerSource';
@@ -61,6 +66,7 @@ export function OrganicPublishTargetPicker({
   onChange: (next: OrganicPublishTarget) => void;
   useSource?: PickerSource<OrganicPublishAccountOption>;
 }) {
+  const uiText = useTranslations('automations');
   const [open, setOpen] = useState(false);
   const platformFieldId = useId();
   const { items, isLoading, isError } = useSource(brandId);
@@ -85,7 +91,7 @@ export function OrganicPublishTargetPicker({
     return (
       <>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={platformFieldId}>Publish platform</Label>
+          <Label htmlFor={platformFieldId}>{uiText('publish_platform_369af58')}</Label>
           <Select
             value={value.platform}
             disabled={disabled}
@@ -96,7 +102,7 @@ export function OrganicPublishTargetPicker({
               })
             }
           >
-            <SelectTrigger id={platformFieldId} aria-label="Publish platform">
+            <SelectTrigger id={platformFieldId} aria-label={uiText('publish_platform_369af58')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -109,15 +115,11 @@ export function OrganicPublishTargetPicker({
           </Select>
         </div>
         <RawIdFallbackField
-          label="Connected account ID"
+          label={uiText('connected_account_id_032e336')}
           value={accountId}
           disabled={disabled}
-          placeholder="Connected account id"
-          reason={
-            brandId
-              ? 'Connected accounts could not be loaded. The stored target stays editable here — check that the platform matches the account.'
-              : 'No brand is in scope, so connected accounts cannot be listed.'
-          }
+          placeholder={uiText('connected_account_id_45a838d')}
+          reason={brandId ? uiText('m_1298860b3f') : uiText('m_498bd9fe65')}
           onChange={(raw) => onChange({ platform: value.platform, accountId: raw })}
         />
       </>
@@ -125,16 +127,16 @@ export function OrganicPublishTargetPicker({
   }
 
   const triggerLabel = isLoading
-    ? 'Loading accounts…'
+    ? uiText('loading_accounts_2494bdb')
     : selected
       ? `${selected.platformLabel} · ${selected.label}`
       : accountId
-        ? `Unavailable account (${accountId})`
-        : 'Select a connected account';
+        ? uiText('m_152924f460', { id: accountId })
+        : uiText('m_1d3b2a2fce');
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>Publish target</Label>
+      <Label>{uiText('publish_target_f3781a4')}</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={
@@ -142,7 +144,7 @@ export function OrganicPublishTargetPicker({
               type="button"
               variant="outline"
               role="combobox"
-              aria-label="Publish target"
+              aria-label={uiText('publish_target_f3781a4')}
               aria-expanded={open}
               disabled={disabled || isLoading || items.length === 0}
               className="w-full justify-between font-normal"
@@ -154,9 +156,12 @@ export function OrganicPublishTargetPicker({
         />
         <PopoverContent className="w-[320px] p-0" align="start">
           <Command>
-            <CommandInput placeholder="Search connected accounts..." className="h-9 text-xs" />
+            <CommandInput
+              placeholder={uiText('search_connected_accounts_016016a')}
+              className="h-9 text-xs"
+            />
             <CommandList>
-              <CommandEmpty>No connected accounts found.</CommandEmpty>
+              <CommandEmpty>{uiText('no_connected_accounts_found_e01ec9e')}</CommandEmpty>
               {groups.map((group) => (
                 <CommandGroup key={group.platform} heading={group.label}>
                   {group.options.map((option) => {
@@ -195,11 +200,11 @@ export function OrganicPublishTargetPicker({
       </Popover>
       {!isLoading && items.length === 0 ? (
         <p className="text-xs leading-4 text-muted-foreground">
-          This brand has no connected Instagram, Facebook, or LinkedIn account to publish to.
+          {uiText('this_brand_has_no_connected_instagram_faceboo_f13c061')}
         </p>
       ) : (
         <p className="text-xs leading-4 text-muted-foreground">
-          Choosing an account sets the platform with it, so the two can never disagree.
+          {uiText('choosing_an_account_sets_the_platform_with_it_5d88825')}
         </p>
       )}
     </div>

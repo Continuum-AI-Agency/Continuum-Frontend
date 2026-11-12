@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 let subscription: PostgresChangesSubscription;

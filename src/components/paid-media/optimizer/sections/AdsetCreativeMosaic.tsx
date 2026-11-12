@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // Right pane of the SuggestionExplorer: every ad creative inside ONE selected ad
 // set, laid out as a true CSS-columns masonry so each creative keeps its native
 // aspect (vertical 9:16 posters, squares, landscape all flow). Each tile carries a
@@ -77,6 +79,8 @@ export function AdsetCreativeMosaic({
   adsetId,
   currency,
 }: AdsetCreativeMosaicProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const adsQuery = useOptimizerAdsetAds(brandId, accountId, adsetId);
   const trendsQuery = useOptimizerAdDailyTrends(brandId, accountId, adsetId);
   const anglesQuery = useOptimizerAdAngles(brandId, accountId, adsetId);
@@ -100,7 +104,9 @@ export function AdsetCreativeMosaic({
   if (!adsetId) {
     return (
       <div className="grid h-full min-h-0 place-items-center rounded-md border border-border/60 border-dashed">
-        <p className="text-xs text-muted-foreground">Select an ad set to see its creatives.</p>
+        <p className="text-xs text-muted-foreground">
+          {uiText('select_an_ad_set_to_see_its_creatives_175a6ea')}
+        </p>
       </div>
     );
   }
@@ -122,7 +128,7 @@ export function AdsetCreativeMosaic({
   if (adsQuery.isError) {
     return (
       <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-6 text-center text-xs text-warning">
-        Couldn&rsquo;t load the ads in this ad set.
+        {uiText('couldn_t_load_the_ads_in_this_ad_set_9ef70fd')}
       </p>
     );
   }
@@ -130,7 +136,7 @@ export function AdsetCreativeMosaic({
   if (adsQuery.data.length === 0) {
     return (
       <p className="rounded-md border border-border/60 px-3 py-6 text-center text-xs text-muted-foreground">
-        No ads in this ad set.
+        {uiText('no_ads_in_this_ad_set_c872e4c')}
       </p>
     );
   }
@@ -183,7 +189,7 @@ export function AdsetCreativeMosaic({
                     style={{ aspectRatio: '4 / 5' }}
                     aria-hidden="true"
                   >
-                    AD
+                    {uiText('ad_c7bf4bb')}
                   </span>
                 )}
                 <div className="space-y-1 p-2">
@@ -192,12 +198,16 @@ export function AdsetCreativeMosaic({
                   </p>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {formatCurrency(spend, currency)}
-                      {cpm != null ? ` · CPM ${formatCpa(cpm, currency)}` : ''}
+                      {formatCurrency(spend, currency, uiLocale)}
+                      {cpm != null
+                        ? uiText('template_d70666746afa', {
+                            v0: formatCpa(cpm, currency, uiLocale),
+                          })
+                        : ''}
                     </span>
                     {angle ? (
                       <Badge className="shrink-0 text-xs" variant="secondary">
-                        {humanize(angle.angle)}
+                        {humanize(angle.angle, uiText)}
                       </Badge>
                     ) : null}
                   </div>
@@ -209,8 +219,7 @@ export function AdsetCreativeMosaic({
       </div>
       {trendsQuery.data.length === 0 ? (
         <p className="px-1 pt-1 text-xs text-muted-foreground">
-          Per-creative spend appears once daily metrics load — hover a creative for its angle and
-          trend.
+          {uiText('per_creative_spend_appears_once_daily_metrics_420f4c2')}
         </p>
       ) : null}
       {opened ? (

@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
+import { getCookieLocale, restoreAccountLocale } from '@/i18n/server';
 import { resolveHeadersOrigin } from '@/lib/server/origin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildAuthCallbackUrl, resolveAuthRedirectPath } from './redirect';
@@ -17,23 +19,28 @@ async function resolveRuntimeSiteUrl(): Promise<string> {
 
 type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
-const SAFE_ERROR_MESSAGES: Record<string, string> = {
-  'Invalid login credentials': 'Invalid email or password',
-  'Email not confirmed': 'Please verify your email address before logging in',
-  'User already registered': 'An account with this email already exists',
-  'Token has expired or is invalid':
-    'That code is wrong or has expired. Use the code from the newest email, or send a new one.',
-};
+const SAFE_ERROR_MESSAGES = {
+  'Invalid login credentials': 'invalidCredentials',
+  'Email not confirmed': 'emailNotConfirmed',
+  'User already registered': 'alreadyRegistered',
+  'Token has expired or is invalid': 'expiredCode',
+  'Invalid email address': 'invalidEmail',
+  'Password is required': 'requiredPassword',
+  'Enter the code from your email': 'emailCodeRequired',
+  'Invalid input': 'invalidInput',
+  'Failed to initialize Google sign-in. Please try again': 'googleInitFailed',
+} as const;
 
-function getSafeErrorMessage(error: Error | { message: string }): string {
+async function getSafeErrorMessage(error: Error | { message: string }): Promise<string> {
+  const t = await getTranslations({ locale: await getCookieLocale(), namespace: 'auth' });
   const message = error.message;
 
-  if (SAFE_ERROR_MESSAGES[message]) {
-    return SAFE_ERROR_MESSAGES[message];
+  if (Object.hasOwn(SAFE_ERROR_MESSAGES, message)) {
+    return t(SAFE_ERROR_MESSAGES[message as keyof typeof SAFE_ERROR_MESSAGES]);
   }
 
   if (message.toLowerCase().includes('network') || message.toLowerCase().includes('fetch')) {
-    return 'Network error. Please check your connection and try again';
+    return t('networkError');
   }
 
   console.error('[AUTH_ERROR] Unmapped error:', {
@@ -41,7 +48,7 @@ function getSafeErrorMessage(error: Error | { message: string }): string {
     timestamp: new Date().toISOString(),
   });
 
-  return 'An unexpected error occurred. Please try again';
+  return t('unexpectedError');
 }
 
 export async function logoutAction(): Promise<ActionResult> {
@@ -54,7 +61,7 @@ export async function logoutAction(): Promise<ActionResult> {
     if (error) {
       return {
         success: false,
-        error: getSafeErrorMessage(error),
+        error: await getSafeErrorMessage(error),
       };
     }
 
@@ -68,7 +75,7 @@ export async function logoutAction(): Promise<ActionResult> {
 
     return {
       success: false,
-      error: getSafeErrorMessage(error as Error),
+      error: await getSafeErrorMessage(error as Error),
     };
   }
 }
@@ -91,14 +98,16 @@ export async function signInWithGoogleAction(
     if (error) {
       return {
         success: false,
-        error: getSafeErrorMessage(error),
+        error: await getSafeErrorMessage(error),
       };
     }
 
     if (!data.url) {
       return {
         success: false,
-        error: 'Failed to initialize Google sign-in. Please try again',
+        error: await getSafeErrorMessage({
+          message: 'Failed to initialize Google sign-in. Please try again',
+        }),
       };
     }
 
@@ -109,7 +118,7 @@ export async function signInWithGoogleAction(
   } catch (error) {
     return {
       success: false,
-      error: getSafeErrorMessage(error as Error),
+      error: await getSafeErrorMessage(error as Error),
     };
   }
 }
@@ -122,7 +131,9 @@ export async function signInWithPasswordAction(
   if (!validation.success) {
     return {
       success: false,
-      error: validation.error.issues[0]?.message || 'Invalid input',
+      error: await getSafeErrorMessage({
+        message: validation.error.issues[0]?.message || 'Invalid input',
+      }),
     };
   }
 
@@ -130,7 +141,7 @@ export async function signInWithPasswordAction(
   const siteUrl = await resolveRuntimeSiteUrl();
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: validation.data.email,
       password: validation.data.password,
     });
@@ -138,10 +149,11 @@ export async function signInWithPasswordAction(
     if (error) {
       return {
         success: false,
-        error: getSafeErrorMessage(error),
+        error: await getSafeErrorMessage(error),
       };
     }
 
+    if (data?.user) await restoreAccountLocale(data.user.user_metadata);
     revalidatePath('/', 'layout');
 
     return {
@@ -156,7 +168,7 @@ export async function signInWithPasswordAction(
   } catch (error) {
     return {
       success: false,
-      error: getSafeErrorMessage(error as Error),
+      error: await getSafeErrorMessage(error as Error),
     };
   }
 }
@@ -167,7 +179,9 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
   if (!validation.success) {
     return {
       success: false,
-      error: validation.error.issues[0]?.message || 'Invalid input',
+      error: await getSafeErrorMessage({
+        message: validation.error.issues[0]?.message || 'Invalid input',
+      }),
     };
   }
 
@@ -187,7 +201,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
     if (error) {
       return {
         success: false,
-        error: getSafeErrorMessage(error),
+        error: await getSafeErrorMessage(error),
       };
     }
 
@@ -198,7 +212,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
   } catch (error) {
     return {
       success: false,
-      error: getSafeErrorMessage(error as Error),
+      error: await getSafeErrorMessage(error as Error),
     };
   }
 }
@@ -211,7 +225,9 @@ export async function verifyEmailCodeAction(
   if (!validation.success) {
     return {
       success: false,
-      error: validation.error.issues[0]?.message || 'Invalid input',
+      error: await getSafeErrorMessage({
+        message: validation.error.issues[0]?.message || 'Invalid input',
+      }),
     };
   }
 
@@ -219,7 +235,7 @@ export async function verifyEmailCodeAction(
   const siteUrl = await resolveRuntimeSiteUrl();
 
   try {
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email: validation.data.email,
       token: validation.data.token,
       type: 'email',
@@ -228,10 +244,11 @@ export async function verifyEmailCodeAction(
     if (error) {
       return {
         success: false,
-        error: getSafeErrorMessage(error),
+        error: await getSafeErrorMessage(error),
       };
     }
 
+    if (data?.user) await restoreAccountLocale(data.user.user_metadata);
     revalidatePath('/', 'layout');
 
     return {
@@ -246,7 +263,7 @@ export async function verifyEmailCodeAction(
   } catch (error) {
     return {
       success: false,
-      error: getSafeErrorMessage(error as Error),
+      error: await getSafeErrorMessage(error as Error),
     };
   }
 }

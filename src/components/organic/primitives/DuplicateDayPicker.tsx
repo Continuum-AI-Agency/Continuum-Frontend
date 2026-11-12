@@ -1,5 +1,7 @@
 'use client';
+
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +16,8 @@ type DuplicateDayPickerProps = {
 };
 
 export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const [weekOffset, setWeekOffset] = React.useState(0);
 
   const weekStart = React.useMemo(() => {
@@ -30,24 +34,24 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
         id: formatDayId(date),
         label: DAY_LABELS[i],
         date: date.getDate(),
-        month: date.toLocaleString('en-US', { month: 'short' }),
+        month: date.toLocaleString(uiLocale, { month: 'short' }),
         isPast: date < new Date(new Date().setHours(0, 0, 0, 0)),
       };
     });
-  }, [weekStart]);
+  }, [weekStart, uiLocale]);
 
   const [selectedDayId, setSelectedDayId] = React.useState<string | null>(null);
 
   const weekLabel = React.useMemo(() => {
     const end = new Date(weekStart);
     end.setDate(weekStart.getDate() + 6);
-    const startMonth = weekStart.toLocaleString('en-US', { month: 'short' });
-    const endMonth = end.toLocaleString('en-US', { month: 'short' });
+    const startMonth = weekStart.toLocaleString(uiLocale, { month: 'short' });
+    const endMonth = end.toLocaleString(uiLocale, { month: 'short' });
     if (startMonth === endMonth) {
       return `${startMonth} ${weekStart.getDate()}–${end.getDate()}`;
     }
     return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}`;
-  }, [weekStart]);
+  }, [weekStart, uiLocale]);
 
   return (
     <div className="w-56 space-y-2">
@@ -56,7 +60,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
           type="button"
           className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={() => setWeekOffset((o) => o - 1)}
-          aria-label="Previous week"
+          aria-label={uiText('previous_week_c0f8bbc')}
         >
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
@@ -65,7 +69,7 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
           type="button"
           className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={() => setWeekOffset((o) => o + 1)}
-          aria-label="Next week"
+          aria-label={uiText('next_week_21fbde1')}
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -101,10 +105,10 @@ export function DuplicateDayPicker({ onSelect, onCancel }: DuplicateDayPickerPro
           disabled={!selectedDayId}
           onClick={() => selectedDayId && onSelect(selectedDayId)}
         >
-          Clone
+          {uiText('clone_5779f32')}
         </Button>
         <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={onCancel}>
-          Cancel
+          {uiText('cancel_19766ed')}
         </Button>
       </div>
     </div>

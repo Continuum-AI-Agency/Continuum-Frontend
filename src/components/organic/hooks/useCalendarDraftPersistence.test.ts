@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { renderHook, waitFor } from '@testing-library/react';
-
+import { waitFor } from '@testing-library/react';
 import { makeCalendarDay } from '@/components/organic/primitives/calendar-utils';
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
 } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };

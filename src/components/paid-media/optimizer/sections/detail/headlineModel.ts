@@ -1,3 +1,14 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import type { UiLocale } from '@/i18n/config';
+import {
+  type OptimizerDisplayKey,
+  type OptimizerDisplayTranslate,
+  optimizerDisplayCopy,
+  optimizerDisplayParts,
+} from '@/lib/paid-media/optimizationMetricPresentation';
 // The portfolio's news, composed from typed fields and nothing else.
 //
 // Performance+ redesign, stage 2 (docs/performance-plus-redesign/portafolio.html, ideas 01,
@@ -147,7 +158,7 @@ const RESULT_NOUNS: Record<string, { one: string; many: string }> = {
   clicks: { one: 'click', many: 'clicks' },
 };
 
-export function resultNouns(kind: string, fallbackLabel: string): { one: string; many: string } {
+function resultNounsEnglish(kind: string, fallbackLabel: string): { one: string; many: string } {
   const known = RESULT_NOUNS[kind];
   if (known) return known;
   const label = fallbackLabel.toLowerCase();
@@ -261,7 +272,7 @@ const percent = (key: string, raw: number, window: FigureWindow): HeadlineFigure
  * for it; with no target it says there is none. With no read of the whole portfolio
  * (HeroView.unread) it says that, and no figure: "no spend" is only ever a read zero.
  */
-export function statusSentence(
+function statusSentenceEnglish(
   growth: BriefGrowth,
   words: { one: string; many: string },
   currency: string | null,
@@ -347,7 +358,7 @@ function adsetCost(items: readonly CycleItemRow[], adsetId: string | null): numb
  * 48.80 MXN a day." Below the impact floor, or with nothing open, the sentence says so with the
  * figure it does have.
  */
-export function opportunitySentence(args: {
+function opportunitySentenceEnglish(args: {
   brief: PortfolioBrief;
   items: readonly CycleItemRow[];
   dailyTotal: number | null;
@@ -410,7 +421,7 @@ export function opportunitySentence(args: {
  * so they need it to BE a read of the whole portfolio: with `unread` set, its zeros mean "not
  * read" and neither is claimed.
  */
-export function blockerSentence(args: {
+function blockerSentenceEnglish(args: {
   growth: BriefGrowth;
   mismatch: HeroMismatch | null;
   words: { one: string; many: string };
@@ -464,15 +475,32 @@ export function blockerSentence(args: {
 }
 
 /** "2 h ago", "35 min ago", "3 days ago" — from an ISO stamp to now. */
-export function agoWords(iso: string, now: number): string | null {
+export function agoWords(iso: string, now: number, locale: UiLocale = 'en'): string | null {
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return null;
   const minutes = Math.max(0, Math.round((now - at) / 60_000));
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60)
+    return locale === 'en'
+      ? `${minutes} min ago`
+      : new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'short' }).format(
+          -minutes,
+          'minute',
+        );
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
+  if (hours < 48)
+    return locale === 'en'
+      ? `${hours} h ago`
+      : new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'short' }).format(
+          -hours,
+          'hour',
+        );
   const days = Math.round(hours / 24);
-  return `${days} days ago`;
+  return locale === 'en'
+    ? `${days} days ago`
+    : new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'short' }).format(
+        -days,
+        'day',
+      );
 }
 
 const hasDigit = (text: string): boolean => /\d/.test(text);
@@ -484,19 +512,28 @@ const sentenceText = (sentence: HeadlineSentence): string => sentence.map(segmen
  * else the deterministic headline, labelled as automatic. A headline with no figure (the calm
  * "nothing worth changing today") is replaced by the status sentence, which always has one.
  */
-export function jainaRead(args: {
-  view: HeroView;
-  name: string;
-  status: HeadlineSentence;
-  growth: BriefGrowth;
-  currency: string | null;
-  now: number;
-}): JainaRead {
+function jainaReadEnglish(
+  args: {
+    view: HeroView;
+    name: string;
+    status: HeadlineSentence;
+    growth: BriefGrowth;
+    currency: string | null;
+    now: number;
+  },
+  uiTranslate?: ScaleCopy,
+): JainaRead {
   const { brief } = args.view;
   const written = args.view.source === 'brief' && brief.model !== 'deterministic';
   const ago = agoWords(brief.generated_at, args.now);
   const who = written ? 'Jaina' : 'Automatic read';
-  const label = [who, `on ${args.name}`, ago].filter(Boolean).join(' · ');
+  const label = [
+    who,
+    uiTranslate ? uiTranslate('helper_961d172ff2f7', { v0: args.name }) : `on ${args.name}`,
+    ago,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const headline = brief.hero.headline;
   const sentence = hasDigit(headline) ? headline : sentenceText(args.status);
   return {
@@ -514,22 +551,27 @@ export function jainaRead(args: {
   };
 }
 
-function tilesOf(args: {
-  growth: BriefGrowth;
-  words: { one: string; many: string };
-  currency: string | null;
-  days: number;
-  dailyTotal: number | null;
-  waiting: number;
-  atStakePerDay: number;
-}): HeadlineTile[] {
+function tilesOf(
+  args: {
+    growth: BriefGrowth;
+    words: { one: string; many: string };
+    currency: string | null;
+    days: number;
+    dailyTotal: number | null;
+    waiting: number;
+    atStakePerDay: number;
+  },
+  uiTranslate?: ScaleCopy,
+): HeadlineTile[] {
   const { growth, words, currency, days, dailyTotal } = args;
   const window = growth.window;
   const perDay = growth.spend / Math.max(days, 1);
   const plan = dailyTotal != null && dailyTotal > 0 ? dailyTotal : null;
   const spend: HeadlineTile = {
     key: 'spend',
-    label: `Spend · ${dayWords(days)}`,
+    label: uiTranslate
+      ? uiTranslate('helper_d02860d6eac6', { v0: dayWords(days) })
+      : `Spend · ${dayWords(days)}`,
     value: formatCurrency(growth.spend, currency),
     figure: { key: 'tiles.spend', raw: growth.spend, currency, window, unit: 'currency' },
     sub: plan
@@ -572,7 +614,9 @@ function tilesOf(args: {
   const pct = vsTargetPct(growth.cost_per_result, target);
   const cost: HeadlineTile = {
     key: 'cost',
-    label: `Cost per ${words.one}`,
+    label: uiTranslate
+      ? uiTranslate('helper_ced2e5c5acfe', { v0: words.one })
+      : `Cost per ${words.one}`,
     value: growth.cost_per_result == null ? '—' : formatCurrency(growth.cost_per_result, currency),
     figure: { key: 'tiles.cost', raw: growth.cost_per_result, currency, window, unit: 'currency' },
     sub:
@@ -590,7 +634,7 @@ function tilesOf(args: {
 
   const decisions: HeadlineTile = {
     key: 'decisions',
-    label: 'Decisions',
+    label: uiTranslate ? uiTranslate('decisions_cfa6a08') : 'Decisions',
     value: String(args.waiting),
     figure: {
       key: 'tiles.decisions',
@@ -610,7 +654,7 @@ function tilesOf(args: {
   return [spend, resultsTile, cost, decisions];
 }
 
-export function buildPortfolioHeadline(args: {
+function buildPortfolioHeadlineEnglish(args: {
   view: HeroView;
   report: ParsedCycleRunReport | null;
   portfolio: { name: string; daily_total: number | null; apply_mode: string | null };
@@ -734,17 +778,20 @@ function anchorState(pct: number | null): PortfolioAnchor['state'] {
  * brief's window (say 14 days) and the picker's range (say 7) differ, so each figure says
  * which days it covers rather than borrowing the other's.
  */
-export function anchorOf(args: {
-  growth: BriefGrowth;
-  words: { one: string; many: string };
-  currency: string | null;
-  days: number;
-  beforeAfter: BeforeAfter | null;
-  /** Where the figure came from (HeroView.figure); absent for a range figure. */
-  figure?: HeroView['figure'];
-}): PortfolioAnchor {
+function anchorOfEnglish(
+  args: {
+    growth: BriefGrowth;
+    words: { one: string; many: string };
+    currency: string | null;
+    days: number;
+    beforeAfter: BeforeAfter | null;
+    /** Where the figure came from (HeroView.figure); absent for a range figure. */
+    figure?: HeroView['figure'];
+  },
+  uiTranslate?: ScaleCopy,
+): PortfolioAnchor {
   const { growth, words, currency, days } = args;
-  const asOfText = figureAsOfText(args.figure);
+  const asOfText = figureAsOfText(args.figure, uiTranslate);
   const cost = growth.cost_per_result;
   const target = growth.target != null && growth.target > 0 ? growth.target : null;
   const pct = vsTargetPct(cost, target);
@@ -764,7 +811,12 @@ export function anchorOf(args: {
     figure: { key: 'anchor.cost', raw: cost, currency, window: growth.window, unit: 'currency' },
     state: anchorState(pct),
     unit: `per ${words.one}`,
-    target: target == null ? 'no target' : `target ${formatCurrency(target, null)}`,
+    target:
+      target == null
+        ? 'no target'
+        : uiTranslate
+          ? uiTranslate('helper_4ab023dac333', { v0: formatCurrency(target, null) })
+          : `target ${formatCurrency(target, null)}`,
     vsTarget:
       pct == null ? null : pct === 0 ? 'on target' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`,
     empty: cost == null ? `no ${words.many} in ${dayWords(days)}` : null,
@@ -819,7 +871,7 @@ function measuredCost(item: CycleItemRow): number | null {
  * cheapest and dearest of them. Every scored ad set counts in the total — one that bought
  * nothing is not in the target — but only a measured cost can be best or worst.
  */
-export function adsetsOnTargetTile(args: {
+function adsetsOnTargetTileEnglish(args: {
   items: readonly CycleItemRow[];
   target: number | null;
   window: FigureWindow;
@@ -904,7 +956,7 @@ export function adsetsOnTargetTile(args: {
  * the third place, but the brief's growth read carries no purchase value yet
  * (briefGrowthSchema in @continuum/contracts); when it does, this is the one switch to add.
  */
-export function relevantTiles(args: {
+function relevantTilesEnglish(args: {
   headline: PortfolioHeadline;
   brief: PortfolioBrief;
   items: readonly CycleItemRow[];
@@ -1002,4 +1054,555 @@ export function relevantTiles(args: {
     });
   }
   return tiles;
+}
+
+type DisplayOptions = { translate?: OptimizerDisplayTranslate; locale?: UiLocale };
+const NOUN_KEYS = {
+  purchases: ['nounPurchase', 'nounPurchases', 'metricPurchases'],
+  appInstalls: ['nounInstall', 'nounInstalls', 'metricInstalls'],
+  signups: ['nounSignup', 'nounSignups', 'metricSignUps'],
+  leads: ['nounLead', 'nounLeads', 'metricLeads'],
+  landingPageViews: ['nounLpv', 'nounLpvs', 'metricLandingPageViews'],
+  impressions: ['nounThousandImpressions', 'nounThousandImpressions', 'metricImpressions'],
+  conversations: ['nounConversation', 'nounConversations', 'metricConversations'],
+  linkClicks: ['nounLinkClick', 'nounLinkClicks', 'metricLinkClicks'],
+  thruplays: ['nounThruplay', 'nounThruplays', 'metricThruPlays'],
+  postEngagement: ['nounEngagement', 'nounEngagements', 'metricEngagements'],
+  clicks: ['nounClick', 'nounClicks', 'metricClicks'],
+} as const satisfies Record<
+  string,
+  readonly [OptimizerDisplayKey, OptimizerDisplayKey, OptimizerDisplayKey]
+>;
+const PRIOR_KEYS = { d3: 'priorThree', d7: 'priorWeek', d14: 'priorFortnight' } as const;
+const PRIOR_SHORT_KEYS = {
+  d3: 'priorThreeShort',
+  d7: 'priorWeekShort',
+  d14: 'priorFortnightShort',
+} as const;
+const nativeCount = (value: number, locale: UiLocale) =>
+  new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+const nativePercent = (value: number, locale: UiLocale) =>
+  `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Math.abs(value))}%`;
+const nativeSignedPercent = (ratio: number, locale: UiLocale) =>
+  `${ratio >= 0 ? '+' : '−'}${nativePercent(Math.round(ratio * 100), locale)}`;
+
+export function resultNouns(
+  kind: string,
+  fallbackLabel: string,
+  translate?: OptimizerDisplayTranslate,
+): { one: string; many: string } {
+  if (!translate) return resultNounsEnglish(kind, fallbackLabel);
+  const keys = Object.hasOwn(NOUN_KEYS, kind) ? NOUN_KEYS[kind as keyof typeof NOUN_KEYS] : null;
+  const known = RESULT_NOUNS[kind];
+  if (!keys || !known) return { one: fallbackLabel, many: fallbackLabel };
+  const canonical = known.many.charAt(0).toUpperCase() + known.many.slice(1);
+  if (
+    fallbackLabel !== canonical &&
+    fallbackLabel !== known.many &&
+    fallbackLabel !== translate(keys[2])
+  )
+    return { one: fallbackLabel, many: fallbackLabel };
+  return { one: translate(keys[0]), many: translate(keys[1]) };
+}
+
+function translatedWords(
+  words: { one: string; many: string },
+  translate: OptimizerDisplayTranslate,
+) {
+  const match = Object.entries(RESULT_NOUNS).find(
+    ([, value]) => value.one === words.one && value.many === words.many,
+  );
+  if (!match) return words;
+  const keys = NOUN_KEYS[match[0] as keyof typeof NOUN_KEYS];
+  return { one: translate(keys[0]), many: translate(keys[1]) };
+}
+
+function localFigureMap(
+  base: HeadlineSentence,
+  locale: UiLocale,
+  words: { one: string; many: string },
+  translate: OptimizerDisplayTranslate,
+) {
+  const mapped = new Map(
+    sentenceFigures(base).map((figure) => {
+      let text = figure.text;
+      if (figure.raw !== null) {
+        if (figure.unit === 'currency') text = formatCurrency(figure.raw, figure.currency, locale);
+        else if (figure.unit === 'percent') text = nativePercent(figure.raw, locale);
+        else if (figure.unit === 'count')
+          text =
+            figure.key === 'headline.results'
+              ? translate('headlineResult', { count: figure.raw, ...words })
+              : nativeCount(figure.raw, locale);
+      }
+      return [figure.key, { ...figure, text }] as const;
+    }),
+  );
+  return (key: string): HeadlineFigure => {
+    const figure = mapped.get(key);
+    if (!figure) throw new Error(`Missing headline figure ${key}`);
+    return figure;
+  };
+}
+
+export function statusSentence(
+  growth: BriefGrowth,
+  words: { one: string; many: string },
+  currency: string | null,
+  days: number,
+  unread: HeroView['unread'] = null,
+  translate?: OptimizerDisplayTranslate,
+  locale: UiLocale = 'en',
+): HeadlineSentence {
+  const base = statusSentenceEnglish(growth, words, currency, days, unread);
+  if (!translate || unread) return base;
+  const nouns = translatedWords(words, translate),
+    figure = localFigureMap(base, locale, nouns, translate),
+    results = figure('headline.results');
+  const sentence = (
+    key: OptimizerDisplayKey,
+    values: Parameters<typeof optimizerDisplayParts<HeadlineSegment>>[2],
+  ) => optimizerDisplayParts<HeadlineSegment>(translate, key, values);
+  if (Math.round(growth.results) === 0 || growth.cost_per_result === null) {
+    return growth.spend <= 0
+      ? sentence('headlineNoSpend', { results, days })
+      : sentence('headlineSpent', { results, days, amount: figure('headline.spend') });
+  }
+  const pct = vsTargetPct(growth.cost_per_result, growth.target);
+  let target: HeadlineSentence;
+  if (pct === null || growth.target === null) target = [translate('headlineNoTarget')];
+  else if (pct === 0) target = sentence('headlineOnTarget', { amount: figure('headline.target') });
+  else {
+    const comparison: HeadlineComparison = {
+      tone: pct > 0 ? 'bad' : 'good',
+      parts: optimizerDisplayParts<HeadlineFigure>(
+        translate,
+        pct > 0 ? 'headlineOverTarget' : 'headlineUnderTarget',
+        { percent: figure('headline.vs-target') },
+      ),
+    };
+    target = sentence('headlineCompareTarget', { comparison, amount: figure('headline.target') });
+  }
+  let prior: HeadlineSentence = [];
+  const delta = growth.deltas.cost_per_result;
+  if (delta !== null && Number.isFinite(delta)) {
+    const percent = Math.round(delta * 100),
+      period = translate(PRIOR_KEYS[growth.window]);
+    if (percent === 0) prior = sentence('headlineSamePrior', { period });
+    else {
+      const comparison: HeadlineComparison = {
+        tone: percent < 0 ? 'good' : 'bad',
+        parts: optimizerDisplayParts<HeadlineFigure>(
+          translate,
+          percent < 0 ? 'headlineCheaper' : 'headlineDearer',
+          { percent: figure('headline.vs-prior') },
+        ),
+      };
+      prior = sentence('headlineDifferentPrior', { comparison, period });
+    }
+  }
+  return sentence('headlineStatus', {
+    results,
+    days,
+    cost: figure('headline.cost'),
+    target,
+    prior,
+  });
+}
+
+export function opportunitySentence(
+  args: Parameters<typeof opportunitySentenceEnglish>[0] & DisplayOptions,
+): HeadlineSentence {
+  const base = opportunitySentenceEnglish(args),
+    translate = args.translate;
+  if (!translate) return base;
+  const locale = args.locale ?? 'en',
+    words = translatedWords(args.words, translate),
+    figure = localFigureMap(base, locale, words, translate);
+  const sentence = (
+    key: OptimizerDisplayKey,
+    values: Parameters<typeof optimizerDisplayParts<HeadlineSegment>>[2] = {},
+  ) => optimizerDisplayParts<HeadlineSegment>(translate, key, values);
+  const ranked = rankCandidates(args.brief.candidates),
+    top = ranked[0];
+  if (!top)
+    return args.dailyTotal !== null && args.dailyTotal > 0
+      ? sentence('noOpportunityPlan', { amount: figure('headline.plan') })
+      : sentence('noOpportunity');
+  if (!heroThresholdMet(ranked, args.dailyTotal))
+    return sentence('opportunityFloor', {
+      amount: figure('headline.opportunity'),
+      floor: figure('headline.floor'),
+    });
+  const name = top.adset_name ?? top.adset_id ?? translate('anAdSet'),
+    amount = figure('headline.opportunity');
+  if (top.module === 'pause')
+    return adsetCost(args.items, top.adset_id) !== null
+      ? sentence('opportunityPauseCost', {
+          name,
+          amount,
+          unit: words.one,
+          cost: figure('headline.opportunity.cost'),
+        })
+      : sentence('opportunityPause', { name, amount });
+  const keys = {
+    budget: 'opportunityBudget',
+    creative: 'opportunityCreative',
+    audience: 'opportunityAudience',
+  } as const;
+  return sentence(keys[top.module], { name, amount });
+}
+
+export function blockerSentence(
+  args: Parameters<typeof blockerSentenceEnglish>[0] & DisplayOptions,
+): HeadlineBlocker | null {
+  const base = blockerSentenceEnglish(args),
+    translate = args.translate;
+  if (!base || !translate) return base;
+  const words = translatedWords(args.words, translate),
+    locale = args.locale ?? 'en';
+  const mismatch = args.mismatch;
+  if (mismatch) {
+    const bought = mismatch.bought
+      ? resultNouns(mismatch.bought, mismatch.bought, translate).many
+      : translate('anotherResult');
+    return {
+      ...base,
+      sentence: [
+        translate(mismatch.scope === 'all' ? 'blockMismatchAll' : 'blockMismatchSome', {
+          count: mismatch.mismatched,
+          total: mismatch.total,
+          bought,
+          measured: words.many,
+        }),
+      ],
+    };
+  }
+  if (base.code === 'zero_delivery')
+    return { ...base, sentence: [translate('blockZero', { days: args.days })] };
+  const figure = localFigureMap(base.sentence, locale, words, translate);
+  return {
+    ...base,
+    sentence: optimizerDisplayParts<HeadlineSegment>(translate, 'blockSignal', {
+      amount: figure('headline.blocker.spend'),
+      results: words.many,
+      days: args.days,
+    }),
+  };
+}
+
+export function jainaRead(
+  args: Parameters<typeof jainaReadEnglish>[0] & DisplayOptions,
+  uiTranslate?: ScaleCopy,
+): JainaRead {
+  const base = jainaReadEnglish(args, uiTranslate),
+    translate = args.translate;
+  if (!translate) return base;
+  const ago = agoWords(args.view.brief.generated_at, args.now, args.locale ?? 'en'),
+    who = base.source === 'jaina' ? 'Jaina' : translate('automaticRead');
+  return {
+    ...base,
+    ago,
+    label: translate(ago ? 'readAttributionAgo' : 'readAttribution', {
+      who,
+      name: args.name,
+      ...(ago ? { ago } : {}),
+    }),
+    sentence: base.source === 'jaina' ? base.sentence : sentenceText(args.status),
+  };
+}
+
+function localizedTiles(
+  base: HeadlineTile[],
+  args: Parameters<typeof tilesOf>[0],
+  translate: OptimizerDisplayTranslate,
+  locale: UiLocale,
+): HeadlineTile[] {
+  const { growth, days, currency } = args,
+    words = translatedWords(args.words, translate),
+    results = Math.round(growth.results),
+    target = growth.target !== null && growth.target > 0 ? growth.target : null,
+    atTarget = target ? growth.spend / target : null,
+    perDay = growth.spend / Math.max(days, 1),
+    plan = args.dailyTotal !== null && args.dailyTotal > 0 ? args.dailyTotal : null;
+  const money = (raw: number) => formatCurrency(raw, currency, locale);
+  return base.map((tile) => {
+    if (tile.key === 'spend')
+      return {
+        ...tile,
+        label: translate('tileSpendTitle', { days }),
+        value: money(growth.spend),
+        sub: plan
+          ? translate('tileSpendPlan', { amount: money(perDay), plan: money(plan) })
+          : translate('tileSpendNoPlan', { amount: money(perDay) }),
+      };
+    if (tile.key === 'results') {
+      const delta = growth.deltas.results;
+      return {
+        ...tile,
+        label: words.many.charAt(0).toLocaleUpperCase(locale) + words.many.slice(1),
+        value: nativeCount(results, locale),
+        sub:
+          delta !== null && Number.isFinite(delta)
+            ? translate('tileDelta', {
+                percent: nativeSignedPercent(delta, locale),
+                period: translate(PRIOR_KEYS[growth.window]),
+              })
+            : atTarget !== null && results > 0
+              ? translate('tileAtTarget', { count: atTarget })
+              : results === 0 && growth.spend > 0
+                ? translate('tileNoResults', { amount: money(growth.spend) })
+                : translate('noPrior'),
+      };
+    }
+    if (tile.key === 'cost') {
+      const pct = vsTargetPct(growth.cost_per_result, target);
+      return {
+        ...tile,
+        label: translate('costPerUnit', { unit: words.one }),
+        value: growth.cost_per_result === null ? '—' : money(growth.cost_per_result),
+        sub:
+          growth.cost_per_result === null
+            ? results === 0
+              ? translate('noResultsToDivide', { results: words.many })
+              : translate('noPrice')
+            : target === null
+              ? translate('noTarget')
+              : pct === 0
+                ? translate('onAmountTarget', { amount: money(target) })
+                : translate('costTargetComparison', {
+                    percent: `${pct !== null && pct > 0 ? '+' : ''}${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(pct ?? 0)}%`,
+                    direction: pct !== null && pct > 0 ? 'over' : 'under',
+                    target: money(target),
+                  }),
+      };
+    }
+    return {
+      ...tile,
+      label: translate('decisions'),
+      value: nativeCount(args.waiting, locale),
+      sub:
+        args.waiting > 0
+          ? args.atStakePerDay > 0
+            ? translate('dailyAtStake', { amount: money(args.atStakePerDay) })
+            : translate('awaitingDecision')
+          : translate('nothingWaiting'),
+    };
+  });
+}
+
+export function buildPortfolioHeadline(
+  args: Parameters<typeof buildPortfolioHeadlineEnglish>[0] & DisplayOptions,
+  uiTranslate?: ScaleCopy,
+): PortfolioHeadline {
+  const base = buildPortfolioHeadlineEnglish(args),
+    translate = args.translate;
+  if (!translate) return base;
+  const locale = args.locale ?? 'en',
+    growth = args.view.brief.growth,
+    words = resultNouns(args.metric.kpiField, args.metric.resultLabel, translate),
+    days = base.days,
+    unread = args.view.unread ?? null;
+  const status = statusSentence(growth, words, args.currency, days, unread, translate, locale),
+    items = args.report?.latest_items ?? [];
+  return {
+    ...base,
+    words,
+    status,
+    opportunity: opportunitySentence({
+      brief: args.view.brief,
+      items,
+      dailyTotal: args.portfolio.daily_total,
+      currency: args.currency,
+      words,
+      translate,
+      locale,
+    }),
+    blocker: blockerSentence({
+      growth,
+      mismatch: args.mismatch,
+      words,
+      currency: args.currency,
+      days,
+      unread,
+      translate,
+      locale,
+    }),
+    tiles: localizedTiles(
+      base.tiles,
+      {
+        growth,
+        words,
+        currency: args.currency,
+        days,
+        dailyTotal: args.portfolio.daily_total,
+        waiting: base.decisions.waiting,
+        atStakePerDay: base.decisions.atStakePerDay,
+      },
+      translate,
+      locale,
+    ),
+    read: jainaRead(
+      {
+        view: args.view,
+        name: args.portfolio.name,
+        status,
+        growth,
+        currency: args.currency,
+        now: args.now ?? Date.now(),
+        translate,
+        locale,
+      },
+      uiTranslate,
+    ),
+  };
+}
+
+export function anchorOf(
+  args: Parameters<typeof anchorOfEnglish>[0] & DisplayOptions,
+  uiTranslate?: ScaleCopy,
+): PortfolioAnchor {
+  const base = anchorOfEnglish(args, uiTranslate),
+    translate = args.translate;
+  if (!translate) return base;
+  const locale = args.locale ?? 'en',
+    words = translatedWords(args.words, translate),
+    cost = args.growth.cost_per_result,
+    target = args.growth.target !== null && args.growth.target > 0 ? args.growth.target : null,
+    pct = vsTargetPct(cost, target);
+  return {
+    ...base,
+    value: cost === null ? '—' : formatCurrency(cost, args.currency, locale),
+    unit: translate('perUnit', { unit: words.one }),
+    target:
+      target === null
+        ? translate('noTarget')
+        : translate('targetAmount', { amount: formatCurrency(target, null, locale) }),
+    vsTarget:
+      pct === null
+        ? null
+        : pct === 0
+          ? translate('onTarget')
+          : `${pct > 0 ? '+' : '−'}${nativePercent(pct, locale)}`,
+    empty:
+      cost === null ? translate('noResultsDays', { results: words.many, days: args.days }) : null,
+    windows: base.windows.map((window) => ({
+      ...window,
+      text:
+        window.cost === null
+          ? translate('noResults', { results: words.many })
+          : formatCurrency(window.cost, args.currency, locale),
+    })),
+  };
+}
+
+export function adsetsOnTargetTile(
+  args: Parameters<typeof adsetsOnTargetTileEnglish>[0] & DisplayOptions,
+): ModuleTile {
+  const base = adsetsOnTargetTileEnglish(args),
+    translate = args.translate;
+  if (!translate) return base;
+  const locale = args.locale ?? 'en';
+  const measured = args.items
+    .map((item) => ({ name: item.adset_name ?? item.adset_id, cost: measuredCost(item) }))
+    .filter((row): row is { name: string; cost: number } => row.cost !== null)
+    .sort((a, b) => a.cost - b.cost);
+  const best = measured[0],
+    worst = measured.length > 1 ? measured.at(-1) : undefined;
+  const bestLine = best
+      ? translate('bestCost', { name: best.name, amount: formatCurrency(best.cost, null, locale) })
+      : null,
+    worstLine = worst
+      ? translate('worstCost', {
+          name: worst.name,
+          amount: formatCurrency(worst.cost, null, locale),
+        })
+      : null;
+  return {
+    ...base,
+    label: translate('adsetsOnTarget'),
+    value:
+      base.figure.raw === null
+        ? '—'
+        : translate('countOfTotal', { count: base.figure.raw, total: args.items.length }),
+    sub:
+      args.items.length === 0
+        ? [translate('noneScored')]
+        : args.target === null
+          ? [translate('noTarget')]
+          : [bestLine ?? translate('noMeasuredCost')],
+    detail: args.items.length === 0 ? null : args.target === null ? bestLine : worstLine,
+  };
+}
+
+export function relevantTiles(
+  args: Parameters<typeof relevantTilesEnglish>[0] & DisplayOptions,
+): ModuleTile[] {
+  const base = relevantTilesEnglish(args),
+    translate = args.translate;
+  if (!translate) return base;
+  const locale = args.locale ?? 'en',
+    growth = args.brief.growth,
+    days = Math.max(args.headline.days, 1),
+    plan = args.dailyTotal !== null && args.dailyTotal > 0 ? args.dailyTotal : null,
+    target = growth.target !== null && growth.target > 0 ? growth.target : null,
+    n = Math.round(growth.results);
+  return base.map((tile) => {
+    if (tile.key === 'spend') {
+      const setting: TileSegment = {
+        setting: 'budget',
+        text: plan
+          ? translate('planAmount', { amount: formatCurrency(plan, args.currency, locale) })
+          : translate('noDailyPlan'),
+      };
+      return {
+        ...tile,
+        sub: optimizerDisplayParts<TileSegment>(translate, 'tileDayPlan', {
+          amount: formatCurrency(growth.spend / days, args.currency, locale),
+          plan: setting,
+        }),
+        detail: finite(growth.deltas.spend)
+          ? translate('tileDelta', {
+              percent: nativeSignedPercent(growth.deltas.spend, locale),
+              period: translate(PRIOR_SHORT_KEYS[growth.window]),
+            })
+          : null,
+      };
+    }
+    if (tile.key === 'results') {
+      const needed = target && n > 0 ? growth.spend / target : null;
+      return {
+        ...tile,
+        sub: [
+          finite(growth.deltas.results)
+            ? translate('tileDelta', {
+                percent: nativeSignedPercent(growth.deltas.results, locale),
+                period: translate(PRIOR_SHORT_KEYS[growth.window]),
+              })
+            : n === 0 && growth.spend > 0
+              ? translate('tileNoResults', {
+                  amount: formatCurrency(growth.spend, args.currency, locale),
+                })
+              : translate('noPrior'),
+        ],
+        detail: needed !== null ? translate('tileAtTarget', { count: needed }) : null,
+      };
+    }
+    if (tile.key === 'adsets')
+      return adsetsOnTargetTile({
+        items: args.items,
+        target,
+        window: growth.window,
+        translate,
+        locale,
+      });
+    return {
+      ...tile,
+      detail:
+        args.headline.decisions.waiting > 0 && args.brief.candidates.length > 0
+          ? translate('openOpportunities', { count: args.brief.candidates.length })
+          : null,
+      cta: args.headline.decisions.waiting > 0 ? translate('reviewArrow') : null,
+    };
+  });
 }

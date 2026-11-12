@@ -8,7 +8,7 @@ import {
   render,
   screen,
   waitFor,
-} from '@testing-library/react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { parseReferenceDropPayload } from '@/lib/ai-studio/referenceDrop';
 import { ApiError } from '@/lib/api/errors';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';

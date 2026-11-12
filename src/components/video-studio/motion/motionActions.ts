@@ -1,3 +1,10 @@
+import type { useTranslations } from 'next-intl';
+
+type MotionUi = {
+  t: ReturnType<typeof useTranslations<'studio'>>;
+  metadata: (source: string) => string;
+};
+
 // The workspace's motion actions — Animate, Look, Transition and the text templates — as the
 // clip menus, the ⌘K palette and the timeline call them. Every one is an editor op, the same
 // the agent and MCP run.
@@ -32,16 +39,19 @@ export function motionClipActions({
   getPlayheadSec,
   runOp,
   runQuiet,
+  ui,
 }: {
   targetsFor: (clipId: string) => readonly string[];
   clipOf: (clipId: string) => EditorClip | undefined;
   getPlayheadSec: () => number;
   runOp: RunVideoEditorOp;
   runQuiet: RunQuiet;
+  ui?: MotionUi;
 }): MotionMenuActions {
+  const present = (source: string) => ui?.metadata(source) ?? source;
   return {
     animate: (clipId, preset) =>
-      void runQuiet(CLIP_MOTION_PRESETS[preset].label, async () => {
+      void runQuiet(present(CLIP_MOTION_PRESETS[preset].label), async () => {
         for (const id of targetsFor(clipId)) {
           const clip = clipOf(id);
           if (!clip || !animates(clip)) continue;
@@ -58,13 +68,13 @@ export function motionClipActions({
         }
       }),
     look: (clipId, effect) =>
-      void runQuiet(LOOK_EFFECTS[effect].label, async () => {
+      void runQuiet(present(LOOK_EFFECTS[effect].label), async () => {
         for (const id of targetsFor(clipId)) {
           if (takesLook(clipOf(id))) await runOp('apply_effect', { clipId: id, effect });
         }
       }),
     transition: (clipId, type) =>
-      void runQuiet(TRANSITION_LABELS[type], () =>
+      void runQuiet(present(TRANSITION_LABELS[type]), () =>
         runOp('add_transition', { fromClipId: clipId, type, durationSec: DEFAULT_TRANSITION_SEC }),
       ),
   };
@@ -77,22 +87,27 @@ export function motionPaletteGroups({
   actions,
   placeTemplate,
   openTextTab,
+  ui,
 }: {
   selectedClip: EditorClip | undefined;
   transitionsToNext: boolean;
   actions: MotionMenuActions;
   placeTemplate: (placement: TemplatePlacement) => void;
   openTextTab: () => void;
+  ui?: MotionUi;
 }): Array<{ heading: string; actions: PaletteAction[] }> {
   const clipId = selectedClip?.id ?? '';
+  const present = (source: string) => ui?.metadata(source) ?? source;
   return [
     {
-      heading: 'Text',
+      heading: present('Text'),
       actions: [
-        { id: 'text-tab', label: 'Open text templates', run: openTextTab },
+        { id: 'text-tab', label: present('Open text templates'), run: openTextTab },
         ...TEXT_TEMPLATE_IDS.map((template) => ({
           id: `text-${template}`,
-          label: `Add ${TEXT_TEMPLATES[template].label} at playhead`,
+          label:
+            ui?.t('paletteAddTemplate', { name: TEXT_TEMPLATES[template].label }) ??
+            `Add ${TEXT_TEMPLATES[template].label} at playhead`,
           run: () =>
             placeTemplate({
               template,
@@ -102,23 +117,29 @@ export function motionPaletteGroups({
       ],
     },
     {
-      heading: 'Motion',
+      heading: present('Motion'),
       actions: [
         ...CLIP_MOTION_PRESET_IDS.map((preset) => ({
           id: `animate-${preset}`,
-          label: `Animate: ${CLIP_MOTION_PRESETS[preset].label}`,
+          label:
+            ui?.t('paletteAnimate', { name: present(CLIP_MOTION_PRESETS[preset].label) }) ??
+            `Animate: ${CLIP_MOTION_PRESETS[preset].label}`,
           disabled: !animates(selectedClip),
           run: () => actions.animate(clipId, preset),
         })),
         ...LOOK_EFFECT_IDS.map((effect) => ({
           id: `look-${effect}`,
-          label: `Look: ${LOOK_EFFECTS[effect].label}`,
+          label:
+            ui?.t('paletteLook', { name: present(LOOK_EFFECTS[effect].label) }) ??
+            `Look: ${LOOK_EFFECTS[effect].label}`,
           disabled: !takesLook(selectedClip),
           run: () => actions.look(clipId, effect),
         })),
         ...SEAM_TRANSITIONS.map((type) => ({
           id: `transition-${type}`,
-          label: `Transition: ${TRANSITION_LABELS[type]} into next clip`,
+          label:
+            ui?.t('paletteTransition', { name: present(TRANSITION_LABELS[type]) }) ??
+            `Transition: ${TRANSITION_LABELS[type]} into next clip`,
           disabled: !transitionsToNext,
           run: () => actions.transition(clipId, type),
         })),

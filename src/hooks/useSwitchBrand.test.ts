@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import type { SelectBrandResult } from '@/components/providers/ActiveBrandProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 import * as storeRegistry from '@/lib/storage/storeRegistry';
 import type { SwitchBrandOutcome } from './useSwitchBrand';
 
 const ACTIVE_BRAND_CONTEXT_PATH = '@/components/providers/ActiveBrandProvider';
-const NEXT_NAV_PATH = 'next/navigation';
+const NEXT_NAV_PATH = '@/i18n/navigation';
 
 type MockState = {
   brandSummaries: Array<{ id: string; name: string; completed?: boolean }>;

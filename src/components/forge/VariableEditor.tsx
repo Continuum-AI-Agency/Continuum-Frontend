@@ -13,7 +13,8 @@ import {
   type SlotRole,
 } from '@continuum/contracts';
 import { Image as ImageIcon, Info, Loader2, Save, Type, Upload, X } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useMemo, useRef, useState, useMemo as useUiConfigMemo } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import { KIND_ICONS } from '@/components/forge/DataGrid';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -83,6 +84,8 @@ export function DefaultValueControl({
   brandId: string;
   onChange: (next: unknown) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [picking, setPicking] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [draggingFile, setDraggingFile] = useState(false);
@@ -91,7 +94,11 @@ export function DefaultValueControl({
   const uploadDefaultFile = async (file: File) => {
     const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
     if (!format.accepted || format.originalKind !== variable.kind) {
-      toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+      toast.error(
+        translateUi('choose_an_value0_file_66ba4888', {
+          value0: String(variable.kind === 'image' ? 'image' : 'video'),
+        }),
+      );
       return;
     }
     setUploading(true);
@@ -99,7 +106,9 @@ export function DefaultValueControl({
       const uploaded = await uploadMediaAsset({ file, brandId });
       onChange({ assetId: uploaded.assetId, versionId: uploaded.versionId });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+      toast.error(
+        error instanceof Error ? error.message : translateUi('could_not_upload_this_file_91efc96a'),
+      );
     } finally {
       setUploading(false);
     }
@@ -113,7 +122,10 @@ export function DefaultValueControl({
           'flex flex-wrap items-center gap-2 rounded border border-dashed p-2',
           draggingFile ? 'border-primary bg-primary/10' : 'border-input',
         )}
-        aria-label={`Default ${variable.kind} for ${label}`}
+        aria-label={translateUi('default_value0_for_value1_118045ab', {
+          value0: String(variable.kind),
+          value1: String(label),
+        })}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes('Files') || uploading) return;
           event.preventDefault();
@@ -128,7 +140,9 @@ export function DefaultValueControl({
           void uploadDefaultFile(file);
         }}
       >
-        <span className="text-xs text-muted-foreground">Drop {variable.kind} here</span>
+        <span className="text-xs text-muted-foreground">
+          {translateUi('drop_c8af9ae3')} {variable.kind} {translateUi('here_fcec9150')}
+        </span>
         <MediaSelectPopover
           brandProfileId={brandId}
           open={picking}
@@ -141,9 +155,7 @@ export function DefaultValueControl({
             // Version-pinned like every other Library reference on the render path: an unpinned
             // default silently changes what renders the next time someone uploads a new version.
             if (!asset.headVersionId) {
-              toast.error(
-                'This file has no saved Library version. Upload it again before using it as a default.',
-              );
+              toast.error(translateUi('this_file_has_no_saved_library_vers_ed25caf5'));
               return;
             }
             onChange({ assetId: asset.id, versionId: asset.headVersionId });
@@ -152,7 +164,9 @@ export function DefaultValueControl({
           anchor={
             <Button type="button" variant="outline" size="xs" className="gap-1.5">
               <ImageIcon className="size-3.5" aria-hidden />
-              {pinned?.assetId ? 'Change' : 'Pick from Library'}
+              {pinned?.assetId
+                ? translateUi('change_c0bf75bd')
+                : translateUi('pick_from_library_5dec3b38')}
             </Button>
           }
         />
@@ -160,7 +174,7 @@ export function DefaultValueControl({
           ref={fileInput}
           type="file"
           accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
-          aria-label={`Upload ${label} default`}
+          aria-label={translateUi('upload_value0_default_bb474ba9', { value0: String(label) })}
           className="sr-only"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -180,12 +194,14 @@ export function DefaultValueControl({
             <Loader2 className="size-3.5 animate-spin" aria-hidden />
           ) : (
             <Upload className="size-3.5" aria-hidden />
-          )}
-          Upload here
+          )}{' '}
+          {translateUi('upload_here_0a705ba9')}{' '}
         </Button>
         {pinned?.assetId ? (
           <>
-            <span className="text-xs text-muted-foreground">A Library {variable.kind} is set</span>
+            <span className="text-xs text-muted-foreground">
+              {translateUi('a_library_cf9eaa27')} {variable.kind} {translateUi('is_set_f09b9fec')}
+            </span>
             <Button
               type="button"
               variant="ghost"
@@ -193,8 +209,7 @@ export function DefaultValueControl({
               className="gap-1"
               onClick={() => onChange(null)}
             >
-              <X className="size-3.5" aria-hidden />
-              Clear
+              <X className="size-3.5" aria-hidden /> {translateUi('clear_83b12c22')}{' '}
             </Button>
           </>
         ) : null}
@@ -206,7 +221,7 @@ export function DefaultValueControl({
     return (
       <BrandColorField
         brandId={brandId}
-        label={`${label} default`}
+        label={translateUi('value0_default_7f2f9c24', { value0: String(label) })}
         value={typeof value === 'string' ? value : null}
         onChange={(next) => onChange(next || null)}
       />
@@ -220,10 +235,10 @@ export function DefaultValueControl({
         <Switch
           checked={value === true}
           onCheckedChange={(next) => onChange(next)}
-          aria-label={`${label} default`}
+          aria-label={translateUi('value0_default_7f2f9c24', { value0: String(label) })}
         />
         <span className="text-xs text-muted-foreground">
-          {value === true ? on : value === false ? off : 'As designed'}
+          {value === true ? on : value === false ? off : translateUi('as_designed_76de4b46')}
         </span>
       </span>
     );
@@ -235,11 +250,17 @@ export function DefaultValueControl({
         value={typeof value === 'string' ? value : NO_ROLE}
         onValueChange={(next) => onChange(next === NO_ROLE ? null : next)}
       >
-        <SelectTrigger size="sm" className="w-full" aria-label={`${label} default`}>
-          <SelectValue>{typeof value === 'string' ? value : 'No default'}</SelectValue>
+        <SelectTrigger
+          size="sm"
+          className="w-full"
+          aria-label={translateUi('value0_default_7f2f9c24', { value0: String(label) })}
+        >
+          <SelectValue>
+            {typeof value === 'string' ? value : translateUi('no_default_706e7d9f')}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={NO_ROLE}>No default</SelectItem>
+          <SelectItem value={NO_ROLE}>{translateUi('no_default_706e7d9f')}</SelectItem>
           {variable.options.map((option) => (
             <SelectItem key={option} value={option}>
               {option}
@@ -255,7 +276,7 @@ export function DefaultValueControl({
       <Input
         type="number"
         inputSize="sm"
-        aria-label={`${label} default`}
+        aria-label={translateUi('value0_default_7f2f9c24', { value0: String(label) })}
         value={typeof value === 'number' ? String(value) : ''}
         placeholder={variable.sample ?? ''}
         onChange={(event) => {
@@ -269,7 +290,7 @@ export function DefaultValueControl({
   return (
     <Input
       inputSize="sm"
-      aria-label={`${label} default`}
+      aria-label={translateUi('value0_default_7f2f9c24', { value0: String(label) })}
       value={typeof value === 'string' ? value : ''}
       placeholder={variable.sample ?? ''}
       onChange={(event) => onChange(event.target.value || null)}
@@ -307,13 +328,15 @@ function FillFromControl({
   link: SlotLink | null;
   onChange: (change: Partial<TemplateSlotEdit>) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   if (!sources.length) return null;
   const source = sources.find((other) => other.key === link?.path);
   const bind = (path: string, line?: number) =>
     onChange({ binding: { source: 'slot', path, ...(line ? { line } : {}) }, exposed: false });
   return (
     <Field orientation="horizontal" className="w-auto gap-2 pb-1">
-      <span className="text-xs">Fill from</span>
+      <span className="text-xs">{translateUi('fill_from_da9548d4')}</span>
       <Select
         value={link?.path ?? OWN_VALUE}
         onValueChange={(next) => {
@@ -321,11 +344,14 @@ function FillFromControl({
           else if (typeof next === 'string') bind(next, link?.line);
         }}
       >
-        <SelectTrigger size="sm" aria-label={`${variable.label} fills from`}>
-          <SelectValue>{source?.label ?? 'Its own value'}</SelectValue>
+        <SelectTrigger
+          size="sm"
+          aria-label={translateUi('value0_fills_from_5dca7b1b', { value0: String(variable.label) })}
+        >
+          <SelectValue>{source?.label ?? translateUi('its_own_value_3c55d696')}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={OWN_VALUE}>Its own value</SelectItem>
+          <SelectItem value={OWN_VALUE}>{translateUi('its_own_value_3c55d696')}</SelectItem>
           {sources.map((other) => (
             <SelectItem key={other.key} value={other.key}>
               {other.label}
@@ -343,14 +369,24 @@ function FillFromControl({
             )
           }
         >
-          <SelectTrigger size="sm" aria-label={`Which part of ${source?.label ?? 'it'}`}>
-            <SelectValue>{link.line ? `Line ${link.line}` : 'Whole text'}</SelectValue>
+          <SelectTrigger
+            size="sm"
+            aria-label={translateUi('which_part_of_value0_b84492f8', {
+              value0: String(source?.label ?? 'it'),
+            })}
+          >
+            <SelectValue>
+              {link.line
+                ? translateUi('line_value0_751dfdcf', { value0: String(link.line) })
+                : translateUi('whole_text_19f28d17')}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={WHOLE_TEXT}>Whole text</SelectItem>
+            <SelectItem value={WHOLE_TEXT}>{translateUi('whole_text_19f28d17')}</SelectItem>
             {[2, 3, 4, 5].map((line) => (
               <SelectItem key={line} value={String(line)}>
-                Line {line}
+                {' '}
+                {translateUi('line_d7852cd0')} {line}
               </SelectItem>
             ))}
           </SelectContent>
@@ -397,23 +433,35 @@ type VariableFilter = 'all' | 'unassigned' | 'media' | 'text' | 'off';
 const switchWords = (variable: TemplateVariable): [string, string] =>
   isLayerSwitch(variable.key) ? ['Shown', 'Hidden'] : ['On', 'Off'];
 
-const FILTERS: Array<{ value: VariableFilter; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'unassigned', label: 'Unassigned' },
-  { value: 'media', label: 'Media' },
-  { value: 'text', label: 'Text' },
-  // A design import brings every layer of the file; most start not asked. "Not asked", never
-  // "Off": a hidden layer is a switch's VALUE, and this filter is about the row form.
-  { value: 'off', label: 'Not asked' },
-];
+function useLocalFiltersMessages() {
+  const translateConfig = useUiTranslations('forge');
+  return useUiConfigMemo(() => {
+    const value: Array<{ value: VariableFilter; label: string }> = [
+      { value: 'all', label: translateConfig('all_a52ace42') },
+      { value: 'unassigned', label: translateConfig('unassigned_14d33bd0') },
+      { value: 'media', label: translateConfig('media_d357175c') },
+      { value: 'text', label: translateConfig('text_71988c4d') },
+      // A design import brings every layer of the file; most start not asked. "Not asked", never
+      // "Off": a hidden layer is a switch's VALUE, and this filter is about the row form.
+      { value: 'off', label: translateConfig('not_asked_b7089777') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 /** What a closed row shows for its default: the copy in mono, a swatch, or that a picture is set. */
 function DefaultPreview({ variable, value }: { variable: TemplateVariable; value: unknown }) {
+  const translateUi = useUiTranslations('forge');
+
   if (value === null || value === undefined || value === '') {
     return <span className="text-muted-foreground">—</span>;
   }
   if (variable.kind === 'image' || variable.kind === 'video') {
-    return <span className="truncate text-muted-foreground">Library {variable.kind}</span>;
+    return (
+      <span className="truncate text-muted-foreground">
+        {translateUi('library_dc20b3d5')} {variable.kind}
+      </span>
+    );
   }
   if (variable.kind === 'color' && typeof value === 'string') {
     return (
@@ -453,6 +501,10 @@ export function VariableEditor({
   /** Resolves true once the server has the edits; the draft is kept on anything else. */
   onSave: (edits: TemplateSlotEdit[]) => Promise<boolean>;
 }) {
+  const FILTERS = useLocalFiltersMessages();
+
+  const translateUi = useUiTranslations('forge');
+
   const [draft, setDraft] = useState<Draft>({});
   // `undefined` until someone opens or closes a row: the first variable starts open, and a person
   // closing every row is an answer that must not snap it back open.
@@ -490,10 +542,12 @@ export function VariableEditor({
       <p className="flex items-center gap-2 p-[var(--card-pad)] text-xs text-muted-foreground">
         <Info className="size-3.5" aria-hidden />
         {parseState === 'pending'
-          ? 'This project has not been opened yet, so its variables are not known.'
+          ? translateUi('this_project_has_not_been_opened_ye_6ee019ee')
           : parseState === 'failed'
-            ? 'This project could not be read, so it exposes no variables.'
-            : `This file is not one we read (${parseState}).`}
+            ? translateUi('this_project_could_not_be_read_so_i_9877b11d')
+            : translateUi('this_file_is_not_one_we_read_value0_7d234cd4', {
+                value0: String(parseState),
+              })}
       </p>
     );
   }
@@ -501,8 +555,8 @@ export function VariableEditor({
   if (!variables.length) {
     return (
       <p className="p-[var(--card-pad)] text-xs text-muted-foreground">
-        We read this project and it exposes no bindable slots. Nothing in it can vary per render yet
-        — expose a property to Essential Graphics in After Effects and upload it again.
+        {' '}
+        {translateUi('we_read_this_project_and_it_exposes_39bd50ee')}{' '}
       </p>
     );
   }
@@ -535,7 +589,7 @@ export function VariableEditor({
     <div className="flex flex-col">
       <div className="flex items-center gap-3 px-[var(--card-pad)] py-1.5">
         <ToggleGroup
-          aria-label="Show variables"
+          aria-label={translateUi('show_variables_d7eda88b')}
           size="sm"
           spacing={0}
           variant="outline"
@@ -549,14 +603,14 @@ export function VariableEditor({
           ))}
         </ToggleGroup>
         <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-          {shown.length} of {variables.length}
+          {shown.length} {translateUi('of_28391d3b')} {variables.length}
         </span>
       </div>
 
       <Accordion
         value={openKey}
         onValueChange={(next) => setSelectedKey(next || null)}
-        render={<ul aria-label="Variables" />}
+        render={<ul aria-label={translateUi('variables_02db55ba')} />}
         className="border-t border-border"
       >
         {shown.map((variable) => {
@@ -588,7 +642,11 @@ export function VariableEditor({
                   <Icon className="size-3.5 text-muted-foreground" aria-hidden />
                   <span className={cn('truncate', !exposed && 'text-muted-foreground')}>
                     {name}
-                    {exposed ? null : <span className="ml-1.5 text-2xs uppercase">Not asked</span>}
+                    {exposed ? null : (
+                      <span className="ml-1.5 text-2xs uppercase">
+                        {translateUi('not_asked_b7089777')}
+                      </span>
+                    )}
                   </span>
                   <span className="flex min-w-0">
                     {role ? (
@@ -599,7 +657,9 @@ export function VariableEditor({
                         {roleLabel(role)}
                       </Pill>
                     ) : (
-                      <span className="text-muted-foreground">Unassigned</span>
+                      <span className="text-muted-foreground">
+                        {translateUi('unassigned_14d33bd0')}
+                      </span>
                     )}
                   </span>
                   <DefaultPreview variable={variable} value={defaultValue} />
@@ -614,18 +674,21 @@ export function VariableEditor({
                       <span
                         className="size-1.5 rounded-full bg-primary"
                         role="img"
-                        aria-label="required"
+                        aria-label={translateUi('required_d0a36305')}
                       />
                     ) : null}
                   </span>
-                  {draft[variable.key] ? <span className="sr-only">unsaved changes</span> : null}
+                  {draft[variable.key] ? (
+                    <span className="sr-only">{translateUi('unsaved_changes_c4751a7a')}</span>
+                  ) : null}
                 </AccordionPrimitive.Trigger>
               </AccordionPrimitive.Header>
               <AccordionPrimitive.Panel className="@container border-t border-dashed border-border py-3 pr-[var(--card-pad)] pl-[calc(var(--card-pad)+1.5rem)]">
                 <FieldGroup className="grid max-w-3xl gap-x-6 gap-y-3 @xl:grid-cols-2">
                   <Field className="gap-1.5">
                     <FieldLabel htmlFor={`variable-name-${variable.key}`} className="text-xs">
-                      Name
+                      {' '}
+                      {translateUi('name_dcd1d522')}{' '}
                     </FieldLabel>
                     <Input
                       id={`variable-name-${variable.key}`}
@@ -646,7 +709,7 @@ export function VariableEditor({
                   </Field>
 
                   <Field className="gap-1.5" data-invalid={clash || undefined}>
-                    <FieldLabel className="text-xs">Means</FieldLabel>
+                    <FieldLabel className="text-xs">{translateUi('means_f40aa59e')}</FieldLabel>
                     <Select
                       value={role ?? NO_ROLE}
                       onValueChange={(next) =>
@@ -656,13 +719,19 @@ export function VariableEditor({
                       <SelectTrigger
                         size="sm"
                         className="w-full"
-                        aria-label={`Meaning for ${name}`}
+                        aria-label={translateUi('meaning_for_value0_cf66d628', {
+                          value0: String(name),
+                        })}
                         aria-invalid={clash || undefined}
                       >
-                        <SelectValue>{role ? roleLabel(role) : 'Unassigned'}</SelectValue>
+                        <SelectValue>
+                          {role ? roleLabel(role) : translateUi('unassigned_14d33bd0')}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NO_ROLE}>Unassigned</SelectItem>
+                        <SelectItem value={NO_ROLE}>
+                          {translateUi('unassigned_14d33bd0')}
+                        </SelectItem>
                         {rolesForKind(variable.kind).map((option) => (
                           <SelectItem key={option} value={option}>
                             {roleLabel(option)}
@@ -672,13 +741,14 @@ export function VariableEditor({
                     </Select>
                     {clash ? (
                       <FieldError className="text-xs">
-                        Another variable already means this.
+                        {' '}
+                        {translateUi('another_variable_already_means_this_d5ee4f3f')}{' '}
                       </FieldError>
                     ) : null}
                   </Field>
 
                   <Field className="gap-1.5">
-                    <FieldLabel className="text-xs">Default</FieldLabel>
+                    <FieldLabel className="text-xs">{translateUi('default_21b111cb')}</FieldLabel>
                     <DefaultValueControl
                       variable={variable}
                       label={name}
@@ -688,12 +758,13 @@ export function VariableEditor({
                     />
                     {isLayerSwitch(variable.key) ? (
                       <FieldDescription className="text-xs">
-                        Hidden makes this layer invisible in the render. Nothing moves into its
-                        place — the rest of the design stays where it was put.
+                        {' '}
+                        {translateUi('hidden_makes_this_layer_invisible_i_633b17ec')}{' '}
                       </FieldDescription>
                     ) : (
                       <FieldDescription className="text-xs">
-                        A row that leaves this empty renders the default.
+                        {' '}
+                        {translateUi('a_row_that_leaves_this_empty_render_41cd3e24')}{' '}
                       </FieldDescription>
                     )}
                   </Field>
@@ -702,7 +773,8 @@ export function VariableEditor({
                     {textLike ? (
                       <Field className="w-28 gap-1.5">
                         <FieldLabel htmlFor={`variable-budget-${variable.key}`} className="text-xs">
-                          Reference length
+                          {' '}
+                          {translateUi('reference_length_7e5bfe39')}{' '}
                         </FieldLabel>
                         <InputGroup className="h-7 rounded-md shadow-none">
                           <InputGroupInput
@@ -717,7 +789,7 @@ export function VariableEditor({
                                   event.target.value === '' ? null : Number(event.target.value),
                               })
                             }
-                            title="The template's reference text length. Longer values are allowed; check their layout in the preview."
+                            title={translateUi('the_template_s_reference_text_lengt_30a005b8')}
                           />
                           <InputGroupAddon align="inline-end" className="text-xs">
                             ch
@@ -744,11 +816,13 @@ export function VariableEditor({
                         onCheckedChange={(next) => patch(variable.key, { exposed: next })}
                       />
                       <FieldLabel htmlFor={`variable-exposed-${variable.key}`} className="text-xs">
-                        Ask per row
+                        {' '}
+                        {translateUi('ask_per_row_860e8090')}{' '}
                       </FieldLabel>
                       {exposed ? null : (
                         <span className="text-xs text-muted-foreground">
-                          Every row renders what the file has
+                          {' '}
+                          {translateUi('every_row_renders_what_the_file_has_fea13dc7')}{' '}
                         </span>
                       )}
                     </Field>
@@ -760,7 +834,8 @@ export function VariableEditor({
                         onCheckedChange={(next) => patch(variable.key, { required: next })}
                       />
                       <FieldLabel htmlFor={`variable-required-${variable.key}`} className="text-xs">
-                        Required
+                        {' '}
+                        {translateUi('required_4850b174')}{' '}
                       </FieldLabel>
                     </Field>
                   </div>
@@ -777,7 +852,7 @@ export function VariableEditor({
                           </span>
                         ))
                       ) : (
-                        <span>Composition not detected</span>
+                        <span>{translateUi('composition_not_detected_cf23d5fd')}</span>
                       )}
                     </span>
                   </div>
@@ -788,7 +863,8 @@ export function VariableEditor({
         })}
         {shown.length ? null : (
           <li className="px-[var(--card-pad)] py-2 text-xs text-muted-foreground">
-            No variables match this filter.
+            {' '}
+            {translateUi('no_variables_match_this_filter_3facca1a')}{' '}
           </li>
         )}
       </Accordion>
@@ -796,15 +872,22 @@ export function VariableEditor({
       <div className="border-t border-border">
         <div className="flex min-h-9 max-w-[54rem] items-center justify-between gap-3 px-[var(--card-pad)] py-1">
           <p className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-            <span>{dirtyCount ? `${dirtyCount} changed` : 'No changes'}</span>
+            <span>
+              {dirtyCount
+                ? translateUi('value0_changed_579d06b0', { value0: String(dirtyCount) })
+                : translateUi('no_changes_c699aa00')}
+            </span>
             {claimed.size ? (
               <>
                 <span aria-hidden> · </span>
                 <span
                   className="text-destructive"
-                  title="Two variables claim the same meaning — the fleet refuses that."
+                  title={translateUi('two_variables_claim_the_same_meanin_4c23f3f0')}
                 >
-                  {`${claimed.size} meaning ${claimed.size === 1 ? 'clash' : 'clashes'}`}
+                  {translateUi('value0_meaning_value1_c2d331dc', {
+                    value0: String(claimed.size),
+                    value1: String(claimed.size === 1 ? 'clash' : 'clashes'),
+                  })}
                 </span>
               </>
             ) : null}
@@ -820,8 +903,8 @@ export function VariableEditor({
               <Loader2 className="size-3.5 animate-spin" aria-hidden />
             ) : (
               <Save className="size-3.5" aria-hidden />
-            )}
-            Save changes
+            )}{' '}
+            {translateUi('save_changes_dd0ae7a5')}{' '}
           </Button>
         </div>
       </div>

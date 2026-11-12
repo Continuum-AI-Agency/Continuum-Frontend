@@ -1,6 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
 
 export type JobStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -41,35 +43,42 @@ type ContextValue = {
 const BackgroundJobsContext = createContext<ContextValue | null>(null);
 
 export function BackgroundJobsProvider({ children }: { children: React.ReactNode }) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('onboarding');
+
   const [jobs, setJobs] = useState<JobsState>(initialState);
   const controllers = useRef<Partial<Record<JobKey, AbortController>>>({});
 
-  const start = useCallback(async <T,>(key: JobKey, runner: JobRunner<T>): Promise<T | null> => {
-    controllers.current[key]?.abort();
-    const ctrl = new AbortController();
-    controllers.current[key] = ctrl;
-    setJobs((prev) => ({
-      ...prev,
-      [key]: { status: 'running', data: null, error: null, startedAt: Date.now() },
-    }));
-    try {
-      const data = await runner(ctrl.signal);
-      if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
+  const start = useCallback(
+    async <T,>(key: JobKey, runner: JobRunner<T>): Promise<T | null> => {
+      controllers.current[key]?.abort();
+      const ctrl = new AbortController();
+      controllers.current[key] = ctrl;
       setJobs((prev) => ({
         ...prev,
-        [key]: { status: 'done', data, error: null, startedAt: prev[key].startedAt },
+        [key]: { status: 'running', data: null, error: null, startedAt: Date.now() },
       }));
-      return data;
-    } catch (error) {
-      if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      setJobs((prev) => ({
-        ...prev,
-        [key]: { status: 'error', data: null, error: message, startedAt: prev[key].startedAt },
-      }));
-      return null;
-    }
-  }, []);
+      try {
+        const data = await runner(ctrl.signal);
+        if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
+        setJobs((prev) => ({
+          ...prev,
+          [key]: { status: 'done', data, error: null, startedAt: prev[key].startedAt },
+        }));
+        return data;
+      } catch (error) {
+        if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
+        const message = error instanceof Error ? uiErrorMessage(error) : tUi('m_e5fd9aa24c');
+        setJobs((prev) => ({
+          ...prev,
+          [key]: { status: 'error', data: null, error: message, startedAt: prev[key].startedAt },
+        }));
+        return null;
+      }
+    },
+    [tUi, uiErrorMessage],
+  );
 
   const patch = useCallback((key: JobKey, data: unknown) => {
     setJobs((prev) => ({ ...prev, [key]: { ...prev[key], data } }));

@@ -1,10 +1,13 @@
 'use client';
+
 import { Rocket } from 'lucide-react';
 
+import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { runStrategicAnalysis } from '@/lib/api/strategicAnalyses.client';
 import { requestStrategicRunsCatchUp } from './realtimeBus';
 
@@ -14,6 +17,10 @@ type Props = {
 };
 
 export function RunStrategicAnalysisButton({ brandProfileId, compact = false }: Props) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+
   const { show } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -25,17 +32,15 @@ export function RunStrategicAnalysisButton({ brandProfileId, compact = false }: 
         const result = await runStrategicAnalysis(brandProfileId);
         const details = result.runId ?? result.taskId ?? result.status ?? undefined;
         show({
-          title: 'Strategic analysis queued',
-          description: details
-            ? `Run reference: ${details}`
-            : 'Regeneration requested for this brand.',
+          title: tUi('m_5b5a87753b'),
+          description: details ? tUi('m_cbe5c04c51', { v0: String(details) }) : tUi('m_74e8d164fb'),
           variant: 'success',
         });
         void requestStrategicRunsCatchUp(brandProfileId);
       } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : 'Unable to start strategic analysis run.';
+        const message = getUiErrorMessage(e);
         setError(message);
-        show({ title: 'Run failed', description: message, variant: 'error' });
+        show({ title: tUi('m_9a731f3d6d'), description: message, variant: 'error' });
       }
     });
   };
@@ -44,10 +49,8 @@ export function RunStrategicAnalysisButton({ brandProfileId, compact = false }: 
     <div className="flex flex-col gap-3">
       {!compact && (
         <div className="space-y-1">
-          <p className="text-base font-semibold text-foreground">Strategic analyses</p>
-          <p className="text-sm text-muted-foreground">
-            Manually queue a fresh strategic analysis when no results exist for this brand.
-          </p>
+          <p className="text-base font-semibold text-foreground">{tUi('m_c3ba9398c5')}</p>
+          <p className="text-sm text-muted-foreground">{tUi('m_cb24f79377')}</p>
         </div>
       )}
 
@@ -59,7 +62,7 @@ export function RunStrategicAnalysisButton({ brandProfileId, compact = false }: 
       ) : null}
 
       <Button onClick={handleRun} disabled={isPending} size={compact ? 'default' : 'lg'}>
-        {isPending ? 'Queuing...' : 'Run analysis'}
+        {isPending ? tUi('m_2aeb6d67d0') : tUi('m_546af0471c')}
       </Button>
     </div>
   );

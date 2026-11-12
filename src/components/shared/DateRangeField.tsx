@@ -1,4 +1,5 @@
 'use client';
+import {useLocale,useTranslations} from 'next-intl';
 
 // A date-range picker over PLAIN ISO dates (YYYY-MM-DD), not Date objects.
 //
@@ -30,7 +31,7 @@ type DateRangeFieldProps = {
   id?: string;
 };
 
-const LABEL_FMT = new Intl.DateTimeFormat('en-US', {
+const makeLabelFormatter = (locale:string)=>new Intl.DateTimeFormat(locale, {
   month: 'short',
   day: 'numeric',
   year: 'numeric',
@@ -52,7 +53,8 @@ function toIso(date: Date | undefined): string | null {
   return `${year}-${month}-${day}`;
 }
 
-export function formatDateRange(value: DateRangeValue, placeholder = 'Not set'): string {
+export function formatDateRange(value: DateRangeValue, placeholder = 'Not set',locale = 'en'): string {
+ const LABEL_FMT=makeLabelFormatter(locale);
   const from = toDate(value.from);
   const to = toDate(value.to);
   if (!from && !to) return placeholder;
@@ -64,12 +66,17 @@ export function formatDateRange(value: DateRangeValue, placeholder = 'Not set'):
 export function DateRangeField({
   value,
   onChange,
-  placeholder = 'Not set',
+  placeholder: uiProvidedPlaceholder,
   disabled,
   clearable = true,
   className,
   id,
 }: DateRangeFieldProps) {
+  const tUi = useTranslations('common');
+ const uiLocale=useLocale();
+const placeholder=uiProvidedPlaceholder??tUi('m_93039e609d');
+
+
   const [open, setOpen] = useState(false);
   const selected = useMemo<DateRange | undefined>(() => {
     const from = toDate(value.from);
@@ -96,7 +103,7 @@ export function DateRangeField({
               variant="outline"
             >
               <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{formatDateRange(value, placeholder)}</span>
+              <span className="truncate">{formatDateRange(value, placeholder,uiLocale)}</span>
             </Button>
           }
         />
@@ -113,7 +120,7 @@ export function DateRangeField({
       </Popover>
       {clearable && hasValue ? (
         <Button
-          aria-label="Clear date range"
+          aria-label={tUi('m_cdb64ef80e')}
           className="size-8 shrink-0 text-muted-foreground"
           disabled={disabled}
           onClick={() => onChange({ from: null, to: null })}

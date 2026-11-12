@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { renderHook } from '@/i18n/__tests__/render';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { calendarPostsQueryKey, useCalendarPostedContent } from './useCalendarPostedContent';
 
@@ -51,7 +52,9 @@ function deferredResponse() {
   return { promise, resolve };
 }
 
-function renderPostedContent({ brandProfileId }: { brandProfileId?: string } = { brandProfileId: 'brand-1' }) {
+function renderPostedContent(
+  { brandProfileId }: { brandProfileId?: string } = { brandProfileId: 'brand-1' },
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

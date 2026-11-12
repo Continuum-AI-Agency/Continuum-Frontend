@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The apply-mode pill needs a TooltipProvider ancestor and is not what these tests are about.
 mock.module('../../ApplyModePill', () => ({

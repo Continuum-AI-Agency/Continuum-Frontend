@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { useMemo } from 'react';
 
 import {
@@ -30,6 +32,7 @@ export function BrandQuestionsList({
   density = 'default',
   scrollWithinSection = false,
 }: BrandQuestionsListProps) {
+  const uiText = useTranslations('common');
   const allQuestions = useMemo(() => {
     return Object.entries(questionsByNiche ?? {}).flatMap(([audience, nicheQuestions]) =>
       (nicheQuestions.questions ?? []).map((question) => ({
@@ -52,32 +55,32 @@ export function BrandQuestionsList({
         subtitle:
           question.whyRelevant ??
           question.contentTypeSuggestion ??
-          `Audience: ${questionWithNiche.audience}`,
+          uiText('m_ca00bedbd7', { v0: String(questionWithNiche.audience) }),
         secondaryValue: questionWithNiche.audience,
         platforms: normalizePlatforms(question.socialPlatform),
         tags: ['question', questionWithNiche.audience],
         details: [
-          { label: 'Audience niche', value: questionWithNiche.audience },
-          { label: 'Platform', value: question.socialPlatform },
-          { label: 'Content suggestion', value: question.contentTypeSuggestion },
-          { label: 'Why relevant', value: question.whyRelevant },
+          { label: uiText('m_f93653fc9b'), value: questionWithNiche.audience },
+          { label: uiText('platform_c78ffe1'), value: question.socialPlatform },
+          { label: uiText('m_fd51d73f71'), value: question.contentTypeSuggestion },
+          { label: uiText('m_5cb656c8a2'), value: question.whyRelevant },
         ],
       });
     });
 
     return mappedRows;
-  }, [allQuestions]);
+  }, [allQuestions, uiText]);
 
   return (
     <BrandInsightsDataTable
       rows={rows}
       density={density}
       scrollWithinSection={scrollWithinSection}
-      countLabel="questions"
-      searchPlaceholder="Search audience questions"
-      secondaryHeaderLabel="Audience"
-      emptyTitle="No audience questions yet"
-      emptyDescription="Generate brand insights to surface audience questions by niche."
+      formatCount={(count) => uiText('insightCount', { kind: 'questions', count })}
+      searchPlaceholder={uiText('insightSearchQuestions')}
+      secondaryHeaderLabel={uiText('insightAudienceHeader')}
+      emptyTitle={uiText('insightNoQuestions')}
+      emptyDescription={uiText('insightNoQuestionsDescription')}
     />
   );
 }

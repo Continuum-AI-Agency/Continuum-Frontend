@@ -1,8 +1,9 @@
 'use client';
-
+import { useTranslations } from 'next-intl';
 import { memo, type ReactElement, type ReactNode } from 'react';
 import { Node, NodeContent, NodeHeader, NodeTitle } from '@/components/ai-elements/node';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type {
   ScaffoldChoices,
   ScaffoldDerived,
@@ -107,6 +108,8 @@ export const ScaffoldCampaignNode = memo(function ScaffoldCampaignNode({
   data: CampaignData;
   selected?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiError = useUiErrorMessage();
   return (
     <NodeHover title={data.name} detail={<ScaffoldCampaignDetail data={data} />}>
       <Node
@@ -119,7 +122,7 @@ export const ScaffoldCampaignNode = memo(function ScaffoldCampaignNode({
         </NodeHeader>
         <NodeContent className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground text-xs">
-            {data.adSetCount} ad sets · {data.adCount} ads
+            {uiText.rich('sentence_3dbb74d29681', { sets: data.adSetCount, ads: data.adCount })}
           </span>
           <ScaffoldStatusPill status={data.status} />
         </NodeContent>
@@ -135,6 +138,8 @@ export const ScaffoldAdSetNode = memo(function ScaffoldAdSetNode({
   data: AdSetData;
   selected?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiError = useUiErrorMessage();
   return (
     <NodeHover title={data.name} detail={<ScaffoldAdSetDetail data={data} />}>
       <Node
@@ -151,13 +156,16 @@ export const ScaffoldAdSetNode = memo(function ScaffoldAdSetNode({
           </span>
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-muted-foreground text-xs tabular-nums">
-              {data.budgetLabel ? `${data.budgetLabel} · ` : ''}
-              {data.adCount} ads
+              {uiText.rich('sentence_2d3c86b1b8d2', {
+                hasBudget: data.budgetLabel ? 'yes' : 'no',
+                budget: data.budgetLabel ?? '',
+                count: data.adCount,
+              })}
             </span>
             <ScaffoldStatusPill status={data.status} />
           </div>
           {data.errorMessage ? (
-            <span className="truncate text-destructive text-xs">{data.errorMessage}</span>
+            <span className="truncate text-destructive text-xs">{uiError(data.errorMessage)}</span>
           ) : null}
         </NodeContent>
       </Node>

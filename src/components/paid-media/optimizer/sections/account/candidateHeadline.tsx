@@ -1,4 +1,7 @@
 'use client';
+import type {UiLocale} from '@/i18n/config';
+
+import { useLocale, useTranslations } from 'next-intl';
 
 // The two lines every candidate leads with, in one place so a full-width card and a list row
 // cannot say the same finding differently.
@@ -76,10 +79,10 @@ const FIGURE_KIND: Record<HeadlineSize, HeroFigureKind | null> = {
 };
 
 /** One side of a `from → to`, printed in the headline's own unit. */
-function sideFigure(unit: CandidateHeadline['unit'], value: number, currency: string | null) {
-  if (unit === 'percent') return formatPercent(value);
-  if (unit === 'currency_per_day') return formatCurrency(value, currency);
-  return value.toLocaleString('en-US');
+function sideFigure(unit: CandidateHeadline['unit'], value: number, currency: string | null, uiLocale:UiLocale='en') {
+  if (unit === 'percent') return formatPercent(value, undefined, uiLocale);
+  if (unit === 'currency_per_day') return formatCurrency(value, currency, uiLocale);
+  return value.toLocaleString(uiLocale);
 }
 
 /** The headline's unit in the figure-provenance vocabulary (see `figureProps`). */
@@ -110,9 +113,14 @@ export function HeadlineFigure({
   /** The surface's name for this figure, e.g. `account-lead` → `account-lead.figure`. */
   figureKey?: string;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const lead = candidate.headline
-    ? formatHeadline(candidate.headline, currency)
-    : { figure: formatCurrency(candidate.impact_per_day, currency), label: '/day' };
+    ? formatHeadline(candidate.headline, currency, uiLocale)
+    : {
+        figure: formatCurrency(candidate.impact_per_day, currency, uiLocale),
+        label: uiText('day_ea30d1c'),
+      };
   const provenance = candidate.headline
     ? figureProps(
         `${figureKey}.figure`,
@@ -162,17 +170,18 @@ export function HeadlineComparison({
   testId?: string;
   figureKey?: string;
 }) {
+const uiLocale=useLocale();
   const headline = candidate.headline;
   if (!headline || headline.from == null || headline.to == null) return null;
   const unit = headlineFigureUnit(headline.unit);
   return (
     <p className="text-xs text-muted-foreground tabular-nums" data-testid={testId}>
       <span {...figureProps(`${figureKey}.from`, headline.from, currency, 'none', unit)}>
-        {sideFigure(headline.unit, headline.from, currency)}
+        {sideFigure(headline.unit, headline.from, currency, uiLocale)}
       </span>{' '}
       →{' '}
       <span {...figureProps(`${figureKey}.to`, headline.to, currency, 'none', unit)}>
-        {sideFigure(headline.unit, headline.to, currency)}
+        {sideFigure(headline.unit, headline.to, currency, uiLocale)}
       </span>
     </p>
   );
@@ -196,10 +205,12 @@ export function MoneyLine({
   testId?: string;
   figureKey?: string;
 }) {
+  const uiLocale = useLocale();
+  const uiText=useTranslations('scale');
   const { month } = perPeriod(candidate.impact_per_day);
   const money = candidate.headline
-    ? formatPerPeriod(candidate.impact_per_day, currency)
-    : `${formatCurrency(month, currency)}/mo`;
+    ? formatPerPeriod(candidate.impact_per_day, currency, uiLocale)
+    : uiText('moneyPerMonth',{amount:formatCurrency(month,currency,uiLocale)});
   const provenance = figureProps(
     `${figureKey}.money`,
     candidate.impact_per_day,

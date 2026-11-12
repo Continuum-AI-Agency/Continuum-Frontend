@@ -1,4 +1,5 @@
 import { Keyboard } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 import { Panel } from '@/components/ai-elements/panel';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 // The canvas keymap, mirrored from useCanvasKeyboardShortcuts. Static by design —
 // there is no shortcut registry to derive it from, so the two are kept in step by hand.
 export function CanvasShortcutsPanel() {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <Panel position="bottom-center" className="border-none bg-transparent p-0 shadow-none">
       <Popover>
@@ -17,15 +20,16 @@ export function CanvasShortcutsPanel() {
               size="sm"
               variant="outline"
               className="h-8 gap-2 bg-background/90 px-2.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
-              aria-label="Show canvas keyboard shortcuts"
+              aria-label={translateUi('show_canvas_keyboard_shortcuts_0433f3ee')}
             >
-              <Keyboard className="h-3.5 w-3.5" />
-              Shortcuts
+              <Keyboard className="h-3.5 w-3.5" /> {translateUi('shortcuts_46e978d0')}{' '}
             </Button>
           }
         />
         <PopoverContent align="center" side="top" className="w-64 p-3">
-          <p className="mb-2 text-xs font-medium text-foreground">Canvas shortcuts</p>
+          <p className="mb-2 text-xs font-medium text-foreground">
+            {translateUi('canvas_shortcuts_263aa1e0')}
+          </p>
           <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-xs">
             {[
               ['Copy selected nodes', '⌘ C'],

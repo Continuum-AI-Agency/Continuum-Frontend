@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * The chain a cited optimizer figure travels to become a working control.
  *
@@ -14,7 +15,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 import {

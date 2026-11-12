@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { UserIntegrationAssetRow } from '@/lib/api/integrations';
 import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 
@@ -36,7 +37,7 @@ mock.module('@/lib/api/integrations', () => ({
   }),
 }));
 
-mock.module('@/app/(post-auth)/settings/integrations/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/integrations/actions', () => ({
   applyBrandIntegrationAssignmentsAction: applyBrandIntegrationAssignmentsActionMock,
 }));
 

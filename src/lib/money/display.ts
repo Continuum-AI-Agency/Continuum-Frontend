@@ -47,7 +47,8 @@ export function joinMoneyInColumn(parts: MoneyParts): string {
   return joinMoney({ ...parts, code: null });
 }
 
-const MONEY_TEXT = /^(-?)([^\d\s-]*)(\d[\d,]*(?:\.\d+)?[KMBT]?)(?: ([A-Z]{3}))?$/;
+// Presentation only: preserve separators and compact suffixes; never parse or round the value.
+const MONEY_TEXT = /^(-?)([^\d\s-]*)(\d(?:[\d.,\u00a0\u202f]*\d)?(?:[\u00a0\u202f ]?(?:[KMBT]|mil|mi|bi|tri))?)(?: ([A-Z]{3}))?$/;
 
 /** The parts of a string `joinMoney` produced, or null when the text is not money (a count,
  *  a percent, "—"). Only text carrying a symbol or a code counts as money. */

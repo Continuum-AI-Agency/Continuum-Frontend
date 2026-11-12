@@ -1,5 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { uiDateFormat } from '@/lib/paid-media/uiDateFormat';
+
 // The seven shapes, drawn.
 //
 // Each one renders ONLY the figures the detector put in the chart — no second reading of the
@@ -26,18 +30,20 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
 
-const DAY_SHORT = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-});
-const DAY_FULL = new Intl.DateTimeFormat('en-US', {
-  day: 'numeric',
-  month: 'long',
-  timeZone: 'UTC',
-  weekday: 'long',
-  year: 'numeric',
-});
+const dayShort = (locale: UiLocale) =>
+  uiDateFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+const dayFull = (locale: UiLocale) =>
+  uiDateFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+    weekday: 'long',
+    year: 'numeric',
+  });
 
 /**
  * A point's own `t`, read as a day when it is one.
@@ -63,13 +69,29 @@ const beaconVariants: Variants = {
 
 type Fmt = (n: number) => string;
 
-const fmtFor = (unit: string | undefined, currency: string | null): Fmt => {
-  if (unit === 'currency') return (n) => formatCurrency(n, currency);
-  if (unit === 'ratio') return (n) => `${Math.round(n * 100) / 100}`;
-  return (n) => `${Math.round(n * 100) / 100}`;
+const chartNumberFormats = new Map<UiLocale, Intl.NumberFormat>();
+function chartNumberFormat(locale: UiLocale): Intl.NumberFormat {
+  let formatter = chartNumberFormats.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { useGrouping: false, maximumFractionDigits: 2 });
+    chartNumberFormats.set(locale, formatter);
+  }
+  return formatter;
+}
+const fmtFor = (
+  unit: string | undefined,
+  currency: string | null,
+  locale: UiLocale = 'en',
+): Fmt => {
+  if (unit === 'currency') return (n) => formatCurrency(n, currency, locale);
+  if (unit === 'ratio') return (n) => chartNumberFormat(locale).format(Math.round(n * 100) / 100);
+  return (n) => chartNumberFormat(locale).format(Math.round(n * 100) / 100);
 };
 
-const pctText = (share: number): string => `${Math.round(share * 100)}%`;
+const pctText = (share: number, locale: UiLocale = 'en'): string =>
+  new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
+    Math.round(share * 100) / 100,
+  );
 
 /** A column whose height is a share of the tallest value in its own chart. */
 function Bar({
@@ -114,7 +136,9 @@ function Transfer({
   chart: Extract<AccountChart, { shape: 'transfer' }>;
   currency: string | null;
 }) {
-  const fmt = fmtFor(chart.unit, currency);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const fmt = fmtFor(chart.unit, currency, uiLocale);
   const max = Math.max(chart.from.cost_per_result, chart.to.cost_per_result);
   return (
     <div className="space-y-2">
@@ -127,11 +151,11 @@ function Transfer({
           caption={fmt(chart.from.cost_per_result)}
         />
         <div className="flex flex-col items-center gap-0.5 pb-8 text-center">
-          <span className="text-xs text-muted-foreground">moves</span>
+          <span className="text-xs text-muted-foreground">{uiText('moves_8aca04a')}</span>
           <span className="font-mono text-xs tabular-nums text-foreground">
             {fmt(chart.movable_per_day)}
           </span>
-          <span className="text-xs text-muted-foreground">/day →</span>
+          <span className="text-xs text-muted-foreground">{uiText('day_3ba565d')}</span>
         </div>
         <Bar
           value={chart.to.cost_per_result}
@@ -142,9 +166,13 @@ function Transfer({
         />
       </div>
       <p className="text-center text-xs text-muted-foreground">
-        the same results at the cheaper price keeps{' '}
-        <span className="font-mono font-semibold text-foreground">{fmt(chart.saving_per_day)}</span>{' '}
-        a day
+        {uiText.rich('sentence_cabbdd1ccac4', {
+          v0: () => (
+            <span className="font-mono font-semibold text-foreground">
+              {fmt(chart.saving_per_day)}
+            </span>
+          ),
+        })}
       </p>
     </div>
   );
@@ -157,7 +185,8 @@ function Threshold({
   chart: Extract<AccountChart, { shape: 'threshold' }>;
   currency: string | null;
 }) {
-  const fmt = fmtFor(chart.unit, currency);
+  const uiLocale = useLocale();
+  const fmt = fmtFor(chart.unit, currency, uiLocale);
   const max = Math.max(
     chart.threshold,
     ...chart.bars.map((b) => b.value),
@@ -207,7 +236,10 @@ function Share({
   chart: Extract<AccountChart, { shape: 'share' }>;
   currency: string | null;
 }) {
-  const fmt = fmtFor('currency', currency);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+
+  const fmt = fmtFor('currency', currency, uiLocale);
   return (
     <div className="space-y-2">
       <div className="flex h-7 w-full overflow-hidden rounded border border-border/60">
@@ -219,10 +251,16 @@ function Share({
               slice.label === chart.focus_label ? 'bg-primary/70' : 'bg-muted-foreground/20',
             )}
             style={{ width: `${Math.max(2, slice.share * 100)}%` }}
-            title={`${slice.label} · ${pctText(slice.share)} · ${fmt(slice.value)}/day`}
+            title={uiText('template_b6b65f9e6b8d', {
+              v0: slice.label,
+              v1: pctText(slice.share, uiLocale),
+              v2: fmt(slice.value),
+            })}
           >
             {slice.share > 0.12 ? (
-              <span className="truncate px-1 text-xs text-foreground">{pctText(slice.share)}</span>
+              <span className="truncate px-1 text-xs text-foreground">
+                {pctText(slice.share, uiLocale)}
+              </span>
             ) : null}
           </div>
         ))}
@@ -252,7 +290,7 @@ function Share({
             >
               {slice.label}
             </span>{' '}
-            {pctText(slice.share)}
+            {pctText(slice.share, uiLocale)}
           </li>
         ))}
       </ul>
@@ -275,8 +313,10 @@ function Rates({
   chart: Extract<AccountChart, { shape: 'rates' }>;
   currency: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const reduce = useReducedMotion();
-  const fmt = fmtFor(chart.unit, currency);
+  const fmt = fmtFor(chart.unit, currency, uiLocale);
   const points = chart.points;
   const lastIndex = points.length - 1;
   const [active, setActive] = React.useState<number | null>(null);
@@ -362,7 +402,7 @@ function Rates({
         </div>
         <div className="shrink-0 text-right">
           <p className="text-xs text-muted-foreground" data-testid="rates-readout-day">
-            {dayLabel(shown.t, DAY_SHORT)}
+            {dayLabel(shown.t, dayShort(uiLocale))}
           </p>
           <p className="font-mono text-xs text-muted-foreground tabular-nums">{secondLine}</p>
         </div>
@@ -377,7 +417,11 @@ function Rates({
         {/* A figure rather than a labelled div: the region has to be announced when a reader
             tabs into the points, and a div with an aria-label alone is announced by nothing. */}
         <figure
-          aria-label={`${chart.a_label}, ${dayLabel(points[0].t, DAY_SHORT)} to ${dayLabel(points[lastIndex].t, DAY_SHORT)}`}
+          aria-label={uiText('template_85f0119edccd', {
+            v0: chart.a_label,
+            v1: dayLabel(points[0].t, dayShort(uiLocale)),
+            v2: dayLabel(points[lastIndex].t, dayShort(uiLocale)),
+          })}
           className="relative m-0 h-24 flex-1"
           onPointerLeave={() => setActive(null)}
           onPointerMove={(event) => pickAt(event.clientX)}
@@ -391,7 +435,9 @@ function Rates({
             preserveAspectRatio="none"
             viewBox="0 0 100 100"
           >
-            <title>{`${chart.a_label} against ${chart.b_label}`}</title>
+            <title>
+              {uiText('template_a44167a0a96e', { v0: chart.a_label, v1: chart.b_label })}
+            </title>
             {bIsSeries ? (
               <polyline
                 className="text-muted-foreground"
@@ -441,7 +487,7 @@ function Rates({
 
           {points.map((point, i) => (
             <button
-              aria-label={`${dayLabel(point.t, DAY_FULL)} — ${chart.a_label} ${fmt(point.a)}${
+              aria-label={`${dayLabel(point.t, dayFull(uiLocale))} — ${chart.a_label} ${fmt(point.a)}${
                 point.b != null ? `, ${chart.b_label} ${fmt(point.b)}` : ''
               }`}
               className="-translate-x-1/2 -translate-y-1/2 absolute flex size-5 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -483,8 +529,8 @@ function Rates({
 
       {/* WHEN. The window's own ends, so any figure above can be checked against a date. */}
       <div className="flex justify-between gap-2 pl-14 font-mono text-xs text-muted-foreground tabular-nums">
-        <span>{dayLabel(points[0].t, DAY_SHORT)}</span>
-        <span>{dayLabel(points[lastIndex].t, DAY_SHORT)}</span>
+        <span>{dayLabel(points[0].t, dayShort(uiLocale))}</span>
+        <span>{dayLabel(points[lastIndex].t, dayShort(uiLocale))}</span>
       </div>
 
       {bIsSeries ? (
@@ -501,9 +547,13 @@ function Rates({
 
       {chart.gap_per_day != null ? (
         <p className="text-xs text-muted-foreground">
-          gap{' '}
-          <span className="font-mono font-semibold text-foreground">{fmt(chart.gap_per_day)}</span>{' '}
-          a day
+          {uiText.rich('sentence_dd9e900d7618', {
+            v0: () => (
+              <span className="font-mono font-semibold text-foreground">
+                {fmt(chart.gap_per_day ?? 0)}
+              </span>
+            ),
+          })}
         </p>
       ) : null}
     </div>
@@ -531,17 +581,21 @@ function Interval({
   chart: Extract<AccountChart, { shape: 'interval' }>;
   currency: string | null;
 }) {
-  const fmt = fmtFor(chart.unit, currency);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const fmt = fmtFor(chart.unit, currency, uiLocale);
   const max = Math.max(chart.high, chart.reference ?? 0) || 1;
   const left = (chart.low / max) * 100;
   const width = Math.max(4, ((chart.high - chart.low) / max) * 100);
   const [active, setActive] = React.useState<'band' | 'reference' | null>(null);
 
-  const bounds = chart.no_results
-    ? `at least ${fmt(chart.low)} — no results to divide by, so no upper bound`
-    : `between ${fmt(chart.low)} and ${fmt(chart.high)}`;
+  const bounds = uiText('chartIntervalBounds', {
+    unbounded: chart.no_results ? 'yes' : 'no',
+    low: fmt(chart.low),
+    high: fmt(chart.high),
+  });
   const bandReading = chart.estimate != null ? `${fmt(chart.estimate)}, ${bounds}` : bounds;
-  const referenceLabel = chart.reference_label ?? 'reference';
+  const referenceLabel = chart.reference_label ?? uiText('chartReference');
   const referenceReading =
     chart.reference != null ? `${referenceLabel} ${fmt(chart.reference)}` : null;
 
@@ -553,10 +607,13 @@ function Interval({
         </p>
         {chart.at_stake_per_day != null ? (
           <p className="shrink-0 text-xs text-muted-foreground">
-            <span className="font-mono font-semibold text-foreground tabular-nums">
-              {fmt(chart.at_stake_per_day)}
-            </span>{' '}
-            a day at stake
+            {uiText.rich('sentence_e536f009986d', {
+              v0: () => (
+                <span className="font-mono font-semibold text-foreground tabular-nums">
+                  {fmt(chart.at_stake_per_day ?? 0)}
+                </span>
+              ),
+            })}
           </p>
         ) : null}
       </div>
@@ -564,7 +621,7 @@ function Interval({
       <div className="relative h-11">
         <div className="absolute top-7 h-2 w-full rounded bg-muted-foreground/15" />
         <button
-          aria-label={`the interval: ${bandReading}`}
+          aria-label={uiText('template_ab75dd64b59a', { v0: bandReading })}
           className="absolute top-6 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           // Which mark the readout is currently speaking for, on the mark itself — the
           // readout says the same words wherever it came from, so without this there is
@@ -655,7 +712,9 @@ function Headroom({
   chart: Extract<AccountChart, { shape: 'headroom' }>;
   currency: string | null;
 }) {
-  const fmt = fmtFor(chart.unit, currency);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const fmt = fmtFor(chart.unit, currency, uiLocale);
   return (
     <div className="space-y-2.5">
       {chart.gauges.map((gauge) => {
@@ -682,11 +741,13 @@ function Headroom({
       })}
       {chart.step_per_day != null ? (
         <p className="text-xs text-muted-foreground">
-          room for{' '}
-          <span className="font-mono font-semibold text-foreground">
-            {formatCurrency(chart.step_per_day, currency)}
-          </span>{' '}
-          a day
+          {uiText.rich('sentence_8ab0ac3af627', {
+            v0: () => (
+              <span className="font-mono font-semibold text-foreground">
+                {formatCurrency(chart.step_per_day, currency, uiLocale)}
+              </span>
+            ),
+          })}
         </p>
       ) : null}
     </div>

@@ -1,4 +1,8 @@
 'use client';
+import type { useTranslations as TranslationHook } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // KPI-adaptive columns for the optimizer's ad-set data tables. The whole point is
 // that a portfolio optimizing for LEADS reads "Leads / CPL", one optimizing for
@@ -23,9 +27,11 @@ import type {
   CycleItemRow,
   OptimizationMetricDefinition,
 } from '@continuum/contracts';
-import { intFmt } from '@/components/charts/chart-formatters';
+import { createChartFormatters } from '@/components/charts/chart-formatters';
 import type { InsightColumn } from '@/components/dashboard/datatable/InsightDataTable';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import { resolveAdsetName } from './adsetName';
 import { AdSetIdLabel } from './charts/AdSetIdLabel';
 import { pct } from './charts/chartScale';
@@ -175,10 +181,12 @@ export function flowToRow(
 }
 
 /** The name column — the single AdSetIdLabel chokepoint. */
-export function nameColumn(): InsightColumn<OptimizerAdsetRow> {
+export function nameColumn(
+  translate?: ReturnType<typeof TranslationHook<'scale'>>,
+): InsightColumn<OptimizerAdsetRow> {
   return {
     id: 'name',
-    header: 'Ad set',
+    header: translate ? translate('optimizer_entityAdSet') : 'Ad set',
     align: 'left',
     sortValue: (row) => (row.name ?? row.adsetId).toLowerCase(),
     cell: (row) => (
@@ -194,7 +202,11 @@ export function nameColumn(): InsightColumn<OptimizerAdsetRow> {
   };
 }
 
-function resultsColumn(metric: OptimizationMetricDefinition): InsightColumn<OptimizerAdsetRow> {
+function resultsColumn(
+  metric: OptimizationMetricDefinition,
+  locale: UiLocale = 'en',
+): InsightColumn<OptimizerAdsetRow> {
+  const { intFmt } = createChartFormatters(locale);
   return {
     id: 'results',
     header: metric.resultLabel,
@@ -220,13 +232,13 @@ function costColumn(
   };
 }
 
-function roasColumn(): InsightColumn<OptimizerAdsetRow> {
+function roasColumn(locale: UiLocale = 'en'): InsightColumn<OptimizerAdsetRow> {
   return {
     id: 'roas',
     header: 'ROAS',
     align: 'right',
     sortValue: (row) => row.roas ?? -1,
-    cell: (row) => (row.roas != null ? `${row.roas.toFixed(2)}×` : DASH),
+    cell: (row) => (row.roas != null ? `${formatDecimal(row.roas, 2, locale)}×` : DASH),
   };
 }
 
@@ -236,22 +248,28 @@ export function kpiColumns(opts: {
   metric: OptimizationMetricDefinition;
   currency?: string | null;
   include?: { roas?: boolean };
+  locale?: UiLocale;
+  translate?: ReturnType<typeof TranslationHook<'scale'>>;
   /** The widest CI upper bound across the row set (display units) — the shared
    *  scale every cost bar is drawn against so the noisiest row is not amputated. */
   maxCiCost?: number;
 }): InsightColumn<OptimizerAdsetRow>[] {
-  const { metric, currency, include, maxCiCost = 1 } = opts;
+  const { metric, currency, include, maxCiCost = 1, locale = 'en' } = opts;
   const columns: InsightColumn<OptimizerAdsetRow>[] = [
-    nameColumn(),
-    resultsColumn(metric),
+    nameColumn(opts.translate),
+    resultsColumn(metric, locale),
     costColumn(metric, currency, maxCiCost),
   ];
-  if (include?.roas) columns.push(roasColumn());
+  if (include?.roas) columns.push(roasColumn(locale));
   return columns;
 }
 
 /** The one-line legend that labels the cost column's CI scale for a table. */
-export function costCiLegend(metric: OptimizationMetricDefinition): string {
+export function costCiLegend(
+  metric: OptimizationMetricDefinition,
+  translate?: ReturnType<typeof TranslationHook<'scale'>>,
+): string {
+  if (translate) return translate('cost_ci_legend', { metric: metric.costLabel });
   return `${metric.costLabel} · 95% CI — wider bar = fewer events`;
 }
 
@@ -266,8 +284,12 @@ function CostCell({
   currency?: string | null;
   maxCiCost: number;
 }) {
+  const uiText = useTranslations('scale');
+
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   if (row.freezeReason) {
-    const held = freezeLabel(row.freezeReason, row.entity);
+    const held = freezeLabel(row.freezeReason, row.entity, optimizerText);
     return (
       <span className="inline-flex items-center justify-end">
         {held ? (
@@ -287,7 +309,7 @@ function CostCell({
   const events = ci?.events ?? null;
   const hasInterval = lo != null && hi != null && hi >= lo;
 
-  const unboundedNote = upperBoundNote(ci);
+  const unboundedNote = upperBoundNote(ci, optimizerText);
   if (cost == null && !hasInterval) {
     return unboundedNote ? (
       <span className="text-xs text-muted-foreground">{unboundedNote}</span>
@@ -303,15 +325,28 @@ function CostCell({
   const markerLeft = cost != null ? pct(cost, maxCiCost) : 0;
 
   const plain = hasInterval
-    ? `${metric.costLabel} ${formatCpa(cost, currency)} (likely ${formatCpa(lo, currency)}–${formatCpa(hi, currency)})${events != null ? ` from ${events} ${metric.resultLabel.toLowerCase()}` : ''}`
-    : `${metric.costLabel} ${formatCpa(cost, currency)}${unboundedNote ? ` · ${unboundedNote}` : ''}`;
+    ? uiText('cost_interval_detail', {
+        metric: metric.costLabel,
+        cost: formatCpa(cost, currency, uiLocale),
+        low: formatCpa(lo, currency, uiLocale),
+        high: formatCpa(hi, currency, uiLocale),
+        hasEvents: events != null ? 'yes' : 'no',
+        events: events ?? 0,
+        results: metric.resultLabel.toLowerCase(),
+      })
+    : uiText('cost_no_interval_detail', {
+        metric: metric.costLabel,
+        cost: formatCpa(cost, currency, uiLocale),
+        hasNote: unboundedNote ? 'yes' : 'no',
+        note: unboundedNote ?? '',
+      });
 
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <span className="inline-flex flex-col items-end gap-0.5">
-            <span className="tabular-nums">{formatCurrencyInColumn(cost, currency)}</span>
+            <span className="tabular-nums">{formatCurrencyInColumn(cost, currency, uiLocale)}</span>
             {hasInterval ? (
               <span
                 aria-hidden="true"

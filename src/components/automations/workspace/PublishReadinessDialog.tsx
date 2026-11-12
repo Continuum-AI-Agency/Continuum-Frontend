@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { automationReadinessMessage } from '@/i18n/automationReadiness';
+
 // The confirm step in front of publishing. It is shown ALWAYS, not only when
 // something is wrong: publishing locks the graph and activates the schedule, and
 // a confirm that only sometimes appears trains people to click through the one
@@ -71,11 +74,12 @@ export function PublishReadinessDialog({
   onRunTest,
   onConfirmPublish,
 }: PublishReadinessDialogProps) {
+  const uiText = useTranslations('automations');
   const readiness = useMemo(
     () => collectPublishBlockers({ definition, capabilities }),
     [definition, capabilities],
   );
-  const freshness = useMemo(() => summarizeTestFreshness(testResult), [testResult]);
+  const freshness = useMemo(() => summarizeTestFreshness(testResult, uiText), [testResult, uiText]);
 
   const { blockers, warnings, blockingNodeIds } = readiness;
   const blocked = blockers.length > 0;
@@ -89,21 +93,22 @@ export function PublishReadinessDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Publish this workflow</DialogTitle>
+          <DialogTitle>{uiText('publish_this_workflow_6dbdde9')}</DialogTitle>
           <DialogDescription>
-            Publishing locks the graph and activates the schedule. Unpublish to edit it again.
+            {uiText('publishing_locks_the_graph_and_activates_the__fa4c405')}
           </DialogDescription>
         </DialogHeader>
 
         {blocked ? (
           <section className="space-y-2" aria-labelledby="publish-blockers-heading">
             <h3 id="publish-blockers-heading" className="text-xs font-medium text-secondary">
-              {blockingNodeIds.length} step{blockingNodeIds.length === 1 ? '' : 's'} would fail on a
-              live run
+              {uiText.rich('sentence_4859ea4f69d3', { count: blockingNodeIds.length })}
             </h3>
             <ul className="space-y-2">
               {blockers.map((blocker) => (
-                <li key={`${blocker.nodeId}-${blocker.code}-${blocker.detail}`}>
+                <li
+                  key={`${blocker.nodeId}-${blocker.code}-${automationReadinessMessage(blocker, uiText).detail}`}
+                >
                   <button
                     type="button"
                     onClick={() => onFocusNode(blocker.nodeId)}
@@ -115,9 +120,12 @@ export function PublishReadinessDialog({
                     />
                     <span className="min-w-0 space-y-0.5">
                       <span className="block text-xs font-medium">
-                        {BLOCKER_HEADINGS[blocker.code]} · {blocker.message}
+                        {automationReadinessMessage(blocker, uiText).title} ·{' '}
+                        {automationReadinessMessage(blocker, uiText).message}
                       </span>
-                      <span className="block text-xs text-secondary">{blocker.detail}</span>
+                      <span className="block text-xs text-secondary">
+                        {automationReadinessMessage(blocker, uiText).detail}
+                      </span>
                     </span>
                   </button>
                 </li>
@@ -129,7 +137,7 @@ export function PublishReadinessDialog({
         {warnings.length > 0 ? (
           <section className="space-y-2" aria-labelledby="publish-warnings-heading">
             <h3 id="publish-warnings-heading" className="text-xs font-medium text-secondary">
-              {warnings.length} step{warnings.length === 1 ? '' : 's'} will run without a connection
+              {uiText.rich('sentence_67f39f689fdf', { count: warnings.length })}
             </h3>
             <ul className="space-y-2">
               {warnings.map((warning) => (
@@ -141,8 +149,12 @@ export function PublishReadinessDialog({
                   >
                     <PlugZap aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-secondary" />
                     <span className="min-w-0 space-y-0.5">
-                      <span className="block text-xs font-medium">{warning.message}</span>
-                      <span className="block text-xs text-secondary">{warning.detail}</span>
+                      <span className="block text-xs font-medium">
+                        {uiText('readinessConnection', { node: warning.nodeLabel })}
+                      </span>
+                      <span className="block text-xs text-secondary">
+                        {uiText('needsConnectionDetail')}
+                      </span>
                     </span>
                   </button>
                 </li>
@@ -154,22 +166,24 @@ export function PublishReadinessDialog({
         {!blocked && warnings.length === 0 ? (
           <p className="flex items-center gap-2 text-xs text-secondary">
             <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-primary" />
-            Every enabled step is wired and ready to run live.
+            {uiText('every_enabled_step_is_wired_and_ready_to_run__98bc271')}
           </p>
         ) : null}
 
         <Alert>
           <FlaskConical aria-hidden="true" />
-          <AlertTitle className="text-xs">Server test</AlertTitle>
+          <AlertTitle className="text-xs">{uiText('server_test_fbb2f1c')}</AlertTitle>
           <AlertDescription className="space-y-2">
             <p className="text-xs">{freshness.message}</p>
             <Button size="sm" variant="outline" disabled={testing} onClick={onRunTest}>
-              {testing ? (
-                <Loader2 data-icon="inline-start" className="animate-spin" />
-              ) : (
-                <FlaskConical data-icon="inline-start" />
-              )}
-              Run test
+              {uiText.rich('sentence_54a2616ab986', {
+                v0: () =>
+                  testing ? (
+                    <Loader2 data-icon="inline-start" className="animate-spin" />
+                  ) : (
+                    <FlaskConical data-icon="inline-start" />
+                  ),
+              })}
             </Button>
           </AlertDescription>
         </Alert>
@@ -182,20 +196,24 @@ export function PublishReadinessDialog({
 
         <DialogFooter className="sm:justify-between">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
+            {uiText('cancel_19766ed')}
           </Button>
           <div className="flex flex-wrap items-center gap-2">
             {blocked ? (
               <Button variant="outline" onClick={handleDisableBlockingNodes}>
-                Disable{' '}
-                {blockingNodeIds.length === 1
-                  ? 'this step'
-                  : `these ${blockingNodeIds.length} steps`}
+                {uiText.rich('sentence_33c56f280bd8', {
+                  v0: () =>
+                    blockingNodeIds.length === 1
+                      ? uiText('this_step_32635e8')
+                      : `these ${blockingNodeIds.length} steps`,
+                })}
               </Button>
             ) : null}
             <Button disabled={blocked || publishing || !definition} onClick={onConfirmPublish}>
-              {publishing ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
-              Publish
+              {uiText.rich('sentence_d37719a6076d', {
+                v0: () =>
+                  publishing ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null,
+              })}
             </Button>
           </div>
         </DialogFooter>

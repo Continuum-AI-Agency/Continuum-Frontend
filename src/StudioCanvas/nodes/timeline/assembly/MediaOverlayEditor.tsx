@@ -9,6 +9,7 @@ import {
   MOTION_SPRING_PRESETS,
 } from '@continuum/contracts';
 import { Diamond, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { NumberScrubField } from '@/components/ui/number-field';
@@ -40,9 +41,11 @@ export function MediaOverlayEditor({
   autoKey: boolean;
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
     <section className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
-      <h3 className="text-xs font-semibold">Media overlays</h3>
+      <h3 className="text-xs font-semibold">{translateUi('media_overlays_c7b63f38')}</h3>
       {(overlayTrack?.clips ?? []).map((clip) => (
         <MediaOverlayRow
           key={clip.id}
@@ -57,7 +60,8 @@ export function MediaOverlayEditor({
       ))}
       {!overlayTrack?.clips.length ? (
         <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-          Add a pinned image or video from the media bin.
+          {' '}
+          {translateUi('add_a_pinned_image_or_video_from_th_ae1026e1')}{' '}
         </p>
       ) : null}
     </section>
@@ -102,6 +106,8 @@ function MediaOverlayRow({
   autoKey: boolean;
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [start, setStart] = useState(clip.timelineStartSec);
   const [duration, setDuration] = useState(clip.durationSec);
   const [x, setX] = useState(clip.transform.position.x);
@@ -155,21 +161,21 @@ function MediaOverlayRow({
           </div>
         )}
         <span className="min-w-0 flex-1 truncate text-xs font-medium">
-          {clip.name ?? 'Overlay'}
+          {clip.name ?? translateUi('overlay_2af93aeb')}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <NumberScrubField
           min={0}
           step={0.1}
-          label="At"
+          label={translateUi('at_c72c5404')}
           value={start}
           max={project.durationSec}
           onChange={setStart}
         />
         <NumberScrubField
           step={0.1}
-          label="Duration"
+          label={translateUi('duration_4fc52a3c')}
           value={duration}
           min={0.1}
           onChange={setDuration}
@@ -215,7 +221,7 @@ function MediaOverlayRow({
           }}
         />
         <SliderField
-          label="Scale"
+          label={translateUi('scale_f102986b')}
           max={4}
           min={0.05}
           step={0.05}
@@ -235,7 +241,7 @@ function MediaOverlayRow({
           }}
         />
         <SliderField
-          label="Rotation"
+          label={translateUi('rotation_57b5e2fc')}
           max={360}
           min={-360}
           step={1}
@@ -259,7 +265,7 @@ function MediaOverlayRow({
           }}
         />
         <SliderField
-          label="Rotate X"
+          label={translateUi('rotate_x_0dd5ce7a')}
           max={90}
           min={-90}
           step={1}
@@ -283,7 +289,7 @@ function MediaOverlayRow({
           }}
         />
         <SliderField
-          label="Rotate Y"
+          label={translateUi('rotate_y_b8e1d6b0')}
           max={90}
           min={-90}
           step={1}
@@ -307,7 +313,7 @@ function MediaOverlayRow({
           }}
         />
         <SliderField
-          label="Perspective"
+          label={translateUi('perspective_e3ad1bcc')}
           max={4}
           min={0}
           step={0.05}
@@ -315,9 +321,9 @@ function MediaOverlayRow({
           onChange={setPerspective}
         />
         <label className="col-span-2 flex items-center justify-between gap-2 text-2xs">
-          <span className="text-muted-foreground">Parent</span>
+          <span className="text-muted-foreground">{translateUi('parent_5f7953f7')}</span>
           <select
-            aria-label="Parent clip"
+            aria-label={translateUi('parent_clip_22203678')}
             className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-1.5 text-xs"
             value={clip.parentClipId ?? ''}
             onChange={(event) =>
@@ -330,7 +336,7 @@ function MediaOverlayRow({
               )
             }
           >
-            <option value="">None</option>
+            <option value="">{translateUi('none_dc937b59')}</option>
             {project.tracks
               .flatMap((track): EditorClip[] => track.clips)
               .filter((candidate) => candidate.id !== clip.id)
@@ -344,7 +350,7 @@ function MediaOverlayRow({
         <div className="flex items-end gap-1">
           <SliderField
             format={{ style: 'percent', maximumFractionDigits: 0 }}
-            label="Anchor"
+            label={translateUi('anchor_a4ae750b')}
             max={1}
             min={0}
             step={0.05}
@@ -377,7 +383,7 @@ function MediaOverlayRow({
         <div className="col-span-2 flex items-end gap-1">
           <SliderField
             format={{ style: 'percent', maximumFractionDigits: 0 }}
-            label="Opacity"
+            label={translateUi('opacity_6062652e')}
             max={1}
             min={0}
             step={0.05}
@@ -408,8 +414,8 @@ function MediaOverlayRow({
             disabled={!playheadOnClip}
             aria-label={
               opacityKeyed
-                ? 'Update opacity keyframe at playhead'
-                : 'Add opacity keyframe at playhead'
+                ? translateUi('update_opacity_keyframe_at_playhead_c725e343')
+                : translateUi('add_opacity_keyframe_at_playhead_f0faaa28')
             }
             aria-pressed={opacityKeyed}
             onClick={() =>
@@ -435,7 +441,7 @@ function MediaOverlayRow({
         departingOpacity &&
         typeof departingOpacity.value === 'number' ? (
           <label className="col-span-2 flex items-center justify-between gap-2 text-2xs">
-            <span className="text-muted-foreground">Opacity easing</span>
+            <span className="text-muted-foreground">{translateUi('opacity_easing_79d5211d')}</span>
             <select
               className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
               value={
@@ -476,10 +482,10 @@ function MediaOverlayRow({
                 );
               }}
             >
-              <option value="linear">Linear</option>
-              <option value="hold">Hold</option>
-              <option value="easeOutBack">Ease out back</option>
-              <option value="spring">Spring</option>
+              <option value="linear">{translateUi('linear_e6950b45')}</option>
+              <option value="hold">{translateUi('hold_8e685d54')}</option>
+              <option value="easeOutBack">{translateUi('ease_out_back_44d254c0')}</option>
+              <option value="spring">{translateUi('spring_db29e82a')}</option>
             </select>
           </label>
         ) : null}
@@ -490,7 +496,7 @@ function MediaOverlayRow({
           size="icon"
           className="size-7"
           onClick={() => onApply(removeClipOperation(project, trackId, clip.id))}
-          aria-label="Delete media overlay"
+          aria-label={translateUi('delete_media_overlay_198b64fd')}
         >
           <Trash2 className="size-3.5" />
         </Button>
@@ -503,7 +509,7 @@ function MediaOverlayRow({
                 clipId: clip.id,
                 assetId: source.assetId,
                 versionId,
-                label: clip.name ?? 'Overlay',
+                label: clip.name ?? translateUi('overlay_2af93aeb'),
                 mediaKind: clip.mediaKind === 'video' ? 'video' : 'image',
                 timelineStartSec: start,
                 durationSec: duration,
@@ -519,7 +525,8 @@ function MediaOverlayRow({
             )
           }
         >
-          Save
+          {' '}
+          {translateUi('save_1509f561')}{' '}
         </Button>
       </div>
     </div>

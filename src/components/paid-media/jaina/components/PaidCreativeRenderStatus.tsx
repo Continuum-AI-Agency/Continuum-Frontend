@@ -1,23 +1,17 @@
 'use client';
 
 import type { ClientRenderJob, JainaPaidCreativeRenderPayload } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { getClientRenderJob } from '@/lib/api/clientRenderJobs.client';
 import type { CreativeArtifact } from '@/lib/jaina/schemas';
 import { fetchPaidScaffoldTreeRows } from '@/lib/paid-media/scaffold-tree-client';
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'cancelled', 'superseded']);
 const REFRESH_MS = 3_000;
-
-const labelFor = (state: ClientRenderJob['state'] | undefined): string => {
-  if (state === 'completed') return 'Completed';
-  if (state === 'failed') return 'Failed';
-  if (state === 'cancelled' || state === 'superseded') return 'Ended';
-  if (state === 'claimed' || state === 'rendering' || state === 'saving') return 'Rendering';
-  return 'Queued';
-};
 
 export function PaidCreativeRenderStatus({
   render,
@@ -26,9 +20,14 @@ export function PaidCreativeRenderStatus({
   render: JainaPaidCreativeRenderPayload;
   onCreativeReady?: (creative: CreativeArtifact) => void;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
   const [job, setJob] = useState<ClientRenderJob | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [signError, setSignError] = useState<string | null>(null);
+  const [error, setError] = useState<{ cause: unknown } | null>(null);
+  const [signError, setSignError] = useState<
+    { cause: unknown } | { code: 'attachment_review' } | null
+  >(null);
   const [media, setMedia] = useState<ChatMedia[]>([]);
 
   useEffect(() => {
@@ -47,7 +46,7 @@ export function PaidCreativeRenderStatus({
         if (!TERMINAL_STATES.has(result.job.state)) timer = setTimeout(read, REFRESH_MS);
       } catch (cause) {
         if (controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause.message.slice(0, 240) : 'Status unavailable');
+        setError({ cause });
         timer = setTimeout(read, REFRESH_MS);
       }
     };
@@ -107,8 +106,7 @@ export function PaidCreativeRenderStatus({
               await new Promise((resolve) => setTimeout(resolve, 1000));
             }
             if (!attached) {
-              if (!cancelled)
-                setSignError('Reel saved in Library; scaffold attachment needs review.');
+              if (!cancelled) setSignError({ code: 'attachment_review' });
               return;
             }
           }
@@ -124,15 +122,12 @@ export function PaidCreativeRenderStatus({
               ...(render.scaffold_target ? { attachment_status: 'attached' as const } : {}),
             });
         })().catch((cause: unknown) => {
-          if (!cancelled)
-            setSignError(
-              cause instanceof Error ? cause.message : 'Scaffold attachment unavailable.',
-            );
+          if (!cancelled) setSignError({ cause });
         });
       })
       .catch((cause) => {
         if (!cancelled) {
-          setSignError(cause instanceof Error ? cause.message.slice(0, 240) : 'Media unavailable');
+          setSignError({ cause });
         }
       });
     return () => {
@@ -146,20 +141,35 @@ export function PaidCreativeRenderStatus({
   const phase = active ? job?.phase?.trim().slice(0, 120) : null;
   const endedError =
     state === 'failed' || state === 'cancelled' || state === 'superseded'
-      ? job?.errorMessage?.trim().slice(0, 240)
+      ? job?.errorMessage
+        ? formatUiError(new Error(job.errorMessage))
+        : null
       : null;
 
   return (
-    <section aria-label="Paid creative render status" className="space-y-2 rounded-lg border p-3">
+    <section
+      aria-label={uiText('paid_creative_render_status_7f6dcb4')}
+      className="space-y-2 rounded-lg border p-3"
+    >
       <div role="status" aria-live="polite" aria-busy={active} className="text-sm">
-        <span className="font-medium">{labelFor(state)}</span>
+        <span className="font-medium">
+          {uiText('jainaRenderState', { state: state ?? 'queued' })}
+        </span>
         {phase ? <span className="text-muted-foreground"> · {phase}</span> : null}
-        {active ? <span className="text-muted-foreground"> · {progress}%</span> : null}
+        {active ? (
+          <span className="text-muted-foreground">
+            {' '}
+            ·{' '}
+            {new Intl.NumberFormat(uiLocale, { style: 'percent', maximumFractionDigits: 0 }).format(
+              progress / 100,
+            )}
+          </span>
+        ) : null}
       </div>
       {active ? (
         <div
           role="progressbar"
-          aria-label="Render progress"
+          aria-label={uiText('render_progress_7d1d013')}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress}
@@ -170,7 +180,13 @@ export function PaidCreativeRenderStatus({
       ) : null}
       {endedError || error || signError ? (
         <p role="alert" className="text-xs text-destructive">
-          {endedError || error || signError}
+          {endedError ||
+            (error ? formatUiError(error.cause) : null) ||
+            (signError
+              ? 'code' in signError
+                ? uiText('creativeScaffoldAttachmentReview')
+                : formatUiError(signError.cause)
+              : null)}
         </p>
       ) : null}
       {media.length > 0 ? (

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import type * as React from 'react';
 import type { OrganicCalendarPostedContent } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 
 const showMock = vi.fn();
 

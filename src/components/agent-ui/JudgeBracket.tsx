@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // How a judge picks the best of several attempts, as a tournament: two at a time, the one it
 // prefers moves on and the other fades. Once the final is decided the champion's way through
 // lights up, and any match opens both sides with their scores and the judge's reason.
@@ -65,6 +67,7 @@ export function JudgeBracket({
   rounds: BracketMatch[][];
   className?: string;
 }) {
+  const uiText = useTranslations('common');
   const counts = bracketRounds(entrants.length);
   const byId = new Map(entrants.map((e) => [e.id, e]));
   const { champion, keys } = championPath(rounds, counts.length);
@@ -83,18 +86,25 @@ export function JudgeBracket({
       <AgentCardHeader
         action={
           champion ? (
-            <StatusLabel tone="done">Winner: {name(champion)}</StatusLabel>
+            <StatusLabel tone="done">
+              {uiText('m_3e2f7cc0f0')}
+              {name(champion)}
+            </StatusLabel>
           ) : live.judging ? (
             <StatusLabel tone="running">
-              Judging the {roundName(liveRound, counts.length).toLowerCase()}
+              {uiText('m_bd498ec1aa')}
+              {roundName(liveRound, counts.length).toLowerCase()}
             </StatusLabel>
           ) : (
-            <StatusLabel>Waiting</StatusLabel>
+            <StatusLabel>{uiText('waiting_6e293a8')}</StatusLabel>
           )
         }
       >
-        <AgentCardEyebrow label="Judge bracket" />
-        <AgentCardTitle>Best of {entrants.length}</AgentCardTitle>
+        <AgentCardEyebrow label={uiText('m_e16d3d8fa3')} />
+        <AgentCardTitle>
+          {uiText('m_1cf2d9cb12')}
+          {entrants.length}
+        </AgentCardTitle>
       </AgentCardHeader>
       <AgentCardBody className="flex flex-col gap-2 pt-3 pb-4">
         <div className="flex min-w-0 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -134,7 +144,9 @@ export function JudgeBracket({
                         key={key}
                         className="grid h-[3.25rem] place-items-center rounded-md border border-dashed border-border text-3xs text-muted-foreground"
                       >
-                        {r === counts.length - 1 ? 'Winner' : 'Waiting'}
+                        {r === counts.length - 1
+                          ? uiText('m_4e3adcfe37')
+                          : uiText('waiting_6e293a8')}
                       </div>
                     );
                   }
@@ -146,7 +158,11 @@ export function JudgeBracket({
                       onClick={() => setChosen(key)}
                       aria-pressed={key === openKey}
                       data-on-path={keys.has(key) || undefined}
-                      aria-label={`${roundName(r, counts.length)}: ${name(match.a)} against ${name(match.b)}`}
+                      aria-label={uiText('m_3f011bf7f6', {
+                        v0: String(roundName(r, counts.length)),
+                        v1: String(name(match.a)),
+                        v2: String(name(match.b)),
+                      })}
                       className={cn(
                         'relative flex h-[3.25rem] min-w-0 flex-col justify-center rounded-md border bg-card text-left outline-none transition-[border-color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring',
                         keys.has(key)
@@ -180,7 +196,9 @@ export function JudgeBracket({
                             ) : (
                               <span className="size-5" />
                             )}
-                            <span className="truncate">{id ? name(id) : 'bye'}</span>
+                            <span className="truncate">
+                              {id ? name(id) : uiText('m_78c9a53e2f')}
+                            </span>
                             <span className="ml-auto flex shrink-0 items-center gap-1">
                               {id && match.scores?.[id] !== undefined && (
                                 <span className="font-mono text-2xs text-muted-foreground tabular-nums">
@@ -207,7 +225,7 @@ export function JudgeBracket({
       </AgentCardBody>
       {open && (
         <section
-          aria-label="Match detail"
+          aria-label={uiText('m_f33e8d0dc8')}
           className="flex flex-col gap-3 border-t border-border/60 bg-muted/20 px-4 py-3"
         >
           <div className="grid grid-cols-2 gap-4">
@@ -226,11 +244,13 @@ export function JudgeBracket({
                 >
                   <div className="flex min-w-0 items-center gap-1.5">
                     <EntrantAvatar entrant={entrant} won={won} />
-                    <span className="truncate font-medium">{entrant?.label ?? id ?? 'bye'}</span>
+                    <span className="truncate font-medium">
+                      {entrant?.label ?? id ?? uiText('m_78c9a53e2f')}
+                    </span>
                     {won && (
                       <Badge variant="violet" className="px-1.5 text-3xs">
                         <Trophy />
-                        Winner
+                        {uiText('m_4e3adcfe37')}
                       </Badge>
                     )}
                     {score !== undefined && (
@@ -258,7 +278,7 @@ export function JudgeBracket({
               <span>{open.reason}</span>
             ) : (
               <span className="animate-pulse text-muted-foreground motion-reduce:animate-none">
-                The judge is comparing…
+                {uiText('m_6a6851f502')}
               </span>
             )}
           </blockquote>

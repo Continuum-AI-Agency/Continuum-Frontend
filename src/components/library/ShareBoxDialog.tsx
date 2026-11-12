@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Copy } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { ShareLinkPanel } from '@/components/library/share/ShareLinkPanel';
 import { shareTokenFromUrl } from '@/components/library/share/shareLinkClient';
@@ -20,6 +21,8 @@ type Props = {
 };
 
 export function ShareBoxDialog({ open, url, onOpenChange }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const [copied, setCopied] = useState(false);
   const token = url ? shareTokenFromUrl(url) : null;
 
@@ -34,10 +37,10 @@ export function ShareBoxDialog({ open, url, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Share box</DialogTitle>
+          <DialogTitle>{translateUi('share_box_21c716f6')}</DialogTitle>
           <DialogDescription>
-            Anyone with the link can review this box. Copy it, send it, revoke it later from the
-            asset or collection.
+            {' '}
+            {translateUi('anyone_with_the_link_can_review_thi_8efa7028')}{' '}
           </DialogDescription>
         </DialogHeader>
         {url ? (
@@ -49,11 +52,11 @@ export function ShareBoxDialog({ open, url, onOpenChange }: Props) {
             />
             <Button type="button" size="sm" onClick={() => void copy()}>
               {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? translateUi('copied_8d525e5f') : translateUi('copy_e21f935f')}
             </Button>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Creating link…</p>
+          <p className="text-sm text-muted-foreground">{translateUi('creating_link_26756b8c')}</p>
         )}
         {token ? <ShareLinkPanel by={{ token }} /> : null}
       </DialogContent>

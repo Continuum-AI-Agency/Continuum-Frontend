@@ -52,7 +52,11 @@ export async function HomeOverviewDataWrapper({ brandId }: { brandId: string }) 
     const id = account.externalAccountId ?? account.integrationAccountId;
     if (seen.has(id)) continue;
     seen.add(id);
-    adAccounts.push({ id, name: account.alias ?? account.name, currency: currencies.get(id) ?? null });
+    adAccounts.push({
+      id,
+      name: account.alias ?? account.name,
+      currency: currencies.get(id) ?? null,
+    });
   }
 
   const organicCandidates: SnapshotAccountRef[] = [

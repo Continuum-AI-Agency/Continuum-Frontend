@@ -1,7 +1,9 @@
 'use client';
+import {translateControlLabel} from '@/lib/ui/controlLabels';
 
 import { type ChatMediaItem, type ChatMediaKind, chatMediaRefKey } from '@continuum/contracts';
 import { ExternalLink, Layers, Play } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useMemo } from 'react';
 import { SkeletonText } from '@/components/ui/skeleton';
 import {
@@ -57,6 +59,8 @@ function MediaStripTile({
   state: TileState;
   onRecover: () => void;
 }) {
+  const tUi = useTranslations('common');
+
   // The tile only ever shows a still: a video's poster, never its bytes. Playback is the
   // player's job, behind its own route.
   const still: ReactNode =
@@ -115,7 +119,7 @@ function MediaStripTile({
       href={item.permalink}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`${name} (opens in a new tab)`}
+      aria-label={tUi('m_6447282c66', { v0: String(name) })}
       className={cn(
         frame,
         'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
@@ -157,6 +161,8 @@ export function MediaStrip({
   stripId,
   tileHeight = MEDIA_STRIP_TILE_HEIGHT,
 }: MediaStripProps) {
+  const tUi = useTranslations('common');
+
   const refs = useMemo(() => items.map((item) => item.ref), [items]);
   const [observe, near] = useNearViewport();
   const { tiles, settled, recover } = useChatMediaTiles(brandId, refs, { enabled: near });
@@ -186,7 +192,7 @@ export function MediaStrip({
               ? 'empty'
               : 'pending';
           const name =
-            item.label?.trim() || `${KIND_LABEL[item.kind]} ${index + 1} of ${items.length}`;
+            item.label?.trim() || `${translateControlLabel(KIND_LABEL[item.kind],tUi)} ${index + 1} of ${items.length}`;
           return (
             <li
               key={key}
@@ -210,7 +216,8 @@ export function MediaStrip({
             className="flex shrink-0 items-center justify-center rounded-md border border-border/60 px-3 text-xs tabular-nums text-muted-foreground"
             style={{ height: tileHeight }}
           >
-            +{more} more
+            +{more}
+            {tUi('m_84b30f4ef3')}
           </li>
         ) : null}
       </ul>

@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import type { TemplatePreview } from '@continuum/contracts';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TEXT_REPAIR_FONT_MIME, TemplateTextRepairCanvas } from './TemplateTextRepairCanvas';
 
 test('drag distance is converted from preview pixels to the measured AEP comp', () => {

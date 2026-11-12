@@ -11,7 +11,7 @@ const orphanErrorPrefix = 'Not connected';
 
 export type OrphanNode = { nodeId: string; label: string; reason: string };
 
-const REASONS: Record<string, string> = {
+export const ORPHAN_REASON_TEXT: Record<string, string> = {
   'ad-set': 'this ad set is not under the campaign',
   ad: 'this ad is not under an ad set that belongs to the campaign',
   creative: 'this creative is not attached to an ad that belongs to the campaign',
@@ -64,7 +64,7 @@ export function collectOrphanNodes(
     .map((node) => ({
       nodeId: node.id,
       label: node.data.label,
-      reason: REASONS[extraCreatives.has(node.id) ? 'extra-creative' : (node.type ?? '')] ?? '',
+      reason: ORPHAN_REASON_TEXT[extraCreatives.has(node.id) ? 'extra-creative' : (node.type ?? '')] ?? '',
     }));
 }
 

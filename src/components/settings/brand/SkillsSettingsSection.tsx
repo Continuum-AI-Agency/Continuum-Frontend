@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // The skills browser for Settings → Skills — the one place skills are authored.
 // Home for the creative-direction skills the AI Studio canvas (visual surface) and
@@ -18,6 +19,8 @@ type Screen =
   | { kind: 'template'; skill: Skill };
 
 export function SkillsSettingsSection({ brandId }: { brandId: string }) {
+  const tUi = useTranslations('settings');
+
   const { skills, templates, isLoading, refresh } = useBrandSkills(brandId);
   const [screen, setScreen] = useState<Screen>({ kind: 'list' });
 
@@ -33,13 +36,13 @@ export function SkillsSettingsSection({ brandId }: { brandId: string }) {
           className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to skills
+          {tUi('m_23caf04924')}
         </button>
       )}
 
       {screen.kind === 'list' &&
         (isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading skills…</p>
+          <p className="text-sm text-muted-foreground">{tUi('m_c1c3862f6b')}</p>
         ) : (
           <SkillList
             skills={skills}
@@ -69,7 +72,7 @@ export function SkillsSettingsSection({ brandId }: { brandId: string }) {
         <div className="flex flex-col gap-2">
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Lock className="h-3 w-3" />
-            First-party library skill — read-only. Apply it from a canvas node or the agent.
+            {tUi('m_0dc97c1108')}
           </p>
           <span className="text-sm font-medium">{screen.skill.name}</span>
           {screen.skill.description && (

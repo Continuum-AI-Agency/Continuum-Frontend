@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // The full-screen Portfolio detail — the optimizer's command center for ONE
 // portfolio. It composes the whole viz language against real reads: the hero CPA
 // timeline with its projection + action pins, the confidence radar, the pacing
@@ -159,6 +164,11 @@ export function PortfolioDetailWorkspace({
   range,
   onRangeChange,
 }: PortfolioDetailWorkspaceProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   // Campaign portfolios enroll campaigns: read the matching snapshot scope so the
   // conversion-funnel sum (keyed by the enrolled entity id) resolves. The cycle
   // charts are entity-agnostic (keyed by entity id) and need no level.
@@ -247,7 +257,10 @@ export function PortfolioDetailWorkspace({
     cpaSeriesQuery.data.map((point) => ({ ts: point.cycle_ts })),
     timelineEventsQuery.data,
   );
-  const metric = getOptimizationMetricDefinition(portfolio.objective);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(portfolio.objective),
+    optimizerText,
+  );
   // The objective's result word for the volume read: leads, conversations, purchases.
   const resultWord = metric.resultLabel.toLowerCase();
   // Target in the metric's DISPLAY unit (CPM for awareness), like every cost it meets.
@@ -263,11 +276,14 @@ export function PortfolioDetailWorkspace({
   );
 
   // One executable row per enrolled ad set, from the within-ad-set creative win rates.
-  const angleRows = buildAdsetAngleStanding({
-    winrateRows: winratesQuery.data,
-    enrolledIds: enrolledQuery.data.map((adset) => adset.adset_id),
-    nameById: adsetNameById,
-  });
+  const angleRows = buildAdsetAngleStanding(
+    {
+      winrateRows: winratesQuery.data,
+      enrolledIds: enrolledQuery.data.map((adset) => adset.adset_id),
+      nameById: adsetNameById,
+    },
+    uiText,
+  );
 
   // Self-heal missing names: ad sets enrolled before the enroll path forwarded
   // names have a blank roster name and render as raw Meta ids. The account-snapshot
@@ -320,7 +336,7 @@ export function PortfolioDetailWorkspace({
     today,
   });
   // The run's verdict beside the flight the row holds now: stale after a rebase, and said so.
-  const pacingStale = pacingStaleLine(latestRun?.pacing ?? null, portfolio);
+  const pacingStale = pacingStaleLine(latestRun?.pacing ?? null, portfolio, uiText, uiLocale);
   const recap = buildRecap({
     snapshots: snapshotsQuery.data,
     enrolledIds,
@@ -340,56 +356,76 @@ export function PortfolioDetailWorkspace({
   const crossPlatform = crossPlatformRead({ portfolio, window: heroWindow, metrics: metricsState });
   const headlineFigure =
     serializeRange(range) === serializeRange(DEFAULT_RANGE) || (crossPlatform && heroWindow)
-      ? portfolioFigureFromReads({
-          portfolio,
-          snapshots: snapshotsQuery.isSuccess ? snapshotsQuery.data : null,
-          inactiveWindows: snapshotsQuery.inactiveWindows,
-          readAt: snapshotsQuery.fetchedAt,
-          memberIds: enrolledQuery.isSuccess ? enrolledIds : null,
-          series: cpaSeriesQuery.data,
-          metrics: metricsState.status === 'ready' ? metricsState.metrics : null,
-        })
+      ? portfolioFigureFromReads(
+          {
+            portfolio,
+            snapshots: snapshotsQuery.isSuccess ? snapshotsQuery.data : null,
+            inactiveWindows: snapshotsQuery.inactiveWindows,
+            readAt: snapshotsQuery.fetchedAt,
+            memberIds: enrolledQuery.isSuccess ? enrolledIds : null,
+            series: cpaSeriesQuery.data,
+            metrics: metricsState.status === 'ready' ? metricsState.metrics : null,
+          },
+          uiLocale,
+          uiText,
+        )
       : null;
   // A figure from the metrics read is in the portfolio's currency, not the Meta account's (null
   // there prints the figure without a symbol, never another account's code).
   const heroCurrency =
     headlineFigure?.currency !== undefined ? headlineFigure.currency : (currency ?? null);
-  const heroView = buildHeroView({
-    report: currentReport,
-    recap,
-    figure: headlineFigure,
-    flightPacing,
-    metric,
-    currency: heroCurrency,
-    portfolio,
-    target: targetDisplay ?? null,
-    window: resolvedRange.window,
-    firstCycle: !latestRun,
-    crossPlatform,
-  });
+  const heroView = buildHeroView(
+    {
+      locale: uiLocale,
+      translate: optimizerText,
+      report: currentReport,
+      recap,
+      figure: headlineFigure,
+      flightPacing,
+      metric,
+      currency: heroCurrency,
+      portfolio,
+      target: targetDisplay ?? null,
+      window: resolvedRange.window,
+      firstCycle: !latestRun,
+      crossPlatform,
+    },
+    uiText,
+  );
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
-  const heroHeader = buildHeroHeader({
-    report,
-    portfolio,
-    lastCycleAt: latestRun?.cycle_ts ?? null,
-    growth: heroView.brief.growth,
-    metric,
-    currency: heroCurrency,
-  });
+  const heroHeader = buildHeroHeader(
+    {
+      report,
+      portfolio,
+      lastCycleAt: latestRun?.cycle_ts ?? null,
+      growth: heroView.brief.growth,
+      metric,
+      currency: heroCurrency,
+    },
+    uiText,
+    uiLocale,
+  );
   // The news in sentences and tiles, and the window before beside the window after — every
   // figure from the same growth read, the same engine series and the same cycle rows the
   // cards use.
-  const headline = buildPortfolioHeadline({
-    view: heroView,
-    report: currentReport,
-    portfolio,
-    metric,
-    currency: heroCurrency,
-    mismatch: heroHeader.mismatch,
-  });
+  const headline = buildPortfolioHeadline(
+    {
+      locale: uiLocale,
+      translate: optimizerText,
+      view: heroView,
+      report: currentReport,
+      portfolio,
+      metric,
+      currency: heroCurrency,
+      mismatch: heroHeader.mismatch,
+    },
+    uiText,
+  );
   // The windows read the engine's cycle series, the read the cost timeline draws: the
   // account snapshots list ACTIVE ad sets only and can hold none of the portfolio's.
   const beforeAfter = buildBeforeAfter({
+    locale: uiLocale,
+    translate: optimizerText,
     report,
     series: cpaSeriesQuery.data,
     range: resolvedRange,
@@ -416,7 +452,7 @@ export function PortfolioDetailWorkspace({
       reason: stopping ? 'Stopped from the portfolio header' : undefined,
     });
   };
-  const dailyRead = buildDailyRead(heroView, portfolio.daily_total);
+  const dailyRead = buildDailyRead(heroView, portfolio.daily_total, optimizerText);
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
   /** The asked-for row whose adopt/build/dismiss is mid-write. */
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
@@ -435,10 +471,15 @@ export function PortfolioDetailWorkspace({
   const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
   const askedRows = useMemo(
     () =>
-      buildAskedForRows(suggestionsQuery.data.rows, portfolio.daily_total, {
-        proposals: audienceProposalsQuery.data,
-      }),
-    [suggestionsQuery.data.rows, portfolio.daily_total, audienceProposalsQuery.data],
+      buildAskedForRows(
+        suggestionsQuery.data.rows,
+        portfolio.daily_total,
+        {
+          proposals: audienceProposalsQuery.data,
+        },
+        uiText,
+      ),
+    [suggestionsQuery.data.rows, portfolio.daily_total, audienceProposalsQuery.data, uiText],
   );
   const askedById = useMemo(() => new Map(askedRows.map((row) => [row.id, row])), [askedRows]);
   /** The asked-for row whose audience proposal is open under it. */
@@ -522,7 +563,7 @@ export function PortfolioDetailWorkspace({
         onError: (error) =>
           setBuildFailure({
             rowId: asked.id,
-            message: error instanceof Error ? error.message : 'That did not go through.',
+            message: formatUiError(error),
           }),
         onSettled: () => setActiveSuggestionId(null),
       });
@@ -609,8 +650,21 @@ export function PortfolioDetailWorkspace({
   const holdsMeta = portfolioPlatforms(portfolio.platforms).includes('meta');
   // The table reads the distance to the target off a small bar per row, when there is one.
   const adsetColumns = [
-    ...kpiColumns({ currency, maxCiCost: maxCiCpa, metric }),
-    ...(targetDisplay != null ? [vsTargetColumn({ target: targetDisplay, metric, currency })] : []),
+    ...kpiColumns({ currency, maxCiCost: maxCiCpa, metric, locale: uiLocale, translate: uiText }),
+    ...(targetDisplay != null
+      ? [
+          vsTargetColumn(
+            {
+              target: targetDisplay,
+              metric,
+              currency,
+              locale: uiLocale,
+              translate: uiText,
+            },
+            uiLocale,
+          ),
+        ]
+      : []),
   ];
 
   const dailyTrendsQuery = useOptimizerAdDailyTrends(brandId, adAccountId, selectedAdsetId);
@@ -631,7 +685,7 @@ export function PortfolioDetailWorkspace({
           back={
             <>
               <Button
-                aria-label="Back to portfolios"
+                aria-label={uiText('back_to_portfolios_94a4418')}
                 className="h-7 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
                 onClick={onClose}
                 size="sm"
@@ -639,7 +693,7 @@ export function PortfolioDetailWorkspace({
                 variant="ghost"
               >
                 <ArrowLeftIcon />
-                Portfolios
+                {uiText('portfolios_e8af9d8')}
               </Button>
               <span aria-hidden className="text-muted-foreground">
                 /
@@ -671,13 +725,13 @@ export function PortfolioDetailWorkspace({
             // rem-sized triggers measured 22px tall, under the 24px target floor.
             <TabsList className="h-8 min-h-[30px] shrink-0" variant="line">
               <TabsTrigger className="min-h-[24px] px-2 text-sm" value="performance">
-                Performance
+                {uiText('performance_442aded')}
               </TabsTrigger>
               <TabsTrigger className="min-h-[24px] px-2 text-sm" value="manage">
-                Manage
+                {uiText('manage_5a23444')}
               </TabsTrigger>
               <TabsTrigger className="min-h-[24px] px-2 text-sm" value="activity">
-                Activity
+                {uiText('activity_38da150')}
               </TabsTrigger>
             </TabsList>
           }
@@ -696,7 +750,7 @@ export function PortfolioDetailWorkspace({
           <OptimizerReadError
             error={performanceQuery.error}
             onRetry={() => void performanceQuery.refetch()}
-            subject="this portfolio's cycle"
+            subject={uiText('optimizerLoadSubject', { kind: 'cycle', name: '' })}
           />
         ) : null}
 
@@ -707,10 +761,7 @@ export function PortfolioDetailWorkspace({
             className="flex items-center gap-2 rounded-lg bg-primary/5 px-4 py-3 text-foreground text-xs"
           >
             <RefreshCwIcon className="size-4 shrink-0 animate-spin text-primary-ink" aria-hidden />
-            <span>
-              Scoring your first cycle — this can take up to a couple of minutes. Results appear
-              here automatically; you can keep working.
-            </span>
+            <span>{uiText('scoring_your_first_cycle_this_can_take_up_to__bc23bbf')}</span>
           </div>
         ) : null}
 
@@ -719,8 +770,7 @@ export function PortfolioDetailWorkspace({
         {firstCycle === 'stalled' ? (
           <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 px-4 py-3 text-foreground text-xs">
             <span className="flex-1">
-              The first cycle hasn't landed yet. It normally scores within a couple of minutes — the
-              scheduler will keep trying.
+              {uiText('the_first_cycle_hasn_t_landed_yet_it_normally_68945e5')}
             </span>
             <Button
               className="h-7 gap-1.5 px-2 text-xs"
@@ -730,7 +780,7 @@ export function PortfolioDetailWorkspace({
               variant="secondary"
             >
               <RefreshCwIcon aria-hidden className="size-3.5" />
-              Check again
+              {uiText('check_again_fb7099a')}
             </Button>
           </div>
         ) : null}
@@ -739,7 +789,7 @@ export function PortfolioDetailWorkspace({
           beforeAfter={{
             model: beforeAfter,
             currency: currency ?? null,
-            words: resultWords(metric.kpiField, metric.resultLabel),
+            words: resultWords(metric.kpiField, metric.resultLabel, uiText),
             window: resolvedRange.window,
             target: targetDisplay ?? null,
           }}
@@ -772,17 +822,17 @@ export function PortfolioDetailWorkspace({
             no Meta member has no ad set to rank. */}
         <OptimizerPanel
           className={holdsMeta ? undefined : 'hidden'}
-          meta={<>{costCiLegend(metric)} · expand a row for its creative verdicts</>}
-          title={`${metric.costLabel} per ad set`}
+          meta={<>{uiText.rich('sentence_f65a8f29df72', { v0: costCiLegend(metric, uiText) })}</>}
+          title={uiText('template_98b365f67cec', { v0: metric.costLabel })}
         >
           <InsightDataTable
             // The search sits in the section without a frame of its own: a muted fill, no border.
             className="[&_[data-slot=input]]:border-0 [&_[data-slot=input]]:bg-muted/60 [&_[data-slot=input]]:shadow-none"
             columns={adsetColumns}
             defaultSort={{ columnId: 'cost', direction: 'desc' }}
-            emptyState="No scored ad sets in the latest cycle."
+            emptyState={uiText('portfolioNoScoredAdsets')}
             searchable
-            searchPlaceholder="Search ad sets by name or ID…"
+            searchPlaceholder={uiText('search_ad_sets_by_name_or_id_aa6e06a')}
             searchValue={(row) => `${row.name ?? ''} ${row.adsetId}`}
             expandedContent={(row) => (
               <AdsetCreativeVerdicts
@@ -795,7 +845,7 @@ export function PortfolioDetailWorkspace({
             getRowId={(row) => row.adsetId}
             rowActions={(row) => (
               <Button
-                aria-label={`Chart the creatives in ${row.name ?? row.adsetId}`}
+                aria-label={uiText('template_5606840871c8', { v0: row.name ?? row.adsetId })}
                 aria-pressed={selectedAdsetId === row.adsetId}
                 className={cn(
                   'size-7',
@@ -819,14 +869,16 @@ export function PortfolioDetailWorkspace({
         <div className="flex flex-wrap items-center justify-between gap-2" data-testid="range-line">
           <p className="text-muted-foreground text-xs">
             <span className="font-semibold text-foreground">{resolvedRange.label}</span>
-            {' · the charts below'}
+            {uiText('the_charts_below_a02e2ec')}
             {headline.days !== resolvedRange.days && !heroView.unread ? (
               <span data-testid="range-line-hero-window">
-                {` · the read above covers ${headline.days} ${headline.days === 1 ? 'day' : 'days'}`}
+                {uiText('template_c73d69e1342e', { count: headline.days })}
               </span>
             ) : null}
             {resolvedRange.flightMissing ? (
-              <span className="ml-2">set a flight in Manage to report on it</span>
+              <span className="ml-2">
+                {uiText('set_a_flight_in_manage_to_report_on_it_b76f106')}
+              </span>
             ) : null}
           </p>
           <DateRangeControl hasFlight={hasFlight} onChange={onRangeChange} value={range} />
@@ -842,15 +894,15 @@ export function PortfolioDetailWorkspace({
         <OptimizerPanel
           meta={
             <span className="text-xs text-muted-foreground">
-              hover a cycle for its metrics + actions
+              {uiText('hover_a_cycle_for_its_metrics_actions_f9dc592')}
             </span>
           }
-          title={`${metric.costLabel} timeline`}
+          title={uiText('template_ae3857e2c83a', { v0: metric.costLabel })}
         >
           <DataState
             error={
               <ChartError
-                message={`The ${metric.costLabel} timeline could not load.`}
+                message={uiText('chartCostLoadFailed', { metric: metric.costLabel })}
                 onRetry={cpaSeriesQuery.refetch}
               />
             }
@@ -876,7 +928,7 @@ export function PortfolioDetailWorkspace({
                 resultLabel={resultWord}
               />
             }
-            title="Conversion volume"
+            title={uiText('conversion_volume_1e40634')}
           >
             <ConversionVolumePanel
               confidence={latestRun?.confidence ?? null}
@@ -890,7 +942,9 @@ export function PortfolioDetailWorkspace({
               <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                 {flightPacing.kind === 'ready' ? (
                   <span>
-                    {flightPacing.source === 'engine' ? 'engine verdict' : 'from daily spend'}
+                    {flightPacing.source === 'engine'
+                      ? uiText('engine_verdict_66d7bee')
+                      : uiText('from_daily_spend_9f97430')}
                   </span>
                 ) : null}
                 {pacingStale ? (
@@ -904,7 +958,7 @@ export function PortfolioDetailWorkspace({
                 ) : null}
               </span>
             }
-            title="Flight pacing"
+            title={uiText('flight_pacing_7974f46')}
           >
             <FlightPacing
               currency={currency}
@@ -916,15 +970,15 @@ export function PortfolioDetailWorkspace({
           <OptimizerPanel
             meta={
               <span className="text-xs text-muted-foreground">
-                within-ad-set creative wins · {resolvedRange.lookback}
+                {uiText.rich('sentence_c0e74bcd4c95', { v0: resolvedRange.lookback })}
               </span>
             }
-            title="Angle to run next"
+            title={uiText('angle_to_run_next_1efda05')}
           >
             <DataState
               error={
                 <ChartError
-                  message="The creative angle standing could not load."
+                  message={uiText('the_creative_angle_standing_could_not_load_a7e613b')}
                   onRetry={winratesQuery.refetch}
                 />
               }
@@ -940,22 +994,22 @@ export function PortfolioDetailWorkspace({
             behind a disclosure: the news above already says where the cost comes from. */}
         <details className="group" data-testid="portfolio-detail-more">
           <summary className={TEXT_DISCLOSURE}>
-            <span className="group-open:hidden">Show detail</span>
-            <span className="hidden group-open:inline">Hide detail</span>
+            <span className="group-open:hidden">{uiText('show_detail_67c90da')}</span>
+            <span className="hidden group-open:inline">{uiText('hide_detail_6c9aeec')}</span>
           </summary>
           <div className="mt-5 grid grid-cols-1 gap-8 lg:grid-cols-2">
             <OptimizerPanel
               meta={
                 <span className="text-xs text-muted-foreground">
-                  step conversion · {funnelMeta}
+                  {uiText.rich('sentence_41976513999e', { v0: funnelMeta })}
                 </span>
               }
-              title="Conversion funnel"
+              title={uiText('conversion_funnel_ade8269')}
             >
               <DataState
                 error={
                   <ChartError
-                    message="The conversion funnel could not load."
+                    message={uiText('the_conversion_funnel_could_not_load_a2be08d')}
                     onRetry={snapshotsQuery.refetch}
                   />
                 }
@@ -978,7 +1032,7 @@ export function PortfolioDetailWorkspace({
                 ) : null
               }
               bodyClassName="space-y-2"
-              title="Reallocation"
+              title={uiText('reallocation_0c79d0f')}
             >
               {/* Observe is where a suggestion-created portfolio silently lands. When
               the engine has actually scored moves and observe is the only reason
@@ -987,9 +1041,7 @@ export function PortfolioDetailWorkspace({
               {isObserveWithMoves ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warning/5 px-3 py-2">
                   <p className="min-w-0 text-warning text-xs">
-                    Observe mode — the optimizer wants to move budget across{' '}
-                    {movedCount === 1 ? '1 ad set' : `${movedCount} ad sets`}, but it never writes
-                    in this mode.
+                    {uiText.rich('sentence_58fb160748b8', { count: movedCount })}
                   </p>
                   <Button
                     className="h-6 shrink-0 px-2 text-xs"
@@ -1004,18 +1056,19 @@ export function PortfolioDetailWorkspace({
                     type="button"
                     variant="secondary"
                   >
-                    {update.isPending ? 'Switching…' : 'Switch to Recommend'}
+                    {update.isPending
+                      ? uiText('switching_b7b9fbf')
+                      : uiText('switch_to_recommend_ea6903f')}
                   </Button>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  {applyModeExplainer(portfolio.apply_mode)}
+                  {applyModeExplainer(portfolio.apply_mode, undefined, optimizerText, uiLocale)}
                 </p>
               )}
               {update.isError ? (
                 <p className="text-xs text-destructive" role="status">
-                  Could not change the mode. Nothing on Meta was touched — try again, or set it from
-                  Manage.
+                  {uiText('could_not_change_the_mode_nothing_on_meta_was_87152ec')}
                 </p>
               ) : null}
               {/* The move as a picture and a sentence first; the sortable table below stays
@@ -1033,7 +1086,7 @@ export function PortfolioDetailWorkspace({
               />
               <details className="group">
                 <summary className="hit-area cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                  Exact figures per ad set
+                  {uiText('exact_figures_per_ad_set_e2dcd24')}
                 </summary>
                 <div className="pt-2">
                   <ReallocationFlow
@@ -1061,12 +1114,12 @@ export function PortfolioDetailWorkspace({
                   {adsetNameById.get(selectedAdsetId) || selectedAdsetId}
                 </span>
               }
-              title="Creatives"
+              title={uiText('creatives_2eb70c5')}
             >
               <DataState
                 error={
                   <ChartError
-                    message="This ad set's creatives could not load."
+                    message={uiText('this_ad_set_s_creatives_could_not_load_b727c82')}
                     onRetry={dailyTrendsQuery.refetch}
                   />
                 }
@@ -1084,13 +1137,17 @@ export function PortfolioDetailWorkspace({
               </DataState>
             </OptimizerPanel>
             <OptimizerPanel
-              meta={<span className="text-xs text-muted-foreground">ROAS vs break-even</span>}
-              title="Ad-set profitability"
+              meta={
+                <span className="text-xs text-muted-foreground">
+                  {uiText('roas_vs_break_even_7dfc61d')}
+                </span>
+              }
+              title={uiText('ad_set_profitability_bbf63af')}
             >
               <DataState
                 error={
                   <ChartError
-                    message="Ad-set profitability could not load."
+                    message={uiText('ad_set_profitability_could_not_load_e538d4c')}
                     onRetry={dailyTrendsQuery.refetch}
                   />
                 }
@@ -1163,9 +1220,11 @@ export function PortfolioDetailWorkspace({
           />
         ) : (
           <div className="border-border/60 border-t pt-3">
-            <p className="font-medium text-sm">No pending actions for this portfolio yet.</p>
+            <p className="font-medium text-sm">
+              {uiText('no_pending_actions_for_this_portfolio_yet_7156624')}
+            </p>
             <p className="text-muted-foreground text-xs">
-              Budget moves and recommendations that need your decision appear here.
+              {uiText('budget_moves_and_recommendations_that_need_yo_c04bb8a')}
             </p>
           </div>
         )}

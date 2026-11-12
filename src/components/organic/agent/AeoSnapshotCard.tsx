@@ -2,6 +2,7 @@
 
 import type { AeoSnapshotCard as AeoSnapshotCardData } from '@continuum/contracts';
 import { Bot, ExternalLink, Lightbulb, Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   AgentArtifactCard,
   AgentCardBody,
@@ -52,6 +53,7 @@ function MetricBlock({
 }
 
 export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData }) {
+  const uiText = useTranslations('organic');
   const narratives = snapshot.topNarratives.slice(0, 5);
   const citations = snapshot.citations.slice(0, 4);
   const topOpportunities = snapshot.opportunities.slice(0, 4);
@@ -59,34 +61,47 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
   return (
     <AgentArtifactCard>
       <AgentCardHeader
-        action={<StatusLabel tone="done">{snapshot.promptCount} prompts</StatusLabel>}
+        action={
+          <StatusLabel tone="done">
+            {uiText.rich('sentence_6992dbc43676', { count: snapshot.promptCount })}
+          </StatusLabel>
+        }
       >
         <AgentCardEyebrow
-          label="AEO snapshot"
+          label={uiText('aeo_snapshot_e13a7e7')}
           right={
             <span className="text-xs text-muted-foreground">
               {formatDate(snapshot.generatedAt)}
             </span>
           }
         />
-        <AgentCardTitle>How AI is representing {snapshot.brandName}</AgentCardTitle>
+        <AgentCardTitle>
+          {uiText.rich('sentence_4afc1256f303', { v0: () => snapshot.brandName })}
+        </AgentCardTitle>
         <AgentCardSummary>
-          Simulated answer-engine run using brand, competitor, document, trend, and
-          audience-question context.
+          {uiText('simulated_answer_engine_run_using_brand_compe_eca0904')}
         </AgentCardSummary>
       </AgentCardHeader>
 
       <AgentCardBody className="space-y-4 pt-4">
         <div className="grid grid-cols-2 gap-2">
-          <MetricBlock label="Visibility" value={snapshot.visibilityScore} suffix="/100" />
-          <MetricBlock label="Share of voice" value={snapshot.shareOfVoice} suffix="%" />
+          <MetricBlock
+            label={uiText('visibility_7448611')}
+            value={snapshot.visibilityScore}
+            suffix="/100"
+          />
+          <MetricBlock
+            label={uiText('share_of_voice_5b1349d')}
+            value={snapshot.shareOfVoice}
+            suffix="%"
+          />
         </div>
 
         {narratives.length > 0 ? (
           <section>
             <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Bot className="size-3.5" />
-              Top narratives
+              {uiText('top_narratives_aed24a7')}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {narratives.map((theme) => (
@@ -102,7 +117,7 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
           <section>
             <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Search className="size-3.5" />
-              Missing topics
+              {uiText('missing_topics_af5c9cb')}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {snapshot.missingTopics.slice(0, 5).map((topic) => (
@@ -117,7 +132,7 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
         {citations.length > 0 ? (
           <section>
             <div className="mb-2 text-xs font-medium text-muted-foreground">
-              Cited/source-like domains
+              {uiText('cited_source_like_domains_e2ee4b8')}
             </div>
             <div className="space-y-1.5">
               {citations.map((citation) => (
@@ -143,7 +158,7 @@ export function AeoSnapshotCard({ snapshot }: { snapshot: AeoSnapshotCardData })
           <section>
             <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Lightbulb className="size-3.5" />
-              Recommended actions
+              {uiText('recommended_actions_d67b993')}
             </div>
             <div className="space-y-2">
               {topOpportunities.map((opportunity, index) => (

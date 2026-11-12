@@ -1,0 +1,482 @@
+[
+  {
+    "file": "src/components/library/AssetDownloadButton.tsx",
+    "kind": "text",
+    "text": "proxy",
+    "reason": "Technical proxy rendition name used consistently by professional media workflows."
+  },
+  {
+    "file": "src/components/library/ClipCaptionToggle.tsx",
+    "kind": "text",
+    "text": "CC",
+    "reason": "Standard closed-caption badge; its interactive accessibility label is translated."
+  },
+  {
+    "file": "src/components/library/LibraryFilterBar.tsx",
+    "kind": "attribute",
+    "text": "HDR",
+    "reason": "Established high dynamic range standard abbreviation, independent of UI language."
+  },
+  {
+    "file": "src/components/library/MediaCard.tsx",
+    "kind": "text",
+    "text": "Ae",
+    "reason": "Adobe After Effects product icon abbreviation; the accessible product name is preserved."
+  },
+  {
+    "file": "src/components/library/MediaCard.tsx",
+    "kind": "text",
+    "text": "Pr",
+    "reason": "Adobe Premiere Pro product icon abbreviation; the accessible product name is preserved."
+  },
+  {
+    "file": "src/components/library/detail/FilePreviewStage.tsx",
+    "kind": "text",
+    "text": "Ae",
+    "reason": "Adobe After Effects product icon abbreviation; the accessible product name is preserved."
+  },
+  {
+    "file": "src/components/library/detail/FilePreviewStage.tsx",
+    "kind": "text",
+    "text": "Pr",
+    "reason": "Adobe Premiere Pro product icon abbreviation; the accessible product name is preserved."
+  },
+  {
+    "file": "src/components/library/detail/VideoAnnotationPlayer.tsx",
+    "kind": "dynamic text",
+    "text": "{value} fps",
+    "reason": "Standard frames-per-second unit symbol; frame rate values and precision remain unchanged."
+  },
+  {
+    "file": "src/components/library/detail/VideoAnnotationPlayer.tsx",
+    "kind": "dynamic text",
+    "text": "~30 fps",
+    "reason": "Standard frames-per-second unit symbol; frame rate values and precision remain unchanged."
+  },
+  {
+    "file": "src/components/library/share/ShareLinkSettings.tsx",
+    "kind": "dynamic text",
+    "text": "{name}",
+    "reason": "Literal supported watermark substitution token; translating it would change the protocol."
+  },
+  {
+    "file": "src/components/library/share/ShareLinkSettings.tsx",
+    "kind": "dynamic text",
+    "text": "{email}",
+    "reason": "Literal supported watermark substitution token; translating it would change the protocol."
+  },
+  {
+    "file": "src/components/library/share/ShareLinkSettings.tsx",
+    "kind": "dynamic text",
+    "text": "{ip}",
+    "reason": "Literal supported watermark substitution token; translating it would change the protocol."
+  },
+  {
+    "file": "src/components/library/share/ShareLinkSettings.tsx",
+    "kind": "dynamic text",
+    "text": "{time}",
+    "reason": "Literal supported watermark substitution token; translating it would change the protocol."
+  },
+  {
+    "file": "src/components/forge/RenderFileSpecs.tsx",
+    "kind": "dynamic text",
+    "text": "{value} fps",
+    "reason": "Standard frames-per-second unit symbol; frame rate values and precision remain unchanged."
+  },
+  {
+    "file": "src/components/forge/RenderRowsImport.tsx",
+    "kind": "attribute",
+    "text": "{Equipo A} vs. {Equipo B}",
+    "reason": "Source template expression example with exact authored field identifiers; changing names breaks binding."
+  },
+  {
+    "file": "src/components/forge/TemplateAuthoringEditor.tsx",
+    "kind": "text",
+    "text": "px",
+    "reason": "Pixel measurement unit symbol; the measured value and stored units remain unchanged."
+  },
+  {
+    "file": "src/components/forge/TemplateAuthoringPreparationPanel.tsx",
+    "kind": "text",
+    "text": "SHA-256",
+    "reason": "Cryptographic algorithm identifier for the source checksum, independent of UI language."
+  },
+  {
+    "file": "src/components/forge/TemplateLayerAuthoredMasks.tsx",
+    "kind": "text",
+    "text": "px",
+    "reason": "Pixel measurement unit symbol; the measured value and stored units remain unchanged."
+  },
+  {
+    "file": "src/components/forge/TemplateLayerEditor.tsx",
+    "kind": "text",
+    "text": "px",
+    "reason": "Pixel measurement unit symbol; the measured value and stored units remain unchanged."
+  },
+  {
+    "file": "src/components/forge/VariableEditor.tsx",
+    "kind": "dynamic text",
+    "text": "{value} ch",
+    "reason": "CSS character-width unit symbol used by the editor; changing it would misstate the measurement."
+  },
+  {
+    "file": "src/components/forge/VariableEditor.tsx",
+    "kind": "text",
+    "text": "ch",
+    "reason": "CSS character-width unit symbol used by the editor; changing it would misstate the measurement."
+  },
+  {
+    "file": "src/components/ai-studio/CanvasMediaLoader.tsx",
+    "kind": "text",
+    "text": "Continuum AI Studio",
+    "reason": "Continuum product name, independent of UI language."
+  },
+  {
+    "file": "src/components/ai-studio/chat/ChatPanel.tsx",
+    "kind": "attribute",
+    "text": "CFG",
+    "reason": "Classifier-free guidance parameter abbreviation used by the model API."
+  },
+  {
+    "file": "src/StudioCanvas/components/CanvasContextMenuContent.tsx",
+    "kind": "text",
+    "text": "Shift+F",
+    "reason": "Keyboard shortcut syntax; the action label is translated separately."
+  },
+  {
+    "file": "src/StudioCanvas/components/StudioCanvas.tsx",
+    "kind": "text",
+    "text": "Unsplash",
+    "reason": "External image provider proper name and required attribution identity."
+  },
+  {
+    "file": "src/StudioCanvas/components/StudioCanvasHeader.tsx",
+    "kind": "text",
+    "text": "Studio",
+    "reason": "Product workspace name, retained as a proper name."
+  },
+  {
+    "file": "src/StudioCanvas/components/UnsplashBrowser.tsx",
+    "kind": "attribute",
+    "text": "Unsplash",
+    "reason": "External image provider proper name and required attribution identity."
+  },
+  {
+    "file": "src/StudioCanvas/components/UnsplashBrowser.tsx",
+    "kind": "text",
+    "text": "Unsplash",
+    "reason": "External image provider proper name and required attribution identity."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/HyperframesAgentBlock.tsx",
+    "kind": "text",
+    "text": "30 fps",
+    "reason": "Standard frames-per-second unit symbol; frame rate values and precision remain unchanged."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/HyperframesAgentBlock.tsx",
+    "kind": "text",
+    "text": "60 fps",
+    "reason": "Standard frames-per-second unit symbol; frame rate values and precision remain unchanged."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/ImageNode.tsx",
+    "kind": "text",
+    "text": "Unsplash",
+    "reason": "External image provider proper name and required attribution identity."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/OmniGenBlock.tsx",
+    "kind": "text",
+    "text": "Omni 1.1 Flash",
+    "reason": "Published model identifier, independent of UI language."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/OmniGenBlock.tsx",
+    "kind": "text",
+    "text": "Gemini Omni 1.1 •",
+    "reason": "Published model family identifier with decorative separator."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/PlannerDraftBlock.tsx",
+    "kind": "dynamic text",
+    "text": "instagram",
+    "reason": "Canonical platform identifier used as a proper-name fallback; authored account names remain unchanged."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/action/SubtitlesConfig.tsx",
+    "kind": "text",
+    "text": "Aa",
+    "reason": "Typeface preview sample preserving its intended glyph shape."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/action/SubtitlesConfig.tsx",
+    "kind": "text",
+    "text": "Bb",
+    "reason": "Typeface preview sample preserving its intended glyph shape."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/api-render/RenderFitTable.tsx",
+    "kind": "text",
+    "text": "px",
+    "reason": "Pixel measurement unit symbol; the measured value and stored units remain unchanged."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/omni/OmniGenDialog.tsx",
+    "kind": "text",
+    "text": "Omni 1.1 Flash",
+    "reason": "Published model identifier, independent of UI language."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/timeline/VideoProductionWorkspaceDialog.tsx",
+    "kind": "attribute",
+    "text": "BPM",
+    "reason": "Standard beats-per-minute unit abbreviation for music tempo."
+  },
+  {
+    "file": "src/StudioCanvas/nodes/timeline/motion/EasingCurveEditor.tsx",
+    "kind": "attribute",
+    "text": "loop or wiggle(2, 0.1)",
+    "reason": "Executable expression example; translating function names or numeric syntax would make it invalid."
+  },
+  {
+    "file": "src/app/[locale]/(post-auth)/ai-studio/AIStudioClient.tsx",
+    "kind": "text",
+    "text": "AI Studio",
+    "reason": "Product workspace name, retained as a proper name."
+  },
+  {
+    "file": "src/components/automations/workspace/NodeConfigurationEditor.tsx",
+    "kind": "attribute",
+    "text": "id-1, id-2",
+    "reason": "Exact technical identifier syntax used in stored source/configuration; translating would change the example contract."
+  },
+  {
+    "file": "src/components/automations/workspace/NodeConfigurationEditor.tsx",
+    "kind": "attribute",
+    "text": "spend, impressions, clicks",
+    "reason": "Exact technical identifier syntax used in stored source/configuration; translating would change the example contract."
+  },
+  {
+    "file": "src/components/automations/workspace/NodeConfigurationEditor.tsx",
+    "kind": "attribute",
+    "text": "get_key_metrics, get_top_ads",
+    "reason": "Exact technical identifier syntax used in stored source/configuration; translating would change the example contract."
+  },
+  {
+    "file": "src/components/automations/workspace/NodeConfigurationEditor.tsx",
+    "kind": "attribute",
+    "text": "custom.workflow_output",
+    "reason": "Exact technical identifier syntax used in stored source/configuration; translating would change the example contract."
+  },
+  {
+    "file": "src/components/paid-media/campaigns/EntityStatusSheet.tsx",
+    "kind": "text",
+    "text": "ID",
+    "reason": "Technical identifier or standardized abbreviation; preserve exact notation."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiDeliveriesTable.tsx",
+    "kind": "text",
+    "text": "fbtrace_id",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiPixelPanel.tsx",
+    "kind": "attribute",
+    "text": "TEST12345",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiSendPanels.tsx",
+    "kind": "text",
+    "text": "fbtrace_id",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiSourcesPanel.tsx",
+    "kind": "text",
+    "text": "id.timestamp.body",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiSourcesPanel.tsx",
+    "kind": "text",
+    "text": "whsec_",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiSourcesPanel.tsx",
+    "kind": "dynamic text",
+    "text": "{ events: [...] }",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiSourcesPanel.tsx",
+    "kind": "text",
+    "text": "?test=1",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/conversions/CapiSourcesPanel.tsx",
+    "kind": "attribute",
+    "text": "{\"contact\": {\"email\": \"ada@example.com\"}, \"deal\": {\"amount\": 1200}}",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/dashboard/CampaignTimelineWorkspace.tsx",
+    "kind": "dynamic text",
+    "text": "DCO",
+    "reason": "Technical identifier or standardized abbreviation; preserve exact notation."
+  },
+  {
+    "file": "src/components/paid-media/dashboard/PaidMediaDashboard.tsx",
+    "kind": "text",
+    "text": "OpenAI Ads",
+    "reason": "Product or platform proper name retained in all UI locales."
+  },
+  {
+    "file": "src/components/paid-media/dashboard/PaidMediaDashboard.tsx",
+    "kind": "text",
+    "text": "DV360",
+    "reason": "Product or platform proper name retained in all UI locales."
+  },
+  {
+    "file": "src/components/paid-media/dashboard/PaidMediaDashboard.tsx",
+    "kind": "text",
+    "text": "TradingView Lightweight Charts",
+    "reason": "Product or platform proper name retained in all UI locales."
+  },
+  {
+    "file": "src/components/paid-media/jaina/components/JainaInlineReport.tsx",
+    "kind": "dynamic text",
+    "text": "EN",
+    "reason": "ISO language code for the independent Jaina report-language selector; preserve the code and report preference."
+  },
+  {
+    "file": "src/components/paid-media/jaina/export/JainaReportDocument.tsx",
+    "kind": "text",
+    "text": "Generated",
+    "reason": "Generated report output retains its independent existing report-language behavior; UI locale must not rewrite exported report content."
+  },
+  {
+    "file": "src/components/paid-media/jaina/export/JainaReportDocument.tsx",
+    "kind": "text",
+    "text": "of",
+    "reason": "Generated report output retains its independent existing report-language behavior; UI locale must not rewrite exported report content."
+  },
+  {
+    "file": "src/components/paid-media/jaina/export/JainaReportDocument.tsx",
+    "kind": "text",
+    "text": "modules computed from live data",
+    "reason": "Generated report output retains its independent existing report-language behavior; UI locale must not rewrite exported report content."
+  },
+  {
+    "file": "src/components/paid-media/jaina/export/JainaReportDocument.tsx",
+    "kind": "dynamic text",
+    "text": "· {value} citations",
+    "reason": "Generated report output retains its independent existing report-language behavior; UI locale must not rewrite exported report content."
+  },
+  {
+    "file": "src/components/paid-media/jaina/export/JainaReportDocument.tsx",
+    "kind": "text",
+    "text": "Continuum · Jaina",
+    "reason": "Generated report output retains its independent existing report-language behavior; UI locale must not rewrite exported report content."
+  },
+  {
+    "file": "src/components/paid-media/optimizer/sections/OverviewSkeletons.tsx",
+    "kind": "dynamic text",
+    "text": "MENSAJES // TODOS",
+    "reason": "Skeleton example campaign name representing authored source content; campaign names are independent of application UI locale."
+  },
+  {
+    "file": "src/components/paid-media/optimizer/sections/PortfolioManagePanel.tsx",
+    "kind": "attribute",
+    "text": "offsite_conversion.fb_pixel_custom",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/optimizer/sections/QueueTraySkeleton.tsx",
+    "kind": "text",
+    "text": "EASY/BROAD/OCTUBRE",
+    "reason": "Skeleton example campaign name representing authored source content; campaign names are independent of application UI locale."
+  },
+  {
+    "file": "src/components/paid-media/optimizer/sections/account/AccountReadFreshness.tsx",
+    "kind": "text",
+    "text": "UTC",
+    "reason": "Technical identifier or standardized abbreviation; preserve exact notation."
+  },
+  {
+    "file": "src/components/paid-media/optimizer/sections/google/views/SearchTermExplorer.tsx",
+    "kind": "text",
+    "text": "PMax",
+    "reason": "Product or platform proper name retained in all UI locales."
+  },
+  {
+    "file": "src/components/paid-media/optimizer/sections/wizard/StepGoal.tsx",
+    "kind": "attribute",
+    "text": "offsite_conversion.fb_pixel_custom",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/primitives/ProductCatalogManagerPrimitive.tsx",
+    "kind": "attribute",
+    "text": "sku_12345",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/components/paid-media/primitives/ProductCatalogManagerPrimitive.tsx",
+    "kind": "attribute",
+    "text": "adset_9876",
+    "reason": "Copyable protocol/schema/example literal: identifier, signing expression, wire field, query flag, JSON shape, or example machine ID must remain byte-compatible."
+  },
+  {
+    "file": "src/CampaignCanvas/nodes/AdNode.tsx",
+    "kind": "dynamic text",
+    "text": "LEARN MORE",
+    "reason": "Default ad creative CTA content in the ad preview, independent of application UI locale; preserves existing content-language behavior."
+  },
+  {
+    "file": "src/components/onboarding/PlatformIcons.tsx",
+    "kind": "attribute",
+    "text": "Threads",
+    "reason": "Official platform brand name; preserve the same name in every locale."
+  },
+  {
+    "file": "src/components/onboarding/PlatformIcons.tsx",
+    "kind": "attribute",
+    "text": "Amazon Ads",
+    "reason": "Official platform brand name; preserve the same name in every locale."
+  },
+  {
+    "file": "src/components/forge/DeliveryChain.tsx",
+    "kind": "dynamic text",
+    "text": "Meta › {value} › {value} › {value}",
+    "reason": "Proper-name provider breadcrumb with source-authored account, campaign and ad-set names/IDs separated only by navigation glyphs; contains no translatable grammar."
+  },
+  {
+    "file": "src/components/organic/primitives/SocialPostFrame.tsx",
+    "kind": "dynamic text",
+    "text": "Shorts",
+    "reason": "YouTube product-format proper name. Preserve platform identity rather than translating its brand label."
+  },
+  {
+    "file": "src/components/organic/primitives/SocialPostFrame.tsx",
+    "kind": "dynamic text",
+    "text": "Reels",
+    "reason": "Meta product-format proper name. Preserve platform identity rather than translating its brand label."
+  },
+  {
+    "file": "src/components/organic/rules/CommentRulePreview.tsx",
+    "kind": "dynamic text",
+    "text": "@commenter",
+    "reason": "Invariant sample Instagram handle identifying the simulated commenter in a rule preview; it is an account identifier, not an instruction or field label."
+  },
+  {
+    "file": "src/components/paid-media/jaina/export/JainaReportDocument.tsx",
+    "kind": "dynamic text",
+    "text": "Performance Report",
+    "reason": "Legacy exported report title fallback belongs to the independent report output; preserve existing export bytes and supplied report title when UI locale changes."
+  }
+]

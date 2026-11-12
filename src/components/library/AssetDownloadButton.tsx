@@ -19,6 +19,7 @@ import {
   psdStaticExportResponseSchema,
 } from '@continuum/contracts';
 import { Download, Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToastContext } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { http } from '@/lib/api/http';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { useLibraryPlayback } from '@/lib/library/libraryPlayback';
@@ -66,6 +68,10 @@ export function AssetDownloadButton({
   variant = 'labelled',
   className,
 }: Props) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   // Nullable on purpose: a card rendered outside the app shell (tests, a future
   // embed) must still offer the control rather than throw on a missing provider.
   const toast = useToastContext();
@@ -83,7 +89,9 @@ export function AssetDownloadButton({
 
   const fileName = asset.fileName || asset.title || `asset-${asset.id}`;
   const stem = fileName.replace(/\.[^.]+$/, '') || fileName;
-  const label = versionId ? 'Download this version' : 'Download';
+  const label = versionId
+    ? translateUi('download_this_version_2e7c5e73')
+    : translateUi('download_d6eafe82');
 
   const run = useCallback(
     async (save: () => Promise<void> | void) => {
@@ -92,15 +100,18 @@ export function AssetDownloadButton({
       try {
         await save();
       } catch (error) {
-        const description =
-          error instanceof Error ? error.message : 'Could not mint a download link.';
+        const description = uiErrorText(error);
         console.error('[AssetDownloadButton] download failed', error);
-        toast?.show({ title: 'Download failed', description, variant: 'error' });
+        toast?.show({
+          title: translateUi('download_failed_eae34ccb'),
+          description,
+          variant: 'error',
+        });
       } finally {
         setBusy(false);
       }
     },
-    [busy, toast],
+    [busy, toast, translateUi, uiErrorText],
   );
 
   const downloadOriginal = () =>
@@ -116,7 +127,7 @@ export function AssetDownloadButton({
       });
       saveSignedUrl(exported.signedUrl, exported.fileName);
       toast?.show({
-        title: 'Saved to Library',
+        title: translateUi('saved_to_library_7ffd8133'),
         description: exported.fileName,
         variant: 'success',
       });
@@ -173,14 +184,14 @@ export function AssetDownloadButton({
             aria-label={label}
             className={cn('gap-1.5', className)}
           >
-            {icon}
-            Download
+            {icon} {translateUi('download_d6eafe82')}{' '}
           </Button>
         }
       />
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem data-testid="download-original" onClick={() => void downloadOriginal()}>
-          Original
+          {' '}
+          {translateUi('original_88d759ea')}{' '}
         </DropdownMenuItem>
         {/\.psd$/i.test(fileName) ? (
           <>
@@ -190,14 +201,16 @@ export function AssetDownloadButton({
               disabled={busy}
               onClick={() => void downloadPsd('png')}
             >
-              PNG · preserves transparency
+              {' '}
+              {translateUi('png_preserves_transparency_275a8ae4')}{' '}
             </DropdownMenuItem>
             <DropdownMenuItem
               data-testid="download-psd-jpeg"
               disabled={busy}
               onClick={() => void downloadPsd('jpeg')}
             >
-              JPEG · white background
+              {' '}
+              {translateUi('jpeg_white_background_5cb4496a')}{' '}
             </DropdownMenuItem>
           </>
         ) : null}
@@ -220,7 +233,8 @@ export function AssetDownloadButton({
                 data-testid="download-proxy-audio_proxy"
                 onClick={() => saveSignedUrl(audioProxy.signedUrl, `${stem}-proxy.m4a`)}
               >
-                Audio proxy (AAC)
+                {' '}
+                {translateUi('audio_proxy_aac_f4ea2d20')}{' '}
               </DropdownMenuItem>
             ) : null}
           </>
@@ -235,7 +249,8 @@ export function AssetDownloadButton({
                 if (stageVideo) void run(() => downloadVideoStill(stageVideo, stem));
               }}
             >
-              Download still
+              {' '}
+              {translateUi('download_still_c4247cf2')}{' '}
             </DropdownMenuItem>
           </>
         ) : null}

@@ -18,12 +18,19 @@ const uploadMediaAsset = mock(async () => ({ assetId: 'asset-1', versionId: 'ver
 const mediaUpload = { ...(await import('@/lib/library/uploadMediaAsset')) };
 mock.module('@/lib/library/uploadMediaAsset', () => ({ ...mediaUpload, uploadMediaAsset }));
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { TemplateSlotEdit, TemplateVariable } from '@/lib/library/templateSources';
 import { VariableEditor } from './VariableEditor';
 

@@ -3,6 +3,7 @@
 import type { BrandSlackWorkspace } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquareText, RefreshCw, TriangleAlert, Unplug } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { AddToSlackButton } from '@/components/slack/AddToSlackButton';
 import {
@@ -19,6 +20,7 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   disconnectBrandSlackWorkspace,
   listBrandSlackWorkspaces,
@@ -43,6 +45,10 @@ export function BrandSlackWorkspacesSection({
   brandId,
   canManage,
 }: BrandSlackWorkspacesSectionProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const { show } = useToast();
   const queryClient = useQueryClient();
   const installHref = slackInstallStartHref(brandId);
@@ -58,22 +64,22 @@ export function BrandSlackWorkspacesSection({
     onSuccess: (_result, workspace) => {
       void queryClient.invalidateQueries({ queryKey: brandSlackWorkspacesKey(brandId) });
       show({
-        title: 'Slack workspace disconnected',
-        description: `This brand no longer posts to ${workspaceLabel(workspace)}.`,
+        title: tUi('m_dd1720223c'),
+        description: tUi('m_2b22114d5e', { v0: String(workspaceLabel(workspace)) }),
         variant: 'success',
       });
     },
     onError: (error) =>
       show({
-        title: 'Could not disconnect Slack',
-        description: error instanceof Error ? error.message : 'Refresh and try again.',
+        title: tUi('m_86c6392841'),
+        description: error instanceof Error ? uiErrorMessage(error) : tUi('m_41848a0e55'),
         variant: 'error',
       }),
   });
 
   if (workspaces.isLoading) {
     return (
-      <div role="status" aria-label="Loading Slack workspaces">
+      <div role="status" aria-label={tUi('m_582edd3946')}>
         <Skeleton className="h-14 w-full rounded-lg" />
       </div>
     );
@@ -84,11 +90,11 @@ export function BrandSlackWorkspacesSection({
       <div className="flex items-start justify-between gap-4 rounded-lg border border-warning/30 bg-warning/5 p-3">
         <p className="flex items-center gap-2 text-sm font-medium">
           <TriangleAlert className="size-4 text-warning" />
-          Slack workspaces could not be loaded
+          {tUi('m_e706cac296')}
         </p>
         <Button type="button" size="sm" variant="outline" onClick={() => void workspaces.refetch()}>
           <RefreshCw className="size-3.5" />
-          Retry
+          {tUi('m_9f5cd8a2e8')}
         </Button>
       </div>
     );
@@ -101,11 +107,9 @@ export function BrandSlackWorkspacesSection({
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center">
           <MessageSquareText className="mx-auto size-5 text-muted-foreground" />
-          <p className="mt-2 text-sm font-medium">No Slack workspace connected</p>
+          <p className="mt-2 text-sm font-medium">{tUi('m_a9564ab9e2')}</p>
           <p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-muted-foreground">
-            {canManage
-              ? 'Add Continuum to a Slack workspace to post renders and optimizer updates to its channels.'
-              : 'Ask a brand owner or admin to add Continuum to your Slack workspace.'}
+            {canManage ? tUi('m_cfc20e43b0') : tUi('m_126ae87ceb')}
           </p>
         </div>
       ) : (
@@ -122,7 +126,7 @@ export function BrandSlackWorkspacesSection({
                   <p className="truncate text-sm font-medium">{label}</p>
                   <Pill variant={active ? 'success' : 'warning'}>
                     <PillIndicator variant={active ? 'success' : 'warning'} />
-                    {active ? 'Active' : 'Needs reinstall'}
+                    {active ? tUi('m_a733b809d2') : tUi('m_b4d6f31f33')}
                   </Pill>
                 </div>
                 {canManage ? (
@@ -132,7 +136,7 @@ export function BrandSlackWorkspacesSection({
                         href={installHref}
                         className={buttonVariants({ size: 'sm', variant: 'outline' })}
                       >
-                        Reinstall
+                        {tUi('m_b08a88592d')}
                       </a>
                     )}
                     <AlertDialog>
@@ -146,26 +150,29 @@ export function BrandSlackWorkspacesSection({
                             className="text-muted-foreground hover:text-destructive"
                           >
                             <Unplug className="size-3.5" />
-                            Disconnect
+                            {tUi('m_ed28e0686e')}
                           </Button>
                         }
                       />
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Disconnect {label}?</AlertDialogTitle>
+                          <AlertDialogTitle>
+                            {tUi('m_6e445f9383')}
+                            {label}?
+                          </AlertDialogTitle>
                           <AlertDialogDescription>
-                            This brand stops posting renders and optimizer updates to {label}. Its
-                            Slack channels here are switched off; Continuum stays installed in the
-                            workspace for any other brand using it.
+                            {tUi('m_e52e13fdd2')}
+                            {label}
+                            {tUi('m_b524c2b931')}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Keep it</AlertDialogCancel>
+                          <AlertDialogCancel>{tUi('m_d9f3692497')}</AlertDialogCancel>
                           <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             onClick={() => disconnect.mutate(workspace)}
                           >
-                            Disconnect workspace
+                            {tUi('m_b161fe9390')}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>

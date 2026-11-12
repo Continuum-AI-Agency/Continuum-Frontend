@@ -96,7 +96,14 @@ mock.module('@/lib/library/sceneTemplates', () => ({
 mock.module('@/lib/ai-studio/elements', () => ({ ...realElements, signLibraryAsset }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { SceneTemplateDetail } from './SceneTemplateDetail';
 
 afterEach(() => {

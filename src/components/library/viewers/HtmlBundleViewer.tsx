@@ -7,6 +7,7 @@
 // storage or DOM — not the app's, not the API's.
 
 import { ExternalLink, Monitor, RotateCcw, Smartphone, Tablet } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,8 @@ function fitScale(stage: { width: number; height: number } | null, preset: HtmlB
 }
 
 export function HtmlBundleViewer({ entryUrl, label, onReload }: Props) {
+  const translateUi = useUiTranslations('library');
+
   const [preset, setPreset] = useState<HtmlBundlePreset>('desktop');
   const [stage, setStage] = useState<{ width: number; height: number } | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -73,14 +76,20 @@ export function HtmlBundleViewer({ entryUrl, label, onReload }: Props) {
               </Button>
             );
           })}
-          <Button type="button" size="sm" variant="ghost" onClick={onReload} aria-label="Reload">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onReload}
+            aria-label={translateUi('reload_bdc090ec')}
+          >
             <RotateCcw className="size-4" />
           </Button>
           <a
             href={entryUrl}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Open in a new tab"
+            aria-label={translateUi('open_in_a_new_tab_306ef19c')}
             className={buttonVariants({ size: 'sm', variant: 'ghost' })}
           >
             <ExternalLink className="size-4" />

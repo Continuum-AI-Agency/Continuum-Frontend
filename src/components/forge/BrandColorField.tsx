@@ -2,6 +2,7 @@
 
 import { brandPaletteSwatches, isLiteralHex } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { ColorField } from '@/components/ui/color-field';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -32,6 +33,8 @@ export function BrandColorField({
   label: string;
   disabled?: boolean;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { data } = useQuery({
     queryKey: brandTypeInputsQueryKey(brandId),
@@ -48,8 +51,8 @@ export function BrandColorField({
         <Popover open={paletteOpen} onOpenChange={setPaletteOpen}>
           <PopoverTrigger
             type="button"
-            aria-label={`${label} brand palette`}
-            title="Brand colors"
+            aria-label={translateUi('value0_brand_palette_c025a731', { value0: String(label) })}
+            title={translateUi('brand_colors_2c547831')}
             disabled={disabled}
             className="flex h-7 w-10 shrink-0 items-center justify-center rounded-md border border-input hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
           >
@@ -64,9 +67,9 @@ export function BrandColorField({
             </span>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-56 p-3">
-            <p className="mb-2 text-xs font-medium">Brand colors</p>
+            <p className="mb-2 text-xs font-medium">{translateUi('brand_colors_2c547831')}</p>
             <fieldset
-              aria-label={`${label} brand colors`}
+              aria-label={translateUi('value0_brand_colors_bd2c6805', { value0: String(label) })}
               className="grid max-h-64 grid-cols-6 gap-2 overflow-y-auto"
             >
               {swatches.map((swatch) => (

@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { STUDIO_NODE_REGISTRY } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type React from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
 (global as { MutationObserver?: unknown }).MutationObserver = window.MutationObserver;
@@ -217,7 +224,7 @@ describe('NodeInspectorPanel', () => {
     seed({ id: 'f1', type: 'frameExtract', data: { selector: 'last', outputWidth: 1024 } });
     render(<NodeInspectorPanel />);
 
-    expect(screen.getByText('Frame Extract')).toBeTruthy();
+    expect(screen.getByText(STUDIO_NODE_REGISTRY.frameExtract.label)).toBeTruthy();
     expect(screen.getByText('selector')).toBeTruthy();
     expect(screen.getByText('last')).toBeTruthy();
     expect(screen.getByText('outputWidth')).toBeTruthy();

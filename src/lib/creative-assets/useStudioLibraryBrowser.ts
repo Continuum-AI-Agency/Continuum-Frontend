@@ -7,6 +7,8 @@ import type {
   MediaSearchResultItem,
 } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { toApiError } from '@/lib/api/errors';
 import {
   buildLibraryBrowseParams,
   type KindFilterValue,
@@ -130,11 +132,12 @@ export function useStudioLibraryBrowser(
     enabled?: boolean;
   },
 ): UseStudioLibraryBrowserResult {
+  const uiErrorText = useUiErrorMessage();
   const enabled = options?.enabled ?? true;
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
   const [query, setQueryState] = useState('');
   const [filters, setFiltersState] = useState<StudioLibraryFilters>({
     source: options?.initialFilters?.source ?? 'all',
@@ -156,19 +159,19 @@ export function useStudioLibraryBrowser(
         if (!sp) {
           setAssets([]);
           setHasMore(false);
-          setError(null);
+          setFailure(null);
           return;
         }
         const resp = await fetch(`/api/library/browse?${sp.toString()}`);
         if (!resp.ok) {
-          throw new Error(`Library request failed (${resp.status})`);
+          throw await toApiError(resp);
         }
         const data = (await resp.json()) as {
           items?: MediaAsset[];
           nextCursor?: string | null;
         };
         if (requestId !== requestIdRef.current) return;
-        setError(null);
+        setFailure(null);
         const incoming = data.items ?? [];
         setAssets((prev) => {
           if (!cursor) return incoming;
@@ -180,7 +183,7 @@ export function useStudioLibraryBrowser(
       } catch (err) {
         if (requestId === requestIdRef.current) {
           console.error('[useStudioLibraryBrowser] list failed', err);
-          setError("Couldn't load the library. Please try again.");
+          setFailure(err);
           setHasMore(false);
         }
       } finally {
@@ -212,17 +215,17 @@ export function useStudioLibraryBrowser(
           }),
         });
         if (!resp.ok) {
-          throw new Error(`Library search failed (${resp.status})`);
+          throw await toApiError(resp);
         }
         const data = (await resp.json()) as { items?: MediaSearchResultItem[] };
         if (requestId !== requestIdRef.current) return;
-        setError(null);
+        setFailure(null);
         setAssets((data.items ?? []).map((item) => item.asset));
         setHasMore(false);
       } catch (err) {
         if (requestId === requestIdRef.current) {
           console.error('[useStudioLibraryBrowser] search failed', err);
-          setError("Couldn't search the library. Please try again.");
+          setFailure(err);
         }
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -280,6 +283,6 @@ export function useStudioLibraryBrowser(
     setQuery,
     filters,
     setFilters,
-    error,
+    error: failure === null ? null : uiErrorText(failure),
   };
 }

@@ -27,8 +27,15 @@ mock.module('../hooks/useWorkflowExecution', () => ({
 }));
 
 import type { DesignSection, DesignSystemSnapshot } from '@continuum/contracts';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { useStudioStore } from '../stores/useStudioStore';
 import { DesignRefNode } from './DesignRefNode';
 

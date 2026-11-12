@@ -1,5 +1,6 @@
 import type { GraphIssue } from '@continuum/contracts';
 import { ShieldCheck } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 
 import { Panel } from '@/components/ai-elements/panel';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,8 @@ export function CanvasValidationPanel({
   issues: GraphIssue[];
   onFocusIssue: (nodeId: string) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   if (issues.length === 0) return null;
 
   return (
@@ -26,15 +29,17 @@ export function CanvasValidationPanel({
               size="sm"
               variant="outline"
               className="h-8 gap-2 bg-background/95 text-xs"
-              aria-label={`${issues.length} workflow validation issue${issues.length === 1 ? '' : 's'}`}
+              aria-label={translateUi('value0_workflow_validation_issue_va_53ebd794', {
+                count: Number(issues.length),
+              })}
             >
               <ShieldCheck className="size-3.5" aria-hidden />
-              {issues.length} to review
+              {issues.length} {translateUi('to_review_07024d06')}{' '}
             </Button>
           }
         />
         <PopoverContent align="end" className="w-80 p-2">
-          <p className="px-2 py-1 text-xs font-medium">Workflow checks</p>
+          <p className="px-2 py-1 text-xs font-medium">{translateUi('workflow_checks_40379ec3')}</p>
           <div className="flex max-h-64 flex-col overflow-y-auto">
             {issues.map((issue: GraphIssue, index) => (
               <button
@@ -47,7 +52,9 @@ export function CanvasValidationPanel({
                 }}
               >
                 <span className="block font-medium">
-                  {issue.phase === 'run' ? 'Before running' : 'Connection'}
+                  {issue.phase === 'run'
+                    ? translateUi('before_running_e16ef722')
+                    : translateUi('connection_639a40e8')}
                 </span>
                 <span className="mt-0.5 block text-muted-foreground">{issue.message}</span>
               </button>

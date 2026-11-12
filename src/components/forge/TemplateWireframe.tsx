@@ -4,6 +4,7 @@ import { readableLayerName, type TemplatePreview } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutTemplate } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React, { type ComponentType, type ReactNode } from 'react';
 import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
 import { cn } from '@/lib/utils';
@@ -71,22 +72,36 @@ export function wireframeFrames(parse: TemplatePreview | null | undefined): Wire
             ? slot.box
             : undefined;
         const fallback = placement
-            ? scaleBox(placement.box, placement.compSize, frame)
-            : bare
-              ? scaleBox(bare, null, frame)
-              : null;
-        if (instances.length) return instances.map((instance) => ({
-          key: slot.key,
-          kind: slot.kind,
-          label: readableLayerName(slot.name || slot.key),
-          box: scaleBox(instance.box!, instance.compSize, frame),
-          ...(!Array.isArray(instance.via) || instance.via.length === 0
-            ? { instance: { compId: instance.compId, layerId: instance.layerId,
-                compSize: (instance.compSize ?? [width, height]) as [number, number] } }
-            : {}),
-        }));
-        return fallback ? [{ key: slot.key, kind: slot.kind,
-          label: readableLayerName(slot.name || slot.key), box: fallback }] : [];
+          ? scaleBox(placement.box, placement.compSize, frame)
+          : bare
+            ? scaleBox(bare, null, frame)
+            : null;
+        if (instances.length)
+          return instances.map((instance) => ({
+            key: slot.key,
+            kind: slot.kind,
+            label: readableLayerName(slot.name || slot.key),
+            box: scaleBox(instance.box!, instance.compSize, frame),
+            ...(!Array.isArray(instance.via) || instance.via.length === 0
+              ? {
+                  instance: {
+                    compId: instance.compId,
+                    layerId: instance.layerId,
+                    compSize: (instance.compSize ?? [width, height]) as [number, number],
+                  },
+                }
+              : {}),
+          }));
+        return fallback
+          ? [
+              {
+                key: slot.key,
+                kind: slot.kind,
+                label: readableLayerName(slot.name || slot.key),
+                box: fallback,
+              },
+            ]
+          : [];
       }),
     };
   });
@@ -150,9 +165,13 @@ export function TemplateWireframe({
   comp?: string;
   className?: string;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const frames = wireframeFrames(parse);
-  const frame = frames.find((entry) => entry.comp === comp) ??
-    frames.find((entry) => entry.ratio === ratio) ?? frames[0];
+  const frame =
+    frames.find((entry) => entry.comp === comp) ??
+    frames.find((entry) => entry.ratio === ratio) ??
+    frames[0];
 
   return (
     <div className={cn('flex items-center justify-center overflow-hidden bg-muted/40', className)}>
@@ -161,7 +180,7 @@ export function TemplateWireframe({
           viewBox={`0 0 ${frame.width} ${frame.height}`}
           className="h-full w-full"
           role="img"
-          aria-label={`${frame.ratio} layout`}
+          aria-label={translateUi('value0_layout_ffff249d', { value0: String(frame.ratio) })}
         >
           <rect
             width={frame.width}

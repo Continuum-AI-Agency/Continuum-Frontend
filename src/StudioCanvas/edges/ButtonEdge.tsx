@@ -8,6 +8,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React, { memo, useCallback } from 'react';
 
 /**
@@ -29,6 +30,8 @@ export const ButtonEdge = memo(
     markerEnd,
     data,
   }: EdgeProps) => {
+    const translateUi = useUiTranslations('studio');
+
     const { deleteElements } = useReactFlow();
 
     const [edgePath, labelX, labelY] = getBezierPath({
@@ -67,7 +70,7 @@ export const ButtonEdge = memo(
               className="nodrag group flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background shadow-sm transition-all hover:scale-110 hover:border-red-500 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1"
               onClick={onDelete}
               onPointerDown={(e) => e.stopPropagation()}
-              title="Delete edge"
+              title={translateUi('delete_edge_28a5cf08')}
             >
               <X className="h-3 w-3 text-muted-foreground transition-colors group-hover:text-red-500" />
             </button>

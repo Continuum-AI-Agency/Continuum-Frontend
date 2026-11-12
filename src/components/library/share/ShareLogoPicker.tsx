@@ -4,6 +4,7 @@
 // the brand's Library. None selected = the brand kit logo.
 
 import type { MediaAsset } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 const PICKER_LIMIT = 48;
@@ -17,6 +18,8 @@ export function ShareLogoPicker({
   value: string | undefined;
   onChange: (assetId: string | undefined) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [images, setImages] = useState<MediaAsset[]>([]);
 
   useEffect(() => {
@@ -47,7 +50,8 @@ export function ShareLogoPicker({
         className={option(!value)}
         onClick={() => onChange(undefined)}
       >
-        Brand kit
+        {' '}
+        {translateUi('brand_kit_52fe7719')}{' '}
       </button>
       {images.map((image) => (
         <button

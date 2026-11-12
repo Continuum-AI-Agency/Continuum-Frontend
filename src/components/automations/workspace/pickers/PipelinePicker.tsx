@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Which PUBLISHED pipeline a headless generation runs, or none.
 //
@@ -26,11 +27,12 @@ import { isUnsetId, type PickerSource, RawIdFallbackField } from './pickerSource
 /** Radix Select forbids an empty option value, so "no pipeline" needs a token. */
 const NO_PIPELINE_VALUE = '__no_pipeline__';
 
-const portSummary = (pipeline: PipelineItem): string => {
+const portSummary = (
+  pipeline: PipelineItem,
+  t: ReturnType<typeof useTranslations<'automations'>>,
+): string => {
   const text = pipeline.inputPorts.filter((port) => (port.dataType ?? 'text') === 'text').length;
-  return `${text} text input${text === 1 ? '' : 's'} · ${pipeline.outputPorts.length} output${
-    pipeline.outputPorts.length === 1 ? '' : 's'
-  }`;
+  return t('m_b9dc704f8b', { inputs: text, outputs: pipeline.outputPorts.length });
 };
 
 export function PipelinePicker({
@@ -46,6 +48,7 @@ export function PipelinePicker({
   onChange: (pipelineId: string | null) => void;
   useSource?: PickerSource<PipelineItem>;
 }) {
+  const uiText = useTranslations('automations');
   const id = useId();
   const { items, isLoading, isError } = useSource(brandId);
   const selected = isUnsetId(value) ? null : (value as string);
@@ -53,15 +56,11 @@ export function PipelinePicker({
   if (isError || !brandId) {
     return (
       <RawIdFallbackField
-        label="Published pipeline ID"
+        label={uiText('published_pipeline_id_4a6dbf9')}
         value={selected}
         disabled={disabled}
-        placeholder="Leave empty to use the plain generator"
-        reason={
-          brandId
-            ? 'Pipelines could not be loaded. The stored pipeline stays editable here — leave it empty to run the plain generator instead.'
-            : 'No brand is in scope, so pipelines cannot be listed.'
-        }
+        placeholder={uiText('leave_empty_to_use_the_plain_generator_28615c3')}
+        reason={brandId ? uiText('m_d25cefed1e') : uiText('m_79d85b27d6')}
         onChange={(raw) => onChange(raw.trim() || null)}
       />
     );
@@ -69,33 +68,37 @@ export function PipelinePicker({
 
   const options = items.map((pipeline) => ({
     value: pipeline.id,
-    label: `${pipeline.name} — ${portSummary(pipeline)}`,
+    label: `${pipeline.name} — ${portSummary(pipeline, uiText)}`,
   }));
   if (selected && !options.some((option) => option.value === selected)) {
-    options.push({ value: selected, label: `Unavailable pipeline (${selected})` });
+    options.push({ value: selected, label: uiText('m_7a37337c9e', { id: selected }) });
   }
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>Published pipeline</Label>
+      <Label htmlFor={id}>{uiText('published_pipeline_8c71462')}</Label>
       <Select
         value={selected ?? NO_PIPELINE_VALUE}
         disabled={disabled || isLoading}
         onValueChange={(next) => onChange(next === NO_PIPELINE_VALUE ? null : next)}
       >
-        <SelectTrigger id={id} aria-label="Published pipeline">
+        <SelectTrigger id={id} aria-label={uiText('published_pipeline_8c71462')}>
           {/* Base UI's Value paints the raw stored value without this map, so the
               closed trigger would read "__no_pipeline__". */}
           <SelectValue
-            placeholder={isLoading ? 'Loading pipelines…' : 'No pipeline'}
+            placeholder={
+              isLoading ? uiText('loading_pipelines_7185281') : uiText('no_pipeline_2eb969c')
+            }
             items={{
-              [NO_PIPELINE_VALUE]: 'No pipeline — plain generator',
+              [NO_PIPELINE_VALUE]: uiText('no_pipeline_plain_generator_a48398c'),
               ...Object.fromEntries(options.map((option) => [option.value, option.label])),
             }}
           />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={NO_PIPELINE_VALUE}>No pipeline — plain generator</SelectItem>
+          <SelectItem value={NO_PIPELINE_VALUE}>
+            {uiText('no_pipeline_plain_generator_a48398c')}
+          </SelectItem>
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
@@ -105,8 +108,7 @@ export function PipelinePicker({
       </Select>
       {items.length === 0 && !isLoading ? (
         <p className="text-xs leading-4 text-muted-foreground">
-          This brand has no published pipelines. Publish a canvas from AI Studio to run it on a
-          schedule.
+          {uiText('this_brand_has_no_published_pipelines_publish_74c9208')}
         </p>
       ) : null}
     </div>

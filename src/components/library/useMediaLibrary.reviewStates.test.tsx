@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { libraryBrowseQuerySchema, type MediaAsset } from '@continuum/contracts';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { useMediaLibrary } from './useMediaLibrary';
 
 // Custom review states are not a browse-RPC argument (a new one would be a PostgREST

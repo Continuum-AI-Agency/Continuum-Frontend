@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { googleCopy } from './googlePresentation';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+
 // Idea 1, the account read by campaign type: under the tab's headline, each type's cost per
 // conversion against the portfolio CPA goal its campaigns are held to. The goal is the
 // portfolio's, never Google's target CPA; a type no portfolio holds reads "no target". With no
@@ -37,9 +45,10 @@ function Cost({
   conversions: number | null;
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
   if (conversions == null) return <Missing reason={NO_SINGLE_RESULT} />;
   if (value == null) return <Missing reason="No conversion in the window to price" />;
-  return <>{formatCurrencyInColumn(value, currency)}</>;
+  return <>{formatCurrencyInColumn(value, currency, uiLocale)}</>;
 }
 
 /** Each result type's count and cost, for a row (or the total) when they are counted apart. */
@@ -52,17 +61,23 @@ function ApartCells({
   types: readonly GoogleResultBucket[];
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   return types.map((bucket) => {
     const cost = costPerResult(row.spend, row.byResult, bucket);
     return [
       <td className={TD_NUM} key={`${bucket}:count`}>
-        {formatConversions(row.byResult?.[bucket] ?? 0)}
+        {formatConversions(row.byResult?.[bucket] ?? 0, uiLocale)}
       </td>,
       <td className={TD_NUM} key={`${bucket}:cost`}>
         {cost == null ? (
-          <Missing reason={`No ${RESULT_WORDS[bucket].one} in the window to price`} />
+          <Missing
+            reason={uiText('googleResultNoPrice', {
+              result: uiText('googleResultLabel', { bucket }),
+            })}
+          />
         ) : (
-          formatCurrencyInColumn(cost, currency)
+          formatCurrencyInColumn(cost, currency, uiLocale)
         )}
       </td>,
     ];
@@ -73,8 +88,13 @@ function summaryOf(
   rows: readonly TypeRow[],
   currency: string | null,
   apart: readonly GoogleResultBucket[],
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): string {
-  if (rows.length === 0) return 'No campaign spent in the window.';
+  if (rows.length === 0)
+    return uiTranslate
+      ? uiTranslate('no_campaign_spent_in_the_window_c21127f')
+      : 'No campaign spent in the window.';
   return rows
     .slice(0, 3)
     .map((row) => {
@@ -85,16 +105,29 @@ function summaryOf(
                 .map((bucket) => {
                   const each = costPerResult(row.spend, row.byResult, bucket);
                   return each == null
-                    ? `no ${RESULT_WORDS[bucket].one} yet`
-                    : `${formatCurrency(each, currency)} per ${RESULT_WORDS[bucket].one}`;
+                    ? uiTranslate
+                      ? uiTranslate('googleResultNoneYet', {
+                          result: uiTranslate('googleResultLabel', { bucket }),
+                        })
+                      : `no ${RESULT_WORDS[bucket].one} yet`
+                    : uiTranslate
+                      ? uiTranslate('googleCostPerResult', {
+                          cost: formatCurrency(each, currency, uiLocale),
+                          result: uiTranslate('googleResultLabel', { bucket }),
+                        })
+                      : `${formatCurrency(each, currency, uiLocale)} per ${RESULT_WORDS[bucket].one}`;
                 })
                 .join(', ')
-            : 'conversions not counted'
+            : googleCopy('conversions not counted', uiTranslate)
           : row.cost == null
-            ? 'no conversion yet'
-            : `${formatCurrency(row.cost, currency)} per conversion`;
+            ? googleCopy('no conversion yet', uiTranslate)
+            : uiTranslate
+              ? uiTranslate('googleCostPerConversion', {
+                  cost: formatCurrency(row.cost, currency, uiLocale),
+                })
+              : `${formatCurrency(row.cost, currency, uiLocale)} per conversion`;
       const band = row.band.label === '—' ? '' : ` · ${row.band.label}`;
-      return `${row.label}: ${cost}${band}`;
+      return `${googleCopy(row.label, uiTranslate)}: ${cost}${band}`;
     })
     .join('; ')
     .concat('.');
@@ -109,16 +142,18 @@ export function AccountReadByType({
   rows: readonly TypeRow[];
   currency: string | null;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const totals: Totals = totalsOf(rows);
   const code = currencyColumnSuffix(currency);
   // Counted apart only when there is no single result and every campaign carries the counts.
   const apart = totals.conversions == null ? resultTypesOf(rows) : [];
   return (
     <GoogleSection
-      showLabel="Show the table"
-      summary={summaryOf(rows, currency, apart)}
+      showLabel={googleCopy('Show the table', uiText)}
+      summary={summaryOf(rows, currency, apart, uiText, uiLocale)}
       testId="google-account-by-type"
-      title={ACCOUNT_READ_TITLE}
+      title={googleCopy(ACCOUNT_READ_TITLE, uiText)}
     >
       {rows.length === 0 ? null : (
         <>
@@ -126,39 +161,41 @@ export function AccountReadByType({
             <thead>
               <tr>
                 <th className={TH} scope="col">
-                  Campaign type
+                  {uiText('campaign_type_37d390b')}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Spend{code}
+                  {uiText('helper_ffca96014e32', { v0: code })}
                 </th>
                 <th className={TH_NUM} scope="col">
-                  Share
+                  {uiText('share_29887a5')}
                 </th>
                 {apart.length > 0 ? (
                   apart.map((bucket) => [
                     <th className={TH_NUM} key={`${bucket}:count`} scope="col">
-                      {RESULT_WORDS[bucket].column}
+                      {uiText('googleResultColumn', { bucket })}
                     </th>,
                     <th className={TH_NUM} key={`${bucket}:cost`} scope="col">
-                      Cost / {RESULT_WORDS[bucket].one}
-                      {code}
+                      {uiText.rich('sentence_27f06c90c1ce', {
+                        v0: uiText('googleResultLabel', { bucket }),
+                        v1: code,
+                      })}
                     </th>,
                   ])
                 ) : (
                   <>
                     <th className={TH_NUM} scope="col">
-                      Conversions
+                      {uiText('conversions_236c262')}
                     </th>
                     <th className={TH_NUM} scope="col">
-                      Cost / conv.{code}
+                      {uiText.rich('sentence_1376b7fc3ded', { v0: code })}
                     </th>
                   </>
                 )}
                 <th className={TH_NUM} scope="col">
-                  Goal{code}
+                  {uiText.rich('sentence_dea6237d1a01', { v0: code })}
                 </th>
                 <th className={TH} scope="col">
-                  vs goal
+                  {uiText('vs_goal_597a6ce')}
                 </th>
               </tr>
             </thead>
@@ -170,12 +207,14 @@ export function AccountReadByType({
                   key={row.key}
                 >
                   <td className={TD}>
-                    {row.label}
+                    {googleCopy(row.label, uiText)}
                     <span className="block text-muted-foreground text-xs">
-                      {row.campaigns} {row.campaigns === 1 ? 'campaign' : 'campaigns'}
+                      {uiText('campaign_count', { count: row.campaigns })}
                     </span>
                   </td>
-                  <td className={TD_NUM}>{formatCurrencyInColumn(row.spend, currency)}</td>
+                  <td className={TD_NUM}>
+                    {formatCurrencyInColumn(row.spend, currency, uiLocale)}
+                  </td>
                   <td className={TD_NUM}>{row.sharePct}%</td>
                   {apart.length > 0 ? (
                     <ApartCells currency={currency} row={row} types={apart} />
@@ -185,7 +224,7 @@ export function AccountReadByType({
                         {row.conversions == null ? (
                           <Missing reason={NO_SINGLE_RESULT} />
                         ) : (
-                          formatConversions(row.conversions)
+                          formatConversions(row.conversions, uiLocale)
                         )}
                       </td>
                       <td className={TD_NUM}>
@@ -195,7 +234,7 @@ export function AccountReadByType({
                   )}
                   <td className={TD_NUM}>
                     {row.band.goal != null ? (
-                      formatCurrencyInColumn(row.band.goal, currency)
+                      formatCurrencyInColumn(row.band.goal, currency, uiLocale)
                     ) : (
                       <Missing reason={row.band.reason ?? 'No goal'} />
                     )}
@@ -209,8 +248,10 @@ export function AccountReadByType({
                 className="border-border border-t font-semibold"
                 data-testid="google-by-type-total"
               >
-                <td className={TD}>All campaigns</td>
-                <td className={TD_NUM}>{formatCurrencyInColumn(totals.spend, currency)}</td>
+                <td className={TD}>{uiText('all_campaigns_ffdb9c4')}</td>
+                <td className={TD_NUM}>
+                  {formatCurrencyInColumn(totals.spend, currency, uiLocale)}
+                </td>
                 <td className={TD_NUM}>100%</td>
                 {apart.length > 0 ? (
                   <ApartCells currency={currency} row={totals} types={apart} />
@@ -220,7 +261,7 @@ export function AccountReadByType({
                       {totals.conversions == null ? (
                         <Missing reason={NO_SINGLE_RESULT} />
                       ) : (
-                        formatConversions(totals.conversions)
+                        formatConversions(totals.conversions, uiLocale)
                       )}
                     </td>
                     <td className={TD_NUM}>

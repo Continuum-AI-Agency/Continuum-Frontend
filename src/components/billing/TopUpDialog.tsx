@@ -5,8 +5,8 @@ import { RadioGroup } from '@base-ui/react/radio-group';
 import { CREDIT_PACK_OFFER, type CreditPackOffer, type CreditWallet } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowRight, Check } from 'lucide-react';
-import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -20,6 +20,8 @@ import {
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { Link, usePathname } from '@/i18n/navigation';
 import {
   promoErrorMessage,
   redeemCreditPromo,
@@ -59,9 +61,13 @@ export function TopUpPackPicker({
   offer?: CreditPackOffer;
   className?: string;
 }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('common');
+
   return (
     <RadioGroup
-      aria-label="Credit packs"
+      aria-label={tUi('m_c83dd57f3a')}
       value={packs}
       onValueChange={(value) => onPacksChange(Number(value))}
       className={cn('grid gap-2', className)}
@@ -85,12 +91,12 @@ export function TopUpPackPicker({
           </span>
           <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
-              {formatCredits(count * offer.credits)}
+              {formatCredits(count * offer.credits, uiLocale)}
             </span>
-            <span className="text-xs text-muted-foreground">credits</span>
+            <span className="text-xs text-muted-foreground">{tUi('m_66c22fad3a')}</span>
           </span>
           <span className="font-mono text-sm text-foreground tabular-nums">
-            {formatUsd(count * offer.priceUsd)}
+            {formatUsd(count * offer.priceUsd, 'usd', uiLocale)}
           </span>
         </Radio.Root>
       ))}
@@ -104,6 +110,10 @@ export function useCreditCheckout(
   purchasedCreditsBefore: number,
   wallet: CreditWallet = 'canvas',
 ) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+
   const { show } = useToast();
   const checkout = useMutation({
     mutationFn: (packs: number) =>
@@ -114,7 +124,7 @@ export function useCreditCheckout(
       }),
     onSuccess: (session) => window.location.assign(session.url),
     onError: (error) =>
-      show({ title: 'Could not open checkout', description: error.message, variant: 'error' }),
+      show({ title: tUi('m_12369214b3'), description: getUiErrorMessage(error), variant: 'error' }),
   });
   return {
     buy: (packs: number) => checkout.mutate(packs),
@@ -134,6 +144,7 @@ export function PromoCodeRedeem({
   brandId: string;
   purchasedCreditsBefore: number;
 }) {
+  const uiText = useTranslations('common');
   const inputId = useId();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState('');
@@ -158,7 +169,7 @@ export function PromoCodeRedeem({
           'h-auto justify-start p-0 text-xs text-muted-foreground',
         )}
       >
-        Have a promo code?
+        {uiText('m_b830436bbf')}
       </button>
     );
   }
@@ -171,7 +182,7 @@ export function PromoCodeRedeem({
       }}
     >
       <Field data-invalid={error ? true : undefined}>
-        <FieldLabel htmlFor={inputId}>Promo code</FieldLabel>
+        <FieldLabel htmlFor={inputId}>{uiText('m_edfcc5e373')}</FieldLabel>
         <div className="flex gap-2">
           <Input
             id={inputId}
@@ -193,7 +204,7 @@ export function PromoCodeRedeem({
             disabled={redirecting || !code.trim()}
             aria-busy={redirecting}
           >
-            {redirecting ? 'Opening checkout…' : 'Redeem'}
+            {redirecting ? uiText('opening_checkout_f1ec8f0') : uiText('m_db3f814368')}
           </Button>
         </div>
         <FieldError>{error}</FieldError>
@@ -202,9 +213,16 @@ export function PromoCodeRedeem({
   );
 }
 
-function balanceLine(view: MeteredSidebarBilling): string {
-  if (view.remainingCredits === 0) return 'Out of credits — generation is paused.';
-  return `${formatCredits(view.remainingCredits)} credits left${view.low ? ' — running low' : ''}.`;
+function balanceLine(
+  view: MeteredSidebarBilling,
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+  uiLocale: string,
+): string {
+  if (view.remainingCredits === 0) return tUi('m_a833afa44e');
+  return tUi('m_97dc375e6b', {
+    count: formatCredits(view.remainingCredits, uiLocale),
+    low: view.low ? 'yes' : 'no',
+  });
 }
 
 export function TopUpDialog({
@@ -265,6 +283,10 @@ function TopUpBody({
   brandId: string;
   owner: boolean;
 }) {
+  const uiLocale = useLocale();
+
+  const tUi = useTranslations('common');
+
   const [packs, setPacks] = useState(DEFAULT_TOP_UP_PACKS);
   const { buy, redirecting } = useCreditCheckout(brandId, view.purchasedCredits);
   const from = typeof window === 'undefined' ? undefined : window.location.pathname;
@@ -275,9 +297,9 @@ function TopUpBody({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Top up Canvas credits</DialogTitle>
+        <DialogTitle>{tUi('m_042bbbdd96')}</DialogTitle>
         <DialogDescription data-testid="top-up-balance" className={cn(view.low && 'text-warning')}>
-          {balanceLine(view)}
+          {balanceLine(view, tUi, uiLocale)}
         </DialogDescription>
       </DialogHeader>
 
@@ -288,7 +310,7 @@ function TopUpBody({
         </div>
       ) : (
         <p className="rounded-lg border border-border bg-muted/40 px-3.5 py-3 text-sm text-muted-foreground">
-          Only the brand owner can buy credits. Let them know when this brand needs a top-up.
+          {tUi('m_cd858cab5d')}
         </p>
       )}
 
@@ -303,10 +325,11 @@ function TopUpBody({
             className="w-full justify-center"
           >
             {redirecting ? (
-              'Opening secure checkout…'
+              tUi('m_151df1a3e7')
             ) : (
               <>
-                Continue to payment · {formatUsd(packs * CREDIT_PACK_OFFER.priceUsd)}
+                {tUi('m_e942ea7b90')}
+                {formatUsd(packs * CREDIT_PACK_OFFER.priceUsd, 'usd', uiLocale)}
                 <ArrowRight data-icon="inline-end" />
               </>
             )}
@@ -315,7 +338,7 @@ function TopUpBody({
         <p className="text-center text-xs text-muted-foreground">
           {offerAutoBilling ? (
             <>
-              Never run out:{' '}
+              {tUi('m_ed99d199c1')}{' '}
               <Link
                 href={creditsHref(from)}
                 className={cn(
@@ -323,11 +346,11 @@ function TopUpBody({
                   'h-auto p-0 text-xs text-foreground underline-offset-3',
                 )}
               >
-                turn on auto-billing
+                {tUi('m_a0c5290661')}
               </Link>
             </>
           ) : (
-            'One-time payment through Stripe.'
+            tUi('m_c7ee45c5f8')
           )}
         </p>
       </DialogFooter>

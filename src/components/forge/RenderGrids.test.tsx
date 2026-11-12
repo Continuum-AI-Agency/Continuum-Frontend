@@ -323,7 +323,8 @@ mock.module('@/components/providers/ActiveBrandProvider', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { holdKeyOf } from './renderHold';
+import type React from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import {
   act,
   cleanup,
@@ -332,13 +333,12 @@ import {
   render as testingRender,
   waitFor,
   within,
-} from '@testing-library/react';
-import type React from 'react';
-import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
+import { holdKeyOf } from './renderHold';
 
 const render = (
   ui: React.ReactNode,

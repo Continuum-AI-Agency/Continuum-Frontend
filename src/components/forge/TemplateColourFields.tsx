@@ -7,6 +7,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Switch } from '@/components/ui/switch';
 import { fetchTemplateColourFields, saveTemplateColourFields } from '@/lib/library/templateSources';
@@ -21,6 +22,8 @@ export function TemplateColourFields({
   assetId: string;
   templateKey: string;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   // The same key TemplateDetail reads the published contract under, so this is not a second fetch.
   const contract = useQuery({
@@ -51,7 +54,8 @@ export function TemplateColourFields({
   return (
     <div className="flex flex-col gap-1.5 border-t border-border pt-3">
       <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-        Colour fields
+        {' '}
+        {translateUi('colour_fields_a82fcdbc')}{' '}
       </p>
       {fields.map((field) => {
         const isMarked = keys.includes(field.key);
@@ -61,12 +65,17 @@ export function TemplateColourFields({
             <span>
               {field.label}
               {detected ? (
-                <span className="text-muted-foreground"> · detected from the template</span>
+                <span className="text-muted-foreground">
+                  {' '}
+                  {translateUi('detected_from_the_template_6684d3bc')}
+                </span>
               ) : null}
             </span>
             <Switch
               size="sm"
-              aria-label={`${field.label} is a colour`}
+              aria-label={translateUi('value0_is_a_colour_2db71e3b', {
+                value0: String(field.label),
+              })}
               checked={field.kind === 'color'}
               disabled={detected || save.isPending || !marked.isSuccess}
               onCheckedChange={(on) =>
@@ -78,7 +87,8 @@ export function TemplateColourFields({
       })}
       {save.isError ? (
         <p role="alert" className="text-xs text-destructive">
-          Colour fields could not be saved. {save.error.message}
+          {' '}
+          {translateUi('colour_fields_could_not_be_saved_03f3b0a4')} {save.error.message}
         </p>
       ) : null}
     </div>

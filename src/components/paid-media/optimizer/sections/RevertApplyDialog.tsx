@@ -1,4 +1,10 @@
 'use client';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // One-click revert of a single prior optimizer write, on a money/status log row. Opens with a
 // dry-run preview (zero Meta writes), then the operator confirms a real revert (dryRun:false →
@@ -54,26 +60,42 @@ function isStatusWould(would: RevertWould): would is { adset_id: string; target_
   return 'target_status' in would;
 }
 
-function reasonMessage(reason: string | undefined): string {
+function reasonMessage(reason: string | undefined, uiTranslate?: ScaleCopy): string {
   switch (reason) {
     case 'observe_mode':
-      return 'This portfolio is in Observe mode — Meta writes are blocked. Switch to Recommend in Manage.';
+      return uiTranslate
+        ? uiTranslate('this_portfolio_is_in_observe_mode_meta_writes_893c9db')
+        : 'This portfolio is in Observe mode — Meta writes are blocked. Switch to Recommend in Manage.';
     case 'unsupported_scope':
-      return 'Only ad-set budget and pause writes can be reverted.';
+      return uiTranslate
+        ? uiTranslate('only_ad_set_budget_and_pause_writes_can_be_re_469049c')
+        : 'Only ad-set budget and pause writes can be reverted.';
     case 'scope_mismatch':
-      return 'This write does not belong to this portfolio.';
+      return uiTranslate
+        ? uiTranslate('this_write_does_not_belong_to_this_portfolio_4583b14')
+        : 'This write does not belong to this portfolio.';
     case 'no_prior':
-      return 'This write has no recorded prior budget to restore.';
+      return uiTranslate
+        ? uiTranslate('this_write_has_no_recorded_prior_budget_to_re_63ad33e')
+        : 'This write has no recorded prior budget to restore.';
     case 'no_prior_status':
-      return 'This pause has no recorded prior status, so there is nothing safe to restore.';
+      return uiTranslate
+        ? uiTranslate('this_pause_has_no_recorded_prior_status_so_th_3b9efcb')
+        : 'This pause has no recorded prior status, so there is nothing safe to restore.';
     case 'audit_not_found':
-      return 'The original write could not be found.';
+      return uiTranslate
+        ? uiTranslate('the_original_write_could_not_be_found_4808acf')
+        : 'The original write could not be found.';
     case 'campaign_unsupported':
-      return 'Campaign-level reverts are not supported yet.';
+      return uiTranslate
+        ? uiTranslate('campaign_level_reverts_are_not_supported_yet_73ee95b')
+        : 'Campaign-level reverts are not supported yet.';
     case 'account_unreadable':
-      return 'Could not read the ad account to build the revert. Try again in a moment.';
+      return uiTranslate
+        ? uiTranslate('could_not_read_the_ad_account_to_build_the_re_8c3062b')
+        : 'Could not read the ad account to build the revert. Try again in a moment.';
     default:
-      return 'Revert failed.';
+      return uiTranslate ? uiTranslate('revert_failed_bff68db') : 'Revert failed.';
   }
 }
 
@@ -85,6 +107,8 @@ export function RevertApplyDialog({
   scope,
   triggerTextSize = 'text-xs',
 }: RevertApplyDialogProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const revert = useRevertApply();
   const [open, setOpen] = React.useState(false);
   const [phase, setPhase] = React.useState<'preview' | 'applying' | 'done' | 'error'>('preview');
@@ -114,24 +138,30 @@ export function RevertApplyDialog({
         onSuccess: (data) => {
           if (!data) {
             setPhase('error');
-            setResultNote('Could not parse the revert response.');
+            setResultNote(uiText('queueRevertParseFailed'));
             return;
           }
           if (!data.ok) {
             setPhase('error');
-            setResultNote(data.error?.trim() || reasonMessage(data.reason));
+            setResultNote(reasonMessage(data.reason, uiText));
             return;
           }
           setPhase('done');
           setResultNote(
-            `${isStatus ? 'Unpaused' : 'Reverted'} ${data.applied ?? 0}` +
-              (data.failed ? ` · ${data.failed} failed` : '') +
-              (data.deduped ? ` · ${data.deduped} already done` : ''),
+            uiText('queueApplyResult', {
+              verb: isStatus ? 'unpause' : 'revert',
+              applied: data.applied ?? 0,
+              failed: data.failed ?? 0,
+              deduped: data.deduped ?? 0,
+              hasFailed: data.failed ? 'yes' : 'no',
+              hasDeduped: data.deduped ? 'yes' : 'no',
+              already: 'done',
+            }),
           );
         },
         onError: (err) => {
           setPhase('error');
-          setResultNote(err instanceof Error ? err.message : 'Revert failed.');
+          setResultNote(formatUiError(err));
         },
       },
     );
@@ -158,19 +188,21 @@ export function RevertApplyDialog({
             className={`h-6 shrink-0 gap-1 px-1.5 ${triggerTextSize} text-muted-foreground hover:text-foreground`}
           >
             <Undo2Icon aria-hidden="true" className="size-3" />
-            {isStatus ? 'Unpause' : 'Revert'}
+            {isStatus ? uiText('unpause_ccf1af7') : uiText('revert_0026c50')}
           </Button>
         }
       />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {isStatus ? 'Unpause — restarts its spend' : 'Revert this budget change'}
+            {isStatus
+              ? uiText('unpause_restarts_its_spend_08ff3ad')
+              : uiText('revert_this_budget_change_2df5d5e')}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {isStatus
-              ? 'Restart this ad set’s spend by restoring the status it had before this pause. This writes a real status change to Meta. Observe mode will refuse the write.'
-              : 'Restore this ad set’s daily budget to what it was before this write. This writes a real ad-set budget to Meta. Observe mode will refuse the write.'}
+              ? uiText('restart_this_ad_set_s_spend_by_restoring_the__f97596a')
+              : uiText('restore_this_ad_set_s_daily_budget_to_what_it_a0d8343')}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -178,8 +210,8 @@ export function RevertApplyDialog({
           <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
             {isStatus
-              ? 'Restoring the prior status on Meta…'
-              : 'Restoring the prior budget on Meta…'}
+              ? uiText('restoring_the_prior_status_on_meta_5d1402f')
+              : uiText('restoring_the_prior_budget_on_meta_26300db')}
           </p>
         ) : phase === 'done' || phase === 'error' ? (
           <p
@@ -203,13 +235,15 @@ export function RevertApplyDialog({
         )}
 
         <AlertDialogFooter>
-          <AlertDialogCancel>{phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
+          <AlertDialogCancel>
+            {phase === 'done' ? uiText('close_7d9eb7a') : uiText('cancel_19766ed')}
+          </AlertDialogCancel>
           {phase !== 'done' ? (
             <Button type="button" className="gap-1.5" disabled={!canRevert} onClick={handleRevert}>
               {phase === 'applying' ? (
                 <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
               ) : null}
-              {isStatus ? 'Unpause ad set' : 'Revert budget'}
+              {isStatus ? uiText('unpause_ad_set_335c259') : uiText('revert_budget_dea8d0b')}
             </Button>
           ) : null}
         </AlertDialogFooter>
@@ -231,36 +265,44 @@ function RevertPreviewBody({
   preview: ReturnType<typeof useRevertApply>['data'];
   would: RevertWould[];
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   if (isPending) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
         <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-        Computing the revert…
+        {uiText('computing_the_revert_cff726c')}
       </p>
     );
   }
 
   if (isError || preview == null) {
     return (
-      <InlineError>Couldn&rsquo;t compute the revert preview. Try again in a moment.</InlineError>
+      <InlineError>{uiText('couldn_t_compute_the_revert_preview_try_again_e2f46d2')}</InlineError>
     );
   }
 
   if (!preview.ok) {
-    return <InlineError>{reasonMessage(preview.reason)}</InlineError>;
+    return <InlineError>{reasonMessage(preview.reason, uiText)}</InlineError>;
   }
 
   const move = would[0];
   if (!move) {
-    return <p className="text-sm text-muted-foreground">Nothing to revert for this write.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {uiText('nothing_to_revert_for_this_write_e7bfd8c')}
+      </p>
+    );
   }
 
   // An ad-set status revert (unpause) restores the prior status — there is no budget to show.
   if (isStatusWould(move)) {
-    const restoreLabel = move.target_status === 'ACTIVE' ? 'Active' : 'Paused';
+    const restoreLabel = move.target_status === 'ACTIVE' ? uiText('entityActive') : uiText('entityPaused');
     return (
       <div className="space-y-1">
-        <p className="text-xs font-medium text-muted-foreground">Restored status</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          {uiText('restored_status_7804eca')}
+        </p>
         <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm">
           <span className="min-w-0 truncate font-mono text-xs">{move.adset_id}</span>
           <span className="shrink-0 font-medium tabular-nums">→ {restoreLabel}</span>
@@ -271,12 +313,21 @@ function RevertPreviewBody({
 
   return (
     <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">Current → restored daily budget</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        {uiText('current_restored_daily_budget_d3936f6')}
+      </p>
       <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm">
         <span className="min-w-0 truncate font-mono text-xs">{move.adset_id}</span>
         <span className="shrink-0 tabular-nums">
-          {formatCurrency(move.current, currency)} <span className="text-muted-foreground">→</span>{' '}
-          <span className="font-medium">{formatCurrency(move.proposed, currency)}</span>/d
+          {uiText.rich('sentence_2af30ac04d46', {
+            v0: formatCurrency(move.current, currency, uiLocale),
+            v1: () => <span className="text-muted-foreground">→</span>,
+            v2: () => (
+              <span className="font-medium">
+                {formatCurrency(move.proposed, currency, uiLocale)}
+              </span>
+            ),
+          })}
         </span>
       </div>
     </div>

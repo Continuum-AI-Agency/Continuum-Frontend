@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // What autopilot may approve on its own — one switch per scope, one line each. Every change
 // saves at once (a partial patch the RPC merges), like Stop / Resume beside it; nothing
@@ -56,6 +57,7 @@ export function AutopilotScopesField({
   savingScope,
   onChange,
 }: AutopilotScopesFieldProps) {
+  const uiText = useTranslations('scale');
   const current = scopes ?? DEFAULT_AUTOPILOT_SCOPES;
   const [unavailable, setUnavailable] = useState<ReadonlySet<AutopilotScope>>(new Set());
 
@@ -104,7 +106,7 @@ export function AutopilotScopesField({
                     data-testid="budget-move-unavailable"
                     role="status"
                   >
-                    This is not available yet for this portfolio. Nothing was saved.
+                    {uiText('this_is_not_available_yet_for_this_portfolio__9ae9ac6')}
                   </p>
                 ) : null}
               </div>
@@ -113,13 +115,11 @@ export function AutopilotScopesField({
         })}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Everything is still recommended in the queue. Nothing a scope creates spends until you
-        activate it. Stop halts all of these.
+        {uiText('everything_is_still_recommended_in_the_queue__9f695d8')}
       </p>
       {noActor ? (
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          Autopilot needs a person to act as. Toggle any scope once so your account is recorded as
-          the approver.
+          {uiText('autopilot_needs_a_person_to_act_as_toggle_any_ed2a16f')}
         </p>
       ) : null}
     </div>

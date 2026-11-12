@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Google's own views on the Google tab (P6 lane B: money left on the table, search terms, Quality
 // Score map, PMax health), mounted once by GoogleAdsTab under the account read, on the read's own
@@ -59,35 +60,40 @@ export function GoogleOwnViews({
   window,
   resultBucket = null,
 }: GoogleOwnViewsProps) {
+  const uiText = useTranslations('scale');
   const target = { brandId, customerId, currency, resultBucket };
   return (
-    <section aria-label="Google's own views" className="space-y-3" data-testid="google-own-views">
-      <h3 className="font-semibold text-sm">Google's own views</h3>
+    <section
+      aria-label={uiText('google_s_own_views_30c7404')}
+      className="space-y-3"
+      data-testid="google-own-views"
+    >
+      <h3 className="font-semibold text-sm">{uiText('google_s_own_views_30c7404')}</h3>
       <ViewSection
-        hint="impression share lost to budget vs rank"
+        hint={uiText('impression_share_lost_to_budget_vs_rank_0315244')}
         id="money-left"
-        title="Money left on the table"
+        title={uiText('money_left_on_the_table_b18e437')}
       >
         {() => <MoneyLeftOnTable {...target} window={window} />}
       </ViewSection>
       <ViewSection
-        hint="grouped by root; ask Jaina about any"
+        hint={uiText('grouped_by_root_ask_jaina_about_any_9697c35')}
         id="search-terms"
-        title="Search terms"
+        title={uiText('search_terms_616578c')}
       >
         {() => <SearchTermExplorer {...target} />}
       </ViewSection>
       <ViewSection
-        hint="where spend sits on the 1–10 scale"
+        hint={uiText('where_spend_sits_on_the_1_10_scale_966c71c')}
         id="quality-score"
-        title="Quality Score map"
+        title={uiText('quality_score_map_fd7c613')}
       >
         {() => <QualityScoreMap {...target} window={window} />}
       </ViewSection>
       <ViewSection
-        hint="asset groups and spend by network"
+        hint={uiText('asset_groups_and_spend_by_network_d14cb71')}
         id="pmax"
-        title="Performance Max health"
+        title={uiText('performance_max_health_10cb6f2')}
       >
         {() => <PmaxHealth {...target} window={window} />}
       </ViewSection>

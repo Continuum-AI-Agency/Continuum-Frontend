@@ -4,6 +4,7 @@ import { isStudioNodeType, studioNodeDefinition } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useReactFlow } from '@xyflow/react';
 import { BookOpen, LayoutTemplate, RefreshCw } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -61,13 +62,16 @@ interface RawEdge {
 // ─── WorkflowMiniCanvas ───────────────────────────────────────────────────────
 
 function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown[] }) {
+  const translateUi = useUiTranslations('studio');
+
   const rawNodes = nodes as RawNode[];
   const rawEdges = edges as RawEdge[];
 
   if (rawNodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        No nodes
+        {' '}
+        {translateUi('no_nodes_10c28b2e')}{' '}
       </div>
     );
   }
@@ -87,7 +91,8 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
   if (!isFinite(minX)) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        No layout data
+        {' '}
+        {translateUi('no_layout_data_6a30f423')}{' '}
       </div>
     );
   }
@@ -192,6 +197,8 @@ export function WorkflowCard({
   item: WorkflowLibraryItem;
   onUse: (item: WorkflowLibraryItem) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const nodeCount = item.content.nodes.length;
 
   return (
@@ -203,7 +210,7 @@ export function WorkflowCard({
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm font-medium">{item.name}</p>
           <span className="shrink-0 text-xs text-muted-foreground">
-            {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'}
+            {translateUi('workflowNodeCount', { count: nodeCount })}
           </span>
         </div>
         {item.description && (
@@ -222,7 +229,8 @@ export function WorkflowCard({
           </div>
         )}
         <Button size="sm" className="mt-3 w-full" onClick={() => onUse(item)}>
-          Use Workflow
+          {' '}
+          {translateUi('use_workflow_e5bbc47c')}{' '}
         </Button>
       </div>
     </div>
@@ -237,6 +245,8 @@ export function WorkflowCard({
  * of "how a template lands" is how one of them quietly stops rehydrating media.
  */
 export function useApplyLibraryWorkflow(): (item: WorkflowLibraryItem) => Promise<void> {
+  const translateUi = useUiTranslations('studio');
+
   const { setNodes, setEdges, takeSnapshot, defaultEdgeType, brandId } = useStudioStore();
   const { fitView } = useReactFlow();
   const { show } = useToast();
@@ -258,15 +268,21 @@ export function useApplyLibraryWorkflow(): (item: WorkflowLibraryItem) => Promis
       requestAnimationFrame(() => {
         fitView({ ...STUDIO_FIT_VIEW_OPTIONS, duration: 300 });
       });
-      show({ title: 'Template applied', description: item.name, variant: 'success' });
+      show({
+        title: translateUi('template_applied_d71a690c'),
+        description: item.name,
+        variant: 'success',
+      });
     },
-    [brandId, defaultEdgeType, fitView, setEdges, setNodes, show, takeSnapshot],
+    [brandId, defaultEdgeType, fitView, setEdges, setNodes, show, takeSnapshot, translateUi],
   );
 }
 
 // ─── WorkflowLibrary ─────────────────────────────────────────────────────────
 
 export function WorkflowLibrary() {
+  const translateUi = useUiTranslations('studio');
+
   const [isOpen, setIsOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [activeTag, setActiveTag] = React.useState<string | null>(null);
@@ -310,21 +326,21 @@ export function WorkflowLibrary() {
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-            Templates
+            <BookOpen className="mr-1.5 h-3.5 w-3.5" /> {translateUi('templates_56b564b7')}{' '}
           </Button>
         }
       />
       <PopoverContent className="w-[440px] p-0" align="end">
         <div className="border-b border-border p-3">
-          <p className="text-sm font-semibold">Workflow Templates</p>
+          <p className="text-sm font-semibold">{translateUi('workflow_templates_2c05d1fd')}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Pre-built starting points — pick one to apply it to the canvas. Looking for your own
-            work? Use <span className="font-medium">My Workflows</span>.
+            {' '}
+            {translateUi('pre_built_starting_points_pick_one__df5cd633')}{' '}
+            <span className="font-medium">{translateUi('my_workflows_a749a3fd')}</span>.
           </p>
           <input
             type="text"
-            placeholder="Search templates…"
+            placeholder={translateUi('search_templates_9eb0054d')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="mt-2.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
@@ -342,7 +358,8 @@ export function WorkflowLibrary() {
                   : 'border-border text-muted-foreground hover:bg-muted'
               }`}
             >
-              All
+              {' '}
+              {translateUi('all_a52ace42')}{' '}
             </button>
             {allTags.map((tag) => (
               <button
@@ -363,16 +380,21 @@ export function WorkflowLibrary() {
 
         <div className="max-h-[420px] space-y-3 overflow-y-auto p-3">
           {isLoading && (
-            <p className="py-6 text-center text-sm text-muted-foreground">Loading templates…</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {translateUi('loading_templates_3800ee71')}
+            </p>
           )}
 
           {isError && !isLoading && (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <RefreshCw className="h-8 w-8 text-muted-foreground/40" />
               <div>
-                <p className="text-sm font-medium text-foreground">Templates unavailable</p>
+                <p className="text-sm font-medium text-foreground">
+                  {translateUi('templates_unavailable_a36850ff')}
+                </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Could not load the template library. Check your connection and try again.
+                  {' '}
+                  {translateUi('could_not_load_the_template_library_5dc86626')}{' '}
                 </p>
               </div>
               <button
@@ -380,8 +402,7 @@ export function WorkflowLibrary() {
                 onClick={() => void refetch()}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
               >
-                <RefreshCw className="h-3 w-3" />
-                Retry
+                <RefreshCw className="h-3 w-3" /> {translateUi('retry_942087cc')}{' '}
               </button>
             </div>
           )}
@@ -391,12 +412,14 @@ export function WorkflowLibrary() {
               <LayoutTemplate className="h-8 w-8 text-muted-foreground/40" />
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  {query ? 'No templates match your search' : 'No templates yet'}
+                  {query
+                    ? translateUi('no_templates_match_your_search_e7829b52')
+                    : translateUi('no_templates_yet_2d1ae3be')}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {query
-                    ? 'Try a different search term or clear the filter.'
-                    : 'Templates will appear here once the library is populated.'}
+                    ? translateUi('try_a_different_search_term_or_clea_3d7121d9')
+                    : translateUi('templates_will_appear_here_once_the_f8121e19')}
                 </p>
               </div>
               {query && (
@@ -405,7 +428,8 @@ export function WorkflowLibrary() {
                   onClick={() => setQuery('')}
                   className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                 >
-                  Clear search
+                  {' '}
+                  {translateUi('clear_search_3b7ea517')}{' '}
                 </button>
               )}
             </div>

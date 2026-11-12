@@ -15,17 +15,18 @@ import {
   Type,
   Upload,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TypefaceHoldBadge } from '@/components/brand/typefaceHonesty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 import {
   fetchTemplateFonts,
   sendTemplateToForge,
   type TemplateFontReadiness,
 } from '@/lib/library/templateSources';
-import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 import { cn } from '@/lib/utils';
 
 // The Templates section: the same rows the Library already holds, shown as what they ARE
@@ -39,15 +40,17 @@ function PARSE_LABEL(state: TemplateSourceSummary['parseState']): {
   text: string;
   variant: 'muted' | 'success' | 'warning' | 'destructive';
 } {
+  const translateUi = useUiTranslations('library');
+
   switch (state) {
     case 'parsed':
-      return { text: 'Read', variant: 'success' };
+      return { text: translateUi('read_9b9a8d05'), variant: 'success' };
     case 'pending':
-      return { text: 'Unpacking', variant: 'muted' };
+      return { text: translateUi('unpacking_88332ba5'), variant: 'muted' };
     case 'unsupported':
-      return { text: 'Not readable', variant: 'warning' };
+      return { text: translateUi('not_readable_9742efc9'), variant: 'warning' };
     case 'failed':
-      return { text: "Couldn't read", variant: 'destructive' };
+      return { text: translateUi('couldn_t_read_3f8b4b56'), variant: 'destructive' };
   }
 }
 
@@ -62,6 +65,8 @@ function TemplateCard({
   asset: MediaAsset | undefined;
   onChanged: () => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [fonts, setFonts] = useState<TemplateFontReadiness | null>(null);
   const [sending, setSending] = useState(false);
   const parse = source.parse;
@@ -89,7 +94,9 @@ function TemplateCard({
     // Forge — where there is a field for it — not a silent truncation.
     const problem = templateNameProblem(name);
     if (problem) {
-      toast.error(`Name this template in Forge first — ${problem}`);
+      toast.error(
+        translateUi('name_this_template_in_forge_first_v_d6292bfa', { value0: String(problem) }),
+      );
       return;
     }
     setSending(true);
@@ -97,16 +104,20 @@ function TemplateCard({
       const next = await sendTemplateToForge(brandId, source.assetId, name);
       toast.success(
         next.forgeState === 'stubbed'
-          ? 'Recorded for Template Forge. The live hand-off is not switched on yet.'
-          : 'Sent to Template Forge.',
+          ? translateUi('recorded_for_template_forge_the_liv_d3c1dbf7')
+          : translateUi('sent_to_template_forge_f666e34f'),
       );
       onChanged();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not reach Template Forge');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_reach_template_forge_6538842a'),
+      );
     } finally {
       setSending(false);
     }
-  }, [brandId, source.assetId, name, onChanged]);
+  }, [brandId, source.assetId, name, onChanged, translateUi]);
 
   return (
     <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border/60 bg-card p-4">
@@ -129,11 +140,11 @@ function TemplateCard({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Layers className="size-3.5" />
-              {source.slotCount ?? 0} {source.slotCount === 1 ? 'slot' : 'slots'}
+              {translateUi('sourceSlotCount', { count: source.slotCount ?? 0 })}
             </span>
             <span className="flex items-center gap-1">
               <Type className="size-3.5" />
-              {source.fonts.length} {source.fonts.length === 1 ? 'font' : 'fonts'}
+              {translateUi('fontCount', { count: source.fonts.length })}
             </span>
             {parse?.comps.some((comp) => comp.durationSec) ? (
               <span className="flex items-center gap-1 tabular-nums">
@@ -152,8 +163,8 @@ function TemplateCard({
             <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                {fonts.missing} of {fonts.fonts.length} fonts are not in the engine. Renders will
-                fall back to another face.
+                {fonts.missing} {translateUi('of_28391d3b')} {fonts.fonts.length}{' '}
+                {translateUi('fonts_are_not_in_the_engine_renders_b55e5031')}{' '}
               </span>
             </div>
           ) : null}
@@ -173,21 +184,25 @@ function TemplateCard({
           {source.parseState === 'failed'
             ? source.parseError
               ? parseErrorSentence(source.parseError)
-              : 'This file could not be read.'
-            : 'Uploaded and queued for unpacking. Ratios, slots, and fonts appear here when it finishes.'}
+              : translateUi('this_file_could_not_be_read_f338e18f')
+            : translateUi('uploaded_and_queued_for_unpacking_r_a900bb54')}
         </p>
       )}
 
       <div className="mt-auto flex items-center justify-between gap-2 pt-1">
         <span className="truncate text-2xs text-muted-foreground">
           {source.templateKey ? (
-            <>Published as {source.templateKey}</>
+            <>
+              {translateUi('published_as_e685e2bd')} {source.templateKey}
+            </>
           ) : source.forgeRunId ? (
             // Never says "published": the fleet can finish a job against an unpromoted
             // package and hand back a blank frame, which reads as success.
-            <>Forge {source.forgeState ?? 'queued'}</>
+            <>
+              {translateUi('forge_8899ecd1')} {source.forgeState ?? 'queued'}
+            </>
           ) : (
-            <>Not sent to Forge</>
+            <>{translateUi('not_sent_to_forge_e9ab8296')}</>
           )}
         </span>
         <Button
@@ -196,8 +211,8 @@ function TemplateCard({
           disabled={sending || source.parseState !== 'parsed'}
           onClick={() => void sendToForge()}
         >
-          {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-          Send to Forge
+          {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}{' '}
+          {translateUi('send_to_forge_27b7284f')}{' '}
         </Button>
       </div>
     </div>
@@ -221,6 +236,8 @@ export function TemplateGrid({
   onChooseFiles: () => void;
   className?: string;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const byId = new Map(assets.map((asset) => [asset.id, asset]));
   const poll = useRef({ key: '', count: 0 });
   const pendingKey = sources
@@ -247,32 +264,38 @@ export function TemplateGrid({
           <PackageOpen className="size-5 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold">Add an After Effects template</h2>
+          <h2 className="text-sm font-semibold">
+            {translateUi('add_an_after_effects_template_dc4e0bf4')}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Drop an .aep, .aepx, .aet, or collected .zip. Continuum keeps the original private,
-            unpacks it, and lists its render controls here.
+            {' '}
+            {translateUi('drop_an_aep_aepx_aet_or_collected_z_706f2401')}{' '}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Upload <span aria-hidden="true">→</span> unpack and inspect{' '}
-            <span aria-hidden="true">→</span> review slots <span aria-hidden="true">→</span> render
-            variants
+            {' '}
+            {translateUi('upload_865e89de')} <span aria-hidden="true">→</span>{' '}
+            {translateUi('unpack_and_inspect_4b40aeb4')} <span aria-hidden="true">→</span>{' '}
+            {translateUi('review_slots_71476f16')} <span aria-hidden="true">→</span>{' '}
+            {translateUi('render_variants_630d4334')}{' '}
           </p>
         </div>
         <Button type="button" onClick={onChooseFiles} className="shrink-0">
-          <Upload className="size-4" />
-          Choose template
+          <Upload className="size-4" /> {translateUi('choose_template_43fcd78f')}{' '}
         </Button>
       </section>
 
       {loading && sources.length === 0 ? (
         <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Loading templates…
+          <Loader2 className="size-4 animate-spin" /> {translateUi(
+            'loading_templates_3800ee71',
+          )}{' '}
         </div>
       ) : sources.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/60 p-8 text-center">
-          <p className="text-sm font-medium">No templates yet</p>
+          <p className="text-sm font-medium">{translateUi('no_templates_yet_2d1ae3be')}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose a project above or drop it anywhere on this page.
+            {' '}
+            {translateUi('choose_a_project_above_or_drop_it_a_32412ac8')}{' '}
           </p>
         </div>
       ) : (

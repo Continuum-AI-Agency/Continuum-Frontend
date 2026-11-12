@@ -1,5 +1,14 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import {
+  countryList,
+  countryName,
+  localizedNodeOptions,
+  localizeNodeOptionCopy,
+} from '../../types/nodeOptionPresentation';
+
 /*
  * An audience is exactly one of two things, and the switch says which: a PUBLISHED
  * audience group (its members already exist on Meta; its targeting is the group's, read
@@ -53,8 +62,8 @@ const genderChoiceOf = (genders: number[] | undefined): GenderChoice =>
 
 const GENDER_CODES: Record<GenderChoice, number[]> = { all: [], male: [1], female: [2] };
 
-const describeAges = (data: AudienceData): string => {
-  if (data.ageMin === undefined && data.ageMax === undefined) return 'Any age';
+const describeAges = (data: AudienceData, anyAgeLabel: string): string => {
+  if (data.ageMin === undefined && data.ageMax === undefined) return anyAgeLabel;
   const max = data.ageMax ?? AUDIENCE_AGE_MAX;
   return `${data.ageMin ?? AUDIENCE_AGE_MIN}–${max >= AUDIENCE_AGE_MAX ? `${max}+` : max}`;
 };
@@ -65,7 +74,10 @@ type PublishedGroups =
   | { state: 'error'; message: string };
 
 function usePublishedGroups(brandId: string, enabled: boolean): PublishedGroups {
-  const [result, setResult] = useState<PublishedGroups>({ state: 'loading' });
+  const formatUiError = useUiErrorMessage();
+  const [result, setResult] = useState<
+    Exclude<PublishedGroups, { state: 'error' }> | { state: 'error'; cause: unknown }
+  >({ state: 'loading' });
 
   useEffect(() => {
     if (!enabled || !brandId) return;
@@ -79,7 +91,7 @@ function usePublishedGroups(brandId: string, enabled: boolean): PublishedGroups 
         if (cancelled) return;
         setResult({
           state: 'error',
-          message: error instanceof Error ? error.message : 'Could not load audience groups.',
+          cause: error,
         });
       });
     return () => {
@@ -87,33 +99,51 @@ function usePublishedGroups(brandId: string, enabled: boolean): PublishedGroups 
     };
   }, [brandId, enabled]);
 
-  return result;
+  return result.state === 'error'
+    ? { state: 'error', message: formatUiError(result.cause) }
+    : result;
 }
 
 function GroupSummary({ data }: { data: AudienceData }) {
-  const rows: [string, string][] = [
-    [
-      'Members',
-      data.customAudiences?.length
-        ? `${data.customAudiences.length} ${data.customAudiences.length === 1 ? 'audience' : 'audiences'}`
-        : 'None listed',
-    ],
-    ['Countries', data.locations.length ? data.locations.join(', ') : 'From the members'],
-    ['Ages', describeAges(data)],
-    [
-      'Genders',
-      GENDER_OPTIONS.find((option) => option.value === genderChoiceOf(data.genders))?.label ??
-        'All',
-    ],
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const genders = localizedNodeOptions(GENDER_OPTIONS, uiText, uiLocale);
+  const rows = [
+    {
+      id: 'members',
+      label: uiText('members_1044a4c'),
+      value: data.customAudiences?.length
+        ? uiText('canvasAudienceCount', { count: data.customAudiences.length })
+        : localizeNodeOptionCopy('None listed', uiText),
+    },
+    {
+      id: 'countries',
+      label: uiText('countries_8faf7ec'),
+      value: data.locations.length
+        ? countryList(data.locations, uiLocale)
+        : localizeNodeOptionCopy('From the members', uiText),
+    },
+    {
+      id: 'ages',
+      label: localizeNodeOptionCopy('Ages', uiText),
+      value: describeAges(data, localizeNodeOptionCopy('Any age', uiText)),
+    },
+    {
+      id: 'genders',
+      label: uiText('genders_4102939'),
+      value:
+        genders.find((option) => option.value === genderChoiceOf(data.genders))?.label ??
+        uiText('all_a52ace4'),
+    },
   ];
   return (
     <dl
       className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-md bg-muted/50 px-3 py-2.5 text-xs"
       data-testid="inspector-audience-group-summary"
     >
-      {rows.map(([term, value]) => (
-        <div key={term} className="contents">
-          <dt className="text-muted-foreground">{term}</dt>
+      {rows.map(({ id, label, value }) => (
+        <div key={id} className="contents">
+          <dt className="text-muted-foreground">{label}</dt>
           <dd className="min-w-0 truncate text-foreground">{value}</dd>
         </div>
       ))}
@@ -122,6 +152,7 @@ function GroupSummary({ data }: { data: AudienceData }) {
 }
 
 function GroupPicker({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
+  const uiText = useTranslations('scale');
   const { data } = node;
   const { activeBrandId } = useActiveBrandContext();
   const updateNodeData = useCampaignStore((store) => store.updateNodeData);
@@ -130,15 +161,15 @@ function GroupPicker({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
 
   if (published.state === 'loading') {
     return (
-      <InspectorField label="Audience group">
+      <InspectorField label={uiText('audience_group_8171c17')}>
         <Skeleton className="h-8 w-full rounded-md bg-muted/70" />
       </InspectorField>
     );
   }
   if (published.state === 'error') {
     return (
-      <InspectorField label="Audience group" error={published.message}>
-        <span className="sr-only">Unavailable</span>
+      <InspectorField label={uiText('audience_group_8171c17')} error={published.message}>
+        <span className="sr-only">{uiText('unavailable_ca18449')}</span>
       </InspectorField>
     );
   }
@@ -149,14 +180,17 @@ function GroupPicker({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
   // A group this node already names but that is not (or no longer) published stays
   // visible, labelled, so the picker never silently shows a different group.
   if (current && !groups.some((group) => group.id === current)) {
-    options.unshift({ value: current, label: `${data.label} (not published)` });
+    options.unshift({
+      value: current,
+      label: uiText('canvasGroupNotPublished', { name: data.label }),
+    });
   }
 
   if (groups.length === 0 && !current) {
     return (
-      <InspectorField label="Audience group">
+      <InspectorField label={uiText('audience_group_8171c17')}>
         <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs leading-snug text-muted-foreground">
-          No published audience groups yet. Ask Jaina to build one, or switch to Broad targeting.
+          {uiText('no_published_audience_groups_yet_ask_jaina_to_e95657e')}
         </p>
       </InspectorField>
     );
@@ -164,15 +198,15 @@ function GroupPicker({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
 
   return (
     <InspectorField
-      label="Audience group"
+      label={uiText('audience_group_8171c17')}
       htmlFor={pickerId}
-      hint="Only published groups are listed: their members already exist on Meta."
+      hint={uiText('only_published_groups_are_listed_their_member_3732544')}
     >
       <SelectField
         id={pickerId}
         testId="inspector-audience-group-picker"
         value={current}
-        placeholder="Choose a published group"
+        placeholder={uiText('choose_a_published_group_06e5415')}
         options={options}
         onChange={(groupId) => {
           const group = groups.find((entry) => entry.id === groupId);
@@ -184,6 +218,10 @@ function GroupPicker({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
 }
 
 function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const locations = localizedNodeOptions(LOCATIONS, uiText, uiLocale, true);
+  const genderOptions = localizedNodeOptions(GENDER_OPTIONS, uiText, uiLocale);
   const { data } = node;
   const updateNodeData = useCampaignStore((store) => store.updateNodeData);
   const update = (patch: Partial<AudienceData>) => updateNodeData(node.id, patch);
@@ -193,13 +231,15 @@ function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
   const full = selected.length >= AUDIENCE_MAX_COUNTRIES;
   const known = new Set(LOCATIONS.map((location) => location.value));
   const options = [
-    ...LOCATIONS.map((location) => ({
+    ...locations.map((location) => ({
       value: location.value,
       label: location.label,
       disabled: full && !selected.includes(location.value),
     })),
     // Countries a hydrated node carries that the short list does not name.
-    ...selected.filter((code) => !known.has(code)).map((code) => ({ value: code, label: code })),
+    ...selected
+      .filter((code) => !known.has(code))
+      .map((code) => ({ value: code, label: countryName(code, uiLocale) })),
   ];
   const ageMin = data.ageMin ?? AUDIENCE_AGE_MIN;
   const ageMax = data.ageMax ?? AUDIENCE_AGE_MAX;
@@ -216,18 +256,18 @@ function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
   return (
     <>
       <InspectorField
-        label="Countries"
-        error={selected.length === 0 ? 'Pick at least one country.' : null}
+        label={uiText('countries_8faf7ec')}
+        error={selected.length === 0 ? uiText('canvasOption_17') : null}
         hint={
           full
-            ? `${AUDIENCE_MAX_COUNTRIES} is the most one ad set can name.`
-            : `${selected.length} selected`
+            ? uiText('canvasMaxCountries', { count: AUDIENCE_MAX_COUNTRIES })
+            : uiText('canvasSelectedCountries', { count: selected.length })
         }
       >
         <ChipGroup
           multiple
           testId="inspector-audience-countries"
-          label="Countries"
+          label={uiText('countries_8faf7ec')}
           value={selected}
           options={options}
           onChange={(locations) => update({ locations })}
@@ -235,7 +275,7 @@ function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
       </InspectorField>
 
       <div className="grid grid-cols-2 gap-2">
-        <InspectorField label="Age from" htmlFor={ids.min}>
+        <InspectorField label={uiText('age_from_12db358')} htmlFor={ids.min}>
           <CommitInput
             id={ids.min}
             testId="inspector-audience-age-min"
@@ -248,7 +288,7 @@ function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
             onCommit={(next) => commitAge('ageMin', next)}
           />
         </InspectorField>
-        <InspectorField label="Age to" htmlFor={ids.max}>
+        <InspectorField label={uiText('age_to_59f177e')} htmlFor={ids.max}>
           <CommitInput
             id={ids.max}
             testId="inspector-audience-age-max"
@@ -263,16 +303,20 @@ function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
         </InspectorField>
       </div>
       <p className="-mt-1.5 text-2xs leading-snug text-muted-foreground">
-        {AUDIENCE_AGE_MIN} to {AUDIENCE_AGE_MAX}. {AUDIENCE_AGE_MAX} means {AUDIENCE_AGE_MAX} and
-        older.
+        {uiText.rich('sentence_9539f407e0a9', {
+          v0: AUDIENCE_AGE_MIN,
+          v1: AUDIENCE_AGE_MAX,
+          v2: AUDIENCE_AGE_MAX,
+          v3: AUDIENCE_AGE_MAX,
+        })}
       </p>
 
-      <InspectorField label="Genders">
+      <InspectorField label={uiText('genders_4102939')}>
         <ChipGroup
           testId="inspector-audience-genders"
-          label="Genders"
+          label={uiText('genders_4102939')}
           value={[genderChoiceOf(data.genders)]}
-          options={GENDER_OPTIONS}
+          options={genderOptions}
           onChange={([choice]) => update({ genders: GENDER_CODES[choice ?? 'all'] })}
         />
       </InspectorField>
@@ -281,6 +325,7 @@ function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
 }
 
 export function AudienceSection({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
+  const uiText = useTranslations('scale');
   const { data } = node;
   const updateNodeData = useCampaignStore((store) => store.updateNodeData);
   const mode: AudienceMode = data.mode ?? 'broad';
@@ -310,28 +355,29 @@ export function AudienceSection({ node }: { node: CampaignCanvasNodeMap['audienc
 
   return (
     <>
-      <InspectorSection title="Audience">
+      <InspectorSection title={uiText('audience_545c023')}>
         <NameField id={node.id} label={data.label} keptOnSave={false} />
         <Tabs value={mode} onValueChange={(value) => switchMode(value as AudienceMode)}>
           <TabsList data-testid="inspector-audience-mode" className="w-full">
             <TabsTrigger value="group" className="text-xs">
-              Published group
+              {uiText('published_group_db5004c')}
             </TabsTrigger>
             <TabsTrigger value="broad" className="text-xs">
-              Broad
+              {uiText('broad_3d9c053')}
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </InspectorSection>
 
-      <InspectorSection title={mode === 'group' ? 'Group' : 'Targeting'}>
+      <InspectorSection
+        title={mode === 'group' ? uiText('group_34ca0e7') : uiText('targeting_dfa4ae5')}
+      >
         {mode === 'group' ? (
           <>
             <GroupPicker node={node} />
             {data.audienceGroupVersionId ? <GroupSummary data={data} /> : null}
             <p className="text-2xs leading-snug text-muted-foreground">
-              Targeting comes from the published group. To change it, publish a new version of the
-              group.
+              {uiText('targeting_comes_from_the_published_group_to_c_6d5f6c0')}
             </p>
           </>
         ) : (

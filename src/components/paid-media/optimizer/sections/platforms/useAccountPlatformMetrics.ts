@@ -1,4 +1,5 @@
 'use client';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The Overview's one multi-platform read: public.optimizer_get_account_platform_metrics, parsed
 // with the contract both sides share. Four states, each a different fact: still reading; the
@@ -48,16 +49,23 @@ export async function fetchAccountPlatformMetrics(
   return parsed.data;
 }
 
-export function metricsStateOf(query: {
-  data: AccountPlatformMetrics | undefined;
-  error: unknown;
-  isError: boolean;
-}): AccountPlatformMetricsState {
+export function metricsStateOf(
+  query: {
+    data: AccountPlatformMetrics | undefined;
+    error: unknown;
+    isError: boolean;
+  },
+  formatError?: (error: unknown) => string,
+): AccountPlatformMetricsState {
   if (query.isError) {
     if (query.error instanceof MissingRpcError) return { status: 'unavailable' };
     return {
       status: 'error',
-      message: query.error instanceof Error ? query.error.message : 'Unknown error',
+      message: formatError
+        ? formatError(query.error)
+        : query.error instanceof Error
+          ? query.error.message
+          : 'Unknown error',
     };
   }
   if (!query.data) return { status: 'loading' };
@@ -68,6 +76,7 @@ export function useAccountPlatformMetrics(
   brandId: string,
   window: MetricsWindowLabel = 'd7',
 ): AccountPlatformMetricsState {
+  const formatUiError = useUiErrorMessage();
   const query = useQuery({
     queryKey: accountPlatformMetricsKey(brandId, window),
     queryFn: () => fetchAccountPlatformMetrics(brandId, window),
@@ -75,5 +84,5 @@ export function useAccountPlatformMetrics(
     staleTime: FIVE_MINUTES,
     retry: (failures, error) => !(error instanceof MissingRpcError) && failures < 1,
   });
-  return metricsStateOf(query);
+  return metricsStateOf(query, formatUiError);
 }

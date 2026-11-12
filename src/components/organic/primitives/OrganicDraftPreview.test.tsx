@@ -1,17 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset, PublishAccountCandidate } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render as rtlRender,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { useEffect, useReducer, useState } from 'react';
+import { render as rtlRender } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 import type { OrganicCalendarDraft } from './types';

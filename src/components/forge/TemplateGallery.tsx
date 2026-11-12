@@ -19,6 +19,7 @@ import {
   Search,
   Settings2,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
@@ -43,13 +44,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { formatDecimal } from '@/lib/format/decimal';
 import { pluralize } from '@/lib/format/pluralize';
+import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 import {
   fetchTemplateRevisionVariants,
   fetchTemplateVariantDefaults,
   fetchTemplateVariants,
 } from '@/lib/library/templateSources';
-import { parseErrorSentence } from '@/lib/library/sceneTemplates';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -65,6 +67,7 @@ import {
   TemplateStatusPill,
   templateStatus,
 } from './TemplateCard';
+import { useForgePresentationText } from './useForgePresentationText';
 
 // Every template the brand can work with, as one searchable gallery: its own uploads, and the
 // templates others built into the shared workspace that it can add. The detail panel is where a
@@ -120,17 +123,27 @@ const statusOf = (item: Item): TemplateStatus =>
   item.kind === 'source' ? item.status : item.shared.draft ? 'draft' : 'ready';
 
 /** Ties fall back to the name, so a sort never shuffles equal rows between renders. */
-function compareItems(a: Item, b: Item, { key, dir }: Sort): number {
+function compareItems(
+  a: Item,
+  b: Item,
+  { key, dir }: Sort,
+  t: ReturnType<typeof useUiTranslations<'forge'>>,
+  collator: Intl.Collator,
+  present: (source: string) => string,
+): number {
   const order =
     key === 'name'
       ? 0
       : key === 'type'
-        ? SOURCE_TYPES[typeOf(a)].localeCompare(SOURCE_TYPES[typeOf(b)]) ||
+        ? collator.compare(present(SOURCE_TYPES[typeOf(a)]), present(SOURCE_TYPES[typeOf(b)])) ||
           MOTION_RANK[a.motion ?? 'unknown'] - MOTION_RANK[b.motion ?? 'unknown']
         : key === 'status'
-          ? TEMPLATE_STATUS[statusOf(a)].label.localeCompare(TEMPLATE_STATUS[statusOf(b)].label)
+          ? collator.compare(
+              t(TEMPLATE_STATUS[statusOf(a)].labelKey),
+              t(TEMPLATE_STATUS[statusOf(b)].labelKey),
+            )
           : a.updatedAt.localeCompare(b.updatedAt);
-  return (dir === 'asc' ? 1 : -1) * (order || a.name.localeCompare(b.name));
+  return (dir === 'asc' ? 1 : -1) * (order || collator.compare(a.name, b.name));
 }
 
 /** Placeholder rows shaped like the table's own, while templates are still arriving. */
@@ -166,6 +179,9 @@ function SortHead({
   onSort: (column: SortKey) => void;
   className?: string;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const presentForge = useForgePresentationText();
+
   const active = sort.key === column;
   const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
   return (
@@ -176,11 +192,13 @@ function SortHead({
       <button
         type="button"
         // Its own name: the Render picker's trigger is already the page's "Template" button.
-        aria-label={`Sort by ${SORT_COLUMNS[column]}`}
+        aria-label={translateUi('sort_by_value0_9ad125fe', {
+          value0: presentForge(SORT_COLUMNS[column]),
+        })}
         onClick={() => onSort(column)}
         className="inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden"
       >
-        {SORT_COLUMNS[column]}
+        {presentForge(SORT_COLUMNS[column])}
         <Icon className={cn('size-3', !active && 'opacity-40')} aria-hidden />
       </button>
     </TableHead>
@@ -215,6 +233,10 @@ function SubRow({
   /** Row actions before Edit. */
   children?: ReactNode;
 }) {
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   return (
     <TableRow data-sub-row className="bg-muted/20">
       <TableCell className="py-1.5">
@@ -227,7 +249,7 @@ function SubRow({
                   variant="ghost"
                   size="sm"
                   className="min-w-0 justify-start px-0 font-normal"
-                  aria-label={`Open ${name}`}
+                  aria-label={translateUi('open_value0_3dfbdb80', { value0: String(name) })}
                   onClick={onOpen}
                 />
               }
@@ -246,7 +268,7 @@ function SubRow({
       <TableCell>{status}</TableCell>
       <TableCell className="whitespace-nowrap text-muted-foreground">
         <time dateTime={updatedAt} title={updatedAt}>
-          {updatedAt ? new Date(updatedAt).toLocaleDateString() : '—'}
+          {updatedAt ? new Date(updatedAt).toLocaleDateString(displayLocale) : '—'}
         </time>
       </TableCell>
       <TableCell>
@@ -255,8 +277,8 @@ function SubRow({
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label={`Edit ${name}`}
-            title="Edit layers"
+            aria-label={translateUi('edit_value0_44b87feb', { value0: String(name) })}
+            title={translateUi('edit_layers_589e52a5')}
             onClick={onEdit}
           >
             <Pencil aria-hidden />
@@ -356,6 +378,17 @@ export function TemplateGallery({
   onRejected: (files: File[]) => void;
   onPresentationCreated?: (assetId: string) => Promise<void>;
 }) {
+  const presentForge = useForgePresentationText();
+
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+  const templateSortLocale = useUiLocale();
+  const templateCollator = useMemo(
+    () => new Intl.Collator(templateSortLocale),
+    [templateSortLocale],
+  );
+
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>({ key: 'updated', dir: 'desc' });
@@ -386,7 +419,9 @@ export function TemplateGallery({
     }
     return grouped;
   }, [finished]);
-  const emptyLabel = finished ? (finished.nextCursor ? 'No recent render' : 'No render yet') : null;
+  const emptyLabel = finished
+    ? translateUi(finished.nextCursor ? 'noRecentRenderFallback' : 'noRenderYetFallback')
+    : null;
   const rendersOf = (templateKey: string | null) =>
     (templateKey ? rendersByTemplate.get(templateKey) : undefined) ?? NO_RENDERS;
 
@@ -538,7 +573,7 @@ export function TemplateGallery({
   }, [items]);
 
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim().toLocaleLowerCase(templateSortLocale);
     return items
       .filter(
         (item) =>
@@ -546,26 +581,41 @@ export function TemplateGallery({
             (filter === 'shared' ? item.kind === 'shared' : item.group === filter)) &&
           (!motion || item.motion === motion) &&
           (sourceType === 'all' || typeOf(item) === sourceType) &&
-          (!needle || item.name.toLowerCase().includes(needle)),
+          (!needle || item.name.toLocaleLowerCase(templateSortLocale).includes(needle)),
       )
-      .sort((a, b) => compareItems(a, b, sort));
-  }, [items, query, filter, sort, motion, sourceType]);
+      .sort((a, b) => compareItems(a, b, sort, translateUi, templateCollator, presentForge));
+  }, [
+    items,
+    query,
+    filter,
+    sort,
+    motion,
+    sourceType,
+    translateUi,
+    templateCollator,
+    templateSortLocale,
+    presentForge,
+  ]);
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {catalogError ? (
         <p role="alert" className="text-xs text-destructive">
-          Could not read source types and variants.{' '}
+          {' '}
+          {translateUi('could_not_read_source_types_and_var_aaae5ed6')}{' '}
           <Button size="xs" variant="outline" onClick={() => void reloadCatalog()}>
-            Retry
+            {' '}
+            {translateUi('retry_942087cc')}{' '}
           </Button>
         </p>
       ) : null}
       {variantsError ? (
         <p role="alert" className="text-xs text-destructive">
-          Could not read template variants, so variants may show as templates of their own.{' '}
+          {' '}
+          {translateUi('could_not_read_template_variants_so_40188131')}{' '}
           <Button size="xs" variant="outline" onClick={() => void reloadVariants()}>
-            Retry
+            {' '}
+            {translateUi('retry_942087cc')}{' '}
           </Button>
         </p>
       ) : null}
@@ -579,12 +629,15 @@ export function TemplateGallery({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search templates"
-            aria-label="Search templates"
+            placeholder={translateUi('search_templates_04b9835b')}
+            aria-label={translateUi('search_templates_04b9835b')}
             className="h-8 pl-8"
           />
         </div>
-        <fieldset className="flex flex-wrap gap-1" aria-label="Filter templates">
+        <fieldset
+          className="flex flex-wrap gap-1"
+          aria-label={translateUi('filter_templates_a4f2c0d8')}
+        >
           {FILTERS.map(({ id, label }) => (
             <Button
               key={id}
@@ -595,12 +648,15 @@ export function TemplateGallery({
               onClick={() => setFilter(id)}
               className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
-              {label}
+              {presentForge(label)}
               <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
             </Button>
           ))}
         </fieldset>
-        <fieldset className="flex flex-wrap gap-1" aria-label="Filter by motion">
+        <fieldset
+          className="flex flex-wrap gap-1"
+          aria-label={translateUi('filter_by_motion_881391e9')}
+        >
           {MOTIONS.map(({ id, label }) => (
             <Button
               key={id}
@@ -611,19 +667,22 @@ export function TemplateGallery({
               onClick={() => setMotion(motion === id ? null : id)}
               className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
-              {label}
+              {presentForge(label)}
               <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
             </Button>
           ))}
         </fieldset>
         <Select value={sourceType} onValueChange={(next) => setSourceType(next as SourceType)}>
-          <SelectTrigger className="h-8 w-44 text-xs" aria-label="Filter by source type">
-            <SelectValue>{SOURCE_TYPES[sourceType]}</SelectValue>
+          <SelectTrigger
+            className="h-8 w-44 text-xs"
+            aria-label={translateUi('filter_by_source_type_98044522')}
+          >
+            <SelectValue>{presentForge(SOURCE_TYPES[sourceType])}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {Object.entries(SOURCE_TYPES).map(([value, label]) => (
               <SelectItem key={value} value={value}>
-                {label}
+                {presentForge(label)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -641,26 +700,30 @@ export function TemplateGallery({
         />
       ) : null}
       <div className="overflow-hidden rounded-lg border">
-        <Table aria-label="Templates" className="text-xs">
+        <Table aria-label={translateUi('templates_56b564b7')} className="text-xs">
           <TableHeader>
             <TableRow>
               <SortHead column="name" sort={sort} onSort={sortBy} className="min-w-64" />
               <SortHead column="type" sort={sort} onSort={sortBy} />
-              <TableHead>Formats</TableHead>
+              <TableHead>{translateUi('formats_9f01769a')}</TableHead>
               <SortHead column="status" sort={sort} onSort={sortBy} />
               <SortHead column="updated" sort={sort} onSort={sortBy} />
               <TableHead>
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{translateUi('actions_ff8059dc')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading || variantsPending ? <SkeletonRows count={6} label="Loading templates" /> : null}
+            {loading || variantsPending ? (
+              <SkeletonRows count={6} label={translateUi('loading_templates_c5c2c487')} />
+            ) : null}
             {['ready', 'drafts', 'attention'].map((group) => {
               const rows = visible.filter((item) => item.group === group);
               if (!rows.length) return null;
               const closed = collapsed.has(group);
-              const label = FILTERS.find((option) => option.id === group)?.label ?? group;
+              const label = presentForge(
+                FILTERS.find((option) => option.id === group)?.label ?? group,
+              );
               return (
                 <Fragment key={group}>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -669,7 +732,7 @@ export function TemplateGallery({
                         variant="ghost"
                         size="sm"
                         aria-expanded={!closed}
-                        aria-label={`${closed ? 'Expand' : 'Collapse'} ${label}`}
+                        aria-label={`${closed ? translateUi('expand_07548c2c') : translateUi('collapse_be6eb1fc')} ${label}`}
                         onClick={() => setCollapsed((previous) => toggled(previous, group))}
                       >
                         {closed ? <ChevronRight aria-hidden /> : <ChevronDown aria-hidden />}{' '}
@@ -719,7 +782,11 @@ export function TemplateGallery({
                                     variant="ghost"
                                     size="icon-xs"
                                     aria-expanded={open}
-                                    aria-label={`${open ? 'Hide' : 'Show'} ${pluralize(subEntries, 'variant')} of ${item.name}`}
+                                    aria-label={translateUi('toggleVariants', {
+                                      open: open ? 'yes' : 'no',
+                                      count: subEntries,
+                                      name: item.name,
+                                    })}
                                     onClick={() =>
                                       setExpanded((previous) => toggled(previous, item.key))
                                     }
@@ -740,7 +807,9 @@ export function TemplateGallery({
                                         variant="ghost"
                                         size="sm"
                                         className="max-w-full justify-start px-0 font-medium"
-                                        aria-label={`Open ${item.name}`}
+                                        aria-label={translateUi('open_value0_3dfbdb80', {
+                                          value0: String(item.name),
+                                        })}
                                         onClick={() =>
                                           item.kind === 'source'
                                             ? onOpen(
@@ -774,30 +843,51 @@ export function TemplateGallery({
                                           emptyLabel={emptyLabel}
                                         />
                                         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                                          <dt className="text-muted-foreground">Source file</dt>
+                                          <dt className="text-muted-foreground">
+                                            {translateUi('source_file_8cfe49e4')}
+                                          </dt>
                                           <dd className="break-all">
                                             {metadata.get(source.assetId)?.originalFileName ??
                                               source.parse?.filename ??
-                                              'Not parsed yet'}
+                                              translateUi('not_parsed_yet_00fbc3e2')}
                                           </dd>
-                                          <dt className="text-muted-foreground">Uploaded</dt>
-                                          <dd>{new Date(source.createdAt).toLocaleString()}</dd>
-                                          <dt className="text-muted-foreground">Parsing</dt>
+                                          <dt className="text-muted-foreground">
+                                            {translateUi('uploaded_3cc3767e')}
+                                          </dt>
+                                          <dd>
+                                            {new Date(source.createdAt).toLocaleString(
+                                              decimalLocale,
+                                            )}
+                                          </dd>
+                                          <dt className="text-muted-foreground">
+                                            {translateUi('parsing_3bdead76')}
+                                          </dt>
                                           <dd>{source.parseState}</dd>
-                                          <dt className="text-muted-foreground">Build</dt>
-                                          <dd>{source.forgeState ?? 'Not built'}</dd>
-                                          <dt className="text-muted-foreground">Missing media</dt>
+                                          <dt className="text-muted-foreground">
+                                            {translateUi('build_bdd254b6')}
+                                          </dt>
+                                          <dd>
+                                            {source.forgeState ?? translateUi('not_built_d22e9e7b')}
+                                          </dd>
+                                          <dt className="text-muted-foreground">
+                                            {translateUi('missing_media_b164aac3')}
+                                          </dt>
                                           <dd>{source.parse?.missingFootage?.length ?? '—'}</dd>
                                         </dl>
                                         {source.parseError ? (
-                                          <p className="text-destructive">{parseErrorSentence(source.parseError)}</p>
+                                          <p className="text-destructive">
+                                            {parseErrorSentence(source.parseError)}
+                                          </p>
                                         ) : null}
                                         <Button
                                           size="sm"
                                           variant="outline"
                                           onClick={() => onOpen(source.assetId)}
                                         >
-                                          Inspect checks and original files
+                                          {' '}
+                                          {translateUi(
+                                            'inspect_checks_and_original_files_ad36bbe5',
+                                          )}{' '}
                                         </Button>
                                       </TemplateHoverPreview>
                                     ) : item.kind === 'shared' ? (
@@ -816,21 +906,21 @@ export function TemplateGallery({
                                 </HoverCard>
                                 {nested ? (
                                   <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
-                                    {pluralize(subEntries, 'variant')}
+                                    {translateUi('variantCount', { count: subEntries })}
                                   </span>
                                 ) : null}
                               </div>
                             </TableCell>
                             <TableCell>
                               <span className="whitespace-nowrap">
-                                {SOURCE_TYPES[typeOf(item)]}
+                                {presentForge(SOURCE_TYPES[typeOf(item)])}
                               </span>
                               <span className="mt-0.5 block text-2xs text-muted-foreground">
                                 {item.motion === 'animated'
-                                  ? 'Motion'
+                                  ? translateUi('motion_8ca34424')
                                   : item.motion === 'static'
-                                    ? 'Static'
-                                    : 'Not rendered'}
+                                    ? translateUi('static_1d2c73dc')
+                                    : translateUi('not_rendered_0ad7b5a0')}
                               </span>
                             </TableCell>
                             <TableCell className="font-mono">
@@ -840,15 +930,15 @@ export function TemplateGallery({
                               {item.kind === 'source' ? (
                                 <TemplateStatusPill status={item.status} />
                               ) : item.shared.draft ? (
-                                'Draft · Shared'
+                                translateUi('draft_shared_92115a8a')
                               ) : (
-                                'Ready · Shared'
+                                translateUi('ready_shared_38bc5908')
                               )}
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-muted-foreground">
                               <time dateTime={item.updatedAt} title={item.updatedAt}>
                                 {item.updatedAt
-                                  ? new Date(item.updatedAt).toLocaleDateString()
+                                  ? new Date(item.updatedAt).toLocaleDateString(decimalLocale)
                                   : '—'}
                               </time>
                             </TableCell>
@@ -858,8 +948,11 @@ export function TemplateGallery({
                                   <Button
                                     size="icon-sm"
                                     variant="ghost"
-                                    aria-label={`Template settings for ${item.name}`}
-                                    title="Template settings"
+                                    aria-label={translateUi(
+                                      'template_settings_for_value0_3b9f3442',
+                                      { value0: String(item.name) },
+                                    )}
+                                    title={translateUi('template_settings_5a053b14')}
                                     onClick={() => onOpen(source.assetId, 'layers')}
                                   >
                                     <Settings2 aria-hidden />
@@ -880,8 +973,17 @@ export function TemplateGallery({
                                       onClick={() => onToggleShared(item.shared)}
                                     >
                                       {item.shared.granted
-                                        ? `Remove ${item.name} from ${brandName ?? 'this brand'}`
-                                        : `Use in ${brandName ?? 'this brand'}`}
+                                        ? translateUi('remove_value0_from_value1_a5b978b5', {
+                                            value0: String(item.name),
+                                            value1: String(
+                                              brandName ?? translateUi('currentBrandFallback'),
+                                            ),
+                                          })
+                                        : translateUi('use_in_value0_54e69fc0', {
+                                            value0: String(
+                                              brandName ?? translateUi('currentBrandFallback'),
+                                            ),
+                                          })}
                                     </Button>
                                     {item.shared.granted && onOpenRender ? (
                                       <Button
@@ -891,7 +993,8 @@ export function TemplateGallery({
                                           onOpenRender({ templateKey: item.shared.templateKey })
                                         }
                                       >
-                                        Render
+                                        {' '}
+                                        {translateUi('render_6d89eb7d')}{' '}
                                       </Button>
                                     ) : null}
                                   </>
@@ -914,8 +1017,13 @@ export function TemplateGallery({
                                   <SubRow
                                     key={variant.variantId}
                                     name={name}
-                                    detail={`Revision ${draft.number} · ${pluralize(variant.revisions.length, 'revision')}`}
-                                    source={SOURCE_TYPES[variant.sourceKind]}
+                                    detail={translateUi('revision_value0_value1_b4613ba2', {
+                                      value0: String(draft.number),
+                                      value1: String(
+                                        pluralize(variant.revisions.length, 'revision'),
+                                      ),
+                                    })}
+                                    source={presentForge(SOURCE_TYPES[variant.sourceKind])}
                                     ratios={draft.source.ratios}
                                     status={
                                       <span className="inline-flex flex-wrap gap-1">
@@ -924,13 +1032,19 @@ export function TemplateGallery({
                                             variant.publishedHeadRevisionId ? 'success' : 'muted'
                                           }
                                         >
-                                          {variant.publishedHeadRevisionId ? 'Published' : 'Draft'}
+                                          {variant.publishedHeadRevisionId
+                                            ? translateUi('published_2ef42ec2')
+                                            : translateUi('draft_ebf12ef4')}
                                         </Badge>
                                         {variant.variantId === lead?.variant.variantId ? (
-                                          <Badge variant="violet">Default</Badge>
+                                          <Badge variant="violet">
+                                            {translateUi('default_21b111cb')}
+                                          </Badge>
                                         ) : null}
                                         {variant.tags.includes('brand_aligned') ? (
-                                          <Badge variant="violet">Brand-aligned</Badge>
+                                          <Badge variant="violet">
+                                            {translateUi('brand_aligned_809b4434')}
+                                          </Badge>
                                         ) : null}
                                       </span>
                                     }
@@ -972,16 +1086,27 @@ export function TemplateGallery({
                                   <SubRow
                                     key={`output:${comp.name}`}
                                     name={comp.name}
-                                    detail={`Output · ${comp.width}×${comp.height}`}
-                                    source={SOURCE_TYPES[typeOf(item)]}
+                                    detail={translateUi('output_value0_value1_97469a88', {
+                                      value0: String(comp.width),
+                                      value1: String(comp.height),
+                                    })}
+                                    source={presentForge(SOURCE_TYPES[typeOf(item)])}
                                     ratios={ratio ? [ratio] : []}
                                     status={
                                       <Badge variant="muted">
                                         {frames === null
-                                          ? 'Output'
+                                          ? translateUi('output_b2439bcb')
                                           : frames > 1
-                                            ? `Animated · ${comp.durationSec!.toFixed(1)}s`
-                                            : 'Static'}
+                                            ? translateUi('animated_value0_s_87db605f', {
+                                                value0: String(
+                                                  formatDecimal(
+                                                    comp.durationSec!,
+                                                    1,
+                                                    decimalLocale,
+                                                  ),
+                                                ),
+                                              })
+                                            : translateUi('static_1d2c73dc')}
                                       </Badge>
                                     }
                                     updatedAt={item.updatedAt}
@@ -1008,21 +1133,27 @@ export function TemplateGallery({
                                 const name =
                                   template.displayName ?? templateDisplayName(template.name);
                                 const built = sourceOf(template.sourceAssetId);
-                                const toggle = `${template.granted ? 'Remove' : 'Use'} ${name} ${template.granted ? 'from' : 'in'} ${brandName ?? 'this brand'}`;
+                                const toggle = translateUi('sharedTemplateToggle', {
+                                  granted: template.granted ? 'yes' : 'no',
+                                  name,
+                                  brandName: brandName ?? translateUi('currentBrandFallback'),
+                                });
                                 return (
                                   <SubRow
                                     key={sharedTemplateId(template)}
                                     name={name}
-                                    detail="Published build"
-                                    source={
+                                    detail={translateUi('publishedBuildFallback')}
+                                    source={presentForge(
                                       SOURCE_TYPES[
                                         sourceKindOf(template.sourceAssetId) ?? typeOf(item)
-                                      ]
-                                    }
+                                      ],
+                                    )}
                                     ratios={built?.ratios ?? []}
                                     status={
                                       <Badge variant={template.granted ? 'success' : 'muted'}>
-                                        {template.granted ? 'In use' : 'Off'}
+                                        {template.granted
+                                          ? translateUi('in_use_750af77a')
+                                          : translateUi('off_ca7981b4')}
                                       </Badge>
                                     }
                                     updatedAt={template.updatedAt ?? ''}
@@ -1057,7 +1188,9 @@ export function TemplateGallery({
                                       <Button
                                         size="xs"
                                         variant="outline"
-                                        aria-label={`Render ${name}`}
+                                        aria-label={translateUi('render_value0_aba29037', {
+                                          value0: String(name),
+                                        })}
                                         onClick={() =>
                                           onOpenRender({
                                             templateKey: template.templateKey,
@@ -1065,7 +1198,8 @@ export function TemplateGallery({
                                           })
                                         }
                                       >
-                                        Render
+                                        {' '}
+                                        {translateUi('render_6d89eb7d')}{' '}
                                       </Button>
                                     ) : null}
                                     <Button
@@ -1075,7 +1209,9 @@ export function TemplateGallery({
                                       disabled={adopting === sharedTemplateId(template)}
                                       onClick={() => onToggleShared(template)}
                                     >
-                                      {template.granted ? 'Remove' : 'Use'}
+                                      {template.granted
+                                        ? translateUi('remove_c3812fc4')
+                                        : translateUi('use_c36d819e')}
                                     </Button>
                                   </SubRow>
                                 );
@@ -1088,13 +1224,15 @@ export function TemplateGallery({
               );
             })}
             {loadingMore && !variantsPending ? (
-              <SkeletonRows count={2} label="Loading more templates" />
+              <SkeletonRows count={2} label={translateUi('loading_more_templates_055e0c6a')} />
             ) : null}
           </TableBody>
         </Table>
       </div>
       {visible.length === 0 && items.length > 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">No templates match.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          {translateUi('no_templates_match_cd53359e')}
+        </p>
       ) : null}
     </div>
   );

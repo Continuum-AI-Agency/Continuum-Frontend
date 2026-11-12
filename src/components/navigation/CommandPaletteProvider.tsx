@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import type React from 'react';
 import { createContext, useCallback, useContext, useState } from 'react';
@@ -12,13 +13,19 @@ interface CommandPaletteContextValue {
 const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null);
 
 export function CommandPaletteProvider({ children }: { children: React.ReactNode }) {
+  const uiText = useTranslations('navigation');
   const [open, setOpen] = useState(false);
 
   const toggle = useCallback(() => setOpen((o) => !o), []);
 
   useShortcut(
     'command-palette',
-    { key: 'k', meta: true, description: 'Open command palette', allowInInput: true },
+    {
+      key: 'k',
+      meta: true,
+      description: uiText('open_command_palette_c022b19'),
+      allowInInput: true,
+    },
     toggle,
   );
 

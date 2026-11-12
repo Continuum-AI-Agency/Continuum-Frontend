@@ -1,6 +1,7 @@
 'use client';
 
 import type { OrganicCreativeMetric, OrganicCreativeRow } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import {
   type InsightColumn,
@@ -42,8 +43,8 @@ type OrganicCreativesTableProps = {
 
 type DisplayRow = OrganicCreativeRow & { rank: number };
 
-function formatCompact(value: number): string {
-  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(
+function formatCompact(value: number, locale = 'en'): string {
+  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(
     value,
   );
 }
@@ -57,6 +58,10 @@ export function OrganicCreativesTable({
   accounts,
   youtubeAccounts = [],
 }: OrganicCreativesTableProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('dashboard');
+  const organicText = useTranslations('organic');
   const resolved = resolveOrganicAccount(brandId, accounts, youtubeAccounts);
   const integrationAccountId = resolved?.account.integrationAccountId ?? null;
   const platform: Platform = resolved?.platform ?? 'instagram';
@@ -113,10 +118,14 @@ export function OrganicCreativesTable({
   const rows = useMemo<DisplayRow[]>(() => {
     if (postsState.status !== 'success') return [];
     const awarenessHookRateById = extractAwarenessHookRates(awareness);
-    return buildOrganicCreativeRows({ posts: postsState.posts, metric, awarenessHookRateById }).map(
-      (row, index) => ({ ...row, rank: index + 1 }),
-    );
-  }, [postsState, awareness, metric]);
+    return buildOrganicCreativeRows({
+      posts: postsState.posts,
+      metric,
+      awarenessHookRateById,
+      translate: organicText,
+      locale: uiLocale,
+    }).map((row, index) => ({ ...row, rank: index + 1 }));
+  }, [postsState, awareness, metric, organicText, uiLocale]);
 
   // The bulk-fetched post (immediate, may carry a stale/expired thumbnail) used
   // as the hovercard's low-fidelity fallback until requestPostDetail resolves.
@@ -128,11 +137,13 @@ export function OrganicCreativesTable({
     return map;
   }, [postsState]);
 
+  // Relabeling for a new UI locale must not repeat post-detail requests.
+  const postDetailIds = JSON.stringify(rows.map((row) => row.id));
   useEffect(() => {
-    for (const row of rows) {
-      requestPostDetail(row.id);
+    for (const id of JSON.parse(postDetailIds) as string[]) {
+      requestPostDetail(id);
     }
-  }, [rows, requestPostDetail]);
+  }, [postDetailIds, requestPostDetail]);
 
   const columns = useMemo<InsightColumn<DisplayRow>[]>(() => {
     const cols: InsightColumn<DisplayRow>[] = [
@@ -144,7 +155,7 @@ export function OrganicCreativesTable({
       },
       {
         id: 'creative',
-        header: 'Creative',
+        header: uiText('m_20ccbc66c1'),
         // max-w-0 + w-full is the table-layout trick that lets this column take
         // remaining width without expanding the table past the panel (which
         // would enable overflow-x-auto). Content truncates instead of scrolling.
@@ -207,11 +218,11 @@ export function OrganicCreativesTable({
         header: metricLabel,
         align: 'right',
         sortValue: (row) => row.metricValue,
-        cell: (row) => formatCompact(row.metricValue),
+        cell: (row) => formatCompact(row.metricValue, uiLocale),
       },
       {
         id: 'hook',
-        header: 'Hook',
+        header: uiText('m_b3e0a103da'),
         align: 'right',
         sortValue: (row) => row.hookRate ?? -1,
         cell: (row) =>
@@ -225,7 +236,7 @@ export function OrganicCreativesTable({
       },
       {
         id: 'delta',
-        header: 'vs avg',
+        header: uiText('m_b91fb55764'),
         align: 'right',
         sortValue: (row) => row.vsAveragePct ?? 0,
         cell: (row) =>
@@ -234,13 +245,23 @@ export function OrganicCreativesTable({
     ];
 
     return cols;
-  }, [metricLabel, postDetailsById, bulkPostById, loadingPostId, requestPostDetail]);
+  }, [
+    metricLabel,
+    postDetailsById,
+    bulkPostById,
+    loadingPostId,
+    requestPostDetail,
+    uiText,
+    uiLocale,
+  ]);
 
   return (
     <InsightDataTable
-      title="Top creatives"
+      title={uiText('top_creatives_ea765e1')}
       metricLabel={metricLabel}
-      headerAction={<ModuleShortcutLink href="/ai-studio" label="Creative Studio" />}
+      headerAction={
+        <ModuleShortcutLink href="/ai-studio" label={uiText('creative_studio_c0a1ec0')} />
+      }
       rows={rows}
       columns={columns}
       getRowId={(row) => row.id}
@@ -249,8 +270,8 @@ export function OrganicCreativesTable({
       isLoading={postsState.status === 'idle' || postsState.status === 'loading'}
       emptyState={
         postsState.status === 'error'
-          ? "Couldn't load your creatives right now."
-          : 'No posts yet for this account.'
+          ? uiText('creativesLoadFailedEmpty')
+          : uiText('creativeNoPostsEmpty')
       }
       contextMenu={(row) => <InsightContextActions permalink={row.permalink} />}
       rowActions={(row) => <InsightActionsDropdown permalink={row.permalink} />}

@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from 'next-intl';
 
 // An animated numeric readout. Split out of `charts/chart-stat-flow.tsx` so the
 // canvas config controls and the chart stat tiles share ONE custom-element gate
@@ -29,8 +30,9 @@ export function formatNumberFlowValue(
   formatOptions: NumberFlowFormat,
   prefix?: string,
   suffix?: string,
+  locale?: string,
 ): string {
-  return `${prefix ?? ''}${new Intl.NumberFormat(undefined, formatOptions).format(value)}${suffix ?? ''}`;
+  return `${prefix ?? ''}${new Intl.NumberFormat(locale, formatOptions).format(value)}${suffix ?? ''}`;
 }
 
 /**
@@ -84,17 +86,19 @@ export function NumberFlowValue({
   suffix?: string;
   className?: string;
 }) {
+  const uiLocale = useLocale();
   const formatOptions = useMemo<NumberFlowFormat>(() => format ?? {}, [format]);
   const ready = useNumberFlowElementReady();
   const staticValue = useMemo(
-    () => formatNumberFlowValue(value, formatOptions, prefix, suffix),
-    [value, formatOptions, prefix, suffix],
+    () => formatNumberFlowValue(value, formatOptions, prefix, suffix, uiLocale),
+    [value, formatOptions, prefix, suffix, uiLocale],
   );
 
   return (
     <span className={cn('tabular-nums', className)} data-slot="number-flow-value">
       {ready ? (
         <NumberFlow
+          locales={uiLocale}
           format={formatOptions}
           isolate
           prefix={prefix}

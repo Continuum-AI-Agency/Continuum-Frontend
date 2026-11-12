@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { formatCompetitorNumber } from '@/components/competitor-spy/brandVisuals';
+
 // Media primitives shared by the Inspiration tile face and its Analyse panel:
 // a cover still that degrades to a placeholder, a muted reel player that falls
 // back to the still, and a pageable carousel. IG CDN URLs expire, so every
@@ -34,6 +37,7 @@ export function PostThumb({
   alt: string;
   className?: string;
 }) {
+  const uiText = useTranslations('competitor');
   const [errored, setErrored] = useState(false);
   if (!coverUrl || errored) {
     return (
@@ -43,7 +47,7 @@ export function PostThumb({
           className,
         )}
       >
-        No preview
+        {uiText('no_preview_4b8bacd')}
       </div>
     );
   }
@@ -154,6 +158,9 @@ export function PostCarousel({
   poster: string | null;
   alt: string;
 }) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('competitor');
   const [api, setApi] = useState<CarouselApi | null>(null);
   const [current, setCurrent] = useState(0);
 
@@ -178,7 +185,11 @@ export function PostCarousel({
         <CarouselContent className="ml-0">
           {slides.map((item, index) => (
             <CarouselItem key={`${item.url}-${index}`} className="pl-0">
-              <SlideMedia item={item} poster={poster} alt={`${alt} slide ${index + 1}`} />
+              <SlideMedia
+                item={item}
+                poster={poster}
+                alt={uiText('m_8e7f9f8ff1', { name: alt, count: index + 1 })}
+              />
             </CarouselItem>
           ))}
         </CarouselContent>
@@ -186,7 +197,7 @@ export function PostCarousel({
         <CarouselNext className={cn('right-2', arrowClass)} />
       </Carousel>
       <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-2xs font-medium text-white">
-        {current + 1}/{slides.length}
+        {current + 1}/{formatCompetitorNumber(slides.length, uiLocale)}
       </span>
     </div>
   );

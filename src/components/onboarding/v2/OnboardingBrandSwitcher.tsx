@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import React from 'react';
 import { BrandAvatar } from '@/components/brand/BrandAvatar';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -16,6 +17,8 @@ import { getBrandMenuItemLabel } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 
 export function OnboardingBrandSwitcher() {
+  const tUi = useTranslations('onboarding');
+
   const { activeBrandId, brandSummaries, isSwitching, switchingToBrandId } =
     useActiveBrandContext();
   const switchBrand = useSwitchBrand();
@@ -24,7 +27,7 @@ export function OnboardingBrandSwitcher() {
   if (brandSummaries.length <= 1) return null;
 
   const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
-  const activeBrandLabel = activeBrand ? getBrandMenuItemLabel(activeBrand) : 'Switch brand';
+  const activeBrandLabel = activeBrand ? getBrandMenuItemLabel(activeBrand) : tUi('m_26a9920e43');
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -62,7 +65,7 @@ export function OnboardingBrandSwitcher() {
       >
         <div className="px-2 pt-1 pb-0">
           <span className="text-xs font-semibold uppercase tracking-wider text-[color-mix(in_srgb,var(--popover-foreground)_52%,transparent)]">
-            Switch brand
+            {tUi('m_26a9920e43')}
           </span>
         </div>
 
@@ -96,7 +99,7 @@ export function OnboardingBrandSwitcher() {
                   {!brand.completed && (
                     <AlertTriangle
                       className="h-3.5 w-3.5 shrink-0 text-warning"
-                      aria-label="Onboarding incomplete"
+                      aria-label={tUi('m_c1c74b0f83')}
                     />
                   )}
                   {isRowSwitching ? (

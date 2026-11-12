@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { LibraryPlayback } from '@continuum/contracts';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { clearLibraryPlaybackCache } from '@/lib/library/libraryPlayback';
 import { activeStageVideo } from '@/lib/library/videoPoster';
 import { VideoAnnotationPlayer } from './VideoAnnotationPlayer';

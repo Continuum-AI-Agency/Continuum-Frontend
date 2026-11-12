@@ -171,7 +171,7 @@ describe('resolveAdAngle — the resolution order', () => {
   it('1. a closed-vocabulary angle_id is confirmed', () => {
     expect(
       resolveAdAngle({ ...row, angle_id: 'offer_discount', angle_leaning: 'value_stack' }, null),
-    ).toEqual({ status: 'confirmed', label: 'Discount offer' });
+    ).toEqual({ status: 'confirmed', label: 'Discount offer', id: 'offer_discount' });
   });
   it('2. a leaning from the vocabulary is a leaning, with its share', () => {
     expect(
@@ -179,13 +179,14 @@ describe('resolveAdAngle — the resolution order', () => {
         { ...row, angle_id: null, angle_leaning: 'value_stack', angle_leaning_share: 0.5 },
         null,
       ),
-    ).toEqual({ status: 'leaning', label: 'Everything you get', share: 0.5 });
+    ).toEqual({ status: 'leaning', label: 'Everything you get', share: 0.5, id: 'value_stack' });
   });
   it('3. the coarse hookArchetype, when it is a vocabulary key, is a leaning without a share', () => {
     expect(resolveAdAngle(row, null)).toEqual({
       status: 'leaning',
       label: 'Everything you get',
       share: null,
+      id: 'value_stack',
     });
   });
   it('ignores ids outside the vocabulary at every step', () => {
@@ -200,6 +201,7 @@ describe('resolveAdAngle — the resolution order', () => {
     expect(resolveAdAngle(null, { seed: { angleId: 'offer_discount' } })).toEqual({
       status: 'confirmed',
       label: 'Discount offer',
+      id: 'offer_discount',
     });
     expect(resolveAdAngle(null, { seed: { labels: { angle: 'Price', hook: 'Urgency' } } })).toEqual(
       {
@@ -216,22 +218,39 @@ describe('resolveAdAngle — the resolution order', () => {
 
 describe('angleChipText', () => {
   it('names a confirmed angle plainly and a leaning as a leaning', () => {
-    expect(angleChipText({ status: 'confirmed', label: 'Discount offer' })).toBe('Discount offer');
-    expect(angleChipText({ status: 'leaning', label: 'Everything you get', share: 0.5 })).toBe(
-      'Leaning: Everything you get · 50%',
-    );
-    expect(angleChipText({ status: 'leaning', label: 'Everything you get', share: null })).toBe(
-      'Leaning: Everything you get',
-    );
+    expect(
+      angleChipText({ status: 'confirmed', label: 'Discount offer', id: 'offer_discount' }),
+    ).toBe('Discount offer');
+    expect(
+      angleChipText({
+        status: 'leaning',
+        label: 'Everything you get',
+        share: 0.5,
+        id: 'value_stack',
+      }),
+    ).toBe('Leaning: Everything you get · 50%');
+    expect(
+      angleChipText({
+        status: 'leaning',
+        label: 'Everything you get',
+        share: null,
+        id: 'value_stack',
+      }),
+    ).toBe('Leaning: Everything you get');
     expect(angleChipText({ status: 'none' })).toBe('Not classified yet');
   });
   it('labels it as the communication angle for assistive tech', () => {
-    expect(angleAriaLabel({ status: 'confirmed', label: 'Discount offer' })).toBe(
-      'Communication angle: Discount offer',
-    );
-    expect(angleAriaLabel({ status: 'leaning', label: 'Everything you get', share: 0.5 })).toBe(
-      'Communication angle: Leaning: Everything you get · 50%',
-    );
+    expect(
+      angleAriaLabel({ status: 'confirmed', label: 'Discount offer', id: 'offer_discount' }),
+    ).toBe('Communication angle: Discount offer');
+    expect(
+      angleAriaLabel({
+        status: 'leaning',
+        label: 'Everything you get',
+        share: 0.5,
+        id: 'value_stack',
+      }),
+    ).toBe('Communication angle: Leaning: Everything you get · 50%');
   });
 });
 
@@ -243,7 +262,12 @@ describe('cardAngles', () => {
       [ad('120252387195460236')],
       easyFitRows as never,
     );
-    expect(view.dominant).toEqual({ status: 'leaning', label: 'Everything you get', share: null });
+    expect(view.dominant).toEqual({
+      status: 'leaning',
+      label: 'Everything you get',
+      share: null,
+      id: 'value_stack',
+    });
     expect(view.hook).toBe('50% de descuento en tu anualidad');
     expect(view.mixed).toBe(false);
   });
@@ -260,18 +284,27 @@ describe('cardAngles', () => {
     ];
     const view = cardAngles(fatigueRec(), ads, rows as never);
     expect(view.mixed).toBe(true);
-    expect(view.dominant).toEqual({ status: 'confirmed', label: 'Discount offer' });
+    expect(view.dominant).toEqual({
+      status: 'confirmed',
+      label: 'Discount offer',
+      id: 'offer_discount',
+    });
     expect(view.perAd.get('120252387195450236')).toEqual({
       status: 'leaning',
       label: 'Everything you get',
       share: 0.5,
+      id: 'value_stack',
     });
     const tie = cardAngles(
       fatigueRec(),
       ads.slice(0, 2),
       [rows[2], rows[0]].map((r, i) => ({ ...r, ad_id: ads[i]?.id })) as never,
     );
-    expect(tie.dominant).toEqual({ status: 'confirmed', label: 'Discount offer' });
+    expect(tie.dominant).toEqual({
+      status: 'confirmed',
+      label: 'Discount offer',
+      id: 'offer_discount',
+    });
   });
   it('uses the seed when no row resolves, and none when nothing does', () => {
     expect(
@@ -279,6 +312,7 @@ describe('cardAngles', () => {
     ).toEqual({
       status: 'confirmed',
       label: 'Discount offer',
+      id: 'offer_discount',
     });
     expect(cardAngles(fatigueRec(), ads, []).dominant).toEqual({ status: 'none' });
     expect(cardAngles(fatigueRec(), ads, []).hook).toBeNull();

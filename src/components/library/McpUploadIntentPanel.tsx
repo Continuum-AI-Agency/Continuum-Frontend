@@ -1,9 +1,12 @@
 'use client';
 
 import { CheckCircle2, CloudUpload, Loader2 } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { completeMcpUploadIntent, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 
 const MAX_FILES = 8;
@@ -20,6 +23,10 @@ type Props = {
 };
 
 export function McpUploadIntentPanel({ brandId }: Props) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const uploadIntentId = searchParams.get('mcpUploadIntent');
@@ -53,12 +60,14 @@ export function McpUploadIntentPanel({ brandId }: Props) {
       });
       setState('completed');
       setMessage(
-        `${uploaded.length} image${uploaded.length === 1 ? '' : 's'} ready in the Library and Cloud MCP.`,
+        translateUi('value0_image_value1_ready_in_the_li_5d522909', {
+          count: Number(uploaded.length),
+        }),
       );
       router.refresh();
     } catch (error) {
       setState('error');
-      setMessage(error instanceof Error ? error.message : 'The upload handoff failed.');
+      setMessage(uiErrorText(error));
     }
   };
 
@@ -76,12 +85,14 @@ export function McpUploadIntentPanel({ brandId }: Props) {
               <CloudUpload className="size-4 text-primary" />
             )}
             <h2 id="mcp-upload-title" className="text-sm font-semibold">
-              Cloud MCP image handoff
+              {' '}
+              {translateUi('cloud_mcp_image_handoff_2f46d11c')}{' '}
             </h2>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Upload up to {MAX_FILES} images. They will enter the Library as pinned versions that
-            Canvas and Organic generation can reference.
+            {' '}
+            {translateUi('upload_up_to_5fc858fa')} {MAX_FILES}{' '}
+            {translateUi('images_they_will_enter_the_library__e2293175')}{' '}
           </p>
           {message ? (
             <p
@@ -93,13 +104,14 @@ export function McpUploadIntentPanel({ brandId }: Props) {
           ) : null}
           {invalidFile ? (
             <p className="mt-2 text-xs text-destructive" role="alert">
-              {invalidFile.name} is not a supported raster image.
+              {invalidFile.name} {translateUi('is_not_a_supported_raster_image_2f828e19')}{' '}
             </p>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <label className="cursor-pointer rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent">
-            Choose images
+            {' '}
+            {translateUi('choose_images_2d39bc2f')}{' '}
             <input
               type="file"
               className="sr-only"
@@ -112,7 +124,9 @@ export function McpUploadIntentPanel({ brandId }: Props) {
                 setState('idle');
                 setMessage(
                   (event.target.files?.length ?? 0) > MAX_FILES
-                    ? `Only the first ${MAX_FILES} images will be uploaded.`
+                    ? translateUi('only_the_first_value0_images_will_b_5f1fc5e9', {
+                        count: Number(MAX_FILES),
+                      })
                     : null,
                 );
               }}
@@ -130,7 +144,9 @@ export function McpUploadIntentPanel({ brandId }: Props) {
             onClick={() => void finish()}
           >
             {state === 'uploading' ? <Loader2 className="size-4 animate-spin" /> : null}
-            {state === 'completed' ? 'Completed' : `Upload ${files.length || ''}`.trim()}
+            {state === 'completed'
+              ? translateUi('completed_22a970d2')
+              : `Upload ${files.length || ''}`.trim()}
           </Button>
         </div>
       </div>

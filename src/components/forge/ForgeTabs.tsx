@@ -2,6 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { ForgeWorkbench } from '@/components/forge/ForgeWorkbench';
 import {
@@ -46,6 +47,8 @@ export function ForgeTabs({
   /** The brand's arming switch for real Meta writes, read by the page beside its control. */
   metaWritesAllowed?: boolean;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [tab, setTab] = useState<ForgeTab>('templates');
   const [visited, setVisited] = useState<ReadonlySet<ForgeTab>>(() => new Set(['templates']));
   // The Render picker's list is the slowest read on the page; start it now, not on first visit.
@@ -98,40 +101,52 @@ export function ForgeTabs({
       className="min-h-0 min-w-0 flex-1"
     >
       <TabsList className="shrink-0">
-        <TabsTrigger value="templates">Templates</TabsTrigger>
-        <TabsTrigger value="render">Render</TabsTrigger>
+        <TabsTrigger value="templates">{translateUi('templates_56b564b7')}</TabsTrigger>
+        <TabsTrigger value="render">{translateUi('render_6d89eb7d')}</TabsTrigger>
         <TabsTrigger value="renders">
-          Render ledger
+          {' '}
+          {translateUi('render_ledger_8068f2c7')}{' '}
           {approvalCountUnavailable ? (
-            <Badge variant="warning" className="ml-1.5" title="Approval count unavailable">
-              Approval count unavailable
+            <Badge
+              variant="warning"
+              className="ml-1.5"
+              title={translateUi('approval_count_unavailable_7836cd6e')}
+            >
+              {' '}
+              {translateUi('approval_count_unavailable_7836cd6e')}{' '}
             </Badge>
           ) : waiting ? (
             <Badge variant="warning" className="ml-1.5 tabular-nums">
               {waiting}
-              <span className="sr-only"> waiting for approval</span>
+              <span className="sr-only"> {translateUi('waiting_for_approval_fbb059ed')}</span>
             </Badge>
           ) : null}
           {approvalStatus === 'unavailable' ? (
             <Badge
               variant="destructive"
               className="ml-1.5"
-              title="Approval count unavailable. Open the ledger and retry to check pending work."
+              title={translateUi('approval_count_unavailable_open_the_88de0461')}
             >
-              ?<span className="sr-only"> Approval count unavailable</span>
+              ?
+              <span className="sr-only"> {translateUi('approval_count_unavailable_7836cd6e')}</span>
             </Badge>
           ) : null}
           {approvalStatus === 'checking' ? (
-            <Badge variant="muted" className="ml-1.5" title="Checking approval count">
-              …<span className="sr-only"> Checking approval count</span>
+            <Badge
+              variant="muted"
+              className="ml-1.5"
+              title={translateUi('checking_approval_count_3a1e2271')}
+            >
+              …<span className="sr-only"> {translateUi('checking_approval_count_3a1e2271')}</span>
             </Badge>
           ) : null}
           {approvalStatus === 'stale' ? (
             <span
               className="ml-1.5 text-xs text-muted-foreground"
-              title="Approval count may be stale"
+              title={translateUi('approval_count_may_be_stale_894f8955')}
             >
-              stale
+              {' '}
+              {translateUi('stale_a03f2386')}{' '}
             </span>
           ) : null}
         </TabsTrigger>

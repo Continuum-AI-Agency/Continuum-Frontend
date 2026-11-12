@@ -1,4 +1,8 @@
 'use client';
+import {useLocale} from 'next-intl';
+
+
+import { useTranslations } from 'next-intl';
 
 // The button a platform card hands a person, and the approval it opens (frontend.html §7,
 // feature 09). Opening it asks the platform first — a dry run through /apply/actions, Google's
@@ -109,6 +113,7 @@ export function UnavailableAction({
   write: CardWrite;
   availability: 'tiktok_not_connected' | 'apply_disabled';
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div
       className="space-y-1"
@@ -116,10 +121,10 @@ export function UnavailableAction({
       data-testid="platform-card-action-unavailable"
     >
       <Button disabled size="sm" type="button" variant="secondary">
-        {cardActionLabel(write)}
+        {cardActionLabel(write, uiText)}
       </Button>
       <p className="text-muted-foreground text-xs">
-        {cardActionUnavailableNote(availability, write)}
+        {cardActionUnavailableNote(availability, write, uiText)}
       </p>
     </div>
   );
@@ -146,6 +151,8 @@ export function PlatformCardActionControl({
   startOpen = false,
   onClose,
 }: PlatformCardActionControlProps) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   const apply = useApplyOptimizerActions();
   const revert = useRevertOptimizerAction();
   const [mode, setMode] = useState<Mode>('apply');
@@ -173,7 +180,7 @@ export function PlatformCardActionControl({
     setCanConfirm(false);
     try {
       const response = await send(true);
-      setPreview(previewVerdict(response, currency));
+      setPreview(previewVerdict(response, currency, uiText, uiLocale));
       setCanConfirm(response?.results[0]?.status === 'would_apply');
     } catch {
       setPreview(UNREACHABLE);
@@ -185,7 +192,7 @@ export function PlatformCardActionControl({
     setPhase('applying');
     try {
       const response = await send(false);
-      setResult(resultVerdict(response, currency));
+      setResult(resultVerdict(response, currency, uiText, uiLocale));
       setUndoAuditId(undoAuditIdOf(response));
     } catch {
       setResult(UNREACHABLE);
@@ -205,10 +212,10 @@ export function PlatformCardActionControl({
       setUndo({
         ...UNDO_START,
         phase: 'checked',
-        preview: undoPreviewVerdict(response),
+        preview: undoPreviewVerdict(response, uiText),
         canConfirm: response?.result.status === 'would_revert',
         restores: response
-          ? undoRestoresText(response.result.restores, response.result.kind, currency)
+          ? undoRestoresText(response.result.restores, response.result.kind, currency, uiText, uiLocale)
           : null,
       });
     } catch {
@@ -222,7 +229,7 @@ export function PlatformCardActionControl({
     let verdict: CardActionVerdict;
     try {
       const response = await sendUndo(undoAuditId, false);
-      verdict = undoResultVerdict(response);
+      verdict = undoResultVerdict(response, uiText);
       if (response?.result.status === 'reverted') setUndoAuditId(null);
     } catch {
       verdict = UNREACHABLE;
@@ -249,7 +256,7 @@ export function PlatformCardActionControl({
     void check();
   });
 
-  const change = cardActionChange(write, currency);
+  const change = cardActionChange(write, currency, uiText, uiLocale);
   const undoing = mode === 'undo';
 
   return (
@@ -266,18 +273,20 @@ export function PlatformCardActionControl({
               />
             }
           >
-            {cardActionLabel(write)}
+            {cardActionLabel(write, uiText)}
           </AlertDialogTrigger>
         )}
         <AlertDialogContent data-testid="platform-card-action-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {undoing ? `Undo: ${cardActionTitle(write)}` : cardActionTitle(write)}
+              {undoing
+                ? uiText('template_6d01f81f67d5', { v0: cardActionTitle(write, uiText, uiLocale) })
+                : cardActionTitle(write, uiText, uiLocale)}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {undoing
-                ? 'We ask Google to check the undo first. Nothing is written until you confirm.'
-                : 'We ask the platform to check it first. Nothing is written until you confirm.'}
+                ? uiText('we_ask_google_to_check_the_undo_first_nothing_7dcb49e')
+                : uiText('we_ask_the_platform_to_check_it_first_nothing_c689754')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {undoing ? (
@@ -292,17 +301,21 @@ export function PlatformCardActionControl({
                   {change}
                 </p>
               ) : null}
-              {phase === 'checking' ? <Pending>Asking the platform to check it…</Pending> : null}
+              {phase === 'checking' ? (
+                <Pending>{uiText('asking_the_platform_to_check_it_909e9db')}</Pending>
+              ) : null}
               {preview && phase !== 'done' ? (
                 <Verdict testId="platform-card-action-preview" verdict={preview} />
               ) : null}
-              {phase === 'applying' ? <Pending>Applying…</Pending> : null}
+              {phase === 'applying' ? <Pending>{uiText('applying_3329a9b')}</Pending> : null}
               {result ? <Verdict testId="platform-card-action-result" verdict={result} /> : null}
             </>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel>
-              {(undoing ? undo.phase : phase) === 'done' ? 'Close' : 'Cancel'}
+              {(undoing ? undo.phase : phase) === 'done'
+                ? uiText('close_7d9eb7a')
+                : uiText('cancel_19766ed')}
             </AlertDialogCancel>
             {undoing ? (
               undo.phase === 'done' ? null : (
@@ -313,7 +326,7 @@ export function PlatformCardActionControl({
                   size="sm"
                   type="button"
                 >
-                  Confirm undo
+                  {uiText('confirm_undo_46f3377')}
                 </Button>
               )
             ) : phase === 'done' ? (
@@ -325,7 +338,7 @@ export function PlatformCardActionControl({
                   type="button"
                   variant="secondary"
                 >
-                  Undo
+                  {uiText('undo_a8283ad')}
                 </Button>
               ) : null
             ) : (
@@ -336,7 +349,7 @@ export function PlatformCardActionControl({
                 size="sm"
                 type="button"
               >
-                Confirm
+                {uiText('confirm_eebdd24')}
               </Button>
             )}
           </AlertDialogFooter>
@@ -350,7 +363,7 @@ export function PlatformCardActionControl({
           type="button"
           variant="outline"
         >
-          Undo
+          {uiText('undo_a8283ad')}
         </Button>
       ) : null}
     </>
@@ -358,6 +371,7 @@ export function PlatformCardActionControl({
 }
 
 function UndoBody({ state }: { state: UndoState }) {
+  const uiText = useTranslations('scale');
   return (
     <>
       {state.restores ? (
@@ -368,11 +382,13 @@ function UndoBody({ state }: { state: UndoState }) {
           {state.restores}
         </p>
       ) : null}
-      {state.phase === 'checking' ? <Pending>Asking Google to check the undo…</Pending> : null}
+      {state.phase === 'checking' ? (
+        <Pending>{uiText('asking_google_to_check_the_undo_2ed0f82')}</Pending>
+      ) : null}
       {state.preview && state.phase !== 'done' ? (
         <Verdict testId="platform-card-undo-preview" verdict={state.preview} />
       ) : null}
-      {state.phase === 'applying' ? <Pending>Undoing…</Pending> : null}
+      {state.phase === 'applying' ? <Pending>{uiText('undoing_62daa93')}</Pending> : null}
       {state.result ? <Verdict testId="platform-card-undo-result" verdict={state.result} /> : null}
     </>
   );
@@ -399,6 +415,8 @@ export function PlatformUndoControl({
   /** Told when the dialog opens and closes, so the row keeps it mounted while it is up. */
   onOpenChange?: (open: boolean) => void;
 }) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   const revert = useRevertOptimizerAction();
   const [open, setOpen] = useState(false);
   const [undo, setUndo] = useState<UndoState>(UNDO_START);
@@ -413,10 +431,10 @@ export function PlatformUndoControl({
       setUndo({
         ...UNDO_START,
         phase: 'checked',
-        preview: undoPreviewVerdict(response),
+        preview: undoPreviewVerdict(response, uiText),
         canConfirm: response?.result.status === 'would_revert',
         restores: response
-          ? undoRestoresText(response.result.restores, response.result.kind, currency)
+          ? undoRestoresText(response.result.restores, response.result.kind, currency, uiText, uiLocale)
           : null,
       });
     } catch {
@@ -428,7 +446,7 @@ export function PlatformUndoControl({
     setUndo((state) => ({ ...state, phase: 'applying' }));
     let verdict: CardActionVerdict;
     try {
-      verdict = undoResultVerdict(await send(false));
+      verdict = undoResultVerdict(await send(false), uiText);
     } catch {
       verdict = UNREACHABLE;
     }
@@ -449,18 +467,20 @@ export function PlatformUndoControl({
           <Button data-testid="activity-platform-undo" size="sm" type="button" variant="outline" />
         }
       >
-        Undo
+        {uiText('undo_a8283ad')}
       </AlertDialogTrigger>
       <AlertDialogContent data-testid="activity-platform-undo-dialog">
         <AlertDialogHeader>
-          <AlertDialogTitle>Undo: {title}</AlertDialogTitle>
+          <AlertDialogTitle>{uiText.rich('sentence_6630bee3bebc', { v0: title })}</AlertDialogTitle>
           <AlertDialogDescription>
-            We ask the platform to check the undo first. Nothing is written until you confirm.
+            {uiText('we_ask_the_platform_to_check_the_undo_first_n_d5eb878')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <UndoBody state={undo} />
         <AlertDialogFooter>
-          <AlertDialogCancel>{undo.phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
+          <AlertDialogCancel>
+            {undo.phase === 'done' ? uiText('close_7d9eb7a') : uiText('cancel_19766ed')}
+          </AlertDialogCancel>
           {undo.phase === 'done' ? null : (
             <Button
               data-testid="activity-platform-undo-confirm"
@@ -469,7 +489,7 @@ export function PlatformUndoControl({
               size="sm"
               type="button"
             >
-              Confirm undo
+              {uiText('confirm_undo_46f3377')}
             </Button>
           )}
         </AlertDialogFooter>

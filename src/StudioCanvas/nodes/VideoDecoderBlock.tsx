@@ -7,6 +7,7 @@ import {
   useEdges,
 } from '@xyflow/react';
 import { Clapperboard, Copy, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -28,12 +29,15 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { VideoDecodeNodeData } from '../types';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 
 export function VideoDecoderBlock({
   id,
   data,
   selected,
 }: NodeProps<ReactFlowNode<VideoDecodeNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -105,7 +109,7 @@ export function VideoDecoderBlock({
             >
               <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/60 bg-muted/40 text-xs font-semibold tracking-wide text-muted-foreground shrink-0">
                 <Clapperboard className="h-3.5 w-3.5" />
-                <span>Video Decoder</span>
+                <span>{translateUi('video_decoder_27ba55a5')}</span>
               </div>
 
               <NodeContent className="relative flex-1 flex flex-col min-h-0 overflow-hidden p-0 bg-muted/20">
@@ -114,12 +118,12 @@ export function VideoDecoderBlock({
                   onChange={handleChange}
                   onKeyDown={(event) => event.stopPropagation()}
                   className="nodrag text-xs text-foreground placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[120px]"
-                  placeholder="Connect a video, then Decode to extract a frame-by-frame creative breakdown..."
+                  placeholder={translateUi('connect_a_video_then_decode_to_extr_3f381adc')}
                 />
 
                 {data.error ? (
                   <div className="px-3 py-1.5 text-2xs text-destructive border-t border-destructive/30 bg-destructive/5 shrink-0">
-                    {data.error}
+                    {workflowNodeError(data, translateUi)}
                   </div>
                 ) : null}
 
@@ -134,12 +138,14 @@ export function VideoDecoderBlock({
                     {data.isExecuting ? (
                       <div className="flex items-center gap-1.5">
                         <div className="animate-spin h-3 w-3 border-2 border-white/30 border-t-white rounded-full" />
-                        <span>Decoding...</span>
+                        <span>{translateUi('decoding_b4908d34')}</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <Clapperboard className="w-3.5 h-3.5" />
-                        <span className="font-semibold tracking-wide">Decode Video</span>
+                        <span className="font-semibold tracking-wide">
+                          {translateUi('decode_video_1ba73df6')}
+                        </span>
                       </div>
                     )}
                   </Button>
@@ -172,16 +178,14 @@ export function VideoDecoderBlock({
         }
       />
       <ContextMenuContent className="w-52">
-        <ContextMenuLabel>Video Decoder</ContextMenuLabel>
+        <ContextMenuLabel>{translateUi('video_decoder_27ba55a5')}</ContextMenuLabel>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => void handleDecode()}>
-          <Clapperboard className="mr-2 h-4 w-4" />
-          Decode Video
+          <Clapperboard className="mr-2 h-4 w-4" /> {translateUi('decode_video_1ba73df6')}{' '}
           <ContextMenuShortcut>R</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={() => duplicateNode(id)}>
-          <Copy className="mr-2 h-4 w-4" />
-          Duplicate
+          <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSeparator />
@@ -189,8 +193,7 @@ export function VideoDecoderBlock({
           className="text-destructive focus:text-destructive"
           onClick={() => deleteNode(id)}
         >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
+          <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>

@@ -4,6 +4,8 @@
 // staged exactly as the detail view stages it. The viewer itself is CompareDialog.
 
 import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { resolveStageMedia } from '../stageMedia';
 import { CompareDialog, type CompareOption } from './CompareDialog';
@@ -12,13 +14,15 @@ export function versionCompareOption(
   asset: MediaAsset,
   version: MediaAssetVersion,
   namePrefix = '',
+  locale: UiLocale = 'en',
+  currentLabel = 'Current',
 ): CompareOption {
   const label = `v${version.versionNumber}`;
   return {
     id: version.id,
     label: `${namePrefix}${label}`,
-    optionLabel: `${namePrefix}${label}${version.isHead ? ' · current' : ''}`,
-    caption: `${namePrefix}${label}${version.isHead ? ' · Current' : ''} · ${formatRelativeTime(version.createdAt)}`,
+    optionLabel: `${namePrefix}${label}${version.isHead ? ` · ${currentLabel.toLocaleLowerCase(locale)}` : ''}`,
+    caption: `${namePrefix}${label}${version.isHead ? ` · ${currentLabel}` : ''} · ${formatRelativeTime(version.createdAt, undefined, locale)}`,
     media: version.isHead
       ? resolveStageMedia({ asset, viewedVersion: null, headVersion: version })
       : resolveStageMedia({ asset, viewedVersion: version }),
@@ -43,11 +47,15 @@ export function VersionCompareDialog({
   initialAId,
   initialBId,
 }: Props) {
+  const locale = useLocale();
+  const t = useTranslations('library');
   return (
     <CompareDialog
       open={open}
       onOpenChange={onOpenChange}
-      options={versions.map((version) => versionCompareOption(asset, version))}
+      options={versions.map((version) =>
+        versionCompareOption(asset, version, '', locale, t('currentVersion')),
+      )}
       initialAId={initialAId}
       initialBId={initialBId}
     />

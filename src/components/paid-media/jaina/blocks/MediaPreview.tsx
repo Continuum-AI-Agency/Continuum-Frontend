@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { type ReactNode, useState } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
@@ -12,6 +13,8 @@ type MediaPreviewProps = {
 };
 
 export function MediaPreview({ entry, children }: MediaPreviewProps) {
+  const uiText = useTranslations('scale');
+
   const [visible, setVisible] = useState(false);
   // A media-map entry carries no brand/account context, so an expired URL
   // degrades to the branded fallback tile (no re-resolve path from here).
@@ -40,7 +43,7 @@ export function MediaPreview({ entry, children }: MediaPreviewProps) {
   return (
     <button
       type="button"
-      aria-label={`Preview ${entry.entity_type} ${entry.entity_id}`}
+      aria-label={uiText('template_482cd160d97e', { v0: entry.entity_type, v1: entry.entity_id })}
       className="relative inline-block cursor-pointer border-b border-dashed border-primary/40 bg-transparent p-0 text-left font-[inherit] text-[length:inherit] text-primary/90 transition-colors hover:text-primary"
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}

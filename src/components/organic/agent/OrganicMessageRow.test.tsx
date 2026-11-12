@@ -1,9 +1,10 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
 import type { HeadlessBatchStatus } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, renderHook } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import { type ComponentType, useMemo } from 'react';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
+import { render, renderHook } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -279,7 +280,8 @@ describe('OrganicMessageRow approval reply', () => {
     const view = render(row(failed));
     expect(view.queryByRole('button', { name: 'Retry' })).toBeTruthy();
     view.rerender(row({ ...failed, approvalReply: true }));
-    expect(view.getByText('Upstream hiccup')).toBeTruthy();
+    expect(view.getByText('Generation failed')).toBeTruthy();
+    expect(view.queryByText('Upstream hiccup')).toBeNull();
     expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
 
     view.rerender(row(answered));

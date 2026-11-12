@@ -18,12 +18,13 @@ import type {
   MediaSource,
 } from '@continuum/contracts';
 import { BookmarkPlus, Loader2, Lock, Users } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/toast-imperative';
+import { useRouter } from '@/i18n/navigation';
 import { createLibraryCollectionOperation } from '@/lib/library/creativeOperations';
 import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -77,6 +78,8 @@ export function SaveFiltersAsCollection({
   query: SavableFilters;
   onSaved?: () => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -113,7 +116,11 @@ export function SaveFiltersAsCollection({
       router.push(`/library?collection=${encodeURIComponent(collection.id)}`);
       router.refresh();
     } catch (err) {
-      toast.error(`Saving the collection failed · ${(err as Error).message}`);
+      toast.error(
+        translateUi('saving_the_collection_failed_value0_f65bc787', {
+          value0: String((err as Error).message),
+        }),
+      );
     } finally {
       setSaving(false);
     }
@@ -127,21 +134,23 @@ export function SaveFiltersAsCollection({
             type="button"
             className="flex min-h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground active:scale-[0.96]"
           >
-            <BookmarkPlus className="size-3.5" />
-            Save as collection
+            <BookmarkPlus className="size-3.5" /> {translateUi('save_as_collection_05a17142')}{' '}
           </button>
         }
       />
       <PopoverContent align="end" className="w-72 space-y-2 p-3">
-        <p className="text-xs font-medium">Save these filters as a collection</p>
+        <p className="text-xs font-medium">
+          {translateUi('save_these_filters_as_a_collection_c2f53641')}
+        </p>
         <p className="text-2xs text-muted-foreground">
-          It stays live: assets that match later join it on their own.
+          {' '}
+          {translateUi('it_stays_live_assets_that_match_lat_7f661f6d')}{' '}
         </p>
         <Input
           value={name}
           autoFocus
-          placeholder="Collection name"
-          aria-label="Collection name"
+          placeholder={translateUi('collection_name_92221492')}
+          aria-label={translateUi('collection_name_92221492')}
           className="h-8 text-xs"
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
@@ -152,13 +161,13 @@ export function SaveFiltersAsCollection({
           }}
         />
         <fieldset
-          aria-label="Who can see it"
+          aria-label={translateUi('who_can_see_it_5d34a0f3')}
           className="grid grid-cols-2 gap-1 rounded-lg bg-muted/60 p-0.5"
         >
           {(
             [
-              { value: 'team', label: 'Team', icon: Users },
-              { value: 'private', label: 'Private', icon: Lock },
+              { value: 'team', label: translateUi('team_5985039f'), icon: Users },
+              { value: 'private', label: translateUi('private_c63eb672'), icon: Lock },
             ] as const
           ).map((option) => (
             <button
@@ -185,8 +194,8 @@ export function SaveFiltersAsCollection({
           disabled={!name.trim() || saving}
           onClick={() => void save()}
         >
-          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-          Save collection
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}{' '}
+          {translateUi('save_collection_bca66b42')}{' '}
         </Button>
       </PopoverContent>
     </Popover>

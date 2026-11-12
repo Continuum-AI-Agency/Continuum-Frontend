@@ -14,7 +14,8 @@ import {
   type MediaAssetVersion,
 } from '@continuum/contracts';
 import { Eye, Loader2, MapPin } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
+import { useEffect, useState, useMemo as useUiConfigMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
@@ -33,15 +34,22 @@ import {
   memberNameLookup,
 } from '../views/cardOptions';
 import { useAssetCommentCounts } from '../views/useAssetFieldValues';
+import { useCardFieldDisplay, useLibraryFieldOptions } from '../views/useLibraryFieldOptions';
 import { useMentionTargets } from './useMentionTargets';
 
-const SECTIONS: { group: LibraryFieldGroup; label: string }[] = [
-  { group: 'file', label: 'File' },
-  { group: 'document', label: 'Document' },
-  { group: 'video', label: 'Video' },
-  { group: 'audio', label: 'Audio' },
-  { group: 'workflow', label: 'Workflow' },
-];
+function useLocalSectionsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value: { group: LibraryFieldGroup; label: string }[] = [
+      { group: 'file', label: translateConfig('file_50009ce1') },
+      { group: 'document', label: translateConfig('document_d6bd8c0a') },
+      { group: 'video', label: translateConfig('video_d534be82') },
+      { group: 'audio', label: translateConfig('audio_bc1b8890') },
+      { group: 'workflow', label: translateConfig('workflow_2e2d5c56') },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 // Drawn by their own controls below rather than as a plain row.
 const OWN_CONTROL = new Set(['title', 'notes', 'hasLocation']);
@@ -85,6 +93,8 @@ function useSeenBy(assetId: string): SeenBy[] | null {
 }
 
 function NotesEditor({ asset, canEdit }: { asset: MediaAsset; canEdit: boolean }) {
+  const translateUi = useUiTranslations('library');
+
   const [stored, setStored] = useState(asset.notes ?? '');
   const [draft, setDraft] = useState(stored);
   const [saving, setSaving] = useState(false);
@@ -107,7 +117,11 @@ function NotesEditor({ asset, canEdit }: { asset: MediaAsset; canEdit: boolean }
       setDraft(saved.notes ?? '');
     } catch (err) {
       setDraft(stored);
-      toast.error(`Saving notes failed · ${(err as Error).message}`);
+      toast.error(
+        translateUi('saving_notes_failed_value0_4ebffad8', {
+          value0: String((err as Error).message),
+        }),
+      );
     } finally {
       setSaving(false);
     }
@@ -116,7 +130,9 @@ function NotesEditor({ asset, canEdit }: { asset: MediaAsset; canEdit: boolean }
   if (!canEdit) {
     return (
       <p data-testid="asset-info-notes" className="text-xs whitespace-pre-wrap">
-        {stored || <span className="text-muted-foreground">No notes</span>}
+        {stored || (
+          <span className="text-muted-foreground">{translateUi('no_notes_efe1cde6')}</span>
+        )}
       </p>
     );
   }
@@ -126,8 +142,8 @@ function NotesEditor({ asset, canEdit }: { asset: MediaAsset; canEdit: boolean }
         data-testid="asset-info-notes"
         value={draft}
         disabled={saving}
-        aria-label="Notes"
-        placeholder="Add notes for your team"
+        aria-label={translateUi('notes_8a7525b1')}
+        placeholder={translateUi('add_notes_for_your_team_87cc629f')}
         maxLength={MAX_ASSET_NOTES_LENGTH}
         className="min-h-20 text-xs"
         onChange={(event) => setDraft(event.target.value)}
@@ -147,6 +163,14 @@ export function AssetInfoPanel({
   asset: MediaAsset;
   version: MediaAssetVersion | null;
 }) {
+  const SECTIONS = useLocalSectionsMessages();
+
+  const displayLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('library');
+  const fieldDisplay = useCardFieldDisplay();
+  const { fields: BUILT_IN_CARD_FIELDS } = useLibraryFieldOptions();
+
   const olderVersion = version && !version.isHead ? version : null;
   const shown: MediaAsset = olderVersion
     ? {
@@ -168,6 +192,7 @@ export function AssetInfoPanel({
   const seenBy = useSeenBy(asset.id);
   const { canEdit } = useLibraryAccess(asset.brandId, { assetId: asset.id });
   const lookups: CardFieldLookups = {
+    ...fieldDisplay,
     commentCount,
     memberName,
     reviewLabel: (item) =>
@@ -181,7 +206,7 @@ export function AssetInfoPanel({
 
   const sections = SECTIONS.map(({ group, label }) => ({
     // The picture fields (colour space, bit depth, alpha) describe a still as much as a clip.
-    label: group === 'video' && shown.kind === 'image' ? 'Image' : label,
+    label: group === 'video' && shown.kind === 'image' ? translateUi('image_1aa4cb0b') : label,
     rows: BUILT_IN_CARD_FIELDS.filter(
       (field) =>
         field.group === group &&
@@ -202,8 +227,9 @@ export function AssetInfoPanel({
     <div data-testid="asset-info-panel" className="flex flex-col gap-4 p-3 text-xs">
       {olderVersion ? (
         <p className="text-muted-foreground">
-          Version {olderVersion.versionNumber}. Technical and workflow details describe the current
-          version.
+          {' '}
+          {translateUi('version_dd167905')} {olderVersion.versionNumber}
+          {translateUi('technical_and_workflow_details_desc_949a3513')}{' '}
         </p>
       ) : null}
 
@@ -211,18 +237,19 @@ export function AssetInfoPanel({
         <Badge
           data-testid="asset-info-gps-badge"
           variant="warning"
-          title="This file carries GPS coordinates. Shared copies have them removed; the original keeps them."
+          title={translateUi('this_file_carries_gps_coordinates_s_0d50a50f')}
         >
-          <MapPin />
-          Location data
+          <MapPin /> {translateUi('location_data_f94fade1')}{' '}
         </Badge>
       ) : null}
 
       {awaitingProbe ? (
         <p className="text-muted-foreground">
           {asset.mediaProbeError
-            ? `Some technical details could not be read: ${asset.mediaProbeError}`
-            : 'Technical details appear once the file has been read.'}
+            ? translateUi('some_technical_details_could_not_be_14af4983', {
+                value0: String(asset.mediaProbeError),
+              })
+            : translateUi('technical_details_appear_once_the_f_23233cbf')}
         </p>
       ) : null}
 
@@ -253,13 +280,14 @@ export function AssetInfoPanel({
         <>
           <section className="flex flex-col gap-1.5">
             <h3 className="flex items-center gap-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-              <Eye className="size-3" aria-hidden />
-              Seen by
+              <Eye className="size-3" aria-hidden /> {translateUi('seen_by_7fb44fd2')}{' '}
             </h3>
             {seenBy === null ? (
-              <p className="text-muted-foreground">Loading…</p>
+              <p className="text-muted-foreground">{translateUi('loading_ba3bbbe1')}</p>
             ) : seenBy.length === 0 ? (
-              <p className="text-muted-foreground">Nobody has opened this yet.</p>
+              <p className="text-muted-foreground">
+                {translateUi('nobody_has_opened_this_yet_3b90a180')}
+              </p>
             ) : (
               <ul data-testid="asset-info-seen-by" className="flex flex-col gap-1">
                 {seenBy.map((entry) => (
@@ -269,9 +297,13 @@ export function AssetInfoPanel({
                     data-user-id={entry.userId}
                     className="flex items-center justify-between gap-2"
                   >
-                    <span className="truncate">{memberName ? (memberName(entry.userId) ?? 'Former member') : '…'}</span>
+                    <span className="truncate">
+                      {memberName
+                        ? (memberName(entry.userId) ?? translateUi('former_member_1ef15417'))
+                        : '…'}
+                    </span>
                     <span className="shrink-0 text-muted-foreground tabular-nums">
-                      {new Date(entry.lastSeenAt).toLocaleDateString(undefined, {
+                      {new Date(entry.lastSeenAt).toLocaleDateString(displayLocale, {
                         month: 'short',
                         day: 'numeric',
                       })}
@@ -285,7 +317,8 @@ export function AssetInfoPanel({
 
           <section className="flex flex-col gap-1.5">
             <h3 className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-              Notes
+              {' '}
+              {translateUi('notes_8a7525b1')}{' '}
             </h3>
             <NotesEditor asset={asset} canEdit={canEdit} />
           </section>

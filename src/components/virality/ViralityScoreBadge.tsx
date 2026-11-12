@@ -1,4 +1,5 @@
 import type { ViralityGrade } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 // Grade heat ramp — cool (weak) to hot (viral). Semantic, separate from the app accent.
@@ -20,6 +21,8 @@ export function ViralityScoreBadge({
   grade: ViralityGrade | null;
   className?: string;
 }) {
+  const tUi = useTranslations('common');
+
   if (overall === null || grade === null) return null;
   return (
     <span
@@ -28,7 +31,7 @@ export function ViralityScoreBadge({
         VIRALITY_GRADE_STYLES[grade],
         className,
       )}
-      title={`Virality ${overall}/100 · ${grade}`}
+      title={tUi('m_ddc091469d', { v0: String(overall), v1: String(grade) })}
     >
       <span className="font-semibold">{overall}</span>
       <span className="text-2xs uppercase tracking-wide">{grade}</span>

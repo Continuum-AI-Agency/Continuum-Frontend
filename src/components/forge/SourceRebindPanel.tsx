@@ -8,6 +8,7 @@ import {
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
 import { AlertTriangle, Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { uploadRefusal } from '@/components/forge/ForgeProjectDrop';
 import {
@@ -28,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   type FolderFile,
   folderFilesFromDrop,
@@ -99,6 +101,10 @@ function SourceRebindForm({
   repairFiles: FolderFile[];
   onRepairFiles: (files: FolderFile[]) => void;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('forge');
+
   const [versions, setVersions] = useState<MediaAssetVersion[]>([]);
   const [versionId, setVersionId] = useState('');
   const [preview, setPreview] = useState<TemplateRebindPreview | null>(null);
@@ -190,7 +196,11 @@ function SourceRebindForm({
       setAcceptMissing(false);
     } catch (error) {
       if (!alive.current) return;
-      toast.error(error instanceof Error ? error.message : 'Could not compare source revisions');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_compare_source_revisions_ea5ecf63'),
+      );
     } finally {
       setBusy(false);
     }
@@ -220,7 +230,7 @@ function SourceRebindForm({
       await inspect(result.versionId);
     } catch (error) {
       if (!alive.current) return;
-      const message = error instanceof Error ? error.message : 'Could not upload the revision';
+      const message = uiErrorText(error);
       toast.error(uploadRefusal({ name: file.name, sizeBytes: file.size }, message) ?? message);
     } finally {
       setBusy(false);
@@ -330,13 +340,15 @@ function SourceRebindForm({
       if (!alive.current) return;
       await onConfirmed();
       toast.success(
-        `${items.length} media file${items.length === 1 ? '' : 's'} repaired in the template source`,
+        translateUi('value0_media_file_value1_repaired_i_c43279dd', {
+          count: Number(items.length),
+        }),
       );
     } catch (error) {
       if (!alive.current) return;
       if (error instanceof RepairProjectChoiceRequired) setProjects(error.projects);
       if (savedVersionId && !applied) onNeedsReview?.(savedVersionId);
-      const message = error instanceof Error ? error.message : 'Could not repair media';
+      const message = uiErrorText(error);
       setRepairError(message);
       toast.error(message);
     } finally {
@@ -375,10 +387,14 @@ function SourceRebindForm({
       if (!alive.current) return;
       await onConfirmed();
       setPreview(null);
-      toast.success('Source revision updated');
+      toast.success(translateUi('source_revision_updated_8b321ab3'));
     } catch (error) {
       if (!alive.current) return;
-      toast.error(error instanceof Error ? error.message : 'Could not update the source revision');
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translateUi('could_not_update_the_source_revisio_e211028f'),
+      );
     } finally {
       setBusy(false);
     }
@@ -387,22 +403,23 @@ function SourceRebindForm({
   const repairRows =
     missingFootage.length > 0 ? (
       <fieldset className="flex flex-col gap-2" disabled={busy}>
-        <legend className="sr-only">Missing media repair</legend>
+        <legend className="sr-only">{translateUi('missing_media_repair_e135544e')}</legend>
         <fieldset
-          aria-label="Batch media repair"
+          aria-label={translateUi('batch_media_repair_89b37c65')}
           className="flex flex-col gap-2 rounded-md border border-dashed p-3 text-xs"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => void receiveRepairFiles(event)}
         >
-          <p>Drop missing files or a folder here. Matching files can be repaired together.</p>
+          <p>{translateUi('drop_missing_files_or_a_folder_here_d0d1f792')}</p>
           <div className="flex flex-wrap items-center gap-2">
             <Label className="cursor-pointer">
-              Choose missing files
+              {' '}
+              {translateUi('choose_missing_files_a6007a63')}{' '}
               <Input
                 type="file"
                 multiple
                 className="sr-only"
-                aria-label="Choose missing files"
+                aria-label={translateUi('choose_missing_files_a6007a63')}
                 onChange={(event) => {
                   onRepairFiles(
                     Array.from(event.target.files ?? []).map((file) => ({ file, folders: [] })),
@@ -413,13 +430,14 @@ function SourceRebindForm({
               />
             </Label>
             <Label className="cursor-pointer">
-              Choose media folder
+              {' '}
+              {translateUi('choose_media_folder_8e92e2f9')}{' '}
               <input
                 type="file"
                 multiple
                 {...{ webkitdirectory: '' }}
                 className="sr-only"
-                aria-label="Choose media folder"
+                aria-label={translateUi('choose_media_folder_8e92e2f9')}
                 onChange={(event) => {
                   onRepairFiles(folderFilesFromInput(event.target.files ?? []));
                   setAssignments({});
@@ -433,14 +451,19 @@ function SourceRebindForm({
               disabled={busy || !matchedRepairs.length}
               onClick={() => void repair(matchedRepairs)}
             >
-              Repair {matchedRepairs.length} matched file{matchedRepairs.length === 1 ? '' : 's'}
+              {' '}
+              {translateUi('repair_1196b6c5')} {matchedRepairs.length}{' '}
+              {translateUi('matched_file_63a63ced')}
+              {matchedRepairs.length === 1 ? '' : 's'}
             </Button>
           </div>
         </fieldset>
         {unmatchedFiles.length ? (
           <p role="status">
-            Unmatched files: {unmatchedFiles.map(({ file }) => file.name).join(', ')}. Choose a file
-            on its named row below.
+            {' '}
+            {translateUi('unmatched_files_0a259868')}{' '}
+            {unmatchedFiles.map(({ file }) => file.name).join(', ')}
+            {translateUi('choose_a_file_on_its_named_row_belo_02078b20')}{' '}
           </p>
         ) : null}
         {matches.map(({ missing: item, matches: choices }, index) => (
@@ -463,15 +486,20 @@ function SourceRebindForm({
                 <span>
                   <strong>{item.name || item.file.split(/[\\/]/).pop()}</strong>
                   <span className="block text-muted-foreground">
-                    Drop this file here or click to choose
+                    {' '}
+                    {translateUi('drop_this_file_here_or_click_to_cho_7b23ac5a')}{' '}
                   </span>
                   <span className="block break-all text-muted-foreground">{item.file}</span>
                   {item.projectPath ? (
-                    <span className="block text-muted-foreground">Project: {item.projectPath}</span>
+                    <span className="block text-muted-foreground">
+                      {translateUi('project_5917f323')} {item.projectPath}
+                    </span>
                   ) : null}
                   {assignments[mediaKey(item)] || choices.length === 1 ? (
                     <span className="block">
-                      Matched: {(assignments[mediaKey(item)] ?? choices[0]?.file)?.name}
+                      {' '}
+                      {translateUi('matched_919d2f9c')}{' '}
+                      {(assignments[mediaKey(item)] ?? choices[0]?.file)?.name}
                     </span>
                   ) : null}
                 </span>
@@ -497,7 +525,8 @@ function SourceRebindForm({
                 disabled={busy}
                 onClick={() => void repair([{ missing: item, file: null }])}
               >
-                Find in ZIP
+                {' '}
+                {translateUi('find_in_zip_0029e8fd')}{' '}
               </Button>
             </div>
             {repairFiles.length > 0 ? (
@@ -516,12 +545,16 @@ function SourceRebindForm({
                     setAssignments((current) => ({ ...current, [mediaKey(item)]: candidate.file }));
                 }}
               >
-                <SelectTrigger aria-label={`Replacement for ${item.name || item.file}`}>
+                <SelectTrigger
+                  aria-label={translateUi('replacement_for_value0_08054e7b', {
+                    value0: String(item.name || item.file),
+                  })}
+                >
                   <SelectValue
                     placeholder={
                       choices.length > 1
-                        ? 'Several files match — choose one'
-                        : 'Assign a supplied file'
+                        ? translateUi('several_files_match_choose_one_401371e2')
+                        : translateUi('assign_a_supplied_file_3b854407')
                     }
                   >
                     {assignments[mediaKey(item)]?.name}
@@ -544,8 +577,14 @@ function SourceRebindForm({
                     setProjectChoices((current) => ({ ...current, [mediaKey(item)]: value }));
                 }}
               >
-                <SelectTrigger aria-label={`Project for ${item.name || item.file}`}>
-                  <SelectValue placeholder="Choose the project that references this file" />
+                <SelectTrigger
+                  aria-label={translateUi('project_for_value0_55b07f41', {
+                    value0: String(item.name || item.file),
+                  })}
+                >
+                  <SelectValue
+                    placeholder={translateUi('choose_the_project_that_references__17a8fae6')}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {projects.map((project) => (
@@ -572,7 +611,8 @@ function SourceRebindForm({
         {repairRows}
         {uploading ? (
           <p role="status" className="text-xs text-muted-foreground">
-            Repairing {uploading}…
+            {' '}
+            {translateUi('repairing_e2c5201c')} {uploading}…
           </p>
         ) : null}
       </div>
@@ -582,17 +622,15 @@ function SourceRebindForm({
     <div ref={root} className="flex flex-col gap-3">
       {repairRows}
       <p className="text-xs text-muted-foreground">
-        Compare a Library version before changing what this template parses. Building and publishing
-        remain separate.
+        {' '}
+        {translateUi('compare_a_library_version_before_ch_a6f108dc')}{' '}
       </p>
       {newerHead ? (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded border border-warning/40 bg-warning/10 p-3 text-xs"
         >
-          <span>
-            A newer Library version is saved but this template still uses the previous source.
-          </span>
+          <span> {translateUi('a_newer_library_version_is_saved_bu_6bb07db4')} </span>
           <Button
             type="button"
             size="xs"
@@ -603,7 +641,8 @@ function SourceRebindForm({
               void inspect(newerHead.id);
             }}
           >
-            Review newer version
+            {' '}
+            {translateUi('review_newer_version_d4df3a68')}{' '}
           </Button>
         </div>
       ) : null}
@@ -616,8 +655,8 @@ function SourceRebindForm({
             setPreview(null);
           }}
         >
-          <SelectTrigger className="w-72" aria-label="Source revision">
-            <SelectValue placeholder="Choose an existing version">
+          <SelectTrigger className="w-72" aria-label={translateUi('source_revision_49114ee4')}>
+            <SelectValue placeholder={translateUi('choose_an_existing_version_aed78e7d')}>
               {versionLabel(versions.find((item) => item.id === versionId))}
             </SelectValue>
           </SelectTrigger>
@@ -625,7 +664,7 @@ function SourceRebindForm({
             {versions.map((version) => (
               <SelectItem key={version.id} value={version.id}>
                 {versionLabel(version)}
-                {version.id === expectedVersionId ? ' (current source)' : ''}
+                {version.id === expectedVersionId ? translateUi('current_source_51f57b77') : ''}
               </SelectItem>
             ))}
           </SelectContent>
@@ -636,7 +675,8 @@ function SourceRebindForm({
           disabled={!versionId || versionId === expectedVersionId || busy}
           onClick={() => void inspect()}
         >
-          {busy ? <Loader2 className="animate-spin" /> : null}Preview changes
+          {busy ? <Loader2 className="animate-spin" /> : null}
+          {translateUi('preview_changes_330c32c4')}{' '}
         </Button>
         <Label className="cursor-pointer">
           <Input
@@ -648,21 +688,23 @@ function SourceRebindForm({
               const file = event.target.files?.[0];
               if (file) void upload(file);
             }}
-          />
-          Upload new revision
+          />{' '}
+          {translateUi('upload_new_revision_5d2a1af8')}{' '}
         </Label>
       </div>
       {uploading ? (
         <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Uploading {uploading} as a new revision…
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />{' '}
+          {translateUi('uploading_8b898ca3')} {uploading}{' '}
+          {translateUi('as_a_new_revision_ea08fdd0')}{' '}
         </p>
       ) : null}
       {listError ? (
         <p role="alert" className="text-xs text-destructive">
           {listError}{' '}
           <Button variant="link" onClick={() => setReload((value) => value + 1)}>
-            Retry
+            {' '}
+            {translateUi('retry_942087cc')}{' '}
           </Button>
         </p>
       ) : null}
@@ -672,9 +714,9 @@ function SourceRebindForm({
             <table className="w-full text-xs">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="px-3 py-2 text-left">Slot</th>
-                  <th className="px-3 py-2 text-left">Kind</th>
-                  <th className="px-3 py-2 text-left">Change</th>
+                  <th className="px-3 py-2 text-left">{translateUi('slot_79689782')}</th>
+                  <th className="px-3 py-2 text-left">{translateUi('kind_f5387f9b')}</th>
+                  <th className="px-3 py-2 text-left">{translateUi('change_c0bf75bd')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -692,8 +734,8 @@ function SourceRebindForm({
           </div>
           {ambiguous ? (
             <p className="flex items-center gap-2 text-xs text-destructive">
-              <AlertTriangle className="size-4" />
-              Ambiguous slots must be resolved before this revision can be used.
+              <AlertTriangle className="size-4" />{' '}
+              {translateUi('ambiguous_slots_must_be_resolved_be_021a7f11')}{' '}
             </p>
           ) : null}
           {missing ? (
@@ -701,8 +743,8 @@ function SourceRebindForm({
               <Checkbox
                 checked={acceptMissing}
                 onCheckedChange={(checked) => setAcceptMissing(checked === true)}
-              />
-              Accept missing slots in this revision
+              />{' '}
+              {translateUi('accept_missing_slots_in_this_revisi_4b5095cd')}{' '}
             </Label>
           ) : null}
           <Button
@@ -710,7 +752,8 @@ function SourceRebindForm({
             disabled={busy || ambiguous || (missing && !acceptMissing)}
             onClick={() => void confirm()}
           >
-            Use this revision
+            {' '}
+            {translateUi('use_this_revision_58a93f1e')}{' '}
           </Button>
         </div>
       ) : null}

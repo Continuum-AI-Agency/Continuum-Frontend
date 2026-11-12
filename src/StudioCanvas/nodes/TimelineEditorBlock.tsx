@@ -27,7 +27,7 @@ import {
   Trash2,
   Video,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -45,6 +45,8 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import {
   applyVideoProjectCommands,
@@ -59,6 +61,7 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { TimelineEditorNodeData } from '../types';
 import { downloadAsset } from '../utils/downloadAsset';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 import { useCanvasTimelineAdapter } from './timeline/useCanvasTimelineAdapter';
 import { useTimelineRender } from './timeline/useTimelineRender';
 
@@ -95,6 +98,10 @@ export function TimelineEditorBlock({
   data,
   selected,
 }: NodeProps<ReactFlowNode<TimelineEditorNodeData>>) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -147,7 +154,9 @@ export function TimelineEditorBlock({
           const project = await createVideoProject({
             brandId: adapter.brandId as string,
             title:
-              typeof data.label === 'string' && data.label.trim() ? data.label : 'Video production',
+              typeof data.label === 'string' && data.label.trim()
+                ? data.label
+                : translateUi('video_production_6228b399'),
             width: 1080,
             height: 1920,
             binding,
@@ -175,15 +184,26 @@ export function TimelineEditorBlock({
       projectSetup.current = false;
       if (cancelled) return;
       show({
-        title: 'Video production unavailable',
-        description: error instanceof Error ? error.message : 'Could not create the project.',
+        title: translateUi('video_production_unavailable_a4b16930'),
+        description: uiErrorText(error),
         variant: 'error',
       });
     });
     return () => {
       cancelled = true;
     };
-  }, [adapter.brandId, data.label, data.videoProjectId, id, roomId, show, triggerSave, updateNode]);
+  }, [
+    adapter.brandId,
+    data.label,
+    data.videoProjectId,
+    id,
+    roomId,
+    show,
+    triggerSave,
+    updateNode,
+    uiErrorText,
+    translateUi,
+  ]);
 
   useEffect(() => {
     if (!data.videoProjectId) return;
@@ -384,18 +404,19 @@ export function TimelineEditorBlock({
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
+      translate: translateUi,
       data: displayVideo,
       baseName: `video-edit-${id}`,
       fallbackExtension: 'mp4',
     });
     if (!success) {
       show({
-        title: 'Download unavailable',
-        description: 'Render the timeline first.',
+        title: translateUi('download_unavailable_2f180e49'),
+        description: translateUi('render_the_timeline_first_660dd748'),
         variant: 'warning',
       });
     }
-  }, [displayVideo, id, show]);
+  }, [displayVideo, id, show, translateUi]);
 
   const isToolbarVisible = selected || isHovered || Boolean(data.isToolbarVisible);
   const renderDisabled = isRunning || clipCount === 0 || (support ? !support.ok : false);
@@ -435,7 +456,7 @@ export function TimelineEditorBlock({
                   onClick={() => {
                     openStudio('assembly');
                   }}
-                  title="Open editor"
+                  title={translateUi('open_editor_550697e0')}
                 >
                   <SquarePen className="h-4 w-4" />
                 </Button>
@@ -447,7 +468,7 @@ export function TimelineEditorBlock({
                     openStudio('motion');
                   }}
                   disabled={!data.videoProjectId}
-                  title="Edit motion"
+                  title={translateUi('edit_motion_8d0989c4')}
                 >
                   <Diamond className="h-4 w-4" />
                 </Button>
@@ -463,7 +484,11 @@ export function TimelineEditorBlock({
                     void render();
                   }}
                   disabled={data.videoProjectId ? false : renderDisabled}
-                  title={data.videoProjectId ? 'Open production' : 'Render & Continue'}
+                  title={
+                    data.videoProjectId
+                      ? translateUi('open_production_2fbe3ddd')
+                      : translateUi('render_continue_e998df3b')
+                  }
                 >
                   <Play className="h-4 w-4" />
                 </Button>
@@ -482,7 +507,7 @@ export function TimelineEditorBlock({
                   }}
                 >
                   <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                    <span>Video Editor</span>
+                    <span>{translateUi('video_editor_d9393765')}</span>
                     {/*
                       What is WIRED IN always leads. A production summary used to replace
                       this readout entirely, so a node with a clip connected and no shots
@@ -490,11 +515,14 @@ export function TimelineEditorBlock({
                       started, in place of the one thing they had actually done (#294).
                     */}
                     <span>
-                      {`${inputCount} input${inputCount === 1 ? '' : 's'}`}
+                      {translateUi('value0_input_value1_e71c5b4e', { count: Number(inputCount) })}
                       {production && production.shotCount > 0
-                        ? ` · ${production.approvedMasters}/${production.shotCount} masters`
+                        ? translateUi('value0_value1_masters_ced9801c', {
+                            value0: String(production.approvedMasters),
+                            value1: String(production.shotCount),
+                          })
                         : clipCount > 0
-                          ? ` · ${clipCount} clip${clipCount === 1 ? '' : 's'}`
+                          ? translateUi('value0_clip_value1_7bfd6846', { count: Number(clipCount) })
                           : ''}
                     </span>
                   </div>
@@ -507,8 +535,8 @@ export function TimelineEditorBlock({
 
                   {isAwaiting ? (
                     <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
-                      Paused — open the editor and click Render &amp; Continue to resume the
-                      workflow.
+                      {' '}
+                      {translateUi('paused_open_the_editor_and_click_re_c47a0bec')}{' '}
                     </div>
                   ) : null}
 
@@ -522,12 +550,14 @@ export function TimelineEditorBlock({
                         <Progress value={progress * 100} className="h-1.5 w-3/4" />
                         <span className="text-2xs text-muted-foreground">
                           {status === 'queued'
-                            ? 'Queued for browser rendering'
+                            ? translateUi('queued_for_browser_rendering_0491f07c')
                             : status === 'preparing'
-                              ? 'Preparing media…'
+                              ? translateUi('preparing_media_e86f6a5e')
                               : status === 'saving'
-                                ? 'Saving render…'
-                                : `${Math.round(progress * 100)}% rendering in browser`}
+                                ? translateUi('saving_render_2b77224f')
+                                : translateUi('value0_rendering_in_browser_bb825cb7', {
+                                    value0: String(Math.round(progress * 100)),
+                                  })}
                         </span>
                       </div>
                     ) : displayVideo ? (
@@ -548,8 +578,8 @@ export function TimelineEditorBlock({
                             event.stopPropagation();
                             handleDownload();
                           }}
-                          title="Download output"
-                          aria-label="Download edited video"
+                          title={translateUi('download_output_446be1d3')}
+                          aria-label={translateUi('download_edited_video_dfbb7382')}
                         >
                           <Download className="h-4 w-4" />
                         </Button>
@@ -566,7 +596,7 @@ export function TimelineEditorBlock({
                         <span className="text-2xs">
                           {production
                             ? production.stage.replaceAll('_', ' ')
-                            : 'Double-click to open the editor'}
+                            : translateUi('double_click_to_open_the_editor_63f1506d')}
                         </span>
                       </button>
                     )}
@@ -577,7 +607,7 @@ export function TimelineEditorBlock({
                       className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive"
                       data-testid="studio-timeline-render-error"
                     >
-                      {data.error}
+                      {workflowNodeError(data, translateUi)}
                     </div>
                   ) : null}
 
@@ -592,7 +622,9 @@ export function TimelineEditorBlock({
                       className="nodrag nopan flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <Library className="h-3.5 w-3.5" />
-                      <span className="font-medium text-foreground">Saved to Library</span>
+                      <span className="font-medium text-foreground">
+                        {translateUi('saved_to_library_7ffd8133')}
+                      </span>
                       <ExternalLink className="ml-auto h-3 w-3" />
                     </a>
                   ) : null}
@@ -607,7 +639,9 @@ export function TimelineEditorBlock({
                       }}
                     >
                       <SquarePen className="mr-1 h-3.5 w-3.5" />
-                      {production ? 'Open production' : 'Open editor'}
+                      {production
+                        ? translateUi('open_production_2fbe3ddd')
+                        : translateUi('open_editor_550697e0')}
                     </Button>
                     {data.videoProjectId ? (
                       <Button
@@ -618,8 +652,9 @@ export function TimelineEditorBlock({
                           openStudio('motion');
                         }}
                       >
-                        <Diamond className="mr-1 h-3.5 w-3.5" />
-                        Motion
+                        <Diamond className="mr-1 h-3.5 w-3.5" /> {translateUi(
+                          'motion_8ca34424',
+                        )}{' '}
                       </Button>
                     ) : null}
                   </div>
@@ -643,7 +678,7 @@ export function TimelineEditorBlock({
                     }
                   />
                   <TooltipContent>
-                    <p>Connect images &amp; videos to place in the editor</p>
+                    <p>{translateUi('connect_images_videos_to_place_in_t_513faa01')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -664,7 +699,7 @@ export function TimelineEditorBlock({
                     }
                   />
                   <TooltipContent>
-                    <p>Edited Video Output</p>
+                    <p>{translateUi('edited_video_output_84f72883')}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -672,15 +707,13 @@ export function TimelineEditorBlock({
           }
         />
         <ContextMenuContent className="w-56">
-          <ContextMenuLabel>Video Editor</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('video_editor_d9393765')}</ContextMenuLabel>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => openStudio('assembly')} disabled={!data.videoProjectId}>
-            <SquarePen className="mr-2 h-4 w-4" />
-            Open editor
+            <SquarePen className="mr-2 h-4 w-4" /> {translateUi('open_editor_550697e0')}{' '}
           </ContextMenuItem>
           <ContextMenuItem onClick={() => openStudio('motion')} disabled={!data.videoProjectId}>
-            <Diamond className="mr-2 h-4 w-4" />
-            Edit motion
+            <Diamond className="mr-2 h-4 w-4" /> {translateUi('edit_motion_8d0989c4')}{' '}
           </ContextMenuItem>
           <ContextMenuItem
             onClick={() => {
@@ -690,25 +723,24 @@ export function TimelineEditorBlock({
             disabled={data.videoProjectId ? false : renderDisabled}
           >
             <Play className="mr-2 h-4 w-4" />
-            {data.videoProjectId ? 'Open production' : 'Render & Continue'}
+            {data.videoProjectId
+              ? translateUi('open_production_2fbe3ddd')
+              : translateUi('render_continue_e998df3b')}
             <ContextMenuShortcut>R</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={() => duplicateNode(id)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicate
+            <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
-            <Download className="mr-2 h-4 w-4" />
-            Download Output
+            <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => deleteNode(id)}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
             <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { createContext, type ReactNode, useCallback, useContext, useState } from 'react';
 import {
   AlertDialog,
@@ -28,6 +30,7 @@ const DraftDeletionConfirmationContext = createContext<DraftDeletionConfirmation
 });
 
 export function DraftDeletionConfirmationProvider({ children }: { children: ReactNode }) {
+  const uiText = useTranslations('organic');
   const [request, setRequest] = useState<DraftDeletionRequest | null>(null);
   const requestDraftDeletion = useCallback((ids: string[], deleteDrafts: DeleteDrafts) => {
     if (ids.length === 0) return;
@@ -42,16 +45,16 @@ export function DraftDeletionConfirmationProvider({ children }: { children: Reac
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {count === 1 ? 'this draft' : `${count} drafts`}?
+              {uiText.rich('sentence_6f20a6cf1a65', { count: count })}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {count === 1
-                ? 'This removes the post from the planner. This action cannot be undone.'
-                : 'These posts will be removed from the planner. This action cannot be undone.'}
+                ? uiText('this_removes_the_post_from_the_planner_this_a_f998df8')
+                : uiText('these_posts_will_be_removed_from_the_planner__c1854ac')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{uiText('cancel_19766ed')}</AlertDialogCancel>
             {/* Destructive, so the confirm button matches the red menu item that opened it. */}
             <AlertDialogAction
               variant="destructive"
@@ -61,7 +64,7 @@ export function DraftDeletionConfirmationProvider({ children }: { children: Reac
                 setRequest(null);
               }}
             >
-              Delete {count === 1 ? 'draft' : `${count} drafts`}
+              {uiText.rich('sentence_11e2719d9c48', { count: count })}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

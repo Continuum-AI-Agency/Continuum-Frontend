@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { CAPTION_MAX_ANY_PLATFORM } from '@continuum/contracts';
-import { act, renderHook, waitFor } from '@testing-library/react';
-
+import { act, waitFor } from '@testing-library/react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 import { ApiError } from '@/lib/api/errors';
 import type { DraftEditField, PendingDraftEdit } from '@/lib/organic/store';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
@@ -354,10 +354,17 @@ describe('editField', () => {
   });
 
   // One caption rule: the route refuses an over-limit caption and names the limit; never truncate.
-  it("shows the route's own reason for a refused edit", async () => {
-    const message = 'LinkedIn captions are at most 3000 characters — this one is 3001';
+  it('uses structured caption limits from the route for a refused edit', async () => {
+    const message =
+      'LinkedIn captions are at most 3,000 characters, hashtags included — this one is 3,001';
     requestImpl = async () => {
-      throw new ApiError(message, 422, undefined, { error: 'caption_too_long', message });
+      throw new ApiError(message, 422, undefined, {
+        error: 'caption_too_long',
+        platform: 'linkedin',
+        maxLength: 3000,
+        length: 3001,
+        message,
+      });
     };
     const target = draft();
     seed(target);

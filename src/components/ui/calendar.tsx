@@ -1,4 +1,6 @@
 'use client';
+import {useLocale,useTranslations} from 'next-intl';
+import {createCalendarLocale} from './calendar-locale';
 
 // One calendar primitive for the whole product, styled for react-day-picker v9.
 //
@@ -17,9 +19,12 @@ import { cn } from '@/lib/utils';
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
-function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
+function Calendar({ className, classNames, showOutsideDays = true, formatters,labels, ...props }: CalendarProps) {
+  const uiLocale=useLocale();const t=useTranslations('common');const translated=createCalendarLocale(props.locale?.code??uiLocale,t,props.timeZone);
   return (
     <DayPicker
+      formatters={{...translated.formatters,...formatters}}
+      labels={{...translated.labels,...labels}}
       showOutsideDays={showOutsideDays}
       className={cn('p-3', className)}
       classNames={{

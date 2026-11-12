@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
 
 // Canonical apply-mode identifier for portfolios — observe / recommend / autopilot.
 // Same kibo-ui Pill + indicator pattern as HeldPill. When autopilot is kill-switched
@@ -23,16 +26,19 @@ export function ApplyModePill({
   scopes?: AutopilotScopes | null;
   className?: string;
 }) {
-  const meta = applyModePill(applyMode);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const meta = applyModePill(applyMode, optimizerText);
   if (!meta) return null;
 
   const stopped = Boolean(autopilotPaused) && (applyMode ?? '').toLowerCase() === 'autopilot';
-  const label = stopped ? 'Stopped' : meta.label;
+  const label = stopped ? uiText('portfolioHeaderMode',{mode:'stopped'}) : meta.label;
   const variant = stopped ? 'warning' : meta.variant;
   const indicator = stopped ? 'warning' : meta.indicator;
   const tip = stopped
-    ? 'Stop — autopilot writes are halted. Resume from Manage, or switch to Observe / Recommend.'
-    : applyModeExplainer(applyMode, scopes);
+    ? uiText('applyModeStoppedHint')
+    : applyModeExplainer(applyMode, scopes, optimizerText, uiLocale);
 
   return (
     <Tooltip>

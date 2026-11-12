@@ -1,6 +1,7 @@
 'use client';
 
 import { FileText, Layers, Video } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
@@ -22,6 +23,8 @@ type Props = {
 
 /** Everything the agent generated in this session, each one a click or a drag away from the composer. */
 export function SessionContentTray({ items, onInsert, renderPreview }: Props) {
+  const tUi = useTranslations('common');
+
   const [open, setOpen] = useState(false);
   // The tray opens over the composer it feeds, so while a tile is in flight it lets the drag
   // through to the editor underneath instead of catching the drop itself.
@@ -34,11 +37,11 @@ export function SessionContentTray({ items, onInsert, renderPreview }: Props) {
         render={
           <button
             type="button"
-            aria-label="Content generated in this session"
+            aria-label={tUi('m_ae3c3affa4')}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           >
             <Layers className="h-3.5 w-3.5" />
-            Session
+            {tUi('m_f7f1997c6c')}
             <span className="rounded bg-muted px-1 text-2xs tabular-nums">{items.length}</span>
           </button>
         }
@@ -48,9 +51,7 @@ export function SessionContentTray({ items, onInsert, renderPreview }: Props) {
         side="top"
         className={cn('w-80 p-2 transition-opacity', dragging && 'pointer-events-none opacity-30')}
       >
-        <p className="px-1 pb-2 text-xs text-muted-foreground">
-          Click or drag into the message to reference it.
-        </p>
+        <p className="px-1 pb-2 text-xs text-muted-foreground">{tUi('m_1cfc327053')}</p>
         <ul className="grid max-h-80 grid-cols-3 gap-2 overflow-y-auto">
           {items.map((item) => (
             <li key={item.key}>

@@ -2,6 +2,7 @@
 
 import type { EditorProjectV2, EditorTextClip, EditorTrack } from '@continuum/contracts';
 import { Plus, Trash2, Type } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ColorField } from '@/components/ui/color-field';
@@ -27,6 +28,8 @@ export function TextOverlayEditor({
   playheadSec: number;
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [draft, setDraft] = useState('');
   const addText = () => {
     if (!draft.trim()) return;
@@ -44,20 +47,20 @@ export function TextOverlayEditor({
     <section className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
       <div className="flex items-center gap-2">
         <Type className="size-3.5 text-muted-foreground" />
-        <h3 className="text-xs font-semibold">Text overlays</h3>
+        <h3 className="text-xs font-semibold">{translateUi('text_overlays_3f2edcfa')}</h3>
       </div>
       <div className="flex gap-2">
         <Input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Add text at the playhead"
+          placeholder={translateUi('add_text_at_the_playhead_c37570d8')}
           className="h-8 text-xs"
           onKeyDown={(event) => {
             if (event.key === 'Enter') addText();
           }}
         />
         <Button size="sm" className="h-8" onClick={addText} disabled={!draft.trim()}>
-          <Plus className="size-3.5" /> Add
+          <Plus className="size-3.5" /> {translateUi('add_9fd728c6')}{' '}
         </Button>
       </div>
       <div className="max-h-52 space-y-2 overflow-y-auto">
@@ -72,7 +75,8 @@ export function TextOverlayEditor({
         ))}
         {!textTrack?.clips.length ? (
           <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-            No text overlays yet.
+            {' '}
+            {translateUi('no_text_overlays_yet_e44afe85')}{' '}
           </p>
         ) : null}
       </div>
@@ -91,6 +95,8 @@ function TextOverlayRow({
   clip: EditorTextClip;
   onApply: (operation: EditorAssemblyOperation) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const colorInputId = useId();
   const [text, setText] = useState(clip.text);
   const [start, setStart] = useState(clip.timelineStartSec);
@@ -123,20 +129,20 @@ function TextOverlayRow({
         <NumberScrubField
           min={0}
           step={0.1}
-          label="At"
+          label={translateUi('at_c72c5404')}
           value={start}
           max={project.durationSec}
           onChange={setStart}
         />
         <NumberScrubField
           step={0.1}
-          label="Duration"
+          label={translateUi('duration_4fc52a3c')}
           value={duration}
           min={0.1}
           onChange={setDuration}
         />
         <NumberScrubField
-          label="Size"
+          label={translateUi('size_1af85190')}
           value={fontSize}
           min={1}
           max={2000}
@@ -144,8 +150,13 @@ function TextOverlayRow({
           onChange={setFontSize}
         />
         <div className="space-y-1 text-3xs text-muted-foreground">
-          <span>Color</span>
-          <ColorField id={colorInputId} label="Text" value={color} onChange={setColor} />
+          <span>{translateUi('color_6b73191a')}</span>
+          <ColorField
+            id={colorInputId}
+            label={translateUi('text_71988c4d')}
+            value={color}
+            onChange={setColor}
+          />
         </div>
         <SliderField
           format={{ style: 'percent', maximumFractionDigits: 0 }}
@@ -166,31 +177,31 @@ function TextOverlayRow({
           onChange={setY}
         />
         <label className="space-y-1 text-3xs text-muted-foreground">
-          <span>Animate in</span>
+          <span>{translateUi('animate_in_63b3eb93')}</span>
           <select
-            aria-label="Animate text in"
+            aria-label={translateUi('animate_text_in_4624aaf4')}
             className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
             value={animationIn}
             onChange={(event) => setAnimationIn(event.target.value)}
           >
-            <option value="none">None</option>
-            <option value="pop">Pop</option>
-            <option value="scaleIn">Scale in</option>
-            <option value="floatIn">Float in</option>
+            <option value="none">{translateUi('none_dc937b59')}</option>
+            <option value="pop">{translateUi('pop_4d616d53')}</option>
+            <option value="scaleIn">{translateUi('scale_in_9f3a0b2b')}</option>
+            <option value="floatIn">{translateUi('float_in_4de6a619')}</option>
           </select>
         </label>
         <label className="space-y-1 text-3xs text-muted-foreground">
-          <span>Animate out</span>
+          <span>{translateUi('animate_out_4a77565b')}</span>
           <select
-            aria-label="Animate text out"
+            aria-label={translateUi('animate_text_out_4302285a')}
             className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
             value={animationOut}
             onChange={(event) => setAnimationOut(event.target.value)}
           >
-            <option value="none">None</option>
-            <option value="pop">Pop</option>
-            <option value="scaleIn">Scale out</option>
-            <option value="floatIn">Float out</option>
+            <option value="none">{translateUi('none_dc937b59')}</option>
+            <option value="pop">{translateUi('pop_4d616d53')}</option>
+            <option value="scaleIn">{translateUi('scale_out_be326322')}</option>
+            <option value="floatIn">{translateUi('float_out_c6dcfd29')}</option>
           </select>
         </label>
       </div>
@@ -200,7 +211,7 @@ function TextOverlayRow({
           size="icon"
           className="size-7"
           onClick={() => onApply(removeClipOperation(project, trackId, clip.id))}
-          aria-label="Delete text overlay"
+          aria-label={translateUi('delete_text_overlay_049f609e')}
         >
           <Trash2 className="size-3.5" />
         </Button>
@@ -225,7 +236,8 @@ function TextOverlayRow({
             )
           }
         >
-          Save
+          {' '}
+          {translateUi('save_1509f561')}{' '}
         </Button>
       </div>
     </div>

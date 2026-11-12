@@ -23,6 +23,7 @@ import {
   Type,
   Variable,
 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useMemo, useState } from 'react';
 import { FactList } from '@/components/forge/FactList';
 import {
@@ -37,6 +38,7 @@ import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
+import type { UiLocale } from '@/i18n/config';
 import type { TemplateVariablesResponse } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
@@ -59,18 +61,18 @@ export type TemplateStatus =
 export const TEMPLATE_STATUS: Record<
   TemplateStatus,
   {
-    label: string;
+    labelKey: keyof typeof import('../../../messages/forge/en.json');
     tone: 'success' | 'error' | 'warning' | 'info';
     group: 'ready' | 'drafts' | 'attention';
   }
 > = {
-  reading: { label: 'Opening', tone: 'info', group: 'drafts' },
-  parsed: { label: 'Ready to set up', tone: 'info', group: 'drafts' },
-  building: { label: 'Setting up', tone: 'info', group: 'drafts' },
-  draft: { label: 'Draft', tone: 'warning', group: 'drafts' },
-  ready: { label: 'Ready', tone: 'success', group: 'ready' },
-  needs_input: { label: 'Needs your input', tone: 'warning', group: 'attention' },
-  failed: { label: 'Failed', tone: 'error', group: 'attention' },
+  reading: { labelKey: 'opening_f4b13e93', tone: 'info', group: 'drafts' },
+  parsed: { labelKey: 'ready_to_set_up_ba865ad5', tone: 'info', group: 'drafts' },
+  building: { labelKey: 'setting_up_dbdf27e5', tone: 'info', group: 'drafts' },
+  draft: { labelKey: 'draft_ebf12ef4', tone: 'warning', group: 'drafts' },
+  ready: { labelKey: 'ready_5fa7aac5', tone: 'success', group: 'ready' },
+  needs_input: { labelKey: 'needs_your_input_b677d376', tone: 'warning', group: 'attention' },
+  failed: { labelKey: 'failed_031a8f0f', tone: 'error', group: 'attention' },
 };
 
 /**
@@ -108,21 +110,23 @@ export function sourceDisplayName(source: TemplateSourceSummary): string {
 }
 
 export function TemplateStatusPill({ status }: { status: TemplateStatus }) {
-  const { label, tone } = TEMPLATE_STATUS[status];
+  const t = useUiTranslations('forge');
+  const { labelKey, tone } = TEMPLATE_STATUS[status];
   return (
     <Pill aria-live="polite">
       <PillIndicator variant={tone} pulse={status === 'building' || status === 'reading'} />
-      {label}
+      {t(labelKey)}
     </Pill>
   );
 }
 
 /** A scene the house owns and every brand may render; it cannot be renamed or removed here. */
 export function HouseScenePill() {
+  const t = useUiTranslations('forge');
   return (
     <Pill>
       <PillIndicator variant="info" />
-      House scene
+      {t('houseScene')}
     </Pill>
   );
 }
@@ -139,6 +143,8 @@ export function InlineRename({
   className?: string;
   iconOnly?: boolean;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value);
   const begin = () => {
@@ -153,7 +159,7 @@ export function InlineRename({
         autoFocus
         value={text}
         maxLength={120}
-        aria-label={`Rename ${value}`}
+        aria-label={translateUi('rename_value0_bb7a240d', { value0: String(value) })}
         className={cn('relative z-10 h-8 pointer-events-auto', className)}
         onChange={(event) => setText(event.target.value)}
         onBlur={() => setEditing(false)}
@@ -185,7 +191,7 @@ export function InlineRename({
       </span>
       <button
         type="button"
-        aria-label={`Rename ${value}`}
+        aria-label={translateUi('rename_value0_bb7a240d', { value0: String(value) })}
         onClick={begin}
         className={cn(
           'shrink-0 rounded p-0.5 text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/rename:opacity-100',
@@ -262,6 +268,8 @@ export function CardPicture({
   /** The wireframe, drawn when there is no file to show. */
   children: ReactNode;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [broken, setBroken] = useState(false);
   if (render && !broken) {
     const { file } = render;
@@ -272,7 +280,7 @@ export function CardPicture({
       // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
       <img
         src={still}
-        alt={`${name} · last render`}
+        alt={translateUi('value0_last_render_870d65ad', { value0: String(name) })}
         loading="lazy"
         decoding="async"
         className="size-full object-contain"
@@ -282,7 +290,7 @@ export function CardPicture({
       // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
       <video
         src={`${thumbnailSrc(file)}#t=0.1`}
-        aria-label={`${name} · last render`}
+        aria-label={translateUi('value0_last_render_870d65ad', { value0: String(name) })}
         className="size-full object-contain"
         muted
         playsInline
@@ -291,7 +299,7 @@ export function CardPicture({
       />
     );
   }
-  const label = render ? "The last render's file didn't load" : emptyLabel;
+  const label = render ? translateUi('the_last_render_s_file_didn_t_load_326536c0') : emptyLabel;
   return (
     <div className="relative size-full">
       {children}
@@ -380,8 +388,8 @@ export function TemplateHoverPreview({
 }
 
 // The ledger's reading of a version (templateVersion.ts): a source revision and the day it was used.
-const shortDate = (value: string) =>
-  new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const shortDate = (value: string, locale: UiLocale = 'en') =>
+  new Date(value).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 
 /**
  * What a card knows, on hover: read from the gallery's list and whatever this page already has in
@@ -399,6 +407,10 @@ export function TemplateFacts({
   lastRender: ApiRenderJob | undefined;
   emptyLabel: string | null;
 }) {
+  const currentUiLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const variables = queryClient.getQueryData<TemplateVariablesResponse>(
     forgeQueryKeys.templateVariables(brandId, source.assetId, source.versionId),
@@ -417,7 +429,7 @@ export function TemplateFacts({
   const revisionNumber = lastRender?.templateSource?.versionNumber;
   const revision =
     lastRender && revisionNumber
-      ? `Rev ${revisionNumber} · ${shortDate(lastRender.createdAt)}`
+      ? `Rev ${revisionNumber} · ${shortDate(lastRender.createdAt, currentUiLocale)}`
       : '—';
 
   return (
@@ -427,7 +439,7 @@ export function TemplateFacts({
         facts={[
           {
             icon: RectangleHorizontal,
-            label: 'Formats',
+            label: translateUi('formats_9f01769a'),
             value: source.ratios.length ? (
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {source.ratios.map((ratio) => (
@@ -446,28 +458,32 @@ export function TemplateFacts({
           },
           {
             icon: Variable,
-            label: 'Variables',
+            label: translateUi('variables_02db55ba'),
             numeric: true,
             value: unnamed ? `${variableCount} · ${unnamed} unnamed` : variableCount,
           },
           {
             icon: Type,
-            label: 'Fonts',
+            label: translateUi('fonts_3680fcad'),
             numeric: true,
             value: missing ? `${fontCount} · ${missing} missing` : fontCount,
           },
           {
             icon: History,
-            label: 'Last render',
+            label: translateUi('last_render_8b8dc7d8'),
             numeric: true,
             value: lastRender
-              ? formatRelativeTime(lastRender.finishedAt ?? lastRender.updatedAt)
+              ? formatRelativeTime(
+                  lastRender.finishedAt ?? lastRender.updatedAt,
+                  undefined,
+                  currentUiLocale,
+                )
               : (emptyLabel ?? '…'),
           },
-          { icon: GitCommitVertical, label: 'Version', value: revision },
+          { icon: GitCommitVertical, label: translateUi('version_dd167905'), value: revision },
           {
             icon: Fingerprint,
-            label: 'Digest',
+            label: translateUi('digest_6e2f80bf'),
             value: source.aepSha256 ? (
               <span className="break-all font-mono text-2xs">{source.aepSha256}</span>
             ) : (
@@ -497,6 +513,8 @@ export function TemplateCard({
   onOpen: () => void;
   onRename: (title: string) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const name = sourceDisplayName(source);
   const status = templateStatus(source);
   const formats = useMemo(
@@ -513,7 +531,7 @@ export function TemplateCard({
           render={
             <button
               type="button"
-              aria-label={`Open ${name}`}
+              aria-label={translateUi('open_value0_3dfbdb80', { value0: String(name) })}
               onClick={onOpen}
               className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
@@ -559,7 +577,7 @@ export function TemplateCard({
           <RatioChips ratios={source.ratios} />
           {source.slotCount ? (
             <span className="text-2xs text-muted-foreground">
-              {source.slotCount} variable{source.slotCount === 1 ? '' : 's'}
+              {translateUi('templateVariableCount', { count: source.slotCount })}
             </span>
           ) : null}
         </div>
@@ -610,15 +628,17 @@ export function SharedTemplateCard({
   onToggle: () => void;
   onRender?: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const name = template.displayName ?? templateDisplayName(template.name);
-  const brand = brandName ?? 'this brand';
+  const brand = brandName ?? translateUi('currentBrandFallback');
   const render = latestCardRender(renders, []);
   return (
     <article className="group relative flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card transition-colors hover:border-primary/40">
       {/* The whole card opens the detail; the Use / Remove / Render controls sit above this layer. */}
       <button
         type="button"
-        aria-label={`Open ${name}`}
+        aria-label={translateUi('open_value0_3dfbdb80', { value0: String(name) })}
         onClick={onOpen}
         className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
@@ -643,14 +663,17 @@ export function SharedTemplateCard({
         </p>
         <div className="flex flex-wrap items-center gap-1">
           <TemplateStatusPill status={template.draft ? 'draft' : 'ready'} />
-          <span className="text-2xs text-muted-foreground">Shared with you</span>
+          <span className="text-2xs text-muted-foreground">
+            {translateUi('shared_with_you_b447129c')}
+          </span>
         </div>
         {/* Using one is a permission, not a copy: a grant this brand can take back. */}
         <div className="pointer-events-auto relative z-10 flex flex-wrap items-center gap-x-2 gap-y-1">
           {template.granted ? (
             <>
               <span className="inline-flex items-center gap-1 text-xs">
-                In {brand}
+                {' '}
+                {translateUi('in_8bc1d53c')} {brand}
                 <Check className="size-3.5 text-success" aria-hidden />
               </span>
               <span aria-hidden className="text-xs text-muted-foreground">
@@ -661,12 +684,15 @@ export function SharedTemplateCard({
                 variant="link"
                 size="xs"
                 className="h-auto gap-1 px-0 text-xs"
-                aria-label={`Remove ${name} from ${brand}`}
+                aria-label={translateUi('remove_value0_from_value1_a5b978b5', {
+                  value0: String(name),
+                  value1: String(brand),
+                })}
                 disabled={busy}
                 onClick={onToggle}
               >
-                {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-                Remove
+                {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}{' '}
+                {translateUi('remove_c3812fc4')}{' '}
               </Button>
               {!template.draft && onRender ? (
                 <Button
@@ -676,8 +702,7 @@ export function SharedTemplateCard({
                   className="ml-auto gap-1.5"
                   onClick={onRender}
                 >
-                  <Play className="size-3.5" aria-hidden />
-                  Render
+                  <Play className="size-3.5" aria-hidden /> {translateUi('render_6d89eb7d')}{' '}
                 </Button>
               ) : null}
             </>
@@ -687,14 +712,13 @@ export function SharedTemplateCard({
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
               ) : (
                 <Plus className="size-3.5" aria-hidden />
-              )}
-              Use in {brand}
+              )}{' '}
+              {translateUi('use_in_792c9a3f')} {brand}
             </Button>
           )}
         </div>
         <p className="text-2xs text-muted-foreground">
-          Lets {brand} render this template. Nothing is copied — it stays in the shared library.
-          Remove any time.
+          {translateUi('sharedTemplatePermission', { brandName: brand })}
         </p>
       </div>
     </article>

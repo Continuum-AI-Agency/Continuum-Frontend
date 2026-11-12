@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The burn-in panel's own controls are what is under test, so the store, the brand-book
 // query and the browser signer are stubbed rather than mounted. Everything stubbed here

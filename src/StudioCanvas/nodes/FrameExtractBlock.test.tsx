@@ -5,8 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 const executeWorkflowMock = mock(() => Promise.resolve(undefined as unknown));
 mock.module('../utils/executeWorkflow', () => ({ executeWorkflow: executeWorkflowMock }));
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { FrameExtractNodeData } from '../types';

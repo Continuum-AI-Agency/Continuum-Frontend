@@ -1,7 +1,9 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
+import { useUiErrorMessage } from '@/i18n/errors';
 import type { ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
 import { ScaffoldAdList } from './ScaffoldAdList';
 import { buildScaffoldAdSetColumns, scaffoldAdSetSearchValue } from './scaffoldColumns';
@@ -28,7 +30,13 @@ export function ScaffoldAdSetTable({
   isLoading: boolean;
   currency?: string | null;
 }) {
-  const columns = React.useMemo(() => buildScaffoldAdSetColumns(currency), [currency]);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const uiError = useUiErrorMessage();
+  const columns = React.useMemo(
+    () => buildScaffoldAdSetColumns(currency, uiText, uiLocale, uiError),
+    [currency, uiText, uiLocale, uiError],
+  );
   const rows = tree?.adSets ?? [];
   const counts = tree?.counts;
 
@@ -37,22 +45,24 @@ export function ScaffoldAdSetTable({
       rows={rows}
       columns={columns}
       getRowId={(row) => row.pathKey}
-      title="Ad sets"
+      title={uiText('ad_sets_f59ed42')}
       metricLabel={
         counts
-          ? `${counts.created} created · ${counts.pending} not created${
-              counts.failed > 0 ? ` · ${counts.failed} failed` : ''
-            }`
+          ? uiText('scaffoldProgressCounts', {
+              created: counts.created,
+              pending: counts.pending,
+              failed: counts.failed,
+            })
           : undefined
       }
       defaultSort={{ columnId: 'name', direction: 'asc' }}
       searchable
-      searchPlaceholder="Search ad sets, angles, ads…"
+      searchPlaceholder={uiText('search_ad_sets_angles_ads_3ab72f6')}
       searchValue={scaffoldAdSetSearchValue}
       expandedContent={(row) => <ScaffoldAdList adSet={row} />}
       isLoading={isLoading}
       maxHeight={420}
-      emptyState="This scaffold has no ad sets."
+      emptyState={uiText('scaffoldNoAdSets')}
     />
   );
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 
 const startMetaSync = mock(async (_input: unknown) => ({ url: 'https://example.test/oauth' }));
@@ -28,7 +29,7 @@ mock.module('@/lib/popup', () => ({
   waitForPopupClosed: mock(async () => {}),
 }));
 
-mock.module('@/app/(post-auth)/settings/integrations/actions', () => ({
+mock.module('@/app/[locale]/(post-auth)/settings/integrations/actions', () => ({
   applyBrandIntegrationAssignmentsAction: mock(async () => ({ linked: 0 })),
 }));
 

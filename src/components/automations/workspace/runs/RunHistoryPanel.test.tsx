@@ -1,10 +1,11 @@
+import { render } from '@/i18n/__tests__/render';
 // The panel adds no data path of its own: both query hooks arrive through
 // `source`, so this spec drives the real component with fakes instead of a
 // process-wide `mock.module`.
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import type { AutomationRun } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { RunHistoryPanel, type RunHistorySource } from './RunHistoryPanel';
 
 afterEach(cleanup);
@@ -119,7 +120,7 @@ describe('RunHistoryPanel', () => {
     expect(other?.getAttribute('aria-current')).toBeNull();
   });
 
-  test('surfaces the error message of a failed run', () => {
+  test('shows safe failure guidance while preserving the original diagnostic', () => {
     render(
       <RunHistoryPanel
         automationId="automation-1"
@@ -138,7 +139,8 @@ describe('RunHistoryPanel', () => {
       />,
     );
 
-    expect(screen.getByText('organic_publish rejected the caption')).toBeTruthy();
+    expect(screen.queryByText('organic_publish rejected the caption')).toBeNull();
+    expect(screen.getByText('An unexpected error occurred. Please try again.')).toBeTruthy();
     expect(screen.getByText('Failed')).toBeTruthy();
   });
 

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import portugueseMessages from '../../../messages/onboarding/pt-BR.json';
 
 import {
   buildCatalogRow,
@@ -41,7 +43,7 @@ describe('readPrice', () => {
     expect(reading.ok).toBe(false);
     if (reading.ok) throw new Error('unreachable');
     expect(reading.raw).toBe('19,99');
-    expect(reading.reason).toContain('full stop');
+    expect(reading.reason).toBe('priceDecimalSeparator');
   });
 
   it('hands back the raw text when it cannot read the amount', () => {
@@ -159,4 +161,103 @@ describe('rejectionDetail', () => {
   it('does not invent a reason it was not given', () => {
     expect(rejectionDetail([])).toBe('The server gave no further detail.');
   });
+});
+
+describe('locale-specific price input', () => {
+  for (const locale of ['pt-BR', 'es'] as const) {
+    it(`${locale}: reads decimal commas without changing USD identity`, () => {
+      expect(readPrice('19,99', 'USD', locale)).toEqual({
+        ok: true,
+        price: { amountMinor: 1999, currency: 'USD' },
+      });
+      expect(readPrice('1.234,56', 'USD', locale)).toEqual({
+        ok: true,
+        price: { amountMinor: 123456, currency: 'USD' },
+      });
+      expect(readPrice('US$ 0,01', 'USD', locale)).toEqual({
+        ok: true,
+        price: { amountMinor: 1, currency: 'USD' },
+      });
+    });
+    it(`${locale}: refuses misplaced groups, foreign decimal conventions and extra precision`, () => {
+      for (const value of ['19.99', '1,234.56', '12.34,56', '1,234', '19,999', '-19,99', '19x99']) {
+        expect(readPrice(value, 'USD', locale).ok).toBe(false);
+      }
+    });
+  }
+  it('interprets a group separator according to the selected locale only', () => {
+    expect(readPrice('1,234', 'USD', 'en')).toEqual({
+      ok: true,
+      price: { amountMinor: 123400, currency: 'USD' },
+    });
+    expect(readPrice('1.234', 'USD', 'pt-BR')).toEqual({
+      ok: true,
+      price: { amountMinor: 123400, currency: 'USD' },
+    });
+  });
+  it('rejects unsupported currency symbols rather than silently changing the currency', () => {
+    expect(readPrice('€19.99', 'USD', 'en').ok).toBe(false);
+    expect(readPrice('R$ 19,99', 'USD', 'pt-BR').ok).toBe(false);
+  });
+  it('preserves an explicitly supplied currency while using localized separators', () => {
+    expect(readPrice('19,99', 'BRL', 'pt-BR')).toEqual({
+      ok: true,
+      price: { amountMinor: 1999, currency: 'BRL' },
+    });
+  });
+  it('computes exact minor units and rejects an unsafe stored integer', () => {
+    expect(readPrice('0.29')).toEqual({ ok: true, price: { amountMinor: 29, currency: 'USD' } });
+    expect(readPrice('90071992547409.91')).toEqual({
+      ok: true,
+      price: { amountMinor: Number.MAX_SAFE_INTEGER, currency: 'USD' },
+    });
+    expect(readPrice('90071992547409.92').ok).toBe(false);
+  });
+  it('builds the same persisted money for equivalent localized input', () => {
+    const english = buildCatalogRow(draft({ price: '1,299.50' }), 'USD', 'en');
+    const portuguese = buildCatalogRow(draft({ price: '1.299,50' }), 'USD', 'pt-BR');
+    expect(portuguese).toEqual(english);
+    expect(portuguese.row).toMatchObject({
+      product: { price: { amountMinor: 129950, currency: 'USD' } },
+    });
+  });
+});
+
+it('localizes the real import outcome and field guidance without exposing server diagnostics', () => {
+  const translate = createTranslator({
+    locale: 'pt-BR',
+    messages: { onboarding: portugueseMessages },
+    namespace: 'onboarding',
+  });
+  const summary = summarizeImport(
+    {
+      accepted: [
+        {
+          status: 'accepted',
+          index: 0,
+          row: { name: 'Bottle', memberAssetIds: ['11111111-1111-4111-8111-111111111111'] },
+          slug: 'bottle',
+          externalKey: 'element:bottle',
+        },
+      ],
+      rejected: [
+        {
+          status: 'rejected',
+          index: 1,
+          name: 'Bad URL',
+          reason: 'element_catalog_row_invalid',
+          issues: ['product.productUrl: provider diagnostic'],
+        },
+      ],
+    },
+    new Set(),
+    translate,
+  );
+  expect(summary.headline).toBe(
+    '1 de 2 importados: 1 adicionado. 1 produto não foi importado; veja abaixo.',
+  );
+  expect(rejectionDetail(['product.productUrl: provider diagnostic'], translate)).toBe(
+    'Verifique a URL da página do produto.',
+  );
+  expect(rejectionDetail([], translate)).toBe('O servidor não forneceu mais detalhes.');
 });

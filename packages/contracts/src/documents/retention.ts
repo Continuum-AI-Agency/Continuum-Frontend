@@ -53,7 +53,14 @@ export const DOCUMENT_SCOPE_LABELS: Record<DocumentScope, string> = {
 // filename that storage_path was built from, so a rename can never invalidate a
 // storage reference. One schema, used by both the client form resolver and the server
 // action, so the two can never drift.
-export const documentRenameSchema = z.object({
-  displayName: z.string().trim().min(1, 'Name is required').max(255, 'Name is too long'),
-});
+export const createDocumentRenameSchema = (
+  messages: { required: string; tooLong: string } = {
+    required: 'Name is required',
+    tooLong: 'Name is too long',
+  },
+) =>
+  z.object({
+    displayName: z.string().trim().min(1, messages.required).max(255, messages.tooLong),
+  });
+export const documentRenameSchema = createDocumentRenameSchema();
 export type DocumentRenameInput = z.infer<typeof documentRenameSchema>;

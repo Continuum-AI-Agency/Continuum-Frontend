@@ -36,6 +36,7 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import {
@@ -54,6 +55,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 import { request } from '@/lib/api/http';
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
@@ -64,6 +66,7 @@ import { platformVerdicts } from '@/lib/organic/platformSelection';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform, POST_PLATFORMS, type PostFormatOption } from '@/lib/organic/postPlatforms';
 import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
+import { localizePublishNotice } from '@/lib/organic/publishPresentation';
 import {
   accountsForPlatform,
   findAccount,
@@ -163,11 +166,11 @@ function safeSourceUrl(value: string | undefined): string | null {
   }
 }
 
-function resolveDraftMediaAltText(draft: OrganicCalendarDraft): string {
+function resolveDraftMediaAltText(draft: OrganicCalendarDraft, fallback: string): string {
   const candidate =
     typeof draft.mediaSuggestion?.alt === 'string' ? draft.mediaSuggestion.alt.trim() : '';
   if (candidate.length > 0) return candidate;
-  return draft.title || 'Generated draft image';
+  return draft.title || fallback;
 }
 
 function resolveCreativeDirection(draft: OrganicCalendarDraft): string {
@@ -318,6 +321,7 @@ function CarouselSlideNav({
   onEnlargeSlide,
   overlayChrome = false,
 }: SlideNavProps & { alt: string }) {
+  const uiText = useTranslations('organic');
   const total = slides.length;
   const activeSlide = slides[activeIndex];
   if (!activeSlide) return null;
@@ -326,7 +330,10 @@ function CarouselSlideNav({
 
   return (
     <>
-      <PreviewSlideMedia slide={activeSlide} alt={`${alt} — slide ${activeIndex + 1}`} />
+      <PreviewSlideMedia
+        slide={activeSlide}
+        alt={uiText('slideAlt', { alt: alt, number: activeIndex + 1 })}
+      />
 
       {/* The creative itself opens the lightbox: full screen is where a slide is
           actually inspected, replaced or removed. */}
@@ -337,7 +344,7 @@ function CarouselSlideNav({
           onEnlargeSlide(activeIndex);
         }}
         className="group/enlarge absolute inset-0 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-        aria-label="Enlarge creative"
+        aria-label={uiText('enlarge_creative_5989ee8')}
       >
         {!overlayChrome && (
           <span className={cn(roundButton, 'left-2 top-2 group-hover/enlarge:bg-neutral-950/75')}>
@@ -360,7 +367,7 @@ function CarouselSlideNav({
             onStepSlide(-1);
           }}
           className={cn(roundButton, 'left-2 top-1/2 -translate-y-1/2 hover:bg-neutral-950/75')}
-          aria-label="Previous slide"
+          aria-label={uiText('previous_slide_bfb5492')}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -374,7 +381,7 @@ function CarouselSlideNav({
             onStepSlide(1);
           }}
           className={cn(roundButton, 'right-2 top-1/2 -translate-y-1/2 hover:bg-neutral-950/75')}
-          aria-label="Next slide"
+          aria-label={uiText('next_slide_cdc93d1')}
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -399,7 +406,7 @@ function CarouselSlideNav({
                 'h-1.5 rounded-full transition-all',
                 position === activeIndex ? 'w-4 bg-neutral-50' : 'w-1.5 bg-neutral-50/50',
               )}
-              aria-label={`Slide ${position + 1}`}
+              aria-label={uiText('slideLabelNumber', { number: position + 1 })}
             />
           ))}
         </div>
@@ -421,6 +428,8 @@ function SlideCollage({
   aspectRatio: number;
   onEnlargeSlide: (position: number) => void;
 }) {
+  const uiText = useTranslations('organic');
+
   const shown = slides.slice(0, 4);
   const hidden = slides.length - shown.length;
   return (
@@ -433,13 +442,16 @@ function SlideCollage({
           key={`${slide.storagePath}-${position}`}
           type="button"
           onClick={() => onEnlargeSlide(position)}
-          aria-label={`Enlarge slide ${position + 1}`}
+          aria-label={uiText('enlargeSlideNumber', { number: position + 1 })}
           className={cn(
             'relative min-h-0 overflow-hidden cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
             shown.length === 3 && position === 0 && 'row-span-2',
           )}
         >
-          <PreviewSlideMedia slide={slide} alt={`${alt} — slide ${position + 1}`} />
+          <PreviewSlideMedia
+            slide={slide}
+            alt={uiText('slideAlt', { alt: alt, number: position + 1 })}
+          />
           {hidden > 0 && position === shown.length - 1 && (
             <span className="absolute inset-0 flex items-center justify-center bg-neutral-950/55 text-lg font-semibold text-neutral-50">
               +{hidden}
@@ -517,6 +529,7 @@ function InteractiveCarouselMediaArea({
   isEnriching?: boolean;
   onEnlargeFrame: (index: number) => void;
 }) {
+  const uiText = useTranslations('organic');
   const total = slides.length;
   const showCta = shouldShowUseOwnCta(draft);
   // A draft with a persisted blueprint but no final media shows its storyboard in
@@ -561,9 +574,9 @@ function InteractiveCarouselMediaArea({
   if (canGenerate) {
     fallbackActions.push({
       key: 'generate',
-      label: 'Generate media',
+      label: uiText('generate_media_279349a'),
       busyLabel: 'Generating media…',
-      title: 'Let the agent realize final media for this draft',
+      title: uiText('let_the_agent_realize_final_media_for_this_dr_57bdea7'),
       icon: <Wand2 className="h-4 w-4" />,
       busy: isGenerating,
       onSelect: onGenerate,
@@ -572,9 +585,9 @@ function InteractiveCarouselMediaArea({
   if (canEnrich && onEnrich) {
     fallbackActions.push({
       key: 'enrich',
-      label: 'Enrich (sketch first)',
+      label: uiText('enrich_sketch_first_96d7f36'),
       busyLabel: 'Sketching blueprint…',
-      title: 'Sketch a low-cost blueprint first, then approve it into final media',
+      title: uiText('sketch_a_low_cost_blueprint_first_then_approv_d1d4a58'),
       icon: <PencilRuler className="h-4 w-4" />,
       busy: isEnriching,
       onSelect: onEnrich,
@@ -608,7 +621,7 @@ function InteractiveCarouselMediaArea({
       {/* Overlaid, not stacked: the slot keeps the frame's aspect while it says what is missing. */}
       {dropState === 'fallback' && (
         <span className="pointer-events-none absolute left-2 top-2 z-20 rounded bg-background/90 px-1.5 py-0.5 text-sm font-medium text-muted-foreground">
-          Needs media
+          {uiText('needs_media_157d226')}
         </span>
       )}
 
@@ -723,6 +736,7 @@ function toPublishFormat(format: string): PostFormatOption {
 }
 
 function HashtagInput({ onAdd }: { onAdd: (tag: string) => void }) {
+  const uiText = useTranslations('organic');
   const [value, setValue] = React.useState('');
 
   const handleSubmit = () => {
@@ -744,7 +758,7 @@ function HashtagInput({ onAdd }: { onAdd: (tag: string) => void }) {
             handleSubmit();
           }
         }}
-        placeholder="Add hashtag..."
+        placeholder={uiText('add_hashtag_ed0be3b')}
         className="h-6 flex-1 rounded border border-border/50 bg-transparent px-2 text-2xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
       />
       <button
@@ -753,7 +767,7 @@ function HashtagInput({ onAdd }: { onAdd: (tag: string) => void }) {
         disabled={!value.trim()}
         className="rounded bg-muted/60 px-2 py-0.5 text-2xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
       >
-        Add
+        {uiText('add_9fd728c')}
       </button>
     </div>
   );
@@ -770,6 +784,8 @@ function ContextualPanel({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const uiText = useTranslations('organic');
+
   return (
     <div className="rounded-xl border border-border/70 bg-background/90 p-3">
       <div className="mb-2 flex items-center justify-between">
@@ -779,7 +795,7 @@ function ContextualPanel({
         <button
           type="button"
           onClick={onClose}
-          aria-label={`Close ${title}`}
+          aria-label={uiText('closeSection', { title: title })}
           className="rounded p-0.5 text-muted-foreground/60 transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <X className="h-3.5 w-3.5" />
@@ -797,6 +813,7 @@ function HashtagTiers({
   draft: OrganicCalendarDraft;
   onHashtagsChange: (hashtags: OrganicCalendarDraft['hashtags']) => void;
 }) {
+  const uiText = useTranslations('organic');
   return (
     <div className="space-y-2">
       {(['high', 'medium', 'low'] as const).map((tier) => {
@@ -806,10 +823,10 @@ function HashtagTiers({
           <div key={tier} className="space-y-1">
             <p className="text-2xs font-medium text-muted-foreground/70">
               {tier === 'high'
-                ? 'High Competition'
+                ? uiText('high_competition_b6ab637')
                 : tier === 'medium'
-                  ? 'Medium Competition'
-                  : 'Low Competition'}
+                  ? uiText('medium_competition_b4c3139')
+                  : uiText('low_competition_a075afa')}
             </p>
             <div className="flex flex-wrap gap-1">
               {tags.map((tag) => (
@@ -828,7 +845,7 @@ function HashtagTiers({
                         [tier]: tags.filter((t) => t !== tag),
                       });
                     }}
-                    aria-label={`Remove #${tag.replace(/^#/, '')}`}
+                    aria-label={uiText('removeHashtag', { tag: tag.replace(/^#/, '') })}
                   >
                     <X className="h-2.5 w-2.5" />
                   </button>
@@ -861,6 +878,9 @@ export function OrganicDraftPreview({
   onStitch,
   isStitching = false,
 }: OrganicDraftPreviewProps) {
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('organic');
   // A post is a group: one row per platform. `storedDraft` is the card (its own row is the
   // group's source); the frame in view is THAT platform's row, and everything the frame shows,
   // edits, gates and publishes is that row's own — caption, first comment, cover, account.
@@ -1191,7 +1211,7 @@ export function OrganicDraftPreview({
       );
       if (failures.length > 0) {
         show({
-          title: `Caption not saved on ${failures.length} of ${others.length}`,
+          title: uiText('captionCopyFailed', { failed: failures.length, total: others.length }),
           description: failures[0],
           variant: 'error',
         });
@@ -1207,6 +1227,7 @@ export function OrganicDraftPreview({
     show,
     storedDraft,
     updateDraft,
+    uiText,
   ]);
 
   // The frame's caption re-argued in its platform's voice, saved by the server on that row.
@@ -1236,13 +1257,13 @@ export function OrganicDraftPreview({
       const reapprove =
         error instanceof ApiError && (error.code ?? error.payload?.error) === 'reapproval_required';
       show({
-        title: 'Caption not adapted',
-        description: error instanceof ApiError ? error.message : 'Network error. Please try again.',
+        title: uiText('caption_not_adapted_9da7001'),
+        description: formatUiError(error),
         variant: 'error',
         ...(reapprove
           ? {
               action: {
-                label: 'Move back to draft',
+                label: uiText('move_back_to_draft_00ade9c'),
                 onClick: () => void unschedule(storedDraft),
               },
             }
@@ -1251,7 +1272,17 @@ export function OrganicDraftPreview({
     } finally {
       setGroupCaptionBusy(null);
     }
-  }, [draft, fieldEditor, framePlatform, show, storedDraft, unschedule, updateDraft]);
+  }, [
+    draft,
+    fieldEditor,
+    framePlatform,
+    show,
+    storedDraft,
+    unschedule,
+    updateDraft,
+    uiText,
+    formatUiError,
+  ]);
 
   const isMultiPlatform = selectedPlatforms.length > 1;
   const isPublished = draft.status === 'published';
@@ -1262,8 +1293,8 @@ export function OrganicDraftPreview({
   // What blocks the post: the shared gate over the plan in view (with its account, once the
   // dry run has answered), plus every other member row's own gate — approve takes them all.
   const readiness = React.useMemo(
-    () => evaluateDraftReadiness(withLiveFrame(storedDraft, draft)),
-    [storedDraft, draft],
+    () => evaluateDraftReadiness(withLiveFrame(storedDraft, draft), uiText, uiLocale),
+    [storedDraft, draft, uiText, uiLocale],
   );
   const readinessItems = React.useMemo<ReadinessItem[]>(() => {
     const seen = new Set<string>();
@@ -1456,7 +1487,7 @@ export function OrganicDraftPreview({
     <InteractiveCarouselMediaArea
       draft={draftForPreview}
       slides={previewSlides}
-      alt={resolveDraftMediaAltText(draftForPreview)}
+      alt={resolveDraftMediaAltText(draftForPreview, uiText('generatedDraftImage'))}
       aspectRatio={mediaAspectRatio}
       slotId={`preview-media-${draft.id}`}
       onActivate={() => setMediaSelectOpen(true)}
@@ -1486,7 +1517,7 @@ export function OrganicDraftPreview({
     !showHyperframePlayer && previewSlides.length > 0 ? (
       <ReadOnlyCarouselMediaArea
         slides={previewSlides}
-        alt={resolveDraftMediaAltText(draftForPreview)}
+        alt={resolveDraftMediaAltText(draftForPreview, uiText('generatedDraftImage'))}
         aspectRatio={mediaAspectRatio}
         activeIndex={activeSlidePosition}
         onSelectSlide={selectSlide}
@@ -1539,7 +1570,7 @@ export function OrganicDraftPreview({
             onClick={() => setMediaSelectOpen(true)}
             className="self-start rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            Add photo or video
+            {uiText('add_photo_or_video_bfea051')}
           </button>,
         )
       : null;
@@ -1553,7 +1584,10 @@ export function OrganicDraftPreview({
     lightbox?.kind === 'blueprint'
       ? lightboxFrames.map((frame, index) => ({
           url: frame.storageUrl,
-          caption: `Frame ${index + 1}${frame.role ? ` · ${frame.role}` : ''}`,
+          caption: uiText('frameWithRole', {
+            number: index + 1,
+            role: frame.role ? ` · ${frame.role}` : '',
+          }),
         }))
       : lightbox?.kind === 'slide'
         ? lightboxSlides.map((slide, index) => ({
@@ -1561,7 +1595,7 @@ export function OrganicDraftPreview({
             isVideo: slide.kind === 'video',
             caption:
               lightboxSlides.length > 1
-                ? `Slide ${index + 1} of ${lightboxSlides.length}`
+                ? uiText('slideOfTotal', { number: index + 1, total: lightboxSlides.length })
                 : 'Creative',
           }))
         : [];
@@ -1573,7 +1607,11 @@ export function OrganicDraftPreview({
         onOpenChange={(open) => {
           if (!open) setLightbox(null);
         }}
-        title={lightbox.kind === 'blueprint' ? 'Blueprint concept' : 'Creative'}
+        title={
+          lightbox.kind === 'blueprint'
+            ? uiText('blueprint_concept_01dafdf')
+            : uiText('creative_2c7e633')
+        }
         items={lightboxItems}
         index={Math.min(lightbox.index, lightboxItems.length - 1)}
         onIndexChange={(index) => {
@@ -1594,7 +1632,7 @@ export function OrganicDraftPreview({
                 className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
               >
                 <Library className="h-4 w-4" />
-                Use your own creative
+                {uiText('use_your_own_creative_f6c4cb6')}
               </button>
             </>
           ) : (
@@ -1608,7 +1646,7 @@ export function OrganicDraftPreview({
                 className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
               >
                 <Replace className="h-4 w-4" />
-                Replace
+                {uiText('replace_95e1543')}
               </button>
               {isCarouselFormat && lightboxSlides.length > 1 && (
                 <button
@@ -1620,7 +1658,7 @@ export function OrganicDraftPreview({
                   className="flex items-center gap-1.5 rounded-md border border-destructive/40 bg-background px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Remove
+                  {uiText('remove_c3812fc')}
                 </button>
               )}
             </>
@@ -1658,7 +1696,7 @@ export function OrganicDraftPreview({
     ) : null;
 
   // ── Who, what, when ────────────────────────────────────────────────────────────
-  const whenLabel = formatScheduleWithZone(dayId, draft.timeLabel, brandTimeZone);
+  const whenLabel = formatScheduleWithZone(dayId, draft.timeLabel, brandTimeZone, uiLocale);
   const formatLabel =
     plan?.verb === 'text'
       ? 'Text post'
@@ -1735,7 +1773,9 @@ export function OrganicDraftPreview({
       onOpenInStudio={
         openInStudio
           ? {
-              label: reelComposition?.composition ? 'Edit in AI Studio' : 'Open in AI Studio',
+              label: reelComposition?.composition
+                ? uiText('edit_in_ai_studio_525f545')
+                : uiText('open_in_ai_studio_2de2e41'),
               onSelect: () => openInStudio(draft.id),
               disabledReason: aiStudioHandoffIssue(draft),
             }
@@ -1781,10 +1821,10 @@ export function OrganicDraftPreview({
   const actionBlockedReason = isUploading
     ? 'Uploading your media…'
     : blocked
-      ? `${readinessItems.length} to fix`
+      ? uiText('issuesToFix', { count: readinessItems.length })
       : null;
   const approveVerb = isMultiPlatform
-    ? `Approve for ${selectedPlatforms.length} platforms`
+    ? uiText('approveForPlatforms', { count: selectedPlatforms.length })
     : 'Approve & schedule';
   const primaryAction =
     onApprove && editable && !isScheduled
@@ -1800,13 +1840,15 @@ export function OrganicDraftPreview({
   // post is ready reads as a feature that does not exist.
   const publishNowAction = canPublish
     ? {
-        label: 'Publish now',
+        label: uiText('publish_now_bf74ddc'),
         busyLabel:
           stage === 'container_created'
-            ? 'Uploading media…'
+            ? uiText('reviewUploadingMedia')
             : stage === 'polling'
-              ? `Processing video${pollingAttempt > 0 ? ` (${pollingAttempt})` : ''}…`
-              : 'Publishing…',
+              ? uiText('processingVideoAttempt', {
+                  attempt: pollingAttempt > 0 ? ` (${pollingAttempt})` : '',
+                })
+              : uiText('publishing_582e0f1'),
         busy: isPublishing,
         disabledReason: actionBlockedReason,
         onClick: () => void handlePublishNow(),
@@ -1816,14 +1858,20 @@ export function OrganicDraftPreview({
   const footerNote =
     !editable || isScheduled ? null : isUploading ? (
       <p data-footer-reason className="text-xs text-muted-foreground">
-        Uploading your media…
+        {uiText('uploading_your_media_f8efe09')}
       </p>
     ) : (
-      <ReadinessLine items={readinessItems} readyLabel="Ready to schedule" onFix={handleFix} />
+      <ReadinessLine
+        items={readinessItems}
+        readyLabel={uiText('reviewReadySchedule')}
+        onFix={handleFix}
+      />
     );
   const footerStatus = isPublished ? (
     <p data-review-status="published" className="flex items-center gap-2 text-sm">
-      <span className="font-medium text-emerald-700 dark:text-emerald-400">Published</span>
+      <span className="font-medium text-emerald-700 dark:text-emerald-400">
+        {uiText('published_2ef42ec')}
+      </span>
       {permalink && publishPlatform && (
         <a
           href={permalink}
@@ -1831,22 +1879,24 @@ export function OrganicDraftPreview({
           rel="noopener noreferrer"
           className="text-primary underline underline-offset-2"
         >
-          View on {publishPlatformLabel(publishPlatform)}
+          {uiText.rich('sentence_703a7e065a66', {
+            v0: () => publishPlatformLabel(publishPlatform),
+          })}
         </a>
       )}
     </p>
   ) : isScheduled ? (
     <p data-review-status="scheduled" className="text-sm font-medium">
-      Scheduled{whenLabel ? ` · ${whenLabel}` : ''}
+      {uiText.rich('sentence_5cc48de6ec40', { v0: () => (whenLabel ? ` · ${whenLabel}` : '') })}
     </p>
   ) : null;
   const footerAlert = (
     <>
       {tokenExpired && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
-          {publishPlatformLabel(publishPlatform)} access token expired.{' '}
+          {uiText('platformTokenExpired', { platform: publishPlatformLabel(publishPlatform) })}{' '}
           <a href="/settings?section=integrations" className="underline underline-offset-2">
-            Reconnect your account
+            {uiText('reconnect_your_account_f799e44')}
           </a>
         </div>
       )}
@@ -1862,7 +1912,7 @@ export function OrganicDraftPreview({
             onClick={placement.clearError}
             className="ml-2 underline underline-offset-2"
           >
-            Dismiss
+            {uiText('dismiss_48845bf')}
           </button>
         </div>
       )}
@@ -1908,24 +1958,27 @@ export function OrganicDraftPreview({
   // ── Below the frame: every way what goes out differs from what was typed ──────
   // Mounted whenever there is a plan, empty or not: a live region that arrives with its first
   // notice is not announced. Out of the layout while empty.
+  const planCover = plan?.cover;
   const planNotices = plan ? (
     <div
       data-plan-notices=""
       aria-live="polite"
       className={cn(
         'flex shrink-0 flex-col gap-1',
-        plan.notices.length === 0 && !plan.cover && 'sr-only',
+        plan.notices.length === 0 && !planCover && 'sr-only',
       )}
     >
-      {plan.cover && (
+      {planCover && (
         <p
-          data-plan-cover={plan.cover.storagePath ?? plan.cover.url ?? ''}
+          data-plan-cover={planCover.storagePath ?? planCover.url ?? ''}
           className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/90 px-3 py-1.5 text-xs text-muted-foreground"
         >
-          {plan.cover.url && (
-            <img src={plan.cover.url} alt="" className="size-6 shrink-0 rounded object-cover" />
-          )}
-          Cover sent with the video
+          {uiText.rich('sentence_44fd6f462c9a', {
+            v0: () =>
+              planCover.url && (
+                <img src={planCover.url} alt="" className="size-6 shrink-0 rounded object-cover" />
+              ),
+          })}
         </p>
       )}
       {plan.notices.map((notice) => (
@@ -1935,7 +1988,7 @@ export function OrganicDraftPreview({
           className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/90 px-3 py-1.5 text-xs text-muted-foreground"
         >
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          {notice.message}
+          {localizePublishNotice(notice, plan, uiText)}
         </p>
       ))}
     </div>
@@ -1955,7 +2008,7 @@ export function OrganicDraftPreview({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => void handleApplyToAll()}
         >
-          Apply to all platforms
+          {uiText('apply_to_all_platforms_8c78f4c')}
         </Button>
         <Button
           type="button"
@@ -1967,7 +2020,7 @@ export function OrganicDraftPreview({
           onClick={() => void handleAdapt()}
         >
           <Wand2 aria-hidden="true" />
-          Adapt for {PUBLISH_PLATFORM_LABELS[framePlatform]}
+          {uiText('adaptForPlatform', { platform: PUBLISH_PLATFORM_LABELS[framePlatform] })}
         </Button>
       </div>
     ) : null;
@@ -1982,12 +2035,15 @@ export function OrganicDraftPreview({
   const slotContent = (
     <>
       {productionDetailsOpen && (
-        <ContextualPanel title="Details" onClose={() => setProductionDetailsOpen(false)}>
+        <ContextualPanel
+          title={uiText('details_45989de')}
+          onClose={() => setProductionDetailsOpen(false)}
+        >
           <div className="flex flex-col gap-2">
             <LifecyclePill status={draft.status} />
             <p className="text-xs text-muted-foreground">
-              {draftStatusPresentation(draft.status).label} ·{' '}
-              {deriveMediaStageLabel(resolveDraftMediaStage(draft))}
+              {draftStatusPresentation(draft.status, uiText).label} ·{' '}
+              {deriveMediaStageLabel(resolveDraftMediaStage(draft), uiText)}
             </p>
             <MediaEnrichmentSummary
               draft={draft}
@@ -1998,7 +2054,7 @@ export function OrganicDraftPreview({
             {draftHook && brandProfileId ? (
               <div className="flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2">
                 <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Hook
+                  {uiText('hook_536ff50')}
                 </span>
                 <p className="min-w-0 flex-1 truncate text-sm" title={draftHook}>
                   {draftHook}
@@ -2013,7 +2069,7 @@ export function OrganicDraftPreview({
                 rel="noopener noreferrer"
                 className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
-                Inspiration source · View original post
+                {uiText('inspiration_source_view_original_post_25ba15d')}
               </a>
             )}
           </div>
@@ -2021,7 +2077,10 @@ export function OrganicDraftPreview({
       )}
 
       {optionsOpen && isPostPlatform(framePlatform) && (
-        <ContextualPanel title="Platform options" onClose={() => setOptionsOpen(false)}>
+        <ContextualPanel
+          title={uiText('platform_options_71c8f32')}
+          onClose={() => setOptionsOpen(false)}
+        >
           <div className="flex flex-col gap-3">
             {platformSwitch('Options for')}
             <PublishOptionsPanel
@@ -2038,21 +2097,24 @@ export function OrganicDraftPreview({
       )}
 
       {creativeOpen && (
-        <ContextualPanel title="Creative direction" onClose={() => setCreativeOpen(false)}>
+        <ContextualPanel
+          title={uiText('creative_direction_955fe28')}
+          onClose={() => setCreativeOpen(false)}
+        >
           <InlinePreviewTextarea
             value={creativeDirection}
             onChange={(event) => handleCreativeDirectionChange(event.target.value)}
             onBlur={() => {
               void fieldEditor.flush();
             }}
-            placeholder="Describe the hook, visual intent, and mood."
+            placeholder={uiText('describe_the_hook_visual_intent_and_mood_c62de51')}
             className="min-h-[5rem] text-sm leading-relaxed"
           />
         </ContextualPanel>
       )}
 
       {hashtagsOpen && (
-        <ContextualPanel title="Hashtags" onClose={() => setHashtagsOpen(false)}>
+        <ContextualPanel title={uiText('hashtags_eb48566')} onClose={() => setHashtagsOpen(false)}>
           <HashtagTiers draft={draft} onHashtagsChange={handleHashtagsChange} />
         </ContextualPanel>
       )}
@@ -2062,7 +2124,7 @@ export function OrganicDraftPreview({
           <HyperFramePlayer draft={draftForPreview} brandId={brandProfileId ?? ''} />
           <div className="rounded-xl border border-border/70 bg-background/90 p-3">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Caption
+              {uiText('caption_87d296e')}
             </p>
             <EditableCaption
               value={draft.captionPreview}
@@ -2070,7 +2132,9 @@ export function OrganicDraftPreview({
               onChange={handleCaptionChange}
               platform={framePlatform}
               hashtags={draft.hashtags}
-              ariaLabel={`${PUBLISH_PLATFORM_LABELS[framePlatform]} caption`}
+              ariaLabel={uiText('platformCaptionLabel', {
+                platform: PUBLISH_PLATFORM_LABELS[framePlatform],
+              })}
               editable={editable}
               editing={captionEditing}
               onEditingChange={setCaptionEditing}
@@ -2123,7 +2187,7 @@ export function OrganicDraftPreview({
           onClick={placement.undo}
           className="self-start rounded px-1.5 py-0.5 text-2xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          Undo last media change
+          {uiText('undo_last_media_change_1d19b98')}
         </button>
       )}
 

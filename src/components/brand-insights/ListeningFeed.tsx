@@ -1,4 +1,7 @@
 'use client';
+import {translateControlLabel} from '@/lib/ui/controlLabels';
+
+import { useTranslations } from 'next-intl';
 
 // Trends+ brand listening: recent mentions of the brand, its competitors and custom keywords,
 // classified once by the Backend. Brands without Trends+ see what it adds and how to get it.
@@ -11,13 +14,12 @@ import {
   type ListeningTag,
 } from '@continuum/contracts';
 import { ExternalLink, X } from 'lucide-react';
-import Link from 'next/link';
 import { type FormEvent, useMemo, useState } from 'react';
-
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Link } from '@/i18n/navigation';
 import { ApiError } from '@/lib/api/errors';
 import { useListening, useSaveListeningKeywords } from '@/lib/api/listening';
 import { billingHref } from '@/lib/billing/productAccess';
@@ -48,6 +50,8 @@ function hostOf(url: string): string {
 }
 
 function MentionRow({ mention }: { mention: ListeningMention }) {
+const tUi=useTranslations('common');
+
   return (
     <li className="border-b px-3 py-2 last:border-0">
       <div className="flex items-start justify-between gap-3">
@@ -74,7 +78,7 @@ function MentionRow({ mention }: { mention: ListeningMention }) {
             ) : null}
             {mention.tags.map((tag) => (
               <Badge key={tag} variant="secondary" className="text-xs">
-                {TAG_LABEL[tag]}
+                {translateControlLabel(TAG_LABEL[tag],tUi)}
               </Badge>
             ))}
           </div>
@@ -85,6 +89,7 @@ function MentionRow({ mention }: { mention: ListeningMention }) {
 }
 
 function KeywordEditor({ brandId, keywords }: { brandId: string; keywords: ListeningKeyword[] }) {
+  const uiText = useTranslations('common');
   const [draft, setDraft] = useState('');
   const save = useSaveListeningKeywords(brandId);
   const full = keywords.length >= LISTENING_MAX_KEYWORDS;
@@ -104,7 +109,7 @@ function KeywordEditor({ brandId, keywords }: { brandId: string; keywords: Liste
           <button
             type="button"
             className="ml-1"
-            aria-label={`Stop listening for ${k.keyword}`}
+            aria-label={uiText('m_4fb7020992', { v0: String(k.keyword) })}
             disabled={save.isPending}
             onClick={() => save.mutate(keywords.filter((other) => other.keyword !== k.keyword))}
           >
@@ -116,39 +121,43 @@ function KeywordEditor({ brandId, keywords }: { brandId: string; keywords: Liste
         <Input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder={full ? `Up to ${LISTENING_MAX_KEYWORDS} keywords` : 'Add a keyword'}
-          aria-label="Add a keyword to listen for"
+          placeholder={
+            full
+              ? uiText('m_cacadacc68', { v0: String(LISTENING_MAX_KEYWORDS) })
+              : uiText('m_3a63e3d254')
+          }
+          aria-label={uiText('m_adddfb4dc7')}
           disabled={full || save.isPending}
           maxLength={80}
           className="h-7 w-40 text-xs"
         />
         <Button type="submit" size="sm" variant="ghost" className="h-7 text-xs" disabled={full}>
-          Add
+          {uiText('add_9fd728c')}
         </Button>
       </form>
       {save.isError ? (
-        <p className="w-full text-xs text-rose-600">Couldn't save keywords. Try again.</p>
+        <p className="w-full text-xs text-rose-600">{uiText('m_b823b7922c')}</p>
       ) : null}
     </div>
   );
 }
 
 function Upsell() {
+  const tUi = useTranslations('common');
+
   return (
     <div className="space-y-2 p-4 text-sm">
-      <p className="font-medium">See who's talking about your brand</p>
-      <p className="text-muted-foreground text-xs">
-        Trends+ listens across the web, news, reviews, forums and Reddit for your brand and your
-        competitors, and flags buying intent, questions and complaints — $9.99 a month.
-      </p>
+      <p className="font-medium">{tUi('m_b9c0f2fb9c')}</p>
+      <p className="text-muted-foreground text-xs">{tUi('m_88817b2b05')}</p>
       <Link href={billingHref('listening')} className={buttonVariants({ size: 'sm' })}>
-        Get Trends+
+        {tUi('m_b5d93fedf8')}
       </Link>
     </div>
   );
 }
 
 export function ListeningFeed({ brandId, enabled }: { brandId?: string; enabled: boolean }) {
+  const uiText = useTranslations('common');
   const { data, error, isLoading } = useListening(brandId, enabled);
   const [tag, setTag] = useState<ListeningTag | 'all'>('all');
   const mentions = useMemo(
@@ -168,7 +177,7 @@ export function ListeningFeed({ brandId, enabled }: { brandId?: string; enabled:
   }
   if (error) {
     if (error instanceof ApiError && error.status === 402) return <Upsell />;
-    return <p className="text-muted-foreground p-3 text-xs">Listening is unavailable right now.</p>;
+    return <p className="text-muted-foreground p-3 text-xs">{uiText('m_5a78830847')}</p>;
   }
   if (!data) return null;
 
@@ -189,7 +198,7 @@ export function ListeningFeed({ brandId, enabled }: { brandId?: string; enabled:
                 tag === option ? 'bg-foreground text-background' : 'text-muted-foreground',
               )}
             >
-              {option === 'all' ? 'All' : TAG_LABEL[option]}
+              {option === 'all' ? uiText('all_a52ace4') : TAG_LABEL[option]}
             </button>
           ))}
         </div>
@@ -202,9 +211,7 @@ export function ListeningFeed({ brandId, enabled }: { brandId?: string; enabled:
         </ul>
       ) : (
         <p className="text-muted-foreground p-3 text-xs">
-          {data.lastFetchedAt
-            ? 'No mentions in the last week.'
-            : 'Listening starts within a minute of adding keywords, then refreshes daily.'}
+          {data.lastFetchedAt ? uiText('m_200e1b9f2b') : uiText('m_3dc1b5eebb')}
         </p>
       )}
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { MarkerType, MiniMap, Panel, ReactFlowProvider } from '@xyflow/react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Controls } from '@/components/ai-elements/controls';
@@ -40,6 +41,8 @@ export function ScaffoldTreeCanvas({
    */
   inline?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   // Recomputed only when the merged tree identity changes — not per progress frame,
   // because buildScaffoldTree is itself memoized on (rows, overlay).
   // The budget label is added here rather than in the pure layout, which stays free of
@@ -58,13 +61,15 @@ export function ScaffoldTreeCanvas({
                 budgetLabel: formatDailyBudget(
                   node.data.dailyBudgetMinorUnits as number | null,
                   currency,
+                  uiText,
+                  uiLocale,
                 ),
               },
             }
           : node,
       ),
     };
-  }, [tree, currency]);
+  }, [tree, currency, uiText, uiLocale]);
 
   const nodes = React.useMemo(
     () =>
@@ -105,15 +110,12 @@ export function ScaffoldTreeCanvas({
         )}
         <Panel position="top-left">
           <div className="rounded-md border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm">
-            <span className="font-medium">{tree.counts.adSets}</span> ad sets ·{' '}
-            <span className="font-medium">{tree.counts.ads}</span> ads ·{' '}
-            <span className="font-medium">{tree.counts.created}</span> created
-            {tree.counts.failed > 0 ? (
-              <>
-                {' '}
-                · <span className="font-medium text-destructive">{tree.counts.failed}</span> failed
-              </>
-            ) : null}
+            {uiText.rich('sentence_118a7068c171', {
+              adsets: () => <span className="font-medium">{tree.counts.adSets}</span>,
+              ads: () => <span className="font-medium">{tree.counts.ads}</span>,
+              created: () => <span className="font-medium">{tree.counts.created}</span>,
+              failed: tree.counts.failed,
+            })}
           </div>
         </Panel>
       </Canvas>

@@ -1,4 +1,5 @@
 import type { ViralityComponent, ViralityScore } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { VIRALITY_GRADE_STYLES } from './ViralityScoreBadge';
 
@@ -46,6 +47,8 @@ export function ViralityScoreCard({
   score: ViralityScore;
   className?: string;
 }) {
+  const tUi = useTranslations('common');
+
   if (score.status !== 'scored' || score.overall === null || score.grade === null) {
     return (
       <div
@@ -54,7 +57,7 @@ export function ViralityScoreCard({
           className,
         )}
       >
-        Virality score pending — the model couldn’t grade this hook. Try again.
+        {tUi('m_f47c5f6894')}
       </div>
     );
   }
@@ -66,7 +69,7 @@ export function ViralityScoreCard({
     <div className={cn('rounded-xl border border-border bg-card p-4', className)}>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Virality score
+          {tUi('m_a4a9a2da6e')}
         </span>
         <span
           className={cn(
@@ -114,11 +117,11 @@ export function ViralityScoreCard({
 
       {grounding?.predictedHookRate != null ? (
         <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
-          Predicted{' '}
-          <span className="font-medium text-foreground">~{grounding.predictedHookRate}</span> hook
-          rate for your audience
+          {tUi('m_a49225ecba')}{' '}
+          <span className="font-medium text-foreground">~{grounding.predictedHookRate}</span>
+          {tUi('m_0ec095a07b')}
           {grounding.brandTopHookRate != null
-            ? ` — your best posts hit ~${Math.round(grounding.brandTopHookRate)}`
+            ? tUi('m_64f91a518d', { v0: String(Math.round(grounding.brandTopHookRate)) })
             : ''}
           .
         </p>
@@ -131,13 +134,19 @@ export function ViralityScoreCard({
         )}
       >
         {grounded
-          ? `Grounded on ${grounding?.evidenceCount ?? 0} winning hook ${
-              (grounding?.evidenceCount ?? 0) === 1 ? 'family' : 'families'
-            } for your brand${
-              grounding?.archetype ? ` · reads as “${grounding.archetype.replace(/_/g, ' ')}”` : ''
-            }.`
-          : 'Scored on the general rubric — no brand history yet, so this isn’t calibrated to your audience.'}
-        {confidence !== null ? ` · ${Math.round(confidence * 100)}% confidence` : ''}
+          ? tUi('m_f1b3214cd4', {
+              v0: String(grounding?.evidenceCount ?? 0),
+              v1: String((grounding?.evidenceCount ?? 0) === 1 ? 'family' : 'families'),
+              v2: String(
+                grounding?.archetype
+                  ? ` · reads as “${grounding.archetype.replace(/_/g, ' ')}”`
+                  : '',
+              ),
+            })
+          : tUi('m_e58f5eb568')}
+        {confidence !== null
+          ? tUi('m_50a862429b', { v0: String(Math.round(confidence * 100)) })
+          : ''}
       </p>
     </div>
   );

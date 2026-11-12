@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
+import { renderHook } from '@/i18n/__tests__/render';
 import { type EarlierPage, prependUnseen, useEarlierHistory } from './useEarlierHistory';
 
 type Item = { id: string };

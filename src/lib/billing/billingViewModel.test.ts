@@ -1,16 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { type BillingOverview, billingOverviewSchema } from '@continuum/contracts';
+import { createTranslator } from 'next-intl';
+import settingsMessages from '../../../messages/settings/en.json';
+import portugueseSettingsMessages from '../../../messages/settings/pt-BR.json';
 import { BillingApiRequestError, promoErrorMessage, withCheckoutSessionId } from './billingApi';
 import {
   AUTO_BILLING_CONTRACT,
   AUTO_BILLING_NEEDS_PLAN,
+  toBillingView as buildBillingView,
   checkoutReturnParams,
   isBrandOwner,
   isChangeSettled,
   parseCheckoutReturn,
   type ReceiptPhase,
   receiptPhase,
-  toBillingView,
 } from './billingViewModel';
 
 const BRAND_ID = '00000000-0000-4000-8000-0000000000b2';
@@ -246,7 +249,9 @@ describe('toBillingView — Trends+ add-on', () => {
     selfServe(withTrendsPlus(input)).plans.find((plan) => plan.planCode === 'trends_plus');
 
   test('sells Trends+ alone to a brand whose Organic comes from an admin grant', () => {
-    const card = trendsPlusCard(overview({ entitlements: { products: ['organic_agent', 'studio'] } }));
+    const card = trendsPlusCard(
+      overview({ entitlements: { products: ['organic_agent', 'studio'] } }),
+    );
     expect(card).toMatchObject({ action: 'checkout', priceLabel: '$9.99' });
     expect(card?.features).toContain('Brand listening: mentions of your brand and competitors');
   });
@@ -708,4 +713,47 @@ describe('isChangeSettled', () => {
     expect(isChangeSettled(change, overview({ canvas: { purchasedBalanceUsd: 5 } }))).toBe(false);
     expect(isChangeSettled(change, overview({ canvas: { purchasedBalanceUsd: 15 } }))).toBe(true);
   });
+});
+
+const billingTranslator = createTranslator({
+  locale: 'en',
+  messages: { settings: settingsMessages },
+  namespace: 'settings',
+});
+function toBillingView(
+  overview: Parameters<typeof buildBillingView>[0],
+  need: Parameters<typeof buildBillingView>[1] = null,
+) {
+  return buildBillingView(overview, need, { locale: 'en', t: billingTranslator });
+}
+
+test('localizes billing presentation without changing invoice currency or stored amounts', () => {
+  const input = overview({
+    invoices: [
+      {
+        id: 'in_locale',
+        number: 'LOCALE-001',
+        status: 'paid',
+        currency: 'mxn',
+        amountDue: 123456,
+        amountPaid: 123456,
+        total: 123456,
+        createdAt: '2026-09-21T10:00:00.000Z',
+        hostedInvoiceUrl: null,
+        invoicePdf: null,
+      },
+    ],
+  });
+  const before = structuredClone(input);
+  const translate = createTranslator({
+    locale: 'pt-BR',
+    messages: { settings: portugueseSettingsMessages },
+    namespace: 'settings',
+  });
+  const view = buildBillingView(input, null, { locale: 'pt-BR', t: translate });
+  if (view.kind !== 'self_serve') throw new Error('Expected self-serve fixture');
+  expect(view.invoices[0].amountLabel).toContain('1.234,56');
+  expect(view.invoices[0].amountLabel).toContain('MX');
+  expect(view.plans[0].features).toContain('Agente Orgânico, calendário e publicação');
+  expect(input).toEqual(before);
 });

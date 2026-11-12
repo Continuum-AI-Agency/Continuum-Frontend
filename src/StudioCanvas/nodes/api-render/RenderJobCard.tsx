@@ -5,6 +5,7 @@ import {
   type ApiRenderOutput,
   isBucketOnlyRenderFile,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { fullSrc, thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +50,8 @@ const deliveryLabel = (job: ApiRenderJob): string | null => {
  * an unchecked frame into a checked one.
  */
 function CheckSummary({ job }: { job: ApiRenderJob }) {
+  const translateUi = useUiTranslations('studio');
+
   if (job.status !== 'finished') return null;
   const findings = job.judge?.verdict?.findings ?? [];
 
@@ -56,21 +59,25 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
     if (job.judge.state === 'unknown') {
       return (
         <Badge variant="muted" className="mt-1">
-          Not checked · {job.judge.why ?? 'the judge could not run'}
+          {' '}
+          {translateUi('not_checked_042a2629')}{' '}
+          {job.judge.why ?? translateUi('the_judge_could_not_run_73bba933')}
         </Badge>
       );
     }
     if (job.judge.state === 'pass' && findings.length === 0) {
       return (
         <Badge variant="success" className="mt-1">
-          Checked · nothing found
+          {' '}
+          {translateUi('checked_nothing_found_46f292fe')}{' '}
         </Badge>
       );
     }
     return (
       <Alert className="mt-1 border-warning/40">
         <AlertTitle className="text-2xs">
-          {findings.length} finding{findings.length === 1 ? '' : 's'} on the rendered frame
+          {findings.length} {translateUi('finding_8bf18252')}
+          {findings.length === 1 ? '' : 's'} {translateUi('on_the_rendered_frame_8ca5dac9')}{' '}
         </AlertTitle>
         <AlertDescription className="flex flex-col gap-1">
           {job.judge.escalatedBecause ? (
@@ -98,14 +105,16 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
   if (job.fit && !job.fit.escalate) {
     return (
       <Badge variant="success" className="mt-1">
-        Placement checked · {job.fit.why}
+        {' '}
+        {translateUi('placement_checked_6daddf0c')} {job.fit.why}
       </Badge>
     );
   }
   if (job.fit?.escalate) {
     return (
       <Badge variant="muted" className="mt-1">
-        Checking the frame…
+        {' '}
+        {translateUi('checking_the_frame_da621cde')}{' '}
       </Badge>
     );
   }
@@ -113,9 +122,13 @@ function CheckSummary({ job }: { job: ApiRenderJob }) {
 }
 
 function StatusSteps({ job }: { job: ApiRenderJob }) {
+  const translateUi = useUiTranslations('studio');
+
   if (job.status === 'failed') {
     return (
-      <span className="text-2xs text-destructive">Failed · {job.error ?? 'See render log'}</span>
+      <span className="text-2xs text-destructive">
+        {translateUi('failed_f3fe30c3')} {job.error ?? translateUi('see_render_log_8ed3bc9f')}
+      </span>
     );
   }
   const reached = STEPS.indexOf(job.status as (typeof STEPS)[number]);
@@ -166,6 +179,8 @@ export function RenderJobCard({
   onRefresh: () => void;
   onUseAsReference?: (output: ApiRenderOutput) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const delivery = deliveryLabel(job);
   return (
     <div className="rounded border border-border/60 p-2 text-2xs">
@@ -178,7 +193,8 @@ export function RenderJobCard({
           <span className="truncate font-medium">{job.templateName}</span>
           {job.test ? (
             <Badge variant="warning" className="shrink-0">
-              Test · watermarked
+              {' '}
+              {translateUi('test_watermarked_2c573ba5')}{' '}
             </Badge>
           ) : null}
         </span>
@@ -186,7 +202,10 @@ export function RenderJobCard({
         {delivery ? <span className="block truncate text-muted-foreground">{delivery}</span> : null}
       </button>
       {job.warnings?.length ? (
-        <ul aria-label="Render warnings" className="mt-1 text-xs text-warning">
+        <ul
+          aria-label={translateUi('render_warnings_b883ff5d')}
+          className="mt-1 text-xs text-warning"
+        >
           {job.warnings.map((warning, index) => (
             <li key={`${index}:${warning.code}`}>{warning.message}</li>
           ))}
@@ -210,7 +229,10 @@ export function RenderJobCard({
             <img
               className="nodrag w-full rounded border border-border/60"
               src={thumbnailSrc(output)}
-              alt={`${job.templateName} render ${output.fileName}`}
+              alt={translateUi('value0_render_value1_c60b9ffa', {
+                value0: String(job.templateName),
+                value1: String(output.fileName),
+              })}
               loading="lazy"
             />
           )}
@@ -221,7 +243,8 @@ export function RenderJobCard({
               target="_blank"
               rel="noreferrer"
             >
-              Open {output.fileName}
+              {' '}
+              {translateUi('open_ed077f3d')} {output.fileName}
             </a>
             <span className="flex shrink-0 items-center gap-2">
               {onUseAsReference && output.kind === 'image' && output.assetId && output.versionId ? (
@@ -231,15 +254,16 @@ export function RenderJobCard({
                   className="nodrag"
                   onClick={() => onUseAsReference(output)}
                 >
-                  Use as reference
+                  {' '}
+                  {translateUi('use_as_reference_b9f850ea')}{' '}
                 </Button>
               ) : null}
               <span className="text-muted-foreground">
                 {isBucketOnlyRenderFile(output.fileName)
-                  ? 'In the render bucket'
+                  ? translateUi('in_the_render_bucket_2aa53330')
                   : output.assetId
-                    ? 'Saved to Library'
-                    : 'Saving to Library…'}
+                    ? translateUi('saved_to_library_7ffd8133')
+                    : translateUi('saving_to_library_13d3c2a2')}
               </span>
             </span>
           </div>

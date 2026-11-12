@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 // Published pipelines as Jaina context: a "Pipelines" family at the root of the @-picker,
 // and matching pipelines leading a free-text search. Jaina only — Organic has no pipeline
 // tools, so a pipeline tag there would ground a turn on something it cannot run.
@@ -15,13 +19,16 @@ export const PIPELINES_MENTION_FOLDER_KEY = 'folder:pipelines';
 /** Searched pipelines lead the list, but the picker keeps only 12 rows and campaigns still count. */
 const SEARCH_LEAD_LIMIT = 4;
 
-function pipelineMentionSuggestion(capability: PipelineCapabilityV2): AgentMentionSuggestion {
+function pipelineMentionSuggestion(
+  capability: PipelineCapabilityV2,
+  uiTranslate?: ScaleCopy,
+): AgentMentionSuggestion {
   return {
     key: `pipeline:${capability.pipeline_id}`,
     label: capability.name,
     type: 'pipeline',
     source: 'jaina',
-    group: 'Pipelines',
+    group: uiTranslate ? uiTranslate('jainaPipelines') : 'Pipelines',
     badge: 'pipeline',
     ...(capability.description ? { description: capability.description } : {}),
     reference: {
@@ -37,6 +44,7 @@ function pipelineMentionSuggestion(capability: PipelineCapabilityV2): AgentMenti
 const matching = (
   capabilities: PipelineCapabilityV2[],
   query: string,
+  uiTranslate?: ScaleCopy,
 ): AgentMentionSuggestion[] => {
   const needle = query.trim().toLowerCase();
   return capabilities
@@ -47,13 +55,14 @@ const matching = (
           value?.toLowerCase().includes(needle),
         ),
     )
-    .map(pipelineMentionSuggestion);
+    .map((capability) => pipelineMentionSuggestion(capability, uiTranslate));
 };
 
 export function withPipelineMentions(
   base: AgentMentionProvider,
   queryClient: QueryClient,
   brandProfileId: string,
+  uiTranslate?: ScaleCopy,
 ): AgentMentionProvider {
   // Same key and fetcher as the Library's `usePipelineCapabilities`, so an open Library
   // panel and the picker share one cached catalog. A catalog failure costs the group, never
@@ -72,22 +81,25 @@ export function withPipelineMentions(
       const [capabilities, rest] = await Promise.all([readCatalog(), base.getSuggestions(input)]);
       if (capabilities.length === 0) return rest;
       const lead = input.query
-        ? matching(capabilities, input.query).slice(0, SEARCH_LEAD_LIMIT)
+        ? matching(capabilities, input.query, uiTranslate).slice(0, SEARCH_LEAD_LIMIT)
         : [
             {
               key: PIPELINES_MENTION_FOLDER_KEY,
-              label: 'Pipelines',
+              label: uiTranslate ? uiTranslate('jainaPipelines') : 'Pipelines',
               type: 'pipeline' as const,
               source: 'jaina' as const,
-              group: 'Pipelines',
-              childrenLabel: 'Published pipelines',
+              group: uiTranslate ? uiTranslate('jainaPipelines') : 'Pipelines',
+              childrenLabel: uiTranslate
+                ? uiTranslate('jainaPublishedPipelines')
+                : 'Published pipelines',
               isFolder: true,
             },
           ];
       return [...lead, ...rest];
     },
     getChildSuggestions: async (parent, query) => {
-      if (parent.key === PIPELINES_MENTION_FOLDER_KEY) return matching(await readCatalog(), query);
+      if (parent.key === PIPELINES_MENTION_FOLDER_KEY)
+        return matching(await readCatalog(), query, uiTranslate);
       return (await base.getChildSuggestions?.(parent, query)) ?? [];
     },
   };

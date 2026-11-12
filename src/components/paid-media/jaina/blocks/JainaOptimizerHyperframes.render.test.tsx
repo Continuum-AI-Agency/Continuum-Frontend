@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { ACCOUNT_DETECTOR_META, type JainaHyperframeSet } from '@continuum/contracts';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The part carries a durable bucket and path, never a signed url — a signed url lasts about
 // an hour and a transcript is read back months later. The surface signs on demand.
@@ -91,7 +92,12 @@ describe('a compiled card inside an answer', () => {
     const two = set({
       frames: [
         set().frames[0],
-        { ...set().frames[0], candidate_id: 'audience_overlap:acct', detector: 'audience_overlap', path: 'b1/cards/def.html' },
+        {
+          ...set().frames[0],
+          candidate_id: 'audience_overlap:acct',
+          detector: 'audience_overlap',
+          path: 'b1/cards/def.html',
+        },
       ],
     });
     const { container } = render(<JainaOptimizerHyperframes sets={[two]} />);

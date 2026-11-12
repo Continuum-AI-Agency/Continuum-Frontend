@@ -1,7 +1,10 @@
 'use client';
 
 import type { AgentSessionListFilters } from '@continuum/contracts';
+
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   EMPTY_SESSION_FILTERS,
   isSessionFilterActive,
@@ -33,6 +36,10 @@ export function useSessionSearch<TSession>(params: {
   /** Must be referentially stable (useCallback) — it is an effect dependency. */
   fetchSessions: (filters: AgentSessionListFilters) => Promise<TSession[]>;
 }): UseSessionSearchResult<TSession> {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+
   const { isEnabled, fetchSessions } = params;
   const [filters, setFilters] = useState<SessionFilterState>(EMPTY_SESSION_FILTERS);
   const [results, setResults] = useState<TSession[]>([]);
@@ -63,7 +70,7 @@ export function useSessionSearch<TSession>(params: {
       .catch((cause: unknown) => {
         if (requestIdRef.current !== requestId) return;
         setResults([]);
-        setError(cause instanceof Error ? cause.message : 'Search failed.');
+        setError(getUiErrorMessage(cause));
       })
       .finally(() => {
         if (requestIdRef.current !== requestId) return;

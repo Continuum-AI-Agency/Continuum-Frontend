@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * A reopened dashboard says, per module, whether it can be re-run and for which window.
  *
@@ -8,7 +9,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 
 mock.module('@/lib/jaina/brandScope', () => ({
   useJainaBrandScope: () => ({ brandId: 'b1', adAccountId: 'act_1' }),
@@ -143,7 +144,7 @@ describe('SavedDashboardsPanel — re-runnable per module', () => {
     const lines = screen.getAllByTestId('block-rerun').map((node) => node.textContent);
     expect(lines).toEqual([
       'Not re-runnable: the scope frame is composed from the other blocks, not fetched',
-      'Re-runnable · computed for 2026-09-13 → 2026-09-19',
+      'Re-runnable · computed for Sep 13, 2026 → Sep 19, 2026',
       'Re-runnable · computed for Last 30 days · its judgements are recomputed, not re-fetched',
     ]);
   });

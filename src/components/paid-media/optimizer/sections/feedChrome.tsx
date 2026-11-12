@@ -1,4 +1,12 @@
 'use client';
+import type {UiLocale} from '@/i18n/config';
+import {useLocale} from 'next-intl';
+
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
 
 // The chrome both optimizer feeds share — the ACTION feed (what we did to the ad account)
 // and the SERVER LOG (what the machine did). They render different rows from different RPCs;
@@ -33,15 +41,17 @@ export function FeedSkeleton() {
   );
 }
 
-export function formatWhen(ts: string): string {
+export function formatWhen(ts: string, uiTranslate?: ScaleCopy, uiLocale:UiLocale='en'): string {
   const then = new Date(ts).getTime();
   if (!Number.isFinite(then)) return ts;
   const minutes = Math.round((Date.now() - then) / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return (uiTranslate?uiTranslate('just_now_7ddb44d'):'just now');
+  if (minutes < 60)
+    return uiTranslate ? uiTranslate('helper_2cd692f8b2a0', { v0: minutes }) : `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (hours < 24)
+    return uiTranslate ? uiTranslate('helper_a13cf92dbf3c', { v0: hours }) : `${hours}h ago`;
+  return new Date(ts).toLocaleDateString(uiLocale, { month: 'short', day: 'numeric' });
 }
 
 /** `lg` is the roomier scale the portfolio Activity tab's "Recently applied" rows use; the
@@ -62,11 +72,15 @@ export function RowHeader({
   ts: string;
   size?: RowHeaderSize;
 }) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   const classes = ROW_HEADER_CLASS[size];
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
       <span className={cn('truncate tracking-tight', classes.title)}>{title}</span>
-      <span className={cn('shrink-0 text-muted-foreground', classes.ts)}>{formatWhen(ts)}</span>
+      <span className={cn('shrink-0 text-muted-foreground', classes.ts)}>
+        {formatWhen(ts, uiText, uiLocale)}
+      </span>
     </div>
   );
 }
@@ -96,6 +110,8 @@ export function ReceiptToken({
   platform: AdPlatform;
   className?: string;
 }) {
+  const uiText = useTranslations('scale');
+
   const label = receiptLabel(platform);
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -107,7 +123,7 @@ export function ReceiptToken({
     <button
       type="button"
       onClick={copy}
-      aria-label={`Copy ${label} ${value}`}
+      aria-label={uiText('template_dc1933cb0a23', { v0: label, v1: value })}
       data-testid="receipt-token"
       className={cn(
         'hit-area mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
@@ -138,6 +154,7 @@ export function PortfolioFilter({
   onChange: (value: string) => void;
   label: string;
 }) {
+  const uiText = useTranslations('scale');
   if (names.length < 2) return null;
   return (
     <Select value={value} onValueChange={onChange}>
@@ -146,12 +163,14 @@ export function PortfolioFilter({
             the literal "__all__" without this mapping. */}
         <SelectValue>
           {(value: unknown) =>
-            value == null || value === ALL_PORTFOLIOS ? 'All portfolios' : String(value)
+            value == null || value === ALL_PORTFOLIOS
+              ? uiText('all_portfolios_52fd3f5')
+              : String(value)
           }
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL_PORTFOLIOS}>All portfolios</SelectItem>
+        <SelectItem value={ALL_PORTFOLIOS}>{uiText('all_portfolios_52fd3f5')}</SelectItem>
         {names.map((name) => (
           <SelectItem key={name} value={name}>
             {name}
@@ -174,20 +193,19 @@ export function FeedFooter({
   hasMore,
   isFetchingMore,
   onLoadMore,
-  noun,
+  entryKind,
 }: {
   loaded: number;
   hasMore: boolean;
   isFetchingMore: boolean;
   onLoadMore: () => void;
-  noun: string;
+  entryKind: 'actions'|'events';
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
       <p className="text-xs text-muted-foreground">
-        {hasMore
-          ? `${loaded} ${noun} loaded — there are older ones.`
-          : `${loaded} ${noun} — that is all of them.`}
+        {uiText('activityFooter',{kind:entryKind,count:loaded,more:hasMore?'yes':'no'})}
       </p>
       {hasMore ? (
         <Button
@@ -198,7 +216,7 @@ export function FeedFooter({
           disabled={isFetchingMore}
           onClick={onLoadMore}
         >
-          {isFetchingMore ? 'Loading…' : 'Load more'}
+          {isFetchingMore ? uiText('loading_ba3bbbe') : uiText('load_more_ac8991e')}
         </Button>
       ) : null}
     </div>

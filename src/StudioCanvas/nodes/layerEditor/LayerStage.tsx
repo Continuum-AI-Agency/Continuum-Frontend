@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { LayerEditorLayer } from '../../types';
@@ -130,6 +131,8 @@ export function LayerStage({
   snapEnabled,
   motionTimeSec = 0,
 }: LayerStageProps) {
+  const translateUi = useUiTranslations('studio');
+
   const containerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
@@ -675,7 +678,7 @@ export function LayerStage({
       // here — under the default document reading mode a screen reader would intercept
       // them before the gizmo ever saw one.
       role="application"
-      aria-label="Layer composition stage"
+      aria-label={translateUi('layer_composition_stage_96e9a90f')}
       style={{ cursor: spaceHeld ? 'grab' : undefined }}
       onWheel={onWheel}
       // Dropping a file straight onto the composition is the shortest path from "I have
@@ -810,7 +813,7 @@ export function LayerStage({
             width={frame.width}
             height={frame.height}
           >
-            <title>Selection</title>
+            <title>{translateUi('selection_ca406707')}</title>
             {/* The alignment the drag has locked onto. Drawn across the whole frame so it
                 reads as a guide rather than as part of either layer. */}
             {guides.map((guide) => (
@@ -969,7 +972,9 @@ export function LayerStage({
                   onPointerDown={startRotate(only)}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Rotate ${only.name} — [ and ] keys`}
+                  aria-label={translateUi('rotate_value0_and_keys_d5589b27', {
+                    value0: String(only.name),
+                  })}
                   onKeyDown={(event) => turnFromKeyboard(only, event)}
                   data-testid="layer-rotate-handle"
                 />
@@ -1008,7 +1013,10 @@ export function LayerStage({
                         // route to a layer's size was typing a scale percentage.
                         tabIndex={0}
                         role="button"
-                        aria-label={`Resize ${only.name} from the ${HANDLE_LABELS[handle]} — arrow keys`}
+                        aria-label={translateUi('resize_value0_from_the_value1_arrow_6369e197', {
+                          value0: String(only.name),
+                          value1: String(HANDLE_LABELS[handle]),
+                        })}
                         onKeyDown={(event) => nudgeHandle(only, handle, event)}
                         data-testid={`layer-resize-${handle}`}
                       />
@@ -1040,9 +1048,13 @@ export function LayerStage({
       <span className="sr-only" aria-live="polite" data-testid="layer-announcement">
         {readout || !only
           ? ''
-          : `${only.name} at x ${Math.round(only.position.x)}, y ${Math.round(
-              only.position.y,
-            )}, ${Math.round(only.scale.x * 100)} percent, ${Math.round(only.rotation)} degrees`}
+          : translateUi('value0_at_x_value1_y_value2_value3__967c7544', {
+              value0: String(only.name),
+              value1: String(Math.round(only.position.x)),
+              value2: String(Math.round(only.position.y)),
+              value3: String(Math.round(only.scale.x * 100)),
+              value4: String(Math.round(only.rotation)),
+            })}
       </span>
 
       {dropActive ? (
@@ -1055,7 +1067,8 @@ export function LayerStage({
           style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}
           data-testid="layer-drop-target"
         >
-          Drop to add as a layer
+          {' '}
+          {translateUi('drop_to_add_as_a_layer_dd3f0538')}{' '}
         </div>
       ) : null}
 
@@ -1088,7 +1101,7 @@ export function LayerStage({
           // The percentage used to be a label for a control that did not exist. Clicking
           // it fits; the chords are ⌘0 fit, ⌘1 for 1:1, ⌘± to step.
           onClick={fitToPane}
-          title="Fit to the pane (⌘0). ⌘1 for 100%."
+          title={translateUi('fit_to_the_pane_0_1_for_100_5298f70b')}
           className={cn(
             'rounded bg-background/80 px-1.5 py-0.5 text-2xs tabular-nums text-muted-foreground',
             'transition-colors hover:bg-background hover:text-foreground',

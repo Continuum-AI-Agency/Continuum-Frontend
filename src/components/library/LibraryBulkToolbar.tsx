@@ -23,6 +23,7 @@ import {
   Workflow,
   X,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -51,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { createElement, elementsQueryKey } from '@/lib/ai-studio/elements';
 import {
   BULK_CHUNK_SIZE,
@@ -66,8 +68,8 @@ import {
 } from '@/lib/library/creativeOperations';
 import { createCustomField } from '@/lib/library/customFields';
 import { createShareLink } from '@/lib/library/share';
-import { mediaSchema } from '@/lib/media/supabase-media';
 import { useLibraryAccess } from '@/lib/library/useBrandRole';
+import { mediaSchema } from '@/lib/media/supabase-media';
 import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { CompareAssetsDialog } from './detail/compare/CompareAssetsDialog';
@@ -103,6 +105,10 @@ export function LibraryBulkToolbar({
    */
   onProjectCreatedAction?: (projectId: string) => void;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [collectionId, setCollectionId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -171,9 +177,11 @@ export function LibraryBulkToolbar({
         collectionId: currentCollectionId,
       });
       setMatchingIds(ids);
-      setMessage(`All ${ids.length} matching selected`);
+      setMessage(
+        translateUi('all_value0_matching_selected_2325c7e7', { count: Number(ids.length) }),
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Selecting failed');
+      setMessage(uiErrorText(error));
     } finally {
       setBusy(null);
     }
@@ -222,10 +230,10 @@ export function LibraryBulkToolbar({
     try {
       await operation();
       const count = writtenCount.current ?? targetIds.length;
-      setMessage(`${label} · ${count} ${count === 1 ? 'asset' : 'assets'}`);
+      setMessage(translateUi('bulkActionCompleted', { action: label, count }));
       onCompleted();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : `${label} failed`);
+      setMessage(uiErrorText(error));
     } finally {
       setBusy(null);
       setProgress(null);
@@ -244,8 +252,7 @@ export function LibraryBulkToolbar({
           data-testid="bulk-compare"
           onClick={() => setCompareOpen(true)}
         >
-          <Columns2 className="size-3.5" />
-          Compare
+          <Columns2 className="size-3.5" /> {translateUi('compare_e888155d')}{' '}
         </Button>
         <CompareAssetsDialog
           brandId={brandId}
@@ -263,10 +270,11 @@ export function LibraryBulkToolbar({
       <div className="sticky top-0 z-20 flex items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-sm backdrop-blur">
         <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
           <Check className="size-3.5 text-primary" aria-hidden />
-          {targetIds.length} selected
+          {targetIds.length} {translateUi('selected_d7cbbb68')}{' '}
         </span>
         <span className="flex-1 text-xs text-muted-foreground">
-          View only — your role cannot change these assets.
+          {' '}
+          {translateUi('view_only_your_role_cannot_change_t_f08a89b7')}{' '}
         </span>
         {compare}
         <Button
@@ -275,7 +283,7 @@ export function LibraryBulkToolbar({
           variant="ghost"
           className="size-7"
           onClick={onClear}
-          aria-label="Clear selection"
+          aria-label={translateUi('clear_selection_cea4d2e0')}
         >
           <X className="size-3.5" />
         </Button>
@@ -287,7 +295,7 @@ export function LibraryBulkToolbar({
     <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-sm backdrop-blur">
       <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
         <Check className="size-3.5 text-primary" aria-hidden />
-        {targetIds.length} selected
+        {targetIds.length} {translateUi('selected_d7cbbb68')}{' '}
       </span>
       {matchingIds === null ? (
         <Button
@@ -298,7 +306,8 @@ export function LibraryBulkToolbar({
           disabled={Boolean(busy)}
           onClick={() => void selectAllMatching()}
         >
-          Select all matching
+          {' '}
+          {translateUi('select_all_matching_76f5ac0c')}{' '}
         </Button>
       ) : null}
       <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
@@ -308,10 +317,10 @@ export function LibraryBulkToolbar({
             <SelectTrigger
               size="sm"
               className="h-7 w-24 border-0 shadow-none"
-              aria-label="Assign field"
+              aria-label={translateUi('assign_field_9819a6bf')}
             >
               <SelectValue
-                placeholder="Field"
+                placeholder={translateUi('field_f45fc1df')}
                 items={Object.fromEntries(userFields.map((field) => [field.id, field.name]))}
               />
             </SelectTrigger>
@@ -353,7 +362,8 @@ export function LibraryBulkToolbar({
                 )
               }
             >
-              Assign
+              {' '}
+              {translateUi('assign_8ece895c')}{' '}
             </Button>
           </>
         ) : (
@@ -369,14 +379,19 @@ export function LibraryBulkToolbar({
               })
             }
           >
-            Add an Assignee field
+            {' '}
+            {translateUi('add_an_assignee_field_323c3103')}{' '}
           </Button>
         )}
       </div>
       <Select value={collectionId} onValueChange={setCollectionId}>
-        <SelectTrigger size="sm" className="h-8 w-44" aria-label="Destination collection">
+        <SelectTrigger
+          size="sm"
+          className="h-8 w-44"
+          aria-label={translateUi('destination_collection_220d2418')}
+        >
           <SelectValue
-            placeholder="Choose collection"
+            placeholder={translateUi('choose_collection_61a0d014')}
             items={Object.fromEntries(
               collections.map((collection) => [collection.id, collection.name]),
             )}
@@ -410,8 +425,7 @@ export function LibraryBulkToolbar({
           )
         }
       >
-        <FolderInput className="size-3.5" />
-        Add
+        <FolderInput className="size-3.5" /> {translateUi('add_9fd728c6')}{' '}
       </Button>
       {currentCollectionId ? (
         <Button
@@ -432,7 +446,8 @@ export function LibraryBulkToolbar({
             )
           }
         >
-          Remove here
+          {' '}
+          {translateUi('remove_here_29f81498')}{' '}
         </Button>
       ) : null}
       {/* Rendered unconditionally, including at zero projects. It used to disappear when the
@@ -442,9 +457,13 @@ export function LibraryBulkToolbar({
       <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
         <FolderOpen className="size-3.5 text-muted-foreground" aria-hidden />
         <Select value={projectId} onValueChange={onProjectChange}>
-          <SelectTrigger size="sm" className="h-7 w-32 border-0 shadow-none" aria-label="Project">
+          <SelectTrigger
+            size="sm"
+            className="h-7 w-32 border-0 shadow-none"
+            aria-label={translateUi('project_98595978')}
+          >
             <SelectValue
-              placeholder="Project"
+              placeholder={translateUi('project_98595978')}
               items={{
                 ...Object.fromEntries(projects.map((project) => [project.id, project.name])),
                 [NEW_PROJECT]: 'New project…',
@@ -457,7 +476,7 @@ export function LibraryBulkToolbar({
                 {project.name}
               </SelectItem>
             ))}
-            <SelectItem value={NEW_PROJECT}>New project…</SelectItem>
+            <SelectItem value={NEW_PROJECT}>{translateUi('new_project_cf8d3c2d')}</SelectItem>
           </SelectContent>
         </Select>
         <Button
@@ -476,7 +495,8 @@ export function LibraryBulkToolbar({
             )
           }
         >
-          Tag
+          {' '}
+          {translateUi('tag_1503916a')}{' '}
         </Button>
         {/* Untag had no caller anywhere in the app, so the DELETE route was unreachable and
             a bulk mis-tag was permanent from the product. Undo belongs next to the action. */}
@@ -496,23 +516,29 @@ export function LibraryBulkToolbar({
             )
           }
         >
-          Untag
+          {' '}
+          {translateUi('untag_fecbff32')}{' '}
         </Button>
       </div>
 
       <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>New project</DialogTitle>
+            <DialogTitle>{translateUi('new_project_a41eb2bf')}</DialogTitle>
             <DialogDescription>
-              Creates the project and adds the {assetIds.length} selected{' '}
-              {assetIds.length === 1 ? 'asset' : 'assets'} to it.
+              {' '}
+              {translateUi('creates_the_project_and_adds_the_37a255f0')} {assetIds.length}{' '}
+              {translateUi('selected_d7cbbb68')}{' '}
+              {assetIds.length === 1
+                ? translateUi('asset_d59386e0')
+                : translateUi('assets_8bf729ff')}{' '}
+              {translateUi('to_it_661b490b')}{' '}
             </DialogDescription>
           </DialogHeader>
           <Input
             autoFocus
             value={newProjectName}
-            placeholder="Winter challenge"
+            placeholder={translateUi('winter_challenge_c7c41dc0')}
             onChange={(event) => setNewProjectName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void createAndTag();
@@ -525,7 +551,8 @@ export function LibraryBulkToolbar({
               disabled={!newProjectName.trim() || Boolean(busy)}
               onClick={() => void createAndTag()}
             >
-              Create and add
+              {' '}
+              {translateUi('create_and_add_1f0cce16')}{' '}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -535,7 +562,7 @@ export function LibraryBulkToolbar({
         <input
           value={tag}
           onChange={(event) => setTag(event.target.value)}
-          placeholder="Add tag"
+          placeholder={translateUi('add_tag_3e10b08c')}
           className="h-7 w-28 bg-transparent px-2 text-xs outline-none"
         />
         <Button
@@ -554,7 +581,8 @@ export function LibraryBulkToolbar({
             })
           }
         >
-          Apply
+          {' '}
+          {translateUi('apply_31e392d1')}{' '}
         </Button>
       </div>
       <div className="flex items-center gap-1 rounded-md border border-border bg-background pl-2">
@@ -563,10 +591,10 @@ export function LibraryBulkToolbar({
           <SelectTrigger
             size="sm"
             className="h-7 w-32 border-0 shadow-none"
-            aria-label="Review status"
+            aria-label={translateUi('review_status_a410d701')}
           >
             <SelectValue
-              placeholder="Review status"
+              placeholder={translateUi('review_status_a410d701')}
               items={{
                 draft: 'Draft',
                 in_review: 'In review',
@@ -576,10 +604,10 @@ export function LibraryBulkToolbar({
             />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="in_review">In review</SelectItem>
-            <SelectItem value="needs_changes">Needs changes</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="draft">{translateUi('draft_ebf12ef4')}</SelectItem>
+            <SelectItem value="in_review">{translateUi('in_review_c3905914')}</SelectItem>
+            <SelectItem value="needs_changes">{translateUi('needs_changes_17fa92a7')}</SelectItem>
+            <SelectItem value="approved">{translateUi('approved_87b42e40')}</SelectItem>
           </SelectContent>
         </Select>
         <Button
@@ -600,7 +628,8 @@ export function LibraryBulkToolbar({
             )
           }
         >
-          Apply
+          {' '}
+          {translateUi('apply_31e392d1')}{' '}
         </Button>
       </div>
       {customFields.length > 0 ? (
@@ -616,10 +645,10 @@ export function LibraryBulkToolbar({
             <SelectTrigger
               size="sm"
               className="h-7 w-28 border-0 shadow-none"
-              aria-label="Custom field"
+              aria-label={translateUi('custom_field_6163a41c')}
             >
               <SelectValue
-                placeholder="Field"
+                placeholder={translateUi('field_f45fc1df')}
                 items={Object.fromEntries(customFields.map((field) => [field.id, field.name]))}
               />
             </SelectTrigger>
@@ -660,7 +689,8 @@ export function LibraryBulkToolbar({
               )
             }
           >
-            Set
+            {' '}
+            {translateUi('set_b6f6f3ad')}{' '}
           </Button>
         </div>
       ) : null}
@@ -689,8 +719,7 @@ export function LibraryBulkToolbar({
           })
         }
       >
-        <Link2 className="size-3.5" />
-        Share box
+        <Link2 className="size-3.5" /> {translateUi('share_box_21c716f6')}{' '}
       </Button>
       {compare}
       <Button
@@ -713,8 +742,7 @@ export function LibraryBulkToolbar({
           })
         }
       >
-        <Layers className="size-3.5" />
-        Mark as Element
+        <Layers className="size-3.5" /> {translateUi('mark_as_element_29af581b')}{' '}
       </Button>
       <Button
         type="button"
@@ -724,22 +752,26 @@ export function LibraryBulkToolbar({
         disabled={Boolean(busy)}
         onClick={() => setConfirmingDelete(true)}
       >
-        <Trash2 className="size-3.5" />
-        Delete
+        <Trash2 className="size-3.5" /> {translateUi('delete_e2d0a549')}{' '}
       </Button>
       <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm">
-              Delete {assetIds.length === 1 ? 'this asset' : `these ${assetIds.length} assets`}?
+              {' '}
+              {translateUi('delete_e2d0a549')}{' '}
+              {assetIds.length === 1
+                ? translateUi('this_asset_ad2fbd56')
+                : translateUi('these_value0_assets_52f4e3c8', { count: Number(assetIds.length) })}
+              ?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              They leave your library, along with every slide of any carousel you selected.
-              Comments, versions and approvals are kept, and support can still bring them back.
+              {' '}
+              {translateUi('they_leave_your_library_along_with__6d5939fa')}{' '}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translateUi('cancel_19766ed6')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setConfirmingDelete(false);
@@ -751,7 +783,8 @@ export function LibraryBulkToolbar({
                 });
               }}
             >
-              Delete
+              {' '}
+              {translateUi('delete_e2d0a549')}{' '}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -775,7 +808,7 @@ export function LibraryBulkToolbar({
         variant="ghost"
         className="size-7"
         onClick={onClear}
-        aria-label="Clear selection"
+        aria-label={translateUi('clear_selection_cea4d2e0')}
       >
         <X className="size-3.5" />
       </Button>

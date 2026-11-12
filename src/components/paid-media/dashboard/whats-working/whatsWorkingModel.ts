@@ -4,6 +4,12 @@
 // materialized paid_media.creative_reports row, so the funnel filter, the
 // labels, and the formatters live here rather than being duplicated per surface.
 
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+
+type ScaleCopy = ReturnType<typeof useTranslations<'scale'>>;
+
 import {
   type CreativeWinRateFlag,
   type CreativeWinRateRow,
@@ -13,6 +19,7 @@ import {
   type PaidCreativeVerdict,
 } from '@continuum/contracts';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
+import { creativeAngleLabel } from '@/lib/paid-media/creativeDisplayLabels';
 
 // The funnel filter, the thin-evidence rule and the two selectors moved into
 // `@continuum/contracts` when the automations `whats_working` source began
@@ -66,30 +73,50 @@ export const VERDICT_STYLE: Record<PaidCreativeVerdict['verdict'], string> = {
 export const humanize = (value: string): string => value.replace(/_/g, ' ');
 
 /** A closed angle id reads by its display name; every other value is humanized. */
-export const categoryValueLabel = (row: Pick<CreativeWinRateRow, 'dimension' | 'value'>): string =>
+export const categoryValueLabel = (
+  row: Pick<CreativeWinRateRow, 'dimension' | 'value'>,
+  uiTranslate?: ScaleCopy,
+): string =>
   row.dimension === 'angle_id' && row.value in GLOBAL_ANGLE_LABELS
-    ? GLOBAL_ANGLE_LABELS[row.value as GlobalAngleId]
+    ? uiTranslate
+      ? creativeAngleLabel(row.value as GlobalAngleId, uiTranslate)
+      : GLOBAL_ANGLE_LABELS[row.value as GlobalAngleId]
     : humanize(row.value);
 
-export const percent = (value: number | null): string =>
-  value === null ? '—' : `${Math.round(value * 100)}%`;
+export const percent = (value: number | null, locale: UiLocale = 'en'): string =>
+  value === null
+    ? '—'
+    : new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
+        Math.round(value * 100) / 100,
+      );
 
 // Money in the AD ACCOUNT's currency, through the optimizer's formatter: an unknown code
 // prints the bare figure rather than "$", because "$" on a peso account misreads by ~20x.
 // The report itself carries no money currency (its win-rate rows do, per account; its
 // verdicts do not), so callers pass the account's code — useAdAccountCurrency on a page,
 // row.currency in the explorer.
-export const money = (value: number | null, currency: string | null | undefined): string =>
-  formatCurrency(value, currency);
+export const money = (
+  value: number | null,
+  currency: string | null | undefined,
+  locale: UiLocale = 'en',
+): string => formatCurrency(value, currency, locale);
 
 export const isHttpUrl = (value: string | null | undefined): value is string =>
   typeof value === 'string' && /^https?:\/\//.test(value);
 
 /** CPA read against its cohort median, e.g. "0.6x cohort median". */
-export const cohortMultipleLabel = (verdict: PaidCreativeVerdict): string | null =>
+export const cohortMultipleLabel = (
+  verdict: PaidCreativeVerdict,
+  uiTranslate?: ScaleCopy,
+  locale: UiLocale = 'en',
+): string | null =>
   verdict.cpaVsCohortMedian === null || verdict.cpaVsCohortMedian === undefined
     ? null
-    : `${verdict.cpaVsCohortMedian.toFixed(1)}x cohort median`;
+    : uiTranslate
+      ? uiTranslate('chartCohortMultiple', {
+          multiple: formatDecimal(verdict.cpaVsCohortMedian, 1, locale),
+        })
+      : `${verdict.cpaVsCohortMedian.toFixed(1)}x cohort median`;
 
 // Explorer sections, most-decision-worthy first. Free-text angle sits last: it is
 // the long tail (one ad per value, mostly) the closed `angle_id` replaced.

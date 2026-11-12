@@ -13,11 +13,11 @@ import type {
   CanvasPublishingSlot,
   CanvasRenderContinuation,
   CanvasTimelineRenderRequest,
+  FastCutNodeData as ContractFastCutNodeData,
   HyperframesAgentNodeData as ContractHyperframesAgentNodeData,
   DesignSection,
   EditorProductionSummary,
   ElementUseIntent,
-  FastCutNodeData as ContractFastCutNodeData,
   ImageGeneratorModel,
   ImageSize,
   ShaderStackV1,
@@ -39,6 +39,7 @@ import type { BatchRunRecord } from '../utils/batch/generationFanout';
 import type { BlendMode, ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
+import type { WorkflowUiFailure } from '../utils/workflowUiFailure';
 
 export type {
   BrandBookPieceKind,
@@ -72,6 +73,7 @@ export interface BaseNodeData extends Record<string, unknown> {
   // guidance panel so the user is told what to change instead of the raw provider
   // sentence. See utils/generationErrorCopy.
   errorCode?: string;
+  uiFailure?: WorkflowUiFailure;
   executionTime?: number;
   isToolbarVisible?: boolean;
   isTourSeed?: boolean;

@@ -6,6 +6,7 @@ import type {
   JainaToolApprovalRequiredPayload,
 } from '@continuum/contracts';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { SentDocumentAttachments } from '@/components/chat/attachments';
@@ -166,6 +167,7 @@ function JainaMessageItemImpl({
   onOperatorAction,
   onOpenAccountRead,
 }: JainaMessageItemProps) {
+  const uiText = useTranslations('scale');
   const isStreaming = message.status === 'streaming';
 
   const reasoning = message.reasoning;
@@ -279,7 +281,7 @@ function JainaMessageItemImpl({
             </span>
             <ChatMediaGrid
               items={mediaFromPersistedAttachments(message.id, message.metadata?.attachments)}
-              lightboxTitle="Attachment"
+              lightboxTitle={uiText('jainaAttachment')}
             />
             <SentDocumentAttachments documents={message.metadata?.documents} />
           </>
@@ -307,8 +309,8 @@ function JainaMessageItemImpl({
             {showStaticFallback ? (
               <span className="text-sm text-muted-foreground">
                 {message.status === 'error'
-                  ? 'Jaina could not finish this response.'
-                  : 'Response complete.'}
+                  ? uiText('jaina_could_not_finish_this_response_ac4a6c9')
+                  : uiText('response_complete_8107ce7')}
               </span>
             ) : null}
 

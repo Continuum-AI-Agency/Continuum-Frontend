@@ -1,5 +1,11 @@
 import { afterEach, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 // The agent's upload link: a template project rides the same handoff as a brief's documents and
 // media, uploaded the way the gallery uploads it, and comes back to the agent as a `template` ref.
@@ -23,7 +29,9 @@ const importDesignTemplate = mock(async () => ({
   parseState: 'pending',
   status: 'created' as const,
 }));
-const fetchTemplateSources = mock(async () => [{ assetId: 'authored-asset', versionId: 'authored-version' }]);
+const fetchTemplateSources = mock(async () => [
+  { assetId: 'authored-asset', versionId: 'authored-version' },
+]);
 
 mock.module('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('mcpSourceIntent=intent-1'),
@@ -45,7 +53,13 @@ const { ForgeSourceHandoff } = await import('./ForgeSourceHandoff');
 afterEach(() => {
   cleanup();
   order.length = 0;
-  for (const fn of [invoke, uploadMediaAsset, uploadTemplateFontFiles, importDesignTemplate, fetchTemplateSources])
+  for (const fn of [
+    invoke,
+    uploadMediaAsset,
+    uploadTemplateFontFiles,
+    importDesignTemplate,
+    fetchTemplateSources,
+  ])
     fn.mockClear();
 });
 
@@ -65,7 +79,9 @@ test('an After Effects project and a Photoshop design reach the agent as templat
   expect(order).toEqual(['fonts Brand.ttf', 'upload promo.aep', 'upload poster.psd']);
   // The PSD becomes its own authored package, and that package is what the agent publishes.
   expect(importDesignTemplate.mock.calls).toEqual([['brand-1', 'poster.psd-asset']]);
-  const completion = invoke.mock.calls.find(([, options]) => options.body.action === 'complete_forge_source_intent');
+  const completion = invoke.mock.calls.find(
+    ([, options]) => options.body.action === 'complete_forge_source_intent',
+  );
   expect(completion?.[1].body).toEqual({
     action: 'complete_forge_source_intent',
     brandId: 'brand-1',
@@ -79,6 +95,10 @@ test('an After Effects project and a Photoshop design reach the agent as templat
 
 test('a fourth template project is refused before the handoff completes', async () => {
   await choose(['a', 'b', 'c', 'd'].map((name) => file(`${name}.aep`)));
-  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Use at most three template projects.'));
-  expect(invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent')).toBe(false);
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe('Use at most three template projects.'),
+  );
+  expect(
+    invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent'),
+  ).toBe(false);
 });

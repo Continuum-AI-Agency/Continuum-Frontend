@@ -1,6 +1,11 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { createEditorProjectV2 } from '@continuum/contracts';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 const ID = '22222222-2222-4222-8222-222222222222';

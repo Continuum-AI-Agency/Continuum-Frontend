@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // CPA-over-cycles trend as a BKLit area chart. CPA per point is derived the same
 // way the engine does — spend / conversions on the trailing 7-day window
 // (deriveCpa) — so the number matches what agents/MCP report (nothing lies). The
@@ -26,12 +31,18 @@ type CpaTrendChartProps = {
 };
 
 export function CpaTrendChart({ series, currency, objective }: CpaTrendChartProps) {
-  const metric = getOptimizationMetricDefinition(objective);
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(objective),
+    optimizerText,
+  );
   const points = buildCpaTrendPoints(series, metric.denominatorMultiplier);
   const summary = cpaTrendSummary(points);
 
   if (!summary) {
-    return <ChartEmpty message={`${metric.costLabel} trend appears after a few scored cycles.`} />;
+    return <ChartEmpty message={uiText('chartCostTrendEmpty', { metric: metric.costLabel })} />;
   }
 
   const { last, deltaPct } = summary;
@@ -42,7 +53,7 @@ export function CpaTrendChart({ series, currency, objective }: CpaTrendChartProp
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
-          {metric.costLabel} trend · {points.length} cycles
+          {uiText.rich('sentence_5c3b8c0d577f', { v0: metric.costLabel, v1: points.length })}
         </span>
         <span
           className={cn(
@@ -51,7 +62,7 @@ export function CpaTrendChart({ series, currency, objective }: CpaTrendChartProp
           )}
         >
           <TrendIcon className="size-3.5" aria-hidden="true" />
-          {Math.abs(deltaPct)}% · {formatCpa(last, currency)}
+          {Math.abs(deltaPct)}% · {formatCpa(last, currency, uiLocale)}
         </span>
       </div>
       <AreaChart

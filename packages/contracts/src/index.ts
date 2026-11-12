@@ -70,3 +70,4 @@ export * from './media/template-authoring-created-motion';
 export * from './media/template-package-fonts';
 
 export * from './hyperframes-aep/authoring';
+export * from './errors/api-error';

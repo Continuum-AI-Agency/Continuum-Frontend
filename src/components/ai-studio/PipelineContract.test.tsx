@@ -4,7 +4,7 @@ import type {
   PipelineManifest,
   PipelineManifestInput,
 } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { PipelineContract } from './PipelineContract';
 
 const input = (over: Partial<PipelineManifestInput> = {}): PipelineManifestInput => ({

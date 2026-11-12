@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
 // Shared "post activity" markers for organic reporting time-series charts. Given
 // the canonical annotated join from @continuum/contracts, this renders one dashed
 // vertical recharts ReferenceLine per calendar day that had published posts,
@@ -33,14 +36,6 @@ const CONTENT_TYPE_COLOR: Record<PostContentType, string> = {
   post: 'var(--color-secondary)',
   story: 'var(--chart-3)',
   video: 'var(--chart-2)',
-};
-
-const CONTENT_TYPE_LABEL: Record<PostContentType, string> = {
-  reel: 'Reel',
-  short: 'Short',
-  post: 'Post',
-  story: 'Story',
-  video: 'Video',
 };
 
 const MIXED_COLOR = 'var(--color-muted-foreground)';
@@ -100,23 +95,25 @@ export function buildPostActivityDays(
   );
 }
 
-function formatTime(timestamp: string | undefined): string {
+function formatTime(timestamp: string | undefined, locale: UiLocale): string {
   if (!timestamp) return '';
   const parsed = new Date(timestamp);
   if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return parsed.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
 }
 
-function formatDayHeading(date: string): string {
+function formatDayHeading(date: string, locale: UiLocale): string {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return parsed.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function PostRow({ post }: { post: OrganicPostSummary }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const type = classifyPostContentType(post);
   const thumbnail = post.thumbnailUrl ?? post.mediaUrl ?? null;
-  const time = formatTime(post.timestamp);
+  const time = formatTime(post.timestamp, uiLocale);
   const caption = (post.caption ?? '').trim();
 
   return (
@@ -136,14 +133,16 @@ function PostRow({ post }: { post: OrganicPostSummary }) {
             className="rounded-full px-1.5 py-0.5 text-2xs font-semibold leading-none text-white"
             style={{ backgroundColor: CONTENT_TYPE_COLOR[type] }}
           >
-            {CONTENT_TYPE_LABEL[type]}
+            {uiText('activityContentType', { type })}
           </span>
           {time ? <span className="text-xs text-muted-foreground">{time}</span> : null}
         </div>
         {caption ? (
           <p className="mt-1 line-clamp-2 text-xs text-foreground/90">{caption.slice(0, 120)}</p>
         ) : (
-          <p className="mt-1 text-xs italic text-muted-foreground">No caption</p>
+          <p className="mt-1 text-xs italic text-muted-foreground">
+            {uiText('no_caption_b7e50ba')}
+          </p>
         )}
         {post.permalink ? (
           <a
@@ -152,7 +151,7 @@ function PostRow({ post }: { post: OrganicPostSummary }) {
             rel="noreferrer"
             className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
           >
-            View post ↗
+            {uiText('view_post_4004e10')}
           </a>
         ) : null}
       </div>
@@ -164,6 +163,8 @@ type LabelViewBox = { x?: number; y?: number; width?: number; height?: number };
 
 // Rendered by recharts as a ReferenceLine `label`; recharts injects `viewBox`.
 function PostFlagLabel(props: { viewBox?: LabelViewBox; day: AnnotatedDailyTrend; color: string }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const { viewBox, day, color } = props;
   const centerX = viewBox?.x ?? 0;
   const top = viewBox?.y ?? 0;
@@ -185,7 +186,10 @@ function PostFlagLabel(props: { viewBox?: LabelViewBox; day: AnnotatedDailyTrend
             render={
               <button
                 type="button"
-                aria-label={`${count} post${count === 1 ? '' : 's'} published on ${day.date}`}
+                aria-label={uiText('publishedPostsOnDate', {
+                  count,
+                  date: formatDayHeading(day.date, uiLocale),
+                })}
                 className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-3xs font-bold leading-none text-white shadow-sm ring-1 ring-white/60 outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                 style={{ backgroundColor: color }}
               >
@@ -195,9 +199,11 @@ function PostFlagLabel(props: { viewBox?: LabelViewBox; day: AnnotatedDailyTrend
           />
           <HoverCardContent side="top" align="center" className="w-72 overflow-hidden p-0">
             <div className="border-b border-border/70 bg-muted/30 px-3 py-2">
-              <p className="text-xs font-semibold text-foreground">{formatDayHeading(day.date)}</p>
+              <p className="text-xs font-semibold text-foreground">
+                {formatDayHeading(day.date, uiLocale)}
+              </p>
               <p className="text-xs text-muted-foreground">
-                {count} post{count === 1 ? '' : 's'} published
+                {uiText.rich('sentence_fb5e4f43e682', { count: count })}
               </p>
             </div>
             <div className="max-h-64 divide-y divide-border/60 overflow-y-auto">

@@ -1,3 +1,5 @@
+import type { useTranslations } from 'next-intl';
+import { localizeCompetitorCopy } from '@/i18n/competitorCopy';
 // Maps a tracked Competitor row onto the shared health-chip input and derives its
 // per-competitor operational chip (IMP-009 / FEAT-009). Thin, no durable monitor:
 // it composes the status enums the row already carries plus the one durable
@@ -30,8 +32,10 @@ export function toCompetitorHealthInput(
 export function competitorHealthChip(
   competitor: Competitor,
   adsFound?: number | null,
+  translate?: ReturnType<typeof useTranslations<'competitor'>>,
 ): CompetitorHealthChip {
-  return deriveCompetitorHealthChip(toCompetitorHealthInput(competitor, adsFound));
+  const chip = deriveCompetitorHealthChip(toCompetitorHealthInput(competitor, adsFound));
+  return translate ? { ...chip, label: localizeCompetitorCopy(chip.label, translate) } : chip;
 }
 
 // Remediation copy — what the user does next to move a competitor toward healthy.
@@ -45,6 +49,11 @@ const HEALTH_GUIDANCE: Record<CompetitorHealthState, string> = {
   sync_error: "The last sync failed. Retry, or re-check this competitor's details.",
 };
 
-export function competitorHealthGuidance(state: CompetitorHealthState): string {
-  return HEALTH_GUIDANCE[state];
+export function competitorHealthGuidance(
+  state: CompetitorHealthState,
+  translate?: ReturnType<typeof useTranslations<'competitor'>>,
+): string {
+  return translate
+    ? localizeCompetitorCopy(HEALTH_GUIDANCE[state], translate)
+    : HEALTH_GUIDANCE[state];
 }

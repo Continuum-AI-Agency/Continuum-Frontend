@@ -1,18 +1,18 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // grandfathered: the tier-era gate — a warning toast and a replace to the dashboard — kept
 // verbatim. ProductGate renders it while billing is not live (every gated page, exactly as before)
 // and, once live, when a grandfathered brand below tier 3 opens Forge. Keep it at the cutover.
 
 import { ShieldAlert } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useRouter } from '@/i18n/navigation';
 
 const DEFAULT_REDIRECT = '/dashboard';
-const DEFAULT_TITLE = 'Access Restricted';
 
 type LegacyTierRedirectProps = {
   description: string;
@@ -22,9 +22,12 @@ type LegacyTierRedirectProps = {
 
 export function LegacyTierRedirect({
   description,
-  title = DEFAULT_TITLE,
+  title: providedTitle,
   redirectTo = DEFAULT_REDIRECT,
 }: LegacyTierRedirectProps) {
+  const tUi = useTranslations('common');
+  const title = providedTitle ?? tUi('accessRestricted');
+
   const { show } = useToast();
   const router = useRouter();
   const hasTriggered = useRef(false);
@@ -53,7 +56,7 @@ export function LegacyTierRedirect({
             <p className="text-sm text-muted-foreground">{description}</p>
           </div>
           <Button variant="secondary" onClick={() => router.replace(redirectTo)}>
-            Back to dashboard
+            {tUi('m_b3963db5ea')}
           </Button>
         </CardContent>
       </Card>

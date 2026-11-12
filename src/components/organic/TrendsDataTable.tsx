@@ -23,6 +23,7 @@ import {
   MessageCircle,
   MoreHorizontal,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Fragment } from 'react';
 
@@ -99,11 +100,14 @@ function shortHost(url?: string): string | null {
   }
 }
 
-function formatRelativeDate(value?: string): string | null {
+function formatRelativeDate(
+  value: string | undefined,
+  locale: ReturnType<typeof useLocale>,
+): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return formatRelativeTime(date);
+  return formatRelativeTime(date, undefined, locale);
 }
 
 function CitationsList({
@@ -117,6 +121,8 @@ function CitationsList({
   insightId: string;
   enabled: boolean;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const query = useQuery({
     queryKey: ['insight-citations', brandProfileId, kind, insightId],
     queryFn: () => fetchInsightCitations({ brandId: brandProfileId, insightType: kind, insightId }),
@@ -127,14 +133,17 @@ function CitationsList({
   if (query.isLoading) {
     return (
       <div className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" /> Loading source signals…
+        <Loader2 className="h-3 w-3 animate-spin" />
+        {uiText('loading_source_signals_1307d09')}
       </div>
     );
   }
 
   if (query.isError) {
     return (
-      <p className="px-1 py-2 text-xs text-muted-foreground">Could not load source signals.</p>
+      <p className="px-1 py-2 text-xs text-muted-foreground">
+        {uiText('could_not_load_source_signals_110ed35')}
+      </p>
     );
   }
 
@@ -142,7 +151,7 @@ function CitationsList({
   if (citations.length === 0) {
     return (
       <p className="px-1 py-2 text-xs text-muted-foreground">
-        No source signals — likely a synthesis-only insight.
+        {uiText('no_source_signals_likely_a_synthesis_only_ins_735c862')}
       </p>
     );
   }
@@ -151,12 +160,15 @@ function CitationsList({
     <ul className="flex flex-col divide-y divide-border/40">
       {citations.map((citation) => {
         const host = shortHost(citation.sourceUrl);
-        const relative = formatRelativeDate(citation.publishedAt);
+        const relative = formatRelativeDate(citation.publishedAt, uiLocale);
         return (
           <li key={citation.id} className="flex flex-col gap-1 px-1 py-1.5">
             <div className="flex items-start justify-between gap-2">
               <p className="line-clamp-2 text-xs text-foreground">
-                {citation.signalTitle ?? citation.rationale ?? host ?? 'Untitled signal'}
+                {citation.signalTitle ??
+                  citation.rationale ??
+                  host ??
+                  uiText('untitled_signal_6dfa2f2')}
               </p>
               {citation.sourceUrl ? (
                 <a
@@ -203,6 +215,7 @@ function RecommendationsList({
   recommendations: TrendPlatformRecommendation[] | undefined;
   fallback?: string[];
 }) {
+  const uiText = useTranslations('organic');
   if (recommendations && recommendations.length > 0) {
     return (
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs leading-relaxed">
@@ -219,12 +232,16 @@ function RecommendationsList({
   }
 
   if (fallback && fallback.length > 0) {
-    return <p className="text-xs text-foreground">Recommended: {fallback.join(', ')}</p>;
+    return (
+      <p className="text-xs text-foreground">
+        {uiText.rich('sentence_82a64026b5a7', { v0: () => fallback.join(', ') })}
+      </p>
+    );
   }
 
   return (
     <p className="px-1 py-2 text-xs text-muted-foreground">
-      No platform recommendations were captured.
+      {uiText('no_platform_recommendations_were_captured_ec10b35')}
     </p>
   );
 }
@@ -240,6 +257,7 @@ export function TrendsDataTable({
   allowActions = false,
   brandProfileId,
 }: TrendsDataTableProps) {
+  const uiText = useTranslations('organic');
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [momentumFilter, setMomentumFilter] = React.useState<string>('all');
@@ -256,7 +274,7 @@ export function TrendsDataTable({
     if (allowDrag) {
       cols.push({
         id: 'drag',
-        header: () => <span className="sr-only">Drag</span>,
+        header: () => <span className="sr-only">{uiText('drag_442e96e')}</span>,
         size: 40,
         cell: ({ row }) => {
           const trend = row.original;
@@ -291,7 +309,7 @@ export function TrendsDataTable({
     if (allowSelect) {
       cols.push({
         id: 'select',
-        header: () => <span className="sr-only">Select</span>,
+        header: () => <span className="sr-only">{uiText('select_2a78025')}</span>,
         size: 40,
         cell: ({ row }) => (
           // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop the row click; the Checkbox is the control
@@ -300,7 +318,7 @@ export function TrendsDataTable({
             <Checkbox
               checked={selectedTrendIds.includes(row.original.id)}
               onCheckedChange={() => onToggleTrend(row.original.id)}
-              aria-label="Select row"
+              aria-label={uiText('select_row_e87f968')}
             />
           </div>
         ),
@@ -320,7 +338,7 @@ export function TrendsDataTable({
               column.toggleSorting(column.getIsSorted() === 'asc');
             }}
           >
-            Trend
+            {uiText('trend_9e21771')}
             <ArrowUpDown className="ml-1 h-3 w-3" />
           </Button>
         ),
@@ -390,7 +408,12 @@ export function TrendsDataTable({
               <div className="flex items-center gap-2 text-2xs text-muted-foreground">
                 {confidenceLabel ? (
                   <span className="tabular-nums text-muted-foreground">
-                    conf <span className="font-medium text-foreground">{confidenceLabel}</span>
+                    {uiText.rich('confidenceValue', {
+                      confidence: confidenceLabel,
+                      value: (chunks) => (
+                        <span className="font-medium text-foreground">{chunks}</span>
+                      ),
+                    })}
                   </span>
                 ) : null}
                 {typeof meta?.sourceSignalCount === 'number' && meta.sourceSignalCount > 0 ? (
@@ -407,20 +430,20 @@ export function TrendsDataTable({
       },
       {
         accessorKey: 'momentum',
-        header: 'Momentum',
+        header: uiText('momentum_438280e'),
         cell: ({ row }) => {
           const momentum = row.getValue('momentum') as Trend['momentum'];
           return (
             <span className="inline-flex items-center gap-1.5 text-xs capitalize text-foreground">
               <span className={cn('h-1.5 w-1.5 rounded-full', MOMENTUM_DOT_TONE[momentum])} />
-              {momentum}
+              {uiText('trendMomentum', { state: momentum })}
             </span>
           );
         },
       },
       {
         id: 'platforms',
-        header: 'Platforms',
+        header: uiText('platforms_ab9bd75'),
         cell: ({ row }) => (
           <div className="flex flex-wrap items-center gap-2 text-2xs font-medium uppercase tracking-wide">
             {row.original.platforms.map((p) => (
@@ -443,7 +466,7 @@ export function TrendsDataTable({
     if (allowActions) {
       cols.push({
         id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
+        header: () => <span className="sr-only">{uiText('actions_ff8059d')}</span>,
         size: 50,
         cell: ({ row }) => (
           // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop the row click; the menu trigger is the control
@@ -452,21 +475,31 @@ export function TrendsDataTable({
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <Button variant="ghost" className="h-6 w-6 p-0" aria-label="Row actions">
+                  <Button
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    aria-label={uiText('row_actions_67a1892')}
+                  >
                     <MoreHorizontal className="h-3 w-3" />
                   </Button>
                 }
               />
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs">
+                  {uiText('actions_ff8059d')}
+                </DropdownMenuLabel>
                 <DropdownMenuItem
                   className="text-xs"
                   onClick={() => onToggleTrend(row.original.id)}
                 >
-                  {selectedTrendIds.includes(row.original.id) ? 'Remove from plan' : 'Add to plan'}
+                  {selectedTrendIds.includes(row.original.id)
+                    ? uiText('remove_from_plan_e1bc712')
+                    : uiText('add_to_plan_0b583b9')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive text-xs">Ignore</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive text-xs">
+                  {uiText('ignore_fce77c3')}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -476,7 +509,7 @@ export function TrendsDataTable({
 
     cols.push({
       id: 'expand',
-      header: () => <span className="sr-only">Expand</span>,
+      header: () => <span className="sr-only">{uiText('expand_07548c2')}</span>,
       size: 40,
       cell: ({ row }) => (
         <ChevronDown
@@ -503,6 +536,7 @@ export function TrendsDataTable({
     allowSelect,
     allowActions,
     expandedId,
+    uiText,
   ]);
 
   const table = useReactTable({
@@ -520,7 +554,7 @@ export function TrendsDataTable({
     <div className="flex flex-col h-full space-y-2">
       <div className="flex items-center gap-2 px-1 shrink-0">
         <Input
-          placeholder="Filter trends…"
+          placeholder={uiText('filter_trends_0de6319')}
           value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
           onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
           className="h-7 text-xs bg-muted/50 border-border/60 flex-1"
@@ -535,7 +569,7 @@ export function TrendsDataTable({
                   className="h-7 px-2 text-3xs uppercase font-semibold"
                 >
                   <Filter className="mr-1 h-3 w-3" />
-                  {momentumFilter === 'all' ? 'All' : momentumFilter}
+                  {uiText('trendMomentum', { state: momentumFilter })}
                 </Button>
               }
             />
@@ -546,7 +580,7 @@ export function TrendsDataTable({
                   className="text-xs capitalize"
                   onClick={() => setMomentumFilter(value)}
                 >
-                  {value === 'all' ? 'All momentum' : value}
+                  {uiText('trendMomentum', { state: value })}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -605,13 +639,13 @@ export function TrendsDataTable({
                               <Tabs defaultValue="why" className="w-full">
                                 <TabsList className="h-7 gap-1 bg-transparent p-0">
                                   <TabsTrigger value="why" className="h-7 px-2 text-2xs">
-                                    Why
+                                    {uiText('why_d3ae14a')}
                                   </TabsTrigger>
                                   <TabsTrigger value="signals" className="h-7 px-2 text-2xs">
-                                    Signals
+                                    {uiText('signals_88b01c8')}
                                   </TabsTrigger>
                                   <TabsTrigger value="distribution" className="h-7 px-2 text-2xs">
-                                    Distribution
+                                    {uiText('distribution_72a23e5')}
                                   </TabsTrigger>
                                 </TabsList>
                                 <TabsContent
@@ -632,7 +666,9 @@ export function TrendsDataTable({
                                   ) : null}
                                   {meta?.contentTypeSuggestion ? (
                                     <p className="italic text-muted-foreground">
-                                      Suggested format: {meta.contentTypeSuggestion}
+                                      {uiText.rich('sentence_0ab106497313', {
+                                        v0: () => meta.contentTypeSuggestion,
+                                      })}
                                     </p>
                                   ) : null}
                                   {visibleTags.length > 0 ? (
@@ -654,7 +690,9 @@ export function TrendsDataTable({
                                     />
                                   ) : (
                                     <p className="px-1 py-2 text-xs text-muted-foreground">
-                                      Source signals are unavailable without an active brand.
+                                      {uiText(
+                                        'source_signals_are_unavailable_without_an_act_3308283',
+                                      )}
                                     </p>
                                   )}
                                 </TabsContent>
@@ -678,7 +716,9 @@ export function TrendsDataTable({
                     colSpan={columns.length}
                     className="h-16 text-center text-xs text-muted-foreground"
                   >
-                    {data.length === 0 ? 'No trends yet.' : 'No trends match your filters.'}
+                    {data.length === 0
+                      ? uiText('no_trends_yet_e65b4e3')
+                      : uiText('no_trends_match_your_filters_8dc1052')}
                   </TableCell>
                 </TableRow>
               )}

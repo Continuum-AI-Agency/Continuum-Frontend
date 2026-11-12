@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
-import { act, cleanup, fireEvent, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import * as React from 'react';
 import { DestructiveConfirmationProvider } from '@/components/organic/primitives/DestructiveConfirmation';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useDraftEnrichmentLadder } from './useDraftEnrichmentLadder';
 
 // happy-dom does not expose SyntaxError on its window object, which crashes

@@ -3,7 +3,8 @@
 // writes — the marks Recharts draws from the stubbed width, their labels, and the theme tokens
 // they are painted with — not pixels.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { chartBlockV2Schema } from '@/lib/jaina/schemas';
 import { ChartBlock } from './ChartBlock';
 import { CHART_CASES } from './chartCases.fixture';

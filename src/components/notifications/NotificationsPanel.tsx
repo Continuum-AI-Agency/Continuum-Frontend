@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Notification list for the header bell: icon by kind, actor + asset from the
 // payload, relative time, unread dot. Clicking a row marks it read and follows
@@ -15,8 +16,8 @@ import {
   SirenIcon,
   UserCheckIcon,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { useRouter } from '@/i18n/navigation';
 import { describeNotification } from '@/lib/notifications/notifications';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
@@ -53,11 +54,12 @@ export function NotificationsPanel({
   onNavigate,
   inFlight,
 }: NotificationsPanelProps) {
+  const t = useTranslations('common');
   const router = useRouter();
 
   const handleRowClick = (notification: AppNotification) => {
     if (!notification.readAt) onMarkRead(notification.id);
-    const { href } = describeNotification(notification);
+    const { href } = describeNotification(notification, t);
     if (href) {
       onNavigate?.();
       // The Library opens the asset and comment its URL names when it mounts; already on
@@ -76,7 +78,7 @@ export function NotificationsPanel({
 
       <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Notifications
+          {t('notificationsTitle')}
         </p>
         {unreadCount > 0 && (
           <Button
@@ -86,15 +88,17 @@ export function NotificationsPanel({
             onClick={onMarkAllRead}
           >
             <CheckCheckIcon className="size-3" />
-            Mark all read
+            {t('notificationsMarkAll')}
           </Button>
         )}
       </div>
       {loading ? (
-        <p className="px-3 py-4 text-center text-xs text-muted-foreground">Loading…</p>
+        <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+          {t('loading_ba3bbbe')}
+        </p>
       ) : notifications.length === 0 ? (
         <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-          Nothing yet. Review pings and replies land here.
+          {t('notificationsEmpty')}
         </p>
       ) : (
         <div className="max-h-80 space-y-0.5 overflow-y-auto">
@@ -118,12 +122,15 @@ function NotificationRowItem({
   notification: AppNotification;
   onClick: () => void;
 }) {
-  const { title, detail } = describeNotification(notification);
+  const t = useTranslations('common');
+  const locale = useLocale();
+  const { title, detail } = describeNotification(notification, t);
   const Icon = KIND_ICONS[notification.kind];
   const unread = !notification.readAt;
 
   return (
     <button
+      data-notification-id={notification.id}
       type="button"
       onClick={onClick}
       className="flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
@@ -137,7 +144,7 @@ function NotificationRowItem({
             {title}
           </span>
           <span className="shrink-0 text-xs text-muted-foreground">
-            {formatRelativeTime(notification.createdAt)}
+            {formatRelativeTime(notification.createdAt, undefined, locale)}
           </span>
         </div>
         {detail && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{detail}</p>}

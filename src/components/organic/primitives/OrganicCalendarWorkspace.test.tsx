@@ -1,5 +1,6 @@
 import { expect, mock, setSystemTime, test } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup } from '@/i18n/__tests__/render';
+
 import { resolvePlannerInitialDates } from './planner-date-anchor';
 
 let capturedClientProps: Record<string, unknown> | null = null;

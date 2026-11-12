@@ -12,9 +12,16 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type ComponentProps, useState } from 'react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import {
   DataGrid,
   type DataGridMenuTarget,

@@ -1,4 +1,8 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // Scale › Campaigns: every campaign on the Meta account, filtered to active and paused by
 // default (so a scaffold's paused build shows up and archived history stays out), expandable
@@ -78,12 +82,6 @@ const ABO_BUDGET_READS = 25;
 
 const DEFAULT_FILTER: ReadonlySet<CampaignStatusBucket> = new Set(['active', 'paused']);
 
-const BUCKET_LABEL: Record<CampaignStatusBucket, string> = {
-  active: 'Active',
-  paused: 'Paused',
-  archived: 'Archived',
-};
-
 const HEAD = 'h-8 font-normal text-2xs text-muted-foreground uppercase tracking-wider';
 
 /** Quiet text action: shown on row hover or focus where a pointer can hover and the table is
@@ -98,11 +96,13 @@ const ROW_ACTION = cn(
 /** Meta budgets are in the currency's minor unit; zero-decimal currencies (JPY, KRW, ...) have
  *  none. ponytail: ISO minor units via Intl; Meta's own offset table differs for a few (e.g.
  *  HUF, TWD) — read it from the account if one of those ever shows up. */
-function minorUnitDivisor(currency: string | null): number {
+function minorUnitDivisor(currency: string | null, uiLocale: UiLocale = 'en'): number {
   if (!currency) return 100;
   try {
-    const digits = new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
-      .maximumFractionDigits;
+    const digits = new Intl.NumberFormat(uiLocale, {
+      style: 'currency',
+      currency,
+    }).resolvedOptions().maximumFractionDigits;
     return 10 ** (digits ?? 2);
   } catch {
     return 100;
@@ -110,6 +110,8 @@ function minorUnitDivisor(currency: string | null): number {
 }
 
 export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAccountId: string }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const scope = React.useMemo(() => ({ brandId, adAccountId }), [adAccountId, brandId]);
   const queryClient = useQueryClient();
   const currency = useAdAccountCurrency(brandId, adAccountId);
@@ -224,17 +226,23 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 pt-1 pb-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
           <h2 id="scale-campaigns-heading" className="font-semibold text-base tabular-nums">
-            {page ? `${rows.length} ${rows.length === 1 ? 'campaign' : 'campaigns'}` : 'Campaigns'}
+            {page
+              ? `${rows.length} ${rows.length === 1 ? 'campaign' : 'campaigns'}`
+              : uiText('campaigns_30e9a08')}
           </h2>
           {page ? (
             <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums">
-              {pausedCount > 0 ? <span>{pausedCount} paused</span> : null}
+              {pausedCount > 0 ? (
+                <span>{uiText.rich('sentence_6ffb921a3fda', { v0: pausedCount })}</span>
+              ) : null}
               {pausedCount > 0 && page.fetchedAt ? <span aria-hidden="true">·</span> : null}
               <CacheAge fetchedAt={page.fetchedAt} />
             </span>
           ) : null}
           {page && campaigns.isError ? (
-            <span className="text-destructive text-xs">Refresh failed, showing the last read</span>
+            <span className="text-destructive text-xs">
+              {uiText('refresh_failed_showing_the_last_read_99034c1')}
+            </span>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -255,34 +263,36 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
               aria-hidden="true"
               className={cn(isRefreshing && 'motion-safe:animate-spin')}
             />
-            Refresh
+            {uiText('refresh_0e91610')}
           </Button>
         </div>
       </header>
 
       <div className="min-h-0 overflow-auto">
         {state === 'error' ? (
-          <QuietState role="alert" title="Campaigns didn't load">
-            Couldn't load campaigns — {errorMessage(campaigns.error)}{' '}
-            <Button
-              type="button"
-              variant="link"
-              size="xs"
-              className="px-1"
-              onClick={() => void campaigns.refetch()}
-            >
-              Retry
-            </Button>
+          <QuietState role="alert" title={uiText('campaigns_didn_t_load_0571532')}>
+            {uiText.rich('sentence_31064f68c368', {
+              v0: errorMessage(campaigns.error, formatUiError, uiText),
+              v1: () => (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="xs"
+                  className="px-1"
+                  onClick={() => void campaigns.refetch()}
+                >
+                  {uiText('retry_942087c')}
+                </Button>
+              ),
+            })}
           </QuietState>
         ) : state === 'empty' ? (
-          <QuietState title="No active or paused campaigns">
-            Campaigns on this Meta ad account appear here, including paused ones Jaina builds for
-            you to review before they go live.
+          <QuietState title={uiText('no_active_or_paused_campaigns_9fe22f3')}>
+            {uiText('campaigns_on_this_meta_ad_account_appear_here_b5951ef')}
           </QuietState>
         ) : page && rows.length === 0 ? (
-          <QuietState title="No campaigns under this filter">
-            {allRows.length} {allRows.length === 1 ? 'campaign is' : 'campaigns are'} on this
-            account; choose All to see every one.
+          <QuietState title={uiText('no_campaigns_under_this_filter_e33035d')}>
+            {uiText.rich('sentence_aa511ed6d4c8', { count: allRows.length })}
           </QuietState>
         ) : (
           <Table className="table-fixed">
@@ -294,13 +304,17 @@ export function CampaignsTab({ brandId, adAccountId }: { brandId: string; adAcco
             </colgroup>
             <TableHeader className="sticky top-0 z-10 bg-background [&_tr]:border-border/60">
               <TableRow className="hover:bg-transparent">
-                <TableHead className={cn(HEAD, 'pl-[2.875rem]')}>Name</TableHead>
-                <TableHead className={cn(HEAD, 'hidden @md/campaigns:table-cell')}>
-                  Status
+                <TableHead className={cn(HEAD, 'pl-[2.875rem]')}>
+                  {uiText('name_dcd1d52')}
                 </TableHead>
-                <TableHead className={cn(HEAD, 'text-right')}>Budget / day</TableHead>
+                <TableHead className={cn(HEAD, 'hidden @md/campaigns:table-cell')}>
+                  {uiText('status_920e413')}
+                </TableHead>
+                <TableHead className={cn(HEAD, 'text-right')}>
+                  {uiText('budget_day_5c4fc4a')}
+                </TableHead>
                 <TableHead className="h-8 pr-1">
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{uiText('actions_ff8059d')}</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -358,28 +372,41 @@ function QuietState({
 }
 
 /** The "why" the client attached (`toLoadError`), with the retry-after when Meta set one. */
-function errorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : 'Meta did not answer.';
+function errorMessage(
+  error: unknown,
+  formatUiError: (error: unknown) => string,
+  uiText: ReturnType<typeof useTranslations<'scale'>>,
+): string {
+  const message = formatUiError(error);
   const retryAfter = (error as { retryAfter?: unknown } | null)?.retryAfter;
-  return typeof retryAfter === 'number' && retryAfter > 0
-    ? `${message} Try again in ${Math.ceil(retryAfter)}s.`
-    : message;
+  return uiText('campaignRetryAfter', {
+    message,
+    hasRetry: typeof retryAfter === 'number' && retryAfter > 0 ? 'yes' : 'no',
+    seconds: typeof retryAfter === 'number' ? Math.ceil(retryAfter) : 0,
+  });
 }
 
 function CacheAge({ fetchedAt }: { fetchedAt: string | null }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
+  const uiLocale = useLocale();
   if (!fetchedAt) return null;
   const isLive = Date.now() - Date.parse(fetchedAt) < 60_000;
   return (
     <span
       data-testid="scale-campaigns-cache-age"
-      title={`Read from Meta ${new Date(fetchedAt).toLocaleString()}`}
+      title={uiText('template_ce7b84b0fa1d', { v0: new Date(fetchedAt).toLocaleString(uiLocale) })}
       className="inline-flex items-center gap-1.5 text-muted-foreground text-xs tabular-nums"
     >
       <span
         aria-hidden="true"
         className={cn('size-1.5 rounded-full', isLive ? 'bg-success' : 'bg-muted-foreground/50')}
       />
-      {isLive ? 'Live' : `Cached ${formatRelativeTime(fetchedAt)}`}
+      {isLive
+        ? uiText('live_b64ac05')
+        : uiText('template_a752a6c9958e', {
+            v0: formatRelativeTime(fetchedAt, undefined, uiLocale),
+          })}
     </span>
   );
 }
@@ -400,6 +427,8 @@ function EntityBranch({
   /** An ACTIVE ABO campaign: read its ad sets now, to sum the budget they hold. */
   readsAdSetBudgets?: boolean;
 }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const [open, setOpen] = React.useState(false);
   const row = context.present(read, fetchedAt);
   const childLevel = CHILD_LEVEL[level];
@@ -413,7 +442,7 @@ function EntityBranch({
   const budget = budgetDisplay(row, level, level === 'campaign' ? adSets.data?.rows : null);
   const delivery =
     row.effectiveStatus && row.effectiveStatus !== row.status
-      ? humanizeStatus(row.effectiveStatus)
+      ? humanizeStatus(row.effectiveStatus, uiText)
       : null;
 
   return (
@@ -431,7 +460,11 @@ function EntityBranch({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                aria-label={childLevel === 'adset' ? 'Show ad sets' : 'Show ads'}
+                aria-label={
+                  childLevel === 'adset'
+                    ? uiText('show_ad_sets_de87bec')
+                    : uiText('show_ads_7f24732')
+                }
                 aria-expanded={open}
                 onClick={() => setOpen((value) => !value)}
                 className="text-muted-foreground"
@@ -458,7 +491,7 @@ function EntityBranch({
                 {row.name}
               </span>
               <span className="truncate text-2xs text-muted-foreground @md/campaigns:hidden">
-                {humanizeStatus(row.status)}
+                {humanizeStatus(row.status, uiText)}
                 {delivery ? ` · ${delivery}` : ''}
               </span>
             </div>
@@ -467,7 +500,7 @@ function EntityBranch({
         <TableCell className="hidden py-2 @md/campaigns:table-cell">
           <div className="flex min-w-0 flex-col text-xs">
             <span className={cn(row.status !== 'ACTIVE' && 'text-muted-foreground')}>
-              {humanizeStatus(row.status)}
+              {humanizeStatus(row.status, uiText)}
             </span>
             {delivery ? (
               <span className="truncate text-2xs text-muted-foreground" title={delivery}>
@@ -493,11 +526,13 @@ function EntityBranch({
               data-testid={
                 action.tool === 'pause_meta_entity' ? 'scale-row-pause' : 'scale-row-unpause'
               }
-              aria-label={`${action.tool === 'pause_meta_entity' ? 'Pause' : 'Unpause'} ${levelNoun(level)} ${row.name}`}
+              aria-label={`${action.tool === 'pause_meta_entity' ? uiText('pause_858e4ba') : uiText('unpause_ccf1af7')} ${levelNoun(level)} ${row.name}`}
               onClick={() => context.onAction(row, level, parentId)}
               className={ROW_ACTION}
             >
-              {action.tool === 'pause_meta_entity' ? 'Pause' : 'Unpause'}
+              {action.tool === 'pause_meta_entity'
+                ? uiText('pause_858e4ba')
+                : uiText('unpause_ccf1af7')}
             </Button>
           ) : null}
         </TableCell>
@@ -512,25 +547,31 @@ function EntityBranch({
 /** The figure, then — muted — where it comes from when it is not a daily budget of the row's
  *  own: "lifetime", or "ad sets" for an ABO campaign's sum (or its bare marker). */
 function BudgetCell({ budget, currency }: { budget: BudgetDisplay; currency: string | null }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   if (!budget) return <span className="text-muted-foreground">—</span>;
   if (budget.kind === 'adsets') {
     return (
-      <span className="text-muted-foreground text-xs" title="Budget is set on each ad set">
-        ad sets
+      <span
+        className="text-muted-foreground text-xs"
+        title={uiText('budget_is_set_on_each_ad_set_ddbe091')}
+      >
+        {uiText('ad_sets_5d00190')}
       </span>
     );
   }
   const note =
-    budget.basis === 'lifetime' ? 'lifetime' : budget.source === 'adsets' ? 'ad sets' : null;
+    budget.basis === 'lifetime' ? uiText('campaignLifetimeLabel') : budget.source === 'adsets' ? uiText('ad_sets_5d00190') : null;
   return (
     <span
       title={
         budget.source === 'adsets'
-          ? `Sum of the active ad sets' ${budget.basis} budgets`
+          ? uiText('template_e0bd86794848', { v0: budget.basis==='lifetime'?uiText('campaignLifetimeLabel'):uiText('daily_b36c261') })
           : undefined
       }
     >
-      {formatCurrency(budget.minor / minorUnitDivisor(currency), currency)}
+      {formatCurrency(budget.minor / minorUnitDivisor(currency, uiLocale), currency, uiLocale)}
       {note ? <span className="ml-1 text-2xs text-muted-foreground">{note}</span> : null}
     </span>
   );
@@ -564,6 +605,17 @@ function StatusFilter({
   value: ReadonlySet<CampaignStatusBucket>;
   onChange: (next: ReadonlySet<CampaignStatusBucket>) => void;
 }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
+  const BUCKET_LABEL: Record<CampaignStatusBucket, string> = useMemo(
+    () => ({
+      active: uiText('active_9234069'),
+      paused: uiText('paused_e159b06'),
+      archived: uiText('archived_bdb8650'),
+    }),
+    [uiText],
+  );
+
   const all = CAMPAIGN_STATUS_BUCKETS.every((bucket) => value.has(bucket));
   const toggle = (bucket: CampaignStatusBucket) => {
     const next = new Set(value);
@@ -579,7 +631,7 @@ function StatusFilter({
   const total = counts.active + counts.paused + counts.archived;
   return (
     <fieldset
-      aria-label="Campaign status"
+      aria-label={uiText('campaign_status_b03e9dc')}
       data-testid="scale-campaigns-filter"
       className="flex items-center gap-0.5"
     >
@@ -601,7 +653,9 @@ function StatusFilter({
         onClick={() => onChange(new Set(CAMPAIGN_STATUS_BUCKETS))}
         className={item(all)}
       >
-        All <span className="font-mono text-muted-foreground tabular-nums">{total}</span>
+        {uiText.rich('sentence_ef381cd7c4ab', {
+          v0: () => <span className="font-mono text-muted-foreground tabular-nums">{total}</span>,
+        })}
       </button>
     </fieldset>
   );
@@ -637,6 +691,8 @@ function ChildRows({
   depth: number;
   context: TableContext;
 }) {
+  const uiText = useTranslations('scale');
+  const formatUiError = useUiErrorMessage();
   const query = useQuery(scaleEntitiesQueryOptions(level, context.scope, parentId));
   const noun = levelNoun(level);
 
@@ -645,7 +701,7 @@ function ChildRows({
     if (rows.length === 0) {
       return (
         <MessageRow depth={depth}>
-          No {noun}s in this {level === 'adset' ? 'campaign' : 'ad set'}.
+          {uiText.rich('sentence_47adcc3530c1', { level: level })}
         </MessageRow>
       );
     }
@@ -665,7 +721,10 @@ function ChildRows({
     return (
       <MessageRow depth={depth}>
         <span role="alert" className="text-destructive">
-          Couldn't load {noun}s — {errorMessage(query.error)}
+          {uiText.rich('sentence_00750558038c', {
+            level: level,
+            error: errorMessage(query.error, formatUiError, uiText),
+          })}
         </span>{' '}
         <Button
           type="button"
@@ -674,7 +733,7 @@ function ChildRows({
           className="px-1"
           onClick={() => void query.refetch()}
         >
-          Retry
+          {uiText('retry_942087c')}
         </Button>
       </MessageRow>
     );

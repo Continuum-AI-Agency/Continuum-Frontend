@@ -1,13 +1,16 @@
 'use client';
+
 import { User } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { ComingSoonPrimitive } from './ComingSoonPrimitive';
 
 export function BrandPersonasPrimitive() {
+  const uiText = useTranslations('scale');
   return (
     <ComingSoonPrimitive
-      title="Brand Personas"
-      summary="Coming soon. We’ll wire this into the same primitives surface so teams can reuse tone, visuals, and personas across channels."
+      title={uiText('brand_personas_b1903fc')}
+      summary={uiText('personasComingSoon')}
       icon={<User />}
     />
   );

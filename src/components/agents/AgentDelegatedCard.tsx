@@ -1,10 +1,12 @@
 'use client';
+import {translateControlLabel} from '@/lib/ui/controlLabels';
 
 import type { AgentDelegatedFrameData } from '@continuum/contracts';
 import { AGENT_INITIATOR_LABELS, agentConversationPath } from '@continuum/contracts';
 import { ArrowLeftRightIcon, ArrowUpRightIcon, Loader2Icon } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { HyperframesFilmView, useHyperframesFilm } from './HyperframesRunFilm';
 
@@ -34,8 +36,8 @@ const STATUS_VARIANT: Record<
   refused: 'warning',
 };
 
-export const agentDelegatedLabel = (data: AgentDelegatedFrameData): string =>
-  `Asked ${AGENT_INITIATOR_LABELS[data.calleeAgent] ?? data.calleeAgent}`;
+export const agentDelegatedLabel = (data: AgentDelegatedFrameData,t?:ReturnType<typeof useTranslations<'common'>>): string =>
+  t?t('m_22465680c3',{agent:AGENT_INITIATOR_LABELS[data.calleeAgent]??data.calleeAgent}):`Asked ${AGENT_INITIATOR_LABELS[data.calleeAgent] ?? data.calleeAgent}`;
 
 /** The link into the callee conversation: the frame's own deep link, else derived. */
 export const agentDelegatedHref = (data: AgentDelegatedFrameData): string | null => {
@@ -50,6 +52,8 @@ export type AgentDelegatedCardProps = {
 };
 
 export function AgentDelegatedCard({ data, className }: AgentDelegatedCardProps) {
+  const tUi = useTranslations('common');
+
   const href = agentDelegatedHref(data);
   // A film outlives the call that asked for it, so its card follows the run, not the frame.
   const film = useHyperframesFilm(
@@ -67,14 +71,14 @@ export function AgentDelegatedCard({ data, className }: AgentDelegatedCardProps)
     >
       <div className="flex items-center gap-2">
         <ArrowLeftRightIcon className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-        <span className="text-xs font-medium text-foreground">{agentDelegatedLabel(data)}</span>
+        <span className="text-xs font-medium text-foreground">{agentDelegatedLabel(data,tUi)}</span>
         <Pill variant="secondary" className="ml-auto gap-1">
           {status === 'running' ? (
             <Loader2Icon className="size-3 animate-spin" />
           ) : (
             <PillIndicator variant={STATUS_VARIANT[status]} />
           )}
-          {STATUS_TEXT[status]}
+          {translateControlLabel(STATUS_TEXT[status],tUi)}
         </Pill>
       </div>
 
@@ -87,7 +91,7 @@ export function AgentDelegatedCard({ data, className }: AgentDelegatedCardProps)
           href={href}
           className="inline-flex w-fit items-center gap-1 text-2xs text-primary hover:underline"
         >
-          Open conversation
+          {tUi('m_c1e01db47d')}
           <ArrowUpRightIcon className="size-3" />
         </Link>
       ) : null}

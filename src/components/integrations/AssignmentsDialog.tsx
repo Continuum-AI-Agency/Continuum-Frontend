@@ -2,9 +2,9 @@
 
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { Loader2, Plug, Search, TriangleAlert, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { applyBrandIntegrationAssignmentsAction } from '@/app/(post-auth)/settings/integrations/actions';
+import { applyBrandIntegrationAssignmentsAction } from '@/app/[locale]/(post-auth)/settings/integrations/actions';
 import { AssignmentAccountList } from '@/components/integrations/internal/AssignmentAccountList';
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -14,6 +14,8 @@ import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/compon
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useMetaAutoResync } from '@/hooks/useMetaAutoResync';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { type UserIntegrationAssetRow, useUserIntegrationAssets } from '@/lib/api/integrations';
 import { getMemberDisplayName } from '@/lib/brands/memberDisplay';
 import { buildAssignmentSections } from '@/lib/integrations/assignmentGroups';
@@ -53,6 +55,10 @@ export function AssignmentsDialog({
   currentUserId = '',
   onSaved,
 }: AssignmentsDialogProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
+  const uiLocale = useLocale();
   const { show } = useToast();
   const router = useRouter();
   const userAssetsQuery = useUserIntegrationAssets();
@@ -128,7 +134,9 @@ export function AssignmentsDialog({
 
   const ownerCaption = (id: string): string | null => {
     if (!isLockedForCaller(id)) return null;
-    return `Tagged by ${getMemberDisplayName(members, ownerByAccountId.get(id) ?? null)}`;
+    return uiText('m_2895be94f7', {
+      v0: String(getMemberDisplayName(members, ownerByAccountId.get(id) ?? null)),
+    });
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: isLockedForCaller is a stable closure over ownerByAccountId + currentUserId, which are the listed deps; adding the function itself would re-run every render.
@@ -186,7 +194,7 @@ export function AssignmentsDialog({
 
   const formatDate = (dateString: string) => {
     if (!mounted) return '—';
-    return new Date(dateString).toLocaleString();
+    return new Date(dateString).toLocaleString(uiLocale);
   };
 
   const desiredAssetIds = useMemo(() => {
@@ -225,13 +233,13 @@ export function AssignmentsDialog({
       router.refresh();
       await onSaved?.();
       show({
-        title: 'Assignments updated',
-        description: `Linked ${result.linked} account(s).`,
+        title: uiText('m_e97aa7e024'),
+        description: uiText('m_ad382123ec', { v0: String(result.linked) }),
         variant: 'success',
       });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to update assignments.';
-      show({ title: 'Update failed', description: message, variant: 'error' });
+      const message = getUiErrorMessage(error);
+      show({ title: uiText('update_failed_e58282f'), description: message, variant: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -249,21 +257,22 @@ export function AssignmentsDialog({
         <DialogPrimitive.Backdrop className="fixed inset-0 z-40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Popup className="fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col border-l bg-background shadow-2xl transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md">
           <SheetHeader className="gap-2 border-b border-border/60 px-5 py-4">
-            <SheetTitle>Assign accounts</SheetTitle>
-            <SheetDescription>Choose which connected accounts this brand can use.</SheetDescription>
+            <SheetTitle>{uiText('assign_accounts_20552cb')}</SheetTitle>
+            <SheetDescription>{uiText('m_4349f58fd5')}</SheetDescription>
 
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">
                 <span className="font-medium text-foreground tabular-nums">
                   {desiredAssetIds.length}
                 </span>
-                {' of '}
+                {uiText('of_a4282e4')}
                 <span className="tabular-nums">{totalSelectable}</span>
-                {' selected'}
+                {uiText('m_e034d90478')}
               </span>
               {syncedAt ? (
                 <span className="text-2xs text-muted-foreground">
-                  Synced {formatDate(syncedAt)}
+                  {uiText('m_1223507c7a')}
+                  {formatDate(syncedAt)}
                 </span>
               ) : null}
             </div>
@@ -276,8 +285,8 @@ export function AssignmentsDialog({
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Filter accounts"
-                aria-label="Filter accounts"
+                placeholder={uiText('m_42a4bfa2c1')}
+                aria-label={uiText('m_42a4bfa2c1')}
                 className="pl-8"
               />
             </div>
@@ -285,28 +294,27 @@ export function AssignmentsDialog({
             {stale ? (
               <Alert className="py-2">
                 <TriangleAlert />
-                <AlertDescription>
-                  Integrations are stale. Refresh sync in Settings to see recent accounts.
-                </AlertDescription>
+                <AlertDescription>{uiText('m_e7d6d3e4fd')}</AlertDescription>
               </Alert>
             ) : null}
 
             {isResyncing ? (
               <Alert className="py-2">
                 <Loader2 className="animate-spin" />
-                <AlertDescription>Refreshing your Meta accounts…</AlertDescription>
+                <AlertDescription>{uiText('m_203e9def72')}</AlertDescription>
               </Alert>
             ) : resyncError ? (
               <Alert variant="destructive" className="py-2">
                 <TriangleAlert />
                 <AlertDescription>
-                  Couldn&apos;t refresh Meta accounts. {resyncError}{' '}
+                  {uiText('m_b2cba8732a')}
+                  {resyncError}{' '}
                   <button
                     type="button"
                     className="font-medium underline underline-offset-2"
                     onClick={triggerResync}
                   >
-                    Retry
+                    {uiText('retry_942087c')}
                   </button>
                 </AlertDescription>
               </Alert>
@@ -314,13 +322,13 @@ export function AssignmentsDialog({
               <Alert className="py-2">
                 <TriangleAlert />
                 <AlertDescription>
-                  Meta is connected but no ad accounts were found.{' '}
+                  {uiText('m_49db7187fa')}{' '}
                   <button
                     type="button"
                     className="font-medium underline underline-offset-2"
                     onClick={triggerResync}
                   >
-                    Refresh Meta accounts
+                    {uiText('m_d11f9ef6bf')}
                   </button>
                 </AlertDescription>
               </Alert>
@@ -352,9 +360,9 @@ export function AssignmentsDialog({
               ) : sections.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-5 py-10 text-center">
                   <Plug className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />
-                  <p className="text-sm font-medium text-foreground">No connected accounts</p>
+                  <p className="text-sm font-medium text-foreground">{uiText('m_a1da631862')}</p>
                   <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
-                    Connect providers from your personal integrations first, then assign them here.
+                    {uiText('m_416d7efb11')}
                   </p>
                 </div>
               ) : (
@@ -374,23 +382,23 @@ export function AssignmentsDialog({
 
           <SheetFooter className="flex-row justify-end gap-2 border-t border-border/60 px-5 py-4">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
-              Cancel
+              {uiText('cancel_19766ed')}
             </Button>
             <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
               {isSaving ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Saving
+                  {uiText('m_369c534df3')}
                 </>
               ) : (
-                'Save'
+                uiText('save_1509f56')
               )}
             </Button>
           </SheetFooter>
 
           <DialogPrimitive.Close className="ring-offset-background focus:ring-ring absolute right-4 top-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none">
             <X className="size-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{uiText('close_7d9eb7a')}</span>
           </DialogPrimitive.Close>
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>

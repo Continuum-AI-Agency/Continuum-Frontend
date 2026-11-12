@@ -1,4 +1,6 @@
 'use client';
+import {useTranslations} from 'next-intl';
+
 
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -27,7 +29,10 @@ export function Spinner({ size = 24 }: { size?: number }) {
   );
 }
 
-export function LoadingOverlay({ show, label = 'Loading...' }: { show: boolean; label?: string }) {
+export function LoadingOverlay({ show, label: uiProvidedLabel }: { show: boolean; label?: string }) {
+const defaultUiText=useTranslations('common');
+const label=uiProvidedLabel??defaultUiText('m_b04ba49f84');
+
   return (
     <AnimatePresence>
       {show && (

@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { CanvasRuntimeProvider } from '../contexts/CanvasRuntimeContext';
 import { useAgentRunStore } from '@/lib/agents/runStore';

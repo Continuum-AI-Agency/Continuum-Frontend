@@ -11,6 +11,7 @@ import type {
   UnfurlMediaItem,
 } from '@continuum/contracts';
 import { AtSign, Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,6 +60,8 @@ export function InstagramMediaBrowser({
   onPlace,
   onClose,
 }: InstagramMediaBrowserProps) {
+  const translateUi = useUiTranslations('studio');
+
   const [username, setUsername] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<InstagramTopMediaResponse | null>(null);
@@ -150,7 +153,7 @@ export function InstagramMediaBrowser({
 
   return (
     <CanvasFloatingPanel
-      title="Import from Instagram"
+      title={translateUi('import_from_instagram_ee939f89')}
       icon={<AtSign className="size-4" aria-hidden />}
       onClose={onClose}
       className="mt-12"
@@ -164,14 +167,18 @@ export function InstagramMediaBrowser({
         }}
       >
         <Input
-          aria-label="Instagram username"
-          placeholder="Search another account"
+          aria-label={translateUi('instagram_username_f0747599')}
+          placeholder={translateUi('search_another_account_40624b97')}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           disabled={status === 'loading'}
         />
         <Button type="submit" disabled={status === 'loading' || !username.trim()}>
-          {status === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+          {status === 'loading' ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            translateUi('search_49c266ba')
+          )}
         </Button>
       </form>
 
@@ -196,7 +203,9 @@ export function InstagramMediaBrowser({
             {followers && <span className="text-xs text-muted-foreground">{followers}</span>}
           </div>
           {result.posts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No media found for this account.</p>
+            <p className="text-sm text-muted-foreground">
+              {translateUi('no_media_found_for_this_account_3f30293c')}
+            </p>
           ) : (
             <InstagramPostGrid
               posts={result.posts}

@@ -1,3 +1,5 @@
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 // Generalizes the Kanban from "the review board" to "a board over any field" —
 // review_status, or ANY of the brand's custom fields. Choice-like fields (single and
 // multi select, status, user, rating, checkbox) get one lane per choice and accept drops;
@@ -97,7 +99,9 @@ export function decodeLaneId(laneId: string): LaneTarget | null {
 /** The brand's own label + colour for a review state (media.review_state_labels). */
 export type ReviewLaneLabels = Partial<Record<MediaReviewStatus, { label: string; color: string }>>;
 
+type BoardUi = { t: ReturnType<typeof useTranslations<'library'>>; locale: UiLocale };
 export type BuildBoardLanesInput = {
+  ui?: BoardUi;
   grouping: BoardGrouping;
   assets: readonly MediaAsset[];
   /**
@@ -151,15 +155,19 @@ function dateBucket(iso: string, now: Date): string {
 }
 
 // Four equal-width ranges over the values present; one lane when they are all equal.
-function numberRanges(values: number[]): { lanes: LaneSpec[]; keyOf: (n: number) => string } {
+function numberRanges(
+  values: number[],
+  ui?: BoardUi,
+): { lanes: LaneSpec[]; keyOf: (n: number) => string } {
   const min = Math.min(...values);
   const max = Math.max(...values);
   if (values.length === 0 || min === max) {
-    const label = values.length === 0 ? 'Any' : String(min);
+    const label =
+      values.length === 0 ? (ui?.t('boardAny') ?? 'Any') : Number(min).toLocaleString(ui?.locale);
     return { lanes: [{ key: 'r0', label }], keyOf: () => 'r0' };
   }
   const width = (max - min) / 4;
-  const fmt = (n: number) => Number(n.toFixed(2)).toLocaleString('en-US');
+  const fmt = (n: number) => Number(n.toFixed(2)).toLocaleString(ui?.locale ?? 'en-US');
   const lanes = [0, 1, 2, 3].map((index) => ({
     key: `r${index}`,
     label: `${fmt(min + width * index)} – ${fmt(index === 3 ? max : min + width * (index + 1))}`,
@@ -173,6 +181,7 @@ function fieldLanes(
   values: CustomFieldValue[],
   members: BuildBoardLanesInput['members'],
   now: Date,
+  ui?: BoardUi,
 ): { lanes: LaneSpec[]; keyOf: (value: CustomFieldValue) => string | null } {
   switch (field.type) {
     case 'single_select':
@@ -214,19 +223,33 @@ function fieldLanes(
     case 'checkbox':
       return {
         lanes: [
-          { key: 'true', label: 'Yes' },
-          { key: 'false', label: 'No' },
+          { key: 'true', label: ui?.t('fieldYes') ?? 'Yes' },
+          { key: 'false', label: ui?.t('fieldNo') ?? 'No' },
         ],
         keyOf: (value) => (value === true ? 'true' : 'false'),
       };
     case 'date':
       return {
-        lanes: DATE_BUCKETS,
+        lanes: DATE_BUCKETS.map((bucket) => ({
+          ...bucket,
+          label: ui
+            ? ui.t(
+                (
+                  {
+                    overdue: 'boardPast',
+                    today: 'boardToday',
+                    week: 'boardNextWeek',
+                    later: 'boardLater',
+                  } as const
+                )[bucket.key as 'overdue' | 'today' | 'week' | 'later'],
+              )
+            : bucket.label,
+        })),
         keyOf: (value) => (typeof value === 'string' ? dateBucket(value, now) : null),
       };
     case 'number': {
       const numbers = values.filter((value): value is number => typeof value === 'number');
-      const { lanes, keyOf } = numberRanges(numbers);
+      const { lanes, keyOf } = numberRanges(numbers, ui);
       return { lanes, keyOf: (value) => (typeof value === 'number' ? keyOf(value) : null) };
     }
     default: {
@@ -236,12 +259,13 @@ function fieldLanes(
         if (typeof value === 'string') counts.set(value, (counts.get(value) ?? 0) + 1);
       }
       const top = [...counts.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], ui?.locale))
         .slice(0, TEXT_LANE_LIMIT)
         .map(([value]) => value);
       const kept = new Set(top);
       const lanes: LaneSpec[] = top.map((value) => ({ key: value, label: value }));
-      if (counts.size > kept.size) lanes.push({ key: OTHER_LANE_KEY, label: 'Other' });
+      if (counts.size > kept.size)
+        lanes.push({ key: OTHER_LANE_KEY, label: ui?.t('boardOther') ?? 'Other' });
       return {
         lanes,
         keyOf: (value) =>
@@ -306,6 +330,7 @@ export function buildBoardLanes({
   reviewLabels,
   customStates = [],
   now = new Date(),
+  ui,
 }: BuildBoardLanesInput): BoardLane[] {
   if (grouping.kind === 'review_status') {
     const columns = groupAssetsByReviewStatus([...assets]);
@@ -337,9 +362,12 @@ export function buildBoardLanes({
 
   const { field } = grouping;
   const values = assets.map((asset) => valueByAssetId?.get(asset.id) ?? null);
-  const { lanes: specs, keyOf } = fieldLanes(field, values, members, now);
+  const { lanes: specs, keyOf } = fieldLanes(field, values, members, now, ui);
   const droppable = isDroppableField(field);
-  const unsetLabel = field.type === 'user' ? 'Unassigned' : UNSET_LANE_LABEL;
+  const unsetLabel =
+    field.type === 'user'
+      ? (ui?.t('boardUnassigned') ?? 'Unassigned')
+      : (ui?.t('boardNotSet') ?? UNSET_LANE_LABEL);
   // A checkbox has no third state: unchecked and never set are the same "No".
   const withUnset = field.type === 'checkbox' ? specs : [{ key: '', label: unsetLabel }, ...specs];
   const lanes: BoardLane[] = withUnset.map((spec) => ({

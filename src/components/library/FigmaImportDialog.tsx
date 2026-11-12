@@ -2,6 +2,7 @@
 
 import type { FigmaFile, FigmaFolder, FigmaFrame } from '@continuum/contracts';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { FigmaIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   beginFigmaConnection,
   importFigmaFrames,
@@ -39,6 +41,10 @@ export function FigmaImportDialog({
   brandId: string;
   onImported: () => void;
 }) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('library');
+
   const [open, setOpen] = useState(false);
   const [teamId, setTeamId] = useState('');
   // Every folder seen so far; choosing one adds its subfolders, so nesting needs no extra UI.
@@ -66,7 +72,7 @@ export function FigmaImportDialog({
       setFiles([]);
       setFrames([]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'provider_unavailable');
+      setError(uiErrorText(cause));
     } finally {
       setBusy(null);
     }
@@ -89,7 +95,7 @@ export function FigmaImportDialog({
       ]);
       setFiles(found);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'provider_unavailable');
+      setError(uiErrorText(cause));
     } finally {
       setBusy(null);
     }
@@ -103,7 +109,7 @@ export function FigmaImportDialog({
     try {
       setFrames((await listFigmaFrames(brandId, value)).frames);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'provider_unavailable');
+      setError(uiErrorText(cause));
     } finally {
       setBusy(null);
     }
@@ -116,7 +122,9 @@ export function FigmaImportDialog({
       const url = await beginFigmaConnection({ brandId, callbackUrl });
       window.open(url, 'continuum-figma-oauth', 'popup,width=720,height=760');
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : 'Could not connect Figma');
+      toast.error(
+        cause instanceof Error ? cause.message : translateUi('could_not_connect_figma_c1ccc5c1'),
+      );
     } finally {
       setBusy(null);
     }
@@ -131,12 +139,15 @@ export function FigmaImportDialog({
       const created = assets.filter((asset) => asset.status !== 'exists').length;
       const unchanged = assets.length - created;
       toast.success(
-        `${created} Figma frame${created === 1 ? '' : 's'} imported${unchanged ? ` · ${unchanged} already current` : ''}`,
+        translateUi('value0_figma_frame_value1_imported__cb8f8021', {
+          count: Number(created),
+          details: String(unchanged ? ` · ${unchanged} already current` : ''),
+        }),
       );
       onImported();
       setOpen(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'operation_failed');
+      setError(uiErrorText(cause));
     } finally {
       setBusy(null);
     }
@@ -148,15 +159,16 @@ export function FigmaImportDialog({
         render={
           <Button type="button" variant="outline" size="sm">
             <FigmaIcon className="size-4" />
-            <span className="hidden sm:inline">Figma</span>
+            <span className="hidden sm:inline">{translateUi('figma_ce460410')}</span>
           </Button>
         }
       />
       <DialogContent className="flex max-h-[82dvh] flex-col overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b border-border px-5 py-4">
-          <DialogTitle>Import from Figma</DialogTitle>
+          <DialogTitle>{translateUi('import_from_figma_2e559556')}</DialogTitle>
           <DialogDescription>
-            Select frames to store as private, versioned Library assets with refreshable provenance.
+            {' '}
+            {translateUi('select_frames_to_store_as_private_v_cf908729')}{' '}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
@@ -164,8 +176,8 @@ export function FigmaImportDialog({
             <Input
               value={teamId}
               onChange={(event) => setTeamId(event.target.value)}
-              placeholder="Figma team ID"
-              aria-label="Figma team ID"
+              placeholder={translateUi('figma_team_id_2932da7a')}
+              aria-label={translateUi('figma_team_id_2932da7a')}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void loadFolders();
               }}
@@ -180,8 +192,8 @@ export function FigmaImportDialog({
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <RefreshCw className="size-4" />
-              )}
-              Browse
+              )}{' '}
+              {translateUi('browse_3227aa96')}{' '}
             </Button>
           </div>
 
@@ -192,9 +204,9 @@ export function FigmaImportDialog({
             >
               <span>
                 {error === 'invalid_configuration'
-                  ? 'Figma is not configured for this environment.'
+                  ? translateUi('figma_is_not_configured_for_this_en_10c07e99')
                   : error === 'provider_unavailable' || error.includes('not_connected')
-                    ? 'Connect Figma, then browse again.'
+                    ? translateUi('connect_figma_then_browse_again_c2329879')
                     : error}
               </span>
               <Button
@@ -208,16 +220,16 @@ export function FigmaImportDialog({
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
                   <FigmaIcon className="size-4" />
-                )}
-                Connect
+                )}{' '}
+                {translateUi('connect_1a2303ed')}{' '}
               </Button>
             </div>
           ) : null}
 
           {folders.length ? (
             <Select value={folderId} onValueChange={(value) => void chooseFolder(value)}>
-              <SelectTrigger aria-label="Figma folder">
-                <SelectValue placeholder="Choose a folder" />
+              <SelectTrigger aria-label={translateUi('figma_folder_2d32f51c')}>
+                <SelectValue placeholder={translateUi('choose_a_folder_5c71b8cd')} />
               </SelectTrigger>
               <SelectContent>
                 {folders
@@ -234,8 +246,8 @@ export function FigmaImportDialog({
 
           {files.length ? (
             <Select value={fileKey} onValueChange={(value) => void chooseFile(value)}>
-              <SelectTrigger aria-label="Figma file">
-                <SelectValue placeholder="Choose a file" />
+              <SelectTrigger aria-label={translateUi('figma_file_cbda49d3')}>
+                <SelectValue placeholder={translateUi('choose_a_file_3e10c3cd')} />
               </SelectTrigger>
               <SelectContent>
                 {files.map((file) => (
@@ -249,11 +261,14 @@ export function FigmaImportDialog({
 
           {busy === 'files' || busy === 'frames' ? (
             <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-              <Loader2 className="mr-2 size-4 animate-spin" /> Loading from Figma…
+              <Loader2 className="mr-2 size-4 animate-spin" />{' '}
+              {translateUi('loading_from_figma_f34d9916')}{' '}
             </div>
           ) : frames.length ? (
             <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <legend className="mb-2 text-xs font-medium text-muted-foreground">Frames</legend>
+              <legend className="mb-2 text-xs font-medium text-muted-foreground">
+                {translateUi('frames_2c447e8d')}
+              </legend>
               {frames.map((frame) => {
                 const checked = selected.includes(frame.id);
                 return (
@@ -296,17 +311,21 @@ export function FigmaImportDialog({
             </fieldset>
           ) : fileKey && busy === null ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              No top-level frames found in this file.
+              {' '}
+              {translateUi('no_top_level_frames_found_in_this_f_2eaa199d')}{' '}
             </p>
           ) : null}
         </div>
         <div className="flex items-center justify-between border-t border-border px-5 py-3">
           <p className="text-xs text-muted-foreground">
-            {selected.length ? `${selected.length} selected` : 'Select up to 50 frames'}
+            {selected.length
+              ? translateUi('value0_selected_975acbfe', { count: Number(selected.length) })
+              : translateUi('select_up_to_50_frames_730d87b7')}
           </p>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
             <Button
               type="button"
@@ -317,8 +336,8 @@ export function FigmaImportDialog({
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <FigmaIcon className="size-4" />
-              )}
-              Import
+              )}{' '}
+              {translateUi('import_2cff9baa')}{' '}
             </Button>
           </div>
         </div>

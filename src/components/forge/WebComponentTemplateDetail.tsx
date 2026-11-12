@@ -8,6 +8,7 @@ import {
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Play, Trash2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { templateLoadQueries } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
@@ -38,6 +39,8 @@ export function WebComponentTemplateDetail({
   onRemove: () => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const { assetId } = source;
   const templateKey = webTemplateKey(assetId);
   const name = source.displayName ?? templateDisplayName(source.parse?.filename);
@@ -56,16 +59,21 @@ export function WebComponentTemplateDetail({
       <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Templates
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}{' '}
           </Button>
           <h2 className="min-w-0 text-base font-semibold">
             <InlineRename value={name} onRename={onRename} />
           </h2>
           <p className="truncate text-xs text-muted-foreground">
-            Web component
+            {' '}
+            {translateUi('web_component_a1d3232a')}{' '}
             {web
-              ? ` · ${variables.length} fields · ${web.width}×${web.height} · ${web.durationSec} s`
+              ? translateUi('value0_fields_value1_value2_value3__bbd18dc4', {
+                  value0: String(variables.length),
+                  value1: String(web.width),
+                  value2: String(web.height),
+                  value3: String(web.durationSec),
+                })
               : null}
           </p>
         </div>
@@ -78,7 +86,7 @@ export function WebComponentTemplateDetail({
             className="gap-1.5 text-destructive"
             onClick={onRemove}
           >
-            <Trash2 className="size-3.5" aria-hidden /> Remove
+            <Trash2 className="size-3.5" aria-hidden /> {translateUi('remove_c3812fc4')}{' '}
           </Button>
           {parsed ? (
             <Button
@@ -87,8 +95,9 @@ export function WebComponentTemplateDetail({
               className="gap-1.5"
               onClick={() => onOpenRender?.({ templateKey })}
             >
-              <Play className="size-3.5" aria-hidden />
-              Render with this
+              <Play className="size-3.5" aria-hidden /> {translateUi(
+                'render_with_this_c249855a',
+              )}{' '}
             </Button>
           ) : null}
         </div>
@@ -100,10 +109,10 @@ export function WebComponentTemplateDetail({
           className="m-0 p-[var(--card-pad)] text-sm text-muted-foreground"
         >
           {source.parseState === 'pending'
-            ? 'Reading the component…'
+            ? translateUi('reading_the_component_884bc9bf')
             : source.parseError
               ? parseErrorSentence(source.parseError)
-              : 'This web component could not be read.'}
+              : translateUi('this_web_component_could_not_be_rea_00020011')}
         </p>
       ) : contract.isError ? (
         <div
@@ -112,14 +121,16 @@ export function WebComponentTemplateDetail({
         >
           {contract.error instanceof Error
             ? contract.error.message
-            : 'Could not read this component.'}
+            : translateUi('could_not_read_this_component_f9e9c3f7')}
           <Button size="sm" variant="outline" onClick={() => void contract.refetch()}>
-            Retry
+            {' '}
+            {translateUi('retry_942087cc')}{' '}
           </Button>
         </div>
       ) : !contract.data ? (
         <p role="status" className="m-0 p-[var(--card-pad)] text-sm text-muted-foreground">
-          Reading the component…
+          {' '}
+          {translateUi('reading_the_component_884bc9bf')}{' '}
         </p>
       ) : (
         <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:divide-x lg:divide-y-0">
@@ -128,13 +139,17 @@ export function WebComponentTemplateDetail({
               <WebComponentPreview web={web} values={NO_VALUES} />
             ) : (
               <p role="alert" className="m-0 text-sm text-destructive">
-                This template has no web component preview.
+                {' '}
+                {translateUi('this_template_has_no_web_component__a0ee94e5')}{' '}
               </p>
             )}
           </div>
           <div className="flex min-w-0 flex-col gap-4 p-[var(--card-pad)]">
-            <section aria-label="Render columns" className="flex flex-col gap-2">
-              <h3 className="m-0 text-sm font-medium">Render columns</h3>
+            <section
+              aria-label={translateUi('render_columns_0dce36c1')}
+              className="flex flex-col gap-2"
+            >
+              <h3 className="m-0 text-sm font-medium">{translateUi('render_columns_0dce36c1')}</h3>
               {variables.length ? (
                 <ul className="m-0 flex list-none flex-col divide-y divide-border p-0 text-xs">
                   {variables.map((variable) => (
@@ -145,7 +160,8 @@ export function WebComponentTemplateDetail({
                       </span>
                       {variable.options.length ? (
                         <span className="text-muted-foreground">
-                          One of: {variable.options.join(', ')}
+                          {' '}
+                          {translateUi('one_of_35c3e6d3')} {variable.options.join(', ')}
                         </span>
                       ) : null}
                     </li>
@@ -153,13 +169,14 @@ export function WebComponentTemplateDetail({
                 </ul>
               ) : (
                 <p className="m-0 text-xs text-muted-foreground">
-                  This component exposes no editable properties.
+                  {' '}
+                  {translateUi('this_component_exposes_no_editable__de15f509')}{' '}
                 </p>
               )}
             </section>
             {issues.length ? (
-              <section aria-label="Issues" className="flex flex-col gap-2">
-                <h3 className="m-0 text-sm font-medium">Issues</h3>
+              <section aria-label={translateUi('issues_666067dd')} className="flex flex-col gap-2">
+                <h3 className="m-0 text-sm font-medium">{translateUi('issues_666067dd')}</h3>
                 <ul className="m-0 list-disc pl-4 text-xs text-warning">
                   {issues.map((issue) => (
                     <li key={issue}>{issue}</li>

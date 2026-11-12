@@ -1,3 +1,4 @@
+import type { useTranslations } from 'next-intl';
 import type { ToastOptions } from '@/components/ui/ToastProvider';
 
 type IntegrationSelectionToastParams = {
@@ -8,12 +9,15 @@ type IntegrationSelectionToastParams = {
 
 export function createIntegrationSelectionToastOptions(
   params: IntegrationSelectionToastParams,
+  t: ReturnType<typeof useTranslations<'common'>>,
 ): ToastOptions {
   const { checked, label, count } = params;
-  const verb = checked ? 'Tagged' : 'Untagged';
   const variant = checked ? 'success' : 'info';
   const hasCount = typeof count === 'number' && count > 1;
-  const title = hasCount ? `${verb} ${count} integrations` : `${verb} integration`;
+  const title = t('integrationSelection', {
+    checked: checked ? 'yes' : 'no',
+    count: hasCount ? count : 1,
+  });
   const description = !hasCount && label ? label : undefined;
 
   return { title, description, variant };

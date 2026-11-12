@@ -4,6 +4,7 @@
 // real choices are the output shape and the tier it renders at. Prompting, the variation
 // library and the edit/extend mode live in the node's editor dialog.
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { OmniGenNodeData } from '../../types';
 import { InspectorNote, InspectorSection, OptionRow } from './controls';
 
@@ -14,19 +15,21 @@ export function OmniGenSection({
   data: OmniGenNodeData;
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   // An edit chain is anchored to the ratio its first frame was generated at; changing
   // it mid-chain would re-render the anchor at a different shape.
   const hasChain = (data.variations?.length ?? 0) > 0;
 
   return (
     <>
-      <InspectorSection title="Model">
-        <InspectorNote>Gemini Omni 1.1 Flash — this node runs one model.</InspectorNote>
+      <InspectorSection title={translateUi('model_5e2c614c')}>
+        <InspectorNote>{translateUi('gemini_omni_1_1_flash_this_node_run_fb292f5f')}</InspectorNote>
       </InspectorSection>
 
-      <InspectorSection title="Output">
+      <InspectorSection title={translateUi('output_b2439bcb')}>
         <OptionRow
-          label="Aspect ratio"
+          label={translateUi('aspect_ratio_d7ad336f')}
           value={data.aspectRatio ?? '16:9'}
           options={[
             { value: '16:9', label: '16:9', disabled: hasChain },
@@ -36,14 +39,14 @@ export function OmniGenSection({
         />
         {hasChain ? (
           <InspectorNote>
-            Locked while this node holds generated variations — the chain is anchored to the ratio
-            it started at.
+            {' '}
+            {translateUi('locked_while_this_node_holds_genera_7e165549')}{' '}
           </InspectorNote>
         ) : null}
         {/* Deliberately NOT locked with the chain the way the ratio is: raising the
             resolution on an edit turn is how you take a draft up to a delivery master. */}
         <OptionRow
-          label="Resolution"
+          label={translateUi('resolution_d4055faf')}
           value={data.resolution ?? '720p'}
           options={[
             { value: '360p', label: '360p' },
@@ -54,8 +57,8 @@ export function OmniGenSection({
           onChange={(value) => onPatch({ resolution: value })}
         />
         <InspectorNote>
-          360p is the draft tier — much faster and cheaper, for comparing directions. Raise it on a
-          later turn once the clip is right.
+          {' '}
+          {translateUi('360p_is_the_draft_tier_much_faster__c2f1440a')}{' '}
         </InspectorNote>
       </InspectorSection>
     </>

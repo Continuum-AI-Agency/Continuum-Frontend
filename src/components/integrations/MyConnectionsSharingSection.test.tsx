@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The section's real grouping and row rendering run; the server-only reads and the two
 // dialog buttons (router + toast) are replaced.

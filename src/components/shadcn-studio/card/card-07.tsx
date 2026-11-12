@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,8 @@ export function CardOverlayDemo({
   callToAction,
   className,
 }: CardOverlayDemoProps) {
+  const tUi = useTranslations('common');
+
   const [mediaSize, setMediaSize] = React.useState<{ width: number; height: number } | null>(null);
 
   const dynamicStyle = React.useMemo(() => {
@@ -74,7 +77,7 @@ export function CardOverlayDemo({
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-neutral-900 text-sm text-neutral-400">
-              No creative preview available
+              {tUi('m_ef58fee8c7')}
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/10 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
@@ -100,7 +103,8 @@ export function CardOverlayDemo({
             ) : null}
             {callToAction ? (
               <span className="select-text rounded-full bg-white/20 px-2 py-1 text-white">
-                CTA: {callToAction}
+                {tUi('m_8fc27cf9af')}
+                {callToAction}
               </span>
             ) : null}
           </div>

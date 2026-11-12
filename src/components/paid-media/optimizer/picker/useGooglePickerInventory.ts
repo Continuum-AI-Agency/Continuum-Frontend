@@ -1,4 +1,5 @@
 'use client';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // The Google half of the picker's inventory: the brand's granted Google Ads customer, its
 // campaigns with their channel type, and their ad groups — two ranking reads of the
@@ -91,6 +92,7 @@ async function invokeRanking(brandId: string, customerId: string, scope: string)
 }
 
 export function useGooglePickerInventory(brandId: string): GooglePickerInventoryState {
+  const formatUiError = useUiErrorMessage();
   const accountsRead = useOptimizerAdAccounts(brandId);
   const account = accountsOn(accountsRead.data ?? [], 'google_ads')[0] ?? null;
   const query = useQuery({
@@ -111,6 +113,6 @@ export function useGooglePickerInventory(brandId: string): GooglePickerInventory
   if (accountsRead.isLoading) return { status: 'loading' };
   if (!account) return { status: 'none' };
   if (query.data) return { status: 'ready', inventory: query.data };
-  if (query.error) return { status: 'error', message: query.error.message };
+  if (query.error) return { status: 'error', message: formatUiError(query.error) };
   return { status: 'loading' };
 }

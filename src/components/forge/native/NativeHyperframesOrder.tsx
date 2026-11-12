@@ -1,6 +1,7 @@
 'use client';
 
 import type { HyperframesOrderView } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { NativeEditorForm } from './nativeEditorEdits';
@@ -15,6 +16,8 @@ export function NativeHyperframesOrder({
   value: NativeEditorForm['orders'];
   onChange: (value: NativeEditorForm['orders']) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [groupIndex, setGroupIndex] = useState(0);
   const [page, setPage] = useState(0);
   const group = view.groups[groupIndex];
@@ -27,7 +30,8 @@ export function NativeHyperframesOrder({
   if (!group)
     return (
       <p className="text-xs text-muted-foreground">
-        This source has no reorderable sibling groups.
+        {' '}
+        {translateUi('this_source_has_no_reorderable_sibl_dd239c2d')}{' '}
       </p>
     );
   const selectGroup = (offset: number) => {
@@ -52,10 +56,13 @@ export function NativeHyperframesOrder({
             disabled={groupIndex === 0}
             onClick={() => selectGroup(-1)}
           >
-            Previous group
+            {' '}
+            {translateUi('previous_group_821e5053')}{' '}
           </Button>
           <span>
-            Group {groupIndex + 1} of {view.groups.length}
+            {' '}
+            {translateUi('group_34ca0e76')} {groupIndex + 1} {translateUi('of_28391d3b')}{' '}
+            {view.groups.length}
           </span>
           <Button
             type="button"
@@ -64,7 +71,8 @@ export function NativeHyperframesOrder({
             disabled={groupIndex + 1 === view.groups.length}
             onClick={() => selectGroup(1)}
           >
-            Next group
+            {' '}
+            {translateUi('next_group_83532bcb')}{' '}
           </Button>
         </div>
       ) : null}
@@ -74,7 +82,9 @@ export function NativeHyperframesOrder({
       <ol
         start={first + 1}
         className="divide-y divide-border"
-        aria-label={`Element order in ${group.parentId}`}
+        aria-label={translateUi('element_order_in_value0_4308a467', {
+          value0: String(group.parentId),
+        })}
       >
         {nodeIds.slice(first, first + 20).map((nodeId, index) => {
           const position = first + index;
@@ -88,21 +98,25 @@ export function NativeHyperframesOrder({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  aria-label={`Move ${nodeId} earlier`}
+                  aria-label={translateUi('move_value0_earlier_46194c47', {
+                    value0: String(nodeId),
+                  })}
                   disabled={position === 0}
                   onClick={() => move(position, -1)}
                 >
-                  Earlier
+                  {' '}
+                  {translateUi('earlier_e10ae990')}{' '}
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  aria-label={`Move ${nodeId} later`}
+                  aria-label={translateUi('move_value0_later_aef5684d', { value0: String(nodeId) })}
                   disabled={position === nodeIds.length - 1}
                   onClick={() => move(position, 1)}
                 >
-                  Later
+                  {' '}
+                  {translateUi('later_73b6e48a')}{' '}
                 </Button>
               </div>
             </li>
@@ -118,10 +132,13 @@ export function NativeHyperframesOrder({
             disabled={page === 0}
             onClick={() => setPage(page - 1)}
           >
-            Previous elements
+            {' '}
+            {translateUi('previous_elements_b111ac13')}{' '}
           </Button>
           <span>
-            Elements {first + 1}–{Math.min(first + 20, nodeIds.length)} of {nodeIds.length}
+            {' '}
+            {translateUi('elements_e1ff7a90')} {first + 1}–{Math.min(first + 20, nodeIds.length)}{' '}
+            {translateUi('of_28391d3b')} {nodeIds.length}
           </span>
           <Button
             type="button"
@@ -130,7 +147,8 @@ export function NativeHyperframesOrder({
             disabled={first + 20 >= nodeIds.length}
             onClick={() => setPage(page + 1)}
           >
-            Next elements
+            {' '}
+            {translateUi('next_elements_d4547c3f')}{' '}
           </Button>
         </div>
       ) : null}

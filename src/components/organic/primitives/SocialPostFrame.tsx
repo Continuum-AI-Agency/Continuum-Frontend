@@ -33,6 +33,7 @@ import {
   ThumbsUp,
   X,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { flattenHashtags } from '@/lib/organic/hashtags';
@@ -200,6 +201,7 @@ function NeedsMedia({
   // Under a full-screen frame's neutral-50 chrome the placeholder is dark in both themes.
   onDark: boolean;
 }) {
+  const uiText = useTranslations('organic');
   return (
     <div
       className={cn(
@@ -209,10 +211,10 @@ function NeedsMedia({
       style={{ aspectRatio: `${aspect}` }}
     >
       <p className={cn('font-medium', onDark ? 'text-neutral-300' : 'text-muted-foreground')}>
-        Needs media
+        {uiText('needs_media_157d226')}
       </p>
       <Button type="button" variant="outline" onClick={onAddMedia}>
-        Add media
+        {uiText('add_media_d5d5d26')}
       </Button>
     </div>
   );
@@ -224,6 +226,7 @@ function MediaBox({
   onAddMedia,
   className,
 }: Pick<SocialPreviewProps, 'frame' | 'mediaNode' | 'onAddMedia'> & { className?: string }) {
+  const uiText = useTranslations('organic');
   if (mediaNode == null && !onAddMedia && frame.kind === 'feed') return null;
   return (
     <div data-frame-media className={cn('relative w-full overflow-hidden', className)}>
@@ -239,7 +242,7 @@ function MediaBox({
             className="flex w-full items-center justify-center bg-neutral-900 px-4 text-center font-medium text-neutral-300"
             style={{ aspectRatio: `${frame.mediaAspect}` }}
           >
-            Preview unavailable
+            {uiText('preview_unavailable_b99fa6c')}
           </div>
         ))}
     </div>
@@ -270,17 +273,18 @@ function shownCaption(props: SocialPreviewProps): string {
  * it shows the sent string again.
  */
 function PostCaption({
-  noun,
+  captionKind: noun,
   lines,
   lead,
   className,
   ...props
 }: SocialPreviewProps & {
-  noun: 'caption' | 'post copy';
+  captionKind: 'caption' | 'post copy';
   lines: keyof typeof CLAMP;
   lead?: string;
   className?: string;
 }) {
+  const uiText = useTranslations('organic');
   const [localEditing, setLocalEditing] = React.useState(false);
   const editing = props.captionEditing ?? localEditing;
   const setEditing = (next: boolean) => {
@@ -288,7 +292,10 @@ function PostCaption({
     props.onCaptionEditingChange?.(next);
   };
   const shown = shownCaption(props);
-  const ariaLabel = `${POST_PLATFORMS[props.platform].label} ${noun}`;
+  const ariaLabel = uiText('socialCaptionField', {
+    platform: POST_PLATFORMS[props.platform].label,
+    kind: noun === 'caption' ? 'caption' : 'post_copy',
+  });
 
   if (props.editable) {
     const leadText = lead ? <span className="font-semibold">{lead} </span> : null;
@@ -303,7 +310,11 @@ function PostCaption({
             platform={props.platform}
             hashtags={props.hashtags}
             ariaLabel={ariaLabel}
-            placeholder={noun === 'caption' ? 'Write your caption…' : 'Write your post copy…'}
+            placeholder={
+              noun === 'caption'
+                ? uiText('write_your_caption_01d1f29')
+                : uiText('write_your_post_copy_9d7871c')
+            }
             editing={editing}
             onEditingChange={setEditing}
             lead={editing ? undefined : leadText}
@@ -338,8 +349,9 @@ function PostCaption({
 }
 
 function FeedFrame(props: SocialPreviewProps) {
+  const uiText = useTranslations('organic');
   const { platform, frame, brandName, mediaNode, onAddMedia, editable } = props;
-  const displayName = brandName ?? 'Your Brand';
+  const displayName = brandName ?? uiText('your_brand_91e6750');
   const hasMediaBox = mediaNode != null || onAddMedia != null;
   const chrome =
     (platform === 'instagram'
@@ -382,7 +394,7 @@ function FeedFrame(props: SocialPreviewProps) {
         )}
         <PostCaption
           {...props}
-          noun="caption"
+          captionKind="caption"
           lines={2}
           lead={displayName}
           className={cn('px-3 pb-3', editable && 'pt-2')}
@@ -434,7 +446,12 @@ function FeedFrame(props: SocialPreviewProps) {
           <MoreHorizontal className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
         )}
       </div>
-      <PostCaption {...props} noun="post copy" lines={isLinkedIn ? 3 : 5} className="px-3 pb-3" />
+      <PostCaption
+        {...props}
+        captionKind="post copy"
+        lines={isLinkedIn ? 3 : 5}
+        className="px-3 pb-3"
+      />
       {media}
       {decoration && (
         <div
@@ -444,7 +461,9 @@ function FeedFrame(props: SocialPreviewProps) {
           {actions.map(([Icon, label]) => (
             <span key={label} className="flex items-center gap-1.5 font-medium">
               <Icon className="size-4" />
-              <span className={cn(isLinkedIn && 'hidden @[20rem]:inline')}>{label}</span>
+              <span className={cn(isLinkedIn && 'hidden @[20rem]:inline')}>
+                {uiText('socialActionLabel', { action: label })}
+              </span>
             </span>
           ))}
         </div>
@@ -454,6 +473,7 @@ function FeedFrame(props: SocialPreviewProps) {
 }
 
 function VerticalFrame(props: SocialPreviewProps) {
+  const uiText = useTranslations('organic');
   const { platform, frame, brandName, mediaNode, onAddMedia, editable } = props;
   const label = platform === 'youtube' ? 'Shorts' : platform === 'tiktok' ? null : 'Reels';
   // A Short overlays its title where a reel overlays its caption.
@@ -465,7 +485,9 @@ function VerticalFrame(props: SocialPreviewProps) {
         src={props.avatarUrl}
         className="size-7 bg-neutral-50 text-neutral-950"
       />
-      <span className="min-w-0 truncate font-semibold">{brandName ?? 'Your Brand'}</span>
+      <span className="min-w-0 truncate font-semibold">
+        {brandName ?? uiText('your_brand_91e6750')}
+      </span>
     </div>
   );
 
@@ -478,7 +500,7 @@ function VerticalFrame(props: SocialPreviewProps) {
       <div className="pointer-events-auto">
         <PostCaption
           {...props}
-          noun="caption"
+          captionKind="caption"
           lines={2}
           className={typing ? undefined : 'text-neutral-50'}
         />
@@ -534,7 +556,9 @@ function VerticalFrame(props: SocialPreviewProps) {
       >
         {!typing && account}
         {title !== null && (title || editable) && (
-          <p className="line-clamp-2 font-semibold leading-5">{title || 'Untitled Short'}</p>
+          <p className="line-clamp-2 font-semibold leading-5">
+            {title || uiText('untitled_short_70d452f')}
+          </p>
         )}
         {caption}
       </div>
@@ -543,6 +567,7 @@ function VerticalFrame(props: SocialPreviewProps) {
 }
 
 function StoryFrame(props: SocialPreviewProps) {
+  const uiText = useTranslations('organic');
   const { platform, frame, brandName, mediaNode, onAddMedia, editable, caption } = props;
   // A draft's plan says so in its own notice; a published story never had a caption.
   const captionNote = !editable && caption.trim().length > 0;
@@ -577,7 +602,9 @@ function StoryFrame(props: SocialPreviewProps) {
               src={props.avatarUrl}
               className="size-7 bg-neutral-50 text-neutral-950"
             />
-            <span className="min-w-0 truncate font-semibold">{brandName ?? 'Your Brand'}</span>
+            <span className="min-w-0 truncate font-semibold">
+              {brandName ?? uiText('your_brand_91e6750')}
+            </span>
             {props.timeLabel && <span className="shrink-0 opacity-80">{props.timeLabel}</span>}
             {!editable && <X className="ml-auto size-5 shrink-0" aria-hidden />}
           </div>
@@ -591,7 +618,7 @@ function StoryFrame(props: SocialPreviewProps) {
                   aria-hidden="true"
                   className="flex h-10 min-w-0 flex-1 items-center rounded-full border border-neutral-50/70 px-4"
                 >
-                  Send message
+                  {uiText('send_message_93a26b1')}
                 </span>
                 <Heart className="size-6 shrink-0" aria-hidden />
                 <Send className="size-6 shrink-0" aria-hidden />
@@ -601,13 +628,16 @@ function StoryFrame(props: SocialPreviewProps) {
         </div>
       </div>
       {captionNote && (
-        <p className="mt-2 text-center text-muted-foreground">Stories post without a caption</p>
+        <p className="mt-2 text-center text-muted-foreground">
+          {uiText('stories_post_without_a_caption_69907c5')}
+        </p>
       )}
     </FrameRoot>
   );
 }
 
 function LandscapeFrame(props: SocialPreviewProps) {
+  const uiText = useTranslations('organic');
   const { platform, frame, brandName, mediaNode, onAddMedia, editable } = props;
   // The publisher sends the whole caption as the description (youtubePublisher), so the
   // description repeats the first line the title was derived from — as it does once posted.
@@ -643,24 +673,26 @@ function LandscapeFrame(props: SocialPreviewProps) {
           !title && 'text-muted-foreground',
         )}
       >
-        {title || 'Untitled video'}
+        {title || uiText('untitled_video_a7e5acf')}
       </p>
       <div className="mt-2 flex h-9 items-center gap-2">
         <Avatar name={brandName} src={props.avatarUrl} className="size-8" />
-        <span className="min-w-0 truncate font-semibold">{brandName ?? 'Your Brand'}</span>
+        <span className="min-w-0 truncate font-semibold">
+          {brandName ?? uiText('your_brand_91e6750')}
+        </span>
         {!editable && (
           <span
             aria-hidden="true"
             className="ml-auto shrink-0 rounded-full bg-foreground px-3 py-1 font-medium text-background"
           >
-            Subscribe
+            {uiText('subscribe_cc0e38d')}
           </span>
         )}
       </div>
       {(editable || shownCaption(props).trim()) && (
         <PostCaption
           {...props}
-          noun="caption"
+          captionKind="caption"
           lines={2}
           className="mt-2 rounded-lg bg-muted px-3 py-2 text-muted-foreground"
         />

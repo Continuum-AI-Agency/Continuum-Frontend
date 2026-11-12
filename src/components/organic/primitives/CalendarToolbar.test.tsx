@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as rtlRender } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import * as lucideIcons from 'lucide-react';
 import type { ReactNode } from 'react';
+import { render as rtlRender } from '@/i18n/__tests__/render';
 
 import type { CalendarToolbar as CalendarToolbarType } from './CalendarToolbar';
 import { DRAFT_STATUS_PRESENTATION } from './draft-card-styles';

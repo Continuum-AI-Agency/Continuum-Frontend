@@ -16,6 +16,7 @@ import {
   readableLayerName,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 import {
   FormatPreview,
@@ -31,6 +32,7 @@ import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
 import { WebComponentPreview } from '@/components/forge/WebComponentPreview';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useDebounce } from '@/hooks/useDebounce';
+import { formatDecimal } from '@/lib/format/decimal';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -120,6 +122,7 @@ function fitSize(text: string, width: number, height: number): number {
   return lo;
 }
 
+type ForgeText = ReturnType<typeof useUiTranslations<'forge'>>;
 type TextFit = { size: number; lines: string[]; overflow: string | null };
 
 /** The size a value takes in its box, its wrapped lines, and the overflow it causes, in words. */
@@ -128,6 +131,7 @@ function fitText(
   text: string,
   width: number,
   height: number,
+  t: ForgeText,
 ): TextFit {
   const size = fitSize(text, width, height);
   const floor = variable.sample
@@ -136,7 +140,11 @@ function fitText(
   const tooSmall = size < floor;
   // A warning, never a block: the render still runs, the type shrinks or the text clips.
   const overflow = tooSmall
-    ? `Will render · ${nameOf(variable)} may shrink or clip (fits only at ${Math.floor(size)} px type, below ${Math.round(floor)} px)`
+    ? t('previewFitOverflow', {
+        label: nameOf(variable),
+        size: Math.floor(size),
+        floor: Math.round(floor),
+      })
     : null;
   // Drawn at the floor when it cannot shrink that far, so the spill is visible, not hidden.
   const drawSize = tooSmall ? floor : size;
@@ -166,6 +174,7 @@ function drawSlot(
   value: ApiRenderInputValue | undefined,
   media: RequestRowMedia | undefined,
   unit: number,
+  t: ForgeText,
 ): Slot {
   const [x0, y0, x1, y1] = box.box;
   const width = Math.max(0, x1 - x0);
@@ -213,7 +222,7 @@ function drawSlot(
             className="fill-muted stroke-muted-foreground/40"
             strokeWidth={unit * 0.2}
           />
-          {mutedLabel('Continuum fills this')}
+          {mutedLabel(t('previewReserved'))}
         </g>
       ),
       overflow: null,
@@ -316,7 +325,7 @@ function drawSlot(
     };
   }
 
-  const { size: drawSize, lines, overflow } = fitText(variable, text, width, height);
+  const { size: drawSize, lines, overflow } = fitText(variable, text, width, height, t);
   return {
     node: (
       <g key={box.key} data-slot={box.key} data-overflow={overflow ? 'true' : undefined}>
@@ -352,12 +361,14 @@ function drawLayout(
   variables: ApiRenderVariable[],
   values: Record<string, ApiRenderInputValue>,
   media: Record<string, RequestRowMedia>,
+  previewLabel: (name: string) => string,
+  t: ForgeText,
 ): { node: JSX.Element; overflows: string[] } {
   const { comp } = layout;
   const unit = Math.max(comp.width, comp.height) / 100;
   const byKey = new Map(variables.map((variable) => [variable.key, variable]));
   const slots = layout.boxes.map((box) =>
-    drawSlot(box, byKey.get(box.key), values[box.key], media[box.key], unit),
+    drawSlot(box, byKey.get(box.key), values[box.key], media[box.key], unit, t),
   );
   return {
     node: (
@@ -366,7 +377,7 @@ function drawLayout(
         viewBox={`0 0 ${comp.width} ${comp.height}`}
         className="block size-full"
         role="img"
-        aria-label={`${comp.name} preview`}
+        aria-label={previewLabel(comp.name)}
       >
         <title>{`${comp.name} — ${comp.width}×${comp.height}`}</title>
         <rect
@@ -422,8 +433,6 @@ const composeKeyOf = (
 const sameSubject = (a: readonly unknown[], b: readonly unknown[]) =>
   a.length === b.length && a.slice(0, -1).every((part, index) => part === b[index]);
 
-const COMPOSE_FAILED = 'Composed preview unavailable — showing the measured boxes.';
-
 type RenderPreviewPanelProps = {
   brandId: string;
   contract: ApiRenderTemplateContract;
@@ -441,6 +450,8 @@ type RenderPreviewPanelProps = {
  * the After Effects kit, compose or motion-proof reads, which are all workspace-scoped.
  */
 export function RenderPreviewPanel(props: RenderPreviewPanelProps): JSX.Element {
+  const translateUi = useUiTranslations('forge');
+
   const { contract, rows, rowId } = props;
   if (!isWebTemplateKey(contract.template.key) || !contract.web)
     return <TemplatePreviewPanel {...props} />;
@@ -451,7 +462,8 @@ export function RenderPreviewPanel(props: RenderPreviewPanelProps): JSX.Element 
     </div>
   ) : (
     <div className="flex h-full items-center justify-center p-2 text-xs text-muted-foreground">
-      Select a row to preview it
+      {' '}
+      {translateUi('select_a_row_to_preview_it_d1aa8057')}{' '}
     </div>
   );
 }
@@ -465,6 +477,10 @@ function TemplatePreviewPanel({
   refusal,
   onRowChange,
 }: RenderPreviewPanelProps): JSX.Element {
+  const decimalLocale = useUiLocale();
+
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   const templateKey = contract.template.key;
   const isInyogoJerseys =
@@ -654,7 +670,9 @@ function TemplatePreviewPanel({
         isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate),
     ) &&
     // Proofed once the row would render: no wrong value, and no refusal the confirmation found.
-    isRenderable(rowStatusOf(validateRow(contract.variables, values), undefined, refusal)) &&
+    isRenderable(
+      rowStatusOf(validateRow(contract.variables, values, translateUi), undefined, refusal),
+    ) &&
     !row?.proposed;
   const proofStart = useQuery({
     queryKey: ['forge-motion-proof', proofSettled],
@@ -772,7 +790,8 @@ function TemplatePreviewPanel({
   if (!rowId || !row) {
     return (
       <div className="flex h-full items-center justify-center p-2 text-xs text-muted-foreground">
-        Select a row to preview it
+        {' '}
+        {translateUi('select_a_row_to_preview_it_d1aa8057')}{' '}
       </div>
     );
   }
@@ -786,7 +805,7 @@ function TemplatePreviewPanel({
     if (!data) return null;
     return {
       mode: 'preview',
-      badge: 'Layout frame',
+      badge: translateUi('previewLayoutFrame'),
       at: data.source === 'render' ? (backdrop?.job.finishedAt ?? null) : null,
       basedOn:
         data.source === 'render'
@@ -796,7 +815,11 @@ function TemplatePreviewPanel({
       pending,
       node: (
         // biome-ignore lint/performance/noImgElement: a data URL composed per edit, not a Next-optimisable asset
-        <img alt="Composed preview" src={data.image} className="size-full object-contain" />
+        <img
+          alt={translateUi('composed_preview_82b9d3b8')}
+          src={data.image}
+          className="size-full object-contain"
+        />
       ),
     };
   };
@@ -804,17 +827,32 @@ function TemplatePreviewPanel({
   /** A render made with exactly these values is the preview as it stands. */
   const unchangedFrame = (backdrop: Backdrop): PreviewRepaint => ({
     mode: 'preview',
-    badge: backdrop.job.test === false ? 'Final render' : 'Previous render',
+    badge: translateUi(backdrop.job.test === false ? 'previewFinal' : 'previewPrevious'),
     at: backdrop.job.finishedAt ?? backdrop.job.updatedAt,
     basedOn: backdrop.job.label ?? backdrop.job.templateName,
-    notes: ['same values'],
-    node: <OutputFile key={fullSrc(backdrop.file)} output={backdrop.file} alt="Render" />,
+    notes: [translateUi('previewSameValues')],
+    node: (
+      <OutputFile
+        key={fullSrc(backdrop.file)}
+        output={backdrop.file}
+        alt={translateUi('render_6d89eb7d')}
+      />
+    ),
   });
 
   /** What the picked format shows, and what it cannot show, in words. */
   const viewOf = (entry: PreviewFormat): { frame: PreviewFrame; warning: string | null } => {
     const plan = planOf(entry);
-    const drawing = plan.layout ? drawLayout(plan.layout, contract.variables, values, media) : null;
+    const drawing = plan.layout
+      ? drawLayout(
+          plan.layout,
+          contract.variables,
+          values,
+          media,
+          (name) => translateUi('compositionPreview', { name }),
+          translateUi,
+        )
+      : null;
     const composedPreview = composedFrame(plan.backdrop);
     const preview =
       plan.backdrop && plan.known && plan.changed.length === 0 && atSec === null
@@ -830,8 +868,18 @@ function TemplatePreviewPanel({
         mode: 'preview',
         at: null,
         basedOn: null,
-        badge: 'Full animation proof',
-        caption: `After Effects · ${currentProof.durationSec?.toFixed(1)}s · ${currentProof.frameRate?.toFixed(1)} fps · ${currentProof.hasAudio ? 'audio' : 'no audio'}`,
+        badge: translateUi('previewProof'),
+        caption: translateUi('previewProofCaption', {
+          duration:
+            currentProof.durationSec == null
+              ? '—'
+              : formatDecimal(currentProof.durationSec, 1, decimalLocale),
+          rate:
+            currentProof.frameRate == null
+              ? '—'
+              : formatDecimal(currentProof.frameRate, 1, decimalLocale),
+          audio: currentProof.hasAudio ? 'yes' : 'no',
+        }),
         node: (
           <video
             controls
@@ -850,9 +898,13 @@ function TemplatePreviewPanel({
         mode: 'preview',
         at: null,
         basedOn: null,
-        badge: 'Animation sketch',
+        badge: translateUi('previewSketch'),
         caption: [
-          `Drawn from the template · ${currentSketch.window[0].toFixed(1)}–${currentSketch.window[1].toFixed(1)}s · ${currentSketch.frames} frames`,
+          translateUi('previewSketchCaption', {
+            from: formatDecimal(currentSketch.window[0], 1, decimalLocale),
+            to: formatDecimal(currentSketch.window[1], 1, decimalLocale),
+            frames: currentSketch.frames,
+          }),
           ...currentSketch.notes,
         ].join(' · '),
         node: (
@@ -877,12 +929,12 @@ function TemplatePreviewPanel({
           mode: 'preview',
           at: null,
           basedOn: null,
-          badge: 'Live',
-          caption: ['Drawn live from the template', ...livePaint.notes].join(' · '),
+          badge: translateUi('previewLive'),
+          caption: [translateUi('previewLiveCaption'), ...livePaint.notes].join(' · '),
           node: (
             <LiveImage
               svg={livePaint.svg}
-              alt="Live preview"
+              alt={translateUi('live_preview_f65ddc1f')}
               since={livePaint.since}
               className="size-full object-contain"
             />
@@ -892,13 +944,17 @@ function TemplatePreviewPanel({
           frame,
           warning:
             livePaint.overflows
-              .map((label) => `Will render · ${label} may shrink or clip`)
+              .map((label) => translateUi('previewOverflow', { label }))
               .join(' · ') || null,
         };
       }
       frame = drawing
-        ? { mode: 'estimate', node: drawing.node, caption: 'Loading the live preview…' }
-        : { mode: 'none', message: 'Loading the live preview…' };
+        ? {
+            mode: 'estimate',
+            node: drawing.node,
+            caption: translateUi('loading_the_live_preview_496548d8'),
+          }
+        : { mode: 'none', message: translateUi('loading_the_live_preview_496548d8') };
       return { frame, warning: drawing?.overflows.join(' · ') || null };
     }
     if (lastJob && own && atSec === null) {
@@ -911,10 +967,15 @@ function TemplatePreviewPanel({
       const stale = ownBackdrop && plan.known ? plan.changed.length > 0 : revisionStale;
       frame = {
         mode: 'rendered',
-        badge: `${lastJob.test === false ? 'Final render' : 'Previous render'}${stale ? ' · before latest edits' : ''}`,
+        badge: translateUi('previewStaleBadge', {
+          kind: lastJob.test === false ? 'final' : 'previous',
+          stale: stale ? 'yes' : 'no',
+        }),
         at: lastJob.finishedAt ?? lastJob.updatedAt,
         stale,
-        node: <OutputFile key={fullSrc(own)} output={own} alt="Last render" />,
+        node: (
+          <OutputFile key={fullSrc(own)} output={own} alt={translateUi('last_render_8b8dc7d8')} />
+        ),
         caption: own.fileName,
         ...(stale && ownBackdrop && preview ? { preview } : {}),
       };
@@ -925,18 +986,18 @@ function TemplatePreviewPanel({
         mode: 'estimate',
         node: drawing.node,
         caption: composed.isError
-          ? COMPOSE_FAILED
+          ? translateUi('previewComposeFailed')
           : needsCompose
-            ? 'Composing the preview…'
+            ? translateUi('composing_the_preview_d5a9535c')
             : undefined,
       };
     } else {
       frame = {
         mode: 'none',
         message: composed.isError
-          ? COMPOSE_FAILED
+          ? translateUi('previewComposeFailed')
           : needsCompose
-            ? 'Composing the preview…'
+            ? translateUi('composing_the_preview_d5a9535c')
             : undefined,
       };
     }
@@ -948,19 +1009,25 @@ function TemplatePreviewPanel({
     const problems = [
       // Whatever stands in for it, a composition that failed is said, not silently skipped.
       ...(composed.isError && needsCompose && frame.mode !== 'estimate' && frame.mode !== 'none'
-        ? ['Composed preview unavailable']
+        ? [translateUi('previewComposeUnavailable')]
         : []),
       ...(data
         ? [
             ...data.overflows.map((label) => `Will render · ${label} may shrink or clip`),
-            ...(data.notPreviewed.length ? [`Not previewed: ${data.notPreviewed.join(', ')}`] : []),
+            ...(data.notPreviewed.length
+              ? [translateUi('previewNotShown', { layers: data.notPreviewed.join(', ') })]
+              : []),
           ]
         : (drawing?.overflows ?? [])),
     ];
     // Live stood down for this row: say why, once, beside what stands in for it.
     const liveProblem =
       entry.id === format?.id && liveFails
-        ? `Live preview unavailable — ${liveKit.isError ? 'the template scene could not be read' : livePaint?.unlaid.join('; ')}`
+        ? translateUi('previewLiveFailed', {
+            reason: liveKit.isError
+              ? translateUi('previewSceneUnreadable')
+              : (livePaint?.unlaid.join('; ') ?? ''),
+          })
         : null;
     return { frame, warning: [liveProblem, ...problems].filter(Boolean).join(' · ') || null };
   };
@@ -968,12 +1035,14 @@ function TemplatePreviewPanel({
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 p-2 text-xs">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-medium">{row.label.trim() || 'Untitled'}</span>
+        <span className="truncate font-medium">
+          {row.label.trim() || translateUi('untitled_f59ab8d1')}
+        </span>
         <div className="flex shrink-0 items-center gap-2">
           {/* What this template DELIVERS. A one-frame comp and a 15s one draw the same boxes. */}
           {motion ? <span className="text-2xs text-muted-foreground">{motion}</span> : null}
           <ToggleGroup
-            aria-label="Preview"
+            aria-label={translateUi('preview_324b134f')}
             size="sm"
             variant="outline"
             value={view}
@@ -984,17 +1053,19 @@ function TemplatePreviewPanel({
           >
             <ToggleGroupItem
               value="live"
-              title="Drawn in the browser from the template, as you type"
+              title={translateUi('drawn_in_the_browser_from_the_templ_a67a37f4')}
               className="px-2 text-2xs"
             >
-              Live
+              {' '}
+              {translateUi('live_b64ac05f')}{' '}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="exact"
-              title="Composed on the server over the closest real render"
+              title={translateUi('composed_on_the_server_over_the_clo_ea893945')}
               className="px-2 text-2xs"
             >
-              Exact
+              {' '}
+              {translateUi('exact_b5aee780')}{' '}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -1002,7 +1073,9 @@ function TemplatePreviewPanel({
       {contract.publishCheck && contract.publishCheck.state !== 'pass' ? (
         <details className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs">
           <summary className="cursor-pointer font-medium">
-            Template placement needs review ({contract.publishCheck.issues.length})
+            {translateUi('previewTemplatePlacementReview', {
+              count: contract.publishCheck.issues.length,
+            })}
           </summary>
           <ul className="mb-0 mt-1 pl-4">
             {contract.publishCheck.issues.map((issue) => (
@@ -1011,9 +1084,15 @@ function TemplatePreviewPanel({
           </ul>
           {contract.publishCheck.media.map((item) => (
             <p key={item.key} className="mb-0 mt-1">
-              {item.label}: source{' '}
-              {item.source ? `${item.source[0]}×${item.source[1]} px` : 'unmeasured'}; canvas{' '}
-              {item.box ? item.box.join(', ') : 'unmeasured'}
+              {item.label}: {translateUi('previewSourceLabel')}{' '}
+              {item.source
+                ? translateUi('previewPixelDimensions', {
+                    width: item.source[0],
+                    height: item.source[1],
+                  })
+                : translateUi('previewUnmeasuredLabel')}
+              ; {translateUi('previewCanvasLabel')}{' '}
+              {item.box ? item.box.join(', ') : translateUi('previewUnmeasuredLabel')}
             </p>
           ))}
         </details>
@@ -1023,15 +1102,13 @@ function TemplatePreviewPanel({
           role="note"
           className="m-0 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs"
         >
-          Use a 254×305 px canvas for Left Jersey and 249×311 px for Right Jersey, with the whole
-          shirt centered. Larger images crop because this template keeps the original layer scale.
-          Enter Bet Amount and Win Amount as short numbers and Lside/Rside Value as numeric odds.
-          Check a Proof before Final.
+          {' '}
+          {translateUi('use_a_254_305_px_canvas_for_left_je_4089ee2d')}{' '}
         </p>
       ) : null}
       {format ? (
         <FormatPreview
-          label="Row preview"
+          label={translateUi('row_preview_2a156013')}
           className="min-h-0 flex-1"
           wellClassName="min-h-0 flex-1"
           formats={rowFormats}
@@ -1041,7 +1118,9 @@ function TemplatePreviewPanel({
           frame={(entry) => viewOf(entry).frame}
         />
       ) : (
-        <p className="m-0 text-muted-foreground">This template has no measured layout to draw.</p>
+        <p className="m-0 text-muted-foreground">
+          {translateUi('this_template_has_no_measured_layou_78b3f59d')}
+        </p>
       )}
       {kit && onRowChange && rowValues.length > 1 ? (
         <VariationStrip
@@ -1058,16 +1137,18 @@ function TemplatePreviewPanel({
       isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
         <div aria-live="polite" className="shrink-0 text-2xs text-muted-foreground">
           <span>
-            Full animation proof · {format.label} · source{' '}
+            {' '}
+            {translateUi('full_animation_proof_6d0e6627')} {format.label}{' '}
+            {translateUi('source_7bb73e1f')}{' '}
             {currentProof?.templateCommitSha?.slice(0, 8) ??
               currentProof?.templateSourceSha256.slice(0, 8) ??
-              'checking'}{' '}
+              translateUi('checking_7f98506a')}{' '}
             ·{' '}
             {currentProof?.state === 'ready'
-              ? 'matches current values'
+              ? translateUi('matches_current_values_d133b1e0')
               : proofReady
-                ? 'current values submitted'
-                : 'updating for current values'}
+                ? translateUi('current_values_submitted_0579f79c')
+                : translateUi('updating_for_current_values_24ac36e8')}
           </span>
           {proofStart.isError ? (
             <button
@@ -1075,12 +1156,14 @@ function TemplatePreviewPanel({
               className="ml-2 underline"
               onClick={() => void proofStart.refetch()}
             >
-              Retry proof: {String(proofStart.error)}
+              {' '}
+              {translateUi('retry_proof_2cc1071d')} {String(proofStart.error)}
             </button>
           ) : null}
           {proof.isError ? (
             <button type="button" className="ml-2 underline" onClick={() => void proof.refetch()}>
-              Retry status: {String(proof.error)}
+              {' '}
+              {translateUi('retry_status_da654e0c')} {String(proof.error)}
             </button>
           ) : null}
           {currentProof?.state === 'failed' ? (
@@ -1092,7 +1175,8 @@ function TemplatePreviewPanel({
                 await proof.refetch();
               }}
             >
-              Retry proof: {currentProof.error}
+              {' '}
+              {translateUi('retry_proof_2cc1071d')} {currentProof.error}
             </button>
           ) : null}
           {currentProof && currentProof.state !== 'ready' && currentProof.state !== 'failed' ? (
@@ -1101,7 +1185,7 @@ function TemplatePreviewPanel({
             </span>
           ) : null}
           {!currentProof && proofReady && !proofStart.isError ? (
-            <span className="ml-2">Preparing proof…</span>
+            <span className="ml-2">{translateUi('preparing_proof_f6b4919f')}</span>
           ) : null}
         </div>
       ) : null}
@@ -1119,14 +1203,16 @@ function TemplatePreviewPanel({
             }}
           >
             {sketch.isPending
-              ? 'Sketching the animation…'
+              ? translateUi('sketching_the_animation_80b05332')
               : currentSketch
-                ? 'Sketch again'
-                : 'Sketch the animation'}
+                ? translateUi('sketch_again_5b4a3dc1')
+                : translateUi('sketch_the_animation_40dcb7a7')}
           </button>
-          <span>drawn from the template in seconds · no render</span>
+          <span>{translateUi('drawn_from_the_template_in_seconds__8c7f2c2b')}</span>
           {sketch.isError && sketchFor === sketchLive ? (
-            <span>· Sketch unavailable: {String(sketch.error)}</span>
+            <span>
+              {translateUi('sketch_unavailable_fe6aad2e')} {String(sketch.error)}
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -1134,7 +1220,7 @@ function TemplatePreviewPanel({
       contract.template.motion &&
       isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
         <label className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
-          <span>Frame</span>
+          <span>{translateUi('frame_d0b50e06')}</span>
           <input
             type="range"
             min={0}
@@ -1149,9 +1235,13 @@ function TemplatePreviewPanel({
               setAtSec(Number(event.target.value) / contract.template.motion!.frameRate)
             }
             className="min-w-0 flex-1"
-            aria-label="Preview frame"
+            aria-label={translateUi('preview_frame_49bc3a3e')}
           />
-          <span>{atSec === null ? 'Auto' : `${atSec.toFixed(2)}s`}</span>
+          <span>
+            {atSec === null
+              ? translateUi('auto_02862497')
+              : `${formatDecimal(atSec, 2, decimalLocale)}s`}
+          </span>
         </label>
       ) : null}
     </div>

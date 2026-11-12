@@ -1,15 +1,16 @@
 'use client';
-
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import {
   renameBrandProfileAction,
   updateBrandContentLanguageAction,
-} from '@/app/(post-auth)/settings/actions';
+} from '@/app/[locale]/(post-auth)/settings/actions';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { SettingsLogoUploader } from '../SettingsLogoUploader';
 
 type BrandProfileMeta = {
@@ -36,6 +37,12 @@ export function BrandIdentitySection({
   canEdit,
   contentLanguage: initialLanguage = null,
 }: BrandIdentitySectionProps) {
+  const uiLocale = useLocale();
+
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const { show } = useToast();
   const { activeBrandId, updateBrandName } = useActiveBrandContext();
   const [isPending, startTransition] = useTransition();
@@ -61,16 +68,16 @@ export function BrandIdentitySection({
       try {
         await updateBrandContentLanguageAction(activeBrandId, contentLanguage);
         show({
-          title: 'Content language saved',
+          title: tUi('m_9953412879'),
           description: contentLanguage.trim()
-            ? `New content will be written in ${contentLanguage.trim()}.`
-            : 'Cleared — the language will be detected from this brand’s posts.',
+            ? tUi('m_f86b975dfd', { v0: String(contentLanguage.trim()) })
+            : tUi('m_1e7cef9323'),
           variant: 'success',
         });
       } catch (error) {
         show({
-          title: 'Could not save language',
-          description: error instanceof Error ? error.message : 'Unable to save.',
+          title: tUi('m_72bf415ad7'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_78f9b86ec5'),
           variant: 'error',
         });
       }
@@ -80,16 +87,16 @@ export function BrandIdentitySection({
   const dates = useMemo(() => {
     if (!profile || !mounted) return null;
     return {
-      createdAt: new Date(profile.createdAt).toLocaleString(),
-      updatedAt: new Date(profile.updatedAt).toLocaleString(),
+      createdAt: new Date(profile.createdAt).toLocaleString(uiLocale),
+      updatedAt: new Date(profile.updatedAt).toLocaleString(uiLocale),
     };
-  }, [profile, mounted]);
+  }, [profile, mounted, uiLocale]);
 
   const handleRename = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = brandName.trim();
     if (!trimmed) {
-      show({ title: 'Name required', description: 'Enter a brand name.', variant: 'error' });
+      show({ title: tUi('m_3cb8eeb8a4'), description: tUi('m_21f57ca992'), variant: 'error' });
       return;
     }
     startTransition(async () => {
@@ -97,11 +104,11 @@ export function BrandIdentitySection({
         await renameBrandProfileAction(activeBrandId, trimmed);
         setBrandName(trimmed);
         updateBrandName(activeBrandId, trimmed);
-        show({ title: 'Brand updated', description: 'Brand name saved.', variant: 'success' });
+        show({ title: tUi('m_269b76042f'), description: tUi('m_1617199c0d'), variant: 'success' });
       } catch (error) {
         show({
-          title: 'Rename failed',
-          description: error instanceof Error ? error.message : 'Unable to rename brand.',
+          title: tUi('m_85aa47dd98'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_e3cc08251b'),
           variant: 'error',
         });
       }
@@ -123,18 +130,18 @@ export function BrandIdentitySection({
               <Input
                 value={brandName}
                 onChange={(event) => setBrandName(event.target.value)}
-                placeholder="Brand name"
+                placeholder={tUi('m_6b4b8b5df0')}
                 className="min-w-[260px]"
                 disabled={!canEdit}
               />
               <Button type="submit" disabled={isPending || !canEdit}>
-                Save name
+                {tUi('m_8ce686405a')}
               </Button>
             </div>
             {profile ? (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Detail label="Created" value={dates?.createdAt ?? '—'} />
-                <Detail label="Last updated" value={dates?.updatedAt ?? '—'} />
+                <Detail label={tUi('m_accf40c89b')} value={dates?.createdAt ?? '—'} />
+                <Detail label={tUi('m_583c9e2357')} value={dates?.updatedAt ?? '—'} />
               </div>
             ) : null}
           </div>
@@ -144,22 +151,19 @@ export function BrandIdentitySection({
       <form onSubmit={handleLanguageSave}>
         <div className="flex flex-col gap-2">
           <div>
-            <span className="text-sm font-medium">Content language</span>
-            <p className="text-xs text-muted-foreground">
-              Every caption, headline and slide for this brand is written in this language. Leave it
-              empty to have it detected from the brand’s existing posts.
-            </p>
+            <span className="text-sm font-medium">{tUi('m_9dc8357635')}</span>
+            <p className="text-xs text-muted-foreground">{tUi('m_7903c85743')}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Input
               value={contentLanguage}
               onChange={(event) => setContentLanguage(event.target.value)}
-              placeholder="e.g. Spanish"
+              placeholder={tUi('m_a2fd122ff6')}
               className="min-w-[260px]"
               disabled={!canEdit}
             />
             <Button type="submit" variant="outline" disabled={isPending || !canEdit}>
-              Save language
+              {tUi('m_af5a1075cf')}
             </Button>
           </div>
         </div>
@@ -167,9 +171,7 @@ export function BrandIdentitySection({
 
       {!canEdit ? (
         <Alert className="border-warning/30 bg-warning/10">
-          <AlertDescription className="text-warning">
-            Only brand owners or admins can edit this brand profile.
-          </AlertDescription>
+          <AlertDescription className="text-warning">{tUi('m_953ebfa711')}</AlertDescription>
         </Alert>
       ) : null}
     </div>

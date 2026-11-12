@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
-import { useCampaignStore } from '../../stores/useCampaignStore';
+import { render } from '@/i18n/__tests__/render';
 import type { CanvasHydration } from '@/lib/campaign-canvas/hydrate';
+import { useCampaignStore } from '../../stores/useCampaignStore';
 import type { AdData, CampaignCanvasNode } from '../../types';
 import { CanvasInspector } from './CanvasInspector';
 

@@ -33,7 +33,8 @@ describe('M1 — the symbol before the figure, the code after it', () => {
 
 describe('splitMoney — the inverse, for a large figure that dims its units', () => {
   it('round-trips what joinMoney wrote', () => {
-    for (const text of ['$85.47 MXN', '-$25.54 USD', '€1,200 EUR', '85.47 CHF', '$30.5K MXN']) {
+    for (const text of ['$85.47 MXN', '-$25.54 USD', '€1,200 EUR', '85.47 CHF', '$30.5K MXN',
+      '€1.234,56 EUR', '$25,54 MXN', '-R$1,2 mil BRL', '$1,2\u00a0mil MXN']) {
       const parts = splitMoney(text);
       expect(parts).not.toBeNull();
       expect(joinMoney(parts as NonNullable<typeof parts>)).toBe(text);

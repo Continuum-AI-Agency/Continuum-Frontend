@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,8 @@ export function NameDialog({
   onConfirm: (name: string) => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const [name, setName] = useState(initialName);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -62,7 +65,7 @@ export function NameDialog({
           </DialogHeader>
           <Input
             autoFocus
-            aria-label="Name"
+            aria-label={translateUi('name_dcd1d522')}
             value={name}
             maxLength={200}
             onChange={(event) => setName(event.target.value)}
@@ -74,7 +77,8 @@ export function NameDialog({
               disabled={busy}
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
             <Button type="submit" disabled={busy || !name.trim()}>
               {busy ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { intFmt } from '../chart-formatters';
+import { useChartFormatters } from '../use-chart-formatters';
 
 export interface TooltipRow {
   color: string;
@@ -17,6 +17,8 @@ export interface TooltipContentProps {
 }
 
 export function TooltipContent({ title, rows, children }: TooltipContentProps) {
+  const { intFmt } = useChartFormatters();
+
   return (
     <div className="overflow-hidden">
       <div className="px-3 py-2.5">

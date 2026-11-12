@@ -1,9 +1,12 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Button } from '@/components/ui/button';
 import { useVersionCheck } from '@/hooks/use-version-check';
 
 export function VersionBanner() {
+  const uiText = useTranslations('common');
   const { isUpdateAvailable, reload } = useVersionCheck();
 
   if (!isUpdateAvailable) return null;
@@ -16,11 +19,11 @@ export function VersionBanner() {
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-semibold text-foreground">New Continuum update available</p>
-          <p className="text-xs text-secondary">Refresh to load the latest deployment.</p>
+          <p className="text-sm font-semibold text-foreground">{uiText('m_da5793a532')}</p>
+          <p className="text-xs text-secondary">{uiText('m_f955d78044')}</p>
         </div>
         <Button size="sm" onClick={reload} className="w-full sm:w-auto">
-          Refresh
+          {uiText('refresh_0e91610')}
         </Button>
       </div>
     </div>

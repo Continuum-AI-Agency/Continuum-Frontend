@@ -1,4 +1,6 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { formatDecimal } from '@/lib/format/decimal';
 
 // One "Top posts by hook rate" row: rank + cover thumbnail + kind/caption, with
 // the hook rate as the emphasis. The whole row is a hover-preview trigger; the
@@ -18,14 +20,14 @@ import { cn } from '@/lib/utils';
 import { AwarenessPostQuickLook } from './AwarenessPostQuickLook';
 import { type AwarenessTopPost, enrichAwarenessTopPost, postKindLabel } from './types';
 
-const nf = new Intl.NumberFormat('en-US');
-
 function Thumb({ post, seed }: { post: AwarenessTopPost; seed: string }) {
+  const uiText = useTranslations('organic');
+
   if (post.thumbnailUrl) {
     return (
       <LeaderboardThumbnail
         src={post.thumbnailUrl}
-        alt={post.caption ?? `Top ${seed}`}
+        alt={post.caption ?? uiText('topContentKind', { kind: seed.toLowerCase() })}
         fallbackSeed={seed}
         className="size-10"
       />
@@ -62,6 +64,8 @@ export function AwarenessTopPostRow({
   loadingDetail?: boolean;
   onRequestDetail?: (postId: string) => void;
 }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const enriched = enrichAwarenessTopPost(post, livePost);
   const kind = postKindLabel(enriched);
   const snippet = captionSnippet(enriched);
@@ -82,9 +86,14 @@ export function AwarenessTopPostRow({
             </span>
             <Thumb post={enriched} seed={kind} />
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-xs font-medium">{kind}</span>
+              <span className="truncate text-xs font-medium">
+                {uiText('contentKindLabel', { kind: kind.toLowerCase().toLowerCase() })}
+              </span>
               <span className="truncate text-2xs text-muted-foreground">
-                {snippet ?? (enriched.views !== null ? `${nf.format(enriched.views)} views` : '—')}
+                {snippet ??
+                  (enriched.views !== null
+                    ? uiText('awarenessViews', { count: enriched.views })
+                    : '—')}
               </span>
             </span>
             <span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -100,16 +109,20 @@ export function AwarenessTopPostRow({
                       : undefined
                   }
                 >
-                  {enriched.hookRate !== null ? `${enriched.hookRate.toFixed(1)}%` : '—'}
+                  {enriched.hookRate !== null
+                    ? `${formatDecimal(enriched.hookRate, 1, uiLocale)}%`
+                    : '—'}
                 </span>
-                <span className="text-3xs uppercase tracking-wide text-muted-foreground">hook</span>
+                <span className="text-3xs uppercase tracking-wide text-muted-foreground">
+                  {uiText('hook_0648298')}
+                </span>
               </span>
               {enriched.permalink ? (
                 <a
                   href={enriched.permalink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={`Open ${kind} on platform`}
+                  aria-label={uiText('openContentOnPlatform', { kind: kind.toLowerCase() })}
                   className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
                   // Keep the hover card open when the pointer moves to the icon,
                   // but don't treat icon clicks as "select the row".

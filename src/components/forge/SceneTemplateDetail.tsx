@@ -3,7 +3,7 @@
 import { type TemplateSourceSummary, templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Box, Trash2 } from 'lucide-react';
-import Link from 'next/link';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
@@ -13,6 +13,7 @@ import { SceneRenderHistory, SceneSignedMedia } from '@/components/forge/scene/S
 import { useScenePreview } from '@/components/forge/scene/useScenePreview';
 import { HouseScenePill, InlineRename } from '@/components/forge/TemplateCard';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Link } from '@/i18n/navigation';
 import {
   blendParseProblem,
   fetchSceneTemplate,
@@ -55,6 +56,8 @@ export function SceneTemplateDetail({
   onRename: (title: string) => void;
   onRemove: () => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const { assetId } = source;
   const name = source.displayName ?? templateDisplayName(source.parse?.filename);
   const parsed = source.parseState === 'parsed';
@@ -95,16 +98,21 @@ export function SceneTemplateDetail({
       <header className="flex flex-wrap items-center justify-between gap-2 px-[var(--card-pad)] py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={onBack}>
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Templates
+            <ArrowLeft className="size-3.5" aria-hidden /> {translateUi('templates_56b564b7')}{' '}
           </Button>
           <h2 className="min-w-0 text-base font-semibold">
             {source.house ? name : <InlineRename value={name} onRename={onRename} />}
           </h2>
           {source.house ? <HouseScenePill /> : null}
           <p className="truncate text-xs text-muted-foreground">
-            Blender scene
-            {view.data ? ` · ${view.data.fields.length} fields · ${outputs.length} outputs` : null}
+            {' '}
+            {translateUi('blender_scene_15f109bd')}{' '}
+            {view.data
+              ? translateUi('value0_fields_value1_outputs_e561e8d7', {
+                  value0: String(view.data.fields.length),
+                  value1: String(outputs.length),
+                })
+              : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -119,7 +127,7 @@ export function SceneTemplateDetail({
                 className="gap-1.5 text-destructive"
                 onClick={onRemove}
               >
-                <Trash2 className="size-3.5" aria-hidden /> Remove
+                <Trash2 className="size-3.5" aria-hidden /> {translateUi('remove_c3812fc4')}{' '}
               </Button>
             </>
           )}
@@ -128,8 +136,7 @@ export function SceneTemplateDetail({
               href={sceneEditorHref(assetId)}
               className={buttonVariants({ size: 'sm', className: 'gap-1.5' })}
             >
-              <Box className="size-3.5" aria-hidden />
-              Open editor
+              <Box className="size-3.5" aria-hidden /> {translateUi('open_editor_550697e0')}{' '}
             </Link>
           ) : null}
         </div>
@@ -142,7 +149,7 @@ export function SceneTemplateDetail({
         >
           {source.parseState !== 'pending'
             ? blendParseProblem(source.parseError)
-            : 'Reading the .blend…'}
+            : translateUi('reading_the_blend_40f8b768')}
         </p>
       ) : view.isError ? (
         <div
@@ -151,12 +158,14 @@ export function SceneTemplateDetail({
         >
           {sceneProblem(view.error).message}
           <Button size="sm" variant="outline" onClick={() => void view.refetch()}>
-            Retry
+            {' '}
+            {translateUi('retry_942087cc')}{' '}
           </Button>
         </div>
       ) : !view.data ? (
         <p role="status" className="m-0 p-[var(--card-pad)] text-sm text-muted-foreground">
-          Reading the scene…
+          {' '}
+          {translateUi('reading_the_scene_708494d1')}{' '}
         </p>
       ) : (
         <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:divide-x lg:divide-y-0">
@@ -186,8 +195,8 @@ export function SceneTemplateDetail({
             />
           </div>
           <div className="flex min-w-0 flex-col gap-4 p-[var(--card-pad)]">
-            <section aria-label="Fields" className="flex flex-col gap-2">
-              <h3 className="m-0 text-sm font-medium">Fields</h3>
+            <section aria-label={translateUi('fields_616f48c1')} className="flex flex-col gap-2">
+              <h3 className="m-0 text-sm font-medium">{translateUi('fields_616f48c1')}</h3>
               {groups.length ? (
                 <dl className="m-0 grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
                   {groups.map(({ group, fields }) => {
@@ -205,17 +214,24 @@ export function SceneTemplateDetail({
                   })}
                 </dl>
               ) : (
-                <p className="m-0 text-xs text-muted-foreground">This file exposes no fields.</p>
+                <p className="m-0 text-xs text-muted-foreground">
+                  {translateUi('this_file_exposes_no_fields_29359480')}
+                </p>
               )}
               {view.data.externals.length ? (
                 <p className="m-0 text-xs text-destructive">
-                  Missing from the file: {view.data.externals.map((x) => x.path).join(', ')}. Pack
-                  them in Blender before rendering.
+                  {' '}
+                  {translateUi('missing_from_the_file_22ab4a66')}{' '}
+                  {view.data.externals.map((x) => x.path).join(', ')}
+                  {translateUi('pack_them_in_blender_before_renderi_5741fe2f')}{' '}
                 </p>
               ) : null}
             </section>
-            <section aria-label="Recent renders" className="flex flex-col gap-2">
-              <h3 className="m-0 text-sm font-medium">Recent renders</h3>
+            <section
+              aria-label={translateUi('recent_renders_8fdf5d7c')}
+              className="flex flex-col gap-2"
+            >
+              <h3 className="m-0 text-sm font-medium">{translateUi('recent_renders_8fdf5d7c')}</h3>
               <SceneRenderHistory
                 brandId={brandId}
                 assetId={assetId}

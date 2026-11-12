@@ -1,6 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+
 // Calendar "Create with AI" composer — the one-shot "very light harness".
 // Collects a direction plus predetermined evidence (selected metrics, insights,
 // winning angles), optionally tags library creatives (>=2 ⇒ carousel) and
@@ -39,6 +42,7 @@ import { createOneShotPost } from '@/lib/organic/oneShotPost';
 import { platformVerdicts } from '@/lib/organic/platformSelection';
 import { postFormatOptions } from '@/lib/organic/postPlatforms';
 import { defaultPublishAccount } from '@/lib/organic/publish-utils';
+import { organicPublishFormatLabel } from '@/lib/organic/publishPresentation';
 import { accountName, findAccount, usePublishAccounts } from '@/lib/organic/publishTargets';
 import type { Trend } from '@/lib/organic/trends';
 import { cn } from '@/lib/utils';
@@ -175,6 +179,8 @@ export function AiPostComposer({
   initialTrendIds?: string[];
   onCreated?: (response: OneShotPostResponse) => void;
 }) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('organic');
   const [angle, setAngle] = React.useState('');
   const [guidance, setGuidance] = React.useState('');
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
@@ -303,7 +309,7 @@ export function AiPostComposer({
         await joinPlatforms(created, platforms, destinationIds);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create the post. Try again.');
+      setError(formatUiError(err));
     } finally {
       dispatchInFlightRef.current = false;
       setSubmitting(false);
@@ -316,11 +322,10 @@ export function AiPostComposer({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
-            Create with AI
+            {uiText('create_with_ai_1c19341')}
           </DialogTitle>
           <DialogDescription>
-            Give the agent a direction — or pick a winning angle. Selected metrics and insights
-            ground the copy; tagged creatives are used directly (two or more makes a carousel).
+            {uiText('give_the_agent_a_direction_or_pick_a_winning__cf535b1')}
           </DialogDescription>
         </DialogHeader>
 
@@ -330,13 +335,15 @@ export function AiPostComposer({
               htmlFor="ai-post-direction"
               className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
             >
-              Direction{selectedAngleRefs.length > 0 ? ' (optional — angle selected)' : ''}
+              {uiText.rich('sentence_224b3d51df96', {
+                optional: selectedAngleRefs.length > 0 ? 'yes' : 'no',
+              })}
             </label>
             <Textarea
               id="ai-post-direction"
               value={angle}
               onChange={(e) => setAngle(e.target.value)}
-              placeholder="e.g. Punchy back-to-school savings hook with our top 3 deals"
+              placeholder={uiText('e_g_punchy_back_to_school_savings_hook_with_o_74acaeb')}
               className="min-h-[4.5rem] text-sm"
               autoFocus
             />
@@ -344,18 +351,19 @@ export function AiPostComposer({
 
           {evidence.loading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
-              <Loader2 className="size-3 animate-spin" /> Loading brand evidence…
+              <Loader2 className="size-3 animate-spin" />
+              {uiText('loading_brand_evidence_f3be8ab')}
             </div>
           ) : (
             <>
               <EvidenceChipGroup
-                title="Winning angles"
+                title={uiText('winning_angles_608f852')}
                 items={evidence.angles.map((a) => ({ refId: a.refId, label: a.angle }))}
                 selectedRefs={selectedAngleRefs}
                 onToggle={(refId) => setSelectedAngleRefs(toggleRef(refId))}
               />
               <EvidenceChipGroup
-                title="Metrics to cite"
+                title={uiText('metrics_to_cite_9ec66d2')}
                 items={evidence.metrics.map((m) => ({
                   refId: m.refId,
                   label: `${m.label}: ${m.value}${m.unit ?? ''}`,
@@ -364,7 +372,7 @@ export function AiPostComposer({
                 onToggle={(refId) => setSelectedMetricRefs(toggleRef(refId))}
               />
               <EvidenceChipGroup
-                title="Insights"
+                title={uiText('insights_2a932f9')}
                 items={evidence.insights.map((i) => ({ refId: i.refId, label: i.summary }))}
                 selectedRefs={selectedInsightRefs}
                 onToggle={(refId) => setSelectedInsightRefs(toggleRef(refId))}
@@ -375,7 +383,7 @@ export function AiPostComposer({
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Platforms
+                {uiText('platforms_ab9bd75')}
               </p>
               <PlatformSelector
                 selected={platforms}
@@ -389,7 +397,7 @@ export function AiPostComposer({
                 <li key={p} data-composer-target={p}>
                   {PUBLISH_PLATFORM_LABELS[p]}:{' '}
                   <span data-composer-account="" className="text-foreground">
-                    {account ?? 'choose the account on the post'}
+                    {account ?? uiText('choose_the_account_on_the_post_9e5fe2c')}
                   </span>
                 </li>
               ))}
@@ -398,7 +406,7 @@ export function AiPostComposer({
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Format
+              {uiText('format_2f34366')}
             </p>
             {/* Two or more creatives already make it a carousel, so the choice is locked. */}
             <ToggleGroup
@@ -406,7 +414,7 @@ export function AiPostComposer({
               variant="outline"
               size="sm"
               spacing={0}
-              aria-label="Post format"
+              aria-label={uiText('post_format_d6bc2f4')}
               value={isCarousel ? 'carousel' : (format ?? '')}
               onValueChange={(value) =>
                 setFormat(organicPostFormatEnum.safeParse(value).data ?? null)
@@ -414,11 +422,11 @@ export function AiPostComposer({
             >
               {postFormatOptions(platforms).map((option) => (
                 <ToggleGroupItem
-                  key={option}
+                  key={organicPublishFormatLabel(option, uiText)}
                   value={option.toLowerCase()}
                   disabled={isCarousel || submitting}
                 >
-                  {option}
+                  {organicPublishFormatLabel(option, uiText)}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
@@ -426,12 +434,12 @@ export function AiPostComposer({
 
           <details className="group/guidance">
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
-              Add more guidance (optional)
+              {uiText('add_more_guidance_optional_8deca6d')}
             </summary>
             <Textarea
               value={guidance}
               onChange={(e) => setGuidance(e.target.value)}
-              placeholder="Tone, CTA, or anything else to steer the post."
+              placeholder={uiText('tone_cta_or_anything_else_to_steer_the_post_0579c1e')}
               className="mt-1.5 min-h-[3rem] text-sm"
             />
           </details>
@@ -439,11 +447,12 @@ export function AiPostComposer({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Images className="size-3.5" /> Creatives
+                <Images className="size-3.5" />
+                {uiText('creatives_2eb70c5')}
               </p>
               {isCarousel && (
                 <Badge variant="secondary" className="text-2xs">
-                  Carousel · {selectedIds.length}
+                  {uiText.rich('sentence_0895971c7cba', { count: selectedIds.length })}
                 </Badge>
               )}
             </div>
@@ -456,7 +465,7 @@ export function AiPostComposer({
                 </div>
               ) : assets.length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-muted-foreground/60">
-                  Nothing in your library yet — the agent will generate the creative.
+                  {uiText('nothing_in_your_library_yet_the_agent_will_ge_1d352c5')}
                 </p>
               ) : (
                 <>
@@ -476,7 +485,7 @@ export function AiPostComposer({
                       onClick={() => loadMore()}
                       className="mt-1.5 w-full rounded-md py-1 text-xs text-muted-foreground hover:bg-muted/50"
                     >
-                      Load more
+                      {uiText('load_more_ac8991e')}
                     </button>
                   )}
                 </>
@@ -486,7 +495,7 @@ export function AiPostComposer({
 
           {taggableTrends.length > 0 && (
             <EvidenceChipGroup
-              title="Trends"
+              title={uiText('trends_e856c6c')}
               items={taggableTrends.map((trend) => ({ refId: trend.id, label: trend.title }))}
               selectedRefs={selectedTrendIds}
               onToggle={toggleTrend}
@@ -503,7 +512,7 @@ export function AiPostComposer({
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
-            Cancel
+            {uiText('cancel_19766ed')}
           </Button>
           <Button
             type="button"
@@ -516,7 +525,7 @@ export function AiPostComposer({
             ) : (
               <Sparkles className="size-4" />
             )}
-            {submitting ? 'Generating…' : 'Create post'}
+            {submitting ? uiText('generating_d20a447') : uiText('create_post_bcf1bfc')}
           </Button>
         </DialogFooter>
       </DialogContent>

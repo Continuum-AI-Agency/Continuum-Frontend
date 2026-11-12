@@ -1,3 +1,9 @@
+import {resultNouns} from '../headlineModel';
+import {createOptimizerDisplayTranslate} from '@/lib/paid-media/optimizerTranslator';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The visual each news card draws in its band, and the figure that sits on top of it.
 // Pure — no React, no formatting — so every kind below is pinned against the real bodies.
 //
@@ -144,10 +150,14 @@ const COST_PER_RESULT_METRICS = new Set(['cpp', 'cpa']);
 const WINDOW_DAYS: Record<string, WindowDays> = { d3: 3, d7: 7, d14: 14 };
 
 /** "leads" → "lead"; the objective's own word, never "result" on a conversations account. */
-export function resultNoun(resultLabel: string): string {
-  const word = resultLabel.toLowerCase();
-  return word.endsWith('s') ? word.slice(0, -1) : word;
+const CANONICAL_RESULT_KINDS:Readonly<Record<string,string>>={purchases:'purchases',installs:'appInstalls','sign-ups':'signups',leads:'leads','landing page views':'landingPageViews',impressions:'impressions',conversations:'conversations','link clicks':'linkClicks',thruplays:'thruplays',engagements:'postEngagement',clicks:'clicks'};
+export function resultWords(resultLabel:string,uiTranslate?:ScaleCopy):{one:string;many:string}{
+ const word=resultLabel.toLowerCase();
+ if(!uiTranslate)return {one:word.endsWith('s')?word.slice(0,-1):word,many:word};
+ const kind=CANONICAL_RESULT_KINDS[word];
+ return kind?resultNouns(kind,resultLabel,createOptimizerDisplayTranslate(uiTranslate)):{one:resultLabel,many:resultLabel};
 }
+export function resultNoun(resultLabel:string,uiTranslate?:ScaleCopy):string{return resultWords(resultLabel,uiTranslate).one}
 
 /** The recommendation behind a candidate, joined by the brief's own id (`rec:<uuid>`). */
 export function recommendationFor(
@@ -386,27 +396,40 @@ export function visualForCard(args: CardVisualArgs): CardVisual {
 }
 
 /** The figure on the band: the money at stake, the budget that moved, or the cost read. */
-export function figureForCard(args: {
-  candidate: BriefCandidate | null;
-  impactPerDay: number | null;
-  visual: CardVisual;
-  resultLabel: string;
-}): CardFigure | null {
+export function figureForCard(
+  args: {
+    candidate: BriefCandidate | null;
+    impactPerDay: number | null;
+    visual: CardVisual;
+    resultLabel: string;
+  },
+  uiTranslate?: ScaleCopy,
+): CardFigure | null {
   const { candidate, impactPerDay, visual, resultLabel } = args;
-  const per = `per ${resultNoun(resultLabel)}`;
+  const per = uiTranslate ? uiTranslate('bandPerResult',{noun:resultNoun(resultLabel,uiTranslate)}) : `per ${resultNoun(resultLabel)}`;
   if (candidate?.module === 'budget' && visual.kind === 'budget_move') {
     return {
       value: round2(visual.to - visual.from),
       unit: 'currency_per_day',
-      label: 'a day moved',
+      label: uiTranslate ? uiTranslate('a_day_moved_38c89fc') : 'a day moved',
       signed: true,
     };
   }
   if (impactPerDay != null && impactPerDay > 0) {
-    return { value: round2(impactPerDay), unit: 'currency_per_day', label: 'a day', signed: false };
+    return {
+      value: round2(impactPerDay),
+      unit: 'currency_per_day',
+      label: uiTranslate ? uiTranslate('a_day_4ed042e') : 'a day',
+      signed: false,
+    };
   }
   if (visual.kind === 'range' && visual.estimate != null) {
-    return { value: visual.estimate, unit: 'currency', label: `${per} · est.`, signed: false };
+    return {
+      value: visual.estimate,
+      unit: 'currency',
+      label: uiTranslate ? uiTranslate('helper_450fadf71473', { v0: per }) : `${per} · est.`,
+      signed: false,
+    };
   }
   if (visual.kind === 'cost_line' && visual.overall != null) {
     return { value: visual.overall, unit: 'currency', label: per, signed: false };

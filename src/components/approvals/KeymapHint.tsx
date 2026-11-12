@@ -1,21 +1,27 @@
 'use client';
 
 import { HelpCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-const KEYMAP: Array<{ keys: string[]; label: string }> = [
-  { keys: ['J', '→'], label: 'Next action' },
-  { keys: ['K', '←'], label: 'Previous action' },
-  { keys: ['A', '⏎'], label: 'Approve focused' },
-  { keys: ['R'], label: 'Reject…' },
-  { keys: ['P'], label: 'View raw payload' },
-  { keys: ['S'], label: 'Skip without deciding' },
-  { keys: ['T'], label: 'Toggle queue view' },
+const getKEYMAP = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): Array<{ keys: string[]; label: string }> => [
+  { keys: ['J', '→'], label: tUi('next_action_365987d') },
+  { keys: ['K', '←'], label: tUi('previous_action_730c9f9') },
+  { keys: ['A', '⏎'], label: tUi('m_17ea001ee2') },
+  { keys: ['R'], label: tUi('m_ca5aa8c9f5') },
+  { keys: ['P'], label: tUi('m_f9816af43f') },
+  { keys: ['S'], label: tUi('m_6d779c89ee') },
+  { keys: ['T'], label: tUi('m_629493d230') },
 ];
 
 export function KeymapHint() {
+  const tUi = useTranslations('common');
+  const KEYMAP = getKEYMAP(tUi);
+
   return (
     <Popover>
       <PopoverTrigger
@@ -25,7 +31,7 @@ export function KeymapHint() {
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-muted-foreground"
-            aria-label="Keyboard shortcuts"
+            aria-label={tUi('m_266695479a')}
           >
             <HelpCircle className="h-4 w-4" strokeWidth={1.5} />
           </Button>
@@ -33,7 +39,7 @@ export function KeymapHint() {
       />
       <PopoverContent side="bottom" align="end" className="w-72 p-3">
         <div className="mb-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-          Keyboard
+          {tUi('m_6662c40bac')}
         </div>
         <ul className="space-y-1.5">
           {KEYMAP.map(({ keys, label }) => (

@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
+import { useRouter } from '@/i18n/navigation';
 import {
   logoutAction,
   sendMagicLinkAction,
@@ -22,6 +23,7 @@ type UseAuthOptions = {
 type SignInResult = Awaited<ReturnType<typeof signInWithPasswordAction>>;
 
 export function useAuth(options?: UseAuthOptions) {
+  const uiText = useTranslations('common');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(options?.initialError ?? null);
   const [isGooglePending, setIsGooglePending] = useState(false);
@@ -142,8 +144,7 @@ export function useAuth(options?: UseAuthOptions) {
       ]);
 
       if ((message as OAuthError).type === 'oauth:error') {
-        const err = message as OAuthError;
-        setError(err.message || 'Authentication failed. Please try again');
+        setError(uiText('authPopupFailed'));
         return;
       }
 
@@ -155,7 +156,7 @@ export function useAuth(options?: UseAuthOptions) {
       const nextRedirect = redirectTo ?? '/dashboard';
       router.replace(nextRedirect);
     } catch {
-      setError('Authentication failed. Please try again');
+      setError(uiText('authPopupFailed'));
     } finally {
       setIsGooglePending(false);
     }

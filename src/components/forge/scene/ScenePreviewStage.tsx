@@ -1,6 +1,7 @@
 'use client';
 
 import type { BlendOutput, ScenePreview } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type ReactNode, useMemo } from 'react';
 import {
   FormatPreview,
@@ -54,11 +55,14 @@ export function ScenePreviewStage({
   /** The picked output's last final render; shown instead of a draft when there is one. */
   final?: { node: ReactNode; at: string } | null;
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const formats = useMemo(() => sceneFormats(outputs), [outputs]);
   if (!formats.length || !outputId) {
     return (
       <p className="p-3 text-xs text-muted-foreground">
-        This file has no camera that renders: add a camera to a scene in Blender.
+        {' '}
+        {translateUi('this_file_has_no_camera_that_render_57b9ddaa')}{' '}
       </p>
     );
   }
@@ -69,7 +73,7 @@ export function ScenePreviewStage({
   return (
     <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
       <FormatPreview
-        label="Scene preview"
+        label={translateUi('scene_preview_163f864f')}
         formats={formats}
         value={outputId}
         onValueChange={onOutputChange}
@@ -104,7 +108,9 @@ export function ScenePreviewStage({
                     // biome-ignore lint/performance/noImgElement: a short-lived signed PNG the image optimizer cannot cache
                     <img
                       src={draft.url}
-                      alt={`Draft preview of ${output?.label ?? outputId}`}
+                      alt={translateUi('draft_preview_of_value0_70221a27', {
+                        value0: String(output?.label ?? outputId),
+                      })}
                       className="size-full object-contain"
                       data-cached={draft.cached || undefined}
                     />
@@ -112,7 +118,11 @@ export function ScenePreviewStage({
                 }
               : {
                   mode: 'none',
-                  message: problem ?? (preview.updating ? 'Drawing a draft…' : 'No draft yet'),
+                  message:
+                    problem ??
+                    (preview.updating
+                      ? translateUi('drawing_a_draft_83aaedb8')
+                      : translateUi('no_draft_yet_711e568f')),
                 }
         }
       />
@@ -120,7 +130,8 @@ export function ScenePreviewStage({
         <p role="alert" className="m-0 flex items-center gap-2 text-xs text-destructive">
           {draft ? problem : null}
           <Button type="button" size="xs" variant="outline" onClick={() => void preview.refetch()}>
-            Try the draft again
+            {' '}
+            {translateUi('try_the_draft_again_577cd6f6')}{' '}
           </Button>
         </p>
       ) : null}

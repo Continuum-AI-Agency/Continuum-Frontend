@@ -2,6 +2,7 @@
 
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -51,6 +52,7 @@ function SheetContent({
   showOverlay?: boolean;
   overlayClassName?: string;
 }) {
+  const uiText = useTranslations('common');
   return (
     <SheetPortal>
       {showOverlay && <SheetOverlay className={overlayClassName} />}
@@ -70,7 +72,7 @@ function SheetContent({
             render={<Button variant="ghost" className="absolute top-3 right-3" size="icon-sm" />}
           >
             <X />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{uiText('close_7d9eb7a')}</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>

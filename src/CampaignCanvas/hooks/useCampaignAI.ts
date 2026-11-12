@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { useCallback, useRef } from 'react';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignCanvasNodeData, CampaignData, CampaignNodeType } from '../types';
@@ -37,6 +38,7 @@ export type CampaignAIAction =
     };
 
 export const useCampaignAI = () => {
+  const uiText = useTranslations('scale');
   const { addNode, updateNodeData, onConnect, nodes } = useCampaignStore();
   const nodeAliasMapRef = useRef<Map<string, string>>(new Map());
 
@@ -58,11 +60,11 @@ export const useCampaignAI = () => {
       setTimeout(() => {
         const lastNode = nodes[nodes.length - 1];
         if (lastNode) {
-          addNode('ad-set', { label: 'Primary Ad Set' }, { x: 250, y: 250 });
+          addNode('ad-set', { label: uiText('primary_ad_set_2e7cf50') }, { x: 250, y: 250 });
         }
       }, 100);
     },
-    [addNode, nodes],
+    [addNode, nodes, uiText],
   );
 
   const processAIAction = useCallback(

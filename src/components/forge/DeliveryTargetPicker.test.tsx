@@ -100,7 +100,6 @@ mock.module('next/link', () => ({
   ),
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
 import { useState } from 'react';
 import {
@@ -108,6 +107,13 @@ import {
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import type { RenderPreflightRow } from './DeliveryTargetPicker';
 import {
   DeliveryTargetPicker,

@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // What a reader can actually get out of the two shapes the portfolio hero opens on.
 //
 // Every assertion here is about a figure being REACHABLE — by pointer, by keyboard, or as
@@ -7,7 +8,7 @@
 // back untouched rather than invented into one.
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent } from '@testing-library/react';
 
 mock.module('motion/react', () => {
   const React = require('react');

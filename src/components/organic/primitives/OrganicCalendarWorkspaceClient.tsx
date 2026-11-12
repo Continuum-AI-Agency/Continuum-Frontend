@@ -13,6 +13,7 @@ import { ChevronLeft, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
@@ -29,7 +30,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
-import { pluralize } from '@/lib/format/pluralize';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
@@ -53,7 +53,6 @@ import { useAttachCreative } from '../hooks/useAttachCreative';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
 import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
 import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
-import { canDeletePublishedPost, useDeletePublishedPost } from '../hooks/useDeletePublishedPost';
 import { useCalendarRealtimeSync } from '../hooks/useCalendarRealtimeSync';
 import {
   findSelectionFocusTarget,
@@ -63,6 +62,7 @@ import {
   type SelectionFocusTarget,
   useCalendarSelection,
 } from '../hooks/useCalendarSelection';
+import { canDeletePublishedPost, useDeletePublishedPost } from '../hooks/useDeletePublishedPost';
 import { useDraftGeneration } from '../hooks/useDraftGeneration';
 import { useRescheduleDraft } from '../hooks/useRescheduleDraft';
 import { AiPostComposer } from './AiPostComposer';
@@ -77,6 +77,7 @@ import {
   formatDayId,
   formatWeekHeading,
   formatWeekRange,
+  localizeCalendarDay,
   makeCalendarDay,
   sliceWeekDays,
   startOfWeek,
@@ -186,8 +187,11 @@ function findLoadedDraft(draftId: string): OrganicCalendarDraft | undefined {
 }
 
 /** "Wed, Oct 14 · 11:00 AM" — a published post carries its day as an id, not a label. */
-function formatPostedWhen(post: OrganicCalendarPostedContent): string {
-  const day = new Date(`${post.dayId}T12:00:00`).toLocaleDateString('en-US', {
+function formatPostedWhen(
+  post: OrganicCalendarPostedContent,
+  locale: import('@/i18n/config').UiLocale,
+): string {
+  const day = new Date(`${post.dayId}T12:00:00`).toLocaleDateString(locale, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -226,6 +230,8 @@ function OrganicCalendarWorkspaceInner({
   postedContentAccountsByPlatform,
   insightsError,
 }: OrganicCalendarWorkspaceClientProps) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const {
     days: calendarDays,
@@ -689,19 +695,22 @@ function OrganicCalendarWorkspaceInner({
   // the banner and the toolbar's counts honest while a lens is on.
   const showPlanned = useCalendarStore((state) => state.showPlanned);
   const gridDays = React.useMemo(() => {
-    if (isViewCleared) return calendarDays.map((day) => ({ ...day, slots: [] }));
-    if (showPlanned) return calendarDays;
-    return calendarDays.map((day) => ({
+    const localizedDays = calendarDays.map((day) =>
+      localizeCalendarDay(day, uiLocale, uiText('unscheduled_42eee02')),
+    );
+    if (isViewCleared) return localizedDays.map((day) => ({ ...day, slots: [] }));
+    if (showPlanned) return localizedDays;
+    return localizedDays.map((day) => ({
       ...day,
       slots: day.slots.filter((slot) => !slot.contentPlanId),
     }));
-  }, [calendarDays, isViewCleared, showPlanned]);
+  }, [calendarDays, isViewCleared, showPlanned, uiLocale, uiText]);
 
   // Week VIEW MODEL: exactly the 7 days of the current week, sliced from the full
   // loaded set (synthesizing any missing day) so the grid stays 7 columns wide.
   const visibleWeekDays = React.useMemo(
-    () => sliceWeekDays(gridDays, weekStart),
-    [gridDays, weekStart],
+    () => sliceWeekDays(gridDays, weekStart, uiLocale),
+    [gridDays, weekStart, uiLocale],
   );
 
   // Generate proposes a plan for the visible week; nothing is generated until the plan
@@ -990,14 +999,21 @@ function OrganicCalendarWorkspaceInner({
     [plannerPlatforms],
   );
 
-  const weekTitle = React.useMemo(() => formatWeekHeading(weekStart), [weekStart]);
+  const weekTitle = React.useMemo(
+    () => formatWeekHeading(weekStart, uiLocale),
+    [weekStart, uiLocale],
+  );
   // The zone every scheduled time in this planner is expressed in. The app displayed it
   // nowhere, which left every "9:00 AM" ambiguous to anyone not in the brand's zone.
   const plannerTimeZone = React.useMemo(() => resolvePlannerTimeZone(null), []);
   const weekSubtitle = React.useMemo(
     () =>
-      `${formatWeekRange(weekStart)} • ${pluralize(schedulableChannels, 'scheduling channel')} • ${plannerTimeZone}`,
-    [plannerTimeZone, schedulableChannels, weekStart],
+      uiText('plannerWeekSubtitle', {
+        range: formatWeekRange(weekStart, uiLocale),
+        channels: schedulableChannels,
+        timezone: plannerTimeZone,
+      }),
+    [plannerTimeZone, schedulableChannels, weekStart, uiText, uiLocale],
   );
 
   const createQuickDraft = React.useCallback(
@@ -1223,13 +1239,13 @@ function OrganicCalendarWorkspaceInner({
       }
       const skipped = selected.length - approved;
       show({
-        title: 'Bulk approve complete',
-        description: `Approved ${approved} • skipped ${skipped}`,
+        title: uiText('bulk_approve_complete_fc9e018'),
+        description: uiText('approveSummary', { approved: approved, skipped: skipped }),
         variant: approved > 0 ? 'success' : 'info',
       });
     })();
     clearAll();
-  }, [selectedIds, drafts, approveAndSchedule, clearAll, show]);
+  }, [selectedIds, drafts, approveAndSchedule, clearAll, show, uiText]);
 
   const handleBulkDelete = React.useCallback(() => {
     requestDraftDeletion(selectedIds, (ids) => {
@@ -1347,13 +1363,14 @@ function OrganicCalendarWorkspaceInner({
     const capped = reelTargets.slice(0, DEFAULT_REEL_VIDEO_BATCH_MAX);
     if (typeof window !== 'undefined') {
       const approxClips = capped.length * 4;
-      const overflowNote =
-        reelTargets.length > capped.length
-          ? ` Only the first ${capped.length} of ${reelTargets.length} selected will render (max ${DEFAULT_REEL_VIDEO_BATCH_MAX} per batch).`
-          : '';
       const confirmed = window.confirm(
-        `Prepare ${capped.length} reel composition${capped.length === 1 ? '' : 's'}? ` +
-          `This renders ~${approxClips} AI video clips, then arranges them in AI Studio for editing.${overflowNote}`,
+        uiText('reelBatchConfirmation', {
+          count: capped.length,
+          clips: approxClips,
+          hasOverflow: reelTargets.length > capped.length ? 'yes' : 'no',
+          selected: reelTargets.length,
+          maximum: DEFAULT_REEL_VIDEO_BATCH_MAX,
+        }),
       );
       if (!confirmed) return;
     }
@@ -1366,7 +1383,7 @@ function OrganicCalendarWorkspaceInner({
         previewRevision: t.previewRevision,
       })),
     );
-  }, [brandProfileId, reelTargets, generateDraftMedia]);
+  }, [brandProfileId, reelTargets, generateDraftMedia, uiText]);
 
   const mediaGenerationTargets = React.useMemo(() => {
     const selected = new Set(selectedIds);
@@ -1463,26 +1480,29 @@ function OrganicCalendarWorkspaceInner({
     plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date());
   const plannerDock = React.useMemo(
     () =>
-      derivePlannerDock({
-        todayId: brandTodayId,
-        attentionDays: gridDays,
-        allDays: calendarDays,
-        postedContent,
-        platforms: plannerPlatforms,
-      }),
-    [brandTodayId, calendarDays, gridDays, plannerPlatforms, postedContent],
+      derivePlannerDock(
+        {
+          todayId: brandTodayId,
+          attentionDays: gridDays,
+          allDays: calendarDays,
+          postedContent,
+          platforms: plannerPlatforms,
+        },
+        uiText,
+      ),
+    [brandTodayId, calendarDays, gridDays, plannerPlatforms, postedContent, uiText],
   );
 
   // Hiding is reversible and the toast is where that promise is kept.
   const handleClearView = React.useCallback(() => {
     clearView();
     show({
-      title: 'View cleared',
-      description: 'Posts are hidden from this view. Nothing was deleted.',
+      title: uiText('view_cleared_63a914b'),
+      description: uiText('posts_are_hidden_from_this_view_nothing_was_d_ac22425'),
       variant: 'info',
-      action: { label: 'Undo', onClick: restoreView },
+      action: { label: uiText('undo_a8283ad'), onClick: restoreView },
     });
-  }, [clearView, restoreView, show]);
+  }, [clearView, restoreView, show, uiText]);
 
   const handlePreviewPercentChange = React.useCallback((percent: number) => {
     setLocalStorageJSON(PREVIEW_LAYOUT_KEY, percent);
@@ -1490,7 +1510,7 @@ function OrganicCalendarWorkspaceInner({
 
   const previewLabel = previewPost ? 'Published post preview' : 'Draft preview';
   const previewWhen =
-    previewDraft?.dateLabel || (previewPost ? formatPostedWhen(previewPost.post) : '');
+    previewDraft?.dateLabel || (previewPost ? formatPostedWhen(previewPost.post, uiLocale) : '');
   const previewContent = isPreviewOpen ? (
     <>
       {/* A draft names itself in its own identity row (account, format, time, ⋯, close); a
@@ -1508,13 +1528,15 @@ function OrganicCalendarWorkspaceInner({
             tabIndex={-1}
             className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground focus:outline-none"
           >
-            Post Preview{previewWhen ? ` · ${previewWhen}` : ''}
+            {uiText.rich('sentence_a13669ff55c4', {
+              v0: () => (previewWhen ? ` · ${previewWhen}` : ''),
+            })}
           </h2>
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Close preview"
+            aria-label={uiText('close_preview_7d8ab36')}
             onClick={closePreview}
           >
             <X className="h-3.5 w-3.5" />
@@ -1557,7 +1579,7 @@ function OrganicCalendarWorkspaceInner({
             className="flex h-full flex-col gap-3 p-3"
             role="status"
             aria-busy="true"
-            aria-label="Loading post preview"
+            aria-label={uiText('loading_post_preview_b013a78')}
           >
             <Skeleton className="h-24 w-full rounded-md" />
             <Skeleton className="h-4 w-2/3 rounded" />
@@ -1815,7 +1837,7 @@ function OrganicCalendarWorkspaceInner({
           <button
             type="button"
             data-testid="planner-preview-expand"
-            aria-label="Expand draft preview"
+            aria-label={uiText('expand_draft_preview_92bc0b5')}
             onClick={expandPreview}
             className="bg-background hover:bg-accent absolute right-1 top-3 z-30 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border shadow-sm transition-colors"
           >
@@ -1848,8 +1870,7 @@ function OrganicCalendarWorkspaceInner({
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>
-                  Attach creative to {attachTargetDraftIds.length} draft
-                  {attachTargetDraftIds.length === 1 ? '' : 's'}
+                  {uiText.rich('sentence_a8989de9f8d7', { count: attachTargetDraftIds.length })}
                 </DialogTitle>
               </DialogHeader>
               <OrganicCreativesPicker
@@ -1900,6 +1921,7 @@ function PlannerSplitLayout({
   onPreviewPercentChange,
   onCollapsePreview,
 }: Omit<PlannerLayoutProps, 'isWide'>) {
+  const uiText = useTranslations('organic');
   // No `key`: `orientation` and `defaultLayout` are props the group already re-lays-out on.
   // Keying it remounted both lazy views and the dnd context on every breakpoint cross.
   return (
@@ -1951,7 +1973,7 @@ function PlannerSplitLayout({
               </motion.aside>
               <ResizablePanelCollapseButton
                 data-testid="planner-preview-collapse"
-                label="Collapse draft preview"
+                label={uiText('collapse_draft_preview_3272ff8')}
                 direction="right"
                 onClick={onCollapsePreview}
               />

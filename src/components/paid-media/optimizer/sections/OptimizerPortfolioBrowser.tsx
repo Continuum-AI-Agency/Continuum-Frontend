@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Every portfolio the BRAND owns, grouped by the ad account that owns it — the answer to
 // "which account is that portfolio on?", which previously required guessing and switching
 // accounts one at a time. The brand-level list is already in hand (optimizer_list_portfolios
@@ -40,6 +42,7 @@ function PortfolioBrowserRow({
   plan: PortfolioOpenPlan;
   onOpen: (plan: PortfolioOpenPlan) => void;
 }) {
+  const uiText = useTranslations('scale');
   const openable = plan.kind !== 'unavailable';
   const crossAccount = plan.kind === 'switch-then-open';
 
@@ -59,8 +62,10 @@ function PortfolioBrowserRow({
           name={portfolio.name}
         />
         <p className="mt-0.5 text-muted-foreground text-xs tabular-nums">
-          {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
-          {portfolio.adset_count === 1 ? 'set' : 'sets'}
+          {uiText.rich('sentence_743ff68bad89', {
+            objective: humanize(portfolio.objective, uiText),
+            count: portfolio.adset_count,
+          })}
         </p>
       </div>
 
@@ -68,8 +73,8 @@ function PortfolioBrowserRow({
         <Button
           aria-label={
             crossAccount
-              ? `Switch ad account and open ${portfolio.name}`
-              : `Open ${portfolio.name} detail`
+              ? uiText('template_7bbbf4767945', { v0: portfolio.name })
+              : uiText('template_5c07ca54da71', { v0: portfolio.name })
           }
           className="h-7 shrink-0 gap-1.5 px-2 text-xs"
           onClick={() => onOpen(plan)}
@@ -82,12 +87,12 @@ function PortfolioBrowserRow({
           ) : (
             <Maximize2 className="size-3.5" aria-hidden />
           )}
-          {crossAccount ? 'Switch & open' : 'Open'}
+          {crossAccount ? uiText('switch_open_3de7811') : uiText('open_ed077f3')}
         </Button>
       ) : (
         <span className="inline-flex shrink-0 items-center gap-1.5 text-muted-foreground text-xs">
           <ShieldQuestionIcon className="size-3.5" aria-hidden />
-          Account not assigned
+          {uiText('account_not_assigned_0c5096a')}
         </span>
       )}
     </li>
@@ -99,10 +104,11 @@ export function OptimizerPortfolioBrowser({
   planOpen,
   onOpen,
 }: OptimizerPortfolioBrowserProps) {
+  const uiText = useTranslations('scale');
   if (groups.length === 0) {
     return (
       <p className="px-2 py-6 text-center text-muted-foreground text-xs">
-        This brand has no portfolios yet.
+        {uiText('this_brand_has_no_portfolios_yet_fa9e021')}
       </p>
     );
   }
@@ -117,7 +123,7 @@ export function OptimizerPortfolioBrowser({
             </h4>
             {group.isSelected ? (
               <Badge variant="teal" className="text-xs">
-                Selected
+                {uiText('selected_57fd7a0')}
               </Badge>
             ) : null}
             <span className="text-muted-foreground text-xs tabular-nums">

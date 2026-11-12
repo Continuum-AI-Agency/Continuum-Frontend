@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // "What's Working" — the brand's data-derived winning angles/hooks, mined from its
 // own top-performing posts and ads and grounded in measured performance + audience.
 // Reads the materialized creative_strategy_reports row (RLS) via
@@ -16,21 +18,10 @@ import * as React from 'react';
 import { Pill, type PillProps, PillStatus } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCreativeStrategyReport } from '@/hooks/useCreativeStrategyReport';
+import { formatDecimal } from '@/lib/format/decimal';
 import { audienceLine } from '@/lib/organic/creative-strategy-rows';
 import { cn } from '@/lib/utils';
 import { CreativeStrategyTable } from './creative-strategy/CreativeStrategyTable';
-
-// An angle's label is a full sentence in the report. The chip shows as much as fits;
-// the tooltip carries the whole thing plus the measured number behind it.
-function leaderboardMetricLine(entry: CreativeLeaderboardEntry): string {
-  const base = `${entry.count} ${entry.count === 1 ? 'creative' : 'creatives'}`;
-  if (entry.metricName && entry.avgMetric !== null) {
-    const formatted =
-      Math.abs(entry.avgMetric) < 1 ? entry.avgMetric.toFixed(3) : entry.avgMetric.toFixed(2);
-    return `${entry.label} — ${base} · avg ${entry.metricName.replace(/_/g, ' ')} ${formatted}`;
-  }
-  return `${entry.label} — ${base}`;
-}
 
 // The leaderboards are already ordered by the report. Rank is what the eye should
 // read first, so it carries both the numeral and the tone — brand violet for the
@@ -42,6 +33,8 @@ function rankVariant(rank: number): PillProps['variant'] {
 }
 
 function Leaderboard({ title, entries }: { title: string; entries: CreativeLeaderboardEntry[] }) {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   if (entries.length === 0) return null;
   return (
     <div>
@@ -64,7 +57,22 @@ function Leaderboard({ title, entries }: { title: string; entries: CreativeLeade
                 </Pill>
               }
             />
-            <TooltipContent>{leaderboardMetricLine(entry)}</TooltipContent>
+            <TooltipContent>
+              {uiText('strategyMetricLine', {
+                label: entry.label,
+                count: entry.count,
+                hasMetric: entry.metricName && entry.avgMetric !== null ? 'yes' : 'no',
+                metric: entry.metricName?.replace(/_/g, ' ') ?? '',
+                value:
+                  entry.avgMetric !== null
+                    ? formatDecimal(
+                        entry.avgMetric,
+                        Math.abs(entry.avgMetric) < 1 ? 3 : 2,
+                        uiLocale,
+                      )
+                    : '',
+              })}
+            </TooltipContent>
           </Tooltip>
         ))}
       </div>
@@ -73,14 +81,14 @@ function Leaderboard({ title, entries }: { title: string; entries: CreativeLeade
 }
 
 function EmptyCard({ status }: { status: string }) {
-  const message =
-    status === 'empty'
-      ? 'We could not find enough top posts or ads to mine yet. As your content performs, winning angles will appear here.'
-      : 'Your winning angles are assembling. The flash-lite agents analyze your top posts and ads to surface the hooks and angles that work — and who they resonate with.';
+  const uiText = useTranslations('organic');
+  const message = status === 'empty' ? uiText('strategyEmpty') : uiText('strategyAssembling');
   return (
     <div className="rounded-lg border border-dashed border-subtle bg-surface/60">
       <div className="px-4 py-6">
-        <span className="block text-sm font-medium">What&apos;s Working — your winning angles</span>
+        <span className="block text-sm font-medium">
+          {uiText('what_s_working_your_winning_angles_84c69f3')}
+        </span>
         <span className="mt-1 block text-xs text-muted-foreground">{message}</span>
       </div>
     </div>
@@ -88,6 +96,8 @@ function EmptyCard({ status }: { status: string }) {
 }
 
 export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('organic');
   const { status, report, refreshedAt } = useCreativeStrategyReport(brandId);
   const [open, setOpen] = React.useState(true);
 
@@ -95,7 +105,7 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
     return <EmptyCard status={status} />;
   }
 
-  const audience = audienceLine(report.audienceSnapshot);
+  const audience = audienceLine(report.audienceSnapshot, uiLocale);
   const sources = report.sourceCounts;
 
   return (
@@ -110,11 +120,15 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
           <div className="min-w-0">
             <span className="flex items-center gap-2 text-base font-semibold tracking-tight">
               <TrendingUp className="size-4 shrink-0 text-primary" aria-hidden="true" />
-              What&apos;s Working
+              {uiText('what_s_working_bca6261')}
             </span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
-              from your top {sources.topOrganicPosts} posts + {sources.topAds} ads
-              {audience ? ` · audience ${audience}` : ''}
+              {uiText.rich('sentence_7a2c33772cfa', {
+                posts: sources.topOrganicPosts,
+                ads: sources.topAds,
+                hasAudience: audience ? 'yes' : 'no',
+                audience: audience ?? '',
+              })}
             </span>
           </div>
           <button
@@ -126,7 +140,7 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
             )}
             aria-expanded={open}
           >
-            {open ? 'Hide' : 'Show'}
+            {open ? uiText('hide_ac20a57') : uiText('show_0df6f1c')}
           </button>
         </div>
 
@@ -134,13 +148,18 @@ export function CreativeStrategyCard({ brandId }: { brandId?: string }) {
           <TooltipProvider delay={200}>
             <div className="mt-3 grid gap-3">
               <div className="flex gap-4 flex-wrap">
-                <Leaderboard title="Top hooks" entries={report.hookLeaderboard} />
-                <Leaderboard title="Top angles" entries={report.angleLeaderboard} />
+                <Leaderboard title={uiText('top_hooks_f98871f')} entries={report.hookLeaderboard} />
+                <Leaderboard
+                  title={uiText('top_angles_c4ac084')}
+                  entries={report.angleLeaderboard}
+                />
               </div>
               <CreativeStrategyTable insights={report.insights} />
               {refreshedAt ? (
                 <span className="block text-right text-xs text-muted-foreground">
-                  Updated {new Date(refreshedAt).toLocaleDateString()}
+                  {uiText.rich('sentence_5f1f7fcaedd2', {
+                    v0: () => new Date(refreshedAt).toLocaleDateString(uiLocale),
+                  })}
                 </span>
               ) : null}
             </div>

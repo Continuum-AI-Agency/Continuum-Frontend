@@ -13,11 +13,12 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
-
 import { useTheme } from '@/components/theme-provider';
 import type { ActionStatus } from '@/lib/types/dco';
 import { cn } from '@/lib/utils';
+import { type DashboardText, dashboardScopeLabel } from './dashboardPresentation';
 
 export type ObservabilityChartPoint = {
   time: UTCTimestamp;
@@ -153,23 +154,20 @@ function getSeriesTimeBounds(
   return { min, max };
 }
 
-function bookmarkScopeLabel(scopes: Set<string>): string {
-  const hasCampaign = scopes.has('CAMPAIGN');
-  const hasAdset = scopes.has('ADSET');
-  const hasAd = scopes.has('AD');
-  const hasAccount = scopes.has('ACCOUNT');
-  const hasGlobal = scopes.has('GLOBAL');
-  if (hasCampaign && (hasAdset || hasAd)) return 'Nested';
-  if (hasCampaign) return 'Campaign';
-  if (hasAdset && hasAd) return 'Adset/Ad';
-  if (hasAdset) return 'Adset';
-  if (hasAd) return 'Ad';
-  if (hasAccount) return 'Account';
-  if (hasGlobal) return 'Global';
-  return 'Entity';
+function bookmarkScopeLabel(scopes: Set<string>, t: DashboardText): string {
+  if (scopes.has('CAMPAIGN') && (scopes.has('ADSET') || scopes.has('AD')))
+    return t('dashboardScopeNested');
+  if (scopes.has('ADSET') && scopes.has('AD')) return t('dashboardScopeAdSetAd');
+  for (const scope of ['CAMPAIGN', 'ADSET', 'AD', 'ACCOUNT', 'GLOBAL'])
+    if (scopes.has(scope)) return dashboardScopeLabel(scope, t);
+  return t('dashboardScopeEntity');
 }
 
-function buildBottomBookmarks(markers: OverlayMarker[], minSpacingPx: number): OverlayBookmark[] {
+function buildBottomBookmarks(
+  markers: OverlayMarker[],
+  minSpacingPx: number,
+  t: DashboardText,
+): OverlayBookmark[] {
   const nestedMarkers = markers.slice().sort((left, right) => left.x - right.x);
 
   if (nestedMarkers.length === 0) return [];
@@ -217,9 +215,9 @@ function buildBottomBookmarks(markers: OverlayMarker[], minSpacingPx: number): O
   });
 
   return clusters.map((cluster, index) => {
-    const scopeLabel = bookmarkScopeLabel(cluster.scopeTypes);
+    const scopeLabel = bookmarkScopeLabel(cluster.scopeTypes, t);
     const x = cluster.weightedX / Math.max(1, cluster.weight);
-    const label = `${cluster.count} action${cluster.count === 1 ? '' : 's'} in ${scopeLabel}`;
+    const label = t('dashboardBookmark', { count: cluster.count, scope: scopeLabel });
     const details = Array.from(new Set(cluster.markers.map((marker) => marker.label)))
       .slice(0, 3)
       .join('\n');
@@ -247,6 +245,8 @@ export function ObservabilityLightweightChart({
   focusTime = null,
   onMarkerSelect,
 }: ObservabilityLightweightChartProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const chartRef = React.useRef<IChartApi | null>(null);
   const seriesMapRef = React.useRef<Map<string, RegisteredSeries>>(new Map());
@@ -317,9 +317,9 @@ export function ObservabilityLightweightChart({
     const bookmarkMarkers = positioned.filter((marker) => marker.position === 'belowBar');
 
     setOverlayMarkers(topMarkers);
-    setOverlayBookmarks(buildBottomBookmarks(bookmarkMarkers, 72));
+    setOverlayBookmarks(buildBottomBookmarks(bookmarkMarkers, 72, uiText));
     setOverlayGeometry({ lineTop, lineBottom });
-  }, [compact, series]);
+  }, [compact, series, uiText]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -543,7 +543,7 @@ export function ObservabilityLightweightChart({
             id: entry.id,
             label: entry.label,
             color: entry.color,
-            value: value.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+            value: value.toLocaleString(uiLocale, { maximumFractionDigits: 2 }),
           };
         })
         .filter((row): row is { id: string; label: string; color: string; value: string } =>
@@ -557,7 +557,7 @@ export function ObservabilityLightweightChart({
 
       const timeLabel =
         typeof param.time === 'number'
-          ? new Date(param.time * 1000).toLocaleString('en-US', {
+          ? new Date(param.time * 1000).toLocaleString(uiLocale, {
               month: 'short',
               day: 'numeric',
               hour: 'numeric',
@@ -580,7 +580,7 @@ export function ObservabilityLightweightChart({
       chart.unsubscribeCrosshairMove(handleMove);
       setHover(null);
     };
-  }, [compact, series]);
+  }, [compact, series, uiLocale]);
 
   return (
     <div

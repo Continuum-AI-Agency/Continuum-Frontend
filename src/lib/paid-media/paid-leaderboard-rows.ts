@@ -6,6 +6,8 @@ import type {
 } from '@continuum/contracts';
 import { buildEntityPathLabel } from '@continuum/contracts';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
 import type { PersistedCampaignInsight } from '@/lib/paid-media/insight-history-client';
 
 export type PaidLeaderboardRow = {
@@ -30,17 +32,18 @@ export function formatKpiValue(
   value: number,
   unit: PaidEntityKpiUnit,
   currency: string | null = null,
+  locale: UiLocale = 'en',
 ): string {
   switch (unit) {
     case 'currency':
-      return formatCurrency(value, currency);
+      return formatCurrency(value, currency, locale);
     case 'percent':
-      return `${value.toFixed(1)}%`;
+      return `${formatDecimal(value, 1, locale)}%`;
     case 'multiplier':
-      return `${value.toFixed(2)}x`;
+      return `${formatDecimal(value, 2, locale)}x`;
     case 'number':
     default:
-      return new Intl.NumberFormat(undefined, {
+      return new Intl.NumberFormat(locale, {
         notation: 'compact',
         maximumFractionDigits: 1,
       }).format(value);
@@ -50,14 +53,14 @@ export function formatKpiValue(
 function buildSubLabel(
   entity: PaidRankedEntity,
   scope: PaidRankingScope,
-  currency: string | null,
+  currency: string | null, uiLocale:UiLocale='en',
 ): string | undefined {
   if (scope === 'top_adsets') {
     const campaign = entity.labels?.campaign?.trim();
     return campaign ? campaign : undefined;
   }
   const spend = entity.metrics.spend;
-  return typeof spend === 'number' ? `${formatCurrency(spend, currency)} spend` : undefined;
+  return typeof spend === 'number' ? `${formatCurrency(spend, currency, uiLocale)} spend` : undefined;
 }
 
 // Campaign rows join their persisted insight by campaign_id. Ad-set rows have no
@@ -95,7 +98,7 @@ export function buildPaidLeaderboardRows(params: {
   scope: PaidRankingScope;
   /** The account's currency for the money in each row; null prints bare, never `$`. */
   currency: string | null;
-}): PaidLeaderboardRow[] {
+}, uiLocale:UiLocale='en'): PaidLeaderboardRow[] {
   const byCampaignId = new Map<string, LeaderboardInsight>();
   const byCampaignName = new Map<string, LeaderboardInsight>();
   for (const insight of params.insights) {
@@ -108,9 +111,9 @@ export function buildPaidLeaderboardRows(params: {
     return {
       id: entity.id,
       name: entity.name.trim() || 'Untitled',
-      subLabel: buildSubLabel(entity, params.scope, params.currency),
+      subLabel: buildSubLabel(entity, params.scope, params.currency, uiLocale),
       insightLine: insight?.title,
-      metricValue: formatKpiValue(entity.kpi_value, entity.kpi_unit, params.currency),
+      metricValue: formatKpiValue(entity.kpi_value, entity.kpi_unit, params.currency, uiLocale),
       level: entity.level,
       pathLabel: resolvePathLabel(entity),
     };

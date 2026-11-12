@@ -1,3 +1,8 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // The line a portfolio opens on: its name, how it runs, when it was last read, how many ad
 // sets it holds, and its fixed facts (objective, budget, target, window, strategy) as chips
 // that open Manage. Everything the line says is decided here so it is testable against the
@@ -15,6 +20,7 @@ import type {
   PortfolioListItem,
 } from '@continuum/contracts';
 import { formatCurrency, humanize } from '../../format';
+import { resultWords } from '../account/overviewModel';
 import { rosterLine, rosterTone, staleLine } from '../portfolioStaleness';
 import { type GoalMismatch, goalMismatchOf } from './goalMismatch';
 
@@ -75,47 +81,93 @@ function singular(resultLabel: string): string {
 
 /** "Sep 26, 1:03 PM". Date and time are formatted apart: ICU joins them with " at " in
  *  some runtimes and ", " in others, and the line has to read the same everywhere. */
-export function dateTime(iso: string | null | undefined, timeZone?: string): string | null {
+export function dateTime(
+  iso: string | null | undefined,
+  timeZone?: string,
+  uiLocale: UiLocale = 'en',
+): string | null {
   if (!iso) return null;
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return null;
-  const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone });
-  const time = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone });
+  const day = new Intl.DateTimeFormat(uiLocale, { month: 'short', day: 'numeric', timeZone });
+  const time = new Intl.DateTimeFormat(uiLocale, { hour: 'numeric', minute: '2-digit', timeZone });
   return `${day.format(at)}, ${time.format(at)}`;
 }
 
-export const budgetSourceWords = (source: string | null | undefined): string =>
-  source === 'fixed' ? 'fixed' : 'follows spend';
+export const budgetSourceWords = (
+  source: string | null | undefined,
+  uiTranslate?: ScaleCopy,
+): string =>
+  uiTranslate
+    ? uiTranslate('portfolioBudgetSource', { source: source ?? 'other' })
+    : source === 'fixed'
+      ? 'fixed'
+      : 'follows spend';
 
-function modeOf(portfolio: HeroPortfolio): HeroHeader['mode'] {
+function modeOf(portfolio: HeroPortfolio, uiTranslate?: ScaleCopy): HeroHeader['mode'] {
   switch ((portfolio.apply_mode ?? '').toLowerCase()) {
     case 'autopilot':
       return portfolio.autopilot_paused
-        ? { label: 'Stopped', tone: 'warn' }
-        : { label: 'Autopilot', tone: 'good' };
+        ? {
+            label: uiTranslate
+              ? uiTranslate('portfolioHeaderMode', { mode: 'stopped' })
+              : 'Stopped',
+            tone: 'warn',
+          }
+        : {
+            label: uiTranslate
+              ? uiTranslate('portfolioHeaderMode', { mode: 'autopilot' })
+              : 'Autopilot',
+            tone: 'good',
+          };
     case 'recommend':
-      return { label: 'Recommend', tone: 'line' };
+      return {
+        label: uiTranslate
+          ? uiTranslate('portfolioHeaderMode', { mode: 'recommend' })
+          : 'Recommend',
+        tone: 'line',
+      };
     case 'observe':
-      return { label: 'Observe', tone: 'idle' };
+      return {
+        label: uiTranslate ? uiTranslate('portfolioHeaderMode', { mode: 'observe' }) : 'Observe',
+        tone: 'idle',
+      };
     default:
       return null;
   }
 }
 
-function secondaryOf(portfolio: HeroPortfolio): HeroHeader['secondary'] {
+function secondaryOf(portfolio: HeroPortfolio, uiTranslate?: ScaleCopy): HeroHeader['secondary'] {
   if (portfolio.apply_mode === 'autopilot') {
     return portfolio.autopilot_paused
-      ? { kind: 'resume', label: 'Resume autopilot' }
-      : { kind: 'stop', label: 'Stop autopilot' };
+      ? {
+          kind: 'resume',
+          label: uiTranslate ? uiTranslate('resume_autopilot_05810ef') : 'Resume autopilot',
+        }
+      : {
+          kind: 'stop',
+          label: uiTranslate ? uiTranslate('stop_autopilot_1971a79') : 'Stop autopilot',
+        };
   }
-  if (portfolio.apply_mode === 'recommend') return { kind: 'review', label: 'Review moves' };
+  if (portfolio.apply_mode === 'recommend')
+    return {
+      kind: 'review',
+      label: uiTranslate ? uiTranslate('review_moves_df726ba') : 'Review moves',
+    };
   return null;
 }
 
-function mismatchOf(report: ParsedCycleRunReport | null, measures: string): HeroHeader['mismatch'] {
-  const found = goalMismatchOf({ report, measures });
+function mismatchOf(
+  report: ParsedCycleRunReport | null,
+  measures: string,
+  uiTranslate?: ScaleCopy,
+): HeroHeader['mismatch'] {
+  const found = goalMismatchOf({ report, measures }, uiTranslate);
   if (!found) return null;
-  const remove = { setting: 'roster', label: 'Remove these ad sets' } as const;
+  const remove = {
+    setting: 'roster',
+    label: uiTranslate ? uiTranslate('remove_these_ad_sets_7837b56') : 'Remove these ad sets',
+  } as const;
   return {
     scope: found.scope,
     mismatched: found.mismatched,
@@ -125,7 +177,11 @@ function mismatchOf(report: ParsedCycleRunReport | null, measures: string): Hero
     actions:
       found.scope === 'all'
         ? [
-            { setting: 'objective', label: 'Change objective', primary: true },
+            {
+              setting: 'objective',
+              label: uiTranslate ? uiTranslate('change_objective_224218f') : 'Change objective',
+              primary: true,
+            },
             { ...remove, primary: false },
           ]
         : [{ ...remove, primary: false }],
@@ -133,8 +189,9 @@ function mismatchOf(report: ParsedCycleRunReport | null, measures: string): Hero
 }
 
 /** The product's staleness line, in the header's language. */
-function stalenessWords(portfolio: HeroPortfolio): string | null {
-  const line = staleLine(portfolio);
+function stalenessWords(portfolio: HeroPortfolio, uiTranslate?: ScaleCopy): string | null {
+  const line = staleLine(portfolio, uiTranslate);
+  if (uiTranslate) return line;
   if (!line) return null;
   const days = portfolio.stale_for_days ?? 0;
   const dayWord = days === 1 ? 'day' : 'days';
@@ -144,22 +201,30 @@ function stalenessWords(portfolio: HeroPortfolio): string | null {
   return days === 0 ? 'no cycle yet' : `no cycle in ${count(days)} ${dayWord}`;
 }
 
-export function buildHeroHeader(args: {
-  /** The latest status body: what its cycle held and why. Absent before the first cycle. */
-  report?: ParsedCycleRunReport | null;
-  portfolio: HeroPortfolio;
-  lastCycleAt: string | null;
-  growth: BriefGrowth | null;
-  metric: OptimizationMetricDefinition;
-  currency: string | null;
-  timeZone?: string;
-}): HeroHeader {
+export function buildHeroHeader(
+  args: {
+    /** The latest status body: what its cycle held and why. Absent before the first cycle. */
+    report?: ParsedCycleRunReport | null;
+    portfolio: HeroPortfolio;
+    lastCycleAt: string | null;
+    growth: BriefGrowth | null;
+    metric: OptimizationMetricDefinition;
+    currency: string | null;
+    timeZone?: string;
+  },
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): HeroHeader {
   const { portfolio, metric, currency } = args;
-  const stale = stalenessWords(portfolio);
-  const updated = dateTime(args.lastCycleAt, args.timeZone);
-  const roster = rosterLine(portfolio);
+  const stale = stalenessWords(portfolio, uiTranslate);
+  const updated = dateTime(args.lastCycleAt, args.timeZone, uiLocale);
+  const roster = rosterLine(portfolio, uiTranslate, uiLocale);
   const rosterColour = rosterTone(portfolio);
-  const resultLabel = args.growth?.result_label ?? metric.resultLabel.toLowerCase();
+  const resultLabel =
+    args.growth?.result_label ??
+    (uiTranslate
+      ? resultWords(metric.kpiField, metric.resultLabel, uiTranslate).many
+      : metric.resultLabel.toLowerCase());
   const per =
     metric.denominatorMultiplier === 1
       ? singular(resultLabel)
@@ -177,36 +242,75 @@ export function buildHeroHeader(args: {
       : (args.report?.latest_items.length ?? null);
   return {
     name: portfolio.name,
-    mode: modeOf(portfolio),
+    mode: modeOf(portfolio, uiTranslate),
     freshness: stale
       ? { text: stale, stale: true }
       : updated
-        ? { text: `Updated ${updated}`, stale: false }
+        ? {
+            text: uiTranslate
+              ? uiTranslate('helper_3f58a9be8386', { v0: updated })
+              : `Updated ${updated}`,
+            stale: false,
+          }
         : null,
     roster:
       roster && rosterColour
         ? { text: roster, tone: rosterColour === 'danger' ? 'bad' : 'warn' }
         : null,
-    adsets: adsets == null ? null : `${count(adsets)} ${adsets === 1 ? 'ad set' : 'ad sets'}`,
+    adsets:
+      adsets == null
+        ? null
+        : uiTranslate
+          ? uiTranslate('portfolioHeaderAdsets', { count: adsets })
+          : `${count(adsets)} ${adsets === 1 ? 'ad set' : 'ad sets'}`,
     chips: [
-      { setting: 'objective', label: 'Objective', value: resultLabel },
+      {
+        setting: 'objective',
+        label: uiTranslate ? uiTranslate('objective_3b20adc') : 'Objective',
+        value: resultLabel,
+      },
       {
         setting: 'budget',
-        label: 'Budget',
+        label: uiTranslate ? uiTranslate('budget_1c6225e') : 'Budget',
         value:
           portfolio.daily_total == null
-            ? 'not set'
-            : `${formatCurrency(portfolio.daily_total, currency)}/day · ${budgetSourceWords(portfolio.budget_source)}`,
+            ? uiTranslate
+              ? uiTranslate('portfolioHeaderNotSet')
+              : 'not set'
+            : uiTranslate
+              ? uiTranslate('portfolioHeaderBudget', {
+                  amount: formatCurrency(portfolio.daily_total, currency, uiLocale),
+                  source: budgetSourceWords(portfolio.budget_source, uiTranslate),
+                })
+              : `${formatCurrency(portfolio.daily_total, currency, uiLocale)}/day · ${budgetSourceWords(portfolio.budget_source)}`,
       },
       {
         setting: 'target',
-        label: 'Target',
-        value: target == null ? 'not set' : `${formatCurrency(target, currency)} / ${per}`,
+        label: uiTranslate ? uiTranslate('target_978354d') : 'Target',
+        value:
+          target == null
+            ? uiTranslate
+              ? uiTranslate('portfolioHeaderNotSet')
+              : 'not set'
+            : `${formatCurrency(target, currency, uiLocale)} / ${per}`,
       },
-      { setting: 'window', label: 'Window', value: `${lookback.replace(/^d/, '')} days` },
-      { setting: 'strategy', label: 'Strategy', value: humanize(portfolio.mode) },
+      {
+        setting: 'window',
+        label: uiTranslate ? uiTranslate('window_19734a1') : 'Window',
+        value: uiTranslate
+          ? uiTranslate('byPlatformWindow', {
+              period: 'no',
+              days: Number(lookback.replace(/^d/, '')),
+            })
+          : `${lookback.replace(/^d/, '')} days`,
+      },
+      {
+        setting: 'strategy',
+        label: uiTranslate ? uiTranslate('strategy_6b27710') : 'Strategy',
+        value: humanize(portfolio.mode, uiTranslate),
+      },
     ],
-    mismatch: mismatchOf(args.report ?? null, resultLabel),
-    secondary: secondaryOf(portfolio),
+    mismatch: mismatchOf(args.report ?? null, resultLabel, uiTranslate),
+    secondary: secondaryOf(portfolio, uiTranslate),
   };
 }

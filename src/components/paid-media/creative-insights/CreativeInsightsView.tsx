@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
 // Creative Insights, the presentational half: one page, general to concrete, no boxes.
 //
 //   1. Header — the title, the window (7 / 30 days) and the funnel filter.
@@ -28,26 +31,6 @@ import type {
   AngleReadPart,
   InsightsWindow,
 } from './creativeInsightsModel';
-
-const WINDOW_OPTIONS: Array<{ value: InsightsWindow; label: string }> = [
-  { value: 'd7', label: '7 days' },
-  { value: 'd30', label: '30 days' },
-];
-
-const FUNNEL_OPTIONS: Array<{ value: FunnelTab; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'tof', label: 'Top' },
-  { value: 'mof', label: 'Mid' },
-  { value: 'bof', label: 'Bottom' },
-];
-
-const VERDICT_META: Record<AccountAngleVerdict, { label: string; tone: string }> = {
-  double_down: { label: 'Double down', tone: 'text-emerald-600 dark:text-emerald-400' },
-  rebuild_craft: { label: 'Rebuild the craft', tone: 'text-amber-600 dark:text-amber-400' },
-  introduce: { label: 'Introduce', tone: 'text-primary-ink' },
-  insufficient: { label: 'Not enough ads', tone: 'text-muted-foreground' },
-  behind: { label: 'Losing in its ad sets', tone: 'text-muted-foreground' },
-};
 
 /** Win rate is only coloured once the sample can carry it. */
 const TRUSTWORTHY_COMPARED_ADS = 3;
@@ -119,8 +102,11 @@ function SectionHeading({ title, sub }: { title: string; sub?: string }) {
   );
 }
 
-function windowPhrase(lookback: InsightsWindow): string {
-  return lookback === 'd7' ? 'last 7 days' : 'last 30 days';
+function windowPhrase(
+  lookback: InsightsWindow,
+  t: ReturnType<typeof useTranslations<'scale'>>,
+): string {
+  return t('creativeWindowPhrase', { days: lookback });
 }
 
 function TheRead({
@@ -132,12 +118,18 @@ function TheRead({
   lookback: InsightsWindow;
   eligibleAds: number;
 }) {
+  const uiText = useTranslations('scale');
   if (read.length === 0) return null;
   return (
     <section className="max-w-[64ch] space-y-1.5" data-testid="creative-insights-read">
       <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
-        {lookback === 'd7' ? "This week's read" : "This month's read"} ·{' '}
-        <span className="tabular-nums">{eligibleAds}</span> ads with enough delivery
+        {uiText.rich('sentence_6ebc4bac55fe', {
+          v0:
+            lookback === 'd7'
+              ? uiText('this_week_s_read_7d2122c')
+              : uiText('this_month_s_read_806ecb2'),
+          v1: () => <span className="tabular-nums">{eligibleAds}</span>,
+        })}
       </p>
       {read.map((line) => (
         <p
@@ -172,6 +164,24 @@ const ANGLE_GRID =
   'grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 @2xl/ci:grid-cols-[minmax(0,1.6fr)_3.5rem_minmax(0,1.2fr)_5.5rem_9rem] @2xl/ci:items-center';
 
 function AngleTableRow({ row }: { row: AccountAngleRow }) {
+  const uiText = useTranslations('scale');
+  const VERDICT_META: Record<AccountAngleVerdict, { label: string; tone: string }> = useMemo(
+    () => ({
+      double_down: {
+        label: uiText('double_down_5c8d3be'),
+        tone: 'text-emerald-600 dark:text-emerald-400',
+      },
+      rebuild_craft: {
+        label: uiText('rebuild_the_craft_bdb1ce4'),
+        tone: 'text-amber-600 dark:text-amber-400',
+      },
+      introduce: { label: uiText('introduce_317dca7'), tone: 'text-primary-ink' },
+      insufficient: { label: uiText('not_enough_ads_47a441e'), tone: 'text-muted-foreground' },
+      behind: { label: uiText('losing_in_its_ad_sets_fcc81ea'), tone: 'text-muted-foreground' },
+    }),
+    [uiText],
+  );
+
   const verdict = VERDICT_META[row.verdict];
   const trustworthy = row.comparedAds >= TRUSTWORTHY_COMPARED_ADS;
   const winTone =
@@ -197,7 +207,7 @@ function AngleTableRow({ row }: { row: AccountAngleRow }) {
       </span>
       <div className="col-span-2 flex items-center gap-4 @2xl/ci:contents">
         <span className="text-muted-foreground text-xs tabular-nums @2xl/ci:text-right @2xl/ci:text-foreground">
-          <span className="@2xl/ci:hidden">Ads </span>
+          <span className="@2xl/ci:hidden">{uiText('ads_9210f3b')}</span>
           {row.ads}
         </span>
         <div className="flex flex-1 items-center gap-2">
@@ -245,6 +255,7 @@ function CommunicationAngles({
   funnel: FunnelTab;
   scope: 'account' | 'brand';
 }) {
+  const uiText = useTranslations('scale');
   const notes = [
     'win rate is inside each ad set, so audience and budget are held constant',
     funnel === 'all' ? null : 'angles cover every funnel stage',
@@ -255,17 +266,16 @@ function CommunicationAngles({
 
   return (
     <section className="space-y-2" data-testid="creative-insights-angles">
-      <SectionHeading sub={notes.join(' · ')} title="Communication angles" />
+      <SectionHeading sub={notes.join(' · ')} title={uiText('communication_angles_832ae5f')} />
       {loading ? (
-        <p className="text-muted-foreground text-xs">Loading angles…</p>
+        <p className="text-muted-foreground text-xs">{uiText('loading_angles_522dde1')}</p>
       ) : error ? (
         <p className="text-muted-foreground text-xs">
-          The angle read did not answer. Try again in a moment.
+          {uiText('the_angle_read_did_not_answer_try_again_in_a__09aa49c')}
         </p>
       ) : rows.length === 0 ? (
         <p className="text-muted-foreground text-xs">
-          No ad in this account has a confirmed angle with enough delivery in the{' '}
-          {windowPhrase(lookback)} yet.
+          {uiText.rich('sentence_d5b72952b694', { v0: windowPhrase(lookback, uiText) })}
         </p>
       ) : (
         <div>
@@ -276,24 +286,25 @@ function CommunicationAngles({
               'hidden pb-1.5 font-semibold text-xs text-muted-foreground uppercase tracking-wider @2xl/ci:grid',
             )}
           >
-            <span>Angle</span>
-            <span className="text-right">Ads</span>
-            <span>Share of spend</span>
-            <span className="text-right">Win rate</span>
-            <span className="text-right">Verdict</span>
+            <span>{uiText('angle_1968034')}</span>
+            <span className="text-right">{uiText('ads_9210f3b')}</span>
+            <span>{uiText('share_of_spend_eadd3f9')}</span>
+            <span className="text-right">{uiText('win_rate_4be2547')}</span>
+            <span className="text-right">{uiText('verdict_4a36f89')}</span>
           </div>
           {rows.map((row) => (
             <AngleTableRow key={row.angleId} row={row} />
           ))}
           <p className="border-border/60 border-t pt-2 text-xs text-muted-foreground">
-            Cost per result by angle is not shown: the angle read carries spend and wins, not the
-            results behind them.
+            {uiText('cost_per_result_by_angle_is_not_shown_the_ang_feb5c6c')}
           </p>
         </div>
       )}
       {neverTested.length > 0 ? (
         <div className="space-y-1.5 pt-2" data-testid="creative-insights-never-tested">
-          <h4 className="font-semibold text-foreground text-xs">Never tested in this account</h4>
+          <h4 className="font-semibold text-foreground text-xs">
+            {uiText('never_tested_in_this_account_5be3dcb')}
+          </h4>
           <div className="flex flex-wrap gap-1.5">
             {neverTested.map((angle) => (
               <span
@@ -311,22 +322,21 @@ function CommunicationAngles({
 }
 
 function AdsSection({ ads, currency }: { ads: CreativeInsightsAdsState; currency: string | null }) {
+  const uiText = useTranslations('scale');
   return (
     <section className="space-y-3" data-testid="creative-insights-ads">
-      <SectionHeading
-        sub="last 30 days · hover a row for the creative and the reasoning"
-        title="Ads"
-      />
+      <SectionHeading sub={uiText('creativeAdsReadHint')} title={uiText('ads_9210f3b')} />
       {ads.status === 'loading' ? (
-        <p className="text-muted-foreground text-xs">Loading creative intelligence…</p>
+        <p className="text-muted-foreground text-xs">
+          {uiText('loading_creative_intelligence_7089eaf')}
+        </p>
       ) : ads.status === 'assembling' ? (
         <p className="text-muted-foreground text-xs">
-          Analyzing your ad creatives — verdicts appear after the first sync completes.
+          {uiText('analyzing_your_ad_creatives_verdicts_appear_a_a8861a2')}
         </p>
       ) : ads.status === 'empty' ? (
         <p className="text-muted-foreground text-xs">
-          No labeled ads with enough spend yet. Verdicts appear once ads clear the evidence floors
-          (50 in spend, 3,000 impressions).
+          {uiText('no_labeled_ads_with_enough_spend_yet_verdicts_34733ae')}
         </p>
       ) : (
         <>
@@ -345,19 +355,40 @@ function AdsSection({ ads, currency }: { ads: CreativeInsightsAdsState; currency
 }
 
 export function CreativeInsightsView(props: CreativeInsightsViewProps) {
+  const uiText = useTranslations('scale');
+  const WINDOW_OPTIONS: Array<{ value: InsightsWindow; label: string }> = useMemo(
+    () => [
+      { value: 'd7', label: uiText('7_days_7f920bb') },
+      { value: 'd30', label: uiText('30_days_ffd7280') },
+    ],
+    [uiText],
+  );
+
+  const FUNNEL_OPTIONS: Array<{ value: FunnelTab; label: string }> = useMemo(
+    () => [
+      { value: 'all', label: uiText('all_a52ace4') },
+      { value: 'tof', label: uiText('top_d5cdfcf') },
+      { value: 'mof', label: uiText('creativeFunnelMid') },
+      { value: 'bof', label: uiText('bottom_479ad21') },
+    ],
+    [uiText],
+  );
+
   const eligibleAds = props.angleRows.reduce((sum, row) => sum + row.ads, 0);
   return (
     <div className="@container/ci flex flex-col gap-8" data-testid="creative-insights">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h2 className="mr-auto font-semibold text-base text-foreground">Creative Insights</h2>
+        <h2 className="mr-auto font-semibold text-base text-foreground">
+          {uiText('creative_insights_48bfa3e')}
+        </h2>
         <Segmented
-          label="Window"
+          label={uiText('window_19734a1')}
           onChange={props.onLookbackChange}
           options={WINDOW_OPTIONS}
           value={props.lookback}
         />
         <Segmented
-          label="Funnel stage"
+          label={uiText('funnel_stage_3331264')}
           onChange={props.onFunnelChange}
           options={FUNNEL_OPTIONS}
           value={props.funnel}
@@ -381,15 +412,15 @@ export function CreativeInsightsView(props: CreativeInsightsViewProps) {
 
       <section className="space-y-2" data-testid="creative-insights-next">
         <SectionHeading
-          sub="what each ad set's own ads have proven"
-          title="Angle to run next, per ad set"
+          sub={uiText('creativeAdsetProofHint')}
+          title={uiText('angle_to_run_next_per_ad_set_2d875c2')}
         />
         {props.anglesLoading ? (
-          <p className="text-muted-foreground text-xs">Loading ad sets…</p>
+          <p className="text-muted-foreground text-xs">{uiText('loading_ad_sets_6efe89e')}</p>
         ) : (
           <AdsetAngleStanding
             currency={props.currency}
-            emptyMessage="Appears once this account's ad sets have analyzed creatives."
+            emptyMessage={uiText('analyzed_creatives_empty')}
             rows={props.nextRows}
           />
         )}

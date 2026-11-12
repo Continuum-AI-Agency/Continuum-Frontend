@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * The Frontend half of `jaina:report:blocks:e2e:bench`.
  *
@@ -21,7 +22,7 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
 import { type CheckpointReportV2, checkpointReportV2Schema } from '@/lib/jaina/schemas';
 

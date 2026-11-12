@@ -1,4 +1,6 @@
 import type { ApiRenderJob } from '@continuum/contracts';
+import type { useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
 
 /**
  * How a template VERSION reads, everywhere in the Forge.
@@ -31,8 +33,8 @@ export function variantLabel(ref: string): string {
 }
 
 /** "Rev 2 · Sep 10" — a source revision and the day it was used. */
-export function revisionLabel(versionNumber: number, at: string): string {
-  const day = new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+export function revisionLabel(versionNumber: number, at: string, locale: UiLocale = 'en'): string {
+  const day = new Date(at).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   return `Rev ${versionNumber} · ${day}`;
 }
 
@@ -59,6 +61,7 @@ export type TemplateVersionView =
 
 export function templateVersionOf(
   job: Pick<ApiRenderJob, 'templateSource' | 'templateVariant' | 'createdAt'>,
+  locale: UiLocale = 'en',
 ): TemplateVersionView {
   const source = job.templateSource;
   if (!source?.sha256) return { state: 'unrecorded' };
@@ -67,7 +70,9 @@ export function templateVersionOf(
     state: 'pinned',
     sha: source.sha256,
     short,
-    label: source.versionNumber ? revisionLabel(source.versionNumber, job.createdAt) : short,
+    label: source.versionNumber
+      ? revisionLabel(source.versionNumber, job.createdAt, locale)
+      : short,
     assetId: source.assetId,
     versionId: source.versionId,
     // A commit with no ref is an unnamed head — real, but not a name anyone can read, so the
@@ -77,10 +82,22 @@ export function templateVersionOf(
 }
 
 /** The one-line explanation the column's tooltip carries. */
-export function templateVersionTitle(view: TemplateVersionView): string {
+export function templateVersionTitle(
+  view: TemplateVersionView,
+  t?: ReturnType<typeof useTranslations<'forge'>>,
+): string {
   if (view.state === 'unrecorded') {
-    return 'No template version was recorded for this render — the exact bytes it used cannot be established.';
+    return (
+      t?.('versionUnrecorded') ??
+      'No template version was recorded for this render — the exact bytes it used cannot be established.'
+    );
   }
-  if (view.variant) return `Template version ${view.sha} — variant ${view.variant}`;
-  return `Template version ${view.sha} — variant unchecked`;
+  if (view.variant)
+    return (
+      t?.('versionWithVariant', { sha: view.sha, variant: view.variant }) ??
+      `Template version ${view.sha} — variant ${view.variant}`
+    );
+  return (
+    t?.('versionUnchecked', { sha: view.sha }) ?? `Template version ${view.sha} — variant unchecked`
+  );
 }

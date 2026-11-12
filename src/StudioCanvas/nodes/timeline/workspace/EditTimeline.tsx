@@ -24,6 +24,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { memo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -230,6 +231,8 @@ export const EditTimeline = memo(function EditTimeline({
   onTransition: (input: TransitionInput) => void;
   toolbarExtra?: React.ReactNode;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const [pxPerSec, setPxPerSec] = useState(60);
   const [snapping, setSnapping] = useState(true);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -441,47 +444,51 @@ export const EditTimeline = memo(function EditTimeline({
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
       <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border/60 px-2 py-1.5">
-        <ShortcutTooltip label="Split at playhead" shortcut="split">
+        <ShortcutTooltip label={translateUi('split_at_playhead_c4a4b9c3')} shortcut="split">
           <Button
             size="icon"
             variant="ghost"
             className="size-7"
-            aria-label="Split at playhead"
+            aria-label={translateUi('split_at_playhead_c4a4b9c3')}
             onClick={() => onShortcut('split')}
           >
             <Scissors className="size-3.5" />
           </Button>
         </ShortcutTooltip>
-        <ShortcutTooltip label="Duplicate" shortcut="duplicate">
+        <ShortcutTooltip label={translateUi('duplicate_02cdaabf')} shortcut="duplicate">
           <Button
             size="icon"
             variant="ghost"
             className="size-7"
-            aria-label="Duplicate selection"
+            aria-label={translateUi('duplicate_selection_907adf3e')}
             disabled={selection.length === 0}
             onClick={() => onShortcut('duplicate')}
           >
             <Copy className="size-3.5" />
           </Button>
         </ShortcutTooltip>
-        <ShortcutTooltip label="Ripple delete" shortcut="rippleDelete">
+        <ShortcutTooltip label={translateUi('ripple_delete_c897c443')} shortcut="rippleDelete">
           <Button
             size="icon"
             variant="ghost"
             className="size-7"
-            aria-label="Ripple delete selection"
+            aria-label={translateUi('ripple_delete_selection_8af78f4f')}
             disabled={selection.length === 0}
             onClick={() => onShortcut('rippleDelete')}
           >
             <Trash2 className="size-3.5" />
           </Button>
         </ShortcutTooltip>
-        <ShortcutTooltip label={snapping ? 'Snapping on' : 'Snapping off'}>
+        <ShortcutTooltip
+          label={
+            snapping ? translateUi('snapping_on_7cf8d3cc') : translateUi('snapping_off_2be29712')
+          }
+        >
           <Button
             size="icon"
             variant={snapping ? 'secondary' : 'ghost'}
             className="size-7"
-            aria-label="Toggle snapping"
+            aria-label={translateUi('toggle_snapping_13c56171')}
             aria-pressed={snapping}
             onClick={() => setSnapping((value) => !value)}
           >
@@ -492,15 +499,18 @@ export const EditTimeline = memo(function EditTimeline({
           <DropdownMenuTrigger
             render={<Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" />}
           >
-            <Plus className="size-3.5" /> Track
+            <Plus className="size-3.5" /> {translateUi('track_051f01f0')}{' '}
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             {(['video', 'overlay', 'text', 'caption', 'audio'] as const).map((kind) => {
               const Icon = TRACK_ICONS[kind];
               return (
                 <DropdownMenuItem key={kind} onClick={() => onAddTrack(kind)}>
-                  <Icon /> {kind === 'caption' ? 'Captions' : kind[0].toUpperCase() + kind.slice(1)}{' '}
-                  track
+                  <Icon />{' '}
+                  {kind === 'caption'
+                    ? translateUi('captions_43bf6af8')
+                    : kind[0].toUpperCase() + kind.slice(1)}{' '}
+                  {translateUi('track_2bb8bf72')}{' '}
                 </DropdownMenuItem>
               );
             })}
@@ -510,7 +520,7 @@ export const EditTimeline = memo(function EditTimeline({
         <div className="ml-auto flex items-center gap-2">
           {toolbarExtra}
           <Slider
-            aria-label="Timeline zoom"
+            aria-label={translateUi('timeline_zoom_23878e62')}
             className="w-28"
             min={15}
             max={300}
@@ -600,13 +610,17 @@ export const EditTimeline = memo(function EditTimeline({
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {track.name}
                         {track.id === main?.id ? (
-                          <span className="ml-1 text-muted-foreground">· main</span>
+                          <span className="ml-1 text-muted-foreground">
+                            {translateUi('main_8c9988f1')}
+                          </span>
                         ) : null}
                       </span>
                       <button
                         type="button"
                         aria-label={
-                          trackIsMuted(track) ? `Unmute ${track.name}` : `Mute ${track.name}`
+                          trackIsMuted(track)
+                            ? translateUi('unmute_value0_fc8f095f', { value0: String(track.name) })
+                            : translateUi('mute_value0_3adce737', { value0: String(track.name) })
                         }
                         className="text-muted-foreground hover:text-foreground"
                         onClick={() => onTrackState(track, { muted: !trackIsMuted(track) })}
@@ -619,7 +633,11 @@ export const EditTimeline = memo(function EditTimeline({
                       </button>
                       <button
                         type="button"
-                        aria-label={track.locked ? `Unlock ${track.name}` : `Lock ${track.name}`}
+                        aria-label={
+                          track.locked
+                            ? translateUi('unlock_value0_8ff206d1', { value0: String(track.name) })
+                            : translateUi('lock_value0_fa3e5447', { value0: String(track.name) })
+                        }
                         className="text-muted-foreground hover:text-foreground"
                         onClick={() => onTrackState(track, { locked: !track.locked })}
                       >
@@ -631,31 +649,38 @@ export const EditTimeline = memo(function EditTimeline({
                         onClick={() => onTrackState(track, { enabled: !track.enabled })}
                       >
                         {track.enabled ? <EyeOff /> : <Eye />}{' '}
-                        {track.enabled ? 'Hide track' : 'Show track'}
+                        {track.enabled
+                          ? translateUi('hide_track_89333373')
+                          : translateUi('show_track_b9f16563')}
                       </ContextMenuItem>
                       <ContextMenuItem
                         onClick={() => onTrackState(track, { muted: !trackIsMuted(track) })}
                       >
                         {trackIsMuted(track) ? <Volume2 /> : <VolumeX />}{' '}
-                        {trackIsMuted(track) ? 'Unmute' : 'Mute'}
+                        {trackIsMuted(track)
+                          ? translateUi('unmute_ce4ee4ef')
+                          : translateUi('mute_8dd6857b')}
                       </ContextMenuItem>
                       <ContextMenuItem
                         onClick={() => onTrackState(track, { locked: !track.locked })}
                       >
-                        {track.locked ? <Unlock /> : <Lock />} {track.locked ? 'Unlock' : 'Lock'}
+                        {track.locked ? <Unlock /> : <Lock />}{' '}
+                        {track.locked
+                          ? translateUi('unlock_4ac709aa')
+                          : translateUi('lock_db44b8db')}
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem onClick={() => onAddTrack(track.kind as LaneKind)}>
-                        <Plus /> Add{' '}
+                        <Plus /> {translateUi('add_9fd728c6')}{' '}
                         {track.kind === 'nested_sequence'
-                          ? 'group'
+                          ? translateUi('group_ad936fcb')
                           : track.kind === 'caption'
-                            ? 'captions'
+                            ? translateUi('captions_dcb3eeed')
                             : track.kind}{' '}
-                        track
+                        {translateUi('track_2bb8bf72')}{' '}
                       </ContextMenuItem>
                       <ContextMenuItem variant="destructive" onClick={() => onRemoveTrack(track)}>
-                        <Trash2 /> Delete track
+                        <Trash2 /> {translateUi('delete_track_3c99bb0b')}{' '}
                       </ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
@@ -667,7 +692,7 @@ export const EditTimeline = memo(function EditTimeline({
             <div
               ref={lanesRef}
               role="listbox"
-              aria-label="Timeline lanes"
+              aria-label={translateUi('timeline_lanes_42daf679')}
               aria-multiselectable
               className="relative flex-1 touch-none"
               onPointerDown={(event) => {
@@ -699,7 +724,8 @@ export const EditTimeline = memo(function EditTimeline({
             >
               {lanes.length === 0 ? (
                 <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
-                  Drop a video, audio or image here — or record one — to start the edit.
+                  {' '}
+                  {translateUi('drop_a_video_audio_or_image_here_or_162d3f2d')}{' '}
                 </div>
               ) : null}
               {lanes.map((track) => (

@@ -13,6 +13,7 @@
 
 import type { PipelineCapabilityV2, PipelineManifest } from '@continuum/contracts';
 import { Check, Copy, Play, Workflow, X } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useState } from 'react';
 import { PipelineContract } from '@/components/ai-studio/PipelineContract';
 import { PipelineInvocationForm } from '@/components/ai-studio/PipelineInvocationForm';
@@ -20,6 +21,8 @@ import { Button } from '@/components/ui/button';
 import { useBrandPipelineManifests, usePipelineCapabilities } from '@/lib/ai-studio/pipelines';
 
 function CopyIdButton({ pipelineId }: { pipelineId: string }) {
+  const translateUi = useUiTranslations('library');
+
   const [copied, setCopied] = useState(false);
   return (
     <Button
@@ -35,7 +38,7 @@ function CopyIdButton({ pipelineId }: { pipelineId: string }) {
       }}
     >
       {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
-      {copied ? 'Copied' : 'Copy ID'}
+      {copied ? translateUi('copied_8d525e5f') : translateUi('copy_id_72ac0d58')}
     </Button>
   );
 }
@@ -51,6 +54,8 @@ function PipelineCard({
   brandId: string;
   manifest: PipelineManifest | PipelineCapabilityV2;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [showSetup, setShowSetup] = useState(false);
   const runnable = isV2(manifest);
   return (
@@ -76,7 +81,7 @@ function PipelineCard({
             ) : (
               <Play className="size-3.5" aria-hidden />
             )}
-            {showSetup ? 'Close setup' : 'Set up run'}
+            {showSetup ? translateUi('close_setup_ef0e47fa') : translateUi('set_up_run_fe78df2c')}
           </Button>
           {showSetup ? <PipelineInvocationForm brandId={brandId} capability={manifest} /> : null}
         </>
@@ -86,6 +91,8 @@ function PipelineCard({
 }
 
 export function PipelinePanel({ brandId }: { brandId: string }) {
+  const translateUi = useUiTranslations('library');
+
   const capabilitiesQuery = usePipelineCapabilities(brandId);
   const manifestsQuery = useBrandPipelineManifests(brandId);
   const capabilities = capabilitiesQuery.data ?? [];
@@ -100,14 +107,17 @@ export function PipelinePanel({ brandId }: { brandId: string }) {
 
   if (isLoading) {
     return (
-      <p className="px-1 py-8 text-center text-sm text-muted-foreground">Reading pipelines…</p>
+      <p className="px-1 py-8 text-center text-sm text-muted-foreground">
+        {translateUi('reading_pipelines_4d1f2560')}
+      </p>
     );
   }
 
   if (isError) {
     return (
       <p className="px-1 py-8 text-center text-sm text-muted-foreground">
-        Could not read your pipelines. Check your connection and try again.
+        {' '}
+        {translateUi('could_not_read_your_pipelines_check_fe7114c6')}{' '}
       </p>
     );
   }
@@ -116,11 +126,12 @@ export function PipelinePanel({ brandId }: { brandId: string }) {
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
         <Workflow className="h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">No pipelines published yet</p>
+        <p className="text-sm font-medium text-muted-foreground">
+          {translateUi('no_pipelines_published_yet_81994b22')}
+        </p>
         <p className="max-w-md text-xs text-muted-foreground">
-          Build a canvas in the Studio, leave a required input unwired — a prompt or a reference
-          image — then Save and choose Pipeline. That unwired handle becomes the port a caller
-          feeds.
+          {' '}
+          {translateUi('build_a_canvas_in_the_studio_leave__4307e85c')}{' '}
         </p>
       </div>
     );

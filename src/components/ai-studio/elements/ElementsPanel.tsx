@@ -8,6 +8,7 @@
 // list behind it.
 
 import { Layers, Plus } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,6 @@ import {
 } from '@/components/ui/sheet';
 import {
   ELEMENT_CATEGORIES,
-  ELEMENT_CATEGORY_LABEL,
   ELEMENT_CEILING_COPY,
   type ElementCategory,
   type ElementRecord,
@@ -40,11 +40,10 @@ import {
 import { ElementCard } from './ElementCard';
 import { ElementCreateForm, type ElementMemberUploader } from './ElementCreateForm';
 import { ElementDetail } from './ElementDetail';
+import { elementCategoryLabel } from './elementPresentation';
 
 /** One sentence, shared with the canvas node's empty state so onboarding says the same
  *  thing wherever the user first meets Elements. */
-export const ELEMENT_ONBOARDING_COPY =
-  'Save a model, product or style once and reuse it across every generation.';
 
 export interface ElementsPanelProps {
   open: boolean;
@@ -68,6 +67,8 @@ export function ElementsPanel({
   initialElementId,
   uploadAsset,
 }: ElementsPanelProps) {
+  const translateUi = useUiTranslations('studio');
+
   const [view, setView] = React.useState<PanelView>({ kind: 'list' });
 
   React.useEffect(() => {
@@ -93,13 +94,15 @@ export function ElementsPanel({
             UNDER the toolbar it was opened from. */}
       <SheetContent side="right" className="z-[110] w-[52rem] max-w-full gap-0 px-4 py-5">
         <SheetHeader className="px-0">
-          <SheetTitle>Elements</SheetTitle>
+          <SheetTitle>{translateUi('elements_e1ff7a90')}</SheetTitle>
           <SheetDescription>{ELEMENT_CEILING_COPY}</SheetDescription>
         </SheetHeader>
 
         <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-2">
           {!brandId ? (
-            <p className="text-sm text-muted-foreground">Select a brand to use Elements.</p>
+            <p className="text-sm text-muted-foreground">
+              {translateUi('select_a_brand_to_use_elements_8a659ed2')}
+            </p>
           ) : view.kind === 'create' ? (
             <ElementCreateForm
               brandId={brandId}
@@ -207,6 +210,8 @@ function ElementList({
   onCreate: () => void;
   onSelect: (elementId: string) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const previewUrls = useSignedAssetUrls(
     brandId,
     elements
@@ -222,29 +227,30 @@ function ElementList({
   return (
     <div className="flex flex-col gap-3">
       <Button type="button" size="sm" className="self-start" onClick={onCreate}>
-        <Plus className="mr-2 h-4 w-4" />
-        New Element
+        <Plus className="mr-2 h-4 w-4" /> {translateUi('new_element_45e3dc5d')}{' '}
       </Button>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading Elements…</p>
+        <p className="text-sm text-muted-foreground">{translateUi('loading_elements_f4e8a467')}</p>
       ) : isError ? (
-        <p className="text-sm text-destructive">{error?.message ?? 'Failed to load Elements'}</p>
+        <p className="text-sm text-destructive">
+          {error?.message ?? translateUi('failed_to_load_elements_2559d3d4')}
+        </p>
       ) : elements.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <Layers />
             </EmptyMedia>
-            <EmptyTitle>No Elements yet</EmptyTitle>
-            <EmptyDescription>{ELEMENT_ONBOARDING_COPY}</EmptyDescription>
+            <EmptyTitle>{translateUi('no_elements_yet_d2dff1dd')}</EmptyTitle>
+            <EmptyDescription>{translateUi('elementOnboarding')}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
         grouped.map((group) => (
           <div key={group.category} className="flex flex-col gap-2">
             <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-              {ELEMENT_CATEGORY_LABEL[group.category as ElementCategory]}
+              {elementCategoryLabel(group.category as ElementCategory, translateUi)}
             </p>
             <div className="grid grid-cols-2 gap-2">
               {group.items.map((element) => (

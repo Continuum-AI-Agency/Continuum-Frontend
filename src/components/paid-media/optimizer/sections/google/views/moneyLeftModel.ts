@@ -1,3 +1,10 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+import type { UiLocale } from '@/i18n/config';
+import { googleCopy } from '../googlePresentation';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // "Money left on the table" (P6 view 2): per campaign, Google's impression share and what it
 // lost to budget and to rank, in separate columns because they call for opposite actions
 // (presentation standard §10). What more budget would buy is the Optimizer's G03 projection when
@@ -44,8 +51,11 @@ function windowDays(range: { since: string; until: string }): number {
   return Number.isFinite(days) && days >= 1 ? Math.round(days) : 1;
 }
 
-function shareCell(field: { value: number; reason: null } | { value: null; reason: string }): Cell {
-  return field.reason === null ? shown(shareText(field.value)) : missing(field.reason);
+function shareCell(
+  field: { value: number; reason: null } | { value: null; reason: string },
+  uiLocale: UiLocale = 'en',
+): Cell {
+  return field.reason === null ? shown(shareText(field.value, uiLocale)) : missing(field.reason);
 }
 
 /** Recovering the impressions lost to budget means buying `lost / won` more of what the
@@ -57,17 +67,38 @@ function linear(
   lost: number,
   days: number,
   currency: string | null,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
 ): Pick<MoneyLeftRow, 'buys' | 'buysBasis' | 'extraSpendPerDay'> {
   const growth = lost / won;
   const extraSpendPerDay = (row.metrics.spend / days) * growth;
-  const basis = `linear on these ${days} days, not a projection`;
-  const spendText = `+${formatCurrency(extraSpendPerDay, currency)}/day`;
+  const basis = uiTranslate
+    ? uiTranslate('googleLinearBasis', { days })
+    : `linear on these ${days} days, not a projection`;
+  const spendText = `+${formatCurrency(extraSpendPerDay, currency, uiLocale)}/day`;
   if (row.metrics.conversions === null) {
-    return { buys: shown(`${spendText} reaches them`), buysBasis: basis, extraSpendPerDay };
+    return {
+      buys: shown(
+        uiTranslate
+          ? uiTranslate('googleReachesSpend', {
+              spend: formatCurrency(extraSpendPerDay, currency, uiLocale),
+            })
+          : `${spendText} reaches them`,
+      ),
+      buysBasis: basis,
+      extraSpendPerDay,
+    };
   }
   const extraResults = (row.metrics.conversions / days) * growth;
   return {
-    buys: shown(`+0–${resultsText(extraResults)} results/day for ${spendText}`),
+    buys: shown(
+      uiTranslate
+        ? uiTranslate('googleResultsForSpend', {
+            results: resultsText(extraResults, uiLocale),
+            spend: formatCurrency(extraSpendPerDay, currency, uiLocale),
+          })
+        : `+0–${resultsText(extraResults, uiLocale)} results/day for ${spendText}`,
+    ),
     buysBasis: basis,
     extraSpendPerDay,
   };
@@ -78,6 +109,8 @@ function buysOf(
   card: BudgetLimitedCard | undefined,
   days: number,
   currency: string | null,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
 ): Pick<MoneyLeftRow, 'buys' | 'buysBasis' | 'extraSpendPerDay'> {
   const won = campaignField(row, 'search_impression_share');
   const lost = campaignField(row, 'search_budget_lost_impression_share');
@@ -85,11 +118,11 @@ function buysOf(
     won.reason === null && lost.reason === null && won.value > 0
       ? lost.value === 0
         ? {
-            buys: shown('Nothing lost to budget'),
+            buys: shown(googleCopy('Nothing lost to budget', uiTranslate)),
             buysBasis: null,
             extraSpendPerDay: 0,
           }
-        : linear(row, won.value, lost.value, days, currency)
+        : linear(row, won.value, lost.value, days, currency, uiLocale, uiTranslate)
       : {
           buys: missing(lost.reason ?? won.reason ?? 'Google reported no impression share won'),
           buysBasis: null,
@@ -97,13 +130,27 @@ function buysOf(
         };
   const projection = card?.projection;
   if (!card || !projection || card.proposed_budget_per_day === null) return fallback;
-  const low = resultsText(projection.results_per_day_low);
-  const high = resultsText(projection.results_per_day_high);
+  const low = resultsText(projection.results_per_day_low, uiLocale);
+  const high = resultsText(projection.results_per_day_high, uiLocale);
   return {
     buys: shown(
-      `At ${formatCurrency(card.proposed_budget_per_day, card.currency ?? currency)}/day: about ${low}–${high} ${card.result_label}/day (now ${resultsText(projection.results_per_day_now)})`,
+      uiTranslate
+        ? uiTranslate('googleBudgetProjection', {
+            budget: formatCurrency(
+              card.proposed_budget_per_day,
+              card.currency ?? currency,
+              uiLocale,
+            ),
+            low,
+            high,
+            result: card.result_label,
+            current: resultsText(projection.results_per_day_now, uiLocale),
+          })
+        : `At ${formatCurrency(card.proposed_budget_per_day, card.currency ?? currency, uiLocale)}/day: about ${low}–${high} ${card.result_label}/day (now ${resultsText(projection.results_per_day_now, uiLocale)})`,
     ),
-    buysBasis: `Optimizer projection on ${projection.basis_days} days`,
+    buysBasis: uiTranslate
+      ? uiTranslate('googleProjectionBasis', { days: projection.basis_days })
+      : `Optimizer projection on ${projection.basis_days} days`,
     extraSpendPerDay: fallback.extraSpendPerDay,
   };
 }
@@ -112,6 +159,8 @@ export function buildMoneyLeft(
   read: GoogleTopCampaigns,
   budgetCards: readonly BudgetLimitedCard[],
   currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): MoneyLeftModel {
   const days = windowDays(read.range);
   const cardByName = new Map(budgetCards.map((card) => [card.campaign_name, card]));
@@ -128,14 +177,20 @@ export function buildMoneyLeft(
     rows.push({
       id: row.id,
       name: row.name,
-      share: shareCell(campaignField(row, 'search_impression_share')),
-      lostToBudget: shareCell(lostToBudget),
-      lostToRank: shareCell(lostToRank),
+      share: shareCell(campaignField(row, 'search_impression_share'), uiLocale),
+      lostToBudget: shareCell(lostToBudget, uiLocale),
+      lostToRank: shareCell(lostToRank, uiLocale),
       budgetPerDay:
         budget.reason === null
-          ? shown(`${formatCurrency(budget.value, currency)}/day`)
+          ? shown(
+              uiTranslate
+                ? uiTranslate('helper_34dd8b60efe4', {
+                    v0: formatCurrency(budget.value, currency, uiLocale),
+                  })
+                : `${formatCurrency(budget.value, currency, uiLocale)}/day`,
+            )
           : missing(budget.reason),
-      ...buysOf(row, cardByName.get(row.name), days, currency),
+      ...buysOf(row, cardByName.get(row.name), days, currency, uiLocale, uiTranslate),
       rankOverBudget:
         lostToRank.reason === null &&
         lostToBudget.reason === null &&

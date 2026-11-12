@@ -7,6 +7,7 @@ import {
   type PublishEvent,
   type PublishPlatform,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useDestructiveConfirmation } from '@/components/organic/primitives/DestructiveConfirmation';
 import {
@@ -83,6 +84,7 @@ function memberLabel(member: PublishMember): string {
 function describeOutcome(
   complete: BulkPublishCompleteEvent,
   members: PublishMember[],
+  translate: ReturnType<typeof useTranslations<'organic'>>,
 ): { published: string[]; failures: string[] } {
   const byId = new Map(members.map((member) => [member.backendDraftId, member]));
   const published: string[] = [];
@@ -93,9 +95,15 @@ function describeOutcome(
       ? memberLabel(member)
       : result.platform
         ? PUBLISH_PLATFORM_LABELS[result.platform]
-        : 'One platform';
+        : translate('publishOnePlatform');
     if (result.status === 'published') published.push(name);
-    else failures.push(`${name} failed: ${describePublishError(result.code, result.error)}`);
+    else
+      failures.push(
+        translate('publishFailedPlatform', {
+          platform: name,
+          error: describePublishError(result.code, result.error, translate),
+        }),
+      );
   }
   return { published, failures };
 }
@@ -118,6 +126,8 @@ export type UsePublishDraftResult = {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function usePublishDraft(): UsePublishDraftResult {
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const brandId = useCalendarStore((state) => state.accountContext.brandId);
   const { show } = useToast();
@@ -144,9 +154,9 @@ export function usePublishDraft(): UsePublishDraftResult {
       // preview footer, the card context menu, the hover card and the command menu), and a
       // group publish must gate every member, not only the one the card shows. Every gate runs
       // before any network call. A member already live is never posted twice.
-      const blocker = groupPublishBlocker(card);
+      const blocker = groupPublishBlocker(card, uiText, uiLocale);
       if (blocker) {
-        fail('Not ready to publish', blocker);
+        fail(uiText('not_ready_to_publish_e4175e1'), blocker);
         return;
       }
       const planned: Array<Omit<PublishMember, 'intent'>> = [];
@@ -154,7 +164,10 @@ export function usePublishDraft(): UsePublishDraftResult {
         const platform = inferPublishPlatform(draft);
         // A row the autosave has not created yet has no intent to confirm against.
         if (!platform || !draft.backendDraftId) {
-          fail('Not saved yet', 'This post is still saving — try again in a moment.');
+          fail(
+            uiText('not_saved_yet_35c5fe4'),
+            uiText('this_post_is_still_saving_try_again_in_a_mome_343ca1d'),
+          );
           return;
         }
         planned.push({ draft, backendDraftId: draft.backendDraftId, platform });
@@ -176,8 +189,8 @@ export function usePublishDraft(): UsePublishDraftResult {
       for (const [index, intent] of intents.entries()) {
         if (!intent) {
           fail(
-            'Publishing failed',
-            'Could not check this post before publishing. Please try again.',
+            uiText('publishing_failed_d5ef405'),
+            uiText('could_not_check_this_post_before_publishing_p_70ce0cd'),
           );
           return;
         }
@@ -187,16 +200,16 @@ export function usePublishDraft(): UsePublishDraftResult {
       const destination =
         members.length === 1
           ? PUBLISH_PLATFORM_LABELS[members[0].platform]
-          : `${members.length} platforms`;
+          : uiText('platformCount', { count: members.length });
       const allPublishable = members.every(
         ({ intent }) => intent.publishable && Boolean(intent.intent_hash),
       );
       const confirmed = await requestDestructiveConfirmation({
-        title: `Publish to ${destination}?`,
+        title: uiText('publishConfirmTitle', { destination }),
         description: allPublishable
-          ? 'This posts publicly right away and cannot be undone from Continuum. Review each account and caption below.'
-          : 'This post is not ready to publish yet.',
-        confirmLabel: `Publish to ${destination}`,
+          ? uiText('publishConfirmDescription')
+          : uiText('publishBlocked'),
+        confirmLabel: uiText('publishConfirmAction', { destination }),
         confirmDisabled: !allPublishable,
         // createElement rather than JSX: this hook is a .ts module, and the summary is a real
         // component so it stays testable and reusable on its own.
@@ -243,15 +256,12 @@ export function usePublishDraft(): UsePublishDraftResult {
         );
 
         if (response.status === 401) {
-          fail(
-            'Publishing failed',
-            classifyOrganicError({ status: 401 }, 'Publishing').userMessage,
-          );
+          fail(uiText('publishing_failed_d5ef405'), uiText('publishSessionExpired'));
           return;
         }
 
         if (!response.body) {
-          fail('Publishing failed', 'Empty response from server.');
+          fail(uiText('publishing_failed_d5ef405'), uiText('empty_response_from_server_5aa681f'));
           return;
         }
 
@@ -314,27 +324,24 @@ export function usePublishDraft(): UsePublishDraftResult {
           // The stream ended without its summary: some members may be live. Saying "failed"
           // here would invite a second click that posts them twice.
           fail(
-            'Publishing status unknown',
-            'The connection closed before every platform reported back. Check the post before publishing again.',
+            uiText('publishing_status_unknown_f6ccb78'),
+            uiText('the_connection_closed_before_every_platform_r_bbe0320'),
           );
           return;
         }
 
-        const { published, failures } = describeOutcome(complete, members);
+        const { published, failures } = describeOutcome(complete, members, uiText);
         const sentence = [
-          published.length > 0 ? `Published to ${published.join(', ')}` : null,
+          published.length > 0
+            ? uiText('publishedToAccounts', { accounts: published.join(', ') })
+            : null,
           failures.length > 0 ? failures.join('; ') : null,
         ]
           .filter(Boolean)
           .join('; ');
         if (failures.length > 0) setError(failures.join('; '));
         show({
-          title:
-            complete.groupStatus === 'published'
-              ? 'Published'
-              : complete.groupStatus === 'partial'
-                ? 'Partly published'
-                : 'Publishing failed',
+          title: uiText('publishResultTitle', { status: complete.groupStatus }),
           description: `${sentence}.`,
           variant:
             complete.groupStatus === 'published'
@@ -345,7 +352,7 @@ export function usePublishDraft(): UsePublishDraftResult {
           ...(creditsExhausted && brandId
             ? {
                 action: {
-                  label: 'Buy X credits',
+                  label: uiText('buy_x_credits_66ac49b'),
                   onClick: () => window.location.assign(xCreditsHref(brandId)),
                 },
               }
@@ -361,18 +368,13 @@ export function usePublishDraft(): UsePublishDraftResult {
         //
         // The user retries deliberately via `retryPublish()`. The backend's publish claim is the
         // backstop that makes even a duplicate request safe.
-        fail(
-          'Publishing failed',
-          err instanceof Error && err.message
-            ? err.message
-            : 'Publishing failed. Check the post, then try again.',
-        );
+        fail(uiText('publishing_failed_d5ef405'), uiText('publishErrorUnknown'));
       } finally {
         setIsPublishing(false);
         setStage(null);
       }
     },
-    [updateDraft, brandId, show, requestDestructiveConfirmation],
+    [updateDraft, brandId, show, requestDestructiveConfirmation, uiText, uiLocale],
   );
 
   // The ONLY retry: the user asked for it. A publish is never replayed by a timer.

@@ -3,6 +3,7 @@
 import { getDay, getDaysInMonth, isSameDay } from 'date-fns';
 import { atom, useAtom } from 'jotai';
 import { Check, ChevronLeftIcon, ChevronRightIcon, ChevronsUpDown } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   createContext,
   memo,
@@ -175,6 +176,8 @@ export const CalendarBody = ({
   selectedDate,
   onSelectDate,
 }: CalendarBodyProps) => {
+  const tUi = useTranslations('common');
+
   const [month] = useCalendarMonth();
   const [year] = useCalendarYear();
   const { startDay } = useContext(CalendarContext);
@@ -237,7 +240,10 @@ export const CalendarBody = ({
           {featuresForDay.slice(0, 3).map((feature) => (children ? children({ feature }) : null))}
         </div>
         {featuresForDay.length > 3 && (
-          <span className="block text-slate-700 text-xs">+{featuresForDay.length - 3} more</span>
+          <span className="block text-slate-700 text-xs">
+            +{featuresForDay.length - 3}
+            {tUi('m_84b30f4ef3')}
+          </span>
         )}
       </>
     );
@@ -461,12 +467,16 @@ export type CalendarProviderProps = {
 };
 
 export const CalendarProvider = ({
-  locale = 'en-US',
+  locale: requestedLocale,
   startDay = 0,
   children,
   className,
-}: CalendarProviderProps) => (
-  <CalendarContext.Provider value={{ locale, startDay }}>
-    <div className={cn('relative flex flex-col', className)}>{children}</div>
-  </CalendarContext.Provider>
-);
+}: CalendarProviderProps) => {
+  const uiLocale = useLocale();
+  const locale = requestedLocale ?? uiLocale;
+  return (
+    <CalendarContext.Provider value={{ locale, startDay }}>
+      <div className={cn('relative flex flex-col', className)}>{children}</div>
+    </CalendarContext.Provider>
+  );
+};

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render, within } from '@testing-library/react';
+import { cleanup, within } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { AMBIGUOUS, AMBIGUOUS_BY_RESULT, EMPTY, GOALS, WITH_E1 } from './__fixtures__/googleTab';
 import { AccountReadByType } from './AccountReadByType';
 import { campaignViews, typeRows } from './campaignExplorerModel';

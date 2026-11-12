@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, CircleDashed, Link2, Target } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { GoalArtifactView, GoalWorkspaceView } from '@/lib/goals/models';
 import { orderArtifactsForManifest } from '@/lib/goals/models';
 import { cn } from '@/lib/utils';
@@ -15,11 +16,12 @@ type GoalArtifactManifestProps = {
 function dependencyLabel(
   artifact: GoalArtifactView,
   artifactsById: ReadonlyMap<string, GoalArtifactView>,
+  t: ReturnType<typeof useTranslations<'dashboard'>>,
 ): string | null {
   const labels = artifact.dependsOnArtifactIds
     .map((id) => artifactsById.get(id)?.title)
     .filter((title): title is string => Boolean(title));
-  return labels.length > 0 ? `Depends on ${labels.join(', ')}` : null;
+  return labels.length > 0 ? t('m_dd92ea8011', { names: labels.join(', ') }) : null;
 }
 
 export function GoalArtifactManifest({
@@ -27,6 +29,7 @@ export function GoalArtifactManifest({
   selectedArtifactId,
   onSelectArtifact,
 }: GoalArtifactManifestProps) {
+  const uiText = useTranslations('dashboard');
   const orderedArtifacts = orderArtifactsForManifest(goal.artifacts);
   const artifactsById = new Map(goal.artifacts.map((artifact) => [artifact.id, artifact]));
 
@@ -35,7 +38,7 @@ export function GoalArtifactManifest({
       <div className="border-b border-border/70 px-3 py-3">
         <div className="flex items-center gap-2 font-mono text-2xs uppercase tracking-wide text-muted-foreground">
           <Target className="size-3.5 text-primary" />
-          Case objective
+          {uiText('m_6eb65755ae')}
         </div>
         <p className="mt-2 text-sm font-medium leading-5 text-foreground">{goal.outcome}</p>
         {goal.doneWhen.length > 0 ? (
@@ -52,23 +55,23 @@ export function GoalArtifactManifest({
 
       <div className="border-b border-border/70 px-3 py-2">
         <p className="font-mono text-2xs uppercase tracking-wide text-muted-foreground">
-          Artifact dependency spine
+          {uiText('artifact_dependency_spine_38fbe15')}
         </p>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {orderedArtifacts.length === 0 ? (
           <div className="p-4">
-            <p className="text-sm font-medium">No artifacts attached</p>
+            <p className="text-sm font-medium">{uiText('no_artifacts_attached_083a945')}</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Ask Jaina to attach the first evidence or deliverable to establish the work sequence.
+              {uiText('ask_jaina_to_attach_the_first_evidence_or_del_ef905f3')}
             </p>
           </div>
         ) : (
           <ol className="relative py-1 before:absolute before:inset-y-4 before:left-[1.15rem] before:w-px before:bg-border">
             {orderedArtifacts.map((artifact, index) => {
               const selected = artifact.id === selectedArtifactId;
-              const dependency = dependencyLabel(artifact, artifactsById);
+              const dependency = dependencyLabel(artifact, artifactsById, uiText);
               const resolved = artifact.status === 'accepted' || artifact.status === 'waived';
               const checklistItems = artifact.checklistItems ?? [];
               const resolvedChecklistItems = checklistItems.filter(
@@ -106,7 +109,10 @@ export function GoalArtifactManifest({
                       <span className="flex items-start justify-between gap-2">
                         <span>
                           <span className="block font-mono text-3xs uppercase tracking-wide text-muted-foreground">
-                            Evidence {String(index + 1).padStart(2, '0')} · {artifact.kindLabel}
+                            {uiText.rich('sentence_c49e697f3ef2', {
+                              v0: () => String(index + 1).padStart(2, '0'),
+                              v1: () => artifact.kindLabel,
+                            })}
                           </span>
                           <span className="mt-0.5 block text-sm font-medium text-foreground">
                             {artifact.title}
@@ -118,7 +124,10 @@ export function GoalArtifactManifest({
                         <span className="font-mono">{artifact.versionLabel}</span>
                         {checklistItems.length > 0 ? (
                           <span>
-                            {resolvedChecklistItems}/{checklistItems.length} checks grounded
+                            {uiText.rich('sentence_4e611a7b95c3', {
+                              v0: () => resolvedChecklistItems,
+                              v1: () => checklistItems.length,
+                            })}
                           </span>
                         ) : null}
                         {artifact.alignmentLabel ? <span>{artifact.alignmentLabel}</span> : null}

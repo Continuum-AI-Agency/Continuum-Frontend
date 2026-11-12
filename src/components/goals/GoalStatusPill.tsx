@@ -1,21 +1,12 @@
+import { useTranslations } from 'next-intl';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import type { GoalArtifactStatusView, GoalStatusView } from '@/lib/goals/models';
+import { goalControlLabel } from './goalControlLabels';
 
 type Status = GoalStatusView | GoalArtifactStatusView;
 
-const LABELS: Record<Status, string> = {
-  draft: 'Draft',
-  active: 'Active',
-  blocked: 'Blocked',
-  complete: 'Complete',
-  archived: 'Archived',
-  in_review: 'In review',
-  needs_changes: 'Needs changes',
-  accepted: 'Accepted',
-  waived: 'Waived',
-};
-
 export function GoalStatusPill({ status }: { status: Status }) {
+  const t = useTranslations('dashboard');
   const variant =
     status === 'accepted' || status === 'complete'
       ? 'success'
@@ -28,7 +19,7 @@ export function GoalStatusPill({ status }: { status: Status }) {
   return (
     <Pill variant={variant}>
       {(status === 'active' || status === 'in_review') && <PillIndicator variant="info" pulse />}
-      {LABELS[status]}
+      {goalControlLabel(status, t)}
     </Pill>
   );
 }

@@ -2,11 +2,13 @@
 
 import type { VideoEditorOpOutput } from '@continuum/contracts';
 import { Download, RotateCcw } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { type StudioVideoOrigin, studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import { ExportDialog } from '../export/ExportDialog';
@@ -33,6 +35,11 @@ export function VariantSwitcher({
   reloadKey: number;
   onRedraft: (variantCount: number) => void;
 }): React.ReactNode {
+  const translateUi = useUiTranslations('studio');
+
+  const uiErrorText = useUiErrorMessage();
+
+  const uiText = useTranslations('common');
   const router = useRouter();
   const { brief, projectId, durationSec } = studio.project;
   const [variants, setVariants] = useState<Variant[]>([]);
@@ -56,12 +63,12 @@ export function VariantSwitcher({
         setAnsweredFor(projectId);
       })
       .catch((error: unknown) => {
-        if (!cancelled) setReadError(error instanceof Error ? error.message : String(error));
+        if (!cancelled) setReadError(uiErrorText(error));
       });
     return () => {
       cancelled = true;
     };
-  }, [brief?.briefId, projectId, reloadKey, attempt]);
+  }, [brief?.briefId, projectId, reloadKey, attempt, uiErrorText]);
 
   if (!brief) return null;
   // Until the siblings are read, the project's own brief names its tab.
@@ -121,7 +128,7 @@ export function VariantSwitcher({
         disabled={answeredFor !== projectId}
         onClick={() => onRedraft(Math.max(tabs.length, 1))}
       >
-        <RotateCcw className="size-3.5" /> Redraft all variants
+        <RotateCcw className="size-3.5" /> {translateUi('redraft_all_variants_d6f5147d')}{' '}
       </Button>
       <Button
         size="sm"
@@ -130,7 +137,7 @@ export function VariantSwitcher({
         disabled={answeredFor !== projectId}
         onClick={() => setExportOpen(true)}
       >
-        <Download className="size-3.5" /> Export all variants
+        <Download className="size-3.5" /> {translateUi('export_all_variants_bc8f1f20')}{' '}
       </Button>
       {readError ? (
         <span role="alert" className="flex items-center gap-1 text-xs text-destructive">
@@ -141,7 +148,7 @@ export function VariantSwitcher({
             className="h-7 px-2 text-xs"
             onClick={() => setAttempt((count) => count + 1)}
           >
-            Retry
+            {uiText('retry_942087c')}
           </Button>
         </span>
       ) : null}

@@ -1,3 +1,10 @@
+import {dashboardActionLabel,dashboardScopeLabel,dashboardStatusLabel} from './dashboardPresentation';
+
+import type {UiLocale} from '@/i18n/config';
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import type { ActionLog, ActionStatus } from '@/lib/types/dco';
 import { CREATIVE_SWAP_ACTION_TYPES } from './creatives/types';
 import type {
@@ -65,8 +72,8 @@ function pointBucket(pointTime: number, resolution: MarkerResolution): string {
   return toBucket(iso, resolution);
 }
 
-function describeActionLog(log: ActionLog): string {
-  if (log.error) return log.error;
+function describeActionLog(log: ActionLog, uiTranslate?: ScaleCopy): string {
+  if (log.error) return uiTranslate?uiTranslate('dashboardActionFailed'):log.error;
   if (log.decisionNote) return log.decisionNote;
 
   const changed = Object.entries(log.paramsChanged ?? {});
@@ -75,7 +82,9 @@ function describeActionLog(log: ActionLog): string {
     return `${key}: ${String(value)}`;
   }
 
-  return `${log.actionType} on ${log.scopeType.toLowerCase()} scope`;
+  return uiTranslate
+    ? uiTranslate('helper_cf84424c4b93', { v0: dashboardActionLabel(log.actionType,uiTranslate), v1: dashboardScopeLabel(log.scopeType,uiTranslate) })
+    : `${log.actionType} on ${log.scopeType.toLowerCase()} scope`;
 }
 
 function normalizeMarkerTime(
@@ -126,6 +135,7 @@ export function mapActionLogsToTimelineMarkers(
   points: ObservabilityChartPoint[],
   resolution: MarkerResolution,
   options: number | MarkerMappingOptions = {},
+  uiTranslate?: ScaleCopy, uiLocale:UiLocale='en',
 ): ObservabilityChartMarker[] {
   if (logs.length === 0 || points.length === 0) return [];
 
@@ -198,10 +208,18 @@ export function mapActionLogsToTimelineMarkers(
       return {
         id: `marker:${group.scopeType}:${group.time}`,
         time: group.time as ObservabilityChartMarker['time'],
-        label: `${latest.scopeType} · ${count} action${count > 1 ? 's' : ''} · ${status}`,
-        detail: `${new Date(latest.occurredAt).toLocaleString('en-US')} · ${scopeRef}\n${uniqueActions
+        label: uiTranslate
+          ? uiTranslate('helper_256d28d3259a', {
+              v0: dashboardScopeLabel(latest.scopeType,uiTranslate),
+              v1: count,
+              v2: count > 1 ? 's' : '',
+              v3: dashboardStatusLabel(status,uiTranslate),
+            })
+          : `${latest.scopeType} · ${count} action${count > 1 ? 's' : ''} · ${status}`,
+        detail: `${new Date(latest.occurredAt).toLocaleString(uiLocale)} · ${scopeRef}\n${uniqueActions
           .slice(0, 3)
-          .join(', ')}\n${describeActionLog(latest)}`,
+          .map(action=>uiTranslate?dashboardActionLabel(action,uiTranslate):action)
+          .join(', ')}\n${describeActionLog(latest, uiTranslate)}`,
         color,
         shape: 'square',
         position: group.position,

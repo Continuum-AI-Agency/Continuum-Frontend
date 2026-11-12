@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * What a person reviewing a proposed campaign actually sees. The tree is seeded straight into the
  * query cache (the card reads Postgres, not the wire), and happy-dom measures every box at 0px —
@@ -13,7 +14,7 @@ import {
   paidScaffoldPlanSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { seededScaffoldState } from '@/lib/jaina/uiMessageProjection';
 import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';

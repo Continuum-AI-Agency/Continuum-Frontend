@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { type BatchItem, MAX_BATCH_ITEMS } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { type Edge, ReactFlowProvider } from '@xyflow/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { BatchNodeData, StudioNode } from '../../types';

@@ -1,3 +1,7 @@
+import { createTranslator } from 'next-intl';
+import en from '../../../messages/scale/en.json';
+import es from '../../../messages/scale/es.json';
+import pt from '../../../messages/scale/pt-BR.json';
 /**
  * Parts in, a whole `JainaChatMessage` out.
  *
@@ -1036,4 +1040,54 @@ describe('a user turn keeps what the reader attached', () => {
     });
     expect(projected.metadata).toBeUndefined();
   });
+});
+
+it('changes cached application chrome on locale change while preserving authored content and source identity', () => {
+  const message = uiMessage(
+    [
+      planPart({
+        plan_id: 'authored-plan',
+        chat_title: 'Customer-authored title',
+        objectives: [{ task: 'Keep authored task', description: 'Keep authored description' }],
+      }),
+      text('Keep the generated answer in its original language.'),
+    ],
+    { metadata: { runId: 'run-locale', status: 'failed' } } as Partial<JainaUIMessage>,
+  );
+  const source = JSON.stringify(message),
+    cache = new WeakMap();
+  let prior: ReturnType<typeof projectTranscriptMessage> | undefined;
+  for (const [locale, messages, label] of [
+    ['en', en, 'Jaina error'],
+    ['pt-BR', pt, 'Erro da Jaina'],
+    ['es', es, 'Error de Jaina'],
+  ] as const) {
+    const uiTranslate = createTranslator({
+      locale,
+      timeZone: 'UTC',
+      messages: { scale: messages },
+      namespace: 'scale',
+      onError(error) {
+        throw error;
+      },
+    });
+    const inputs: TranscriptProjectionInputs = {
+      isStreaming: false,
+      optimisticPlanStatusById: {},
+      deliverySource: 'history_hydrated',
+      uiTranslate,
+    };
+    const projected = projectTranscriptMessage(cache, message, inputs);
+    expect(projected).not.toBe(prior);
+    expect(projectTranscriptMessage(cache, message, { ...inputs })).toBe(projected);
+    expect(projected.title).toBe(label);
+    expect(projected.content).toContain('Keep the generated answer in its original language.');
+    expect(projected.plan?.title).toBe('Customer-authored title');
+    expect(projected.plan?.steps[0]).toMatchObject({
+      title: 'Keep authored task',
+      description: 'Keep authored description',
+    });
+    expect(JSON.stringify(message)).toBe(source);
+    prior = projected;
+  }
 });

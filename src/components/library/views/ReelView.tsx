@@ -3,6 +3,7 @@
 import type { MediaAsset } from '@continuum/contracts';
 import { ChevronLeft, ChevronRight, FileText, ImageOff, Maximize2 } from 'lucide-react';
 import Image from 'next/image';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Video } from '@/components/ui/video';
@@ -21,6 +22,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function ReelMedia({ asset }: { asset: MediaAsset }) {
+  const translateUi = useUiTranslations('library');
+
   const name = asset.title ?? asset.fileName;
   const preview = asset.preview?.state === 'ready' ? asset.preview : null;
   if (asset.kind === 'video' && asset.signedUrl) {
@@ -40,7 +43,9 @@ function ReelMedia({ asset }: { asset: MediaAsset }) {
   if (asset.kind === 'audio' && asset.signedUrl) {
     return (
       <div className="flex flex-col items-center gap-4 text-white/80">
-        <p className="text-sm">{formatDurationMs(asset.durationMs) ?? 'Audio'}</p>
+        <p className="text-sm">
+          {formatDurationMs(asset.durationMs) ?? translateUi('audio_bc1b8890')}
+        </p>
         {/* biome-ignore lint/a11y/useMediaCaption: the user's own audio; no caption track exists */}
         <audio key={asset.id} src={asset.signedUrl} controls autoPlay />
       </div>
@@ -94,6 +99,8 @@ export function ReelView({
   hasMore?: boolean;
   loadingMore?: boolean;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [index, setIndex] = useState(0);
   const current = Math.min(index, Math.max(assets.length - 1, 0));
   const asset = assets[current];
@@ -140,7 +147,8 @@ export function ReelView({
         data-testid="library-reel-view"
         className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground"
       >
-        No media yet.
+        {' '}
+        {translateUi('no_media_yet_78144e53')}{' '}
       </div>
     );
   }
@@ -148,7 +156,7 @@ export function ReelView({
   return (
     <section
       data-testid="library-reel-view"
-      aria-label="Reel view"
+      aria-label={translateUi('reel_view_993377b0')}
       className="flex h-[calc(var(--app-content-h,100dvh)-14rem)] min-h-96 flex-col overflow-hidden rounded-xl bg-neutral-950"
     >
       <div
@@ -163,7 +171,7 @@ export function ReelView({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Previous asset"
+          aria-label={translateUi('previous_asset_05c2b18d')}
           disabled={current === 0}
           onClick={() => setIndex(current - 1)}
           className="text-white hover:bg-white/10 hover:text-white"
@@ -177,7 +185,7 @@ export function ReelView({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Next asset"
+          aria-label={translateUi('next_asset_21e7551d')}
           disabled={current >= assets.length - 1}
           onClick={() => setIndex(current + 1)}
           className="text-white hover:bg-white/10 hover:text-white"
@@ -194,8 +202,7 @@ export function ReelView({
           onClick={() => onOpenDetail(asset)}
           className="text-white hover:bg-white/10 hover:text-white"
         >
-          <Maximize2 className="size-3.5" />
-          Details
+          <Maximize2 className="size-3.5" /> {translateUi('details_45989de4')}{' '}
         </Button>
       </div>
     </section>

@@ -1,13 +1,13 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useMemo } from 'react';
-
 import {
   BrandInsightsDataTable,
   type BrandInsightsTableRow,
 } from '@/components/brand-insights/BrandInsightsDataTable';
+import { useRouter } from '@/i18n/navigation';
 import { type BrandInsightsTrend, brandInsightsTrendSchema } from '@/lib/schemas/brandInsights';
 
 // Only real (uuid) trend ids can anchor a one-shot generation on the planner.
@@ -20,11 +20,11 @@ type BrandTrendsGridProps = {
   isLoading?: boolean;
 };
 
-function formatDate(value?: string) {
-  if (!value) return 'No date';
+function formatDate(value: string | undefined, uiLocale: string, noDate: string) {
+  if (!value) return noDate;
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return 'No date';
-  return parsed.toLocaleDateString('en-US', {
+  if (Number.isNaN(parsed.getTime())) return noDate;
+  return parsed.toLocaleDateString(uiLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -37,13 +37,18 @@ export function BrandTrendsGrid({
   generatedAt,
   isLoading = false,
 }: BrandTrendsGridProps) {
+  const uiText = useTranslations('common');
+  const uiLocale = useLocale();
   const router = useRouter();
   const normalizedTrends = useMemo(() => {
     const parsed = brandInsightsTrendSchema.array().safeParse(trends);
     return parsed.success ? parsed.data : [];
   }, [trends]);
 
-  const generatedAtLabel = useMemo(() => formatDate(generatedAt), [generatedAt]);
+  const generatedAtLabel = useMemo(
+    () => formatDate(generatedAt, uiLocale, uiText('insightNoDate')),
+    [generatedAt, uiLocale, uiText],
+  );
 
   // One-click handoff into the planner: /organic opens the AI composer pre-seeded
   // with this trend (see OrganicPage composeTrendId handling).
@@ -57,8 +62,8 @@ export function BrandTrendsGrid({
       return (
         <button
           type="button"
-          aria-label="Generate content from this trend"
-          title="Generate content from this trend"
+          aria-label={uiText('generate_content_from_this_trend_ebcebff')}
+          title={uiText('generate_content_from_this_trend_ebcebff')}
           onClick={() => router.push(`/organic?${params.toString()}`)}
           className="rounded p-1 text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-primary focus-visible:ring-1 focus-visible:ring-ring"
         >
@@ -66,7 +71,7 @@ export function BrandTrendsGrid({
         </button>
       );
     },
-    [normalizedTrends, router],
+    [normalizedTrends, router, uiText],
   );
 
   const rows = useMemo<BrandInsightsTableRow[]>(
@@ -79,22 +84,22 @@ export function BrandTrendsGrid({
         platforms: trend.platforms?.length ? trend.platforms : platforms,
         tags: [],
         details: [
-          { label: 'Description', value: trend.description },
-          { label: 'Relevance to brand', value: trend.relevanceToBrand },
+          { label: uiText('description_526e008'), value: trend.description },
+          { label: uiText('m_aea9a1e318'), value: trend.relevanceToBrand },
         ],
       })),
-    [generatedAtLabel, normalizedTrends, platforms],
+    [generatedAtLabel, normalizedTrends, platforms, uiText],
   );
 
   return (
     <BrandInsightsDataTable
       rows={rows}
       isLoading={isLoading}
-      countLabel="trends"
-      searchPlaceholder="Search trends"
-      secondaryHeaderLabel="Date"
-      emptyTitle="No trends yet"
-      emptyDescription="Generate brand insights to populate trend signals for this brand."
+      formatCount={(count) => uiText('insightCount', { kind: 'trends', count })}
+      searchPlaceholder={uiText('insightSearchTrends')}
+      secondaryHeaderLabel={uiText('date_99c40ab')}
+      emptyTitle={uiText('insightNoTrends')}
+      emptyDescription={uiText('insightNoTrendsDescription')}
       density="compact"
       scrollWithinSection
       renderRowAction={renderRowAction}

@@ -77,7 +77,13 @@ mock.module('@/lib/library/templateSources', () => ({
 mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show: shows }) }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ApplyDesignSystemButton } from './ApplyDesignSystemButton';
 
 const revision = {

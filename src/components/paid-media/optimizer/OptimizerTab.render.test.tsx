@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // What gates the surface: the portfolio read, and nothing else. Every section is a stub so
 // this file is about the shell's loading behaviour, not the sections' own reads.

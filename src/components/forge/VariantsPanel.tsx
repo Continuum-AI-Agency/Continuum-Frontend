@@ -2,10 +2,13 @@
 
 import type { TemplateRevision, TemplateRevisionVariant } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { UiLocale } from '@/i18n/config';
+import { useUiErrorMessage } from '@/i18n/errors';
 import {
   archiveTemplateRevisionVariant,
   fetchTemplateRevisionVariants,
@@ -32,8 +35,8 @@ const headOf = (variant: TemplateRevisionVariant) =>
   variant.revisions.find((revision) => revision.id === variant.draftHeadRevisionId);
 const publishedOf = (variant: TemplateRevisionVariant) =>
   variant.revisions.find((revision) => revision.id === variant.publishedHeadRevisionId);
-const day = (at: string) =>
-  new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const day = (at: string, locale: UiLocale = 'en') =>
+  new Date(at).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 
 export function VariantsPanel({
   brandId,
@@ -54,6 +57,12 @@ export function VariantsPanel({
   onBranch?: (assetId: string) => void | Promise<void>;
   onRender?: (intent: ForgeRenderIntent) => void;
 }) {
+  const calendarLocale = useUiLocale();
+
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('forge');
+
   const queryClient = useQueryClient();
   // Archived variants stay in the family so they can be restored and their children still hang
   // somewhere; the catalog other tabs read leaves them out.
@@ -98,7 +107,7 @@ export function VariantsPanel({
     try {
       await run();
     } catch (cause) {
-      setFailure(cause instanceof Error ? cause.message : `Could not ${what}`);
+      setFailure(uiErrorText(cause));
     } finally {
       setBusy(false);
     }
@@ -156,7 +165,7 @@ export function VariantsPanel({
             {comparable ? (
               <input
                 type="checkbox"
-                aria-label={`Compare ${label}`}
+                aria-label={translateUi('compare_value0_bbd48f16', { value0: String(label) })}
                 checked={comparing.includes(variant.variantId)}
                 onChange={(event) =>
                   setComparing((current) =>
@@ -168,30 +177,43 @@ export function VariantsPanel({
               />
             ) : null}
             <strong className="min-w-0 flex-1 truncate">{label}</strong>
-            {isDefault && !archived ? <Badge variant="violet">Default</Badge> : null}
+            {isDefault && !archived ? (
+              <Badge variant="violet">{translateUi('default_21b111cb')}</Badge>
+            ) : null}
             {archived ? (
-              <Badge variant="muted">Archived</Badge>
+              <Badge variant="muted">{translateUi('archived_bdb86505')}</Badge>
             ) : (
               <Badge variant={published ? 'success' : 'secondary'}>
-                {published ? `Published · Revision ${published.number}` : 'Draft'}
-                {head && published && head.id !== published.id ? ' · newer draft' : ''}
+                {published
+                  ? translateUi('published_revision_value0_3e5bc076', {
+                      value0: String(published.number),
+                    })
+                  : translateUi('draft_ebf12ef4')}
+                {head && published && head.id !== published.id
+                  ? translateUi('newer_draft_4b5c26a0')
+                  : ''}
               </Badge>
             )}
             {node.behindOriginal ? (
               <Badge
                 variant="warning"
-                title={`Branched from Original revision ${node.from?.revision.number ?? '?'}; the Original has moved on since.`}
+                title={translateUi('branched_from_original_revision_val_09cbd032', {
+                  value0: String(node.from?.revision.number ?? '?'),
+                })}
               >
-                Behind original
+                {' '}
+                {translateUi('behind_original_a3a2dbc1')}{' '}
               </Badge>
             ) : null}
             {variant.tags.includes('brand_aligned') ? (
-              <Badge variant="violet">Brand-aligned</Badge>
+              <Badge variant="violet">{translateUi('brand_aligned_809b4434')}</Badge>
             ) : null}
           </div>
           {node.from ? (
             <p className="text-muted-foreground">
-              From {variantName(node.from.variant)} · Revision {node.from.revision.number}
+              {' '}
+              {translateUi('from_21819769')} {variantName(node.from.variant)}{' '}
+              {translateUi('revision_8d8560f7')} {node.from.revision.number}
               {node.changes.length ? ` — ${node.changes.join(' · ')}` : ''}
             </p>
           ) : null}
@@ -202,12 +224,13 @@ export function VariantsPanel({
                 variant={head.sourceAssetId === assetId ? 'default' : 'outline'}
                 onClick={() => void onInspect(head.sourceAssetId)}
               >
-                {published ? 'Open' : 'Open to publish'}
+                {published ? translateUi('open_ed077f3d') : translateUi('open_to_publish_bde5a63b')}
               </Button>
             ) : null}
             {head && onBranch && !archived ? (
               <Button size="xs" variant="outline" onClick={() => void onBranch(head.sourceAssetId)}>
-                Branch from here
+                {' '}
+                {translateUi('branch_from_here_35ed2154')}{' '}
               </Button>
             ) : null}
             {published?.publications.map((target) =>
@@ -228,7 +251,9 @@ export function VariantsPanel({
                     })
                   }
                 >
-                  Render {label} · Revision {published.number}
+                  {' '}
+                  {translateUi('render_6d89eb7d')} {label} {translateUi('revision_8d8560f7')}{' '}
+                  {published.number}
                   {published.publications.length > 1 ? ` · ${target.templateKey}` : ''}
                 </Button>
               ) : null,
@@ -247,7 +272,8 @@ export function VariantsPanel({
                   })
                 }
               >
-                Make default
+                {' '}
+                {translateUi('make_default_f43b9425')}{' '}
               </Button>
             ) : null}
             {archived ? (
@@ -262,7 +288,8 @@ export function VariantsPanel({
                   })
                 }
               >
-                Restore
+                {' '}
+                {translateUi('restore_a76e13b9')}{' '}
               </Button>
             ) : !variant.original ? (
               <Button
@@ -271,28 +298,32 @@ export function VariantsPanel({
                 disabled={busy}
                 onClick={() => setArchive(variant.variantId)}
               >
-                Archive
+                {' '}
+                {translateUi('archive_66f4804e')}{' '}
               </Button>
             ) : null}
           </div>
           {(published ?? head)?.sources ? (
             // Outputs here run different After Effects files; naming one would misdescribe the rest.
             <ul
-              aria-label={`${label} source files`}
+              aria-label={translateUi('value0_source_files_47ad75a3', { value0: String(label) })}
               className="space-y-0.5 text-2xs text-muted-foreground"
             >
               {(published ?? head)?.sources?.map((source) => (
                 <li key={source.fileId}>
-                  {source.outputs.join(', ')} · worker file {source.fileId}
+                  {source.outputs.join(', ')} {translateUi('worker_file_16dd0e3f')} {source.fileId}
                 </li>
               ))}
             </ul>
           ) : null}
           <details>
             <summary className="cursor-pointer text-muted-foreground">
-              {revisions.length} {revisions.length === 1 ? 'revision' : 'revisions'}
+              {translateUi('revisionCount', { count: revisions.length })}
             </summary>
-            <ol aria-label={`${label} revisions`} className="mt-1 space-y-1">
+            <ol
+              aria-label={translateUi('value0_revisions_d2dd917f', { value0: String(label) })}
+              className="mt-1 space-y-1"
+            >
               {revisions.map((revision) => {
                 const parent = variant.revisions.find(
                   (item) => item.id === revision.parentRevisionId,
@@ -300,10 +331,14 @@ export function VariantsPanel({
                 const changes = parent ? revisionChanges(parent.edits, revision.edits) : [];
                 return (
                   <li key={revision.id} className="flex flex-wrap items-center gap-2">
-                    <span className="tabular-nums">Revision {revision.number}</span>
+                    <span className="tabular-nums">
+                      {translateUi('revision_2e516d68')} {revision.number}
+                    </span>
                     <span className="text-muted-foreground">
-                      {day(revision.createdAt)}
-                      {revision.id === variant.publishedHeadRevisionId ? ' · published' : ''}
+                      {day(revision.createdAt, calendarLocale)}
+                      {revision.id === variant.publishedHeadRevisionId
+                        ? translateUi('published_894efbc7')
+                        : ''}
                       {changes.length ? ` · ${changes.join(' · ')}` : ''}
                     </span>
                     {onInspect ? (
@@ -312,7 +347,9 @@ export function VariantsPanel({
                         variant={viewing(revision) ? 'default' : 'ghost'}
                         onClick={() => void onInspect(revision.sourceAssetId)}
                       >
-                        {viewing(revision) ? 'Viewing' : 'Open'}
+                        {viewing(revision)
+                          ? translateUi('viewing_9dc859e8')
+                          : translateUi('open_ed077f3d')}
                       </Button>
                     ) : null}
                   </li>
@@ -323,7 +360,7 @@ export function VariantsPanel({
         </div>
         {node.children.length ? (
           <ul
-            aria-label={`Variants of ${label}`}
+            aria-label={translateUi('variants_of_value0_92dd1ead', { value0: String(label) })}
             className="ml-3 space-y-2 border-l border-border pl-3"
           >
             {node.children.map(renderNode)}
@@ -338,12 +375,11 @@ export function VariantsPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-          The Original is never edited. Branch a variant from any revision, change its layers and
-          save it under a new name; publish a variant to render it. Render sets keep the exact
-          revision they picked.
+          {' '}
+          {translateUi('the_original_is_never_edited_branch_f8ae1077')}{' '}
         </p>
         <fieldset className="flex gap-1">
-          <legend className="sr-only">Family view</legend>
+          <legend className="sr-only">{translateUi('family_view_baf916d0')}</legend>
           {(['tree', 'graph'] as const).map((option) => (
             <Button
               key={option}
@@ -352,20 +388,22 @@ export function VariantsPanel({
               aria-pressed={view === option}
               onClick={() => setView(option)}
             >
-              {option === 'tree' ? 'Tree' : 'Graph'}
+              {option === 'tree' ? translateUi('tree_b85f5fab') : translateUi('graph_32ab018f')}
             </Button>
           ))}
         </fieldset>
       </div>
       {error ? (
         <p role="alert" className="text-xs text-destructive">
-          Could not read variants.{' '}
+          {' '}
+          {translateUi('could_not_read_variants_3bcdbb4e')}{' '}
           <Button size="xs" variant="outline" onClick={() => void refetch()}>
-            Retry
+            {' '}
+            {translateUi('retry_942087cc')}{' '}
           </Button>
         </p>
       ) : !variants ? (
-        <p className="text-xs text-muted-foreground">Reading variants…</p>
+        <p className="text-xs text-muted-foreground">{translateUi('reading_variants_aac7b65e')}</p>
       ) : null}
       {failure ? (
         <p role="alert" className="text-xs text-destructive">
@@ -375,18 +413,23 @@ export function VariantsPanel({
       {compared.length >= 2 ? (
         <div className="space-y-2 rounded-md border p-3">
           <div className="flex items-center gap-2 text-xs">
-            <strong className="flex-1">Compare {compared.map(variantName).join(' · ')}</strong>
+            <strong className="flex-1">
+              {translateUi('compare_e888155d')} {compared.map(variantName).join(' · ')}
+            </strong>
             <Button size="xs" variant="ghost" onClick={() => setComparing([])}>
-              Close
+              {' '}
+              {translateUi('close_7d9eb7ac')}{' '}
             </Button>
           </div>
           <VariantCompare brandId={brandId} variants={compared} />
         </div>
       ) : comparing.length === 1 ? (
-        <p className="text-xs text-muted-foreground">Tick one more published variant to compare.</p>
+        <p className="text-xs text-muted-foreground">
+          {translateUi('tick_one_more_published_variant_to__7909c06a')}
+        </p>
       ) : null}
       {view === 'tree' ? (
-        <ul aria-label="Template variants" className="space-y-2">
+        <ul aria-label={translateUi('template_variants_402aa7c6')} className="space-y-2">
           {tree.map(renderNode)}
         </ul>
       ) : variants ? (
@@ -399,28 +442,33 @@ export function VariantsPanel({
       {selectedVariant && DESIGN_FILE[selectedVariant.sourceKind] ? (
         <div className="space-y-2 border-t pt-3 text-xs">
           <p>
-            This template is built from {DESIGN_FILE[selectedVariant.sourceKind]} file. Make a
-            variant by changing its layers and saving them as a new variant.
+            {' '}
+            {translateUi('this_template_is_built_from_8d44d0ff')}{' '}
+            {DESIGN_FILE[selectedVariant.sourceKind]}{' '}
+            {translateUi('file_make_a_variant_by_changing_its_bbfd99c9')}{' '}
           </p>
           {onEditLayers ? (
             <Button size="xs" variant="outline" onClick={onEditLayers}>
-              Edit layers
+              {' '}
+              {translateUi('edit_layers_589e52a5')}{' '}
             </Button>
           ) : null}
         </div>
       ) : (
         <fieldset className="space-y-2 border-t pt-3">
-          <legend className="text-xs">Upload an authored After Effects variant</legend>
+          <legend className="text-xs">
+            {translateUi('upload_an_authored_after_effects_va_c44739bc')}
+          </legend>
           <Input
-            aria-label="Uploaded variant name"
-            placeholder="Variant name"
+            aria-label={translateUi('uploaded_variant_name_4ba6f56e')}
+            placeholder={translateUi('variant_name_0f204472')}
             value={name}
             onChange={(event) => setName(event.target.value)}
             disabled={busy}
           />
           <input
             type="file"
-            aria-label="Upload After Effects variant"
+            aria-label={translateUi('upload_after_effects_variant_cd864015')}
             accept=".aep,.aet,.zip"
             disabled={busy || !selectedRevision}
             onChange={(event) => {
@@ -434,16 +482,14 @@ export function VariantsPanel({
       {archive ? (
         <div
           role="alertdialog"
-          aria-label="Archive template variant"
+          aria-label={translateUi('archive_template_variant_62b5fa24')}
           className="space-y-2 rounded-md border p-3"
         >
-          <p className="text-xs">
-            Archive this variant? Existing sets keep their saved revision, and you can restore it
-            later. It will no longer appear for new sets.
-          </p>
+          <p className="text-xs"> {translateUi('archive_this_variant_existing_sets__24d5128a')} </p>
           <div className="flex gap-2">
             <Button size="xs" variant="outline" disabled={busy} onClick={() => setArchive(null)}>
-              Cancel
+              {' '}
+              {translateUi('cancel_19766ed6')}{' '}
             </Button>
             <Button
               size="xs"
@@ -461,7 +507,8 @@ export function VariantsPanel({
                 })
               }
             >
-              Archive variant
+              {' '}
+              {translateUi('archive_variant_f774d5b8')}{' '}
             </Button>
           </div>
         </div>
@@ -486,6 +533,10 @@ function VariantGraph({
   isViewing: (revision: TemplateRevision) => boolean;
   onOpen?: (revision: TemplateRevision) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+
+  const calendarLocale = useUiLocale();
+
   const { lanes, dots, edges } = useMemo(() => variantLanes(variants), [variants]);
   const x = (lane: number) => lane * LANE + LANE / 2;
   const y = (row: number) => row * ROW + ROW / 2;
@@ -530,10 +581,13 @@ function VariantGraph({
           );
         })}
       </svg>
-      <ol aria-label="Template revisions" className="min-w-0 flex-1">
+      <ol aria-label={translateUi('template_revisions_a4eab904')} className="min-w-0 flex-1">
         {dots.map((dot) => {
           const { variant } = lanes[dot.lane]!;
-          const text = `${variantName(variant)} · Revision ${dot.revision.number}`;
+          const text = translateUi('variantRevision', {
+            variant: variantName(variant),
+            revision: dot.revision.number,
+          });
           return (
             <li key={dot.revision.id} className="flex items-center gap-2" style={{ height: ROW }}>
               {onOpen ? (
@@ -548,9 +602,11 @@ function VariantGraph({
                 <span>{text}</span>
               )}
               <span className="truncate text-muted-foreground">
-                {day(dot.revision.createdAt)}
-                {dot.revision.id === variant.publishedHeadRevisionId ? ' · published' : ''}
-                {variant.archivedAt ? ' · archived' : ''}
+                {day(dot.revision.createdAt, calendarLocale)}
+                {dot.revision.id === variant.publishedHeadRevisionId
+                  ? translateUi('published_894efbc7')
+                  : ''}
+                {variant.archivedAt ? translateUi('archived_736ced99') : ''}
               </span>
             </li>
           );

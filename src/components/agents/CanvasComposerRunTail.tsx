@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Tail for AI Studio runs whose row supplies terminal status, while the shared event
 // tail restores narration missed during navigation or a dropped connection.
@@ -29,6 +30,8 @@ const runChanged = (next: AgentRunDto, current: AgentRunDto): boolean =>
   next.finishedAt !== current.finishedAt;
 
 export function DurableAiStudioRunTail({ run }: { run: AgentRunDto }) {
+  const tUi = useTranslations('common');
+
   if (run.agent !== 'canvas' && run.agent !== 'hyperframes') {
     throw new Error(`DurableAiStudioRunTail cannot tail ${run.agent}.`);
   }

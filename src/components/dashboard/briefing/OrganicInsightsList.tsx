@@ -1,5 +1,7 @@
 'use client';
+
 import { RotateCw } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { useMemo } from 'react';
 import { DASHBOARD_PANEL_MAX_HEIGHT } from '@/components/dashboard/briefing/panelLayout';
@@ -25,6 +27,7 @@ export function OrganicInsightsList({
   accounts: InstagramAccountOption[];
   youtubeAccounts?: InstagramAccountOption[];
 }) {
+  const uiText = useTranslations('dashboard');
   const resolved = resolveOrganicAccount(brandId, accounts, youtubeAccounts);
   const integrationAccountId = resolved?.account.integrationAccountId ?? null;
   const platform = resolved?.platform ?? 'instagram';
@@ -44,7 +47,7 @@ export function OrganicInsightsList({
           id: 'organic-zero-data',
           text: 'Publish your first posts to unlock performance insights.',
           severity: 'neutral',
-          label: 'Getting started',
+          label: uiText('getting_started_831d0f7'),
           detail: 'Continuum will surface reach, engagement, and content patterns as data arrives.',
         },
       ];
@@ -56,11 +59,11 @@ export function OrganicInsightsList({
       label: insight.category,
       detail: insight.recommendation,
     }));
-  }, [insights]);
+  }, [insights, uiText]);
 
   return (
     <InsightsList
-      title="Insights"
+      title={uiText('insights_2a932f9')}
       items={items}
       maxHeight={DASHBOARD_PANEL_MAX_HEIGHT}
       headerAction={
@@ -69,19 +72,17 @@ export function OrganicInsightsList({
             type="button"
             onClick={refresh}
             disabled={isLoading}
-            aria-label="Regenerate insights"
+            aria-label={uiText('regenerate_insights_7246598')}
             className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RotateCw className={cn('size-3', isLoading && 'animate-spin')} />
           </button>
-          <ModuleShortcutLink href="/organic?tab=metrics" label="Metrics" />
+          <ModuleShortcutLink href="/organic?tab=metrics" label={uiText('metrics_a58da79')} />
         </div>
       }
       isLoading={isLoading && items.length === 0}
       emptyState={
-        integrationAccountId
-          ? "Insights appear once we've analyzed your account."
-          : 'Connect an account to see insights.'
+        integrationAccountId ? uiText('organicInsightsEmpty') : uiText('organicInsightsConnect')
       }
     />
   );

@@ -1,4 +1,12 @@
 'use client';
+import type {UiLocale} from '@/i18n/config';
+import {useLocale} from 'next-intl';
+
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useTranslations } from 'next-intl';
 
 // A cross-platform budget move in the Actions queue: ONE row for the whole move (decision 17),
 // every leg under it, decreases first, and the same percentage on each side. A person approves
@@ -46,8 +54,14 @@ function platformList(platforms: QueuedMove['from']): string {
   return platforms.map((platform) => PLATFORM_NAMES[platform]).join(' and ');
 }
 
-export function moveTitle(move: QueuedMove): string {
-  return `Move ${formatMinorExact(move.amountMinor, move.currency)}/day from ${platformList(move.from)} to ${platformList(move.to)}`;
+export function moveTitle(move: QueuedMove, uiTranslate?: ScaleCopy, uiLocale:UiLocale='en'): string {
+  return uiTranslate
+    ? uiTranslate('helper_a66bbcfe1c8b', {
+        v0: formatMinorExact(move.amountMinor, move.currency, uiLocale),
+        v1: platformList(move.from),
+        v2: platformList(move.to),
+      })
+    : `Move ${formatMinorExact(move.amountMinor, move.currency, uiLocale)}/day from ${platformList(move.from)} to ${platformList(move.to)}`;
 }
 
 type Phase = 'checking' | 'checked' | 'applying' | 'done';
@@ -68,6 +82,7 @@ const UNREACHABLE: CardActionVerdict = {
 function movePreviewVerdict(
   response: ApplyActionsResponse | null,
   currency: string,
+  uiTranslate?: ScaleCopy, uiLocale:UiLocale='en',
 ): CardActionVerdict {
   if (response?.results[0]?.status === 'would_apply') {
     return {
@@ -75,7 +90,7 @@ function movePreviewVerdict(
       text: 'Every leg checked out against its platform and would go through. Nothing changes until you confirm.',
     };
   }
-  return previewVerdict(response, currency);
+  return previewVerdict(response, currency, uiTranslate, uiLocale);
 }
 
 function Pending({ children }: { children: string }) {
@@ -117,6 +132,8 @@ function ApproveMove({
   /** The move landed: the queue records the person's decision, so it is not offered again. */
   onApplied?: () => void;
 }) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   const apply = useApplyOptimizerActions();
   const [open, setOpenState] = useState(false);
   const [phase, setPhase] = useState<Phase>('checking');
@@ -139,7 +156,7 @@ function ApproveMove({
     setCanConfirm(false);
     try {
       const response = await send(true);
-      setPreview(movePreviewVerdict(response, move.currency));
+      setPreview(movePreviewVerdict(response, move.currency, uiText, uiLocale));
       setCanConfirm(response?.results[0]?.status === 'would_apply');
     } catch {
       setPreview(UNREACHABLE);
@@ -151,7 +168,7 @@ function ApproveMove({
     setPhase('applying');
     try {
       const response = await send(false);
-      setResult(resultVerdict(response, move.currency));
+      setResult(resultVerdict(response, move.currency, uiText, uiLocale));
       if (response?.results[0]?.status === 'applied') onApplied?.();
     } catch {
       setResult(UNREACHABLE);
@@ -173,25 +190,28 @@ function ApproveMove({
         size="sm"
         type="button"
       >
-        Approve the move
+        {uiText('approve_the_move_9dc6ec1')}
       </Button>
       <AlertDialog onOpenChange={setOpen} open={open}>
         <AlertDialogContent data-testid="budget-move-action-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>{moveTitle(move)}</AlertDialogTitle>
+            <AlertDialogTitle>{moveTitle(move, uiText, uiLocale)}</AlertDialogTitle>
             <AlertDialogDescription>
-              We ask the platforms to check every leg first. Nothing is written until you confirm,
-              and then the decreases are written before the increases.
+              {uiText('we_ask_the_platforms_to_check_every_leg_first_9225b29')}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {phase === 'checking' ? <Pending>Asking the platforms to check it…</Pending> : null}
+          {phase === 'checking' ? (
+            <Pending>{uiText('asking_the_platforms_to_check_it_110bde9')}</Pending>
+          ) : null}
           {preview && phase !== 'done' ? (
             <Verdict testId="budget-move-action-preview" verdict={preview} />
           ) : null}
-          {phase === 'applying' ? <Pending>Applying…</Pending> : null}
+          {phase === 'applying' ? <Pending>{uiText('applying_3329a9b')}</Pending> : null}
           {result ? <Verdict testId="budget-move-action-result" verdict={result} /> : null}
           <AlertDialogFooter>
-            <AlertDialogCancel>{phase === 'done' ? 'Close' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogCancel>
+              {phase === 'done' ? uiText('close_7d9eb7a') : uiText('cancel_19766ed')}
+            </AlertDialogCancel>
             {phase === 'done' ? null : (
               <Button
                 data-testid="budget-move-action-confirm"
@@ -200,7 +220,7 @@ function ApproveMove({
                 size="sm"
                 type="button"
               >
-                Confirm
+                {uiText('confirm_eebdd24')}
               </Button>
             )}
           </AlertDialogFooter>
@@ -239,6 +259,8 @@ export function BudgetMoveQueueRow({
   onDismiss,
   onApplied,
 }: BudgetMoveQueueRowProps) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   const approved = rec.status === 'approved';
   const decreases = move.legs.filter((leg) => leg.direction === 'decrease');
   const increases = move.legs.filter((leg) => leg.direction === 'increase');
@@ -255,15 +277,24 @@ export function BudgetMoveQueueRow({
             <PlatformChip key={`to-${platform}`} platform={platform} />
           ))}
         </span>
-        <KindTag tone="budget">Move budget between platforms</KindTag>
+        <KindTag tone="budget">{uiText('move_budget_between_platforms_d074036')}</KindTag>
       </div>
       <div className="space-y-1">
-        <p className="font-semibold text-sm leading-snug">{moveTitle(move)}</p>
-        {rec.reason ? <p className="text-muted-foreground text-xs">Why: {rec.reason}</p> : null}
+        <p className="font-semibold text-sm leading-snug">{moveTitle(move, uiText, uiLocale)}</p>
+        {rec.reason ? (
+          <p className="text-muted-foreground text-xs">
+            {uiText.rich('sentence_b8fcef5f90e9', { v0: rec.reason })}
+          </p>
+        ) : null}
         <p className="text-muted-foreground text-xs" data-testid="budget-move-sides">
-          Every {platformList(move.from)} entity here goes down {formatSidePct(move.decreasePct)} (
-          {decreases.length}); every {platformList(move.to)} entity goes up{' '}
-          {formatSidePct(move.increasePct)} ({increases.length}). Decreases run first.
+          {uiText.rich('sentence_4244733ffe09', {
+            v0: platformList(move.from),
+            v1: formatSidePct(move.decreasePct, uiLocale),
+            v2: decreases.length,
+            v3: platformList(move.to),
+            v4: formatSidePct(move.increasePct, uiLocale),
+            v5: increases.length,
+          })}
         </p>
       </div>
       <ol className="divide-y divide-border/40">
@@ -285,7 +316,7 @@ export function BudgetMoveQueueRow({
       <p className="text-muted-foreground text-xs">{MOVE_APPROVAL_RECOMMENDATION}</p>
       {approved ? (
         <p className="text-sm" data-testid="budget-move-approved" role="status">
-          Approved. The optimizer writes the decreases first, then the increases.
+          {uiText('approved_the_optimizer_writes_the_decreases_f_d042767')}
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -305,13 +336,14 @@ export function BudgetMoveQueueRow({
                   size="sm"
                   variant="outline"
                 >
-                  Approve the decrease only
+                  {uiText('approve_the_decrease_only_88b26d6')}
                 </Button>
               </>
             )}
             <Button disabled={disabled} onClick={onDismiss} size="sm" variant="ghost">
-              {busy ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-              Dismiss
+              {uiText.rich('sentence_c0b09555af17', {
+                v0: () => (busy ? <Loader2Icon className="size-3.5 animate-spin" /> : null),
+              })}
             </Button>
           </div>
           {writesOffNote ? (
@@ -320,7 +352,7 @@ export function BudgetMoveQueueRow({
             </p>
           ) : onApproveDecreaseOnly ? null : (
             <p className="text-muted-foreground text-xs" data-testid="decrease-only-unavailable">
-              Approving only the decrease is not available yet: the optimizer writes whole moves.
+              {uiText('approving_only_the_decrease_is_not_available__6d6d2c8')}
             </p>
           )}
         </div>

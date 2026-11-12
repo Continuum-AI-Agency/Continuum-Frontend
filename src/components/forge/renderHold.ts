@@ -1,3 +1,7 @@
+import type { useTranslations } from 'next-intl';
+
+type HeldText = ReturnType<typeof useTranslations<'forge'>>;
+
 // A held batch. When createBatch fails, whatever the status, the client cannot know which rows the
 // backend made (it makes rows 1..k-1, then throws on row k), so the render set holds the batch: in
 // any tab its Render opens the hold, whose token can be re-sent (rows dedupe on request_id), and
@@ -66,10 +70,12 @@ export const SET_CHANGED = 'This set changed somewhere else. Reload it, then Ren
 export const HELD_SET =
   'This set has an unconfirmed render. Press Render to see it, then check the Render ledger.';
 /** A held set's actions warn, then go: one confirm. A copy starts with no hold, and says so. */
-export const heldConfirmCopy = (copy: boolean) =>
-  `This set has an unconfirmed render. Check the Render ledger before rendering this.${
-    copy ? ' The copy won’t remember the unconfirmed render.' : ''
-  } Continue?`;
+export const heldConfirmCopy = (copy: boolean, translate?: HeldText) =>
+  translate
+    ? translate('heldConfirm', { copy: copy ? 'yes' : 'no' })
+    : `This set has an unconfirmed render. Check the Render ledger before rendering this.${
+        copy ? ' The copy won’t remember the unconfirmed render.' : ''
+      } Continue?`;
 /** How often an outstanding send says it is still on its way, and how long its silence means not. */
 export const BEAT_MS = 30_000;
 export const STALE_MS = 60_000;
@@ -84,10 +90,12 @@ export const isSessionRefusal = (error: unknown): boolean =>
 export const isPermissionRefusal = (error: unknown): boolean =>
   error instanceof ApiError && error.status === 403;
 /** A 403's own reason when the service gave one (a Final needs an owner), else the access line. */
-export const permissionCopy = (error: unknown): string =>
+export const permissionCopy = (error: unknown, present?: (source: string) => string): string =>
   error instanceof ApiError && typeof error.payload?.detail === 'string'
-    ? describeRenderDiscoveryFailure(error)
-    : NO_PERMISSION;
+    ? describeRenderDiscoveryFailure(error, present)
+    : present
+      ? present(NO_PERMISSION)
+      : NO_PERMISSION;
 
 const codeOf = (error: ApiError) =>
   error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
@@ -298,7 +306,25 @@ export const sendingElsewhere = (held: HeldBatch, now = Date.now()): boolean =>
   held.inflight && held.signed === null && now - held.heldAt < STALE_MS;
 
 /** The held view's one line: built from the reason, never from other copy. */
-export function heldCopy(held: HeldBatch, now = Date.now()): string {
+export function heldCopy(held: HeldBatch, now = Date.now(), translate?: HeldText): string {
+  if (translate) {
+    if (sendingElsewhere(held, now)) return translate('heldSending');
+    if (!held.reason) return translate('heldReloaded', { inflight: held.inflight ? 'yes' : 'no' });
+    switch (held.reason.kind) {
+      case 'session':
+        return translate('heldSession');
+      case 'permission':
+        return translate('heldPermission');
+      case 'set_changed':
+        return translate('heldSetChanged');
+      case 'refused':
+        return translate('heldRefused');
+      default:
+        return translate('heldUnconfirmed', {
+          retry: canRetry(held, now) || held.sending ? 'yes' : 'no',
+        });
+    }
+  }
   const { reason } = held;
   if (sendingElsewhere(held, now))
     return 'A Render of this set is still being sent. Wait a moment, then check the Render ledger.';

@@ -1,21 +1,27 @@
 'use client';
+import { useLocale } from 'next-intl';
 
 import { createContext, type HTMLAttributes, useContext, useEffect } from 'react';
 import { useControllableState } from '@/hooks/useControllableState';
 import { cn } from '@/lib/utils';
 
-const formatDate = (date: Date, timeZone: string, options?: Intl.DateTimeFormatOptions) =>
+const formatDate = (
+  date: Date,
+  timeZone: string,
+  options?: Intl.DateTimeFormatOptions,
+  locale = 'en',
+) =>
   new Intl.DateTimeFormat(
-    'en-US',
+    locale,
     options ?? {
       dateStyle: 'long',
       timeZone,
     },
   ).format(date);
 
-const formatTime = (date: Date, timeZone: string, options?: Intl.DateTimeFormatOptions) =>
+const formatTime = (date: Date, timeZone: string, options?: Intl.DateTimeFormatOptions, locale = 'en') =>
   new Intl.DateTimeFormat(
-    'en-US',
+    locale,
     options ?? {
       hour: '2-digit',
       minute: '2-digit',
@@ -117,7 +123,7 @@ export type RelativeTimeZoneDisplayProps = HTMLAttributes<HTMLDivElement>;
 export const RelativeTimeZoneDisplay = ({ className, ...props }: RelativeTimeZoneDisplayProps) => {
   const { time, timeFormatOptions } = useContext(RelativeTimeContext);
   const { zone } = useContext(RelativeTimeZoneContext);
-  const display = formatTime(time, zone, timeFormatOptions);
+  const display = formatTime(time, zone, timeFormatOptions, useLocale());
 
   return (
     <div className={cn('pl-8 text-muted-foreground tabular-nums', className)} {...props}>
@@ -131,7 +137,7 @@ export type RelativeTimeZoneDateProps = HTMLAttributes<HTMLDivElement>;
 export const RelativeTimeZoneDate = ({ className, ...props }: RelativeTimeZoneDateProps) => {
   const { time, dateFormatOptions } = useContext(RelativeTimeContext);
   const { zone } = useContext(RelativeTimeZoneContext);
-  const display = formatDate(time, zone, dateFormatOptions);
+  const display = formatDate(time, zone, dateFormatOptions, useLocale());
 
   return <div {...props}>{display}</div>;
 };

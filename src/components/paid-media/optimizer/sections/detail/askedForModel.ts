@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 // Suggestions a person asked for, turned into rows of the SAME list the day's read renders.
 //
 // This is the whole "one inbox" argument, and it is structural rather than a promise: a
@@ -56,7 +60,9 @@ import {
 } from '@continuum/contracts';
 import {
   AUDIENCE_PROPOSAL_STATE_LABEL,
+  audienceBlockReason,
   audienceCardStateFor,
+  audienceProposalStateLabel,
   proposalFailureReason,
 } from '../audienceCardModel';
 import type { DailyReadRow } from './dailyReadModel';
@@ -102,8 +108,13 @@ const SHOWN: ReadonlySet<AdhocSuggestionRow['status']> = new Set([
   'adopted',
 ]);
 
-function waitingRow(row: AdhocSuggestionRow): AskedForRow {
-  const copy = ADHOC_SUGGESTION_CATEGORY_COPY[row.category];
+function waitingRow(row: AdhocSuggestionRow, uiTranslate?: ScaleCopy): AskedForRow {
+  const copy = uiTranslate
+    ? {
+        label: uiTranslate('askedCategoryLabel', { category: row.category }),
+        blurb: uiTranslate('askedCategoryBlurb', { category: row.category }),
+      }
+    : ADHOC_SUGGESTION_CATEGORY_COPY[row.category];
   return {
     id: `asked:${row.id}`,
     suggestionId: row.id,
@@ -114,8 +125,10 @@ function waitingRow(row: AdhocSuggestionRow): AskedForRow {
     tier: 'low',
     // Not "Low impact": nothing has been weighed yet, and a tier badge on an unanswered ask
     // is a figure invented to fill a slot.
-    tierLabel: 'Reading',
-    title: `${copy.label} — reading the portfolio`,
+    tierLabel: uiTranslate ? uiTranslate('askedTierLabel', { tier: 'reading' }) : 'Reading',
+    title: uiTranslate
+      ? uiTranslate('helper_18d1280ebb42', { v0: copy.label })
+      : `${copy.label} — reading the portfolio`,
     reason: null,
     basis: copy.blurb,
     isHero: false,
@@ -126,7 +139,11 @@ function waitingRow(row: AdhocSuggestionRow): AskedForRow {
     handoff: null,
     proposal: null,
     nextNote: null,
-    cta: { kind: 'manage', rowKey: null, label: 'Working…' },
+    cta: {
+      kind: 'manage',
+      rowKey: null,
+      label: uiTranslate ? uiTranslate('working_5474eef') : 'Working…',
+    },
   };
 }
 
@@ -158,6 +175,7 @@ export type HandoffProposal = {
 export function handoffProposal(
   handoff: AdhocSuggestionHandoff | null,
   proposals: readonly AudienceProposalRow[] | undefined,
+  uiTranslate?: ScaleCopy,
 ): HandoffProposal | null {
   if (!handoff?.proposal_id || !proposals) return null;
   const opened = proposals.find((candidate) => candidate.id === handoff.proposal_id);
@@ -173,13 +191,20 @@ export function handoffProposal(
       trigger: opened.trigger,
     }) ?? opened;
   const state = audienceCardStateFor(row);
-  const block = readProposalBlock(row);
+  const sourceBlock = readProposalBlock(row);
+  const block =
+    sourceBlock && uiTranslate
+      ? {
+          ...sourceBlock,
+          message: audienceBlockReason(sourceBlock, uiTranslate) ?? sourceBlock.message,
+        }
+      : sourceBlock;
   const closed = row.status === 'superseded';
   const blocked = state === 'blocked' || state === 'blocked_cbo';
   const reason = blocked
     ? (block?.message ?? null)
     : state === 'failed'
-      ? proposalFailureReason(row.error)
+      ? proposalFailureReason(row.error, uiTranslate)
       : null;
   return {
     row,
@@ -193,7 +218,12 @@ export function handoffProposal(
 
 /** The badge on the row: the proposal's state in the card's own words, or "Closed" for a
  *  proposal the cycle closed without ever giving it a body. */
-export function proposalStateLabel(proposal: HandoffProposal): string {
+export function proposalStateLabel(proposal: HandoffProposal, uiTranslate?: ScaleCopy): string {
+  if (uiTranslate)
+    return audienceProposalStateLabel(
+      proposal.state === 'none' && proposal.closed ? 'closed' : proposal.state,
+      uiTranslate,
+    );
   if (proposal.state === 'none' && proposal.closed) return 'Closed';
   return AUDIENCE_PROPOSAL_STATE_LABEL[proposal.state];
 }
@@ -205,7 +235,26 @@ const CLOSED_NOTE = 'The cycle closed the recommendation it opened.';
  * The sentence under the row once the proposal exists: what state it is in and, for a
  * blocked or failed one, why. Null for the states the built note already covers.
  */
-export function proposalNote(proposal: HandoffProposal): string | null {
+export function proposalNote(proposal: HandoffProposal, uiTranslate?: ScaleCopy): string | null {
+  if (uiTranslate) {
+    if (proposal.state === 'none' && !proposal.closed) return null;
+    return uiTranslate('askedProposalNote', {
+      state: proposal.state,
+      closed:
+        proposal.closed &&
+        (proposal.state === 'none' ||
+          proposal.state === 'blocked' ||
+          proposal.state === 'blocked_cbo')
+          ? 'yes'
+          : 'no',
+      reason: proposal.block
+        ? (audienceBlockReason(proposal.block, uiTranslate) ?? '')
+        : (proposalFailureReason(proposal.row.error, uiTranslate) ??
+          uiTranslate('audienceFailureReason', {
+            code: proposal.closed ? 'signal_stopped' : 'other',
+          })),
+    });
+  }
   const closedTail = proposal.closed
     ? ` ${proposalFailureReason(proposal.row.error) ?? SIGNAL_STOPPED} ${CLOSED_NOTE}`
     : '';
@@ -244,8 +293,14 @@ function settledRow(
   row: AdhocSuggestionRow,
   dailyTotal: number | null | undefined,
   context: AskedForContext,
+  uiTranslate?: ScaleCopy,
 ): AskedForRow {
-  const copy = ADHOC_SUGGESTION_CATEGORY_COPY[row.category];
+  const copy = uiTranslate
+    ? {
+        label: uiTranslate('askedCategoryLabel', { category: row.category }),
+        blurb: uiTranslate('askedCategoryBlurb', { category: row.category }),
+      }
+    : ADHOC_SUGGESTION_CATEGORY_COPY[row.category];
   const plan = readAdhocSuggestion(row);
   const module = MODULE_BY_CATEGORY[row.category];
 
@@ -257,7 +312,9 @@ function settledRow(
     // delivering one, so the Backend's sentence (what to do about it) is the whole answer.
     const unbuildable =
       looked && row.error?.code === 'no_delivering_adset' && typeof row.error.message === 'string'
-        ? row.error.message
+        ? uiTranslate
+          ? uiTranslate('askedNoDelivering')
+          : row.error.message
         : null;
     return {
       id: `asked:${row.id}`,
@@ -267,16 +324,28 @@ function settledRow(
       module,
       category: copy.label,
       tier: 'low',
-      tierLabel: unbuildable ? 'Nothing to build' : looked ? 'Nothing to change' : 'Could not read',
-      title: looked
-        ? `${copy.label} — nothing worth changing right now`
-        : `${copy.label} — the read did not finish`,
+      tierLabel: uiTranslate
+        ? uiTranslate('askedTierLabel', {
+            tier: unbuildable ? 'nothing_build' : looked ? 'nothing_change' : 'unread',
+          })
+        : unbuildable
+          ? 'Nothing to build'
+          : looked
+            ? 'Nothing to change'
+            : 'Could not read',
+      title: uiTranslate
+        ? uiTranslate('askedEmptyTitle', { category: copy.label, looked: looked ? 'yes' : 'no' })
+        : looked
+          ? `${copy.label} — nothing worth changing right now`
+          : `${copy.label} — the read did not finish`,
       reason: null,
       basis:
         unbuildable ??
-        (looked
-          ? 'Looked across the enrolled ad sets and found nothing this category can improve today.'
-          : 'Ask again in a moment.'),
+        (uiTranslate
+          ? uiTranslate('askedEmptyBasis', { looked: looked ? 'yes' : 'no' })
+          : looked
+            ? 'Looked across the enrolled ad sets and found nothing this category can improve today.'
+            : 'Ask again in a moment.'),
       isHero: false,
       origin: 'asked',
       steps: [],
@@ -285,7 +354,11 @@ function settledRow(
       handoff: null,
       proposal: null,
       nextNote: null,
-      cta: { kind: 'manage', rowKey: null, label: 'Open Manage' },
+      cta: {
+        kind: 'manage',
+        rowKey: null,
+        label: uiTranslate ? uiTranslate('optimizer_openManage') : 'Open Manage',
+      },
     };
   }
 
@@ -295,7 +368,7 @@ function settledRow(
   const tier: ImpactTier = sized ? impactTier(plan.impact_per_day ?? 0, dailyTotal) : 'low';
   const adopted = row.status === 'adopted';
   const handoff = readAdhocHandoff(row);
-  const proposal = handoffProposal(handoff, context.proposals);
+  const proposal = handoffProposal(handoff, context.proposals, uiTranslate);
 
   return {
     id: `asked:${row.id}`,
@@ -307,13 +380,21 @@ function settledRow(
     tier,
     tierLabel: adopted
       ? proposal
-        ? proposalStateLabel(proposal)
+        ? proposalStateLabel(proposal, uiTranslate)
         : handoff
-          ? 'Handed off'
-          : 'Taken on'
+          ? uiTranslate
+            ? uiTranslate('askedTierLabel', { tier: 'handed' })
+            : 'Handed off'
+          : uiTranslate
+            ? uiTranslate('askedTierLabel', { tier: 'taken' })
+            : 'Taken on'
       : sized
-        ? IMPACT_TIER_COPY[tier]
-        : 'Not sized',
+        ? uiTranslate
+          ? uiTranslate('askedTierLabel', { tier })
+          : IMPACT_TIER_COPY[tier]
+        : uiTranslate
+          ? uiTranslate('askedTierLabel', { tier: 'unsized' })
+          : 'Not sized',
     title: plan.headline,
     reason: plan.why || null,
     basis: plan.impact_basis ?? plan.confidence_note ?? copy.blurb,
@@ -328,9 +409,9 @@ function settledRow(
     // The proposal's own state outranks the "being built" promise: the row that asked must
     // say what actually became of the ask, not what the build was going to be.
     nextNote:
-      (proposal ? proposalNote(proposal) : null) ??
-      nextNoteFor(row.category, plan, handoff, adopted),
-    cta: ctaFor(plan, module, row.category, adopted, handoff),
+      (proposal ? proposalNote(proposal, uiTranslate) : null) ??
+      nextNoteFor(row.category, plan, handoff, adopted, uiTranslate),
+    cta: ctaFor(plan, module, row.category, adopted, handoff, uiTranslate),
   };
 }
 
@@ -347,14 +428,22 @@ function nextNoteFor(
   plan: AdhocSuggestionPlan,
   handoff: AdhocSuggestionHandoff | null,
   adopted: boolean,
+  uiTranslate?: ScaleCopy,
 ): string | null {
-  if (handoff) return adhocHandoffBuiltNote(category);
+  if (handoff)
+    return uiTranslate
+      ? uiTranslate('askedHandoffBuilt', { category })
+      : adhocHandoffBuiltNote(category);
   if (!adopted) return null;
   if (plan.cta?.target_id) return null;
   if (!plan.adset_id) {
-    return 'This suggestion names no ad set, so there is nothing here to build from.';
+    return uiTranslate
+      ? uiTranslate('askedNoAdset')
+      : 'This suggestion names no ad set, so there is nothing here to build from.';
   }
-  return ADHOC_HANDOFF_COPY[category].paused;
+  return uiTranslate
+    ? uiTranslate('askedHandoffPaused', { category })
+    : ADHOC_HANDOFF_COPY[category].paused;
 }
 
 /**
@@ -378,6 +467,7 @@ function ctaFor(
   category: AdhocSuggestionCategory,
   adopted: boolean,
   handoff: AdhocSuggestionHandoff | null,
+  uiTranslate?: ScaleCopy,
 ): HeroCta {
   const cta = plan.cta;
   // ONE resolver with the hero card (heroModel.queueRowKeyFor). An `audience_card` CTA
@@ -389,32 +479,75 @@ function ctaFor(
     return {
       kind: 'queue_row',
       rowKey,
-      label: module === 'budget' ? 'Review the budget moves' : 'Open it in the queue',
+      label: uiTranslate
+        ? uiTranslate('askedCta', { kind: module === 'budget' ? 'budget' : 'queue' })
+        : module === 'budget'
+          ? 'Review the budget moves'
+          : 'Open it in the queue',
     };
   }
   if (cta?.kind === 'audience_card' && rowKey) {
-    return { kind: 'audience_card', rowKey, label: ADHOC_HANDOFF_COPY.audience.open };
+    return {
+      kind: 'audience_card',
+      rowKey,
+      label: uiTranslate
+        ? uiTranslate('askedCta', { kind: 'audience' })
+        : ADHOC_HANDOFF_COPY.audience.open,
+    };
   }
 
   if (handoff) {
     const rowKey = adhocHandoffRowKey(handoff, plan);
     if (rowKey && handoff.kind === 'audience_proposal' && handoff.proposal_id) {
-      return { kind: 'audience_card', rowKey, label: ADHOC_HANDOFF_COPY.audience.open };
+      return {
+        kind: 'audience_card',
+        rowKey,
+        label: uiTranslate
+          ? uiTranslate('askedCta', { kind: 'audience' })
+          : ADHOC_HANDOFF_COPY.audience.open,
+      };
     }
     if (rowKey) {
-      return { kind: 'queue_row', rowKey, label: ADHOC_HANDOFF_COPY[category].open };
+      return {
+        kind: 'queue_row',
+        rowKey,
+        label: uiTranslate
+          ? uiTranslate('askedCta', { kind: category })
+          : ADHOC_HANDOFF_COPY[category].open,
+      };
     }
-    return { kind: 'manage', rowKey: null, label: 'Open Manage' };
+    return {
+      kind: 'manage',
+      rowKey: null,
+      label: uiTranslate ? uiTranslate('askedCta', { kind: 'manage' }) : 'Open Manage',
+    };
   }
 
   if (adopted && plan.adset_id) {
-    return { kind: 'build', rowKey: null, label: ADHOC_HANDOFF_COPY[category].build };
+    return {
+      kind: 'build',
+      rowKey: null,
+      label: uiTranslate
+        ? uiTranslate('askedCta', {
+            kind:
+              category === 'audience'
+                ? 'buildAudience'
+                : category === 'budget'
+                  ? 'budget'
+                  : 'buildCreative',
+          })
+        : ADHOC_HANDOFF_COPY[category].build,
+    };
   }
 
   return {
     kind: 'manage',
     rowKey: null,
-    label: adopted ? 'Open Manage' : 'Take this on',
+    label: uiTranslate
+      ? uiTranslate('askedCta', { kind: adopted ? 'manage' : 'take' })
+      : adopted
+        ? 'Open Manage'
+        : 'Take this on',
   };
 }
 
@@ -430,13 +563,14 @@ export function buildAskedForRows(
   rows: readonly AdhocSuggestionRow[],
   dailyTotal: number | null | undefined,
   context: AskedForContext = {},
+  uiTranslate?: ScaleCopy,
 ): AskedForRow[] {
   return rows
     .filter((row) => SHOWN.has(row.status))
     .map((row) =>
       row.status === 'queued' || row.status === 'proposing'
-        ? waitingRow(row)
-        : settledRow(row, dailyTotal, context),
+        ? waitingRow(row, uiTranslate)
+        : settledRow(row, dailyTotal, context, uiTranslate),
     );
 }
 
@@ -453,9 +587,17 @@ export function askedRecommendationIds(rows: readonly AskedForRow[]): string[] {
 }
 
 /** The one line above the list saying what the day's read and the asks add up to. */
-export function askedForSummary(rows: readonly AskedForRow[]): string | null {
+export function askedForSummary(
+  rows: readonly AskedForRow[],
+  uiTranslate?: ScaleCopy,
+): string | null {
   const waiting = rows.filter((row) => row.status === 'queued' || row.status === 'proposing');
   if (waiting.length > 0) {
+    if (uiTranslate)
+      return uiTranslate('askedReadingSummary', {
+        count: waiting.length,
+        module: waiting[0]?.module ?? 'audience',
+      });
     return waiting.length === 1
       ? `Reading ${HERO_MODULE_COPY[waiting[0]!.module].label.toLowerCase()}…`
       : `Reading ${waiting.length} categories…`;

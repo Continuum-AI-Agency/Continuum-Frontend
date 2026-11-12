@@ -1,5 +1,6 @@
 import { Check } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import type { ShellPillId } from './OnboardingShell';
 
@@ -13,6 +14,8 @@ type OnboardingStepperProps = {
 };
 
 export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps) {
+  const tUi = useTranslations('onboarding');
+
   return (
     <ol className="flex w-full items-stretch justify-between gap-1 sm:justify-center sm:gap-0">
       {steps.map((step, index) => {
@@ -25,7 +28,10 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
           >
             <button
               type="button"
-              aria-label={`${step.label}: ${step.description}`}
+              aria-label={tUi('m_98b5818045', {
+                v0: String(step.label),
+                v1: String(step.description),
+              })}
               disabled={!interactive}
               onClick={interactive ? () => onStepClick(step.id) : undefined}
               className={cn(

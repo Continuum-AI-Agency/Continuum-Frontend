@@ -5,6 +5,8 @@ import {
   getAutomationNodePortSpec,
 } from '@continuum/contracts';
 import type { Connection, Edge } from '@xyflow/react';
+import type { useTranslations } from 'next-intl';
+import { localizeAutomationsCopy } from '@/i18n/automationsCopy';
 import type { WorkflowCanvasEdge } from './WorkflowEdge';
 import type { WorkflowCanvasNode } from './WorkflowNodeCard';
 
@@ -233,4 +235,14 @@ export function findCompatibleWorkflowConnection({
     }
   }
   return null;
+}
+
+/** Presentation-only; validation codes and port compatibility remain canonical. */
+export function workflowConnectionMessage(
+  evaluation: WorkflowConnectionEvaluation,
+  t: ReturnType<typeof useTranslations<'automations'>>,
+): string {
+  return evaluation.code === 'incompatible_ports'
+    ? t('m_04876d3481')
+    : localizeAutomationsCopy(evaluation.reason, t);
 }

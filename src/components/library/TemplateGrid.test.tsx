@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@/components/library/__tests__/renderWithCreativeI18n';
 import { TemplateGrid } from './TemplateGrid';
 
 test('the Templates section starts with one clear AEP intake action', () => {

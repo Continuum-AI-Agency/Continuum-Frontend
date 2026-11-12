@@ -1,14 +1,18 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
+import { usePathname, useRouter } from '@/i18n/navigation';
 
 const WELCOME_PARAM = 'welcome';
 const WELCOME_PREFIX = 'brand:';
 
 export function BrandWelcomeBanner() {
+  const tUi = useTranslations('common');
+
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -43,17 +47,17 @@ export function BrandWelcomeBanner() {
       className="mx-auto mt-4 flex max-w-3xl items-start gap-3 rounded-md border border-primary/40 bg-primary/10 px-4 py-3 text-sm"
     >
       <div className="flex-1">
-        <p className="font-medium text-foreground">Welcome to {brand.name}.</p>
-        <p className="text-muted-foreground">
-          You can switch brands anytime from the sidebar. Connected integrations are listed under
-          Integrations.
+        <p className="font-medium text-foreground">
+          {tUi('m_2e450fe356')}
+          {brand.name}.
         </p>
+        <p className="text-muted-foreground">{tUi('m_96694bdfba')}</p>
       </div>
       <button
         type="button"
         onClick={dismiss}
         className="rounded-sm p-1 text-muted-foreground hover:bg-accent/40 hover:text-foreground"
-        aria-label="Dismiss welcome banner"
+        aria-label={tUi('m_b2fc428ebc')}
       >
         <X className="size-4" />
       </button>

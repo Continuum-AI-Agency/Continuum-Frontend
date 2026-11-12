@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import authMessages from '../../../messages/auth/en.json';
 
 type SignInArgs = { email: string; password: string };
 type VerifyOtpArgs = { email: string; token: string; type: string };
@@ -9,6 +11,8 @@ type FakeState = {
   verifyCalls: VerifyOtpArgs[];
   verifyError: { message: string } | null;
   revalidateCalls: string[];
+  restoredLocales: unknown[];
+  accountLocale: string;
 };
 
 const state: FakeState = {
@@ -17,7 +21,20 @@ const state: FakeState = {
   verifyCalls: [],
   verifyError: null,
   revalidateCalls: [],
+  restoredLocales: [],
+  accountLocale: 'es',
 };
+
+mock.module('next-intl/server', () => ({
+  getTranslations: async () =>
+    createTranslator({ locale: 'en', messages: { auth: authMessages }, namespace: 'auth' }),
+}));
+mock.module('@/i18n/server', () => ({
+  getCookieLocale: async () => 'en',
+  restoreAccountLocale: async (metadata: unknown) => {
+    state.restoredLocales.push(metadata);
+  },
+}));
 
 mock.module('next/cache', () => ({
   revalidatePath: (path: string) => {
@@ -41,11 +58,15 @@ mock.module('@/lib/supabase/server', () => ({
     auth: {
       signInWithPassword: async (args: SignInArgs) => {
         state.signInCalls.push(args);
-        return state.signInError ? { error: state.signInError } : { error: null };
+        return state.signInError
+          ? { error: state.signInError }
+          : { error: null, data: { user: { user_metadata: { ui_locale: state.accountLocale } } } };
       },
       verifyOtp: async (args: VerifyOtpArgs) => {
         state.verifyCalls.push(args);
-        return state.verifyError ? { error: state.verifyError } : { error: null };
+        return state.verifyError
+          ? { error: state.verifyError }
+          : { error: null, data: { user: { user_metadata: { ui_locale: state.accountLocale } } } };
       },
     },
   }),
@@ -59,6 +80,7 @@ beforeEach(() => {
   state.verifyCalls = [];
   state.verifyError = null;
   state.revalidateCalls = [];
+  state.restoredLocales = [];
 });
 
 describe('signInWithPasswordAction', () => {
@@ -179,4 +201,15 @@ describe('verifyEmailCodeAction', () => {
     expect(result).toEqual({ success: false, error: 'Enter the code from your email' });
     expect(state.verifyCalls).toEqual([]);
   });
+});
+
+it('restores the account language from the existing password response', async () => {
+  state.accountLocale = 'pt-BR';
+  await signInWithPasswordAction({ email: 'reader@continuum.test', password: 'valid password' });
+  expect(state.restoredLocales).toEqual([{ ui_locale: 'pt-BR' }]);
+});
+it('restores the account language from the existing email-code response', async () => {
+  state.accountLocale = 'es';
+  await verifyEmailCodeAction({ email: 'reader@continuum.test', token: '123456' });
+  expect(state.restoredLocales).toEqual([{ ui_locale: 'es' }]);
 });

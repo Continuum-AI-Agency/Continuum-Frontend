@@ -14,6 +14,7 @@ import {
   type MediaComment,
   parseCommentMentions,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type AssetCommentsSnapshot,
@@ -85,6 +86,8 @@ export function useMultiAssetComments(
   brandId: string,
   assetIds: string[],
 ): UseMultiAssetCommentsResult {
+  const translateUi = useUiTranslations('library');
+
   const [comments, setComments] = useState<MediaComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +149,7 @@ export function useMultiAssetComments(
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error('[useMultiAssetComments] list failed', err);
-        setError('Could not load comments.');
+        setError(translateUi('could_not_load_comments_87295f6a'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -155,7 +158,7 @@ export function useMultiAssetComments(
     return () => {
       cancelled = true;
     };
-  }, [brandId, assetKey]);
+  }, [brandId, assetKey, translateUi]);
 
   /** INSERT and UPDATE land the same way; a soft-deleted row leaves the list. */
   const applyComment = useCallback((row: MediaCommentRow) => {
@@ -269,13 +272,13 @@ export function useMultiAssetComments(
       } catch (err: unknown) {
         console.error('[useMultiAssetComments] post failed', err);
         setComments((prev) => prev.filter((c) => c.id !== tempId));
-        setError('Could not post comment.');
+        setError(translateUi('could_not_post_comment_7cc9ca09'));
         return null;
       } finally {
         markPending(tempId, false);
       }
     },
-    [brandId, markPending],
+    [brandId, markPending, translateUi],
   );
 
   const setResolved = useCallback(
@@ -286,10 +289,14 @@ export function useMultiAssetComments(
         setComments((prev) => upsertComment(prev, updated));
       } catch (err: unknown) {
         console.error('[useMultiAssetComments] resolve failed', err);
-        setError(resolved ? 'Could not resolve thread.' : 'Could not reopen thread.');
+        setError(
+          resolved
+            ? translateUi('could_not_resolve_thread_08ed9637')
+            : translateUi('could_not_reopen_thread_002da427'),
+        );
       }
     },
-    [brandId],
+    [brandId, translateUi],
   );
 
   const removeComment = useCallback(
@@ -300,10 +307,10 @@ export function useMultiAssetComments(
         setComments((prev) => prev.filter((c) => c.id !== commentId));
       } catch (err: unknown) {
         console.error('[useMultiAssetComments] delete failed', err);
-        setError('Could not delete comment.');
+        setError(translateUi('could_not_delete_comment_cd440da1'));
       }
     },
-    [brandId],
+    [brandId, translateUi],
   );
 
   return useMemo(

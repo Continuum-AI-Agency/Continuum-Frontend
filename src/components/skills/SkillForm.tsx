@@ -2,6 +2,7 @@
 
 import type { Skill, SkillSurface } from '@continuum/contracts';
 import { Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { createBrandSkill, updateBrandSkill } from '@/lib/organic/skills';
@@ -17,10 +18,12 @@ type Props = {
 
 // Which generator the skill steers. Copy skills surface in the organic composer;
 // visual skills surface on the AI Studio canvas; both appear in each.
-const SURFACES: { value: SkillSurface; label: string }[] = [
-  { value: 'copy', label: 'Copy' },
-  { value: 'visual', label: 'Visual' },
-  { value: 'both', label: 'Both' },
+const getSURFACES = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): { value: SkillSurface; label: string }[] => [
+  { value: 'copy', label: tUi('copy_e21f935') },
+  { value: 'visual', label: tUi('m_770d690e6d') },
+  { value: 'both', label: tUi('m_1f46983828') },
 ];
 
 const parseTags = (raw: string): string[] =>
@@ -33,6 +36,8 @@ const parseTags = (raw: string): string[] =>
 // Create/edit form for a brand skill. Saves straight to the database via the
 // brand-skill endpoints; library templates are never edited here.
 export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: Props) {
+  const uiText = useTranslations('common');
+  const SURFACES = getSURFACES(uiText);
   const [name, setName] = useState(initial?.name ?? '');
   const [surface, setSurface] = useState<SkillSurface>(initial?.surface ?? 'both');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -69,7 +74,7 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
       }
       onSavedAction();
     } catch {
-      setError('Could not save the skill. Try again.');
+      setError(uiText('m_c8ae308dca'));
     } finally {
       setSaving(false);
     }
@@ -80,9 +85,9 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Skill name"
+        placeholder={uiText('skill_name_0fbb6f4')}
         maxLength={120}
-        aria-label="Skill name"
+        aria-label={uiText('skill_name_0fbb6f4')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-medium"
       />
 
@@ -108,9 +113,9 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
       <input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Short description (when to use it)"
+        placeholder={uiText('m_b468afcf87')}
         maxLength={500}
-        aria-label="Skill description"
+        aria-label={uiText('m_3a8b3a62e7')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
       />
 
@@ -118,16 +123,16 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
         value={directives}
         onChange={(e) => setDirectives(e.target.value)}
         rows={6}
-        placeholder="Directives — the guidance injected into the agent when this skill is applied."
-        aria-label="Skill directives"
+        placeholder={uiText('m_65cb8a1c46')}
+        aria-label={uiText('skill_directives_39e7b80')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm leading-relaxed"
       />
 
       <input
         value={tags}
         onChange={(e) => setTags(e.target.value)}
-        placeholder="Tags (comma separated)"
-        aria-label="Skill tags"
+        placeholder={uiText('m_8c7e01ee22')}
+        aria-label={uiText('m_3e2d447dae')}
         className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
       />
 
@@ -135,7 +140,7 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
 
       <div className="mt-0.5 flex items-center justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancelAction}>
-          Cancel
+          {uiText('cancel_19766ed')}
         </Button>
         <Button
           variant="default"
@@ -145,7 +150,7 @@ export function SkillForm({ brandId, initial, onCancelAction, onSavedAction }: P
           onClick={save}
         >
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {initial ? 'Save changes' : 'Create skill'}
+          {initial ? uiText('save_changes_dd0ae7a') : uiText('m_f7fc4f0889')}
         </Button>
       </div>
     </div>

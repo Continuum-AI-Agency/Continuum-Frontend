@@ -1,6 +1,13 @@
 'use client';
 
 import {
+  type AdminAccessUpdateRequest,
+  type AdminAccessUpdateResponse,
+  type AdminBrandAccess,
+  adminAccessUpdateResponseSchema,
+  type ProductCode,
+} from '@continuum/contracts';
+import {
   ArrowRightLeft,
   Building2,
   CheckCircle2,
@@ -21,14 +28,8 @@ import {
   UserCog,
   XCircle,
 } from 'lucide-react';
-import {
-  type AdminAccessUpdateRequest,
-  type AdminAccessUpdateResponse,
-  type AdminBrandAccess,
-  adminAccessUpdateResponseSchema,
-  type ProductCode,
-} from '@continuum/contracts';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
 import {
@@ -105,6 +106,8 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DEFAULT_SEARCH_DEBOUNCE_MS, useDebounce } from '@/hooks/useDebounce';
+import { LocalizedUiError, useUiErrorMessage } from '@/i18n/errors';
+import { useRouter } from '@/i18n/navigation';
 import { fuzzyMatches } from '@/lib/search/fuzzy';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
@@ -145,10 +148,12 @@ type BulkTransferOutcome = {
   mediaSummary?: string;
 };
 
-function describeMediaMoved(assets?: number, versions?: number): string | undefined {
-  if (!assets) return undefined;
-  const versionSuffix = versions ? ` and ${versions} version${versions === 1 ? '' : 's'}` : '';
-  return `${assets} media item${assets === 1 ? '' : 's'}${versionSuffix} moved`;
+function describeMediaMoved(
+  assets: number | undefined,
+  versions: number | undefined,
+  translate: ReturnType<typeof useTranslations<'admin'>>,
+): string | undefined {
+  return assets ? translate('m_278e9b289b', { assets, versions: versions ?? 0 }) : undefined;
 }
 
 const GLOBAL_LIBRARY_BRAND_OPTION: AdminBrandOption = {
@@ -227,6 +232,10 @@ export function AdminUserList({
   searchQuery,
   billingLive = false,
 }: Props) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const uiText = useTranslations('admin');
+  const uiLocale = useLocale();
   const { show } = useToast();
   const [isNavPending, startNavTransition] = useTransition();
   const supabase = createSupabaseBrowserClient();
@@ -323,10 +332,18 @@ export function AdminUserList({
     () => workflows.filter((workflow) => checkedWorkflowIds.has(workflow.id)),
     [workflows, checkedWorkflowIds],
   );
-  const bulkEligibility = useMemo(() => canBulkTransfer(checkedWorkflows), [checkedWorkflows]);
+  const bulkEligibility = useMemo(
+    () => canBulkTransfer(checkedWorkflows, uiText),
+    [checkedWorkflows, uiText],
+  );
   const checkedWorkflowNamesLabel = useMemo(
-    () => describeWorkflowNames(checkedWorkflows.map((workflow) => workflow.name)),
-    [checkedWorkflows],
+    () =>
+      describeWorkflowNames(
+        checkedWorkflows.map((workflow) => workflow.name),
+        5,
+        uiText,
+      ),
+    [checkedWorkflows, uiText],
   );
   const allCheckedAreBrandScoped =
     checkedWorkflows.length > 0 &&
@@ -334,7 +351,10 @@ export function AdminUserList({
   const allCheckedAreGlobalScoped =
     checkedWorkflows.length > 0 &&
     checkedWorkflows.every((workflow) => workflow.visibility === 'global');
-  const brandFilterOptions = useMemo(() => [GLOBAL_LIBRARY_BRAND_OPTION, ...brands], [brands]);
+  const brandFilterOptions = useMemo(
+    () => [{ ...GLOBAL_LIBRARY_BRAND_OPTION, brand_name: uiText('m_061122128b') }, ...brands],
+    [brands, uiText],
+  );
   // Airtable #277 — a transfer DESTINATION has to be a brand with a Creative Studio.
   // Scoped to the destination picker on purpose: the two filter pickers above and below
   // it are for finding existing rows, where an empty brand is a legitimate thing to look
@@ -361,7 +381,7 @@ export function AdminUserList({
   const safePage =
     pagination.totalPages > 0 ? Math.min(pagination.page, pagination.totalPages) : pagination.page;
   const totalPages = Math.max(pagination.totalPages, 1);
-  const totalCountLabel = pagination.totalCount.toLocaleString();
+  const totalCountLabel = pagination.totalCount.toLocaleString(uiLocale);
   const trimmedQuery = query.trim();
   const serverQueryActive = searchQuery.trim().length > 0;
   const isDirectoryUpdating = isNavPending || trimmedQuery !== searchQuery.trim();
@@ -492,9 +512,10 @@ export function AdminUserList({
     const message = await readEdgeErrorMessage(error, fallback);
     if (message === 'Forbidden') {
       router.refresh();
-      return 'Your session is no longer an admin session (an impersonation link replaces it). Reload and sign in as yourself.';
+      return uiText('m_8f46f0ad07');
     }
-    return message;
+    console.error('[Admin] function request failed', error);
+    return describeAccessError(message, uiText);
   }
 
   async function copyImpersonationLinkToClipboard(url: string): Promise<boolean> {
@@ -518,16 +539,14 @@ export function AdminUserList({
       const copied = await copyImpersonationLinkToClipboard(data.signInLink);
       if (!copied) setImpersonationDialog({ email: user.email, link: data.signInLink });
       show({
-        title: 'Impersonation link ready',
-        description: copied
-          ? 'Link copied to clipboard.'
-          : 'Copy blocked by the browser. Use the manual copy dialog.',
+        title: uiText('impersonation_link_ready_d3a4cc4'),
+        description: copied ? uiText('m_0aad611ee6') : uiText('m_9a7228e20d'),
         variant: copied ? 'success' : 'warning',
       });
     } catch (error) {
       show({
-        title: 'Failed to impersonate',
-        description: error instanceof Error ? error.message : 'Unable to generate link.',
+        title: uiText('failed_to_impersonate_abb0ce6'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -544,12 +563,15 @@ export function AdminUserList({
         body: { userId: user.id, isAdmin: !user.isAdmin },
       });
       if (error) throw new Error(await adminEdgeError(error, 'Unable to update admin flag.'));
-      show({ title: user.isAdmin ? 'Admin revoked' : 'Admin granted', variant: 'success' });
+      show({
+        title: user.isAdmin ? uiText('m_5aed3b6f75') : uiText('m_6dd3a8820f'),
+        variant: 'success',
+      });
       router.refresh();
     } catch (error) {
       show({
-        title: 'Update failed',
-        description: error instanceof Error ? error.message : 'Unable to update admin flag.',
+        title: uiText('update_failed_e58282f'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -573,13 +595,13 @@ export function AdminUserList({
         body: { brandProfileId: input.membership.brand_profile_id, tier: nextTierValue },
       });
       if (error) throw new Error(await adminEdgeError(error, 'Unable to save brand tier.'));
-      show({ title: 'Brand tier updated', variant: 'success' });
+      show({ title: uiText('brand_tier_updated_63b6766'), variant: 'success' });
       router.refresh();
     } catch (error) {
       setTierOverrides((prev) => ({ ...prev, [actionId]: input.previousTier }));
       show({
-        title: 'Failed to update brand tier',
-        description: error instanceof Error ? error.message : 'Unable to save brand tier.',
+        title: uiText('failed_to_update_brand_tier_21fa61f'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -597,9 +619,7 @@ export function AdminUserList({
       body: { brandId, ...change },
     });
     if (error) {
-      throw new Error(
-        describeAccessError(await adminEdgeError(error, 'Unable to save brand access.')),
-      );
+      throw new LocalizedUiError(await adminEdgeError(error, 'Unable to save brand access.'));
     }
     const parsed = adminAccessUpdateResponseSchema.safeParse(data);
     if (!parsed.success) throw new Error('The access update returned an unexpected response.');
@@ -620,13 +640,17 @@ export function AdminUserList({
     setActionPending(actionId, true);
     try {
       const saved = await updateAccess(brandId, change);
-      show({ title: 'Brand access updated', description: saved.note, variant: 'success' });
+      show({
+        title: uiText('brand_access_updated_3bc0953'),
+        description: saved.note,
+        variant: 'success',
+      });
       router.refresh();
       return true;
     } catch (error) {
       show({
-        title: 'Failed to update brand access',
-        description: error instanceof Error ? error.message : 'Unable to save brand access.',
+        title: uiText('failed_to_update_brand_access_4c4ade4'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
       return false;
@@ -662,7 +686,7 @@ export function AdminUserList({
             brandId,
             brandName,
             ok: false,
-            message: error instanceof Error ? error.message : 'Unable to save brand access.',
+            message: getUiErrorMessage(error),
           });
         }
         setFullAccessResults({ userId: user.id, results: [...results] });
@@ -670,9 +694,12 @@ export function AdminUserList({
       const failed = results.filter((result) => !result.ok).length;
       show({
         title: failed
-          ? `Full access failed on ${failed} of ${results.length} brands`
-          : 'Full access granted',
-        description: `${results.length - failed} of ${results.length} brands updated.`,
+          ? uiText('m_5d2189b006', { v0: String(failed), v1: String(results.length) })
+          : uiText('m_9871041583'),
+        description: uiText('m_daceebdbf3', {
+          v0: String(results.length - failed),
+          v1: String(results.length),
+        }),
         variant: failed ? 'error' : 'success',
       });
       router.refresh();
@@ -696,12 +723,12 @@ export function AdminUserList({
         },
       });
       if (error) throw new Error(await adminEdgeError(error, 'Unable to remove member.'));
-      show({ title: 'Member removed', variant: 'success' });
+      show({ title: uiText('member_removed_5dcec1a'), variant: 'success' });
       router.refresh();
     } catch (error) {
       show({
-        title: 'Removal failed',
-        description: error instanceof Error ? error.message : 'Unable to remove member.',
+        title: uiText('removal_failed_59ac9c0'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -724,7 +751,7 @@ export function AdminUserList({
       );
       if (error) {
         show({
-          title: 'Unable to load brands',
+          title: uiText('unable_to_load_brands_042e500'),
           description: await adminEdgeError(error, 'Brand list request failed.'),
           variant: 'error',
         });
@@ -761,8 +788,8 @@ export function AdminUserList({
       );
     } catch (error) {
       show({
-        title: 'Unable to load workflows',
-        description: error instanceof Error ? error.message : 'Workflow library request failed.',
+        title: uiText('unable_to_load_workflows_7d6b735'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -797,8 +824,8 @@ export function AdminUserList({
     } catch (error) {
       if (!isCurrent()) return;
       show({
-        title: 'Unable to load audit log',
-        description: error instanceof Error ? error.message : 'Audit request failed.',
+        title: uiText('unable_to_load_audit_log_e9b1584'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -885,7 +912,7 @@ export function AdminUserList({
 
   async function runBulkTransfer(args: {
     actionId: string;
-    successVerb: string;
+    action: 'move' | 'copy' | 'promote' | 'assign';
     run: () => Promise<BulkTransferOutcome[]>;
   }) {
     setActionPending(args.actionId, true);
@@ -897,10 +924,13 @@ export function AdminUserList({
       show({
         title:
           failed.length === 0
-            ? `${outcomes.length} workflow${outcomes.length === 1 ? '' : 's'} ${args.successVerb}`
-            : `${outcomes.length - failed.length}/${outcomes.length} ${args.successVerb}`,
+            ? uiText('m_bb426bea2d', { action: args.action, count: outcomes.length })
+            : uiText('m_b4f4fd1b30', {
+                succeeded: outcomes.length - failed.length,
+                total: outcomes.length,
+              }),
         description:
-          failed.length === 0 ? undefined : `${failed.length} failed — see details below.`,
+          failed.length === 0 ? undefined : uiText('m_a98a98d292', { v0: String(failed.length) }),
         variant: failed.length === 0 ? 'success' : 'warning',
       });
       const succeededIds = new Set(
@@ -915,8 +945,8 @@ export function AdminUserList({
       await loadAuditEntries(auditPage, auditFilters);
     } catch (error) {
       show({
-        title: 'Bulk action failed',
-        description: error instanceof Error ? error.message : 'Unable to complete the bulk action.',
+        title: uiText('bulk_action_failed_46471f3'),
+        description: getUiErrorMessage(error),
         variant: 'error',
       });
     } finally {
@@ -926,14 +956,14 @@ export function AdminUserList({
 
   async function runSingleItemBulk(args: {
     actionId: string;
-    successVerb: string;
+    action: 'move' | 'copy' | 'promote' | 'assign';
     ids: string[];
     buildBody: (workflowId: string) => Record<string, unknown>;
   }) {
     const nameById = new Map(workflows.map((workflow) => [workflow.id, workflow.name]));
     await runBulkTransfer({
       actionId: args.actionId,
-      successVerb: args.successVerb,
+      action: args.action,
       run: async () => {
         return Promise.all(
           args.ids.map(async (workflowId) => {
@@ -958,7 +988,7 @@ export function AdminUserList({
               workflowName: nameById.get(workflowId) ?? workflowId,
               status: 'success' as const,
               mediaSummary: copiedAssets
-                ? `${copiedAssets} media item${copiedAssets === 1 ? '' : 's'} copied`
+                ? uiText('m_2d41374424', { count: copiedAssets })
                 : undefined,
             };
           }),
@@ -969,14 +999,14 @@ export function AdminUserList({
 
   async function handleBulkMove() {
     if (!targetBrandId) {
-      show({ title: 'Choose a destination brand', variant: 'warning' });
+      show({ title: uiText('choose_a_destination_brand_14b305e'), variant: 'warning' });
       return;
     }
     const ids = Array.from(checkedWorkflowIds);
     const nameById = new Map(workflows.map((workflow) => [workflow.id, workflow.name]));
     await runBulkTransfer({
       actionId: 'workflow-bulk:move',
-      successVerb: 'moved',
+      action: 'move',
       run: async () => {
         const { data, error } = await supabase.functions.invoke<AdminWorkflowMoveResponse>(
           'admin-workflow-library',
@@ -994,8 +1024,8 @@ export function AdminUserList({
           workflowId: result.workflowId,
           workflowName: nameById.get(result.workflowId) ?? result.workflowId,
           status: result.status === 'moved' ? ('success' as const) : ('failed' as const),
-          message: result.error,
-          mediaSummary: describeMediaMoved(result.movedAssets, result.movedVersions),
+          message: result.error ? describeAccessError(result.error, uiText) : undefined,
+          mediaSummary: describeMediaMoved(result.movedAssets, result.movedVersions, uiText),
         }));
       },
     });
@@ -1003,12 +1033,12 @@ export function AdminUserList({
 
   async function handleBulkCopy() {
     if (!targetBrandId) {
-      show({ title: 'Choose a destination brand', variant: 'warning' });
+      show({ title: uiText('choose_a_destination_brand_14b305e'), variant: 'warning' });
       return;
     }
     await runSingleItemBulk({
       actionId: 'workflow-bulk:copy',
-      successVerb: 'copied',
+      action: 'copy',
       ids: Array.from(checkedWorkflowIds),
       buildBody: (workflowId) => ({
         action: 'duplicate_to_brand',
@@ -1021,7 +1051,7 @@ export function AdminUserList({
   async function handleBulkPromote() {
     await runSingleItemBulk({
       actionId: 'workflow-bulk:promote',
-      successVerb: 'promoted to the global library',
+      action: 'promote',
       ids: Array.from(checkedWorkflowIds),
       buildBody: (workflowId) => ({ action: 'promote_to_global', workflowId }),
     });
@@ -1029,12 +1059,12 @@ export function AdminUserList({
 
   async function handleBulkAssignToBrand() {
     if (!targetBrandId) {
-      show({ title: 'Choose a destination brand', variant: 'warning' });
+      show({ title: uiText('choose_a_destination_brand_14b305e'), variant: 'warning' });
       return;
     }
     await runSingleItemBulk({
       actionId: 'workflow-bulk:assign',
-      successVerb: 'assigned to the brand canvas',
+      action: 'assign',
       ids: Array.from(checkedWorkflowIds),
       buildBody: (workflowId) => ({
         action: 'migrate_global_to_brand',
@@ -1048,8 +1078,8 @@ export function AdminUserList({
     const brandId = reportBrandId.trim();
     if (!brandId) {
       show({
-        title: 'Brand ID required',
-        description: 'Select or paste a brand ID first.',
+        title: uiText('brand_id_required_7b8cf5f'),
+        description: uiText('select_or_paste_a_brand_id_first_e7edc93'),
         variant: 'warning',
       });
       return;
@@ -1077,20 +1107,19 @@ export function AdminUserList({
       const result = data ?? { status: 'unknown' };
       setReportSmokeResult(result);
       show({
-        title: send ? 'Smoke email sent' : 'Report is ready',
+        title: send ? uiText('smoke_email_sent_0bea2a1') : uiText('m_df2b4e6675'),
         description: send
           ? result.resendMessageId
-            ? `Resend message ${result.resendMessageId}`
-            : 'Resend accepted the message.'
-          : 'One or more report sections are available.',
+            ? uiText('m_f9d8507aeb', { v0: String(result.resendMessageId) })
+            : uiText('m_320b0a801c')
+          : uiText('one_or_more_report_sections_are_available_e726a3c'),
         variant: 'success',
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to run first value report smoke test.';
+      const message = getUiErrorMessage(error);
       setReportSmokeResult({ status: 'failed', ok: false, error: message });
       show({
-        title: send ? 'Smoke send failed' : 'Smoke validation failed',
+        title: send ? uiText('m_b58c2b5f9f') : uiText('m_6d6959b7c5'),
         description: message,
         variant: 'error',
       });
@@ -1105,42 +1134,53 @@ export function AdminUserList({
         <TabsList className="w-full justify-start overflow-x-auto rounded-md bg-surface p-1">
           <TabsTrigger value="users" className="gap-2">
             <UserCog className="size-4" />
-            Users
+            {uiText('users_6b0cc90')}
           </TabsTrigger>
           <TabsTrigger value="brands" className="gap-2">
             <Building2 className="size-4" />
-            Brands
+            {uiText('brands_ec26be2')}
           </TabsTrigger>
           <TabsTrigger value="workflows" className="gap-2">
             <Library className="size-4" />
-            Workflows
+            {uiText('m_825ce9e97d')}
           </TabsTrigger>
           <TabsTrigger value="audit" className="gap-2">
             <History className="size-4" />
-            Audit
+            {uiText('m_fa1703dd78')}
           </TabsTrigger>
           <TabsTrigger value="reports" className="gap-2">
             <Mail className="size-4" />
-            Reports
+            {uiText('m_88bc3fe3da')}
           </TabsTrigger>
         </TabsList>
         <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4">
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-xs uppercase tracking-[0.16em]">Users</span>
+            <span className="block text-xs uppercase tracking-[0.16em]">
+              {uiText('users_6b0cc90')}
+            </span>
             <strong className="text-base text-foreground">{users.length}</strong> /{' '}
             {totalCountLabel}
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-xs uppercase tracking-[0.16em]">Admins</span>
-            <strong className="text-base text-foreground">{adminCount}</strong> page
+            <span className="block text-xs uppercase tracking-[0.16em]">
+              {uiText('admins_8273a67')}
+            </span>
+            <strong className="text-base text-foreground">{adminCount}</strong>
+            {uiText('m_e7cfb4febc')}
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-xs uppercase tracking-[0.16em]">Brands</span>
-            <strong className="text-base text-foreground">{uniqueBrandCount}</strong> in view
+            <span className="block text-xs uppercase tracking-[0.16em]">
+              {uiText('brands_ec26be2')}
+            </span>
+            <strong className="text-base text-foreground">{uniqueBrandCount}</strong>
+            {uiText('m_4254f5661d')}
           </div>
           <div className="rounded-md border border-subtle bg-surface px-3 py-2">
-            <span className="block text-xs uppercase tracking-[0.16em]">Owners</span>
-            <strong className="text-base text-foreground">{ownerMemberships}</strong> locked
+            <span className="block text-xs uppercase tracking-[0.16em]">
+              {uiText('owners_58f5df9')}
+            </span>
+            <strong className="text-base text-foreground">{ownerMemberships}</strong>
+            {uiText('m_31f7f3c305')}
           </div>
         </div>
       </div>
@@ -1157,15 +1197,21 @@ export function AdminUserList({
           <div className="flex min-w-0 flex-col gap-4 xl:min-h-0">
             <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-base font-semibold text-foreground">User Directory</h2>
+                <h2 className="text-base font-semibold text-foreground">
+                  {uiText('user_directory_f32b19f')}
+                </h2>
                 <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
-                  Showing {users.length} on this page · {totalCountLabel} {totalLabelSuffix}
-                  {isDirectoryUpdating ? ' · Updating...' : null}
+                  {uiText('m_43539d947c', {
+                    shown: users.length,
+                    total: pagination.totalCount,
+                    mode: serverQueryActive ? 'matches' : 'total',
+                    updating: isDirectoryUpdating ? 'yes' : 'no',
+                  })}
                 </p>
               </div>
               <div className="w-full lg:w-[320px]">
                 <Label htmlFor="admin-user-search" className="sr-only">
-                  Search users
+                  {uiText('search_users_e4bb77a')}
                 </Label>
                 <div className="relative">
                   {isDirectoryUpdating ? (
@@ -1175,7 +1221,7 @@ export function AdminUserList({
                   )}
                   <Input
                     id="admin-user-search"
-                    placeholder="Search users by name or email"
+                    placeholder={uiText('search_users_by_name_or_email_8408a13')}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={(event) => {
@@ -1190,7 +1236,7 @@ export function AdminUserList({
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      aria-label="Clear search"
+                      aria-label={uiText('clear_search_3b7ea51')}
                       className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                       onClick={() => {
                         setQuery('');
@@ -1206,10 +1252,9 @@ export function AdminUserList({
 
             <Alert className="border-amber-200 bg-amber-50/60 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
               <ShieldAlert className="size-4" />
-              <AlertTitle>Immediate audited changes</AlertTitle>
+              <AlertTitle>{uiText('immediate_audited_changes_32ff069')}</AlertTitle>
               <AlertDescription>
-                Service-role actions apply immediately. Owner memberships are locked and cannot be
-                removed in this panel.
+                {uiText('service_role_actions_apply_immediately_owner__a665ea8')}
               </AlertDescription>
             </Alert>
 
@@ -1225,10 +1270,12 @@ export function AdminUserList({
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-surface">
                       <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Brands</TableHead>
-                        <TableHead>Role state</TableHead>
-                        <TableHead className="text-right">Primary action</TableHead>
+                        <TableHead>{uiText('user_b512d97')}</TableHead>
+                        <TableHead>{uiText('brands_ec26be2')}</TableHead>
+                        <TableHead>{uiText('role_state_5470cc9')}</TableHead>
+                        <TableHead className="text-right">
+                          {uiText('primary_action_da2eb57')}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1238,7 +1285,9 @@ export function AdminUserList({
                             colSpan={4}
                             className="px-5 py-6 text-sm text-muted-foreground"
                           >
-                            {serverQueryActive ? 'No users match this search.' : 'No users found.'}
+                            {serverQueryActive
+                              ? uiText('no_users_match_this_search_daa4b5d')
+                              : uiText('no_users_found_ce0171e')}
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1250,7 +1299,7 @@ export function AdminUserList({
                           ).length;
                           const brandSummary =
                             memberships.length === 0
-                              ? 'No brand memberships'
+                              ? uiText('no_brand_memberships_ae71bb8')
                               : memberships
                                   .slice(0, 2)
                                   .map(
@@ -1283,7 +1332,7 @@ export function AdminUserList({
                               </TableCell>
                               <TableCell>
                                 <div className="text-sm text-foreground">
-                                  {membershipLabel(memberships.length)}
+                                  {membershipLabel(memberships.length, uiText)}
                                 </div>
                                 <p
                                   title={brandSummary}
@@ -1294,15 +1343,18 @@ export function AdminUserList({
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  {user.isAdmin ? <Badge variant="secondary">Admin</Badge> : null}
+                                  {user.isAdmin ? (
+                                    <Badge variant="secondary">{uiText('admin_c1c224b')}</Badge>
+                                  ) : null}
                                   {ownerCount > 0 ? (
                                     <Badge variant="outline" className="gap-1">
                                       <Lock className="size-3" />
-                                      {ownerCount} owner
+                                      {ownerCount}
+                                      {uiText('m_a81ee2bd70')}
                                     </Badge>
                                   ) : null}
                                   {memberships.length === 0 && (
-                                    <Badge variant="outline">No brands</Badge>
+                                    <Badge variant="outline">{uiText('no_brands_726698d')}</Badge>
                                   )}
                                 </div>
                               </TableCell>
@@ -1316,10 +1368,12 @@ export function AdminUserList({
                                     void handleImpersonate(user);
                                   }}
                                 >
-                                  {pendingActions[`impersonate:${user.id}`] ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                  ) : null}
-                                  Impersonate
+                                  {uiText.rich('sentence_8fe535707c22', {
+                                    v0: () =>
+                                      pendingActions[`impersonate:${user.id}`] ? (
+                                        <Loader2 className="size-4 animate-spin" />
+                                      ) : null,
+                                  })}
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -1334,7 +1388,7 @@ export function AdminUserList({
 
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
-                Page {safePage} of {totalPages}
+                {uiText.rich('sentence_4e58978f3adf', { v0: () => safePage, v1: () => totalPages })}
               </p>
               <Pagination className="w-auto justify-end">
                 <PaginationContent className="flex-wrap justify-end">
@@ -1345,7 +1399,7 @@ export function AdminUserList({
                       onClick={(event) => handlePageNavigation(event, 1)}
                       disabled={!pagination.hasPrevPage || isNavPending}
                     >
-                      First
+                      {uiText('first_a151ceb')}
                     </PaginationLink>
                   </PaginationItem>
                   <PaginationItem>
@@ -1391,7 +1445,7 @@ export function AdminUserList({
                       onClick={(event) => handlePageNavigation(event, totalPages)}
                       disabled={!pagination.hasNextPage || totalPages <= 1 || isNavPending}
                     >
-                      Last
+                      {uiText('last_eb970eb')}
                     </PaginationLink>
                   </PaginationItem>
                 </PaginationContent>
@@ -1410,13 +1464,15 @@ export function AdminUserList({
                       </h3>
                       <p className="truncate text-xs text-muted-foreground">{selectedUser.email}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Created {formatDate(selectedUser.createdAt)}
+                        {uiText.rich('sentence_26f8d4972219', {
+                          v0: () => formatDate(selectedUser.createdAt, uiLocale, uiText),
+                        })}
                       </p>
                     </div>
                     {selectedUser.isAdmin ? (
-                      <Badge variant="secondary">Admin</Badge>
+                      <Badge variant="secondary">{uiText('admin_c1c224b')}</Badge>
                     ) : (
-                      <Badge variant="outline">User</Badge>
+                      <Badge variant="outline">{uiText('user_b512d97')}</Badge>
                     )}
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1426,10 +1482,12 @@ export function AdminUserList({
                       disabled={Boolean(pendingActions[`impersonate:${selectedUser.id}`])}
                       onClick={() => void handleImpersonate(selectedUser)}
                     >
-                      {pendingActions[`impersonate:${selectedUser.id}`] ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : null}
-                      Impersonate
+                      {uiText.rich('sentence_8fe535707c22', {
+                        v0: () =>
+                          pendingActions[`impersonate:${selectedUser.id}`] ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : null,
+                      })}
                     </Button>
                     <AdminActionConfirmation
                       trigger={
@@ -1441,12 +1499,18 @@ export function AdminUserList({
                           {pendingActions[`admin:${selectedUser.id}`] ? (
                             <Loader2 className="size-4 animate-spin" />
                           ) : null}
-                          {selectedUser.isAdmin ? 'Revoke admin' : 'Make admin'}
+                          {selectedUser.isAdmin ? uiText('m_14652b698d') : uiText('m_84ec1c9afa')}
                         </Button>
                       }
-                      title={selectedUser.isAdmin ? 'Revoke admin access?' : 'Grant admin access?'}
-                      description="This action is immediate and will be written to the admin audit log."
-                      confirmLabel={selectedUser.isAdmin ? 'Revoke admin' : 'Make admin'}
+                      title={
+                        selectedUser.isAdmin
+                          ? uiText('revoke_admin_access_83d3315')
+                          : uiText('grant_admin_access_996c04c')
+                      }
+                      description={uiText('this_action_is_immediate_and_will_be_written__a91f769')}
+                      confirmLabel={
+                        selectedUser.isAdmin ? uiText('m_14652b698d') : uiText('m_84ec1c9afa')
+                      }
                       targetEmail={selectedUser.email}
                       requireTypedEmail={!selectedUser.isAdmin}
                       onConfirm={() => void handleAdminToggle(selectedUser)}
@@ -1462,15 +1526,19 @@ export function AdminUserList({
                             Boolean(pendingActions[`full-access:${selectedUser.id}`])
                           }
                         >
-                          {pendingActions[`full-access:${selectedUser.id}`] ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : null}
-                          Full access for all brands
+                          {uiText.rich('sentence_3485728deb6d', {
+                            v0: () =>
+                              pendingActions[`full-access:${selectedUser.id}`] ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : null,
+                          })}
                         </Button>
                       }
-                      title={`Give every brand of ${selectedUser.email} full access?`}
-                      description={`Turns on every product, Trends Pro and its providers on each of this user's ${membershipLabel(selectedMemberships.length)}, one brand at a time. Stripe and Contract grants stay as they are, and Canvas stays metered. Each change is written to the admin audit log.`}
-                      confirmLabel="Give full access"
+                      title={uiText('m_32caaa0a56', { v0: String(selectedUser.email) })}
+                      description={uiText('m_785b9aeee6', {
+                        v0: String(membershipLabel(selectedMemberships.length, uiText)),
+                      })}
+                      confirmLabel={uiText('m_acc06b922d')}
                       onConfirm={() =>
                         void handleFullAccessForUser(selectedUser, selectedMemberships)
                       }
@@ -1479,7 +1547,7 @@ export function AdminUserList({
                   {fullAccessResults?.userId === selectedUser.id ? (
                     <ul
                       className="mt-3 space-y-1 text-xs"
-                      aria-label="Full access results"
+                      aria-label={uiText('full_access_results_36a1cd8')}
                       data-testid="full-access-results"
                     >
                       {fullAccessResults.results.map((result) => (
@@ -1497,7 +1565,9 @@ export function AdminUserList({
                           <span className="min-w-0">
                             <span className="text-foreground">{result.brandName}</span>{' '}
                             <span className="text-muted-foreground">
-                              {result.ok ? 'ok' : `failed — ${result.message}`}
+                              {result.ok
+                                ? uiText('ok_2689367')
+                                : uiText('m_97072e1d57', { v0: String(result.message) })}
                             </span>
                           </span>
                         </li>
@@ -1508,10 +1578,12 @@ export function AdminUserList({
 
                 <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
                   <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Brand access
+                    {uiText('brand_access_f923b1b')}
                   </h4>
                   {selectedMemberships.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No memberships for this user.</p>
+                    <p className="text-sm text-muted-foreground">
+                      {uiText('no_memberships_for_this_user_46f6ef1')}
+                    </p>
                   ) : (
                     selectedMemberships.map((membership) => {
                       const tierValue = String(membership.brand_tier ?? 0);
@@ -1533,15 +1605,19 @@ export function AdminUserList({
                               </p>
                               <div className="mt-1 flex flex-wrap gap-1.5">
                                 <Badge variant={roleVariant(membership.role)}>
-                                  {membership.role ?? 'unknown'}
+                                  {membership.role ?? uiText('unknown_b23a6a8')}
                                 </Badge>
                                 {billingLive ? null : (
-                                  <Badge variant="outline">Tier {currentTier}</Badge>
+                                  <Badge variant="outline">
+                                    {uiText.rich('sentence_d24576c1199a', {
+                                      v0: () => currentTier,
+                                    })}
+                                  </Badge>
                                 )}
                                 {isOwner ? (
                                   <Badge variant="outline" className="gap-1">
                                     <Lock className="size-3" />
-                                    locked
+                                    {uiText('m_adec79fd87')}
                                   </Badge>
                                 ) : null}
                               </div>
@@ -1564,10 +1640,10 @@ export function AdminUserList({
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="0">Tier 0</SelectItem>
-                                  <SelectItem value="1">Tier 1</SelectItem>
-                                  <SelectItem value="2">Tier 2</SelectItem>
-                                  <SelectItem value="3">Tier 3</SelectItem>
+                                  <SelectItem value="0">{uiText('tier_0_6e1a8c3')}</SelectItem>
+                                  <SelectItem value="1">{uiText('tier_1_c97454a')}</SelectItem>
+                                  <SelectItem value="2">{uiText('tier_2_aa91161')}</SelectItem>
+                                  <SelectItem value="3">{uiText('tier_3_5020877')}</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
@@ -1601,7 +1677,7 @@ export function AdminUserList({
                             {isOwner ? (
                               <Button size="sm" variant="outline" disabled className="gap-2">
                                 <Lock className="size-4" />
-                                Owner locked
+                                {uiText('m_735899a1dd')}
                               </Button>
                             ) : (
                               <AdminActionConfirmation
@@ -1611,17 +1687,22 @@ export function AdminUserList({
                                     variant="destructive"
                                     disabled={Boolean(pendingActions[removeActionId])}
                                   >
-                                    {pendingActions[removeActionId] ? (
-                                      <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="size-4" />
-                                    )}
-                                    Remove access
+                                    {uiText.rich('sentence_3a3421e4f359', {
+                                      v0: () =>
+                                        pendingActions[removeActionId] ? (
+                                          <Loader2 className="size-4 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="size-4" />
+                                        ),
+                                    })}
                                   </Button>
                                 }
-                                title="Remove this brand membership?"
-                                description={`This removes ${selectedUser.email} from ${membership.brand_name ?? 'this brand'} and writes an audit log entry.`}
-                                confirmLabel="Remove access"
+                                title={uiText('remove_this_brand_membership_3c29129')}
+                                description={uiText('m_97209ab326', {
+                                  v0: String(selectedUser.email),
+                                  v1: String(membership.brand_name ?? uiText('this_brand_c31b658')),
+                                })}
+                                confirmLabel={uiText('m_a13a9514cc')}
                                 targetEmail={selectedUser.email}
                                 requireTypedEmail
                                 onConfirm={() => void handleRemoveMember(membership)}
@@ -1636,7 +1717,7 @@ export function AdminUserList({
               </div>
             ) : (
               <div className="p-4 text-sm text-muted-foreground">
-                Select a user to inspect access.
+                {uiText('select_a_user_to_inspect_access_7bf5417')}
               </div>
             )}
           </aside>
@@ -1657,20 +1738,26 @@ export function AdminUserList({
           <div className="min-w-0 space-y-3">
             <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-foreground">Workflow Library</h2>
+                <h2 className="text-base font-semibold text-foreground">
+                  {uiText('workflow_library_861f22e')}
+                </h2>
                 <p className="truncate text-xs text-muted-foreground">
-                  Viewing{' '}
-                  {formatBrandDisambiguationLabel(
-                    brandFilterOptions.find((brand) => brand.id === sourceBrandId) ??
-                      GLOBAL_LIBRARY_BRAND_OPTION,
-                  )}
+                  {uiText.rich('sentence_1310085f6420', {
+                    v0: () =>
+                      formatBrandDisambiguationLabel(
+                        brandFilterOptions.find((brand) => brand.id === sourceBrandId) ?? {
+                          ...GLOBAL_LIBRARY_BRAND_OPTION,
+                          brand_name: uiText('m_061122128b'),
+                        },
+                      ),
+                  })}
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative w-full sm:w-[220px]">
                   <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Search workflows"
+                    placeholder={uiText('search_workflows_e827cf3')}
                     value={workflowQuery}
                     onChange={(event) => setWorkflowQuery(event.target.value)}
                     className="pl-9"
@@ -1682,12 +1769,12 @@ export function AdminUserList({
                     brands={brandFilterOptions}
                     value={sourceBrandId}
                     onChange={setSourceBrandId}
-                    placeholder="Filter by brand"
+                    placeholder={uiText('filter_by_brand_6be6143')}
                   />
                 </div>
                 <Button variant="outline" size="sm" onClick={() => void loadWorkflows()}>
                   <RefreshCw className="size-4" />
-                  Refresh
+                  {uiText('m_56e3badc4e')}
                 </Button>
               </div>
             </div>
@@ -1702,12 +1789,12 @@ export function AdminUserList({
                           checked={allVisibleWorkflowsChecked}
                           onCheckedChange={() => toggleAllVisibleWorkflowsChecked()}
                           disabled={visibleWorkflows.length === 0}
-                          aria-label="Select all visible workflows"
+                          aria-label={uiText('select_all_visible_workflows_0206450')}
                         />
                       </TableHead>
-                      <TableHead>Workflow</TableHead>
-                      <TableHead>Scope</TableHead>
-                      <TableHead>Updated</TableHead>
+                      <TableHead>{uiText('workflow_2e2d5c5')}</TableHead>
+                      <TableHead>{uiText('scope_b073f6c')}</TableHead>
+                      <TableHead>{uiText('updated_3a5ecca')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1717,7 +1804,7 @@ export function AdminUserList({
                           colSpan={4}
                           className="py-8 text-center text-sm text-muted-foreground"
                         >
-                          Loading workflows...
+                          {uiText('loading_workflows_c0a24ee')}
                         </TableCell>
                       </TableRow>
                     ) : visibleWorkflows.length === 0 ? (
@@ -1727,8 +1814,8 @@ export function AdminUserList({
                           className="py-8 text-center text-sm text-muted-foreground"
                         >
                           {workflows.length === 0
-                            ? 'No workflows found.'
-                            : `No workflows match "${workflowQuery}".`}
+                            ? uiText('no_workflows_found_ca97e48')
+                            : uiText('m_053607fe47', { v0: String(workflowQuery) })}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -1743,7 +1830,7 @@ export function AdminUserList({
                             <Checkbox
                               checked={checkedWorkflowIds.has(workflow.id)}
                               onCheckedChange={() => toggleWorkflowChecked(workflow.id)}
-                              aria-label={`Select ${workflow.name}`}
+                              aria-label={uiText('m_0d07636c17', { v0: String(workflow.name) })}
                             />
                           </TableCell>
                           <TableCell>
@@ -1752,7 +1839,7 @@ export function AdminUserList({
                                 {workflow.name}
                               </div>
                               <p className="line-clamp-1 text-xs text-muted-foreground">
-                                {workflow.description ?? 'No description'}
+                                {workflow.description ?? uiText('no_description_bcd8cc5')}
                               </p>
                             </div>
                           </TableCell>
@@ -1760,17 +1847,17 @@ export function AdminUserList({
                             {workflow.visibility === 'global' ? (
                               <Badge variant="secondary" className="gap-1">
                                 <Globe2 className="size-3" />
-                                Global
+                                {uiText('m_5f1184f7df')}
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="gap-1">
                                 <Building2 className="size-3" />
-                                Brand
+                                {uiText('brand_090ed43')}
                               </Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {formatDate(workflow.updated_at)}
+                            {formatDate(workflow.updated_at, uiLocale, uiText)}
                           </TableCell>
                         </TableRow>
                       ))
@@ -1797,41 +1884,45 @@ export function AdminUserList({
                       </h3>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {focusedWorkflow.description ?? 'No description'}
+                      {focusedWorkflow.description ?? uiText('no_description_bcd8cc5')}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-md border border-subtle bg-default/40 p-2">
-                      <span className="block text-muted-foreground">Scope</span>
-                      <strong className="text-foreground">{focusedWorkflow.visibility}</strong>
+                      <span className="block text-muted-foreground">{uiText('scope_b073f6c')}</span>
+                      <strong className="text-foreground">
+                        {focusedWorkflow.visibility === 'global'
+                          ? uiText('m_5f1184f7df')
+                          : uiText('brand_090ed43')}
+                      </strong>
                     </div>
                     <div className="rounded-md border border-subtle bg-default/40 p-2">
-                      <span className="block text-muted-foreground">Nodes</span>
+                      <span className="block text-muted-foreground">{uiText('nodes_7ac3620')}</span>
                       <strong className="text-foreground">{focusedWorkflow.node_count ?? 0}</strong>
                     </div>
                   </div>
                   <Alert className="border-subtle">
                     <Copy className="size-4" />
-                    <AlertTitle>Duplicate policy</AlertTitle>
+                    <AlertTitle>{uiText('duplicate_policy_4f7b2a5')}</AlertTitle>
                     <AlertDescription>
-                      Copy and assign actions save conflicting names as renamed copies. Move
-                      re-creates the workflow under the destination brand and removes the original.
+                      {uiText('copy_and_assign_actions_save_conflicting_name_6c3d898')}
                     </AlertDescription>
                   </Alert>
                   <p className="text-xs text-muted-foreground">
-                    Check this workflow (and any others) in the table to transfer it — the transfer
-                    bar appears at the bottom once at least one is selected.
+                    {uiText('check_this_workflow_and_any_others_in_the_tab_e7f6362')}
                   </p>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Select a workflow to preview it.</p>
+                <p className="text-sm text-muted-foreground">
+                  {uiText('select_a_workflow_to_preview_it_0e0f510')}
+                </p>
               )}
             </div>
 
             {transferResults && transferResults.length > 0 ? (
               <div className="rounded-lg border border-subtle bg-surface p-4">
                 <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Last transfer
+                  {uiText('last_transfer_4ba588b')}
                 </h4>
                 <ul className="mt-2 space-y-2">
                   {transferResults.map((result) => (
@@ -1862,8 +1953,7 @@ export function AdminUserList({
           <div className="sticky bottom-2 z-20 rounded-lg border border-subtle bg-surface p-3 shadow-lg">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="text-sm text-foreground">
-                <strong>{checkedWorkflowIds.size}</strong>{' '}
-                {checkedWorkflowIds.size === 1 ? 'workflow' : 'workflows'} selected
+                {uiText('m_fea1461749', { count: checkedWorkflowIds.size })}
                 {!bulkEligibility.allowed ? (
                   <span className="ml-2 text-xs text-destructive">{bulkEligibility.reason}</span>
                 ) : null}
@@ -1876,7 +1966,7 @@ export function AdminUserList({
                       brands={transferTargetBrands}
                       value={targetBrandId}
                       onChange={setTargetBrandId}
-                      placeholder="Choose destination brand"
+                      placeholder={uiText('choose_destination_brand_3eb2289')}
                     />
                   </div>
                 ) : null}
@@ -1888,17 +1978,21 @@ export function AdminUserList({
                         <Button
                           disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:move'])}
                         >
-                          {pendingActions['workflow-bulk:move'] ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <ArrowRightLeft className="size-4" />
-                          )}
-                          Move to brand
+                          {uiText.rich('sentence_5296add61fa3', {
+                            v0: () =>
+                              pendingActions['workflow-bulk:move'] ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <ArrowRightLeft className="size-4" />
+                              ),
+                          })}
                         </Button>
                       }
-                      title={`Move ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
-                      description={`${checkedWorkflowNamesLabel} will be removed from the current brand and re-created under the destination brand, and the canvas media moves with them so it still renders. This is logged.`}
-                      confirmLabel="Move to brand"
+                      title={uiText('m_7592bcaa87', { count: checkedWorkflows.length })}
+                      description={uiText('m_5b418d7ce7', {
+                        v0: String(checkedWorkflowNamesLabel),
+                      })}
+                      confirmLabel={uiText('m_f6bc4dc039')}
                       onConfirm={() => void handleBulkMove()}
                     />
                     <AdminActionConfirmation
@@ -1907,17 +2001,21 @@ export function AdminUserList({
                           variant="outline"
                           disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:copy'])}
                         >
-                          {pendingActions['workflow-bulk:copy'] ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Copy className="size-4" />
-                          )}
-                          Copy to brand
+                          {uiText.rich('sentence_de01e13eed31', {
+                            v0: () =>
+                              pendingActions['workflow-bulk:copy'] ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Copy className="size-4" />
+                              ),
+                          })}
                         </Button>
                       }
-                      title={`Copy ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
-                      description={`${checkedWorkflowNamesLabel} will be duplicated under the destination brand, along with their own copies of the canvas media. Originals and their media are unaffected.`}
-                      confirmLabel="Copy to brand"
+                      title={uiText('m_abdc66a41f', { count: checkedWorkflows.length })}
+                      description={uiText('m_4a1a99b105', {
+                        v0: String(checkedWorkflowNamesLabel),
+                      })}
+                      confirmLabel={uiText('m_ab6956e9e4')}
                       onConfirm={() => void handleBulkCopy()}
                     />
                     <AdminActionConfirmation
@@ -1926,17 +2024,21 @@ export function AdminUserList({
                           variant="outline"
                           disabled={Boolean(pendingActions['workflow-bulk:promote'])}
                         >
-                          {pendingActions['workflow-bulk:promote'] ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Globe2 className="size-4" />
-                          )}
-                          Promote to global
+                          {uiText.rich('sentence_c9d678a8466c', {
+                            v0: () =>
+                              pendingActions['workflow-bulk:promote'] ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Globe2 className="size-4" />
+                              ),
+                          })}
                         </Button>
                       }
-                      title={`Promote ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
-                      description={`${checkedWorkflowNamesLabel} will be added to the global workflow library.`}
-                      confirmLabel="Promote to global"
+                      title={uiText('m_693ff6c55d', { count: checkedWorkflows.length })}
+                      description={uiText('m_0bb96e49e9', {
+                        v0: String(checkedWorkflowNamesLabel),
+                      })}
+                      confirmLabel={uiText('m_24197af409')}
                       onConfirm={() => void handleBulkPromote()}
                     />
                   </>
@@ -1948,23 +2050,25 @@ export function AdminUserList({
                       <Button
                         disabled={!targetBrandId || Boolean(pendingActions['workflow-bulk:assign'])}
                       >
-                        {pendingActions['workflow-bulk:assign'] ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Building2 className="size-4" />
-                        )}
-                        Assign to brand canvas
+                        {uiText.rich('sentence_30b478ae35ac', {
+                          v0: () =>
+                            pendingActions['workflow-bulk:assign'] ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Building2 className="size-4" />
+                            ),
+                        })}
                       </Button>
                     }
-                    title={`Assign ${checkedWorkflows.length} workflow${checkedWorkflows.length === 1 ? '' : 's'}?`}
-                    description={`${checkedWorkflowNamesLabel} will be copied into the destination brand's canvas workflows, along with their own copies of the canvas media.`}
-                    confirmLabel="Assign to brand canvas"
+                    title={uiText('m_978e9818d4', { count: checkedWorkflows.length })}
+                    description={uiText('m_c2f013f15c', { v0: String(checkedWorkflowNamesLabel) })}
+                    confirmLabel={uiText('m_1dcbb38149')}
                     onConfirm={() => void handleBulkAssignToBrand()}
                   />
                 ) : null}
 
                 <Button variant="ghost" size="sm" onClick={clearCheckedWorkflows}>
-                  Clear
+                  {uiText('clear_83b12c2')}
                 </Button>
               </div>
             </div>
@@ -1979,31 +2083,32 @@ export function AdminUserList({
       >
         <div className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-foreground">Admin Audit Log</h2>
+            <h2 className="text-base font-semibold text-foreground">
+              {uiText('admin_audit_log_1ede0f9')}
+            </h2>
             <p className="text-xs text-muted-foreground">
-              Immutable trail of service-role admin actions. Expand a row for the before/after
-              change.
+              {uiText('immutable_trail_of_service_role_admin_actions_96f64e2')}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-[200px]">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search action or target"
+                placeholder={uiText('search_action_or_target_b9c2cfc')}
                 value={auditSearch}
                 onChange={(event) => setAuditSearch(event.target.value)}
                 className="h-9 pl-9"
-                aria-label="Search the audit log"
+                aria-label={uiText('search_the_audit_log_eb31f4b')}
               />
             </div>
             <div className="relative w-full sm:w-[180px]">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Filter by actor"
+                placeholder={uiText('filter_by_actor_7c3b90e')}
                 value={auditActorQuery}
                 onChange={(event) => setAuditActorQuery(event.target.value)}
                 className="h-9 pl-9"
-                aria-label="Filter the audit log by actor"
+                aria-label={uiText('filter_the_audit_log_by_actor_af40e61')}
               />
             </div>
             <div className="w-full sm:w-[240px]">
@@ -2012,18 +2117,21 @@ export function AdminUserList({
                 brands={auditBrandFilterOptions}
                 value={auditBrandFilter}
                 onChange={handleAuditBrandChange}
-                placeholder="Filter by brand"
+                placeholder={uiText('filter_by_brand_6be6143')}
               />
             </div>
             <Select value={auditActionFilter} onValueChange={handleAuditActionChange}>
-              <SelectTrigger className="h-9 w-[220px]" aria-label="Filter by action">
-                <SelectValue placeholder="All actions" />
+              <SelectTrigger
+                className="h-9 w-[220px]"
+                aria-label={uiText('filter_by_action_ef58fba')}
+              >
+                <SelectValue placeholder={uiText('all_actions_83140cf')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={AUDIT_ACTION_ALL}>All actions</SelectItem>
+                <SelectItem value={AUDIT_ACTION_ALL}>{uiText('all_actions_83140cf')}</SelectItem>
                 {ADMIN_AUDIT_ACTIONS.map((action) => (
                   <SelectItem key={action} value={action}>
-                    {formatAuditActionLabel(action)}
+                    {formatAuditActionLabel(action, uiText)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2034,12 +2142,14 @@ export function AdminUserList({
               onClick={() => void loadAuditEntries(auditPage, auditFilters)}
               disabled={isAuditLoading}
             >
-              {isAuditLoading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-              Refresh
+              {uiText.rich('sentence_33ac68602e96', {
+                v0: () =>
+                  isAuditLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  ),
+              })}
             </Button>
           </div>
         </div>
@@ -2048,23 +2158,23 @@ export function AdminUserList({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8" />
-                <TableHead>Action</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>When</TableHead>
+                <TableHead>{uiText('action_64cff13')}</TableHead>
+                <TableHead>{uiText('target_978354d')}</TableHead>
+                <TableHead>{uiText('status_920e413')}</TableHead>
+                <TableHead>{uiText('when_cf9c7aa')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isAuditLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    Loading audit log...
+                    {uiText('loading_audit_log_76ac988')}
                   </TableCell>
                 </TableRow>
               ) : auditEntries.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    No audit entries for this filter.
+                    {uiText('no_audit_entries_for_this_filter_7d3c04e')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -2073,7 +2183,7 @@ export function AdminUserList({
                   const beforeJson = formatAuditJson(entry.before);
                   const afterJson = formatAuditJson(entry.after);
                   const metadataJson = formatAuditJson(entry.metadata);
-                  const actorLabel = auditActorLabel(entry);
+                  const actorLabel = auditActorLabel(entry, uiText);
                   const actorEmailSecondary =
                     entry.actor_email && entry.actor_email !== actorLabel
                       ? entry.actor_email
@@ -2092,7 +2202,11 @@ export function AdminUserList({
                             size="icon"
                             className="size-6"
                             aria-expanded={isExpanded}
-                            aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                            aria-label={
+                              isExpanded
+                                ? uiText('collapse_details_0b65585')
+                                : uiText('expand_details_957d5d5')
+                            }
                             onClick={(event) => {
                               event.stopPropagation();
                               toggleAuditExpanded(entry.id);
@@ -2107,7 +2221,7 @@ export function AdminUserList({
                         </TableCell>
                         <TableCell className="align-top">
                           <div className="text-sm font-medium text-foreground">
-                            {formatAuditActionLabel(entry.action)}
+                            {formatAuditActionLabel(entry.action, uiText)}
                           </div>
                           <p className="max-w-[220px] truncate text-xs text-muted-foreground">
                             {actorLabel}
@@ -2116,7 +2230,7 @@ export function AdminUserList({
                         <TableCell className="align-top">
                           <div className="text-sm text-foreground">{entry.target_type}</div>
                           <p className="max-w-[320px] truncate font-mono text-xs text-muted-foreground">
-                            {entry.target_id ?? 'none'}
+                            {entry.target_id ?? uiText('none_140bedb')}
                           </p>
                         </TableCell>
                         <TableCell className="align-top">
@@ -2133,7 +2247,7 @@ export function AdminUserList({
                           </Badge>
                         </TableCell>
                         <TableCell className="align-top text-xs text-muted-foreground">
-                          {formatDate(entry.created_at)}
+                          {formatDate(entry.created_at, uiLocale, uiText)}
                         </TableCell>
                       </TableRow>
                       {isExpanded ? (
@@ -2144,7 +2258,7 @@ export function AdminUserList({
                           <TableCell colSpan={5} className="space-y-3 py-3">
                             <dl className="grid gap-2 text-xs sm:grid-cols-2">
                               <div>
-                                <dt className="text-muted-foreground">Actor</dt>
+                                <dt className="text-muted-foreground">{uiText('actor_449995c')}</dt>
                                 <dd className="break-all text-foreground">{actorLabel}</dd>
                                 {actorEmailSecondary ? (
                                   <dd className="break-all text-xs text-muted-foreground">
@@ -2153,29 +2267,35 @@ export function AdminUserList({
                                 ) : null}
                               </div>
                               <div>
-                                <dt className="text-muted-foreground">Request ID</dt>
+                                <dt className="text-muted-foreground">
+                                  {uiText('request_id_d561f52')}
+                                </dt>
                                 <dd className="font-mono break-all text-foreground">
-                                  {entry.request_id ?? 'none'}
+                                  {entry.request_id ?? uiText('none_140bedb')}
                                 </dd>
                               </div>
                               <div>
-                                <dt className="text-muted-foreground">Target</dt>
+                                <dt className="text-muted-foreground">
+                                  {uiText('target_978354d')}
+                                </dt>
                                 <dd className="font-mono break-all text-foreground">
                                   {entry.target_type}
-                                  {entry.target_id ? ` · ${entry.target_id}` : ''}
+                                  {entry.target_id ? <> · {entry.target_id}</> : null}
                                 </dd>
                               </div>
                               <div>
-                                <dt className="text-muted-foreground">Brand profile</dt>
+                                <dt className="text-muted-foreground">
+                                  {uiText('brand_profile_7230926')}
+                                </dt>
                                 <dd className="font-mono break-all text-foreground">
-                                  {entry.brand_profile_id ?? 'none'}
+                                  {entry.brand_profile_id ?? uiText('none_140bedb')}
                                 </dd>
                               </div>
                             </dl>
                             <div className="grid gap-3 lg:grid-cols-2">
                               <div>
                                 <p className="mb-1 text-xs font-medium text-muted-foreground">
-                                  Before
+                                  {uiText('before_9bb7250')}
                                 </p>
                                 <pre className="max-h-64 overflow-auto rounded-md border border-subtle bg-background p-2 text-xs">
                                   {beforeJson ?? '—'}
@@ -2183,7 +2303,7 @@ export function AdminUserList({
                               </div>
                               <div>
                                 <p className="mb-1 text-xs font-medium text-muted-foreground">
-                                  After
+                                  {uiText('after_7b68fe5')}
                                 </p>
                                 <pre className="max-h-64 overflow-auto rounded-md border border-subtle bg-background p-2 text-xs">
                                   {afterJson ?? '—'}
@@ -2193,7 +2313,7 @@ export function AdminUserList({
                             {metadataJson ? (
                               <div>
                                 <p className="mb-1 text-xs font-medium text-muted-foreground">
-                                  Metadata
+                                  {uiText('metadata_9eddf57')}
                                 </p>
                                 <pre className="max-h-64 overflow-auto rounded-md border border-subtle bg-background p-2 text-xs">
                                   {metadataJson}
@@ -2212,8 +2332,10 @@ export function AdminUserList({
           {auditPagination && auditTotalPages > 1 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-subtle p-3">
               <p className="text-xs text-muted-foreground">
-                Page {auditPagination.page} of {auditTotalPages} · {auditPagination.totalCount}{' '}
-                entries
+                {uiText('m_108d9ea56d')}
+                {auditPagination.page}
+                {uiText('m_607f2de6ce')}
+                {auditTotalPages} · {auditPagination.totalCount} {uiText('m_c2e311d614')}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -2222,7 +2344,7 @@ export function AdminUserList({
                   onClick={() => goToAuditPage(Math.max(1, auditPage - 1))}
                   disabled={!auditPagination.hasPrevPage || isAuditLoading}
                 >
-                  Previous
+                  {uiText('previous_a57b08a')}
                 </Button>
                 <Button
                   variant="outline"
@@ -2230,7 +2352,7 @@ export function AdminUserList({
                   onClick={() => goToAuditPage(auditPage + 1)}
                   disabled={!auditPagination.hasNextPage || isAuditLoading}
                 >
-                  Next
+                  {uiText('next_1ff57a2')}
                 </Button>
               </div>
             </div>
@@ -2244,19 +2366,18 @@ export function AdminUserList({
             <CardContent className="space-y-4 p-4">
               <div>
                 <h2 className="text-base font-semibold text-foreground">
-                  First Value Report Smoke Test
+                  {uiText('first_value_report_smoke_test_61ffb99')}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Validate or send the onboarding follow-up email for a specific brand without
-                  waiting for cron.
+                  {uiText('validate_or_send_the_onboarding_follow_up_ema_73178ab')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="first-value-brand-select">Brand</Label>
+                <Label htmlFor="first-value-brand-select">{uiText('brand_090ed43')}</Label>
                 <Select value={reportBrandId || undefined} onValueChange={setReportBrandId}>
                   <SelectTrigger id="first-value-brand-select">
-                    <SelectValue placeholder="Choose a loaded brand" />
+                    <SelectValue placeholder={uiText('choose_a_loaded_brand_c68e8b5')} />
                   </SelectTrigger>
                   <SelectContent>
                     {brands.map((brand) => (
@@ -2269,26 +2390,28 @@ export function AdminUserList({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="first-value-brand-id">Brand ID</Label>
+                <Label htmlFor="first-value-brand-id">{uiText('brand_id_4452264')}</Label>
                 <Input
                   id="first-value-brand-id"
                   value={reportBrandId}
                   onChange={(event) => setReportBrandId(event.target.value)}
-                  placeholder="Paste a brand profile UUID"
+                  placeholder={uiText('paste_a_brand_profile_uuid_cd8eb82')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="first-value-recipient">Recipient override</Label>
+                <Label htmlFor="first-value-recipient">
+                  {uiText('recipient_override_0071f03')}
+                </Label>
                 <Input
                   id="first-value-recipient"
                   type="email"
                   value={reportRecipientEmail}
                   onChange={(event) => setReportRecipientEmail(event.target.value)}
-                  placeholder="Optional: send smoke email to this address"
+                  placeholder={uiText('optional_send_smoke_email_to_this_address_92c69d3')}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave blank to send to the brand owner email stored in permissions.
+                  {uiText('leave_blank_to_send_to_the_brand_owner_email__fa30b45')}
                 </p>
               </div>
 
@@ -2299,24 +2422,28 @@ export function AdminUserList({
                   disabled={isReportSmokeLoading}
                   onClick={() => void handleFirstValueReportSmoke(false)}
                 >
-                  {isReportSmokeLoading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <PlayCircle className="size-4" />
-                  )}
-                  Validate
+                  {uiText.rich('sentence_d3d8d23c6043', {
+                    v0: () =>
+                      isReportSmokeLoading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <PlayCircle className="size-4" />
+                      ),
+                  })}
                 </Button>
                 <Button
                   className="flex-1"
                   disabled={isReportSmokeLoading}
                   onClick={() => void handleFirstValueReportSmoke(true)}
                 >
-                  {isReportSmokeLoading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Mail className="size-4" />
-                  )}
-                  Send smoke email
+                  {uiText.rich('sentence_ad906f311213', {
+                    v0: () =>
+                      isReportSmokeLoading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Mail className="size-4" />
+                      ),
+                  })}
                 </Button>
               </div>
             </CardContent>
@@ -2325,37 +2452,42 @@ export function AdminUserList({
           <Card className="border-subtle bg-surface shadow-sm">
             <CardContent className="space-y-4 p-4">
               <div>
-                <h2 className="text-base font-semibold text-foreground">Smoke Result</h2>
+                <h2 className="text-base font-semibold text-foreground">
+                  {uiText('smoke_result_6f9273a')}
+                </h2>
                 <p className="text-xs text-muted-foreground">
-                  The report can send with any section that has renderable email content. The
-                  snapshot shows ready sections, rendered insight counts, and chart points.
+                  {uiText('the_report_can_send_with_any_section_that_has_548a568')}
                 </p>
               </div>
 
               {!reportSmokeResult ? (
                 <div className="rounded-lg border border-dashed border-subtle p-6 text-sm text-muted-foreground">
-                  Run validation to see section readiness and the report snapshot.
+                  {uiText('run_validation_to_see_section_readiness_and_t_7b900ab')}
                 </div>
               ) : reportSmokeResult.ok === false ? (
                 <Alert variant="destructive">
                   <ShieldAlert className="size-4" />
-                  <AlertTitle>{reportSmokeResult.status ?? 'Report smoke test failed'}</AlertTitle>
+                  <AlertTitle>
+                    {reportSmokeResult.status ?? uiText('report_smoke_test_failed_0c5e576')}
+                  </AlertTitle>
                   <AlertDescription>
                     {reportSmokeResult.error ??
                       reportSmokeResult.missing?.reason ??
-                      'Required report data is missing.'}
+                      uiText('required_report_data_is_missing_b916849')}
                   </AlertDescription>
                 </Alert>
               ) : (
                 <Alert className="border-emerald-200 bg-emerald-50/60 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
                   <CheckCircle2 className="size-4" />
                   <AlertTitle>
-                    {reportSmokeResult.sent ? 'Smoke email sent' : 'Report ready'}
+                    {reportSmokeResult.sent
+                      ? uiText('smoke_email_sent_0bea2a1')
+                      : uiText('report_ready_99e3bb0')}
                   </AlertTitle>
                   <AlertDescription>
                     {reportSmokeResult.resendMessageId
-                      ? `Resend message ID: ${reportSmokeResult.resendMessageId}`
-                      : 'One or more report sections are available.'}
+                      ? uiText('m_3a1d7edc7d', { v0: String(reportSmokeResult.resendMessageId) })
+                      : uiText('one_or_more_report_sections_are_available_e726a3c')}
                   </AlertDescription>
                 </Alert>
               )}
@@ -2380,14 +2512,15 @@ export function AdminUserList({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Copy impersonation link</DialogTitle>
+            <DialogTitle>{uiText('copy_impersonation_link_cb5229d')}</DialogTitle>
             <DialogDescription>
-              Paste this link into a browser to impersonate{' '}
-              {impersonationDialog?.email ?? 'this user'}.
+              {uiText.rich('sentence_4a2e69df7ef4', {
+                v0: () => impersonationDialog?.email ?? uiText('this_user_0913f7b'),
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="impersonation-link">Impersonation link</Label>
+            <Label htmlFor="impersonation-link">{uiText('impersonation_link_9378436')}</Label>
             <Input
               id="impersonation-link"
               value={impersonationDialog?.link ?? ''}
@@ -2402,15 +2535,13 @@ export function AdminUserList({
                 if (!impersonationDialog?.link) return;
                 const copied = await copyImpersonationLinkToClipboard(impersonationDialog.link);
                 show({
-                  title: copied ? 'Link copied' : 'Copy blocked',
-                  description: copied
-                    ? 'The impersonation link is on your clipboard.'
-                    : 'Copy blocked by the browser. Use a different browser or allow clipboard permissions.',
+                  title: copied ? uiText('m_c2e98476ef') : uiText('m_1d219e2bb8'),
+                  description: copied ? uiText('m_7a38ec30aa') : uiText('m_bf97125940'),
                   variant: copied ? 'success' : 'warning',
                 });
               }}
             >
-              Copy link
+              {uiText('copy_link_dbf362d')}
             </Button>
           </DialogFooter>
         </DialogContent>

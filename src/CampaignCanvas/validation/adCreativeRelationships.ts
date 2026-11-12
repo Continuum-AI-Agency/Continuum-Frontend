@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import type { AdData, CampaignCanvasEdge, CampaignCanvasNode, CreativeData } from '../types';
 import { isAdFormatCompatibleWithCreativeType } from '../types/adCreativeCompatibility';
 
@@ -20,10 +24,12 @@ function isCreativeNode(
   return node.type === 'creative';
 }
 
-function getErrorMessage(issue: RelationshipIssue): string {
+function getErrorMessage(issue: RelationshipIssue, uiTranslate?: ScaleCopy): string {
   const adFormat = issue.adFormat ?? 'IMAGE';
   const assetType = (issue.assetType ?? 'image').toUpperCase();
-  return `${relationshipErrorPrefix}: ${assetType} creative is not supported by ${adFormat} ad format.`;
+  return uiTranslate
+    ? uiTranslate('canvasCompatibility',{asset:assetType,format:adFormat})
+    : `${relationshipErrorPrefix}: ${assetType} creative is not supported by ${adFormat} ad format.`;
 }
 
 function getRelationshipErrorsForNode(
@@ -33,7 +39,7 @@ function getRelationshipErrorsForNode(
   const retainedErrors = (existingErrors ?? []).filter(
     (error) => !error.startsWith(relationshipErrorPrefix),
   );
-  const relationshipErrors = issues.map(getErrorMessage);
+  const relationshipErrors = issues.map((issue) => getErrorMessage(issue));
   return [...retainedErrors, ...relationshipErrors];
 }
 

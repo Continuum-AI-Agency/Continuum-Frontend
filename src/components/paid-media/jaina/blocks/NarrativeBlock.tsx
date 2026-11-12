@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import type { NarrativeBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
@@ -94,6 +95,7 @@ function NarrativeThreeBoxes({
 }
 
 export default function NarrativeBlock({ block, isStreaming }: NarrativeBlockProps) {
+  const uiText = useTranslations('scale');
   const three = narrativeThreeOf(block);
   // A reading in one body is one neutral module; a three-box reading is three modules, so
   // the block around them takes no fill.
@@ -121,7 +123,7 @@ export default function NarrativeBlock({ block, isStreaming }: NarrativeBlockPro
               <li
                 key={index}
                 className="flex gap-2.5 py-1"
-                title={`${highlight.category || 'Highlight'}: ${JUDGEMENT_LABEL[judgement]}`}
+                title={`${highlight.category || uiText('highlight_07ccd15')}: ${JUDGEMENT_LABEL[judgement]}`}
               >
                 <span
                   aria-hidden="true"

@@ -2,6 +2,7 @@
 
 import type { ShaderStackV1 } from '@continuum/contracts';
 import { Loader2, Play } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Video } from '@/components/ui/video';
 import { signHyperframeAsset } from '@/lib/organic/hyperframeSign';
@@ -39,6 +40,7 @@ export function HyperFramePlayer({
   draft: OrganicCalendarDraft;
   brandId: string;
 }) {
+  const uiText = useTranslations('organic');
   const hyperframe = draft.mediaSuggestion?.hyperframe ?? null;
   const coverUrl = resolveCoverUrl(draft);
   const mp4Status = hyperframe?.mp4Status ?? null;
@@ -116,7 +118,7 @@ export function HyperFramePlayer({
             'group absolute inset-0 flex items-center justify-center',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           )}
-          aria-label={`Play HyperFrame: ${draft.title}`}
+          aria-label={uiText('playHyperFrame', { title: draft.title })}
         >
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -146,7 +148,7 @@ export function HyperFramePlayer({
 
       {state !== 'playing' && mp4Status === 'failed' ? (
         <p className="absolute inset-x-0 bottom-0 bg-black/70 px-3 py-1.5 text-center text-xs text-white">
-          {hyperframe?.error ?? 'The film did not render.'}
+          {hyperframe?.error ?? uiText('the_film_did_not_render_1cc4b65')}
         </p>
       ) : null}
     </div>

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import * as React from 'react';
-
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
 } from '@/components/organic/primitives/types';
+import { renderHook } from '@/i18n/__tests__/render';
 
 // PP-L2-planner-draft-autosave-fires-from-approvals: hydrating the planner used to
 // PATCH every manual draft straight back to organic_calendar_drafts because the

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Settings → Projects: the create-and-manage surface for the sub-brand context scope.
 //
@@ -19,6 +20,8 @@ import { ProjectForm } from './ProjectForm';
 type Screen = { kind: 'list' } | { kind: 'form'; project: Project | null };
 
 export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
+  const tUi = useTranslations('settings');
+
   // Reusing the existing session hook rather than adding a second way to ask who is signed
   // in. Only `user.id` is read here; the avatar work it also does is already paid for
   // elsewhere on this page.
@@ -78,7 +81,7 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
           className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back to projects
+          {tUi('m_0559813da2')}
         </button>
         <ProjectForm
           brandId={brandId}
@@ -99,18 +102,18 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
         onClick={() => setScreen({ kind: 'form', project: null })}
       >
         <Plus className="h-3.5 w-3.5" />
-        New project
+        {tUi('m_e5bcbe241f')}
       </Button>
 
       {isLoading ? (
-        <p className="px-0.5 text-sm text-muted-foreground">Loading projects…</p>
+        <p className="px-0.5 text-sm text-muted-foreground">{tUi('m_b8f7bb7e49')}</p>
       ) : isError ? (
-        <p className="px-0.5 text-sm text-destructive">Could not load projects.</p>
+        <p className="px-0.5 text-sm text-destructive">{tUi('m_52d2b82e78')}</p>
       ) : (
         <>
           {mine.length > 0 ? (
             <ProjectRows
-              heading="Led by you"
+              heading={tUi('m_daf262b7ed')}
               projects={mine}
               emptyLabel=""
               busyId={busyId}
@@ -125,13 +128,9 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
           {mine.length === 0 || theirs.length > 0 ? (
             <ProjectRows
               // Only worth a second heading once there is something to contrast it with.
-              heading={mine.length > 0 ? 'Other projects' : 'Projects'}
+              heading={mine.length > 0 ? tUi('m_193c99c12e') : tUi('m_53e890d5f0')}
               projects={theirs}
-              emptyLabel={
-                mine.length > 0
-                  ? ''
-                  : 'No projects yet. Create one to scope a direction — a brief, a colour, and the ad accounts it covers.'
-              }
+              emptyLabel={mine.length > 0 ? '' : tUi('m_cf726f2de3')}
               busyId={busyId}
               currentUserId={user?.id ?? null}
               onEditAction={(project) => setScreen({ kind: 'form', project })}
@@ -141,7 +140,7 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
           ) : null}
           {archived.length > 0 ? (
             <ProjectRows
-              heading="Archived"
+              heading={tUi('m_eddc813f35')}
               projects={archived}
               emptyLabel=""
               busyId={busyId}
@@ -165,13 +164,15 @@ export function ProjectsSettingsSection({ brandId }: { brandId: string }) {
  * is what makes a scope rule safe to have, not the rule alone.
  */
 function ProjectWindowBadge({ project }: { project: Project }) {
+  const tUi = useTranslations('settings');
+
   const state = projectTimeState(project, isoToday());
   if (state === 'live') return null;
   return (
     <span className="rounded-full border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
       {state === 'ended'
-        ? `Ended ${project.endsOn} — brief not sent to the agent`
-        : `Starts ${project.startsOn} — brief not sent to the agent yet`}
+        ? tUi('m_6def3b7237', { v0: String(project.endsOn) })
+        : tUi('m_1e97c4d5f3', { v0: String(project.startsOn) })}
     </span>
   );
 }
@@ -195,6 +196,8 @@ function ProjectRows({
   onStatusAction: (project: Project) => void;
   onLeadAction?: (project: Project, lead: string | null) => void;
 }) {
+  const tUi = useTranslations('settings');
+
   const archivedGroup = heading === 'Archived';
 
   return (
@@ -218,14 +221,17 @@ function ProjectRows({
               <span className="flex items-center gap-2">
                 <ProjectChip project={project} />
                 {archivedGroup ? (
-                  <span className="text-xs text-muted-foreground">Archived</span>
+                  <span className="text-xs text-muted-foreground">{tUi('m_eddc813f35')}</span>
                 ) : (
                   <ProjectWindowBadge project={project} />
                 )}
               </span>
               <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                 {project.brief ??
-                  `${project.adAccountIds.length} ad accounts · ${project.campaignIds.length} campaigns`}
+                  tUi('m_a01325e613', {
+                    v0: project.adAccountIds.length,
+                    v1: project.campaignIds.length,
+                  })}
               </span>
             </button>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -235,8 +241,8 @@ function ProjectRows({
                   disabled={busyId === project.id}
                   aria-label={
                     project.leadUserId === currentUserId
-                      ? `Step down as lead of ${project.name}`
-                      : `Take the lead of ${project.name}`
+                      ? tUi('m_30183bcef3', { v0: String(project.name) })
+                      : tUi('m_94eb447225', { v0: String(project.name) })
                   }
                   onClick={() =>
                     onLeadAction(
@@ -246,12 +252,12 @@ function ProjectRows({
                   }
                   className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 >
-                  {project.leadUserId === currentUserId ? 'You lead' : 'Take lead'}
+                  {project.leadUserId === currentUserId ? tUi('m_e7571a9c21') : tUi('m_0e06c71351')}
                 </button>
               ) : null}
               <button
                 type="button"
-                aria-label={`Edit ${project.name}`}
+                aria-label={tUi('m_a9abc6a7cc', { v0: String(project.name) })}
                 onClick={() => onEditAction(project)}
                 className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               >
@@ -259,7 +265,10 @@ function ProjectRows({
               </button>
               <button
                 type="button"
-                aria-label={`${archivedGroup ? 'Restore' : 'Archive'} ${project.name}`}
+                aria-label={tUi('m_a79fb214ea', {
+                  v0: String(archivedGroup ? 'Restore' : 'Archive'),
+                  v1: String(project.name),
+                })}
                 disabled={busyId === project.id}
                 onClick={() => onStatusAction(project)}
                 className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-40"

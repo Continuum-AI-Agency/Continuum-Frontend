@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 global.getComputedStyle = global.window.getComputedStyle.bind(global.window);
 (global as { MutationObserver?: unknown }).MutationObserver = window.MutationObserver;
@@ -265,7 +271,7 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     ).toBeDefined();
   });
 
-  it('shows why a draft was refused and invents no guide in its place', async () => {
+  it('shows localized failure guidance and invents no guide in its place', async () => {
     draftPipelineGuide.mockImplementationOnce(async () => {
       throw new Error('draft unavailable');
     });
@@ -277,8 +283,8 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
-    // The refusal is shown as-is; no generic "Supply X as text" guide is invented in its place.
-    await screen.findByText('draft unavailable');
+    // Unknown provider diagnostics stay out of the UI; a refusal never invents a guide.
+    await screen.findByText('An unexpected error occurred. Please try again.');
     expect(screen.queryByLabelText('Use when · one per line')).toBeNull();
     expect(screen.queryByText(/Supply/)).toBeNull();
     expect(

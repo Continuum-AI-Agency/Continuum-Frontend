@@ -1,4 +1,6 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 // A gated Jaina tool call opened by a BUTTON, not by a model turn.
 //
@@ -20,8 +22,8 @@ import type {
 } from '@continuum/contracts';
 import { useCallback, useMemo, useState } from 'react';
 import { useJainaChat } from '@/hooks/useJainaChat';
-import { type JainaOperatorAction, jainaOperatorActionSchema } from '@/lib/jaina/schemas';
 import { refusalReasonOf } from '@/lib/jaina/operatorOutcome';
+import { type JainaOperatorAction, jainaOperatorActionSchema } from '@/lib/jaina/schemas';
 import { approvalsOf, textOf, toolResultsOf } from '@/lib/jaina/uiMessageProjection';
 
 export type OperatorActionRequest = JainaOperatorAction & {
@@ -139,6 +141,8 @@ export function operatorActionStateOf({
 }
 
 export function useJainaOperatorAction({ brandId, adAccountId, sessionId }: Options) {
+  const commonText = useTranslations('common');
+  const formatUiError = useUiErrorMessage();
   const chat = useJainaChat({ sessionId });
   const { messages, status, sendTurn } = chat;
 
@@ -168,7 +172,7 @@ export function useJainaOperatorAction({ brandId, adAccountId, sessionId }: Opti
   const run = useCallback(
     (request: OperatorActionRequest) => {
       if (!adAccountId) {
-        setError('Select an ad account first.');
+        setError(commonText('operatorSelectAccount'));
         setFirstMessage(messages.length);
         return;
       }
@@ -181,7 +185,7 @@ export function useJainaOperatorAction({ brandId, adAccountId, sessionId }: Opti
         input: request.input,
       });
       if (!parsed.success) {
-        setError(parsed.error.issues[0]?.message ?? 'This action is not valid for that row.');
+        setError(commonText('operatorInvalidRow'));
         return;
       }
       setError(null);
@@ -189,10 +193,10 @@ export function useJainaOperatorAction({ brandId, adAccountId, sessionId }: Opti
         ...baseTurn(),
         query: request.displayText,
         operatorAction: parsed.data,
-        onDispatchError: (message) => setError(message),
+        onDispatchError: (message) => setError(formatUiError(message)),
       });
     },
-    [adAccountId, baseTurn, messages.length, sendTurn],
+    [adAccountId, baseTurn, messages.length, sendTurn, commonText, formatUiError],
   );
 
   const decide = useCallback(
@@ -214,11 +218,11 @@ export function useJainaOperatorAction({ brandId, adAccountId, sessionId }: Opti
           // Roll the optimistic decision back: a card reading "Approved" for a decision that
           // never arrived is the exact silence the gate exists to prevent.
           setDecision(null);
-          setError(message);
+          setError(formatUiError(message));
         },
       });
     },
-    [baseTurn, decision, sendTurn, state.approval],
+    [baseTurn, decision, sendTurn, state.approval, formatUiError],
   );
 
   const reset = useCallback(() => {

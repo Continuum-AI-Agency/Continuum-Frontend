@@ -11,6 +11,7 @@ import {
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 import {
   AlertDialog,
@@ -57,6 +58,7 @@ import {
 import {
   type CapiPanelProps,
   capiErrorMessage,
+  capiIssueMessage,
   leafPaths,
   nowSeconds,
   sampleWebhookBody,
@@ -68,6 +70,7 @@ import {
 export const capiIngestUrl = (publicId: string) => getApiUrl(`${CAPI_ROUTES.hooks}/${publicId}`);
 
 export function CapiSourcesPanel(props: CapiPanelProps) {
+  const uiText = useTranslations('scale');
   const { brandId } = props;
   const sources = useQuery({
     queryKey: capiQueryKeys.sources(brandId),
@@ -76,16 +79,18 @@ export function CapiSourcesPanel(props: CapiPanelProps) {
   });
   return (
     <Panel
-      title="Webhook sources"
-      description="Named inbound URLs your CRM, form tool or booking app posts conversions to."
+      title={uiText('webhook_sources_7ae1e38')}
+      description={uiText('named_inbound_urls_your_crm_form_tool_or_book_cceb1a0')}
     >
       <CreateSourceForm {...props} />
       {sources.isPending ? (
         <Skeleton className="h-16 w-full" />
       ) : sources.isError ? (
-        <PanelError message={capiErrorMessage(sources.error, 'Could not load webhook sources.')} />
+        <PanelError
+          message={capiErrorMessage(sources.error, 'Could not load webhook sources.', uiText)}
+        />
       ) : sources.data.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No webhook sources yet.</p>
+        <p className="text-xs text-muted-foreground">{uiText('no_webhook_sources_yet_db0dd4a')}</p>
       ) : (
         <div className="space-y-2">
           {sources.data.map((source) => (
@@ -100,6 +105,7 @@ export function CapiSourcesPanel(props: CapiPanelProps) {
 type Created = { source: CapiSource; signingSecret: string };
 
 function CreateSourceForm({ brandId, readOnly, onForbidden }: CapiPanelProps) {
+  const uiText = useTranslations('scale');
   const queryClient = useQueryClient();
   const nameId = useId();
   const eventId = useId();
@@ -127,7 +133,7 @@ function CreateSourceForm({ brandId, readOnly, onForbidden }: CapiPanelProps) {
       setName('');
       await queryClient.invalidateQueries({ queryKey: capiQueryKeys.sources(brandId) });
     } catch (createError) {
-      setError(writeFailure(createError, onForbidden, 'Could not create this source.'));
+      setError(writeFailure(createError, onForbidden, 'Could not create this source.', uiText));
     } finally {
       setBusy(false);
     }
@@ -140,18 +146,18 @@ function CreateSourceForm({ brandId, readOnly, onForbidden }: CapiPanelProps) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor={nameId}>Source name</Label>
+          <Label htmlFor={nameId}>{uiText('source_name_1939968')}</Label>
           <Input
             id={nameId}
             className="w-48"
             value={name}
-            placeholder="HubSpot closed-won"
+            placeholder={uiText('hubspot_closed_won_7ebc594')}
             disabled={readOnly || busy}
             onChange={(event) => setName(event.target.value)}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={eventId}>Default event name</Label>
+          <Label htmlFor={eventId}>{uiText('default_event_name_77341f5')}</Label>
           <EventNameInput
             id={eventId}
             value={eventName}
@@ -160,7 +166,7 @@ function CreateSourceForm({ brandId, readOnly, onForbidden }: CapiPanelProps) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Action source</Label>
+          <Label>{uiText('action_source_771ead1')}</Label>
           <ActionSourceSelect
             value={actionSource}
             onChange={setActionSource}
@@ -172,13 +178,13 @@ function CreateSourceForm({ brandId, readOnly, onForbidden }: CapiPanelProps) {
           onCheckedChange={setRequireSignature}
           disabled={readOnly || busy}
         >
-          Require signature
+          {uiText('require_signature_739dbe5')}
         </SwitchField>
         <Button
           disabled={readOnly || busy || !name.trim() || !eventName.trim()}
           onClick={() => void create()}
         >
-          Create source
+          {uiText('create_source_020457f')}
         </Button>
       </div>
       <PanelError message={error} />
@@ -187,6 +193,7 @@ function CreateSourceForm({ brandId, readOnly, onForbidden }: CapiPanelProps) {
 }
 
 function CreatedSource({ created, onDismiss }: { created: Created; onDismiss: () => void }) {
+  const uiText = useTranslations('scale');
   const { source, signingSecret } = created;
   const url = capiIngestUrl(source.publicId);
   const [signed, setSigned] = useState<{ at: number; curl: string } | null>(null);
@@ -207,34 +214,40 @@ function CreatedSource({ created, onDismiss }: { created: Created; onDismiss: ()
   return (
     <RevealOnceSecret
       secret={signingSecret}
-      subject={`source “${source.name}”`}
+      subject={uiText('capiRevealSubject', { kind: 'source', name: source.name })}
       onDismiss={onDismiss}
     >
       <div className="space-y-1">
-        <p className="text-xs font-medium">Ingest URL</p>
+        <p className="text-xs font-medium">{uiText('ingest_url_55c4ce6')}</p>
         <CopyBlock value={url} label="URL" />
       </div>
       <div className="space-y-1">
-        <p className="text-xs font-medium">Unsigned (the URL is the credential)</p>
+        <p className="text-xs font-medium">
+          {uiText('unsigned_the_url_is_the_credential_165b71c')}
+        </p>
         {source.requireSignature ? (
-          <p className="text-xs">This source requires a signature, so it refuses this one.</p>
+          <p className="text-xs">
+            {uiText('this_source_requires_a_signature_so_it_refuse_0ccfb3f')}
+          </p>
         ) : null}
-        <CopyBlock value={unsignedCurl(url, body)} label="Unsigned curl" />
+        <CopyBlock value={unsignedCurl(url, body)} label={uiText('unsigned_curl_07e8327')} />
       </div>
       <div className="space-y-1">
         <p className="text-xs font-medium">
-          Signed (Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature)
+          {uiText('signed_standard_webhooks_webhook_id_webhook_t_8848ed9')}
         </p>
         <p className="text-xs">
-          The timestamp is now, so run it within a few minutes or{' '}
-          <button type="button" className="underline" onClick={sign}>
-            sign again
-          </button>
-          . Sign real requests the same way: base64 HMAC-SHA256 of{' '}
-          <span className="font-mono">id.timestamp.body</span>, keyed by the decoded bytes after{' '}
-          <span className="font-mono">whsec_</span>.
+          {uiText.rich('sentence_ac20fe23fcaf', {
+            v0: () => (
+              <button type="button" className="underline" onClick={sign}>
+                {uiText('sign_again_34f18a4')}
+              </button>
+            ),
+            v1: () => <span className="font-mono">id.timestamp.body</span>,
+            v2: () => <span className="font-mono">whsec_</span>,
+          })}
         </p>
-        {signed ? <CopyBlock value={signed.curl} label="Signed curl" /> : null}
+        {signed ? <CopyBlock value={signed.curl} label={uiText('signed_curl_6fe6055')} /> : null}
       </div>
     </RevealOnceSecret>
   );
@@ -246,6 +259,8 @@ function SourceRow({
   readOnly,
   onForbidden,
 }: CapiPanelProps & { source: CapiSource }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const queryClient = useQueryClient();
   const [mapping, setMapping] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -260,7 +275,7 @@ function SourceRow({
       await action();
       await queryClient.invalidateQueries({ queryKey: capiQueryKeys.sources(brandId) });
     } catch (writeError) {
-      setError(writeFailure(writeError, onForbidden, fallback));
+      setError(writeFailure(writeError, onForbidden, fallback, uiText));
     } finally {
       setBusy(false);
     }
@@ -273,16 +288,23 @@ function SourceRow({
           <p className="truncate text-sm font-medium">{source.name}</p>
           <p className="text-xs text-muted-foreground">
             {source.eventName} · {ACTION_SOURCE_LABELS[source.actionSource]} ·{' '}
-            {mappedCount ? `${mappedCount} mapped fields` : 'native format'} ·{' '}
+            {mappedCount
+              ? uiText('template_8877f77d012e', { count: mappedCount })
+              : uiText('native_format_7fab526')}{' '}
+            ·{' '}
             {source.lastReceivedAt
-              ? `last received ${new Date(source.lastReceivedAt).toLocaleString()}`
-              : 'nothing received yet'}
+              ? uiText('template_7a80ddde286a', {
+                  v0: new Date(source.lastReceivedAt).toLocaleString(uiLocale),
+                })
+              : uiText('nothing_received_yet_da85c28')}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {source.requireSignature ? <Badge variant="outline">Signed only</Badge> : null}
+          {source.requireSignature ? (
+            <Badge variant="outline">{uiText('signed_only_a0b37d7')}</Badge>
+          ) : null}
           <Switch
-            aria-label={`${source.name} enabled`}
+            aria-label={uiText('template_591872fa0a4c', { v0: source.name })}
             checked={source.enabled}
             disabled={readOnly || busy}
             onCheckedChange={(enabled) =>
@@ -293,7 +315,7 @@ function SourceRow({
             }
           />
           <Button size="sm" variant="outline" onClick={() => setMapping((open) => !open)}>
-            {mapping ? 'Close mapping' : 'Map fields'}
+            {mapping ? uiText('close_mapping_b59d773') : uiText('map_fields_78611a0')}
           </Button>
           <AlertDialog>
             <AlertDialogTrigger
@@ -303,7 +325,7 @@ function SourceRow({
                   variant="ghost"
                   className="size-7"
                   disabled={readOnly || busy}
-                  aria-label={`Delete ${source.name}`}
+                  aria-label={uiText('template_3468c78743f0', { v0: source.name })}
                 >
                   <Trash2 aria-hidden="true" />
                 </Button>
@@ -311,13 +333,15 @@ function SourceRow({
             />
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete “{source.name}”?</AlertDialogTitle>
+                <AlertDialogTitle>
+                  {uiText.rich('sentence_8c6c8ffd09eb', { v0: source.name })}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  Its URL stops accepting events immediately. Past deliveries stay in the list.
+                  {uiText('its_url_stops_accepting_events_immediately_pa_09a90b8')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Keep it</AlertDialogCancel>
+                <AlertDialogCancel>{uiText('keep_it_fdce5da')}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() =>
                     void write(
@@ -326,7 +350,7 @@ function SourceRow({
                     )
                   }
                 >
-                  Delete source
+                  {uiText('delete_source_26f4130')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -386,6 +410,7 @@ export function FieldMapEditor({
   /** Re-reads the source; resolves to what its URL last received (redacted), or null. */
   onLoadLastSample: () => Promise<unknown>;
 }) {
+  const uiText = useTranslations('scale');
   const sampleId = useId();
   const [sampleText, setSampleText] = useState(() =>
     source.lastSample ? sampleJson(source.lastSample) : '',
@@ -427,23 +452,21 @@ export function FieldMapEditor({
   return (
     <div className="space-y-3 border-t pt-3">
       <p className="text-xs text-muted-foreground">
-        An empty map means the sender posts Continuum&rsquo;s native format (
-        <span className="font-mono">{'{ events: [...] }'}</span>). Map fields when the sender has
-        its own shape: send one test from it to this URL and load it here (values arrive redacted),
-        or paste one of its payloads, then pick where each field lives. Add{' '}
-        <span className="font-mono">?test=1</span> to the URL to send a mapped payload as a test.
+        {uiText.rich('sentence_c4c4b0f97934', {
+          v0: () => <span className="font-mono">{'{ events: [...] }'}</span>,
+          v1: () => <span className="font-mono">?test=1</span>,
+        })}
       </p>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <Label htmlFor={sampleId}>Sample payload (JSON)</Label>
+          <Label htmlFor={sampleId}>{uiText('sample_payload_json_2560682')}</Label>
           <Button size="sm" variant="outline" type="button" onClick={() => void loadLastSample()}>
-            Load last received payload
+            {uiText('load_last_received_payload_3a2b043')}
           </Button>
         </div>
         {nothingReceived ? (
           <p className="text-xs text-muted-foreground">
-            Nothing has arrived yet. Send a test from HubSpot (or your tool) to this URL, then load
-            it.
+            {uiText('nothing_has_arrived_yet_send_a_test_from_hubs_2bd80cb')}
           </p>
         ) : null}
         <Textarea
@@ -454,7 +477,9 @@ export function FieldMapEditor({
           placeholder='{"contact": {"email": "ada@example.com"}, "deal": {"amount": 1200}}'
           onChange={(event) => setSampleText(event.target.value)}
         />
-        {sample && !sample.ok ? <PanelError message="That is not valid JSON." /> : null}
+        {sample && !sample.ok ? (
+          <PanelError message={uiText('that_is_not_valid_json_f520c48')} />
+        ) : null}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {capiMappableFieldSchema.options.map((field) => (
@@ -465,11 +490,15 @@ export function FieldMapEditor({
               onValueChange={(path) => setField(field, path)}
               disabled={readOnly}
             >
-              <SelectTrigger size="sm" className="w-56" aria-label={`${field} path`}>
+              <SelectTrigger
+                size="sm"
+                className="w-56"
+                aria-label={uiText('template_c1406aded858', { v0: field })}
+              >
                 <SelectValue items={pathLabels} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NOT_MAPPED}>Not mapped</SelectItem>
+                <SelectItem value={NOT_MAPPED}>{uiText('not_mapped_9ea5619')}</SelectItem>
                 {paths.map((path) => (
                   <SelectItem key={path} value={path}>
                     {path}
@@ -482,13 +511,19 @@ export function FieldMapEditor({
       </div>
       {preview ? (
         <div className="space-y-1">
-          <p className="text-xs font-medium">Preview: what this payload becomes</p>
+          <p className="text-xs font-medium">
+            {uiText('preview_what_this_payload_becomes_831a520')}
+          </p>
           {preview.ok ? (
             <pre className="overflow-x-auto rounded bg-muted p-2 text-xs">
               {JSON.stringify(preview.event, null, 2)}
             </pre>
           ) : (
-            preview.issues.map((issue) => <PanelError key={issue} message={issue} />)
+            (
+              preview.issueDetails?.map((issue) => capiIssueMessage(issue, uiText)) ?? [
+                capiIssueMessage({}, uiText),
+              ]
+            ).map((issue) => <PanelError key={issue} message={issue} />)
           )}
         </div>
       ) : null}
@@ -501,7 +536,7 @@ export function FieldMapEditor({
           setSaving(false);
         }}
       >
-        {saving ? 'Saving…' : 'Save mapping'}
+        {saving ? uiText('saving_23e3929') : uiText('save_mapping_bb40e39')}
       </Button>
     </div>
   );

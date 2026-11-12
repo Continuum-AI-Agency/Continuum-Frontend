@@ -1,4 +1,5 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
 
 // Every listed portfolio's headline figure (see ./portfolioFigure), from the reads the
 // portfolio detail makes — the account snapshot read and each portfolio's enrolled roster (and
@@ -37,6 +38,8 @@ export function usePortfolioFigures(args: {
   /** Each portfolio's efficiency series, in the order of `portfolios` (the snapshot). */
   series: readonly (readonly EfficiencySeriesPoint[])[];
 }): PortfolioFigures {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const { brandId, adAccountId, portfolios, series } = args;
   const levels = useMemo(() => [...new Set(portfolios.map(levelOf))], [portfolios]);
   const snapshotReads = useQueries({
@@ -67,15 +70,19 @@ export function usePortfolioFigures(args: {
     const read = snapshotReads[levels.indexOf(levelOf(portfolio))]?.data;
     const roster = rosterReads[index]?.data;
     const metrics = metricsById.get(portfolio.id);
-    const figure = portfolioFigureFromReads({
-      portfolio,
-      snapshots: read?.snapshots ?? null,
-      inactiveWindows: read?.inactiveWindows,
-      readAt: read?.fetchedAt ?? null,
-      memberIds: roster?.map((member) => member.adset_id) ?? null,
-      series: series[index] ?? [],
-      metrics: metrics?.status === 'ready' ? metrics.metrics : null,
-    });
+    const figure = portfolioFigureFromReads(
+      {
+        portfolio,
+        snapshots: read?.snapshots ?? null,
+        inactiveWindows: read?.inactiveWindows,
+        readAt: read?.fetchedAt ?? null,
+        memberIds: roster?.map((member) => member.adset_id) ?? null,
+        series: series[index] ?? [],
+        metrics: metrics?.status === 'ready' ? metrics.metrics : null,
+      },
+      uiLocale,
+      uiText,
+    );
     if (figure) figures.set(portfolio.id, figure);
   });
   return { figures, pending };

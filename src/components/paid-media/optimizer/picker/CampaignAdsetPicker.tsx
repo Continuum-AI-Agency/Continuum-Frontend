@@ -1,5 +1,11 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+import { pickerProviderStatusLabel } from './platformPickerModel';
+
 // The enrollment selector: a VIRTUALIZED, campaign-grouped table of ad sets.
 //
 // It used to render every ad set in the account into the DOM, inside a max-h-[60vh] box, inside
@@ -130,14 +136,13 @@ function safeId(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '-');
 }
 
-function money(value: number | null | undefined, currency?: string | null): string {
-  return value == null || value <= 0 ? DASH : formatCurrency(value, currency);
+function money(
+  value: number | null | undefined,
+  currency?: string | null,
+  uiLocale: UiLocale = 'en',
+): string {
+  return value == null || value <= 0 ? DASH : formatCurrency(value, currency, uiLocale);
 }
-
-const BUDGET_TYPE_LABEL: Record<'daily' | 'lifetime', string> = {
-  daily: 'Daily',
-  lifetime: 'Lifetime',
-};
 
 const AdsetRow = memo(function AdsetRow({
   row,
@@ -160,6 +165,16 @@ const AdsetRow = memo(function AdsetRow({
   onToggle: (id: string, checked: boolean) => void;
   style: CSSProperties;
 }) {
+  const uiText = useTranslations('scale');
+  const BUDGET_TYPE_LABEL: Record<'daily' | 'lifetime', string> = useMemo(
+    () => ({
+      daily: uiText('daily_b36c261'),
+      lifetime: uiText('lifetime_bdcd897'),
+    }),
+    [uiText],
+  );
+
+  const uiLocale = useLocale();
   const controlId = `optimizer-adset-${safeId(row.id)}`;
 
   return (
@@ -213,17 +228,17 @@ const AdsetRow = memo(function AdsetRow({
             ) : null}
             {row.providerLifecycle && row.providerLifecycle !== 'active' ? (
               <Badge variant="warning" className="shrink-0 text-xs">
-                {row.providerStatus?.replaceAll('_', ' ').toLowerCase() ?? 'Unknown status'}
+                {pickerProviderStatusLabel(row.providerStatus, uiText)}
               </Badge>
             ) : null}
             {!row.eligible && (!row.providerLifecycle || row.providerLifecycle === 'active') ? (
               <Badge variant="warning" className="shrink-0 text-xs">
-                Held
+                {uiText('held_85cd61f')}
               </Badge>
             ) : null}
             {row.eligible && row.mismatch ? (
               <Badge variant="warning" className="shrink-0 text-xs">
-                Wrong KPI
+                {uiText('wrong_kpi_a089c11')}
               </Badge>
             ) : null}
             {row.enrolledIn ? (
@@ -232,8 +247,8 @@ const AdsetRow = memo(function AdsetRow({
                 className="shrink-0 text-xs"
               >
                 {row.enrolledIn.portfolioName
-                  ? `In: ${row.enrolledIn.portfolioName}`
-                  : 'Claimed elsewhere'}
+                  ? uiText('template_94b0e50bb0b7', { v0: row.enrolledIn.portfolioName ?? '' })
+                  : uiText('claimed_elsewhere_c6c58e5')}
               </Badge>
             ) : null}
           </span>
@@ -254,9 +269,9 @@ const AdsetRow = memo(function AdsetRow({
           {row.eligible && row.mismatch ? (
             <span
               className="mt-0.5 block truncate text-xs text-warning"
-              title={`Buys ${row.kpiField} — the optimizer freezes it and never moves its budget.`}
+              title={uiText('template_8850ced97c8f', { v0: row.kpiField ?? '' })}
             >
-              Buys {row.kpiField} — the optimizer freezes it and never moves its budget.
+              {uiText.rich('sentence_1a6ae29d3c9e', { v0: row.kpiField ?? '' })}
             </span>
           ) : null}
           {/* An ad set holds exactly one active enrollment, so selecting a claimed one MOVES
@@ -270,26 +285,26 @@ const AdsetRow = memo(function AdsetRow({
               }`}
               title={
                 row.enrolledIn.canRelease
-                  ? `Selecting this moves it out of ${row.enrolledIn.portfolioName}.`
-                  : 'Another brand’s portfolio holds this. You need edit access there to move it.'
+                  ? uiText('template_29aa4e70a4e1', { v0: row.enrolledIn.portfolioName ?? '' })
+                  : uiText('another_brand_s_portfolio_holds_this_you_need_def8d1f')
               }
             >
               {row.enrolledIn.canRelease
-                ? `Selecting this moves it out of ${row.enrolledIn.portfolioName}.`
-                : 'Another brand’s portfolio holds this. You need edit access there to move it.'}
+                ? uiText('template_29aa4e70a4e1', { v0: row.enrolledIn.portfolioName ?? '' })
+                : uiText('another_brand_s_portfolio_holds_this_you_need_def8d1f')}
             </span>
           ) : null}
         </label>
       </TableCell>
 
       <TableCell className="p-0 text-right text-xs tabular-nums">
-        {row.currentBudget > 0 ? formatCurrency(row.currentBudget, currency) : DASH}
+        {row.currentBudget > 0 ? formatCurrency(row.currentBudget, currency, uiLocale) : DASH}
       </TableCell>
       <TableCell className="p-0 text-right text-xs tabular-nums">
-        {money(row.spend14, currency)}
+        {money(row.spend14, currency, uiLocale)}
       </TableCell>
       <TableCell className="p-0 text-right text-xs tabular-nums">
-        {row.cpa != null ? formatCpa(row.cpa, currency) : DASH}
+        {row.cpa != null ? formatCpa(row.cpa, currency, uiLocale) : DASH}
       </TableCell>
       <TableCell className="p-0 text-right text-xs tabular-nums">
         {row.adCount > 0 ? row.adCount : DASH}
@@ -304,7 +319,7 @@ const AdsetRow = memo(function AdsetRow({
               render={
                 <button
                   type="button"
-                  aria-label={`Show ads in ${row.name}`}
+                  aria-label={uiText('template_5c6a64b30ddb', { v0: row.name })}
                   // A painted 24px box, in px (rem steps down with the root font size): the
                   // virtualizer's scroll box clips a pseudo-element hit pad at the table's edge.
                   className="inline-flex size-[24px] items-center justify-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
@@ -344,6 +359,8 @@ function CampaignHeaderRow({
   onToggleAll: (ids: string[], checked: boolean) => void;
   style: CSSProperties;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const eligibleIds = sectionEligibleIds(section.adsets);
   const selectedCount = eligibleIds.filter((id) => selectedIds.has(id)).length;
   const allSelected = eligibleIds.length > 0 && selectedCount === eligibleIds.length;
@@ -361,7 +378,7 @@ function CampaignHeaderRow({
         <Checkbox
           checked={allSelected ? true : someSelected ? 'indeterminate' : false}
           disabled={disabled || eligibleIds.length === 0}
-          aria-label={`Select all eligible ad sets in ${section.campaignName}`}
+          aria-label={uiText('template_d046c5c55b3b', { v0: section.campaignName })}
           onCheckedChange={(value) => onToggleAll(eligibleIds, value === true)}
         />
       </TableCell>
@@ -381,23 +398,27 @@ function CampaignHeaderRow({
           <span className="truncate font-medium text-xs">{section.campaignName}</span>
         </button>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {selectedCount}/{eligibleIds.length} of {visibleCount}
+          {uiText.rich('sentence_42878172904b', {
+            v0: selectedCount,
+            v1: eligibleIds.length,
+            v2: visibleCount,
+          })}
         </span>
         {section.mismatchCount > 0 ? (
           <Badge variant="warning" className="shrink-0 text-xs">
-            {section.mismatchCount} wrong KPI
+            {uiText.rich('sentence_2b8ee99e2bfc', { v0: section.mismatchCount })}
           </Badge>
         ) : null}
       </TableCell>
 
       <TableCell className="p-0 text-right text-xs tabular-nums">
-        {money(section.totalBudget, currency)}
+        {money(section.totalBudget, currency, uiLocale)}
       </TableCell>
       <TableCell className="p-0 text-right text-xs tabular-nums">
-        {money(section.totalSpend14, currency)}
+        {money(section.totalSpend14, currency, uiLocale)}
       </TableCell>
       <TableCell className="p-0 text-right text-xs tabular-nums">
-        {section.cpa != null ? formatCpa(section.cpa, currency) : DASH}
+        {section.cpa != null ? formatCpa(section.cpa, currency, uiLocale) : DASH}
       </TableCell>
       <TableCell className="p-0 text-right text-xs tabular-nums">
         {section.totalAds > 0 ? section.totalAds : DASH}
@@ -423,6 +444,10 @@ export function CampaignAdsetPicker({
   heightClassName = 'h-[24rem]',
   inventoryFreshness,
 }: CampaignAdsetPickerProps) {
+  const uiLocale = useLocale();
+
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
   const [query, setQuery] = useState('');
   const [chips, setChips] = useState<PickerChip[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -438,8 +463,8 @@ export function CampaignAdsetPicker({
   );
 
   const sections = useMemo(
-    () => buildCampaignSections(entities, mode, objective, claims),
-    [entities, mode, objective, claims],
+    () => buildCampaignSections(entities, mode, objective, claims, uiText),
+    [entities, mode, objective, claims, uiText],
   );
   const counts = useMemo(() => pickerCounts(sections), [sections]);
   const selectedIds = useMemo(() => new Set(selectedAdsetIds), [selectedAdsetIds]);
@@ -541,7 +566,7 @@ export function CampaignAdsetPicker({
   if (isLoading) {
     return (
       <div className="space-y-2" role="status" aria-busy="true">
-        <span className="sr-only">Loading ad sets</span>
+        <span className="sr-only">{uiText('loading_ad_sets_5f0be05')}</span>
         <Skeleton className="h-8 rounded-lg bg-muted/70" />
         <Skeleton className={cn(heightClassName, 'rounded-lg bg-muted/70')} />
       </div>
@@ -552,7 +577,7 @@ export function CampaignAdsetPicker({
     return (
       <p className="flex items-center gap-2 py-2 text-xs text-destructive">
         <ServerCrash className="size-4 shrink-0" aria-hidden="true" />
-        Couldn't load this account's ad sets. Retry in a moment.
+        {uiText('couldn_t_load_this_account_s_ad_sets_retry_in_6540edd')}
       </p>
     );
   }
@@ -561,12 +586,17 @@ export function CampaignAdsetPicker({
     return (
       <p className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
         <SearchX className="size-4 shrink-0" aria-hidden="true" />
-        No ad sets found on this account.
+        {uiText('no_ad_sets_found_on_this_account_fe959cb')}
       </p>
     );
   }
 
-  const metric = objective ? getOptimizationMetricDefinition(objective) : null;
+  const metric = objective
+    ? localizeOptimizationMetricDefinition(
+        getOptimizationMetricDefinition(objective),
+        optimizerText,
+      )
+    : null;
   const virtualRows = virtualizer.getVirtualItems();
 
   const combinedFetchedAt =
@@ -597,13 +627,12 @@ export function CampaignAdsetPicker({
 
       {inventoryFreshness?.isError ? (
         <p className="text-xs text-warning">
-          Inactive Meta ad sets are temporarily unavailable. Active and already-enrolled rows remain
-          editable.
+          {uiText('inactive_meta_ad_sets_are_temporarily_unavail_cb95309')}
         </p>
       ) : null}
       {inventoryFreshness?.partial || inventoryFreshness?.truncated ? (
         <p className="text-xs text-warning">
-          Meta returned a partial ad-set inventory. Refresh before making broad membership changes.
+          {uiText('meta_returned_a_partial_ad_set_inventory_refr_a67f42a')}
         </p>
       ) : null}
 
@@ -626,15 +655,15 @@ export function CampaignAdsetPicker({
         <p className="flex items-start gap-2 text-xs text-warning">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
           {counts.inactive > 0 && !isCampaignMode
-            ? 'No active ad sets are currently optimizable. Inactive rows may be enrolled, but remain held until Meta reports them active.'
-            : `None of these ${isCampaignMode ? 'campaigns' : 'ad sets'} own a budget the optimizer can move — they are managed at the campaign level (CBO or lifetime).`}
+            ? uiText('no_active_ad_sets_are_currently_optimizable_i_46b5d03')
+            : uiText('template_83c132806a3e', { mode: isCampaignMode ? 'campaign' : 'adset' })}
         </p>
       ) : null}
 
       {rows.length === 0 ? (
         <p className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
           <SearchX className="size-4 shrink-0" aria-hidden="true" />
-          Nothing matches this search or filter.
+          {uiText('nothing_matches_this_search_or_filter_60cb55f')}
         </p>
       ) : (
         // The column header lives OUTSIDE the scroller, so it never needs `position: sticky` —
@@ -655,17 +684,23 @@ export function CampaignAdsetPicker({
                   'py-1.5 text-left font-medium text-muted-foreground hover:bg-transparent',
                 )}
               >
-                <TableHead aria-label="Select" className="p-0" />
+                <TableHead aria-label={uiText('select_2a78025')} className="p-0" />
                 <TableHead className="p-0 font-medium">
-                  {isCampaignMode ? 'Campaign' : 'Ad set'}
+                  {isCampaignMode ? uiText('campaign_268286d') : uiText('ad_set_639a64f')}
                 </TableHead>
-                <TableHead className="p-0 text-right font-medium">Budget/day</TableHead>
-                <TableHead className="p-0 text-right font-medium">Spend 14d</TableHead>
+                <TableHead className="p-0 text-right font-medium">
+                  {uiText('budget_day_050231b')}
+                </TableHead>
+                <TableHead className="p-0 text-right font-medium">
+                  {uiText('spend_14d_4ab2cda')}
+                </TableHead>
                 <TableHead className="p-0 text-right font-medium">
                   {metric?.costLabel ?? 'CPA'}
                 </TableHead>
-                <TableHead className="p-0 text-right font-medium">Ads</TableHead>
-                <TableHead aria-label="Creatives" className="p-0" />
+                <TableHead className="p-0 text-right font-medium">
+                  {uiText('ads_9210f3b')}
+                </TableHead>
+                <TableHead aria-label={uiText('creatives_2eb70c5')} className="p-0" />
               </TableRow>
             </TableHeader>
           </Table>
@@ -683,7 +718,9 @@ export function CampaignAdsetPicker({
               containerClassName="overflow-visible"
               className="grid"
               aria-rowcount={rows.length}
-              aria-label={isCampaignMode ? 'Campaigns' : 'Ad sets by campaign'}
+              aria-label={
+                isCampaignMode ? uiText('campaigns_30e9a08') : uiText('ad_sets_by_campaign_9fc68fc')
+              }
             >
               <TableBody
                 className="relative grid"

@@ -6,7 +6,12 @@
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type BlendField, blendParseSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import parseExample from '../../../../packages/contracts/src/media/__fixtures__/blend-parse.example.json';
 import { SceneFieldControl, sceneValueFromControl, sceneVariable } from './SceneFieldControl';
 

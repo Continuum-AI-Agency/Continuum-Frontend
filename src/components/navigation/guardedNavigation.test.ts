@@ -23,11 +23,12 @@ describe('navigateAfterForgeExit', () => {
   });
 });
 
-
 describe('command actions leaving a Forge draft', () => {
   it('defers a brand switch until the draft decision resolves', async () => {
     let decide!: (allowed: boolean) => void;
-    const decision = new Promise<boolean>((resolve) => { decide = resolve; });
+    const decision = new Promise<boolean>((resolve) => {
+      decide = resolve;
+    });
     const switchBrand = mock(() => {});
     runAfterForgeExit(switchBrand, () => decision);
     await Promise.resolve();

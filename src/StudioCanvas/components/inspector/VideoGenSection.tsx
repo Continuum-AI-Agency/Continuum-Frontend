@@ -22,6 +22,7 @@ import {
   videoReferencesRequireEightSeconds,
   videoResolutionRequiresEightSeconds,
 } from '@continuum/contracts';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useStudioStore } from '../../stores/useStudioStore';
 import type { VideoGenNodeData } from '../../types';
 import { InspectorNote, InspectorSection, OptionRow } from './controls';
@@ -39,6 +40,8 @@ export function VideoGenSection({
   data: VideoGenNodeData;
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   const shape = { type: nodeType, data: data as unknown as Record<string, unknown> };
   const model = resolveVideoGeneratorModel(shape);
   const referenceMode = resolveVideoGeneratorReferenceMode(shape);
@@ -70,7 +73,7 @@ export function VideoGenSection({
 
   return (
     <>
-      <InspectorSection title="Model">
+      <InspectorSection title={translateUi('model_5e2c614c')}>
         {VIDEO_GENERATOR_MODEL_GROUPS.map((group) => (
           <OptionRow<VideoGeneratorModel>
             key={group.provider}
@@ -85,9 +88,9 @@ export function VideoGenSection({
         ))}
       </InspectorSection>
 
-      <InspectorSection title="Inputs">
+      <InspectorSection title={translateUi('inputs_7abc49df')}>
         <OptionRow<VideoGeneratorReferenceMode>
-          label="Reference mode"
+          label={translateUi('reference_mode_aa5925c1')}
           value={referenceMode}
           options={referenceModes.map((option) => ({
             value: option,
@@ -98,15 +101,15 @@ export function VideoGenSection({
         />
         {referenceModes.length === 1 ? (
           <InspectorNote>
-            {VIDEO_GENERATOR_MODEL_LABELS[model]} accepts one input mode; it swaps the node&apos;s
-            handles when a model that offers a choice is selected.
+            {VIDEO_GENERATOR_MODEL_LABELS[model]}{' '}
+            {translateUi('accepts_one_input_mode_it_swaps_the_1f5e5723')}{' '}
           </InspectorNote>
         ) : null}
       </InspectorSection>
 
-      <InspectorSection title="Output">
+      <InspectorSection title={translateUi('output_b2439bcb')}>
         <OptionRow
-          label="Aspect ratio"
+          label={translateUi('aspect_ratio_d7ad336f')}
           value={data.aspectRatio ?? '16:9'}
           options={[
             { value: '16:9', label: '16:9' },
@@ -115,20 +118,20 @@ export function VideoGenSection({
           onChange={(value) => onPatch({ aspectRatio: value })}
         />
         <OptionRow<Resolution>
-          label="Resolution"
+          label={translateUi('resolution_d4055faf')}
           value={resolution}
           options={getVideoGeneratorResolutions(model).map((value) => ({ value, label: value }))}
           onChange={(value) => onPatch({ resolution: value })}
         />
         {durationSeconds === undefined ? (
           <InspectorNote>
-            {VIDEO_GENERATOR_MODEL_LABELS[model]} has no fixed clip length — duration is set by the
-            provider.
+            {VIDEO_GENERATOR_MODEL_LABELS[model]}{' '}
+            {translateUi('has_no_fixed_clip_length_duration_i_908abbcb')}{' '}
           </InspectorNote>
         ) : (
           <>
             <OptionRow<string>
-              label="Duration"
+              label={translateUi('duration_4fc52a3c')}
               value={String(durationSeconds)}
               options={VIDEO_GENERATOR_DURATIONS.map((seconds) => ({
                 value: String(seconds),
@@ -139,12 +142,12 @@ export function VideoGenSection({
             />
             {lockedByResolution ? (
               <InspectorNote>
-                {resolution} renders at 8 seconds only — switch to 720p for 4s or 6s.
+                {resolution} {translateUi('renders_at_8_seconds_only_switch_to_2710bbeb')}{' '}
               </InspectorNote>
             ) : lockedByReference ? (
               <InspectorNote>
-                Veo renders 8 seconds only when a reference image or frame is attached — detach it
-                for 4s or 6s.
+                {' '}
+                {translateUi('veo_renders_8_seconds_only_when_a_r_7ec91003')}{' '}
               </InspectorNote>
             ) : null}
           </>

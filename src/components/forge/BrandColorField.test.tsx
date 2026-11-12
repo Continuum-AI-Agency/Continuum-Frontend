@@ -31,9 +31,15 @@ mock.module('@/lib/brands/brandTypeInputs.client', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { BrandColorField } from './BrandColorField';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import { BrandColorField } from './BrandColorField';
 
 // Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
 // (a global shim in the shared setup drops other files' tests).
@@ -76,9 +82,9 @@ describe('BrandColorField', () => {
     // already marked closed. What must never hold is a palette still standing open.
     const lingering = screen.queryByRole('button', { name: 'Background: --brand-orange' });
     if (lingering) {
-      expect(
-        lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed'),
-      ).toBe(true);
+      expect(lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed')).toBe(
+        true,
+      );
     }
     await openPalette();
     const orange = await screen.findByRole('button', { name: 'Background: --brand-orange' });
@@ -117,9 +123,9 @@ describe('BrandColorField', () => {
     // already marked closed. What must never hold is a palette still standing open.
     const lingering = screen.queryByRole('button', { name: 'Background: --brand-orange' });
     if (lingering) {
-      expect(
-        lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed'),
-      ).toBe(true);
+      expect(lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed')).toBe(
+        true,
+      );
     }
   });
 

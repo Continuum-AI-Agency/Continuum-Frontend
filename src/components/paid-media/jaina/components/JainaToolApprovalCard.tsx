@@ -2,7 +2,9 @@
 
 import type { JainaToolAction, JainaToolApprovalRequiredPayload } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { useMemo } from 'react';
 import {
   AgentCardBody,
   AgentCardEyebrow,
@@ -54,19 +56,6 @@ const DECISION_MODULE =
 const VALUES_PANEL = 'rounded-lg bg-background/80';
 
 /** Tool name → what the human is actually being asked to allow. */
-const TOOL_LABELS: Record<string, string> = {
-  audience_group_publish: 'Publish audience group to Meta',
-  pipeline_run: 'Run pipeline',
-  approve_optimizer_recommendation: 'Approve optimizer recommendations',
-  request_optimizer_budget_apply: 'Request budget apply',
-  apply_approved_optimizer_pauses: 'Apply approved pauses',
-  paid_creative_slate: 'Generate creative slate',
-  pause_meta_entity: 'Pause campaign / ad set / ad',
-  rename_meta_entity: 'Rename campaign / ad set / ad',
-  activate_meta_entity: 'Unpause a paused campaign / ad set / ad',
-  archive_meta_entity: 'Archive ad set / ad',
-  duplicate_meta_entity: 'Duplicate as a paused copy',
-};
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -82,13 +71,14 @@ const formatValue = (value: unknown): string => {
 };
 
 function ProposedInput({ input }: { input: unknown }) {
+  const uiText = useTranslations('scale');
   const record = asRecord(input);
   const entries = record ? Object.entries(record) : [];
 
   if (entries.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        {record ? 'This call takes no arguments.' : formatValue(input)}
+        {record ? uiText('this_call_takes_no_arguments_750f018') : formatValue(input)}
       </p>
     );
   }
@@ -113,6 +103,7 @@ function ProposedInput({ input }: { input: unknown }) {
  * than blocking the gate.
  */
 function AudienceGroupSummary({ groupVersionId }: { groupVersionId: string }) {
+  const uiText = useTranslations('scale');
   const { data } = useQuery({
     queryKey: ['audience-group-version-summary', groupVersionId] as const,
     queryFn: () => fetchAudienceGroupVersionSummary({ groupVersionId }),
@@ -124,7 +115,7 @@ function AudienceGroupSummary({ groupVersionId }: { groupVersionId: string }) {
   if (!data) return null;
   return (
     <AgentCardSummary>
-      {data.name} — {data.memberCount} audience{data.memberCount === 1 ? '' : 's'}
+      {uiText.rich('sentence_55e9859b5a8f', { name: data.name, count: data.memberCount })}
     </AgentCardSummary>
   );
 }
@@ -141,7 +132,25 @@ export function JainaToolApprovalCard({
   isStreaming: boolean;
   onDecide?: (approval: JainaToolApprovalRequiredPayload, decision: ToolApprovalDecision) => void;
 }) {
-  const title = TOOL_LABELS[approval.toolName] ?? approval.toolName;
+  const uiText = useTranslations('scale');
+  const TOOL_LABELS: Record<string, string> = useMemo(
+    () => ({
+      audience_group_publish: uiText('jainaApproval_audience_group_publish'),
+      pipeline_run: uiText('run_pipeline_c415e40'),
+      approve_optimizer_recommendation: uiText('jainaApproval_approve_optimizer_recommendation'),
+      request_optimizer_budget_apply: uiText('jainaApproval_request_optimizer_budget_apply'),
+      apply_approved_optimizer_pauses: uiText('jainaApproval_apply_approved_optimizer_pauses'),
+      paid_creative_slate: uiText('jainaApproval_paid_creative_slate'),
+      pause_meta_entity: uiText('jainaApproval_pause_meta_entity'),
+      rename_meta_entity: uiText('jainaApproval_rename_meta_entity'),
+      activate_meta_entity: uiText('jainaApproval_activate_meta_entity'),
+      archive_meta_entity: uiText('jainaApproval_archive_meta_entity'),
+      duplicate_meta_entity: uiText('jainaApproval_duplicate_meta_entity'),
+    }),
+    [uiText],
+  );
+
+  const title = TOOL_LABELS[approval.toolName] ?? uiText('jainaUnknownTool');
   const expired = Date.parse(approval.expiresAt) < Date.now();
   const groupVersionId =
     approval.toolName === 'audience_group_publish'
@@ -154,7 +163,7 @@ export function JainaToolApprovalCard({
     <AgentDecisionCard className={DECISION_MODULE}>
       <div className="px-4 pt-4">
         <AgentCardEyebrow
-          label="Approval required"
+          label={uiText('approval_required_ef677f5')}
           right={<ApprovalStatus decided={optimisticDecision} expired={expired} />}
         />
       </div>
@@ -177,20 +186,24 @@ export function JainaToolApprovalCard({
          */}
         {preview ? (
           <details className={`mt-2 px-3 py-2 ${VALUES_PANEL}`}>
-            <summary className="cursor-pointer text-muted-foreground text-xs">Exact input</summary>
+            <summary className="cursor-pointer text-muted-foreground text-xs">
+              {uiText('exact_input_e583d6e')}
+            </summary>
             <div className="mt-2">
+              <p className="mb-1 font-mono text-xs text-muted-foreground">{approval.toolName}</p>
               <ProposedInput input={approval.input} />
             </div>
           </details>
         ) : (
           <div className={`mt-3 px-3 py-2.5 ${VALUES_PANEL}`}>
+            <p className="mb-1 font-mono text-xs text-muted-foreground">{approval.toolName}</p>
             <ProposedInput input={approval.input} />
           </div>
         )}
 
         {expired && !optimisticDecision ? (
           <p className="mt-2 text-muted-foreground text-sm">
-            This approval expired, so nothing ran. Ask Jaina to propose it again.
+            {uiText('this_approval_expired_so_nothing_ran_ask_jain_43257f7')}
           </p>
         ) : null}
       </AgentCardBody>
@@ -198,8 +211,8 @@ export function JainaToolApprovalCard({
       {!optimisticDecision && !expired && onDecide ? (
         <ApproveRejectActions
           locked={isStreaming}
-          approveLabel="Approve"
-          rejectLabel="Deny"
+          approveLabel={uiText('optimizer_approve')}
+          rejectLabel={uiText('deny_05a2d73')}
           onApprove={() => onDecide(approval, 'approve')}
           onReject={() => onDecide(approval, 'deny')}
         />
@@ -215,8 +228,11 @@ function ApprovalStatus({
   decided: ToolApprovalDecision | null;
   expired: boolean;
 }) {
-  if (decided === 'deny') return <StatusLabel tone="neutral">Declined — nothing ran</StatusLabel>;
-  if (decided === 'approve') return <StatusLabel tone="running">Approved</StatusLabel>;
-  if (expired) return <StatusLabel tone="neutral">Expired</StatusLabel>;
-  return <StatusLabel tone="waiting">Awaiting your approval</StatusLabel>;
+  const uiText = useTranslations('scale');
+  if (decided === 'deny')
+    return <StatusLabel tone="neutral">{uiText('declined_nothing_ran_b457168')}</StatusLabel>;
+  if (decided === 'approve')
+    return <StatusLabel tone="running">{uiText('approved_87b42e4')}</StatusLabel>;
+  if (expired) return <StatusLabel tone="neutral">{uiText('expired_424a255')}</StatusLabel>;
+  return <StatusLabel tone="waiting">{uiText('awaiting_your_approval_9f09488')}</StatusLabel>;
 }

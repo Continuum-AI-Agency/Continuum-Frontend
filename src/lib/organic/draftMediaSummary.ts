@@ -1,3 +1,5 @@
+import type { useTranslations } from 'next-intl';
+
 // Glanceable media-enrichment summary for the post-preview stepper. Mirrors the
 // URL fields the card/preview actually render (publishingAssets first, then the
 // transient mediaSuggestion shapes) so "what media exists" agrees with what the
@@ -118,7 +120,26 @@ function collectBlueprint(draft: OrganicCalendarDraft): ReusableMediaItem[] {
   });
 }
 
-function buildLabel(summary: Omit<DraftMediaSummary, 'label'>): string {
+function buildLabel(
+  summary: Omit<DraftMediaSummary, 'label'>,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+): string {
+  if (translate) {
+    if (summary.imageCount > 0 || summary.videoCount > 0)
+      return translate('draftMediaInventory', {
+        kind:
+          summary.imageCount > 0 && summary.videoCount > 0
+            ? 'mixed'
+            : summary.imageCount > 0
+              ? 'image'
+              : 'video',
+        images: summary.imageCount,
+        videos: summary.videoCount,
+      });
+    if (summary.blueprintFrames > 0)
+      return translate('draftMediaBlueprint', { count: summary.blueprintFrames });
+    return translate('draftMediaEmpty');
+  }
   const parts: string[] = [];
   if (summary.imageCount > 0) {
     parts.push(`${summary.imageCount} image${summary.imageCount === 1 ? '' : 's'}`);
@@ -149,7 +170,10 @@ function dedupeByFile(items: ReusableMediaItem[]): ReusableMediaItem[] {
   });
 }
 
-export function summarizeDraftMedia(draft: OrganicCalendarDraft): DraftMediaSummary {
+export function summarizeDraftMedia(
+  draft: OrganicCalendarDraft,
+  translate?: ReturnType<typeof useTranslations<'organic'>>,
+): DraftMediaSummary {
   const realized = collectRealized(draft);
   const reel = collectReel(draft);
   const blueprint = collectBlueprint(draft);
@@ -175,5 +199,5 @@ export function summarizeDraftMedia(draft: OrganicCalendarDraft): DraftMediaSumm
     reusable,
   };
 
-  return { ...summary, label: buildLabel(summary) };
+  return { ...summary, label: buildLabel(summary, translate) };
 }

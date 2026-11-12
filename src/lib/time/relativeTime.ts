@@ -4,10 +4,13 @@
 // relative-time component is a live multi-timezone clock — a different job — and
 // stays reserved for scheduling / "best time to post" surfaces.)
 
+import type { UiLocale } from '@/i18n/config';
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
+const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 
 export function toEpochMs(input: string | number | Date): number {
   if (input instanceof Date) return input.getTime();
@@ -23,15 +26,28 @@ export function toEpochMs(input: string | number | Date): number {
 export function formatRelativeTime(
   input: string | number | Date,
   now: number = Date.now(),
+  locale: UiLocale = 'en',
 ): string {
   const then = toEpochMs(input);
-  if (!Number.isFinite(then)) return 'unknown';
+  if (!Number.isFinite(then)) return { en: 'unknown', 'pt-BR': 'desconhecido', es: 'desconocido' }[locale];
 
   const diff = now - then;
   const past = diff >= 0;
   const abs = Math.abs(diff);
 
-  if (abs < MINUTE) return 'just now';
+  if (abs < MINUTE) return { en: 'just now', 'pt-BR': 'agora mesmo', es: 'ahora mismo' }[locale];
+
+  if (locale !== 'en' && abs < 4 * WEEK) {
+    const [duration, unit] = abs < HOUR ? [MINUTE, 'minute'] as const
+      : abs < DAY ? [HOUR, 'hour'] as const
+        : abs < WEEK ? [DAY, 'day'] as const : [WEEK, 'week'] as const;
+    let formatter = relativeFormatters.get(locale);
+    if (!formatter) {
+      formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'short' });
+      relativeFormatters.set(locale, formatter);
+    }
+    return formatter.format((past ? -1 : 1) * Math.round(abs / duration), unit);
+  }
 
   const label = (value: number, unit: string) =>
     past ? `${value}${unit} ago` : `in ${value}${unit}`;
@@ -42,7 +58,7 @@ export function formatRelativeTime(
   if (abs < 4 * WEEK) return label(Math.round(abs / WEEK), 'w');
 
   const sameYear = new Date(then).getFullYear() === new Date(now).getFullYear();
-  return new Date(then).toLocaleDateString(undefined, {
+  return new Date(then).toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     year: sameYear ? undefined : 'numeric',

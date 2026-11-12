@@ -11,8 +11,8 @@
 import { EXPORT_MEDIA_INPUT_HANDLE } from '@continuum/contracts';
 import { Handle, type NodeProps, Position, type Node as ReactFlowNode } from '@xyflow/react';
 import { Download, Loader2, Package } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
-
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { EXPORT_FORMATS, formatsForKind, isExportFormatId } from '@/lib/export/transcode';
 import { useWorkflowExecution } from '../../hooks/useWorkflowExecution';
 import { useStudioStore } from '../../stores/useStudioStore';
@@ -37,6 +38,10 @@ import { EDGE_COLOR_BY_MODALITY, MODALITY_LABEL } from '../modalityPreview';
 import { NodeBadge, NodeTitleBar } from '../NodeChrome';
 
 export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<ExportNodeData>>) {
+  const uiErrorText = useUiErrorMessage();
+
+  const translateUi = useUiTranslations('studio');
+
   const executionControls = useWorkflowExecution();
   const brandId = useStudioStore((state) => state.brandId);
   const roomId = useStudioStore((state) => state.activeRoomId);
@@ -121,15 +126,24 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
         result.zipped ? `${result.files[0].name} — ${resolved.length} files` : result.files[0].name,
       );
       if (result.fellBackToH264) {
-        setError('This browser cannot encode H.265 — saved as H.264.');
+        setError(translateUi('this_browser_cannot_encode_h_265_sa_a04ce6ca'));
       }
       updateNodeData(id, { isComplete: true, error: undefined });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed');
+      setError(uiErrorText(err));
     } finally {
       setBusy(false);
     }
-  }, [brandId, data.format, executionControls, id, roomId, updateNodeData]);
+  }, [
+    brandId,
+    data.format,
+    executionControls,
+    id,
+    roomId,
+    updateNodeData,
+    translateUi,
+    uiErrorText,
+  ]);
 
   return (
     // `size-full`, never a hardcoded box — see RouterNode. The node is created 280x200.
@@ -139,7 +153,7 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
         selected={selected}
         className="size-full overflow-hidden border-border/60 bg-background"
       >
-        <NodeTitleBar icon={Download} label="Export">
+        <NodeTitleBar icon={Download} label={translateUi('export_36648955')}>
           {kind ? <NodeBadge>{MODALITY_LABEL[kind]}</NodeBadge> : null}
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
@@ -170,9 +184,13 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
                 {EXPORT_FORMATS[format].hint ??
                   (bulk
                     ? mixedPool
-                      ? `${wiredCount} inputs — saved as one ZIP. The format applies to matching inputs; others keep their own default.`
-                      : `${wiredCount} inputs — saved as one ZIP.`
-                    : 'Saved straight to your downloads.')}
+                      ? translateUi('value0_inputs_saved_as_one_zip_the__b8e24fef', {
+                          value0: String(wiredCount),
+                        })
+                      : translateUi('value0_inputs_saved_as_one_zip_ba48bfc6', {
+                          value0: String(wiredCount),
+                        })
+                    : translateUi('saved_straight_to_your_downloads_b8e265bc'))}
               </p>
               <Button
                 className="nodrag mt-auto h-8"
@@ -184,17 +202,19 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
                 {busy ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
                 {bulk ? (
                   <>
-                    <Package className="mr-2 size-3.5" />
-                    Download All
+                    <Package className="mr-2 size-3.5" /> {translateUi(
+                      'download_all_d92a2f6b',
+                    )}{' '}
                   </>
                 ) : (
-                  'Download'
+                  translateUi('download_d6eafe82')
                 )}
               </Button>
             </>
           ) : (
             <p className="my-auto text-center text-xs text-muted-foreground">
-              Connect an image or a clip to save it out.
+              {' '}
+              {translateUi('connect_an_image_or_a_clip_to_save__bc17d823')}{' '}
             </p>
           )}
           {wrote ? (
@@ -202,7 +222,8 @@ export function ExportNode({ id, data, selected }: NodeProps<ReactFlowNode<Expor
               className="truncate text-2xs text-muted-foreground"
               data-testid="studio-export-wrote"
             >
-              Saved {wrote}
+              {' '}
+              {translateUi('saved_b5c120b3')} {wrote}
             </p>
           ) : null}
           {error ? (

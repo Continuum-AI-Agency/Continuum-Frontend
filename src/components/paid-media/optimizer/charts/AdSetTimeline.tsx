@@ -1,4 +1,9 @@
 'use client';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+import { useLocale } from 'next-intl';
+
+import { useTranslations } from 'next-intl';
 
 // TradingView-style per-creative drill-in for one ad set: pick ONE metric and plot
 // every creative as its own line on a shared axis, add/remove creatives from the
@@ -29,18 +34,16 @@ const PALETTE = [
   'var(--chart-5)',
 ];
 
-const METRICS: { key: AdMetric; label: string }[] = [
-  { key: 'spend', label: 'Spend' },
-  { key: 'cpa', label: 'CPA' },
-  { key: 'roas', label: 'ROAS' },
-  { key: 'ctr', label: 'CTR' },
-];
-
-function formatMetric(metric: AdMetric, value: number, currency?: string | null): string {
-  if (metric === 'spend') return formatCurrency(value, currency);
-  if (metric === 'cpa') return formatCpa(value, currency);
-  if (metric === 'roas') return `${value.toFixed(2)}×`;
-  return `${value.toFixed(2)}%`;
+function formatMetric(
+  metric: AdMetric,
+  value: number,
+  currency?: string | null,
+  uiLocale: UiLocale = 'en',
+): string {
+  if (metric === 'spend') return formatCurrency(value, currency, uiLocale);
+  if (metric === 'cpa') return formatCpa(value, currency, uiLocale);
+  if (metric === 'roas') return `${formatDecimal(value, 2, uiLocale)}×`;
+  return `${formatDecimal(value, 2, uiLocale)}%`;
 }
 
 type AdSetTimelineProps = {
@@ -68,6 +71,18 @@ export function AdSetTimeline({
   metric: metricProp,
   onMetricChange,
 }: AdSetTimelineProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const METRICS: { key: AdMetric; label: string }[] = useMemo(
+    () => [
+      { key: 'spend', label: uiText('spend_85f3d55') },
+      { key: 'cpa', label: 'CPA' },
+      { key: 'roas', label: uiText('roas_b81bd97') },
+      { key: 'ctr', label: uiText('ctr_07fce34') },
+    ],
+    [uiText],
+  );
+
   const chartable = useMemo(() => trends.filter((trend) => trend.series.length >= 2), [trends]);
   const [localMetric, setLocalMetric] = useState<AdMetric>('spend');
   const metric = metricProp ? fromUrlMetric(metricProp) : localMetric;
@@ -92,9 +107,7 @@ export function AdSetTimeline({
   );
 
   if (chartable.length === 0) {
-    return (
-      <ChartEmpty message="Per-creative trends appear once the ad set has a few days of delivery." />
-    );
+    return <ChartEmpty message={uiText('per_creative_trends_appear_once_the_ad_set_ha_74e3e26')} />;
   }
 
   const nameFor = (adId: string): string => {
@@ -119,7 +132,7 @@ export function AdSetTimeline({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ToggleGroup
-          aria-label="Creative chart metric"
+          aria-label={uiText('creative_chart_metric_06206b5')}
           className="justify-start rounded-md border border-border p-0.5"
           onValueChange={selectMetric}
           type="single"
@@ -127,7 +140,7 @@ export function AdSetTimeline({
         >
           {METRICS.map((option) => (
             <ToggleGroupItem
-              aria-label={`Show ${option.label}`}
+              aria-label={uiText('template_b3b3aee511d7', { v0: option.label })}
               className="h-6 rounded px-2 text-xs data-[state=on]:bg-secondary data-[state=on]:text-foreground"
               key={option.key}
               value={option.key}
@@ -137,7 +150,7 @@ export function AdSetTimeline({
           ))}
         </ToggleGroup>
         <span className="text-xs text-muted-foreground">
-          {active.size} of {chartable.length} creatives
+          {uiText.rich('sentence_7c7bbaa38e88', { v0: active.size, v1: chartable.length })}
         </span>
       </div>
 
@@ -202,14 +215,14 @@ export function AdSetTimeline({
                 label: nameFor(trend.ad_id),
                 value:
                   typeof point[trend.ad_id] === 'number'
-                    ? formatMetric(metric, point[trend.ad_id] as number, currency)
+                    ? formatMetric(metric, point[trend.ad_id] as number, currency, uiLocale)
                     : '—',
               }))
             }
           />
         </AreaChart>
       ) : (
-        <ChartEmpty message="Select at least one creative to plot." />
+        <ChartEmpty message={uiText('select_at_least_one_creative_to_plot_38afe8d')} />
       )}
     </div>
   );

@@ -1,7 +1,9 @@
 'use client';
-import { Check, FileText, RotateCw, X } from 'lucide-react';
 
+import { Check, FileText, RotateCw, X } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import type * as React from 'react';
+import type { UiLocale } from '@/i18n/config';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
 import { cn } from '@/lib/utils';
@@ -29,13 +31,15 @@ const stageColors: Record<string, string> = {
   finalizing: 'text-success',
 };
 
-function formatTimeLabel(timestamp: string): string {
+function formatTimeLabel(timestamp: string, locale: UiLocale): string {
   const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemProps) {
-  const timeLabel = formatTimeLabel(event.timestamp);
+  const uiText = useTranslations('organic');
+  const uiLocale = useLocale();
+  const timeLabel = formatTimeLabel(event.timestamp, uiLocale);
 
   if (event.type === 'placement') {
     const placementEvent = event.data as Extract<CalendarGenerationEvent, { type: 'placement' }>;
@@ -74,9 +78,12 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
       <div className="flex items-center gap-3 py-2 px-3 rounded-md hover:bg-muted/50 transition-colors">
         <div className={cn('flex items-center justify-center', colorClass)}>{icon}</div>
         <div className="flex flex-col flex-1 min-w-0">
-          <span className="text-sm truncate">{progressData.message || 'Processing...'}</span>
+          <span className="text-sm truncate">{uiText('processing_f40a853')}</span>
           <span className="text-xs text-muted-foreground">
-            {progressData.completed}/{progressData.total} completed
+            {uiText.rich('sentence_aa10b89ff18d', {
+              completed: progressData.completed,
+              total: progressData.total,
+            })}
           </span>
         </div>
         <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
@@ -93,7 +100,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm truncate">
-            {startedData.message ?? `Generating ${startedData.placementId}`}
+            {uiText('generatingPlacement', { placement: startedData.placementId })}
           </span>
         </div>
         <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
@@ -113,7 +120,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm text-destructive truncate">
-            {friendlyStreamError(errorData.message)}
+            {friendlyStreamError(errorData.message, uiText)}
           </span>
         </div>
         <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
@@ -133,7 +140,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm text-destructive truncate">
-            {friendlyStreamError(errorData.message)}
+            {friendlyStreamError(errorData.message, uiText)}
           </span>
           <span className="text-xs text-muted-foreground">{errorData.placementId}</span>
         </div>
@@ -149,7 +156,7 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
           <Check className="w-3.5 h-3.5" />
         </div>
         <div className="flex flex-col flex-1 min-w-0">
-          <span className="text-sm truncate">Generation complete</span>
+          <span className="text-sm truncate">{uiText('generation_complete_7e3208e')}</span>
         </div>
         <span className="text-xs text-muted-foreground tabular-nums">{timeLabel}</span>
       </div>

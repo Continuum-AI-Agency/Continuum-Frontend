@@ -1,9 +1,14 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import { Progress } from '@/components/ui/progress';
 import type { BudgetPacingResponse } from '@/lib/schemas/budgetPacing';
 import { cn } from '@/lib/utils';
 import { BudgetPacingStatusBadge } from './BudgetPacingStatusBadge';
+import {
+  formatBudgetPacingPercent,
+  formatBudgetPacingCurrency as formatCurrency,
+} from './budgetPacingPresentation';
 
 type Props = {
   data: BudgetPacingResponse;
@@ -11,14 +16,6 @@ type Props = {
 };
 
 export type BudgetPacingSummaryCardKey = 'budget' | 'spend' | 'remaining' | 'pace';
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 type KpiCardProps = {
   label: string;
@@ -48,6 +45,8 @@ function KpiCard({ label, value, subLabel, progressValue, valueClassName, active
 }
 
 export function BudgetPacingSummaryStrip({ data, activeKey }: Props) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const { summary } = data;
   const isDaily = summary.accountBudgetPeriod === 'daily';
   const isLifetime = summary.accountBudgetPeriod === 'lifetime';
@@ -65,25 +64,31 @@ export function BudgetPacingSummaryStrip({ data, activeKey }: Props) {
     summary.totalBudget > 0 &&
     summary.totalBudgetRemaining / summary.totalBudget < 0.1;
 
-  const budgetLabel = isDaily ? 'Daily Budget Cap' : isLifetime ? 'Total Budget' : 'Budget';
-  const spendLabel = isDaily ? "Today's Spend" : 'Spend to Date';
-  const remainingLabel = isDaily ? "Today's Remaining" : 'Remaining';
+  const budgetLabel = uiText(
+    isDaily ? 'budgetDailyBudgetCap' : isLifetime ? 'budgetTotalBudget' : 'budget_1c6225e',
+  );
+  const spendLabel = uiText(isDaily ? 'budgetTodaySpend' : 'budgetSpendToDate');
+  const remainingLabel = uiText(isDaily ? 'budgetTodayRemaining' : 'remaining_f3e4352');
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <KpiCard
         label={budgetLabel}
-        value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudget) : '—'}
-        subLabel={isDaily ? 'per day' : undefined}
+        value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudget, uiLocale) : '—'}
+        subLabel={isDaily ? uiText('per_day_489b7ab') : undefined}
         progressValue={100}
         active={activeKey === 'budget'}
       />
 
       <KpiCard
         label={spendLabel}
-        value={formatCurrency(spendValue)}
+        value={formatCurrency(spendValue, uiLocale)}
         subLabel={
-          summary.totalBudget > 0 ? `${Math.min(spentPct, 999).toFixed(1)}% of cap` : undefined
+          summary.totalBudget > 0
+            ? uiText('budgetPercentOfCap', {
+                percentage: formatBudgetPacingPercent(Math.min(spentPct, 999), uiLocale),
+              })
+            : undefined
         }
         progressValue={spentPct}
         active={activeKey === 'spend'}
@@ -91,17 +96,19 @@ export function BudgetPacingSummaryStrip({ data, activeKey }: Props) {
 
       <KpiCard
         label={remainingLabel}
-        value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudgetRemaining) : '—'}
+        value={
+          summary.totalBudget > 0 ? formatCurrency(summary.totalBudgetRemaining, uiLocale) : '—'
+        }
         valueClassName={isRemainingCritical ? 'text-red-500' : undefined}
         progressValue={remainingPct}
         active={activeKey === 'remaining'}
       />
 
       <KpiCard
-        label="Pace"
+        label={uiText('pace_9582b50')}
         value={
           <span className="flex items-center gap-2">
-            {summary.overallPacePct.toFixed(1)}%
+            {formatBudgetPacingPercent(summary.overallPacePct, uiLocale)}
             <BudgetPacingStatusBadge status={summary.paceStatus} />
           </span>
         }

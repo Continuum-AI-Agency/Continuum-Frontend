@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 /**
  * The migration's whole claim, in one assertion: a turn rendered from the AI SDK's `message.parts`
  * is the SAME DOM as the equivalent persisted message.
@@ -14,7 +15,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { JainaUIMessage } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 import {

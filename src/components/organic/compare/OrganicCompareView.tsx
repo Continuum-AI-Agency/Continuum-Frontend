@@ -1,4 +1,7 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useUiErrorMessage } from '@/i18n/errors';
+import { organicMetricLabel } from '@/lib/organic/metricLabels';
 
 // Cross-platform / multi-account Compare mode for organic metrics.
 // Same fetchOrganicAnalytics path via loadBrandOrganicSnapshot.
@@ -122,6 +125,9 @@ export function OrganicCompareView({
   forceRefreshOnTick = false,
   onSelectionChange,
 }: OrganicCompareViewProps) {
+  const uiLocale = useLocale();
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('organic');
   const allAccounts = React.useMemo(
     () => flattenAccountsByPlatform(accountsByPlatform),
     [accountsByPlatform],
@@ -193,13 +199,13 @@ export function OrganicCompareView({
       .catch((error) => {
         if (cancelled) return;
         setStatus('error');
-        setErrorMessage(error instanceof Error ? error.message : 'Unable to load comparison data.');
+        setErrorMessage(formatUiError(error));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [allAccounts, brandId, forceRefreshOnTick, rangePreset, reloadTick]);
+  }, [allAccounts, brandId, forceRefreshOnTick, rangePreset, reloadTick, formatUiError]);
 
   const selectedSet = React.useMemo(() => new Set(selectedAccountKeys), [selectedAccountKeys]);
 
@@ -224,8 +230,9 @@ export function OrganicCompareView({
   const activeMetrics = React.useMemo(() => {
     return selectedMetrics
       .map((id) => getOrganicMetric(id))
-      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  }, [selectedMetrics]);
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .map((entry) => ({ ...entry, label: organicMetricLabel(entry.id, uiText) }));
+  }, [selectedMetrics, uiText]);
 
   React.useEffect(() => {
     if (selectedMetrics.includes(chartMetric)) return;
@@ -244,8 +251,9 @@ export function OrganicCompareView({
         metricId: chartMetric,
         mode: seriesMode,
         colorByKey,
+        translate: uiText,
       }),
-    [chartMetric, colorByKey, seriesMode, visibleAccounts],
+    [chartMetric, colorByKey, seriesMode, uiText, visibleAccounts],
   );
 
   // Every series on this chart shares one date axis, so the point count is the row
@@ -291,13 +299,13 @@ export function OrganicCompareView({
       const blended = blendMetric(visibleAccounts, metric.id);
       if (blended.kind !== 'sum') continue;
       items.push({
-        label: `Total ${metric.label}`,
-        value: formatNumber(blended.total),
+        label: uiText('metricTotal', { metric: metric.label }),
+        value: formatNumber(blended.total, uiLocale),
         deltaPct: blended.comparison?.percentageChange,
       });
     }
     return items;
-  }, [activeMetrics, visibleAccounts]);
+  }, [activeMetrics, visibleAccounts, uiText, uiLocale]);
 
   const toggleMetric = (id: OrganicMetricId) => {
     setSelectedMetrics((current) => {
@@ -316,10 +324,9 @@ export function OrganicCompareView({
           <EmptyMedia variant="icon">
             <Columns2 />
           </EmptyMedia>
-          <EmptyTitle>No organic accounts connected</EmptyTitle>
+          <EmptyTitle>{uiText('no_organic_accounts_connected_7da3e7a')}</EmptyTitle>
           <EmptyDescription>
-            Connect Instagram, Facebook, TikTok, YouTube, or LinkedIn in Integrations to compare
-            metrics across platforms.
+            {uiText('connect_instagram_facebook_tiktok_youtube_or__38998a4')}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -339,7 +346,9 @@ export function OrganicCompareView({
         />
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-2xs uppercase tracking-wide text-muted-foreground">Metrics</span>
+          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+            {uiText('metrics_a58da79')}
+          </span>
           {ORGANIC_METRIC_CATALOG.filter((entry) => entry.defaultSelected).map((entry) => {
             const on = selectedMetrics.includes(entry.id);
             return (
@@ -351,7 +360,7 @@ export function OrganicCompareView({
                 className="h-7 px-2.5 text-xs"
                 onClick={() => toggleMetric(entry.id)}
               >
-                {entry.label}
+                {organicMetricLabel(entry.id, uiText)}
               </Button>
             );
           })}
@@ -359,7 +368,7 @@ export function OrganicCompareView({
             <PopoverTrigger
               render={
                 <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs">
-                  More metrics
+                  {uiText('more_metrics_95d5330')}
                 </Button>
               }
             />
@@ -382,9 +391,9 @@ export function OrganicCompareView({
                         htmlFor={checkboxId}
                         className="flex flex-1 cursor-pointer items-center gap-2"
                       >
-                        <span className="flex-1">{entry.label}</span>
+                        <span className="flex-1">{organicMetricLabel(entry.id, uiText)}</span>
                         <span className="text-2xs text-muted-foreground">
-                          {entry.platforms.length} plat.
+                          {uiText.rich('sentence_6345be07b26f', { count: entry.platforms.length })}
                         </span>
                       </label>
                     </div>
@@ -412,12 +421,13 @@ export function OrganicCompareView({
         {snapshot && snapshot.missing.length > 0 ? (
           <Alert>
             <AlertDescription className="text-pretty">
-              Could not load {snapshot.missing.length} account
-              {snapshot.missing.length === 1 ? '' : 's'}:{' '}
-              {snapshot.missing
-                .map((row) => `${PLATFORM_LABELS[row.platform]} (${row.name})`)
-                .join(', ')}
-              . Showing accounts with data.
+              {uiText.rich('sentence_b47749676607', {
+                count: snapshot.missing.length,
+                accounts: () =>
+                  snapshot.missing
+                    .map((row) => `${PLATFORM_LABELS[row.platform]} (${row.name})`)
+                    .join(', '),
+              })}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -427,13 +437,13 @@ export function OrganicCompareView({
             {rollupItems.length > 0 ? (
               <div className="flex flex-col gap-1">
                 <span className="flex items-center gap-1 text-2xs uppercase tracking-wide text-muted-foreground">
-                  Combined total across selected accounts
+                  {uiText('combinedSelectedTotal')}
                   <Tooltip>
                     <TooltipTrigger
                       render={
                         <button
                           type="button"
-                          aria-label="What can be combined across accounts"
+                          aria-label={uiText('what_can_be_combined_across_accounts_6bce0b1')}
                           className="inline-flex size-3.5 items-center justify-center rounded-full border border-subtle text-2xs leading-none text-muted-foreground"
                         >
                           ?
@@ -442,9 +452,7 @@ export function OrganicCompareView({
                     />
                     <TooltipContent side="top" className="max-w-[240px]">
                       <p className="text-xs leading-snug">
-                        Only metrics that can be added up appear here. Rates and unique-people
-                        counts such as reach are left out, because adding them across accounts would
-                        count the same person twice.
+                        {uiText('only_metrics_that_can_be_added_up_appear_here_3341f2b')}
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -457,10 +465,11 @@ export function OrganicCompareView({
               <CardHeader className="border-b">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-col gap-1">
-                    <CardTitle className="text-base">Trend comparison</CardTitle>
+                    <CardTitle className="text-base">
+                      {uiText('trend_comparison_c1e45c3')}
+                    </CardTitle>
                     <CardDescription>
-                      Show one line per account, one combined line per platform, or both. Combined
-                      lines are dashed.
+                      {uiText('show_one_line_per_account_one_combined_line_p_f41f292')}
                     </CardDescription>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -476,21 +485,21 @@ export function OrganicCompareView({
                           className="px-3 text-xs"
                           data-tour-id="series-mode-decompose"
                         >
-                          Per account
+                          {uiText('per_account_4e99067')}
                         </TabsTrigger>
                         <TabsTrigger
                           value="blend"
                           className="px-3 text-xs"
                           data-tour-id="series-mode-blend"
                         >
-                          Combined
+                          {uiText('combined_8036ed3')}
                         </TabsTrigger>
                         <TabsTrigger
                           value="both"
                           className="px-3 text-xs"
                           data-tour-id="series-mode-both"
                         >
-                          Both
+                          {uiText('both_b6c1d86')}
                         </TabsTrigger>
                       </TabsList>
                     </Tabs>
@@ -514,12 +523,10 @@ export function OrganicCompareView({
               <CardContent className="pt-4">
                 {chartRows.length < 2 || chartSeries.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Not enough daily history for{' '}
-                    {getOrganicMetric(chartMetric)?.label ?? chartMetric} on the selected accounts
-                    {seriesMode !== 'decompose'
-                      ? ' (a combined line needs a metric that can be added up)'
-                      : ''}
-                    .
+                    {uiText.rich('sentence_f307f3622091', {
+                      metric: organicMetricLabel(chartMetric, uiText),
+                      combined: seriesMode !== 'decompose' ? 'yes' : 'no',
+                    })}
                   </p>
                 ) : (
                   <ChartContainer config={chartConfig} className="aspect-auto h-[280px] w-full">
@@ -556,18 +563,18 @@ export function OrganicCompareView({
 
             <Card>
               <CardHeader className="border-b">
-                <CardTitle className="text-base">Metric matrix</CardTitle>
+                <CardTitle className="text-base">{uiText('metric_matrix_6707c3e')}</CardTitle>
                 <CardDescription>
-                  Each account's values, with the change compared with the previous period. A
-                  combined row appears for any platform where two or more selected accounts share
-                  it.
+                  {uiText('each_account_s_values_with_the_change_compare_492c87d')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="px-0 pt-0" data-tour-id="organic-compare-matrix">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="min-w-[10rem] pl-4">Account</TableHead>
+                      <TableHead className="min-w-[10rem] pl-4">
+                        {uiText('account_7e1b0d5')}
+                      </TableHead>
                       {activeMetrics.map((metric) => (
                         <TableHead key={metric.id} className="text-right">
                           {metric.label}
@@ -612,7 +619,7 @@ export function OrganicCompareView({
                                   </span>
                                   {typeof delta === 'number' ? (
                                     <span className="text-2xs text-muted-foreground">
-                                      {formatPercentChange(delta)}
+                                      {formatPercentChange(delta, uiLocale)}
                                     </span>
                                   ) : null}
                                 </div>
@@ -630,9 +637,14 @@ export function OrganicCompareView({
                             <PlatformIcon platform={row.platform} size={16} />
                             <div className="flex flex-col">
                               <span className="font-medium leading-tight">
-                                {PLATFORM_LABELS[row.platform]} (all · {row.accounts.length})
+                                {uiText.rich('sentence_4b36e6830a41', {
+                                  platform: () => PLATFORM_LABELS[row.platform],
+                                  count: row.accounts.length,
+                                })}
                               </span>
-                              <span className="text-2xs text-muted-foreground">Combined</span>
+                              <span className="text-2xs text-muted-foreground">
+                                {uiText('combined_8036ed3')}
+                              </span>
                             </div>
                           </div>
                         </TableCell>
@@ -649,7 +661,7 @@ export function OrganicCompareView({
                                   </span>
                                   {typeof cell.delta === 'number' ? (
                                     <span className="text-2xs text-muted-foreground">
-                                      {formatPercentChange(cell.delta)}
+                                      {formatPercentChange(cell.delta, uiLocale)}
                                     </span>
                                   ) : null}
                                 </div>
@@ -667,10 +679,9 @@ export function OrganicCompareView({
         ) : status === 'success' ? (
           <Empty className="min-h-[160px] rounded-lg border border-dashed">
             <EmptyHeader>
-              <EmptyTitle>No accounts with data selected</EmptyTitle>
+              <EmptyTitle>{uiText('no_accounts_with_data_selected_5a10683')}</EmptyTitle>
               <EmptyDescription>
-                Select at least one account that loaded successfully, or refresh after fixing
-                connection errors.
+                {uiText('select_at_least_one_account_that_loaded_succe_896ba3d')}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

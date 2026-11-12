@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, render } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 
 // The settings page mounts this hook TWICE for one brand — `DesignSystemSection` for
 // the section cards, and the `DesignSystemCard` nested inside it for the uploader. When

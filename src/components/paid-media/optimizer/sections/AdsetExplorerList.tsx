@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+
 // Left pane of the SuggestionExplorer: a searchable, internally-scrolling ticker
 // of the suggestion's ad sets (the FE convention is a left-rail list, not a heavy
 // data table). Each row still carries the inline Budget / Spend 14d / cost the old
@@ -38,6 +40,8 @@ export function AdsetExplorerList({
   selectedId,
   onSelect,
 }: AdsetExplorerListProps) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const [query, setQuery] = useState('');
 
   // Highest spend first, matching the old table's default sort — the ad set with the
@@ -58,25 +62,25 @@ export function AdsetExplorerList({
         <Input
           className="h-8 pl-7 text-xs"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search ad sets…"
+          placeholder={uiText('search_ad_sets_598b3cb')}
           value={query}
-          aria-label="Search ad sets"
+          aria-label={uiText('search_ad_sets_8f9a08f')}
         />
       </div>
 
       <div
         className={`${typeScale.label} grid shrink-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 px-2 font-medium text-muted-foreground`}
       >
-        <span>Ad set</span>
-        <span className="text-right">Budget</span>
-        <span className="text-right">Spend 14d</span>
+        <span>{uiText('ad_set_639a64f')}</span>
+        <span className="text-right">{uiText('budget_1c6225e')}</span>
+        <span className="text-right">{uiText('spend_14d_4ab2cda')}</span>
         <span className="text-right">{metricLabel}</span>
       </div>
 
       <ScrollArea className="min-h-0 flex-1 rounded-md border border-border/60">
         {filtered.length === 0 ? (
           <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No ad sets match &ldquo;{query.trim()}&rdquo;.
+            {uiText.rich('sentence_4d9920ba12bd', { v0: query.trim() })}
           </p>
         ) : (
           <ul>
@@ -99,13 +103,13 @@ export function AdsetExplorerList({
                       name={row.name ?? undefined}
                     />
                     <span className="text-right text-xs tabular-nums text-foreground">
-                      {formatCurrency(row.currentBudget, currency)}
+                      {formatCurrency(row.currentBudget, currency, uiLocale)}
                     </span>
                     <span className="text-right text-xs tabular-nums text-foreground">
-                      {formatCurrency(row.spend, currency)}
+                      {formatCurrency(row.spend, currency, uiLocale)}
                     </span>
                     <span className="text-right text-xs tabular-nums text-muted-foreground">
-                      {row.cost != null ? formatCpa(row.cost, currency) : '—'}
+                      {row.cost != null ? formatCpa(row.cost, currency, uiLocale) : '—'}
                     </span>
                   </button>
                 </li>

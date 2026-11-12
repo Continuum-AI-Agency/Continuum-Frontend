@@ -1,3 +1,7 @@
+import { createTranslator } from 'next-intl';
+import es from '../../../messages/forge/es.json';
+import pt from '../../../messages/forge/pt-BR.json';
+import { checkSummary } from './CheckTable';
 /**
  * Every state each render check can be in, and the words it uses for it. A judge that reads
  * "Judging…" forever, or a placement row that says "fits" for a slot nobody measured, is worse
@@ -422,4 +426,54 @@ test('recorded quality warnings stay visible on successful renders', () => {
     lines: ['Review the accent color.'],
   });
   expect(checks.find((check) => check.name === 'Brand')?.state).toBe('warn');
+});
+
+describe('localized check display with canonical states', () => {
+  for (const [locale, messages, file, saved, warning] of [
+    ['pt-BR', pt, '1 arquivo', '1 arquivo salvo', '1 aviso'],
+    ['es', es, '1 archivo', '1 archivo guardado', '1 advertencia'],
+  ] as const) {
+    test(`${locale}: translated counts keep check states and source names intact`, () => {
+      const t = createTranslator({ locale, messages: { forge: messages }, namespace: 'forge' });
+      const job = { ...JOB, outputs: [{ ...FILES[0]!, assetId: JOB.id }] };
+      const ui = { t, locale };
+      const checks = renderJobChecks(job, {}, NOW, ui);
+      expect(checks.find((check) => check.kind === 'inputs')?.name).toBe('Entradas');
+      expect(checks.find((check) => check.kind === 'render')?.result).toBe(file);
+      expect(jobSteps(job, ui).some((step) => step.detail === saved)).toBe(true);
+      expect(jobSteps({ ...job, status: 'failed' }, ui)[1]?.state).toBe('error');
+      expect(checkSummary([{ state: 'warn' }], t)).toBe(warning);
+      expect(job.templateName).toBe('Producto individual');
+      expect(
+        checks
+          .map((check) => check.state)
+          .every((state) => ['pass', 'warn', 'fail', 'running', 'todo', 'skipped'].includes(state)),
+      ).toBe(true);
+    });
+  }
+});
+
+describe('localized original placement checks', () => {
+  for (const [locale, messages, singular, plural] of [
+    ['pt-BR', pt, '1 imagem cabe', '2 imagens cabem'],
+    ['es', es, '1 imagen cabe', '2 imágenes caben'],
+  ] as const) {
+    test(`${locale}: plural counts preserve placement states and authored names`, () => {
+      const t = createTranslator({ locale, messages: { forge: messages }, namespace: 'forge' });
+      const one = { ...JOB, fit: fit([slot({ key: 'first' })]) };
+      const two = { ...JOB, fit: fit([slot({ key: 'first' }), slot({ key: 'second' })]) };
+      const labels = { first: 'Client image A', second: 'Client image B' };
+      const first = renderJobChecks(one, labels, NOW, { t, locale }).find(
+        (row) => row.kind === 'placement',
+      );
+      const second = renderJobChecks(two, labels, NOW, { t, locale }).find(
+        (row) => row.kind === 'placement',
+      );
+      expect(first).toMatchObject({ state: 'pass', result: singular });
+      expect(second).toMatchObject({ state: 'pass', result: plural });
+      expect(second?.lines[0]).toContain('Client image A');
+      expect(second?.lines[1]).toContain('Client image B');
+      expect(two.fit.slots.map((slot) => slot.key)).toEqual(['first', 'second']);
+    });
+  }
 });

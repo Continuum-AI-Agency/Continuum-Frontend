@@ -7,6 +7,7 @@ import {
   checkBundleBudgets,
   isWithinBudget,
   maxAllowedBytes,
+  visibleRoute,
 } from './check-vercel-bundle-budget.mjs';
 
 // The arithmetic tests below never touch a dist directory, which is why the bundler migration broke
@@ -37,6 +38,42 @@ writeFileSync(
 afterAll(() => rmSync(distDirectory, { recursive: true, force: true }));
 
 describe('Vercel bundle budgets', () => {
+  it('keeps existing route budgets across internal locale and route groups', () => {
+    expect(visibleRoute('/[locale]/(post-auth)/organic')).toBe('/organic');
+    expect(visibleRoute('/[locale]/(auth)/login')).toBe('/login');
+    expect(visibleRoute('/[locale]')).toBe('/');
+    expect(visibleRoute('/api/auth')).toBe('/api/auth');
+  });
+  it('gates the largest localized route against the unchanged visible-route budget', () => {
+    const localizedDist = mkdtempSync(path.join(tmpdir(), 'localized-budget-'));
+    mkdirSync(path.join(localizedDist, 'diagnostics'), { recursive: true });
+    writeFileSync(
+      path.join(localizedDist, 'diagnostics/route-bundle-stats.json'),
+      JSON.stringify([
+        {
+          route: '/[locale]/(post-auth)/organic',
+          firstLoadUncompressedJsBytes: 1000,
+          firstLoadChunkPaths: [],
+        },
+        {
+          route: '/pt-BR/(post-auth)/organic',
+          firstLoadUncompressedJsBytes: 1300,
+          firstLoadChunkPaths: [],
+        },
+      ]),
+    );
+    const [result] = checkBundleBudgets({
+      distDirectory: localizedDist,
+      configuration: {
+        maxGrowthPercent: 10,
+        budgets: [
+          { name: 'organic', source: 'routeFirstLoad', route: '/organic', baselineBytes: 1000 },
+        ],
+      },
+    });
+    expect(result).toMatchObject({ actualBytes: 1300, passed: false });
+    rmSync(localizedDist, { recursive: true, force: true });
+  });
   it('allows at most the configured percentage over the recorded baseline', () => {
     expect(maxAllowedBytes(1000, 10)).toBe(1100);
     expect(isWithinBudget(1100, 1000, 10)).toBe(true);

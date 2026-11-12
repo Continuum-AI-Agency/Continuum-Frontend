@@ -1,3 +1,6 @@
+import type { useTranslations } from 'next-intl';
+import { countryName } from '@/CampaignCanvas/types/nodeOptionPresentation';
+import type { UiLocale } from '@/i18n/config';
 /**
  * The campaign -> ad set -> ad tree a scaffold card renders, built from database rows
  * and overlaid with live progress.
@@ -198,16 +201,37 @@ const derivedOf = (payload: Record<string, unknown>): ScaffoldDerived => ({
  * identical sentence — two summaries of the same spec that disagreed would read as two
  * different audiences.
  */
-export const targetingSummary = (targeting: unknown): string | null => {
+export const targetingSummary = (
+  targeting: unknown,
+  t?: ReturnType<typeof useTranslations<'scale'>>,
+  locale: UiLocale = 'en',
+): string | null => {
   if (!targeting || typeof targeting !== 'object') return null;
   const record = targeting as Record<string, unknown>;
   const parts: string[] = [];
   const included = record.custom_audiences;
   const excluded = record.excluded_custom_audiences;
-  if (Array.isArray(included) && included.length > 0) parts.push(`${included.length} included`);
-  if (Array.isArray(excluded) && excluded.length > 0) parts.push(`${excluded.length} excluded`);
+  if (Array.isArray(included) && included.length > 0)
+    parts.push(
+      t
+        ? t('scaffoldIncludedAudiences', { count: included.length })
+        : `${included.length} included`,
+    );
+  if (Array.isArray(excluded) && excluded.length > 0)
+    parts.push(
+      t
+        ? t('scaffoldExcludedAudiences', { count: excluded.length })
+        : `${excluded.length} excluded`,
+    );
   const countries = (record.geo_locations as Record<string, unknown> | undefined)?.countries;
-  if (Array.isArray(countries) && countries.length > 0) parts.push(countries.join('/'));
+  if (Array.isArray(countries) && countries.length > 0)
+    parts.push(
+      t
+        ? countries
+            .map((code) => (typeof code === 'string' ? countryName(code, locale) : String(code)))
+            .join('/')
+        : countries.join('/'),
+    );
   const ageMin = record.age_min;
   const ageMax = record.age_max;
   if (typeof ageMin === 'number' || typeof ageMax === 'number') {

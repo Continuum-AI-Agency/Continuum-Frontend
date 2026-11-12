@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { formatFigure, type TemplateFigure } from '@continuum/contracts';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { type AnswerTemplateBlockV2, checkpointBlockV2Schema } from '@/lib/jaina/schemas';
 import { ExportModeProvider } from '../export/ExportModeContext';
 import fixture from './__fixtures__/explained_ranking.block.json';

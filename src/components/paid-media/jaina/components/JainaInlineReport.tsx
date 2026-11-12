@@ -1,11 +1,15 @@
 'use client';
 
+
 import { DownloadIcon, FileCode2Icon, Share2Icon, Table2Icon } from 'lucide-react';
+
+import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { type FrontendCheckpointReport, hasReportContent } from '@/lib/jaina/schemas';
 import { JainaProse } from '../blocks/prose';
 import {
@@ -36,6 +40,8 @@ export function JainaInlineReport({
   isStreaming,
   onSuggestionClick,
 }: JainaInlineReportProps) {
+  const formatUiError = useUiErrorMessage();
+  const uiText = useTranslations('scale');
   const { show } = useToast();
   const [exporting, setExporting] = React.useState<'sheets' | 'share' | null>(null);
   const fallbackTables = React.useMemo(
@@ -65,12 +71,12 @@ export function JainaInlineReport({
       });
     } catch {
       show({
-        title: 'Export failed',
-        description: 'Unable to generate PDF report right now.',
+        title: uiText('export_failed_e94d3ee'),
+        description: uiText('unable_to_generate_pdf_report_right_now_b787d7b'),
         variant: 'error',
       });
     }
-  }, [fallbackTables, report, show]);
+  }, [fallbackTables, report, show, uiText]);
 
   const handleHtmlExport = React.useCallback(() => {
     if (!report) return;
@@ -81,12 +87,12 @@ export function JainaInlineReport({
       });
     } catch {
       show({
-        title: 'Export failed',
-        description: 'Unable to generate HTML report right now.',
+        title: uiText('export_failed_e94d3ee'),
+        description: uiText('unable_to_generate_html_report_right_now_3bed49b'),
         variant: 'error',
       });
     }
-  }, [fallbackTables, report, show]);
+  }, [fallbackTables, report, show, uiText]);
 
   const handleSheetsExport = React.useCallback(async () => {
     if (!report) return;
@@ -97,19 +103,19 @@ export function JainaInlineReport({
       );
       window.open(result.url, '_blank', 'noopener,noreferrer');
       show({
-        title: 'Google Sheet created',
-        description: 'Your report is ready in Google Sheets.',
+        title: uiText('google_sheet_created_625ad8c'),
+        description: uiText('your_report_is_ready_in_google_sheets_b6087a7'),
       });
     } catch (error) {
       show({
-        title: 'Google Sheets export failed',
-        description: error instanceof Error ? error.message : 'Unable to export the report.',
+        title: uiText('google_sheets_export_failed_6b033bc'),
+        description: formatUiError(error),
         variant: 'error',
       });
     } finally {
       setExporting(null);
     }
-  }, [fallbackTables, report, show]);
+  }, [fallbackTables, report, show, formatUiError, uiText]);
 
   const handleShare = React.useCallback(async () => {
     if (!report) return;
@@ -121,21 +127,20 @@ export function JainaInlineReport({
         downloadFile(file);
         openJainaReportMailDraft(report.report_title || 'Jaina report');
         show({
-          title: 'Attach the downloaded report',
-          description:
-            'Your email draft is open. Attach the downloaded HTML report before sending.',
+          title: uiText('attach_the_downloaded_report_ffa76ca'),
+          description: uiText('your_email_draft_is_open_attach_the_downloade_cea581f'),
         });
       }
     } catch {
       show({
-        title: 'Share failed',
-        description: 'Unable to prepare the report for sharing right now.',
+        title: uiText('share_failed_609fbf0'),
+        description: uiText('unable_to_prepare_the_report_for_sharing_righ_60230b9'),
         variant: 'error',
       });
     } finally {
       setExporting(null);
     }
-  }, [fallbackTables, report, show]);
+  }, [fallbackTables, report, show, uiText]);
 
   if (!report || !hasReportContent(report)) return null;
 
@@ -151,7 +156,7 @@ export function JainaInlineReport({
     <section className="mt-6 space-y-6">
       <header className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold tracking-tight">
-          {report.report_title || 'Checkpoint Analysis'}
+          {report.report_title || uiText('checkpoint_analysis_d632c22')}
         </h2>
         <div className="flex items-center gap-2">
           <Pill variant="violet" className="uppercase text-xs tracking-wide">
@@ -163,17 +168,19 @@ export function JainaInlineReport({
             variant="secondary"
             onClick={() => void handleDownload()}
             disabled={isStreaming}
-            aria-label="Download report as PDF"
+            aria-label={uiText('download_report_as_pdf_bb6939f')}
           >
             <DownloadIcon className="size-3.5" />
-            Download
+            {uiText('download_d6eafe8')}
           </Button>
         </div>
       </header>
 
       {report.executive_summary ? (
         <div className="space-y-2">
-          <span className="text-sm font-medium text-foreground/85">Executive Summary</span>
+          <span className="text-sm font-medium text-foreground/85">
+            {uiText('executive_summary_53d548a')}
+          </span>
           <JainaProse
             content={report.executive_summary}
             className="text-base leading-6 text-muted-foreground"
@@ -184,7 +191,9 @@ export function JainaInlineReport({
 
       {report.blocks.length > 0 ? (
         <div className="space-y-2">
-          <span className="text-sm font-medium text-foreground/85">Checkpoint Blocks</span>
+          <span className="text-sm font-medium text-foreground/85">
+            {uiText('checkpoint_blocks_4f463e6')}
+          </span>
           <div className="space-y-2">
             {report.blocks.map((block) => (
               <div key={block.block_id} className="rounded-xl bg-muted/40 px-3 py-2.5">
@@ -215,7 +224,9 @@ export function JainaInlineReport({
 
       {report.follow_up_questions.length > 0 ? (
         <div className="space-y-2 pt-2">
-          <span className="text-sm font-medium text-foreground/85">Follow-up</span>
+          <span className="text-sm font-medium text-foreground/85">
+            {uiText('follow_up_09b2d9c')}
+          </span>
           <Suggestions className="pb-1">
             {report.follow_up_questions.map((question, index) => (
               <Suggestion
@@ -230,7 +241,7 @@ export function JainaInlineReport({
 
       <footer className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
-          Export includes summary, metrics, charts, tables, recommendations, and follow-up prompts.
+          {uiText('export_includes_summary_metrics_charts_tables_81b7b72')}
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -239,10 +250,11 @@ export function JainaInlineReport({
             variant="outline"
             onClick={() => void handleSheetsExport()}
             disabled={isStreaming || exporting !== null}
-            aria-label="Export report to Google Sheets"
+            aria-label={uiText('export_report_to_google_sheets_cd12c3b')}
           >
-            <Table2Icon className="size-3.5" />
-            Google Sheets
+            {uiText.rich('sentence_7ada52d96afe', {
+              v0: () => <Table2Icon className="size-3.5" />,
+            })}
           </Button>
           <Button
             type="button"
@@ -250,10 +262,10 @@ export function JainaInlineReport({
             variant="outline"
             onClick={() => void handleShare()}
             disabled={isStreaming || exporting !== null}
-            aria-label="Share report by email"
+            aria-label={uiText('share_report_by_email_6991803')}
           >
             <Share2Icon className="size-3.5" />
-            Email
+            {uiText('email_969ccbd')}
           </Button>
           <Button
             type="button"
@@ -261,10 +273,10 @@ export function JainaInlineReport({
             variant="outline"
             onClick={handleHtmlExport}
             disabled={isStreaming || exporting !== null}
-            aria-label="Export response as HTML"
+            aria-label={uiText('export_response_as_html_18a729c')}
           >
             <FileCode2Icon className="size-3.5" />
-            Export HTML
+            {uiText('export_html_17f681a')}
           </Button>
         </div>
       </footer>

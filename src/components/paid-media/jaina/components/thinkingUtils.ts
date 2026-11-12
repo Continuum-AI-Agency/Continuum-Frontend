@@ -1,3 +1,7 @@
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
 import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import type { ToolCallEventData, ToolResultEventData } from '@/lib/jaina/schemas';
 
@@ -44,7 +48,9 @@ export type ToolCluster = {
   runningCount: number;
 };
 
-export function formatToolLabel(toolName: string): string {
+export function formatToolLabel(toolName: string,uiTranslate?:ScaleCopy,displayName?:string|null): string {
+  if(displayName?.trim())return displayName;
+  if(uiTranslate)return toolName==='router'?uiTranslate('consulting_the_council_26ca0ae'):uiTranslate('jainaTool');
   return toolName === 'router' ? 'Consulting the Council' : toolName.replace(/_/g, ' ');
 }
 
@@ -74,7 +80,10 @@ export const STAGE_LABELS: Record<string, string> = {
 // to the last progress entry, so it includes tool/delegation time, not just the
 // model's thinking. Returns null when the span is under a second or unknowable,
 // letting the caller fall back to a plain "Reasoning trace" label.
-export function formatThoughtDuration(reasoning: JainaProgressEntry[]): string | null {
+export function formatThoughtDuration(
+  reasoning: JainaProgressEntry[],
+  uiTranslate?: ScaleCopy,
+): string | null {
   const timestamps = reasoning
     .map((entry) => Date.parse(entry.at))
     .filter((value) => Number.isFinite(value));
@@ -83,33 +92,37 @@ export function formatThoughtDuration(reasoning: JainaProgressEntry[]): string |
   const elapsedMs = Math.max(...timestamps) - Math.min(...timestamps);
   if (elapsedMs < 1000) return null;
 
-  return `Thought for ${Math.round(elapsedMs / 1000)}s`;
+  return uiTranslate
+    ? uiTranslate('helper_9751db2da8ca', { v0: Math.round(elapsedMs / 1000) })
+    : `Thought for ${Math.round(elapsedMs / 1000)}s`;
 }
 
-export function humanizeStage(stage: string): string {
+export function humanizeStage(stage: string,uiTranslate?:ScaleCopy): string {
+  if(uiTranslate)return uiTranslate('jainaStage',{stage});
   const normalized = stage.replace(/[_-]+/g, ' ').trim();
   if (!normalized) return 'Working';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
-function stageEntryToLiveLabel(entry: JainaProgressEntry): string | null {
+function stageEntryToLiveLabel(entry: JainaProgressEntry,uiTranslate?:ScaleCopy): string | null {
   const stage = entry.stage;
   if (!stage) return null;
   const data = (entry.data ?? {}) as Record<string, unknown>;
   const toolName = typeof data.tool_name === 'string' ? data.tool_name : undefined;
   if ((stage === 'tool_start' || stage === 'tool_complete') && toolName) {
+    if(uiTranslate)return uiTranslate('jainaLiveTool',{stage});
     const friendly = formatToolLabel(toolName);
     return stage === 'tool_start' ? `Pulling ${friendly}` : `Reviewing ${friendly}`;
   }
-  return STAGE_LABELS[stage] ?? humanizeStage(stage);
+  return uiTranslate?humanizeStage(stage,uiTranslate):(STAGE_LABELS[stage] ?? humanizeStage(stage));
 }
 
 // The most recent meaningful activity, surfaced as the live status line. Reads
 // the latest progress entry so the label tracks what Jaina is doing right now
 // (a tool name, a delegation, "Writing report") instead of a generic spinner.
-export function deriveLiveStatusLabel(reasoning: JainaProgressEntry[]): string | null {
+export function deriveLiveStatusLabel(reasoning: JainaProgressEntry[],uiTranslate?:ScaleCopy): string | null {
   for (let i = reasoning.length - 1; i >= 0; i -= 1) {
-    const label = stageEntryToLiveLabel(reasoning[i]);
+    const label = stageEntryToLiveLabel(reasoning[i],uiTranslate);
     if (label) return label;
   }
   return null;
@@ -123,9 +136,10 @@ const KNOWN_AGENT_LABELS: Record<string, string> = {
   routing_agent: 'Router',
 };
 
-export function formatAgentLabel(scope: string): string {
+export function formatAgentLabel(scope: string,uiTranslate?:ScaleCopy,displayName?:string|null): string {
   const normalized = scope.startsWith('Jaina_') ? scope.slice('Jaina_'.length) : scope;
-  if (normalized in KNOWN_AGENT_LABELS) return KNOWN_AGENT_LABELS[normalized];
+  if(displayName&&displayName!==KNOWN_AGENT_LABELS[normalized]&&displayName!==scope)return displayName;
+  if (normalized in KNOWN_AGENT_LABELS)return uiTranslate?uiTranslate('jainaAgent',{agent:normalized}):KNOWN_AGENT_LABELS[normalized];
   return normalized.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { act, renderHook } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import * as React from 'react';
-
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { renderHook } from '@/i18n/__tests__/render';
 import { useDraftGeneration } from './useDraftGeneration';
 
 // Deliberately no mock.module: it is process-wide in bun, so mocking the store or the

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { PlatformChip, PlatformIcon, platformColor } from './PlatformChip';
 import { AD_PLATFORMS } from './platformTabsModel';
 

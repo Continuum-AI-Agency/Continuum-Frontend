@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderInDom, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
+import { render as renderInDom } from '@/i18n/__tests__/render';
 import { publishAccountsKey } from '@/lib/organic/publishTargets';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 

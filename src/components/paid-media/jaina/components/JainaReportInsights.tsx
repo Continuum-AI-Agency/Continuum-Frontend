@@ -1,4 +1,5 @@
 import { LightbulbIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 
 interface JainaReportInsightsProps {
@@ -6,11 +7,14 @@ interface JainaReportInsightsProps {
 }
 
 export function JainaReportInsights({ insights }: JainaReportInsightsProps) {
+  const uiText = useTranslations('scale');
   if (!insights || insights.length === 0) return null;
 
   return (
     <div id="strategic-insights" className="space-y-4">
-      <h3 className="text-lg font-semibold text-primary/80">Strategic Insights</h3>
+      <h3 className="text-lg font-semibold text-primary/80">
+        {uiText('strategic_insights_b5fe78d')}
+      </h3>
       <div className="rounded-xl bg-primary/10 p-4">
         <div className="flex gap-4 items-start p-2">
           <div className="mt-1 p-2 bg-indigo-500/20 rounded-full text-indigo-400">

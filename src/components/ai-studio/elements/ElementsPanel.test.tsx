@@ -36,6 +36,8 @@ mock.module('@/components/ui/select', () => ({
 
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type React from 'react';
+import type { ReactNode } from 'react';
 import {
   act,
   cleanup,
@@ -44,9 +46,7 @@ import {
   render,
   screen,
   waitFor,
-} from '@testing-library/react';
-import type React from 'react';
-import type { ReactNode } from 'react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ELEMENT_DRAG_TYPE, parseElementDragPayload } from '@/lib/ai-studio/referenceDrop';
 import { ElementsPanel } from './ElementsPanel';
 

@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
 import type { ApiRenderTemplateContract } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import {
   chooseOption,
@@ -9,6 +8,14 @@ import {
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import type { RequestRow } from '@/components/forge/renderRequestRows';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 
 installPickerDomGlobals();
 afterEach(cleanup);

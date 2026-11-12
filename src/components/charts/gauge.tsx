@@ -1,4 +1,6 @@
 'use client';
+import {useTranslations} from 'next-intl';
+
 
 import { ParentSize } from '@visx/responsive';
 import { motion, type Transition, useReducedMotion } from 'motion/react';
@@ -216,6 +218,7 @@ function useGaugeFillState(props: GaugeInnerProps) {
     totalNotches = 40,
   } = props;
 
+
   const themeActiveGradientId = `gauge-theme-active-${useId().replace(/:/g, '')}`;
   const defsChildren = useMemo(() => collectGaugeDefsElements(children), [children]);
 
@@ -245,6 +248,9 @@ function useGaugeFillState(props: GaugeInnerProps) {
 }
 
 function GaugeArcInner(props: GaugeInnerProps) {
+const defaultUiText=useTranslations('common');
+
+
   const {
     value,
     totalNotches = 40,
@@ -257,7 +263,7 @@ function GaugeArcInner(props: GaugeInnerProps) {
     endAngle = 405,
     useGradient = false,
     centerValue,
-    defaultLabel = 'Total',
+    defaultLabel: uiProvidedDefaultLabel,
     prefix,
     suffix,
     formatOptions = defaultChartStatFlowFormat,
@@ -267,6 +273,7 @@ function GaugeArcInner(props: GaugeInnerProps) {
     enterTransition,
     enterStaggerScale = 1,
   } = props;
+ const defaultLabel=uiProvidedDefaultLabel??defaultUiText('total_c9b3c38');
 
   const prefersReducedMotion = useReducedMotion();
   const fillState = useGaugeFillState(props);
@@ -425,6 +432,9 @@ function GaugeArcInner(props: GaugeInnerProps) {
 }
 
 function GaugeLinearInner(props: GaugeInnerProps) {
+const defaultUiText=useTranslations('common');
+
+
   const {
     value,
     totalNotches = 40,
@@ -435,7 +445,7 @@ function GaugeLinearInner(props: GaugeInnerProps) {
     height,
     useGradient = false,
     centerValue,
-    defaultLabel = 'Total',
+    defaultLabel: uiProvidedDefaultLabel,
     prefix,
     suffix,
     formatOptions = defaultChartStatFlowFormat,
@@ -449,6 +459,7 @@ function GaugeLinearInner(props: GaugeInnerProps) {
     enterStaggerScale = 1,
     geometryScrubbing = false,
   } = props;
+ const defaultLabel=uiProvidedDefaultLabel??defaultUiText('total_c9b3c38');
 
   const prefersReducedMotion = useReducedMotion();
   const fillState = useGaugeFillState(props);

@@ -10,11 +10,18 @@ import {
   RotateCcw,
   Save,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  goalChecklistBlocker,
+  goalChecklistCopy,
+  goalChecklistStatus,
+  goalChecklistSummary,
+} from '@/lib/goals/checklistCopy';
 import type { GoalArtifactView } from '@/lib/goals/models';
 import { GoalStatusPill } from './GoalStatusPill';
 
@@ -41,6 +48,7 @@ export function GoalArtifactEditor({
   onSave,
   onAction,
 }: GoalArtifactEditorProps) {
+  const uiText = useTranslations('dashboard');
   const [draft, setDraft] = useState(artifact?.markdown ?? '');
   // Undefined means "the user has not picked a tab" — the tab that suits the artifact wins until
   // then. The derived tab depends on values computed past the early return below, so this stays
@@ -61,10 +69,9 @@ export function GoalArtifactEditor({
       <section className="flex min-h-0 flex-1 items-center justify-center bg-card/20 p-6">
         <div className="max-w-md text-center">
           <FileText className="mx-auto size-5 text-muted-foreground" />
-          <p className="mt-3 text-sm font-medium">Select an artifact</p>
+          <p className="mt-3 text-sm font-medium">{uiText('select_an_artifact_fc3d77d')}</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            The case file keeps evidence in dependency order. Select an item from the manifest to
-            inspect its current reviewed version.
+            {uiText('the_case_file_keeps_evidence_in_dependency_or_e39fe31')}
           </p>
         </div>
       </section>
@@ -124,7 +131,7 @@ export function GoalArtifactEditor({
                 }
               >
                 <RotateCcw className="size-3.5" />
-                Request changes
+                {uiText('m_bbd0717f18')}
               </Button>
               <Button
                 type="button"
@@ -134,7 +141,7 @@ export function GoalArtifactEditor({
                 }
               >
                 <Check className="size-3.5" />
-                Approve version
+                {uiText('m_406380acbc')}
               </Button>
             </>
           ) : null}
@@ -147,7 +154,7 @@ export function GoalArtifactEditor({
               }
             >
               <Check className="size-3.5" />
-              Accept artifact
+              {uiText('m_f1445323b5')}
             </Button>
           ) : null}
           {versionId && artifact.status === 'accepted' && !artifact.promotedToBrandDocumentId ? (
@@ -160,7 +167,7 @@ export function GoalArtifactEditor({
               }
             >
               <Library className="size-3.5" />
-              Promote to Brand Knowledge
+              {uiText('m_3aa6257e12')}
             </Button>
           ) : null}
           {editable ? (
@@ -175,7 +182,7 @@ export function GoalArtifactEditor({
               ) : (
                 <Save className="size-3.5" />
               )}
-              {isSaving ? 'Saving…' : 'Save draft'}
+              {isSaving ? uiText('saving_23e3929') : uiText('save_draft_3de1001')}
             </Button>
           ) : null}
         </div>
@@ -194,16 +201,16 @@ export function GoalArtifactEditor({
       >
         <div className="shrink-0 border-b border-border/70 px-4 py-2">
           <TabsList>
-            {editable ? <TabsTrigger value="edit">Edit</TabsTrigger> : null}
+            {editable ? <TabsTrigger value="edit">{uiText('edit_464c4ff')}</TabsTrigger> : null}
             {structuredDocument ? (
               <>
-                <TabsTrigger value="overview">Artifact</TabsTrigger>
-                <TabsTrigger value="checklist">Checklist</TabsTrigger>
-                <TabsTrigger value="rationale">Rationale</TabsTrigger>
-                <TabsTrigger value="raw">Structured data</TabsTrigger>
+                <TabsTrigger value="overview">{uiText('artifact_e06171a')}</TabsTrigger>
+                <TabsTrigger value="checklist">{uiText('checklist_7346030')}</TabsTrigger>
+                <TabsTrigger value="rationale">{uiText('rationale_58f23be')}</TabsTrigger>
+                <TabsTrigger value="raw">{uiText('structured_data_6a2dc31')}</TabsTrigger>
               </>
             ) : (
-              <TabsTrigger value="preview">Preview</TabsTrigger>
+              <TabsTrigger value="preview">{uiText('preview_324b134')}</TabsTrigger>
             )}
           </TabsList>
         </div>
@@ -213,7 +220,7 @@ export function GoalArtifactEditor({
             <Textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              aria-label={`${artifact.title} Markdown draft`}
+              aria-label={uiText('m_ef4809b018', { v0: String(artifact.title) })}
               spellCheck
               className="min-h-full resize-none rounded-none border-0 bg-transparent px-5 py-5 font-mono text-sm leading-6 shadow-none focus-visible:ring-0"
             />
@@ -227,11 +234,12 @@ export function GoalArtifactEditor({
                 <div className="rounded-lg border border-border/70 bg-background/55 p-4">
                   <div className="flex items-center gap-2">
                     <FileText className="size-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold">Current structured artifact</h3>
+                    <h3 className="text-sm font-semibold">
+                      {uiText('current_structured_artifact_c17fa49')}
+                    </h3>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    This exact Library version is the working authority. Acceptance is blocked until
-                    its enforced checklist validates.
+                    {uiText('this_exact_library_version_is_the_working_aut_9a25627')}
                   </p>
                   <pre className="mt-4 overflow-x-auto whitespace-pre-wrap text-xs leading-5">
                     {JSON.stringify(structuredDocument.data, null, 2)}
@@ -239,8 +247,7 @@ export function GoalArtifactEditor({
                 </div>
                 {!exactVersionValidated ? (
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
-                    This version has not passed the complete schema, provenance, confidence, and
-                    stakeholder-authority check. It cannot be accepted.
+                    {uiText('this_version_has_not_passed_the_complete_sche_a5048d1')}
                   </div>
                 ) : null}
               </div>
@@ -254,33 +261,36 @@ export function GoalArtifactEditor({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium">{item.definition.label}</p>
+                        <p className="text-sm font-medium">
+                          {goalChecklistCopy(item.definition, uiText).label}
+                        </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {item.definition.question}
+                          {goalChecklistCopy(item.definition, uiText).question}
                         </p>
                       </div>
                       <span className="font-mono text-2xs uppercase text-muted-foreground">
-                        {item.status.replaceAll('_', ' ')}
+                        {goalChecklistStatus(item.status, uiText)}
                       </span>
                     </div>
                     {item.blocker ? (
-                      <p className="mt-2 text-xs text-amber-300">{item.blocker}</p>
+                      <p className="mt-2 text-xs text-amber-300">
+                        {goalChecklistBlocker(item.blocker, uiText)}
+                      </p>
                     ) : null}
                     <p className="mt-2 text-2xs text-muted-foreground">
-                      {item.definition.collectionPolicy.replaceAll('_', ' ')}
-                      {item.requestIds.length > 0
-                        ? ` · ${item.requestIds.length} stakeholder request`
-                        : ''}
-                      {item.evidenceIds.length > 0
-                        ? ` · ${item.evidenceIds.length} evidence source`
-                        : ''}
+                      {goalChecklistSummary(
+                        item.definition.collectionPolicy,
+                        item.requestIds.length,
+                        item.evidenceIds.length,
+                        uiText,
+                      )}
                     </p>
                   </div>
                 ))}
                 {checklistItems.length === 0 ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     <ListChecks className="mx-auto mb-3 size-5" />
-                    The artifact checklist is being materialized.
+                    {uiText('m_46f3e43247')}
                   </div>
                 ) : null}
               </div>
@@ -301,25 +311,35 @@ export function GoalArtifactEditor({
                     {result.rationale ? (
                       <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
                         <p>
-                          <span className="text-muted-foreground">Confidence</span>
+                          <span className="text-muted-foreground">
+                            {uiText('confidence_6422e3e')}
+                          </span>
                           <br />
                           {Math.round(result.rationale.confidence * 100)}%
                         </p>
                         <p>
-                          <span className="text-muted-foreground">Assumptions</span>
+                          <span className="text-muted-foreground">
+                            {uiText('assumptions_69ef1ef')}
+                          </span>
                           <br />
-                          {result.rationale.assumptions.join(' · ') || 'None recorded'}
+                          {result.rationale.assumptions.join(' · ') ||
+                            uiText('none_recorded_aab6c5e')}
                         </p>
                         <p>
-                          <span className="text-muted-foreground">Tradeoffs</span>
+                          <span className="text-muted-foreground">
+                            {uiText('tradeoffs_b6d4d27')}
+                          </span>
                           <br />
-                          {result.rationale.tradeoffs.join(' · ') || 'None recorded'}
+                          {result.rationale.tradeoffs.join(' · ') ||
+                            uiText('none_recorded_aab6c5e')}
                         </p>
                         <p>
-                          <span className="text-muted-foreground">Risks and unknowns</span>
+                          <span className="text-muted-foreground">
+                            {uiText('risks_and_unknowns_99f18ba')}
+                          </span>
                           <br />
                           {[...result.rationale.risks, ...result.rationale.unknowns].join(' · ') ||
-                            'None recorded'}
+                            uiText('none_recorded_aab6c5e')}
                         </p>
                       </div>
                     ) : null}
@@ -328,7 +348,7 @@ export function GoalArtifactEditor({
                 {workProducts.length === 0 ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     <Brain className="mx-auto mb-3 size-5" />
-                    Jaina has not submitted a public rationale for this artifact yet.
+                    {uiText('m_4b29970ee4')}
                   </div>
                 ) : null}
               </div>
@@ -350,7 +370,9 @@ export function GoalArtifactEditor({
                 />
               ) : (
                 <div className="py-12 text-center">
-                  <p className="text-sm font-medium">This artifact has no written evidence yet.</p>
+                  <p className="text-sm font-medium">
+                    {uiText('this_artifact_has_no_written_evidence_yet_1b4da37')}
+                  </p>
                 </div>
               )}
             </article>

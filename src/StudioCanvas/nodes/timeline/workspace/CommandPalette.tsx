@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import {
   CommandDialog,
   CommandEmpty,
@@ -28,11 +29,17 @@ export function CommandPalette({
   onOpenChange: (open: boolean) => void;
   groups: ReadonlyArray<{ heading: string; actions: readonly PaletteAction[] }>;
 }) {
+  const translateUi = useUiTranslations('studio');
+
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title="Video Studio actions">
-      <CommandInput placeholder="Search actions…" />
+    <CommandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={translateUi('video_studio_actions_1e8103fa')}
+    >
+      <CommandInput placeholder={translateUi('search_actions_d16d1db0')} />
       <CommandList>
-        <CommandEmpty>No matching action.</CommandEmpty>
+        <CommandEmpty>{translateUi('no_matching_action_fbde80dd')}</CommandEmpty>
         {groups.map((group) => (
           <CommandGroup key={group.heading} heading={group.heading}>
             {group.actions.map((action) => (

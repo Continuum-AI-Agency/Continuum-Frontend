@@ -2,12 +2,14 @@
 
 import type { AdNamingSchemaConfig } from '@continuum/contracts';
 import { Plus, Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
-import { updateBrandAdNamingSchemaAction } from '@/app/(post-auth)/settings/actions';
+import { updateBrandAdNamingSchemaAction } from '@/app/[locale]/(post-auth)/settings/actions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useUiErrorMessage } from '@/i18n/errors';
 
 type AdNamingPlatform = 'meta' | 'google' | 'all';
 
@@ -33,6 +35,10 @@ export function BrandAdNamingSection({
   initial,
   canEdit,
 }: BrandAdNamingSectionProps) {
+  const uiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('settings');
+
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
   const [delimiter, setDelimiter] = useState(initial?.delimiter ?? '|');
@@ -50,24 +56,24 @@ export function BrandAdNamingSection({
     const trimmedDelimiter = delimiter.trim();
     if (!trimmedDelimiter) {
       show({
-        title: 'Delimiter required',
-        description: 'Enter a delimiter such as | or _.',
+        title: tUi('m_421b305fec'),
+        description: tUi('m_2f28df5895'),
         variant: 'error',
       });
       return;
     }
     if (cleanedFields.length === 0) {
       show({
-        title: 'Fields required',
-        description: 'Add at least one naming field.',
+        title: tUi('m_013237c994'),
+        description: tUi('m_18ed0136b3'),
         variant: 'error',
       });
       return;
     }
     if (new Set(cleanedFields).size !== cleanedFields.length) {
       show({
-        title: 'Duplicate fields',
-        description: 'Each naming field must be unique.',
+        title: tUi('m_de132694be'),
+        description: tUi('m_4bc0b0aa27'),
         variant: 'error',
       });
       return;
@@ -81,14 +87,14 @@ export function BrandAdNamingSection({
           fields: cleanedFields,
         });
         show({
-          title: 'Naming convention saved',
-          description: 'Your ad naming taxonomy was updated.',
+          title: tUi('m_2cf3538189'),
+          description: tUi('m_fe3420b842'),
           variant: 'success',
         });
       } catch (error) {
         show({
-          title: 'Save failed',
-          description: error instanceof Error ? error.message : 'Unable to save naming convention.',
+          title: tUi('m_0a44446762'),
+          description: error instanceof Error ? uiErrorMessage(error) : tUi('m_74ad99b35c'),
           variant: 'error',
         });
       }
@@ -97,13 +103,10 @@ export function BrandAdNamingSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
-        Declare how you name ads on this platform — a delimiter plus an ordered list of field
-        labels. Paid-media rows are parsed against it so insights can read an ad by its named parts.
-      </p>
+      <p className="text-sm text-muted-foreground">{tUi('m_33d5902bfe')}</p>
 
       <div className="flex max-w-[160px] flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Delimiter</span>
+        <span className="text-xs font-medium text-muted-foreground">{tUi('m_5e96ff2a31')}</span>
         <Input
           value={delimiter}
           onChange={(event) => setDelimiter(event.target.value)}
@@ -114,15 +117,14 @@ export function BrandAdNamingSection({
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted-foreground">Fields (in order)</span>
+          <span className="text-xs font-medium text-muted-foreground">{tUi('m_c6a4e5b1b3')}</span>
           <Button type="button" size="sm" variant="secondary" onClick={addItem} disabled={!canEdit}>
-            <Plus /> Add field
+            <Plus />
+            {tUi('m_8aff8a760d')}
           </Button>
         </div>
         {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No fields yet. Add labels like funnel, format, audience.
-          </p>
+          <p className="text-sm text-muted-foreground">{tUi('m_3ea516d924')}</p>
         ) : (
           items.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2">
@@ -130,7 +132,7 @@ export function BrandAdNamingSection({
               <Input
                 value={item.value}
                 onChange={(event) => updateItem(item.id, event.target.value)}
-                placeholder="Field label"
+                placeholder={tUi('m_f4434a25ff')}
                 className="flex-1"
                 disabled={!canEdit}
               />
@@ -142,7 +144,8 @@ export function BrandAdNamingSection({
                 disabled={!canEdit}
                 className="text-destructive hover:text-destructive"
               >
-                <Trash2 /> Remove
+                <Trash2 />
+                {tUi('m_46d18a51ac')}
               </Button>
             </div>
           ))
@@ -150,21 +153,19 @@ export function BrandAdNamingSection({
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Preview</span>
+        <span className="text-xs font-medium text-muted-foreground">{tUi('m_f1fbb2b43d')}</span>
         <span className="font-mono text-sm text-muted-foreground">{preview || '—'}</span>
       </div>
 
       <div className="flex">
         <Button type="button" onClick={handleSave} disabled={isPending || !canEdit}>
-          Save naming convention
+          {tUi('m_8afb295dc1')}
         </Button>
       </div>
 
       {!canEdit ? (
         <Alert className="border-warning/30 bg-warning/10">
-          <AlertDescription className="text-warning">
-            Only brand owners or admins can edit the ad naming convention.
-          </AlertDescription>
+          <AlertDescription className="text-warning">{tUi('m_3242952233')}</AlertDescription>
         </Alert>
       ) : null}
     </div>

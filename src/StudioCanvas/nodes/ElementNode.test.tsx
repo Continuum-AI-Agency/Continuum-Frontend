@@ -8,9 +8,16 @@ mock.module('@/lib/api/http', () => ({
 
 import type { ElementRecord } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { useStudioStore } from '../stores/useStudioStore';
 import { ElementNode, type ElementNodeData } from './ElementNode';
 

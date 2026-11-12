@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Separator } from '@/components/ui/separator';
 import type { CanvasGateStatus } from '@/lib/paid-media/jaina-activity-client';
@@ -21,20 +24,11 @@ import type { BaseCampaignNodeData } from '../types';
 
 type Tone = 'success' | 'error' | 'warning' | 'info';
 
-const GATE_PRESENTATION: Record<CanvasGateStatus, { tone: Tone; label: string; pulse: boolean }> = {
-  proposed: { tone: 'info', label: 'Proposed', pulse: false },
-  awaiting_approval: { tone: 'warning', label: 'Awaiting approval', pulse: true },
-  approved: { tone: 'success', label: 'Approved', pulse: false },
-  denied: { tone: 'error', label: 'Denied', pulse: false },
-  expired: { tone: 'warning', label: 'Expired', pulse: false },
-  consumed: { tone: 'success', label: 'Approval used', pulse: false },
-};
-
 /** Short and absolute. A relative time on a record of an approval invites re-reading it. */
-const formatApprovedAt = (value: string): string => {
+const formatApprovedAt = (value: string, locale: string): string => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString(undefined, {
+  return parsed.toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -43,6 +37,25 @@ const formatApprovedAt = (value: string): string => {
 };
 
 export function NodeProvenance({ data }: { data: BaseCampaignNodeData }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
+  const GATE_PRESENTATION: Record<CanvasGateStatus, { tone: Tone; label: string; pulse: boolean }> =
+    useMemo(
+      () => ({
+        proposed: { tone: 'info', label: uiText('proposed_9b0c660'), pulse: false },
+        awaiting_approval: {
+          tone: 'warning',
+          label: uiText('awaiting_approval_ae25c9b'),
+          pulse: true,
+        },
+        approved: { tone: 'success', label: uiText('approved_87b42e4'), pulse: false },
+        denied: { tone: 'error', label: uiText('denied_da404de'), pulse: false },
+        expired: { tone: 'warning', label: uiText('expired_424a255'), pulse: false },
+        consumed: { tone: 'success', label: uiText('approval_used_7e440fe'), pulse: false },
+      }),
+      [uiText],
+    );
+
   const provenance = data.provenance;
   if (!provenance) return null;
 
@@ -50,6 +63,16 @@ export function NodeProvenance({ data }: { data: BaseCampaignNodeData }) {
   const presentation = GATE_PRESENTATION[gate?.status ?? 'proposed'];
   const approver = gate?.approvedBy;
   const approvedAt = gate?.approvedAt;
+  const metaStatusKeys = {
+    ACTIVE: 'entityActive',
+    PAUSED: 'entityPaused',
+    ARCHIVED: 'entityArchived',
+    DELETED: 'entityDeleted',
+  } as const;
+  const metaStatusKey =
+    provenance.metaStatus && Object.hasOwn(metaStatusKeys, provenance.metaStatus)
+      ? metaStatusKeys[provenance.metaStatus as keyof typeof metaStatusKeys]
+      : null;
 
   return (
     <>
@@ -64,26 +87,33 @@ export function NodeProvenance({ data }: { data: BaseCampaignNodeData }) {
             <Pill
               className="gap-1.5 whitespace-nowrap"
               data-testid="canvas-node-meta-status"
-              title="The status this object holds in Meta Ads Manager."
+              title={uiText('the_status_this_object_holds_in_meta_ads_mana_292cd2d')}
             >
               <PillIndicator
                 variant={provenance.metaStatus === 'ACTIVE' ? 'success' : 'info'}
                 pulse={false}
               />
-              {provenance.metaStatus}
+              {metaStatusKey ? uiText(metaStatusKey) : provenance.metaStatus}
             </Pill>
           ) : null}
         </div>
 
         {approver || approvedAt ? (
           <span className="text-2xs text-muted-foreground" data-testid="canvas-node-approver">
-            {approver ? `by ${approver}` : 'by a former member'}
-            {approvedAt ? ` · ${formatApprovedAt(approvedAt)}` : ''}
+            {approver
+              ? uiText('template_b02b8406d8dc', { v0: approver })
+              : uiText('by_a_former_member_bde6d42')}
+            {approvedAt ? ` · ${formatApprovedAt(approvedAt, uiLocale)}` : ''}
           </span>
         ) : null}
 
-        <span className="font-mono text-2xs text-muted-foreground" data-testid="canvas-node-meta-id">
-          {data.metaId ? `Meta ID: ${data.metaId}` : `Not on Meta · ${provenance.pathKey}`}
+        <span
+          className="font-mono text-2xs text-muted-foreground"
+          data-testid="canvas-node-meta-id"
+        >
+          {data.metaId
+            ? uiText('template_096aad8393d3', { v0: data.metaId })
+            : uiText('template_337832cd083c', { v0: provenance.pathKey })}
         </span>
       </div>
     </>

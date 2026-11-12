@@ -14,7 +14,6 @@ import {
   hasProseMarks,
   headersOfBlocks,
   insightListItemSchema,
-  PRISM_BLOCK_ORDER,
   metricPolarityOf,
   metricReadOf,
   metricReadViolationsOf,
@@ -22,6 +21,8 @@ import {
   narrativeThreePartViolationsOf,
   numberReadingsOfToken,
   numbersInText,
+  numberTokensInText,
+  PRISM_BLOCK_ORDER,
   parseProseMarks,
   sectionOfBlockCategory,
   stripProseMarks,
@@ -1023,6 +1024,15 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
     expect(numbersInText('date_start 2026-08-25, date_stop 2026-08-25')).toEqual([]);
   });
 
+  it('keeps serialized numeric precision, signs and exponents without treating commas as locale punctuation', () => {
+    expect(numberTokensInText('[1.2300,[-2,1e3]]')).toEqual([
+      [{ value: 1.23, decimals: 4 }],
+      [{ value: -2, decimals: 0 }],
+      [{ value: 1000, decimals: -3 }],
+    ]);
+    expect(numbersInText('Spend $1,500 on 2026-08-25T12:00:00Z')).toEqual([1500]);
+  });
+
   const templateFigure = (id: string, value: number | null, unit: string, currency = null) => ({
     id,
     label: `label ${id}`,
@@ -1327,9 +1337,20 @@ describe('withPrismBlockOrder', () => {
   it('lets only the answer and the requested format stand above the scope', () => {
     const codes = (blocks: Array<Record<string, unknown>>) =>
       validateReport(blocks as never).map((violation) => violation.code);
-    const scope = block('data_scope', 'scope', { dates: '2026-10-12 → 2026-10-18', timezone: 'UTC', source: 'api', notes: [], scope: 'account', title: 'Data scope' });
+    const scope = block('data_scope', 'scope', {
+      dates: '2026-10-12 → 2026-10-18',
+      timezone: 'UTC',
+      source: 'api',
+      notes: [],
+      scope: 'account',
+      title: 'Data scope',
+    });
     expect(
-      codes([block('answer_template', 'template'), block('data_table', 'asked', { answer_format: true, columns: [], rows: [] }), scope]),
+      codes([
+        block('answer_template', 'template'),
+        block('data_table', 'asked', { answer_format: true, columns: [], rows: [] }),
+        scope,
+      ]),
     ).not.toContain('data_scope_not_first');
     expect(codes([block('metric_grid', 'grid', { metrics: [] }), scope])).toContain(
       'data_scope_not_first',

@@ -12,6 +12,7 @@
 import type { BrandBookPieceKind, BrandDirectionPiece, DesignSection } from '@continuum/contracts';
 import { SECTION_AUTO_APPLY, suppressedDesignSections } from '@continuum/contracts';
 import { ChevronDown, Gem } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import React from 'react';
 import {
   BrandBookPiecePreview,
@@ -89,6 +90,8 @@ export function GroundingChip({
   inherited,
   className,
 }: Props) {
+  const translateUi = useUiTranslations('studio');
+
   const ids = skillIds ?? [];
   /*
    * Derived through a STRING, not an array.
@@ -128,11 +131,13 @@ export function GroundingChip({
 
   const tooltip = (
     <div className="flex max-w-xs flex-col gap-2 text-xs">
-      {inherited ? <p className="font-medium">Applied when enriching this prompt</p> : null}
+      {inherited ? (
+        <p className="font-medium">{translateUi('applied_when_enriching_this_prompt_f43ce19d')}</p>
+      ) : null}
       <div>
-        <p className="font-medium">Brand book</p>
+        <p className="font-medium">{translateUi('brand_book_11141eb1')}</p>
         {!enforced ? (
-          <p className="opacity-70">Off</p>
+          <p className="opacity-70">{translateUi('off_ca7981b4')}</p>
         ) : (
           <ul className="mt-1 flex flex-col gap-1.5">
             {brandPresentations.map((piece) => (
@@ -148,36 +153,42 @@ export function GroundingChip({
         )}
       </div>
       <div>
-        <p className="font-medium">Creative direction</p>
+        <p className="font-medium">{translateUi('creative_direction_955fe28d')}</p>
         <p className="opacity-70">
           {brandDirectionPieces === undefined
-            ? 'Everything this brand has authored'
+            ? translateUi('everything_this_brand_has_authored_51e6f919')
             : brandDirectionPieces.length === 0
-              ? 'Off'
-              : `${brandDirectionPieces.length} selected`}
+              ? translateUi('off_ca7981b4')
+              : translateUi('value0_selected_975acbfe', {
+                  count: Number(brandDirectionPieces.length),
+                })}
         </p>
       </div>
       <div>
-        <p className="font-medium">Design system</p>
+        <p className="font-medium">{translateUi('design_system_4a866105')}</p>
         <p className="opacity-70">
           {effectiveSections === null
-            ? 'Everything this brand has approved'
+            ? translateUi('everything_this_brand_has_approved_128db47f')
             : effectiveSections.length === 0
-              ? 'Off'
+              ? translateUi('off_ca7981b4')
               : `${effectiveSections.join(', ')}${
-                  designSystemSections === undefined ? ' — automatic for this node' : ''
+                  designSystemSections === undefined
+                    ? translateUi('automatic_for_this_node_91354caf')
+                    : ''
                 }`}
         </p>
         {contextual && contextual.wired.length > 0 ? (
           <p className="opacity-70">
-            Wired: {contextual.wired.join(', ')} — from a Design Reference
+            {' '}
+            {translateUi('wired_6f076d29')} {contextual.wired.join(', ')}{' '}
+            {translateUi('from_a_design_reference_3a0f601f')}{' '}
           </p>
         ) : null}
       </div>
       <div>
-        <p className="font-medium">Creative skills</p>
+        <p className="font-medium">{translateUi('creative_skills_49562c60')}</p>
         {selectedSkills.length === 0 ? (
-          <p className="opacity-70">None</p>
+          <p className="opacity-70">{translateUi('none_dc937b59')}</p>
         ) : (
           <ul className="mt-1 flex flex-col gap-1.5">
             {selectedSkills.map((skill) => (
@@ -229,7 +240,9 @@ export function GroundingChip({
           <button
             type="button"
             className="nodrag nopan cursor-pointer"
-            title={`Brand book: ${brandBookModeDetail(brandBookPieces)}`}
+            title={translateUi('brand_book_value0_3c963218', {
+              value0: String(brandBookModeDetail(brandBookPieces)),
+            })}
           >
             {chipInner}
           </button>

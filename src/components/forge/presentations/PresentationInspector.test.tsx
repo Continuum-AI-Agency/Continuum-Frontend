@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { type PresentationCommand, presentationDocumentSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { PresentationInspector } from './PresentationInspector';
 
 const document = presentationDocumentSchema.parse({

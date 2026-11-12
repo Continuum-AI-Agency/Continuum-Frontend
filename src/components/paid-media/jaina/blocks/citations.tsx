@@ -18,6 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { HoverCardTrigger } from '@/components/ui/hover-card';
 import type { CheckpointBlockV2, NarrativeBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { useAnswerLanguage } from '../answerLanguageContext';
+import { reportSourceLabel } from '../reportChrome';
 
 // The citation shape is identical across every analytical block; derive it from
 // the narrative block so this module never re-imports the contract directly.
@@ -119,9 +121,10 @@ function citationSummary(citation: BlockCitation): {
 // (`new URL(sources[0])`), but Jaina citations are tool/label/cache_key with no
 // URL, so we drive the HoverCard trigger ourselves with a numbered Badge.
 export function CitationChip({ resolved }: { resolved: ResolvedCitation }) {
+  const language = useAnswerLanguage();
   const { citation, index } = resolved;
   const { title, description } = citationSummary(citation);
-  const ariaLabel = `Source ${index}: ${title}${description ? ` — ${description}` : ''}`;
+  const ariaLabel = reportSourceLabel(index, title, description, language);
 
   return (
     <InlineCitationCard>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Right-click action menu for a portfolio / ad-set row or a timeline marker — the
 // optimizer actions an operator reaches for without leaving the chart: run a cycle,
@@ -36,6 +37,7 @@ export function AdsetActionMenu({
   onArchive,
   children,
 }: AdsetActionMenuProps) {
+  const uiText = useTranslations('scale');
   // Base UI's ContextMenuTrigger has no `disabled`; leaving the menu off entirely is the same
   // observable behaviour (right-click does nothing) without a dead trigger in the tree.
   if (disabled) return children;
@@ -50,11 +52,19 @@ export function AdsetActionMenu({
             <ContextMenuSeparator />
           </>
         ) : null}
-        {onRun ? <ContextMenuItem onSelect={onRun}>Run cycle now</ContextMenuItem> : null}
-        {onAnalyzeAngles ? (
-          <ContextMenuItem onSelect={onAnalyzeAngles}>Analyze creative angles</ContextMenuItem>
+        {onRun ? (
+          <ContextMenuItem onSelect={onRun}>{uiText('run_cycle_now_ca7d02c')}</ContextMenuItem>
         ) : null}
-        {onHold ? <ContextMenuItem onSelect={onHold}>Hold — freeze budget</ContextMenuItem> : null}
+        {onAnalyzeAngles ? (
+          <ContextMenuItem onSelect={onAnalyzeAngles}>
+            {uiText('analyze_creative_angles_86f20db')}
+          </ContextMenuItem>
+        ) : null}
+        {onHold ? (
+          <ContextMenuItem onSelect={onHold}>
+            {uiText('hold_freeze_budget_24dc701')}
+          </ContextMenuItem>
+        ) : null}
         {onArchive ? (
           <>
             <ContextMenuSeparator />
@@ -62,7 +72,7 @@ export function AdsetActionMenu({
               className="text-destructive focus:text-destructive"
               onSelect={onArchive}
             >
-              Archive portfolio
+              {uiText('archive_portfolio_827acab')}
             </ContextMenuItem>
           </>
         ) : null}

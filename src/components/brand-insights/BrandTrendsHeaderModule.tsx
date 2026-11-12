@@ -1,8 +1,9 @@
 'use client';
 
 import { LineChart } from 'lucide-react';
-import * as React from 'react';
 
+import { useLocale, useTranslations } from 'next-intl';
+import * as React from 'react';
 import { BrandInsightsGenerateButton } from '@/components/brand-insights/BrandInsightsGenerateButton';
 import { BrandTrendsPanel } from '@/components/brand-insights/BrandTrendsPanel';
 import { BrandTrendsPeek } from '@/components/brand-insights/BrandTrendsPeek';
@@ -13,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { fetchBrandInsightsWeek } from '@/lib/api/brandInsights.client';
 import type { OrganicMetricsBrandInsights } from '@/lib/schemas/brandInsights';
 import { cn } from '@/lib/utils';
@@ -25,11 +27,11 @@ type BrandTrendsHeaderModuleProps = {
   className?: string;
 };
 
-function formatWeekLabel(value?: string) {
+function formatWeekLabel(value: string | undefined, uiLocale: string) {
   if (!value) return undefined;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parsed.toLocaleDateString(uiLocale, { month: 'short', day: 'numeric' });
 }
 
 function isOlderThanAWeek(generatedAt?: string) {
@@ -50,6 +52,11 @@ export function BrandTrendsHeaderModule({
   brandInsights = null,
   className,
 }: BrandTrendsHeaderModuleProps) {
+  const getUiErrorMessage = useUiErrorMessage();
+
+  const tUi = useTranslations('common');
+  const uiLocale = useLocale();
+
   const [visibleInsights, setVisibleInsights] = React.useState(brandInsights);
   const [isWeekLoading, setIsWeekLoading] = React.useState(false);
   const [weekError, setWeekError] = React.useState<string | null>(null);
@@ -78,19 +85,19 @@ export function BrandTrendsHeaderModule({
           generationCount: result.data.generationCount,
         });
       } catch (error) {
-        setWeekError(error instanceof Error ? error.message : 'Unable to load that Trends week.');
+        setWeekError(getUiErrorMessage(error));
       } finally {
         setIsWeekLoading(false);
       }
     },
-    [brandId, visibleInsights?.weekStartDate],
+    [brandId, visibleInsights?.weekStartDate, getUiErrorMessage],
   );
 
   const trends = visibleInsights?.trendsAndEvents.trends ?? [];
   const events = visibleInsights?.trendsAndEvents.events ?? [];
   const questionCount = countQuestions(visibleInsights?.questionsByNiche);
   const generatedAt = visibleInsights?.trendsAndEvents.generatedAt ?? visibleInsights?.generatedAt;
-  const weekLabel = formatWeekLabel(visibleInsights?.weekStartDate);
+  const weekLabel = formatWeekLabel(visibleInsights?.weekStartDate, uiLocale);
 
   const signalCount = trends.length + events.length + questionCount;
   const needsAttention = signalCount === 0 || isOlderThanAWeek(generatedAt);
@@ -113,7 +120,7 @@ export function BrandTrendsHeaderModule({
                   className={cn('h-8 gap-1.5 px-2 text-xs', className)}
                 >
                   <LineChart className="size-3.5" aria-hidden />
-                  Trends
+                  {tUi('trends_e856c6c')}
                   {/* The badge counts trends, so it is gated on trends. Gating it on the
                   wider signal count (trends + events + questions) rendered a literal
                   "0" beside a chip that had just been shown for having signals. */}
@@ -121,7 +128,7 @@ export function BrandTrendsHeaderModule({
                     <Badge
                       variant="secondary"
                       className="h-4 px-1 text-2xs tabular-nums"
-                      aria-label={`${trends.length} trends available`}
+                      aria-label={tUi('m_edfe8798a9', { v0: String(trends.length) })}
                     >
                       {trends.length}
                     </Badge>

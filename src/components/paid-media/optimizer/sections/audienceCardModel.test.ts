@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { createTranslator } from 'next-intl';
+import en from '../../../../../messages/scale/en.json';
+import es from '../../../../../messages/scale/es.json';
+import pt from '../../../../../messages/scale/pt-BR.json';
 import {
   AUDIENCE_PROPOSAL_STATE_LABEL,
   audienceCardStateFor,
@@ -814,3 +818,33 @@ describe('audience card model — every label is English', () => {
     }
   });
 });
+
+for (const [locale, messages, reach, trigger] of [
+  ['en', en, '1.1M–1.3M', 'Reach exhausted'],
+  ['pt-BR', pt, '1,1 mi–1,3 mi', 'Alcance esgotado'],
+  ['es', es, '1,1 M–1,3 M', 'Alcance agotado'],
+] as const) {
+  it(`keeps source targeting and reach math intact in ${locale}`, () => {
+    const t = createTranslator({
+      locale,
+      timeZone: 'UTC',
+      messages: { scale: messages },
+      namespace: 'scale',
+      onError(error) {
+        throw error;
+      },
+    });
+    const before = JSON.stringify(plan);
+    const proposed = proposedAudience(plan, t, locale);
+    expect(proposed.reach).toBe(reach);
+    expect(proposed.words).toContain('Gimnasios');
+    expect(proposed.words).toContain('Lookalike 1–3% · compradores');
+    expect(audienceComparison(plan, null, t, locale).reachChange?.up).toBe(false);
+    expect(audienceComparison(plan, null, t, locale).reachChange?.label).toBe(
+      locale === 'es' ? '−65\u00a0%' : '−65%',
+    );
+    expect(triggerLabel('F3_audience_exhausted', t)).toBe(trigger);
+    expect(triggerLabel('rule:customer-authored', t)).toBe('rule:customer-authored');
+    expect(JSON.stringify(plan)).toBe(before);
+  });
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect } from 'react';
 import { z } from 'zod';
 import { toast } from '@/components/ui/toast-imperative';
@@ -56,6 +57,8 @@ const NO_ROOMS: CanvasRoom[] = [];
  * flip `isLoading` and paint a one-room list over an empty one.
  */
 export function useCanvasRooms(brandProfileId: string) {
+  const translateUi = useUiTranslations('studio');
+
   const supabase = createSupabaseBrowserClient();
   const queryClient = useQueryClient();
   const queryKey = canvasRoomsQueryKey(brandProfileId);
@@ -86,8 +89,8 @@ export function useCanvasRooms(brandProfileId: string) {
   // a toast in the queryFn would tell the user twice about one failure.
   const failed = query.isError;
   useEffect(() => {
-    if (failed) toast.error('Failed to load workspaces');
-  }, [failed]);
+    if (failed) toast.error(translateUi('failed_to_load_workspaces_8c6faaf1'));
+  }, [failed, translateUi]);
 
   const rooms = query.data ?? NO_ROOMS;
   // No brand means no answer is coming, which is what this hook reported before React Query
@@ -162,7 +165,7 @@ export function useCanvasRooms(brandProfileId: string) {
   const createRoom = async (name: string) => {
     const generalRooms = rooms.filter((room) => room.kind !== 'planner');
     if (generalRooms.length >= 3) {
-      toast.error('Maximum 3 workspaces allowed');
+      toast.error(translateUi('maximum_3_workspaces_allowed_dc6830b4'));
       return null;
     }
 
@@ -176,14 +179,14 @@ export function useCanvasRooms(brandProfileId: string) {
 
     if (error) {
       console.error('[Canvas Rooms] Create failed', error);
-      toast.error('Failed to create workspace');
+      toast.error(translateUi('failed_to_create_workspace_0a8d4fd6'));
       return null;
     }
 
     const parsed = createdWorkspaceSchema.safeParse(data);
     if (!parsed.success) {
       console.error('[Canvas Rooms] Create returned an invalid workspace', parsed.error.flatten());
-      toast.error('Failed to create workspace');
+      toast.error(translateUi('failed_to_create_workspace_0a8d4fd6'));
       return null;
     }
     const room: CanvasRoom = {
@@ -195,18 +198,18 @@ export function useCanvasRooms(brandProfileId: string) {
       kind: parsed.data.kind,
     };
     setRooms((prev) => [...prev, room]);
-    toast.success('Workspace created');
+    toast.success(translateUi('workspace_created_246b4682'));
     return room;
   };
 
   const deleteRoom = async (roomId: string) => {
     const room = rooms.find((candidate) => candidate.id === roomId);
     if (room?.kind === 'planner') {
-      toast.error('Planner Compositions is a reserved workspace');
+      toast.error(translateUi('planner_compositions_is_a_reserved__b362b0bb'));
       return false;
     }
     if (rooms.filter((candidate) => candidate.kind !== 'planner').length <= 1) {
-      toast.error('Cannot delete the last workspace');
+      toast.error(translateUi('cannot_delete_the_last_workspace_6540c1c7'));
       return false;
     }
 
@@ -218,18 +221,18 @@ export function useCanvasRooms(brandProfileId: string) {
 
     if (error) {
       console.error('[Canvas Rooms] Delete failed', error);
-      toast.error('Failed to delete workspace');
+      toast.error(translateUi('failed_to_delete_workspace_8a95759b'));
       return false;
     }
 
     setRooms((prev) => prev.filter((r) => r.id !== roomId));
-    toast.success('Workspace deleted');
+    toast.success(translateUi('workspace_deleted_a8a7c1ce'));
     return true;
   };
 
   const updateRoomName = async (roomId: string, name: string) => {
     if (rooms.find((room) => room.id === roomId)?.kind === 'planner') {
-      toast.error('Planner Compositions is a reserved workspace');
+      toast.error(translateUi('planner_compositions_is_a_reserved__b362b0bb'));
       return false;
     }
     const { error } = await supabase
@@ -240,7 +243,7 @@ export function useCanvasRooms(brandProfileId: string) {
 
     if (error) {
       console.error('[Canvas Rooms] Update failed', error);
-      toast.error('Failed to update workspace name');
+      toast.error(translateUi('failed_to_update_workspace_name_30dea6b3'));
       return false;
     }
 

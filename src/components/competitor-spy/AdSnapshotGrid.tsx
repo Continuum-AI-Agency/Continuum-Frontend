@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAdTimeline } from '@/lib/api/competitorSpy';
 import { AdSnapshotCard } from './AdSnapshotCard';
@@ -19,6 +21,7 @@ export function AdSnapshotGrid({
   limit?: number;
   inspiration?: boolean;
 }) {
+  const uiText = useTranslations('competitor');
   const { data, isLoading, isError } = useAdTimeline({ brandId, competitorId, status, q, limit });
 
   if (isLoading) {
@@ -36,7 +39,11 @@ export function AdSnapshotGrid({
   // An error and an empty feed are different answers; each competitor's own paid
   // badge carries the reason a Page has no ads yet.
   if (isError) {
-    return <p className="p-6 text-sm text-muted-foreground">Failed to load competitor ads.</p>;
+    return (
+      <p className="p-6 text-sm text-muted-foreground">
+        {uiText('failed_to_load_competitor_ads_b348566')}
+      </p>
+    );
   }
 
   const items = data ?? [];
@@ -44,12 +51,14 @@ export function AdSnapshotGrid({
     return (
       <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border p-10 text-center">
         <p className="text-sm font-medium">
-          {searching ? 'No matching inspiration' : 'No competitor ads yet'}
+          {searching
+            ? uiText('no_matching_inspiration_b5ac65d')
+            : uiText('no_competitor_ads_yet_4f8ca64')}
         </p>
         <p className="text-xs text-muted-foreground">
           {searching
-            ? 'Try a different keyword, or clear the search.'
-            : 'Tag competitors and run a sync to pull their Meta Ad Library creatives.'}
+            ? uiText('try_a_different_keyword_or_clear_the_search_3a66628')
+            : uiText('tag_competitors_and_run_a_sync_to_pull_their__61b5855')}
         </p>
       </div>
     );

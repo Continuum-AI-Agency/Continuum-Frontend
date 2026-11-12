@@ -36,6 +36,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { ChevronDown, Columns3 } from 'lucide-react';
+import { useLocale as useUiLocale, useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DropdownMenu,
@@ -72,7 +73,6 @@ const PAGE_SIZE = 96;
 const MAX_BOARD_ASSETS = 192;
 
 const REVIEW_GROUPING: BoardGrouping = { kind: 'review_status' };
-const REVIEW_GROUPING_LABEL = 'Review status';
 
 // The board answers "what is in each lane", so it must honour whatever the
 // viewer has narrowed to — chips, tag selection, collection, field filters, or
@@ -191,6 +191,8 @@ export function LibraryBoardView({
   groupBy,
   onGroupByChange,
 }: LibraryBoardViewProps) {
+  const boardLocale = useUiLocale();
+  const boardText = useUiTranslations('library');
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeAsset, setActiveAsset] = useState<MediaAsset | null>(null);
@@ -334,8 +336,9 @@ export function LibraryBoardView({
         members: members ?? [],
         reviewLabels,
         customStates,
+        ui: { t: boardText, locale: boardLocale },
       }),
-    [grouping, assets, valueByAssetId, members, reviewLabels, customStates],
+    [grouping, assets, valueByAssetId, members, reviewLabels, customStates, boardText, boardLocale],
   );
 
   // Inside a collection the grouping is the collection's, not the viewer's: it is
@@ -426,7 +429,9 @@ export function LibraryBoardView({
           : transitionReviewStatus({ brandId, assetId, toStatus: target.status });
       write.catch((err: unknown) => {
         place(from);
-        toast.error(`Move failed · ${(err as Error).message}`);
+        toast.error(
+          boardText('move_failed_value0_61adff04', { value0: String((err as Error).message) }),
+        );
       });
       return;
     }
@@ -435,7 +440,11 @@ export function LibraryBoardView({
     const current = valueByAssetId.get(assetId) ?? null;
     const next = dropValue(groupField, target.optionId, current);
     if (next === undefined) {
-      toast.info(`${groupField.name} lanes group by range — set the value on the asset`);
+      toast.info(
+        boardText('value0_lanes_group_by_range_set_the_baa20620', {
+          value0: String(groupField.name),
+        }),
+      );
       return;
     }
     if (JSON.stringify(next) === JSON.stringify(current)) return;
@@ -444,7 +453,9 @@ export function LibraryBoardView({
     setAssetFieldValue({ brandId, assetId, fieldId: groupField.id, value: next }).catch(
       (err: unknown) => {
         setLocalValue(assetId, current);
-        toast.error(`Move failed · ${(err as Error).message}`);
+        toast.error(
+          boardText('move_failed_value0_61adff04', { value0: String((err as Error).message) }),
+        );
       },
     );
   };
@@ -455,7 +466,7 @@ export function LibraryBoardView({
     <div className="flex h-full flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <GroupByPicker
-          label={groupField?.name ?? REVIEW_GROUPING_LABEL}
+          label={groupField?.name ?? boardText('review_status_a410d701')}
           fields={groupableFields}
           onSelect={(fieldId) => chooseGroupBy(fieldId ?? 'review_status')}
         />
@@ -502,6 +513,8 @@ function GroupByPicker({
   fields: readonly CustomField[];
   onSelect: (fieldId: string | null) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -511,7 +524,7 @@ function GroupByPicker({
             className="flex min-h-7 items-center gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <Columns3 className="size-3.5" />
-            <span>Group by</span>
+            <span>{translateUi('group_by_956a51f6')}</span>
             <span className="font-medium text-foreground">{label}</span>
             <ChevronDown className="size-3 opacity-60" />
           </button>
@@ -519,7 +532,7 @@ function GroupByPicker({
       />
       <DropdownMenuContent align="start">
         <DropdownMenuItem className="text-xs" onSelect={() => onSelect(null)}>
-          {REVIEW_GROUPING_LABEL}
+          {translateUi('review_status_a410d701')}
         </DropdownMenuItem>
         {fields.map((field) => (
           <DropdownMenuItem key={field.id} className="text-xs" onSelect={() => onSelect(field.id)}>

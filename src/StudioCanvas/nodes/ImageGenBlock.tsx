@@ -26,6 +26,7 @@ import {
   useUpdateNodeInternals,
 } from '@xyflow/react';
 import { Copy, Download, Image, Play, Trash2, TriangleAlert } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
@@ -78,6 +79,7 @@ import { downloadAsset } from '../utils/downloadAsset';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { generationErrorCopy } from '../utils/generationErrorCopy';
 import { resignCanvasNodes } from '../utils/resignCanvasNodes';
+import { workflowNodeError } from '../utils/workflowUiFailure';
 import { BatchMatrixButton } from './batch/BatchMatrixButton';
 
 // One or a full quadrant. Anything between would leave the 2x2 grid ragged and
@@ -121,6 +123,8 @@ const LimitedHandle = ({
 };
 
 export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<NanoGenNodeData>>) {
+  const translateUi = useUiTranslations('studio');
+
   const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -306,8 +310,13 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         if (removedCount > 0) {
           setEdges(survivingEdges);
           show({
-            title: `Removed ${removedCount} connection${removedCount === 1 ? '' : 's'}`,
-            description: `Variations ${count + 1}–${previousCount} no longer exist on this node.`,
+            title: translateUi('removed_value0_connection_value1_df99e0ab', {
+              count: Number(removedCount),
+            }),
+            description: translateUi('variations_value0_value1_no_longer__4caec04e', {
+              value0: String(count + 1),
+              value1: String(previousCount),
+            }),
             variant: 'warning',
           });
         }
@@ -327,6 +336,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
       triggerSave,
       updateNode,
       updateNodeInternals,
+
+      translateUi,
     ],
   );
 
@@ -340,9 +351,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   // shown. The toast that used to be the sole signal auto-dismissed after five
   // seconds, which is how "no image returned, change your prompt" reached the user
   // as an empty node.
-  const generationError = typeof data.error === 'string' ? data.error : undefined;
+  const generationError = workflowNodeError(data, translateUi);
   const errorCopy = generationError
-    ? generationErrorCopy(data.errorCode, generationError)
+    ? data.uiFailure && data.uiFailure.code !== 'workflow_this_node_could_not_complete_r_4bbf0954'
+      ? { ...generationErrorCopy(undefined, undefined, translateUi), guidance: generationError }
+      : generationErrorCopy(data.errorCode, generationError, translateUi)
     : undefined;
 
   // A refusal is about the workspace, not this node: remember it so the picker on every
@@ -418,6 +431,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
+      translate: translateUi,
       data: previewImage as string | Blob | undefined,
       baseName: fileBaseName,
       fallbackExtension: 'png',
@@ -425,12 +439,12 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
 
     if (!success) {
       show({
-        title: 'Download unavailable',
-        description: 'Run the node to generate an image before downloading.',
+        title: translateUi('download_unavailable_2f180e49'),
+        description: translateUi('run_the_node_to_generate_an_image_b_5f28198a'),
         variant: 'warning',
       });
     }
-  }, [previewImage, fileBaseName, show]);
+  }, [previewImage, fileBaseName, show, translateUi]);
 
   return (
     <ContextMenu>
@@ -503,7 +517,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                     onClick={() => handleVariationCountChange(count)}
-                    title={`Generate ${count} variation${count > 1 ? 's' : ''}`}
+                    title={translateUi('generate_value0_variation_value1_3fa913c9', {
+                      count: Number(count),
+                    })}
                   >
                     {count}
                   </button>
@@ -514,7 +530,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                 size="icon"
                 className="h-7 w-7"
                 onClick={handleRun}
-                title="Run Node"
+                title={translateUi('run_node_79567976')}
               >
                 <Play className="h-4 w-4" />
               </Button>
@@ -563,7 +579,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                           handleDismissError();
                         }}
                       >
-                        Dismiss
+                        {' '}
+                        {translateUi('dismiss_48845bff')}{' '}
                       </Button>
                     </div>
                   </div>
@@ -577,7 +594,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                         <img
                           loading="lazy"
                           src={variation.preview}
-                          alt={`Generated variation ${index + 1}`}
+                          alt={translateUi('generated_variation_value0_c9e691fe', {
+                            value0: String(index + 1),
+                          })}
                           className="h-full w-full object-cover"
                           onError={handleImageError}
                         />
@@ -589,13 +608,18 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                           onClick={(event) => {
                             event.stopPropagation();
                             downloadAsset({
+                              translate: translateUi,
                               data: variation.preview,
                               baseName: `${fileBaseName}-${index + 1}`,
                               fallbackExtension: 'png',
                             });
                           }}
-                          title={`Download variation ${index + 1}`}
-                          aria-label={`Download variation ${index + 1}`}
+                          title={translateUi('download_variation_value0_21af9b0d', {
+                            value0: String(index + 1),
+                          })}
+                          aria-label={translateUi('download_variation_value0_21af9b0d', {
+                            value0: String(index + 1),
+                          })}
                         >
                           <Download className="h-3 w-3" />
                         </Button>
@@ -607,7 +631,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                     <img
                       loading="lazy"
                       src={previewImage as string}
-                      alt="Generated result"
+                      alt={translateUi('generated_result_1d3b17bc')}
                       className="h-full w-full object-contain"
                       onError={handleImageError}
                     />
@@ -620,8 +644,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                         event.stopPropagation();
                         handleDownload();
                       }}
-                      title="Download Output"
-                      aria-label="Download generated image"
+                      title={translateUi('download_output_b86e2324')}
+                      aria-label={translateUi('download_generated_image_97d5a3bf')}
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -633,8 +657,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                         <EmptyMedia variant="icon">
                           <Image />
                         </EmptyMedia>
-                        <EmptyTitle>No Image</EmptyTitle>
-                        <EmptyDescription>Generated image will appear here</EmptyDescription>
+                        <EmptyTitle>{translateUi('no_image_ffd6177d')}</EmptyTitle>
+                        <EmptyDescription>
+                          {translateUi('generated_image_will_appear_here_6511ce83')}
+                        </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
                   </div>
@@ -656,7 +682,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                   />
                   {outputHandleIds.length > 1 ? (
                     <span className="studio-handle-pill absolute right-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                      {`Variation ${index + 1}`}
+                      {translateUi('variation_value0_fc43410c', { value0: String(index + 1) })}
                     </span>
                   ) : null}
                 </div>
@@ -677,7 +703,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                   className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                 />
                 <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                  Prompt
+                  {' '}
+                  {translateUi('prompt_5c391238')}{' '}
                 </span>
               </div>
 
@@ -693,7 +720,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                   className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                 />
                 <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                  Negative Prompt
+                  {' '}
+                  {translateUi('negative_prompt_e2203ddc')}{' '}
                 </span>
               </div>
 
@@ -709,7 +737,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                   className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                 />
                 <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-2xs font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
-                  Ref Image
+                  {' '}
+                  {translateUi('ref_image_d2845994')}{' '}
                 </span>
               </div>
             </div>
@@ -732,9 +761,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             unreachable. Every other context menu in the app has the same shape; the
             durable fix belongs in components/ui/context-menu.tsx. */}
         <ContextMenuGroup>
-          <ContextMenuLabel>Image Generator</ContextMenuLabel>
+          <ContextMenuLabel>{translateUi('image_generator_bd309b57')}</ContextMenuLabel>
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{translateUi('model_5e2c614c')}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-60">
               {modelOptions.map((option) => (
                 <ContextMenuCheckboxItem
@@ -755,7 +784,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           </ContextMenuSub>
           {supportsImageSize(model) && (
             <ContextMenuSub>
-              <ContextMenuSubTrigger>Size</ContextMenuSubTrigger>
+              <ContextMenuSubTrigger>{translateUi('size_1af85190')}</ContextMenuSubTrigger>
               <ContextMenuSubContent className="w-36">
                 {sizeOptions.map((value) => (
                   <ContextMenuCheckboxItem
@@ -770,7 +799,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             </ContextMenuSub>
           )}
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Aspect Ratio</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{translateUi('aspect_ratio_556f85ef')}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
               {(model === 'nano-banana-2'
                 ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4']
@@ -791,26 +820,22 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={handleRun}>
-          <Play className="mr-2 h-4 w-4" />
-          Run Node
+          <Play className="mr-2 h-4 w-4" /> {translateUi('run_node_79567976')}{' '}
           <ContextMenuShortcut>R</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={() => duplicateNode(id)}>
-          <Copy className="mr-2 h-4 w-4" />
-          Duplicate
+          <Copy className="mr-2 h-4 w-4" /> {translateUi('duplicate_02cdaabf')}{' '}
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={handleDownload} disabled={!previewImage}>
-          <Download className="mr-2 h-4 w-4" />
-          Download Output
+          <Download className="mr-2 h-4 w-4" /> {translateUi('download_output_b86e2324')}{' '}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
           className="text-destructive focus:text-destructive"
           onClick={() => deleteNode(id)}
         >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
+          <Trash2 className="mr-2 h-4 w-4" /> {translateUi('delete_e2d0a549')}{' '}
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>

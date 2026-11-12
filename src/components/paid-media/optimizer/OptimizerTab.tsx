@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Paid Media Optimizer surface — rebuilt from the reference-ui-preview.html
 // visual spec as native shadcn/Tailwind + Radix + @bklit charts. Rendered inside
 // the Scale page's "Optimizer" (performance) tab slot. Five sub-views
@@ -95,9 +97,10 @@ function withPlatformPortfolios(
 }
 
 function OptimizerSkeleton() {
+  const uiText = useTranslations('scale');
   return (
     <div className="space-y-3 p-2" role="status" aria-busy="true">
-      <span className="sr-only">Loading optimizer</span>
+      <span className="sr-only">{uiText('loading_optimizer_59e75e8')}</span>
       <Skeleton className="h-6 w-56 rounded-md bg-muted/70" />
       <Skeleton className="h-40 rounded-lg bg-muted/70" />
       <div className="space-y-2">
@@ -137,9 +140,10 @@ function PlatformSwitch({
   onChange: (tab: PlatformTab) => void;
   connected: Record<AdPlatform, boolean>;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div
-      aria-label="Ad platform"
+      aria-label={uiText('ad_platform_f325480')}
       className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-[3px]"
       data-testid="platform-tabs"
       role="tablist"
@@ -166,9 +170,9 @@ function PlatformSwitch({
             role="tab"
             type="button"
           >
-            {platformTabLabel(tab)}
+            {tab === 'all' ? uiText('all_a52ace4') : platformTabLabel(tab)}
             {disconnected ? (
-              <span className="font-normal text-muted-foreground">· Connect</span>
+              <span className="font-normal text-muted-foreground">{uiText('platformConnect')}</span>
             ) : null}
           </button>
         );
@@ -190,6 +194,7 @@ function OverviewToolbar({
   onOpenActions: () => void;
   onCreatePortfolio: () => void;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="flex shrink-0 items-center gap-1.5" data-testid="overview-toolbar">
       {pendingCount > 0 ? (
@@ -201,8 +206,10 @@ function OverviewToolbar({
           type="button"
           variant="ghost"
         >
-          Review {pendingCount}
-          <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+          {uiText.rich('sentence_98aeb8190d23', {
+            v0: pendingCount,
+            v1: () => <ArrowRightIcon aria-hidden="true" className="size-3.5" />,
+          })}
         </Button>
       ) : null}
       {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
@@ -216,39 +223,43 @@ function OverviewToolbar({
         href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
       >
         <FileTextIcon aria-hidden="true" className="size-3.5" />
-        Weekly report
+        {uiText('weekly_report_53f750c')}
       </a>
       <Button
-        aria-label="New portfolio"
+        aria-label={uiText('new_portfolio_2ea4a33')}
         className="h-7 gap-1 px-2.5 text-xs"
         onClick={onCreatePortfolio}
         size="sm"
         type="button"
       >
         <PlusIcon aria-hidden="true" className="size-3.5" />
-        Portfolio
+        {uiText('portfolio_1853eb2')}
       </Button>
     </div>
   );
 }
 
 function RefreshFailedNotice({ onRetry }: { onRetry: () => void }) {
+  const uiText = useTranslations('scale');
   return (
     <span
       className="inline-flex items-center gap-1.5 text-xs font-normal text-muted-foreground"
       data-testid="optimizer-refresh-failed"
       role="status"
     >
-      Couldn't refresh — showing the last read.
-      <Button
-        className="h-6 px-1.5 text-xs"
-        onClick={onRetry}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >
-        Retry
-      </Button>
+      {uiText.rich('sentence_5e89b978ce80', {
+        v0: () => (
+          <Button
+            className="h-6 px-1.5 text-xs"
+            onClick={onRetry}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {uiText('retry_942087c')}
+          </Button>
+        ),
+      })}
     </span>
   );
 }
@@ -259,6 +270,7 @@ export function OptimizerTab({
   platform,
   onSelectAdAccount,
 }: OptimizerTabProps) {
+  const uiText = useTranslations('scale');
   const {
     view,
     portfolioId,
@@ -408,7 +420,7 @@ export function OptimizerTab({
             title={
               <span className="inline-flex items-center gap-2">
                 <LayersIcon className="size-4" aria-hidden="true" />
-                All portfolios
+                {uiText('all_portfolios_52fd3f5')}
               </span>
             }
             action={
@@ -420,7 +432,7 @@ export function OptimizerTab({
                 onClick={() => setBrowsingAllAccounts(false)}
               >
                 <ChevronLeftIcon className="size-3.5" aria-hidden="true" />
-                Back
+                {uiText('back_76900f1')}
               </Button>
             }
           />
@@ -536,10 +548,10 @@ export function OptimizerTab({
         <div className="flex min-w-0 max-w-full items-center gap-3 overflow-x-auto">
           <TabsList variant="line" className="h-9 gap-4 p-0">
             <TabsTrigger value="overview" className={subTab}>
-              Overview
+              {uiText('overview_d4b1ea5')}
             </TabsTrigger>
             <TabsTrigger value="portfolios" className={subTab}>
-              Portfolios
+              {uiText('portfolios_e8af9d8')}
             </TabsTrigger>
             <TabsTrigger
               value="actions"
@@ -547,18 +559,20 @@ export function OptimizerTab({
               onMouseEnter={() => warmActionsQueue(actionPortfolios)}
               onFocus={() => warmActionsQueue(actionPortfolios)}
             >
-              Actions
-              {actionsPending + renewalCount > 0 ? (
-                <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-2xs font-semibold text-primary-foreground tabular-nums">
-                  {actionsPending + renewalCount}
-                </span>
-              ) : null}
+              {uiText.rich('sentence_3d9db7903c56', {
+                v0: () =>
+                  actionsPending + renewalCount > 0 ? (
+                    <span className="grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-2xs font-semibold text-primary-foreground tabular-nums">
+                      {actionsPending + renewalCount}
+                    </span>
+                  ) : null,
+              })}
             </TabsTrigger>
             <TabsTrigger value="automations" className={subTab}>
-              Automations
+              {uiText('automations_ad1fb9e')}
             </TabsTrigger>
             <TabsTrigger value="logs" className={subTab}>
-              Activity
+              {uiText('activity_38da150')}
             </TabsTrigger>
           </TabsList>
           {portfoliosQuery.isError ? (
@@ -649,9 +663,9 @@ export function OptimizerTab({
       >
         <OptimizerActivity brandId={brandId} />
         <div className="mt-4 border-t border-border/60 pt-4">
-          <SectionHeader title="Notifications" />
+          <SectionHeader title={uiText('notifications_7880118')} />
           <p className="mt-2 text-xs text-muted-foreground">
-            Get a Slack message when the optimizer moves budget, instead of checking this log.
+            {uiText('get_a_slack_message_when_the_optimizer_moves__6b28c78')}
           </p>
           <div className="mt-3">
             <OptimizerNotificationsSection brandId={brandId} />

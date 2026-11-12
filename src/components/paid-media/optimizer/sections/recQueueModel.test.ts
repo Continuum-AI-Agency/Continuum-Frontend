@@ -282,20 +282,22 @@ describe('words', () => {
   });
   it('asOfLine names the cycle and the next one, or nothing without a cycle', () => {
     expect(asOfLine('2026-09-17T06:10:00Z', '2026-09-20T06:00:00Z')).toMatch(
-      /^As of Sep 1[67] at .* · next cycle Sep (19|20) at /,
+      /^As of Sep 1[67](?: at |, ).* · next cycle Sep (19|20)(?: at |, )/,
     );
     expect(asOfLine(null, '2026-09-20T06:00:00Z')).toBeNull();
   });
   it("asOfLine calls a stale portfolio's next_realloc_at an attempt, never a cycle", () => {
     expect(asOfLine('2026-08-05T06:10:00Z', '2026-09-24T06:00:00Z', true)).toMatch(
-      /^As of Aug [45] at .* · next attempt Sep 2[34] at /,
+      /^As of Aug [45](?: at |, ).* · next attempt Sep 2[34](?: at |, )/,
     );
     expect(asOfLine('2026-08-05T06:10:00Z', '2026-09-24T06:00:00Z', true)).not.toContain(
       'next cycle',
     );
     // Fresh is the default, so every existing caller reads exactly as before.
     expect(asOfLine('2026-08-05T06:10:00Z', '2026-09-24T06:00:00Z', false)).toContain('next cycle');
-    expect(asOfLine('2026-08-05T06:10:00Z', null, true)).toMatch(/^As of Aug [45] at [^·]*$/);
+    expect(asOfLine('2026-08-05T06:10:00Z', null, true)).toMatch(
+      /^As of Aug [45](?: at |, )[^·]*$/,
+    );
   });
 });
 

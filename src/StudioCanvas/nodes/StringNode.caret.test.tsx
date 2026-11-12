@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';

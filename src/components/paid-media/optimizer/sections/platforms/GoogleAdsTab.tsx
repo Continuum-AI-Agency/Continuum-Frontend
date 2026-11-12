@@ -1,5 +1,13 @@
 'use client';
 
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+import type { UiLocale } from '@/i18n/config';
+import { formatDecimal } from '@/lib/format/decimal';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
+
 // The Overview's Google tab (MP2, docs/optimizer-multiplatform/frontend.html §2): Google's own
 // screen, read live for the brand's granted Google Ads customer. A sentence with figures, the
 // window it covers, then four to six tiles by campaign type — each naming its entity, its figure
@@ -43,8 +51,17 @@ import { type GoogleAdsOverviewState, useGoogleAdsOverview } from './useGoogleAd
 /** Said once, where the window is named, when no source names the account's currency. */
 const UNKNOWN_CURRENCY = 'currency not reported by Google';
 
-function signedPct(pct: number): string {
-  return pct > 0 ? `+${pct}%` : `${pct}%`;
+function signedPct(pct: number, locale: UiLocale = 'en'): string {
+  return new Intl.NumberFormat(locale, {
+    style: 'percent',
+    maximumFractionDigits: 0,
+    signDisplay: pct > 0 ? 'always' : 'auto',
+  }).format(pct / 100);
+}
+function percent(value: number, locale: UiLocale): string {
+  return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 }).format(
+    value / 100,
+  );
 }
 
 /** "$33.07 MXN per lead · no sign-up yet": each result type's own cost, when counted apart. */
@@ -52,12 +69,22 @@ function costsApart(
   item: Pick<CampaignGroup, 'spend' | 'byResult'>,
   overview: GoogleOverview,
   currency: string | null,
+  uiLocale: UiLocale = 'en',
+  uiTranslate?: ScaleCopy,
 ): string {
   return overview.resultTypes
     .map((bucket) => {
       const cost = costPerResult(item.spend, item.byResult, bucket);
+      if (uiTranslate)
+        return uiTranslate('googleTabResultCost', {
+          bucket,
+          present: cost == null ? 'no' : 'yes',
+          cost: cost == null ? '' : formatCurrency(cost, currency, uiLocale),
+        });
       const word = RESULT_WORDS[bucket].one;
-      return cost == null ? `no ${word} yet` : `${formatCurrency(cost, currency)} per ${word}`;
+      return cost == null
+        ? `no ${word} yet`
+        : `${formatCurrency(cost, currency, uiLocale)} per ${word}`;
     })
     .join(' · ');
 }
@@ -67,40 +94,88 @@ function costComparison(
   group: CampaignGroup,
   overview: GoogleOverview,
   currency: string | null,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
 ): string {
+  if (uiTranslate) {
+    const share = percent(group.sharePct, uiLocale);
+    if (group.conversions == null)
+      return overview.resultTypes.length > 0 && group.byResult
+        ? uiTranslate('googleTabGroupShare', {
+            results: costsApart(group, overview, currency, uiLocale, uiTranslate),
+            share,
+          })
+        : uiTranslate('googleTabGroupNoResult', {
+            spend: formatCurrency(group.spend, currency, uiLocale),
+            share,
+          });
+    const cost = costPerConversion(group);
+    if (cost == null)
+      return uiTranslate('googleTabGroupNoConversion', {
+        spend: formatCurrency(group.spend, currency, uiLocale),
+        share,
+      });
+    const versus = percentAgainst(cost, overview.costPerConversion);
+    return uiTranslate('googleTabGroupCost', {
+      cost: formatCurrency(cost, currency, uiLocale),
+      comparison:
+        versus == null || overview.costPerConversion == null
+          ? 'none'
+          : versus === 0
+            ? 'same'
+            : versus < 0
+              ? 'below'
+              : 'above',
+      accountCost: formatCurrency(overview.costPerConversion, currency, uiLocale),
+      difference: percent(Math.abs(versus ?? 0), uiLocale),
+      share,
+    });
+  }
   if (group.conversions == null) {
     if (overview.resultTypes.length > 0 && group.byResult) {
-      return `${costsApart(group, overview, currency)} · ${group.sharePct}% of spend`;
+      return `${costsApart(group, overview, currency, uiLocale)} · ${group.sharePct}% of spend`;
     }
-    return `${formatCurrency(group.spend, currency)} spent · ${group.sharePct}% of spend · ${NO_SINGLE_RESULT.toLowerCase()}`;
+    return `${formatCurrency(group.spend, currency, uiLocale)} spent · ${group.sharePct}% of spend · ${NO_SINGLE_RESULT.toLowerCase()}`;
   }
   const cost = costPerConversion(group);
   if (cost == null) {
-    return `${formatCurrency(group.spend, currency)} without a conversion · ${group.sharePct}% of spend`;
+    return `${formatCurrency(group.spend, currency, uiLocale)} without a conversion · ${group.sharePct}% of spend`;
   }
   const versus = percentAgainst(cost, overview.costPerConversion);
   const against =
     versus == null || overview.costPerConversion == null
       ? ''
       : versus === 0
-        ? ` · same as Google's ${formatCurrency(overview.costPerConversion, currency)}`
-        : ` · ${Math.abs(versus)}% ${versus < 0 ? 'below' : 'above'} Google's ${formatCurrency(overview.costPerConversion, currency)}`;
-  return `${formatCurrency(cost, currency)} each${against} · ${group.sharePct}% of spend`;
+        ? ` · same as Google's ${formatCurrency(overview.costPerConversion, currency, uiLocale)}`
+        : ` · ${Math.abs(versus)}% ${versus < 0 ? 'below' : 'above'} Google's ${formatCurrency(overview.costPerConversion, currency, uiLocale)}`;
+  return `${formatCurrency(cost, currency, uiLocale)} each${against} · ${group.sharePct}% of spend`;
 }
 
 /** The group's count; with no single result each result type apart; a dash only when the read
  *  carried neither. */
-function groupValue(group: CampaignGroup, overview: GoogleOverview): string {
-  if (group.conversions != null) return `${formatConversions(group.conversions)} conv.`;
-  return resultsApartLabel(group.byResult, overview.resultTypes) ?? '—';
+function groupValue(
+  group: CampaignGroup,
+  overview: GoogleOverview,
+  uiTranslate?: ScaleCopy,
+  uiLocale: UiLocale = 'en',
+): string {
+  if (group.conversions != null)
+    return uiTranslate
+      ? uiTranslate('helper_6da454239496', { v0: formatConversions(group.conversions, uiLocale) })
+      : `${formatConversions(group.conversions, uiLocale)} conv.`;
+  return resultsApartLabel(group.byResult, overview.resultTypes, uiLocale, uiTranslate) ?? '—';
 }
 
-function groupLabel(group: CampaignGroup, byType: boolean): string {
+function groupLabel(group: CampaignGroup, byType: boolean, uiTranslate?: ScaleCopy): string {
   if (!byType) return group.label;
+  if (uiTranslate)
+    return uiTranslate('googleTabGroupLabel', { name: group.label, count: group.campaigns });
   return `${group.label} · ${group.campaigns} ${group.campaigns === 1 ? 'campaign' : 'campaigns'}`;
 }
 
 function Headline({ overview, currency }: { overview: GoogleOverview; currency: string | null }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const window = figureWindowOf(overview.days);
   const change = percentAgainst(overview.spend, overview.priorSpend);
   const converting = overview.groups
@@ -109,65 +184,92 @@ function Headline({ overview, currency }: { overview: GoogleOverview; currency: 
   const apart = overview.resultTypes.map((bucket) => {
     const count = overview.byResult?.[bucket] ?? 0;
     const cost = costPerResult(overview.spend, overview.byResult, bucket);
-    return `${resultCountLabel(bucket, count)}${cost == null ? '' : ` at ${formatCurrency(cost, currency)} each`}`;
+    return uiText('googleTabApartCost', {
+      results: resultCountLabel(bucket, count, uiLocale, uiText),
+      hasCost: cost == null ? 'no' : 'yes',
+      cost: cost == null ? '' : formatCurrency(cost, currency, uiLocale),
+    });
   });
-  const ending = !overview.resultsDefined
-    ? apart.length > 0
-      ? `: ${apart.join(' and ')}, counted apart because no single result is defined for this account.`
-      : '. Conversions are not shown: no single result is defined for this account.'
-    : overview.spend > 0
-      ? ' and recorded no conversions.'
-      : '.';
+  const ending = uiText('googleTabHeadlineEnding', {
+    state: !overview.resultsDefined
+      ? apart.length > 0
+        ? 'apart'
+        : 'undefined'
+      : overview.spend > 0
+        ? 'none'
+        : 'empty',
+    results: new Intl.ListFormat(uiLocale, { style: 'long', type: 'conjunction' }).format(apart),
+  });
   return (
     <p
       className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
       data-testid="google-headline"
     >
-      Google spent{' '}
-      <span
-        className="tabular-nums"
-        {...figureProps('google.spend', overview.spend, currency, window)}
-      >
-        {formatCurrency(overview.spend, currency)}
-      </span>
-      {change != null ? ` (${signedPct(change)} on the period before)` : ''}
-      {converting.length > 0 ? ': ' : ending}
-      {converting.map((group, index) => (
-        <span key={group.key}>
-          {index > 0 ? (index === converting.length - 1 ? ' and ' : ', ') : ''}
-          {group.label} bought{' '}
+      {uiText.rich('sentence_cf112fa790ba', {
+        v0: () => (
           <span
             className="tabular-nums"
-            {...figureProps(
-              `google.group.${group.key}.conversions`,
-              group.conversions,
-              null,
-              window,
-              'count',
-            )}
+            {...figureProps('google.spend', overview.spend, currency, window)}
           >
-            {formatConversions(group.conversions ?? 0)}
-          </span>{' '}
-          {group.conversions === 1 ? 'conversion' : 'conversions'} at{' '}
-          <span
-            className="tabular-nums"
-            {...figureProps(
-              `google.group.${group.key}.cost`,
-              costPerConversion(group),
-              currency,
-              window,
-            )}
-          >
-            {formatCurrency(costPerConversion(group), currency)}
+            {formatCurrency(overview.spend, currency, uiLocale)}
           </span>
-        </span>
-      ))}
-      {converting.length > 0 ? '.' : ''}
+        ),
+        v1:
+          change != null
+            ? uiText('googleTabHeadlineChange', { change: signedPct(change, uiLocale) })
+            : '',
+        v2: converting.length > 0 ? ': ' : ending,
+        v3: () =>
+          converting.map((group, index) => (
+            <span key={group.key}>
+              {uiText.rich('sentence_cefd87efeabb', {
+                separator:
+                  index > 0
+                    ? index === converting.length - 1
+                      ? uiText('list_final_separator')
+                      : ', '
+                    : '',
+                group: group.label,
+                conversions: () => (
+                  <span
+                    className="tabular-nums"
+                    {...figureProps(
+                      `google.group.${group.key}.conversions`,
+                      group.conversions,
+                      null,
+                      window,
+                      'count',
+                    )}
+                  >
+                    {formatConversions(group.conversions ?? 0, uiLocale)}
+                  </span>
+                ),
+                count: group.conversions ?? 0,
+                cost: () => (
+                  <span
+                    className="tabular-nums"
+                    {...figureProps(
+                      `google.group.${group.key}.cost`,
+                      costPerConversion(group),
+                      currency,
+                      window,
+                    )}
+                  >
+                    {formatCurrency(costPerConversion(group), currency, uiLocale)}
+                  </span>
+                ),
+              })}
+            </span>
+          )),
+        v4: converting.length > 0 ? '.' : '',
+      })}
     </p>
   );
 }
 
 function Tiles({ overview, currency }: { overview: GoogleOverview; currency: string | null }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   const window = figureWindowOf(overview.days);
   const change = percentAgainst(overview.spend, overview.priorSpend);
   const groups = overview.groups.slice(0, MAX_GROUP_TILES);
@@ -179,14 +281,17 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
     >
       <KpiTile
         figure={figureProps('google.tiles.spend', overview.spend, currency, window)}
-        label="Spend"
+        label={uiText('spend_85f3d55')}
         sub={
           change != null && overview.priorSpend != null
-            ? `${signedPct(change)} on ${formatCurrency(overview.priorSpend, currency)} the period before`
-            : 'no prior period to compare'
+            ? uiText('googleTabPriorSpend', {
+                change: signedPct(change, uiLocale),
+                spend: formatCurrency(overview.priorSpend, currency, uiLocale),
+              })
+            : uiText('googleTabNoPrior')
         }
         testId="google-tile-spend"
-        value={formatCurrency(overview.spend, currency)}
+        value={formatCurrency(overview.spend, currency, uiLocale)}
       />
       <KpiTile
         figure={figureProps(
@@ -196,21 +301,25 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
           window,
           'count',
         )}
-        label="Conversions"
+        label={uiText('conversions_236c262')}
         sub={
           overview.conversions == null
             ? overview.resultTypes.length > 0
-              ? `${costsApart(overview, overview, currency)} · counted apart`
-              : NO_SINGLE_RESULT
+              ? uiText('googleTabCountedApart', {
+                  results: costsApart(overview, overview, currency, uiLocale, uiText),
+                })
+              : uiText('dashboardNoSingleResult')
             : overview.costPerConversion != null
-              ? `${formatCurrency(overview.costPerConversion, currency)} each · as Google attributes them`
-              : 'none recorded in the window'
+              ? uiText('googleTabAttributedCost', {
+                  cost: formatCurrency(overview.costPerConversion, currency, uiLocale),
+                })
+              : uiText('googleTabNoneRecorded')
         }
         testId="google-tile-conversions"
         value={
           overview.conversions == null
-            ? (resultsApartLabel(overview.byResult, overview.resultTypes) ?? '—')
-            : formatConversions(overview.conversions)
+            ? (resultsApartLabel(overview.byResult, overview.resultTypes, uiLocale, uiText) ?? '—')
+            : formatConversions(overview.conversions, uiLocale)
         }
       />
       {groups.map((group) => (
@@ -223,19 +332,21 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
             'count',
           )}
           key={group.key}
-          label={groupLabel(group, overview.byType)}
-          sub={costComparison(group, overview, currency)}
+          label={groupLabel(group, overview.byType, uiText)}
+          sub={costComparison(group, overview, currency, uiText, uiLocale)}
           testId="google-tile-group"
-          value={groupValue(group, overview)}
+          value={groupValue(group, overview, uiText, uiLocale)}
         />
       ))}
       {showClicks ? (
         <KpiTile
           figure={figureProps('google.tiles.clicks', overview.clicks, null, window, 'count')}
-          label="Clicks"
-          sub={`${overview.ctr.toFixed(2)}% of impressions clicked`}
+          label={uiText('clicks_921fc98')}
+          sub={uiText('googleTabClicksShare', {
+            percentage: formatDecimal(overview.ctr, 2, uiLocale) + '%',
+          })}
           testId="google-tile-clicks"
-          value={overview.clicks.toLocaleString('en-US')}
+          value={overview.clicks.toLocaleString(uiLocale)}
         />
       ) : null}
     </div>
@@ -276,29 +387,31 @@ export function GoogleAdsTabView({
   /** False when the frame above already said what these figures are. */
   readingNote?: boolean;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   switch (state.status) {
     case 'loading':
       return (
         <p className="px-1 text-muted-foreground text-sm" data-testid="google-loading">
-          Reading Google Ads…
+          {uiText('reading_google_ads_3c591ba')}
         </p>
       );
     case 'no-connection':
       return (
         <EmptyState
-          body="Google Ads isn't connected. Connect a Google login with access to the Ads account, then grant that account to this brand."
+          body={uiText('googleTabNoConnection')}
           connect
           testId="google-empty-no-connection"
-          title="No Google connection"
+          title={uiText('no_google_connection_afe8a59')}
         />
       );
     case 'no-grant':
       return (
         <EmptyState
-          body="Your Google login is connected, but no Google Ads account is granted to this brand. Grant one in Settings → Integrations."
+          body={uiText('googleTabNoGrant')}
           connect
           testId="google-empty-no-grant"
-          title="No Google Ads account granted to this brand"
+          title={uiText('no_google_ads_account_granted_to_this_brand_e53da31')}
         />
       );
     case 'error':
@@ -309,8 +422,10 @@ export function GoogleAdsTabView({
           testId="google-empty-error"
           title={
             state.account
-              ? `Google Ads could not be read for ${state.account.name ?? state.account.account_id}`
-              : 'Google Ads could not be read'
+              ? uiText('template_7f7ae35fd49f', {
+                  v0: state.account.name ?? state.account.account_id,
+                })
+              : uiText('google_ads_could_not_be_read_6d8c63a')
           }
         />
       );
@@ -325,17 +440,19 @@ export function GoogleAdsTabView({
               className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs"
               data-testid="google-subline"
             >
-              <span>{windowRangeLabel(overview.since, overview.until)}</span>
+              <span>{windowRangeLabel(overview.since, overview.until, uiLocale)}</span>
               <span aria-hidden="true">·</span>
               <span>
                 {account.name ?? 'Google Ads'} ({account.account_id})
               </span>
               <span aria-hidden="true">·</span>
-              <span>attribution: what Google reports</span>
+              <span>{uiText('attribution_what_google_reports_ea2682d')}</span>
               {currency ? null : (
                 <>
                   <span aria-hidden="true">·</span>
-                  <span data-testid="google-currency-unknown">{UNKNOWN_CURRENCY}</span>
+                  <span data-testid="google-currency-unknown">
+                    {uiText('googleTabUnknownCurrency')}
+                  </span>
                 </>
               )}
             </div>
@@ -354,17 +471,19 @@ export function GoogleAdsTabView({
  * edge reads it from Google. Silent when Google cannot be read; the frame above says why.
  */
 export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOverviewState }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   if (state.status === 'loading') {
     return (
       <p className="px-1 text-muted-foreground text-xs" data-testid="google-breakdown-loading">
-        Reading Google's campaign types…
+        {uiText('reading_google_s_campaign_types_db6ef4a')}
       </p>
     );
   }
   if (state.status === 'error') {
     return (
       <p className="px-1 text-muted-foreground text-xs" data-testid="google-breakdown-error">
-        The split by campaign type could not be read: {state.message}
+        {uiText.rich('sentence_37076960c7f0', { v0: state.message })}
       </p>
     );
   }
@@ -376,8 +495,10 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
   return (
     <section className="space-y-2" data-testid="google-breakdown">
       <p className={`${typeScale.label} px-1 font-semibold text-muted-foreground`}>
-        By campaign type · {windowRangeLabel(overview.since, overview.until)} · what Google reports
-        {account.currency ? '' : ` · ${UNKNOWN_CURRENCY}`}
+        {uiText.rich('sentence_1675e7ff58cf', {
+          v0: windowRangeLabel(overview.since, overview.until, uiLocale),
+          v1: account.currency ? '' : ` · ${uiText('googleTabUnknownCurrency')}`,
+        })}
       </p>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {groups.map((group) => (
@@ -390,10 +511,10 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
               'count',
             )}
             key={group.key}
-            label={groupLabel(group, overview.byType)}
-            sub={costComparison(group, overview, account.currency)}
+            label={groupLabel(group, overview.byType, uiText)}
+            sub={costComparison(group, overview, account.currency, uiText, uiLocale)}
             testId="google-tile-group"
-            value={groupValue(group, overview)}
+            value={groupValue(group, overview, uiText, uiLocale)}
           />
         ))}
       </div>

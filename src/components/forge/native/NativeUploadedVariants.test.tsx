@@ -1,5 +1,6 @@
 /** Mounted upload lifecycle + real authenticated metadata transport. Storage,
  * SQL publication and worker leases are exercised by their separate benches. */
+
 import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import {
   type HyperframesSceneView,
@@ -8,7 +9,15 @@ import {
   templateRevisionVariantSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
+import { markFetchFailure } from '@/lib/api/errors';
 
 const uuid = () => crypto.randomUUID();
 const BRAND = uuid(),
@@ -235,7 +244,9 @@ test('a registered upload freezes its real parent, shows failures, and never inv
   await act(async () => {
     await client.invalidateQueries();
   });
-  await screen.findByText('The uploaded source has a missing dependency.');
+  await screen.findByText(
+    'This uploaded source could not be processed. Check the upload job and try again.',
+  );
   expect(saved).toEqual([]);
   expect(screen.getByRole('link', { name: 'Upload job' }).getAttribute('href')).toContain(
     `uploadJobId=${JOB}`,
@@ -244,11 +255,11 @@ test('a registered upload freezes its real parent, shows failures, and never inv
 test('lost upload acknowledgement refreshes durable history and preserves the retry diagnosis', async () => {
   upload = async () => {
     history = { ...history, items: [pending] };
-    throw Error('Upload acknowledgement was interrupted.');
+    throw markFetchFailure(new TypeError('Failed to fetch'));
   };
   mount();
   await choose();
-  await screen.findByText(/Upload acknowledgement was interrupted/);
+  await screen.findByText('Check your connection and try again.');
   await screen.findByText('Fresh source · Parsing pending');
   expect(saved).toEqual([]);
   expect(busy).toEqual([true, false]);

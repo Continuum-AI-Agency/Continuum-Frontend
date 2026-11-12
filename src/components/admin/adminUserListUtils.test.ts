@@ -336,7 +336,11 @@ describe('brand access grid helpers', () => {
     );
     expect(
       describeBillingPlan(
-        access({ billingModel: 'stripe', plans: ['organic_studio', 'paid_media'], status: 'past_due' }),
+        access({
+          billingModel: 'stripe',
+          plans: ['organic_studio', 'paid_media'],
+          status: 'past_due',
+        }),
       ),
     ).toBe('Organic Plus + Performance Plus · past due');
     expect(describeBillingPlan(access({ billingModel: 'stripe', status: 'canceled' }))).toBe(

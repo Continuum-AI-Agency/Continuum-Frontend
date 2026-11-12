@@ -6,19 +6,27 @@
 
 import type { DrawingTool } from '@continuum/contracts';
 import { ArrowUpRight, MousePointer2, Pencil, Redo2, Slash, Square, Undo2 } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
+import { useMemo as useUiConfigMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DRAWING_COLORS } from './drawing';
 
 export type StageTool = 'point' | DrawingTool;
 
-const TOOLS: ReadonlyArray<{ value: StageTool; label: string; icon: typeof Pencil }> = [
-  { value: 'point', label: 'Pin', icon: MousePointer2 },
-  { value: 'arrow', label: 'Arrow', icon: ArrowUpRight },
-  { value: 'line', label: 'Line', icon: Slash },
-  { value: 'box', label: 'Rectangle', icon: Square },
-  { value: 'freehand', label: 'Freehand', icon: Pencil },
-];
+function useLocalToolsMessages() {
+  const translateConfig = useUiTranslations('library');
+  return useUiConfigMemo(() => {
+    const value: ReadonlyArray<{ value: StageTool; label: string; icon: typeof Pencil }> = [
+      { value: 'point', label: translateConfig('pin_ff1cee74'), icon: MousePointer2 },
+      { value: 'arrow', label: translateConfig('arrow_05800e70'), icon: ArrowUpRight },
+      { value: 'line', label: translateConfig('line_d7852cd0'), icon: Slash },
+      { value: 'box', label: translateConfig('rectangle_03069962'), icon: Square },
+      { value: 'freehand', label: translateConfig('freehand_dbf41ae1'), icon: Pencil },
+    ];
+    return value;
+  }, [translateConfig]);
+}
 
 type Props = {
   tool: StageTool;
@@ -46,10 +54,14 @@ export function DrawingToolbar({
   onRedo,
   className,
 }: Props) {
+  const TOOLS = useLocalToolsMessages();
+
+  const translateUi = useUiTranslations('library');
+
   return (
     <div
       role="toolbar"
-      aria-label="Annotation tools"
+      aria-label={translateUi('annotation_tools_fa7d8c17')}
       className={cn(
         'flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur',
         className,
@@ -64,7 +76,7 @@ export function DrawingToolbar({
             size="icon"
             variant={tool === value ? 'secondary' : 'ghost'}
             className="size-7"
-            aria-label={`${label} annotation`}
+            aria-label={translateUi('value0_annotation_b574cf0f', { value0: String(label) })}
             aria-pressed={tool === value}
             title={label}
             onClick={() => onToolChange(value)}
@@ -78,7 +90,7 @@ export function DrawingToolbar({
         <button
           key={swatch}
           type="button"
-          aria-label={`Colour ${swatch}`}
+          aria-label={translateUi('colour_value0_447e6404', { value0: String(swatch) })}
           aria-pressed={color === swatch}
           title={swatch}
           onClick={() => onColorChange(swatch)}
@@ -95,8 +107,8 @@ export function DrawingToolbar({
         size="icon"
         variant="ghost"
         className="size-7"
-        aria-label="Undo"
-        title="Undo (⌘Z)"
+        aria-label={translateUi('undo_a8283ade')}
+        title={translateUi('undo_z_9c72706a')}
         disabled={!canUndo}
         onClick={onUndo}
       >
@@ -107,8 +119,8 @@ export function DrawingToolbar({
         size="icon"
         variant="ghost"
         className="size-7"
-        aria-label="Redo"
-        title="Redo (⇧⌘Z)"
+        aria-label={translateUi('redo_74273989')}
+        title={translateUi('redo_z_a212a69e')}
         disabled={!canRedo}
         onClick={onRedo}
       >

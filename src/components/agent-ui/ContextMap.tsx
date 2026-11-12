@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useAgentFormats } from './useAgentFormats';
+
 // What fills an agent's context window: a segmented meter of how full it is, then each part of
 // the prompt as a tile sized by its tokens, one column per kind, the free space left dashed. Tiles
 // glide as the window grows; pointing at a kind in the legend lights its column.
@@ -16,21 +19,43 @@ import {
 } from '@/components/shared/agent-cards/agentCardKit';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { type ContextPart, type ContextPartKind, formatTokens, layoutContext } from './model';
+import { type ContextPart, type ContextPartKind, layoutContext } from './model';
 import { DetailRows, RollingTokens } from './parts';
 
-const KIND: Record<ContextPartKind, { label: string; tile: string; swatch: string }> = {
-  system: { label: 'System', tile: 'border-chart-1/35 bg-chart-1/10', swatch: 'bg-chart-1' },
-  tools: { label: 'Tools', tile: 'border-chart-4/35 bg-chart-4/10', swatch: 'bg-chart-4' },
-  memory: { label: 'Memory', tile: 'border-chart-2/35 bg-chart-2/10', swatch: 'bg-chart-2' },
-  files: { label: 'Files', tile: 'border-chart-5/35 bg-chart-5/10', swatch: 'bg-chart-5' },
+const getKIND = (
+  tUi: ReturnType<typeof useTranslations<'common'>>,
+): Record<ContextPartKind, { label: string; tile: string; swatch: string }> => ({
+  system: {
+    label: tUi('m_bc0792d8dc'),
+    tile: 'border-chart-1/35 bg-chart-1/10',
+    swatch: 'bg-chart-1',
+  },
+  tools: {
+    label: tUi('m_4fa8cc860c'),
+    tile: 'border-chart-4/35 bg-chart-4/10',
+    swatch: 'bg-chart-4',
+  },
+  memory: {
+    label: tUi('m_89c8a2851d'),
+    tile: 'border-chart-2/35 bg-chart-2/10',
+    swatch: 'bg-chart-2',
+  },
+  files: {
+    label: tUi('m_6ce6c512ea'),
+    tile: 'border-chart-5/35 bg-chart-5/10',
+    swatch: 'bg-chart-5',
+  },
   history: {
-    label: 'Chat',
+    label: tUi('m_2ced57f125'),
     tile: 'border-foreground/15 bg-foreground/[0.04]',
     swatch: 'bg-muted-foreground',
   },
-  results: { label: 'Tool results', tile: 'border-chart-3/35 bg-chart-3/10', swatch: 'bg-chart-3' },
-};
+  results: {
+    label: tUi('m_38bff00d73'),
+    tile: 'border-chart-3/35 bg-chart-3/10',
+    swatch: 'bg-chart-3',
+  },
+});
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -43,6 +68,10 @@ export function ContextMap({
   maxTokens: number;
   className?: string;
 }) {
+  const { formatTokens } = useAgentFormats();
+
+  const uiText = useTranslations('common');
+  const KIND = getKIND(uiText);
   const { groups, usedTokens, freeTokens, freeShare, over } = layoutContext(parts, maxTokens);
   const [focus, setFocus] = useState<ContextPartKind>();
   const fill = usedTokens / Math.max(maxTokens, 1);
@@ -54,22 +83,31 @@ export function ContextMap({
           <AgentCardHeader
             action={
               over ? (
-                <StatusLabel tone="failed">Over the window</StatusLabel>
+                <StatusLabel tone="failed">{uiText('m_34ce47178c')}</StatusLabel>
               ) : fill >= 0.8 ? (
-                <StatusLabel tone="waiting">{pct(fill)} full</StatusLabel>
+                <StatusLabel tone="waiting">
+                  {pct(fill)}
+                  {uiText('m_ac7986607a')}
+                </StatusLabel>
               ) : (
-                <StatusLabel>{pct(fill)} full</StatusLabel>
+                <StatusLabel>
+                  {pct(fill)}
+                  {uiText('m_ac7986607a')}
+                </StatusLabel>
               )
             }
           >
-            <AgentCardEyebrow label="Context window" />
+            <AgentCardEyebrow label={uiText('context_window_7696d08')} />
             <AgentCardTitle>
               <span className={cn('font-mono tabular-nums', over && 'text-destructive')}>
                 <RollingTokens value={usedTokens} />
               </span>
               <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                of {formatTokens(maxTokens)} tokens · {pct(fill)}
-                {over && ' — over the window'}
+                {uiText('m_2449d65241')}
+                {formatTokens(maxTokens)}
+                {uiText('m_7c297370a6')}
+                {pct(fill)}
+                {over && uiText('m_12a7ee6929')}
               </span>
             </AgentCardTitle>
           </AgentCardHeader>
@@ -95,7 +133,7 @@ export function ContextMap({
               )}
             </div>
             <LayoutGroup>
-              <ul aria-label="Context window" className="flex h-44 min-w-0 gap-1">
+              <ul aria-label={uiText('context_window_7696d08')} className="flex h-44 min-w-0 gap-1">
                 {groups.map((group) => (
                   <motion.li
                     layout
@@ -159,17 +197,19 @@ export function ContextMap({
                   >
                     <span className="flex flex-col px-1">
                       <span className="truncate font-mono text-xs font-medium">
-                        {formatTokens(freeTokens)} free
+                        {formatTokens(freeTokens)}
+                        {uiText('m_4a6a461db6')}
                       </span>
                       <span className="truncate text-3xs text-muted-foreground">
-                        {pct(freeShare)} of the window
+                        {pct(freeShare)}
+                        {uiText('m_f26d05ea48')}
                       </span>
                     </span>
                   </motion.li>
                 )}
               </ul>
             </LayoutGroup>
-            <ul aria-label="Legend" className="flex flex-wrap gap-1">
+            <ul aria-label={uiText('m_5846955db6')} className="flex flex-wrap gap-1">
               {groups.map((group) => (
                 <li key={group.kind}>
                   <button

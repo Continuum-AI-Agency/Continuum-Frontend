@@ -5,9 +5,10 @@ import {
   type HeadlessBatchStatus,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import type { ParsedRunEvent } from '@/hooks/useRunEventStream';
+import { render } from '@/i18n/__tests__/render';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,

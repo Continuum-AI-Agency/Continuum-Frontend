@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { CrossPlatformMoveCardSchema, PlatformCardSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import {
   CROSS_PLATFORM_MOVE,
   EVERY_CARD,
@@ -488,7 +489,7 @@ describe('Google delivery issue', () => {
     );
     expect(getByRole('heading').textContent).toBe('PMax Necesidades SLP has not served for 1 day');
     expect(getByTestId('platform-card-delivery').textContent).toBe(
-      'Google says: no asset groups; some new reason.',
+      'Google says: no asset groups; delivery status unavailable (SOME_NEW_REASON).',
     );
     expect(queryByTestId('platform-card-account-wide')).toBeNull();
     expect(getByTestId('platform-card-open-google').getAttribute('href')).toBe(
@@ -527,7 +528,7 @@ describe('TikTok delivery issue', () => {
     });
     const { getByRole, getByTestId } = render(<PlatformCardBody card={card} />);
     expect(getByRole('heading').textContent).toBe(
-      'EF | Leads | Intereses fitness is not serving: something new',
+      'EF | Leads | Intereses fitness is not serving: status unavailable (ADGROUP_STATUS_SOMETHING_NEW)',
     );
     expect(getByTestId('platform-card-delivery').textContent).toContain(
       'TikTok gives no review reason',

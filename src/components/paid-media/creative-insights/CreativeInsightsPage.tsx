@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Creative Insights, the reading half: it owns the queries and hands CreativeInsightsView
 // plain data. It replaces the "What's working" view on the Scale bar.
@@ -43,6 +44,7 @@ export function CreativeInsightsPage({
   brandId: string;
   adAccountId: string | null;
 }) {
+  const uiText = useTranslations('scale');
   const [lookback, setLookback] = useState<InsightsWindow>('d7');
   const [funnel, setFunnel] = useState<FunnelTab>('all');
 
@@ -71,7 +73,7 @@ export function CreativeInsightsPage({
     const scopedRows = scopeWinrateRows(winrates.data, scope);
     const angleByAd = angleIdByAd(adAngles.data, scope);
     const verdicts = scopeVerdicts(report?.verdicts ?? [], scope);
-    const nextRows = buildNextAngleRows(scopedRows, nameById);
+    const nextRows = buildNextAngleRows(scopedRows, nameById, uiText);
     const angleRows = buildAccountAngleRows({
       scopedRows,
       standing: nextRows,
@@ -87,11 +89,11 @@ export function CreativeInsightsPage({
       angleRows,
       nextRows,
       neverTested: neverTestedAngles(angleByAd, scopedRows),
-      read: composeAngleRead(angleRows, nextRows),
+      read: composeAngleRead(angleRows, nextRows, uiText),
       verdicts,
       angleLabelByAd,
     };
-  }, [winrates.data, adAngles.data, report, scope, nameById]);
+  }, [winrates.data, adAngles.data, report, scope, nameById, uiText]);
 
   const verdictsByKind = useMemo(
     () => selectVerdictsByKind(report ? { ...report, verdicts: model.verdicts } : null, funnel),

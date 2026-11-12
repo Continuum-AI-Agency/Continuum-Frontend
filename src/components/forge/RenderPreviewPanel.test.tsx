@@ -139,6 +139,7 @@ mock.module('@/lib/supabase/realtime', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import {
   act,
   cleanup,
@@ -146,8 +147,7 @@ import {
   render as renderInDom,
   screen,
   waitFor,
-} from '@testing-library/react';
-import type { ReactElement } from 'react';
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { RenderPreviewPanel } from './RenderPreviewPanel';
 import type { RequestRow } from './renderRequestRows';
 

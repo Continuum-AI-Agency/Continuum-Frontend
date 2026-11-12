@@ -1,3 +1,4 @@
+import { render } from '@/i18n/__tests__/render';
 // Presentation coverage for the proposed-plan surface. `ui.plan_card` ships 16+ fields
 // per item and the old square-tile grid rendered two of them; these tests render the REAL
 // ConceptPlan / ConceptCard from CONTRACT-VALIDATED plan data and assert that the
@@ -11,9 +12,16 @@
 // `chat:e2e:bench` cannot run locally (the /organic workspace tabs never mount without
 // seed state), so this is the anchor for the plan surface.
 
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { proposedPlanSchema } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { createTranslator, NextIntlClientProvider } from 'next-intl';
+import commonEn from '../../../../messages/common/en.json';
+import commonEs from '../../../../messages/common/es.json';
+import commonPt from '../../../../messages/common/pt-BR.json';
+import en from '../../../../messages/organic/en.json';
+import es from '../../../../messages/organic/es.json';
+import pt from '../../../../messages/organic/pt-BR.json';
 import { ConceptCard } from './ConceptCard';
 import { ConceptPlan } from './ConceptPlan';
 import type { AgentJobState, PipelineCardState, PlanItem, UiPlanCard } from './types';
@@ -393,7 +401,8 @@ describe('state is honest — three failures that must not look alike', () => {
     const row = container.querySelector('[data-slot="concept-row"]');
     expect(row?.getAttribute('data-status-kind')).toBe('failed');
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
-    expect(screen.getByText('render exploded')).toBeTruthy();
+    expect(screen.getByText('Generation failed')).toBeTruthy();
+    expect(screen.queryByText('render exploded')).toBeNull();
     expect(screen.getByText('Retry')).toBeTruthy();
     expect(screen.queryByText('Try media again')).toBeNull();
   });
@@ -445,4 +454,210 @@ describe('a durable media failure survives the reducer and reaches the row', () 
     ).toBe('media_failed');
     expect(screen.queryAllByText(/Copy ready/)).toHaveLength(0);
   });
+});
+
+for (const [locale, messages, common] of [
+  ['en', en, commonEn],
+  ['pt-BR', pt, commonPt],
+  ['es', es, commonEs],
+] as const) {
+  const t = createTranslator({
+    locale,
+    namespace: 'organic',
+    messages: { organic: messages },
+    onError: (error) => {
+      throw error;
+    },
+  });
+  const wrap = (children: React.ReactNode) => (
+    <NextIntlClientProvider
+      locale={locale}
+      timeZone="Pacific/Honolulu"
+      messages={{ organic: messages, common }}
+      onError={(error) => {
+        throw error;
+      }}
+    >
+      {children}
+    </NextIntlClientProvider>
+  );
+  describe(`computed plan summaries ${locale}`, () => {
+    it('localizes bare-date week headings, counts, dependency summaries and ETA while preserving action IDs and authored text', () => {
+      const plan = planFixture({
+        title: 'Week of an authored title',
+        summary: 'Past post is a generated narrative, not a control label.',
+        items: [
+          rawItem({
+            itemId: 'child',
+            scheduledAt: '2026-08-24T02:00:00.000Z',
+            dependsOn: ['root-a', 'root-b'],
+            creativeBrief: brief({ hook: 'Authored child hook' }),
+          }),
+          rawItem({
+            itemId: 'root-a',
+            scheduledAt: '2026-08-26T02:00:00.000Z',
+            format: 'carousel',
+            creativeBrief: brief({ hook: 'Authored first parent hook' }),
+          }),
+          rawItem({
+            itemId: 'root-b',
+            scheduledAt: '2026-08-25T02:00:00.000Z',
+            creativeBrief: brief({ hook: 'Authored second parent hook' }),
+          }),
+        ],
+      });
+      const before = structuredClone(plan);
+      const generateAll = mock((_ids: string[]) => {});
+      const { container, getByText, getByRole } = render(
+        wrap(
+          <ConceptPlan
+            plan={plan}
+            pipeline={[]}
+            onGenerateAllAction={generateAll}
+            onGenerateItemAction={noop}
+            onRejectAction={noop}
+            onViewDraftAction={noop}
+          />,
+        ),
+      );
+      expect(getByText(plan.title)).toBeTruthy();
+      expect(getByText(plan.summary)).toBeTruthy();
+      expect(
+        getByText(
+          t('conceptWeekOf', {
+            date: new Date(2026, 7, 24).toLocaleDateString(locale, {
+              month: 'short',
+              day: 'numeric',
+            }),
+          }),
+        ),
+      ).toBeTruthy();
+      expect(getByText(t('awarenessPosts', { count: 3 }))).toBeTruthy();
+      expect(getByText(t('conceptGenerationEstimate', { count: 4, unit: 'minute' }))).toBeTruthy();
+      const parentLabel = [
+        new Date('2026-08-26T02:00:00.000Z').toLocaleDateString(locale, {
+          weekday: 'short',
+          day: 'numeric',
+        }),
+        t('publishFormatCAROUSEL'),
+      ].join(' · ');
+      expect(container.textContent).toContain(
+        t('conceptDependencyMore', { dependency: parentLabel, count: 1 }),
+      );
+      expect(
+        Array.from(container.querySelectorAll('[data-slot="concept-row"]')).map(
+          (row) => row.querySelector('p.text-sm')?.textContent,
+        ),
+      ).toEqual([
+        '“Authored second parent hook”',
+        '“Authored first parent hook”',
+        '“Authored child hook”',
+      ]);
+      fireEvent.click(getByRole('button', { name: t('sentence_726d1496c874', { count: 3 }) }));
+      expect(generateAll).toHaveBeenCalledTimes(1);
+      expect(generateAll).toHaveBeenCalledWith(['root-b', 'root-a', 'child']);
+      expect(plan).toEqual(before);
+    });
+
+    it('keeps the original 90-second unit threshold and rounding policy', () => {
+      for (const [seconds, count, unit] of [
+        [1, 1, 'second'],
+        [89, 89, 'second'],
+        [90, 2, 'minute'],
+        [149, 2, 'minute'],
+        [150, 3, 'minute'],
+      ] as const) {
+        const view = render(
+          wrap(
+            <ConceptPlan
+              plan={planFixture({ estimatedDurationSeconds: seconds })}
+              pipeline={[]}
+              onGenerateAllAction={noop}
+              onGenerateItemAction={noop}
+              onRejectAction={noop}
+              onViewDraftAction={noop}
+            />,
+          ),
+        );
+        expect(view.getByText(t('conceptGenerationEstimate', { count, unit }))).toBeTruthy();
+        view.unmount();
+      }
+    });
+
+    it('localizes evidence kind chrome without translating generated evidence summaries', async () => {
+      const evidence = [
+        { kind: 'competitor', refId: null, summary: 'Competitor is an authored comparison.' },
+        { kind: 'past_draft', refId: null, summary: 'Past post is generated source text.' },
+        { kind: 'brand_doc', refId: null, summary: 'Brand doc is quoted evidence.' },
+      ];
+      const plan = planFixture({ evidence });
+      const before = structuredClone(plan);
+      const view = render(
+        wrap(
+          <ConceptPlan
+            plan={plan}
+            pipeline={[]}
+            onGenerateAllAction={noop}
+            onGenerateItemAction={noop}
+            onRejectAction={noop}
+            onViewDraftAction={noop}
+          />,
+        ),
+      );
+      const trigger = view.getByRole('button', {
+        name: new RegExp(t('groundedSignals', { count: 3 })),
+      });
+      await act(async () => {
+        fireEvent.pointerEnter(trigger, { pointerType: 'mouse' });
+        fireEvent.mouseEnter(trigger);
+        fireEvent.mouseMove(trigger);
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      });
+      for (const key of [
+        'conceptEvidenceCompetitor',
+        'conceptEvidencePastPost',
+        'conceptEvidenceBrandDoc',
+      ] as const)
+        expect(view.getByText(t(key))).toBeTruthy();
+      for (const item of evidence) expect(view.getByText(item.summary)).toBeTruthy();
+      expect(plan).toEqual(before);
+    });
+  });
+}
+
+it('does not fetch again or mutate the plan when the UI locale changes', async () => {
+  const fetch = spyOn(globalThis, 'fetch').mockRejectedValue(
+    new Error('Unexpected network request in read-only plan presentation'),
+  );
+  const plan = planFixture();
+  const before = structuredClone(plan);
+  const element = (locale: 'en' | 'pt-BR' | 'es', organic: typeof en, common: typeof commonEn) => (
+    <NextIntlClientProvider
+      locale={locale}
+      timeZone="UTC"
+      messages={{ organic, common }}
+      onError={(error) => {
+        throw error;
+      }}
+    >
+      <ConceptPlan
+        plan={plan}
+        pipeline={[]}
+        onGenerateAllAction={noop}
+        onGenerateItemAction={noop}
+        onRejectAction={noop}
+        onViewDraftAction={noop}
+      />
+    </NextIntlClientProvider>
+  );
+  try {
+    const view = render(element('en', en, commonEn));
+    view.rerender(element('pt-BR', pt, commonPt));
+    view.rerender(element('es', es, commonEs));
+    await act(async () => {});
+    expect(fetch).not.toHaveBeenCalled();
+    expect(plan).toEqual(before);
+  } finally {
+    fetch.mockRestore();
+  }
 });

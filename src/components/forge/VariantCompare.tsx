@@ -2,6 +2,7 @@
 
 import type { ApiRenderJob, TemplateRevisionVariant } from '@continuum/contracts';
 import { useQueries } from '@tanstack/react-query';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { fullSrc, thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
@@ -38,21 +39,24 @@ export function compareRows(variants: TemplateRevisionVariant[], jobs: ApiRender
 }
 
 function Still({ job }: { job: ApiRenderJob | null }) {
+  const translateUi = useUiTranslations('forge');
+
   const output = job?.outputs[0];
-  if (!output) return <span className="text-muted-foreground">Not rendered</span>;
+  if (!output)
+    return <span className="text-muted-foreground">{translateUi('not_rendered_0ad7b5a0')}</span>;
   const still = output.kind === 'image' ? thumbnailSrc(output) : output.posterUrl;
   return (
     <a href={fullSrc(output)} target="_blank" rel="noreferrer" className="block">
       {still ? (
         <img
           src={still}
-          alt={job?.label ?? 'Render'}
+          alt={job?.label ?? translateUi('render_6d89eb7d')}
           loading="lazy"
           decoding="async"
           className="max-h-40 w-full rounded-sm object-contain"
         />
       ) : (
-        <span className="underline">Open render</span>
+        <span className="underline">{translateUi('open_render_42b58ffe')}</span>
       )}
     </a>
   );
@@ -65,6 +69,8 @@ export function VariantCompare({
   brandId: string;
   variants: TemplateRevisionVariant[];
 }) {
+  const translateUi = useUiTranslations('forge');
+
   const reads = useQueries({
     queries: variants.map((variant) => ({
       queryKey: [...forgeQueryKeys.renderJobs(brandId), 'variant', variant.variantId],
@@ -79,11 +85,14 @@ export function VariantCompare({
   if (reads.some((read) => read.error))
     return (
       <p role="alert" className="text-xs text-destructive">
-        Could not read these variants' renders.
+        {' '}
+        {translateUi('could_not_read_these_variants_rende_efd939dc')}{' '}
       </p>
     );
   if (reads.some((read) => !read.data))
-    return <p className="text-xs text-muted-foreground">Reading renders…</p>;
+    return (
+      <p className="text-xs text-muted-foreground">{translateUi('reading_renders_616f34a6')}</p>
+    );
   const rows = compareRows(
     variants,
     reads.map((read) => read.data?.items ?? []),
@@ -91,19 +100,22 @@ export function VariantCompare({
   if (!rows.length)
     return (
       <p className="text-xs text-muted-foreground">
-        No finished renders on these variants yet. Use "Run on variants" from a render set to render
-        the same rows on each.
+        {' '}
+        {translateUi('no_finished_renders_on_these_varian_8899f0d8')}{' '}
       </p>
     );
   return (
     <div className="overflow-x-auto">
-      <table aria-label="Variant comparison" className="w-full table-fixed text-xs">
+      <table
+        aria-label={translateUi('variant_comparison_b79776e5')}
+        className="w-full table-fixed text-xs"
+      >
         <thead>
           <tr>
-            <th className="w-32 text-left font-medium">Row</th>
+            <th className="w-32 text-left font-medium">{translateUi('row_95110d74')}</th>
             {variants.map((variant) => (
               <th key={variant.variantId} className="text-left font-medium">
-                {variant.original ? 'Original' : variant.name}
+                {variant.original ? translateUi('original_88d759ea') : variant.name}
               </th>
             ))}
           </tr>

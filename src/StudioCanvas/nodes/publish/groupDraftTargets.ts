@@ -4,6 +4,7 @@ import {
   formatWeekHeading,
   startOfWeek,
 } from '@/components/organic/primitives/calendar-utils';
+import type { UiLocale } from '@/i18n/config';
 
 export type DraftTargetGroup = {
   /** Stable key — a week-start day id, or the unscheduled sentinel. */
@@ -22,7 +23,11 @@ const UNSCHEDULED_KEY = 'unscheduled';
  * results — the week heading is what makes a draft identifiable at a glance, and the
  * server already sorts soonest-scheduled-first so group order falls out of the input.
  */
-export function groupDraftTargets(targets: readonly OrganicCanvasTarget[]): DraftTargetGroup[] {
+export function groupDraftTargets(
+  targets: readonly OrganicCanvasTarget[],
+  locale: UiLocale = 'en',
+  unscheduledLabel = 'Unscheduled',
+): DraftTargetGroup[] {
   const groups: DraftTargetGroup[] = [];
   const byKey = new Map<string, DraftTargetGroup>();
 
@@ -38,7 +43,7 @@ export function groupDraftTargets(targets: readonly OrganicCanvasTarget[]): Draf
     }
     const group: DraftTargetGroup = {
       key,
-      heading: weekStart ? formatWeekHeading(weekStart) : 'Unscheduled',
+      heading: weekStart ? formatWeekHeading(weekStart, locale) : unscheduledLabel,
       targets: [target],
     };
     byKey.set(key, group);

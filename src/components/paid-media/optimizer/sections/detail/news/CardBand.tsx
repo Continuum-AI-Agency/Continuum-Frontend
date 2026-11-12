@@ -1,4 +1,11 @@
 'use client';
+import type {UiLocale} from '@/i18n/config';
+
+import type { useTranslations as ScaleTranslationHook } from 'next-intl';
+
+type ScaleCopy = ReturnType<typeof ScaleTranslationHook<'scale'>>;
+
+import { useLocale, useTranslations } from 'next-intl';
 
 // The band: a finding's own evidence, drawn — tinted faintly in the finding's tone, with the
 // figure in its top-left corner so the number and its proof read as one object. It opens under
@@ -120,11 +127,13 @@ function CostVsReference({
   currency,
   resultLabel,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'cost_vs_reference' }> }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const top = Math.max(visual.value, visual.line, visual.reference ?? 0) * 1.12;
   const x = (v: number) => (v / top) * 100;
   return (
     <>
-      <Surface title="this ad set against the reference">
+      <Surface title={uiText('this_ad_set_against_the_reference_466c42f')}>
         <rect
           className="fill-destructive/30"
           height={13}
@@ -155,16 +164,23 @@ function CostVsReference({
         />
       </Surface>
       <Label tone="bad" x={0.5} y={56.8}>
-        {formatCurrency(visual.value, currency)} / {resultNoun(resultLabel)} · this ad set
+        {uiText.rich('sentence_ef4ae334f2a8', {
+          v0: formatCurrency(visual.value, currency, uiLocale),
+          v1: resultNoun(resultLabel),
+        })}
       </Label>
       {visual.reference != null ? (
         <Label x={0.5} y={83.2}>
-          {formatCurrency(visual.reference, currency)} · the reference
+          {uiText.rich('sentence_aee08580b8e6', {
+            v0: formatCurrency(visual.reference, currency, uiLocale),
+          })}
         </Label>
       ) : null}
       <Label align="end" tone="bad" x={99.5} y={46}>
-        {visual.multiple != null ? `${visual.multiple}× line` : 'line'} ·{' '}
-        {formatCurrency(visual.line, currency)}
+        {visual.multiple != null
+          ? uiText('template_ec24c0c82382', { v0: visual.multiple })
+          : uiText('line_38a9c1e')}{' '}
+        · {formatCurrency(visual.line, currency, uiLocale)}
       </Label>
     </>
   );
@@ -175,6 +191,8 @@ function SpendBlocks({
   currency,
   resultLabel,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'spend_blocks' }> }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const whole = Math.floor(visual.blocks);
   const part = visual.blocks - whole;
   const count = Math.ceil(visual.blocks);
@@ -183,7 +201,7 @@ function SpendBlocks({
   const noun = resultNoun(resultLabel);
   return (
     <>
-      <Surface title="spend in results at target">
+      <Surface title={uiText('spend_in_results_at_target_2f6849f')}>
         {Array.from({ length: count }, (_, i) => (
           <rect
             className="fill-muted-foreground/20 stroke-muted-foreground/45"
@@ -208,8 +226,12 @@ function SpendBlocks({
         />
       </Surface>
       <Label x={0.5} y={54.4}>
-        {formatCurrency(visual.spent, currency)} = {visual.blocks}{' '}
-        {visual.blocks === 1 ? noun : `${noun}s`} at target
+        {uiText.rich('sentence_f6b48fef9f95', {
+          spent: formatCurrency(visual.spent, currency, uiLocale),
+          count: visual.blocks,
+          noun: noun,
+          nounPlural: `${noun}s`,
+        })}
       </Label>
       <Label align="end" strong tone="bad" x={99.5} y={96.4}>
         0 {resultLabel.toLowerCase()}
@@ -222,12 +244,14 @@ function CtrStep({
   visual,
   resultLabel,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'ctr_step' }> }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const split = ((visual.baseWindowDays - visual.recentWindowDays) / visual.baseWindowDays) * 100;
   const recentY = clamp(50 + (1 - visual.recent / visual.base) * 50, 12, 100);
   const cost = visual.costChangePct;
   return (
     <>
-      <Surface title="click-through rate stepping down">
+      <Surface title={uiText('click_through_rate_stepping_down_c31624d')}>
         <rect className="fill-muted-foreground/20" height={50} width={split} x={0} y={50} />
         {recentY > 50 ? (
           <rect
@@ -275,17 +299,26 @@ function CtrStep({
         />
       </Surface>
       <Label x={0.5} y={49}>
-        {visual.baseWindowDays}-day CTR {formatPercent(visual.base, { fractionDigits: 2 })}
+        {uiText.rich('sentence_bef0bbd439ba', {
+          v0: visual.baseWindowDays,
+          v1: formatPercent(visual.base, { fractionDigits: 2 }, uiLocale),
+        })}
       </Label>
       <Label align="end" anchor="center" strong tone="bad" x={split - 1.5} y={(50 + recentY) / 2}>
-        {formatPercent(visual.changePct, { signed: true })}
+        {formatPercent(visual.changePct, { signed: true }, uiLocale)}
       </Label>
       <Label align="end" anchor="below" tone="bad" x={99.5} y={recentY + 1.5}>
-        {visual.recentWindowDays} days {formatPercent(visual.recent, { fractionDigits: 2 })}
+        {uiText.rich('sentence_5ea5eabdac0e', {
+          v0: visual.recentWindowDays,
+          v1: formatPercent(visual.recent, { fractionDigits: 2 }, uiLocale),
+        })}
       </Label>
       {cost != null ? (
         <Label x={1.5} y={98.2}>
-          cost per {resultNoun(resultLabel)} {formatPercent(cost, { signed: true })}
+          {uiText.rich('sentence_099911bf8a49', {
+            v0: resultNoun(resultLabel),
+            v1: formatPercent(cost, { signed: true }, uiLocale),
+          })}
         </Label>
       ) : null}
     </>
@@ -296,6 +329,8 @@ function BudgetMove({
   visual,
   currency,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'budget_move' }> }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const top = Math.max(visual.from, visual.to, visual.wanted ?? 0, visual.cap ?? 0) * 1.1;
   const h = (v: number) => (v / top) * 55;
   const up = visual.to >= visual.from;
@@ -317,7 +352,7 @@ function BudgetMove({
   ];
   return (
     <>
-      <Surface title="daily budget now and next">
+      <Surface title={uiText('daily_budget_now_and_next_857b922')}>
         {columns.map((column) => (
           <rect
             className={column.className}
@@ -361,7 +396,7 @@ function BudgetMove({
           x={column.x + 12}
           y={100 - h(column.value) - 1.5}
         >
-          {formatCurrency(column.value, currency)}
+          {formatCurrency(column.value, currency, uiLocale)}
         </Label>
       ))}
       {columns.map((column) => (
@@ -372,16 +407,18 @@ function BudgetMove({
       {visual.wanted != null ? (
         <>
           <Label align="middle" x={80} y={100 - h(visual.wanted) - 1.5}>
-            {formatCurrency(visual.wanted, currency)}
+            {formatCurrency(visual.wanted, currency, uiLocale)}
           </Label>
           <Label align="middle" x={80} y={98.2}>
-            wanted
+            {uiText('wanted_ca90668')}
           </Label>
         </>
       ) : null}
       {visual.cap != null ? (
         <Label x={31} y={100 - h(visual.cap) - 1}>
-          cap {formatCurrency(visual.cap, currency)}
+          {uiText.rich('sentence_5c981f3a16d8', {
+            v0: formatCurrency(visual.cap, currency, uiLocale),
+          })}
         </Label>
       ) : null}
     </>
@@ -393,6 +430,8 @@ function Range({
   currency,
   resultLabel,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'range' }> }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const { winner } = visual;
   const marks = [
     visual.low,
@@ -406,7 +445,7 @@ function Range({
   const over = visual.target != null && visual.estimate != null && visual.estimate > visual.target;
   return (
     <>
-      <Surface title="the ad set’s cost range against the target">
+      <Surface title={uiText('the_ad_set_s_cost_range_against_the_target_4595b85')}>
         <line
           className="stroke-border"
           strokeWidth={1}
@@ -460,32 +499,38 @@ function Range({
         ) : null}
       </Surface>
       <Label align="end" anchor="center" x={x(visual.low) - 1} y={71.2}>
-        {formatCurrency(visual.low, currency)}
+        {formatCurrency(visual.low, currency, uiLocale)}
       </Label>
       <Label anchor="center" x={x(visual.high) + 1} y={71.2}>
-        {formatCurrency(visual.high, currency)}
+        {formatCurrency(visual.high, currency, uiLocale)}
       </Label>
       {visual.estimate != null ? (
         <Label align="end" tone={over ? 'warn' : 'primary'} x={x(visual.estimate) + 1} y={54.4}>
-          est. {formatCurrency(visual.estimate, currency)}
+          {uiText.rich('sentence_9851d7c65f25', {
+            v0: formatCurrency(visual.estimate, currency, uiLocale),
+          })}
         </Label>
       ) : null}
       {visual.target != null ? (
         <Label align="middle" anchor="below" x={x(visual.target)} y={88}>
-          target {formatCurrency(visual.target, currency)}
+          {uiText.rich('sentence_dde108a60475', {
+            v0: formatCurrency(visual.target, currency, uiLocale),
+          })}
         </Label>
       ) : null}
       {winner ? (
         // Above the estimate's row, on whichever side of the tick has room.
         <Label
           align={x(winner.costPerResult) > 50 ? 'end' : 'start'}
-          hint={`${winner.adName ?? winner.adId} · ${formatCurrency(winner.costPerResult, currency)} per ${resultNoun(resultLabel)}`}
+          hint={uiText('bandWinnerHint',{name:winner.adName??winner.adId,cost:formatCurrency(winner.costPerResult,currency,uiLocale),noun:resultNoun(resultLabel,uiText)})}
           testId="band-winner"
           tone="good"
           x={x(winner.costPerResult) + (x(winner.costPerResult) > 50 ? 1 : -1)}
           y={42.4}
         >
-          winning ad {formatCurrency(winner.costPerResult, currency)}
+          {uiText.rich('sentence_fec2ef07b929', {
+            v0: formatCurrency(winner.costPerResult, currency, uiLocale),
+          })}
         </Label>
       ) : null}
     </>
@@ -497,6 +542,8 @@ function CostLine({
   currency,
   resultLabel,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'cost_line' }> }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const values = [
     ...visual.points.map((point) => point.cost),
     ...(visual.target != null ? [visual.target] : []),
@@ -521,7 +568,7 @@ function CostLine({
   const over = visual.target != null && visual.overall != null && visual.overall > visual.target;
   return (
     <>
-      <Surface title="cost per result against the target">
+      <Surface title={uiText('cost_per_result_against_the_target_e6613aa')}>
         {shaded ? <polygon className="fill-warning/20" points={shaded} /> : null}
         {targetY != null ? (
           <line
@@ -557,24 +604,29 @@ function CostLine({
       </Surface>
       {visual.overall != null ? (
         <Label x={0.5} y={y(visual.overall) - 1}>
-          portfolio {formatCurrency(visual.overall, currency)}
+          {uiText.rich('sentence_3bd70e15160d', {
+            v0: formatCurrency(visual.overall, currency, uiLocale),
+          })}
         </Label>
       ) : null}
       {targetY != null && visual.target != null ? (
         <Label align="end" anchor="below" x={99.5} y={targetY + 1.5}>
-          target {formatCurrency(visual.target, currency)}
+          {uiText.rich('sentence_dde108a60475', {
+            v0: formatCurrency(visual.target, currency, uiLocale),
+          })}
         </Label>
       ) : null}
       {last && lastXY ? (
         <Label align="end" anchor="center" tone={over ? 'warn' : 'primary'} x={96} y={lastXY.y}>
-          {formatCurrency(last.cost, currency)}
+          {formatCurrency(last.cost, currency, uiLocale)}
         </Label>
       ) : null}
       <Label x={0.5} y={100}>
-        {visual.across === 'ad_sets'
-          ? `${visual.points.length} ad sets, cheapest → dearest`
-          : `${visual.points.length} priced days`}
-        {' · '}cost per {resultNoun(resultLabel)}
+        {uiText.rich('sentence_806b5851ce1b', {
+          across: visual.across,
+          count: visual.points.length,
+          result: resultNoun(resultLabel),
+        })}
       </Label>
     </>
   );
@@ -584,6 +636,7 @@ function Strip({
   visual,
   currency,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'strip' }> }) {
+  const uiLocale = useLocale();
   return (
     <div className="absolute inset-0 flex flex-col gap-2 py-1">
       <p
@@ -600,8 +653,8 @@ function Strip({
           >
             <HeroFigure className="text-foreground" kind="tile">
               {cell.kind === 'money'
-                ? formatCurrency(cell.value, currency)
-                : cell.value.toLocaleString('en-US')}
+                ? formatCurrency(cell.value, currency, uiLocale)
+                : cell.value.toLocaleString(uiLocale)}
             </HeroFigure>
             <span className="text-muted-foreground text-xs">{cell.label}</span>
           </div>
@@ -616,38 +669,52 @@ export function captionFor(
   visual: CardVisual,
   currency: string | null,
   resultLabel: string,
+  uiTranslate?: ScaleCopy,
+  locale:UiLocale='en',
 ): string {
-  const money = (v: number) => formatCurrency(v, currency);
+  const money = (v: number) => formatCurrency(v, currency, locale);
   const noun = resultNoun(resultLabel);
+  if(uiTranslate){
+    const noun=resultNoun(resultLabel,uiTranslate);
+    switch(visual.kind){
+      case 'cost_vs_reference':return uiTranslate('bandCaptionCost',{noun,cost:money(visual.value),days:visual.windowDays,hasReference:visual.reference!=null?'yes':'no',reference:visual.reference!=null?money(visual.reference):'',line:money(visual.line)});
+      case 'spend_blocks':return uiTranslate('bandCaptionZero',{noun,spent:money(visual.spent),days:visual.windowDays,count:visual.blocks,target:money(visual.perResult)});
+      case 'ctr_step':return uiTranslate('bandCaptionCtr',{noun,base:formatPercent(visual.base,{fractionDigits:2},locale),baseDays:visual.baseWindowDays,recent:formatPercent(visual.recent,{fractionDigits:2},locale),recentDays:visual.recentWindowDays,change:formatPercent(visual.changePct,{signed:true},locale),hasCost:visual.costChangePct!=null?'yes':'no',costChange:visual.costChangePct!=null?formatPercent(visual.costChangePct,{signed:true},locale):''});
+      case 'budget_move':return uiTranslate('bandCaptionBudget',{from:money(visual.from),to:money(visual.to),hasWanted:visual.wanted!=null?'yes':'no',wanted:visual.wanted!=null?money(visual.wanted):'',hasCap:visual.cap!=null?'yes':'no',cap:visual.cap!=null?money(visual.cap):''});
+      case 'range':return uiTranslate('bandCaptionRange',{noun,low:money(visual.low),high:money(visual.high),hasEstimate:visual.estimate!=null?'yes':'no',estimate:visual.estimate!=null?money(visual.estimate):'',hasTarget:visual.target!=null?'yes':'no',target:visual.target!=null?money(visual.target):'',hasWinner:visual.winner?'yes':'no',winner:visual.winner?.adName??visual.winner?.adId??'',winnerCost:visual.winner?money(visual.winner.costPerResult):''});
+      case 'cost_line':return uiTranslate('bandCaptionLine',{noun,count:visual.points.length,across:visual.across,hasTarget:visual.target!=null?'yes':'no',target:visual.target!=null?money(visual.target):'',hasOverall:visual.overall!=null?'yes':'no',overall:visual.overall!=null?money(visual.overall):''});
+      case 'strip':return visual.label;
+    }
+  }
   switch (visual.kind) {
     case 'cost_vs_reference':
       return `Cost per ${noun} ${money(visual.value)} over ${visual.windowDays} days${
-        visual.reference != null ? ` against a ${money(visual.reference)} reference` : ''
-      }; the line is ${money(visual.line)}`;
+            visual.reference != null ? ` against a ${money(visual.reference)} reference` : ''
+          }; the line is ${money(visual.line)}`;
     case 'spend_blocks':
       return `${money(visual.spent)} spent in ${visual.windowDays} days, ${visual.blocks} ${noun}s' worth at the ${money(visual.perResult)} target; 0 ${resultLabel.toLowerCase()} came back`;
     case 'ctr_step':
-      return `CTR ${formatPercent(visual.base, { fractionDigits: 2 })} over ${visual.baseWindowDays} days, ${formatPercent(visual.recent, { fractionDigits: 2 })} over the last ${visual.recentWindowDays}, ${formatPercent(visual.changePct, { signed: true })}${
-        visual.costChangePct != null
-          ? `; cost per ${noun} ${formatPercent(visual.costChangePct, { signed: true })}`
-          : ''
-      }`;
+      return `CTR ${formatPercent(visual.base, { fractionDigits: 2 }, locale)} over ${visual.baseWindowDays} days, ${formatPercent(visual.recent, { fractionDigits: 2 }, locale)} over the last ${visual.recentWindowDays}, ${formatPercent(visual.changePct, { signed: true }, locale)}${
+            visual.costChangePct != null
+              ? `; cost per ${noun} ${formatPercent(visual.costChangePct, { signed: true }, locale)}`
+              : ''
+          }`;
     case 'budget_move':
       return `Daily budget ${money(visual.from)} now, ${money(visual.to)} next cycle${
-        visual.wanted != null ? `; the solver wanted ${money(visual.wanted)}` : ''
-      }${visual.cap != null ? `, the velocity cap holds it at ${money(visual.cap)}` : ''}`;
+            visual.wanted != null ? `; the solver wanted ${money(visual.wanted)}` : ''
+          }${visual.cap != null ? `, the velocity cap holds it at ${money(visual.cap)}` : ''}`;
     case 'range':
       return `Cost per ${noun} between ${money(visual.low)} and ${money(visual.high)}${
-        visual.estimate != null ? `, estimate ${money(visual.estimate)}` : ''
-      }${visual.target != null ? `, against a ${money(visual.target)} target` : ''}${
-        visual.winner
-          ? `; winning ad ${visual.winner.adName ?? visual.winner.adId} at ${money(visual.winner.costPerResult)}`
-          : ''
-      }`;
+            visual.estimate != null ? `, estimate ${money(visual.estimate)}` : ''
+          }${visual.target != null ? `, against a ${money(visual.target)} target` : ''}${
+            visual.winner
+              ? `; winning ad ${visual.winner.adName ?? visual.winner.adId} at ${money(visual.winner.costPerResult)}`
+              : ''
+          }`;
     case 'cost_line':
       return `Cost per ${noun} across ${visual.points.length} ${visual.across === 'ad_sets' ? 'ad sets' : 'days'}${
-        visual.target != null ? ` against a ${money(visual.target)} target` : ''
-      }${visual.overall != null ? `; portfolio ${money(visual.overall)}` : ''}`;
+            visual.target != null ? ` against a ${money(visual.target)} target` : ''
+          }${visual.overall != null ? `; portfolio ${money(visual.overall)}` : ''}`;
     case 'strip':
       return visual.label;
   }
@@ -681,7 +748,8 @@ function Figure({
   figure: CardFigure;
   currency: string | null;
 }) {
-  const body = formatCurrency(figure.value, currency);
+  const uiLocale = useLocale();
+  const body = formatCurrency(figure.value, currency, uiLocale);
   const signed = figure.signed && figure.value > 0 ? `+${body}` : body;
   return (
     <p
@@ -715,6 +783,8 @@ export type CardBandProps = {
 };
 
 export function CardBand({ id, visual, figure, tone, currency, resultLabel }: CardBandProps) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   return (
     <div
       className={cn('relative h-36 w-full rounded-md', BAND_TONE[tone])}
@@ -723,7 +793,7 @@ export function CardBand({ id, visual, figure, tone, currency, resultLabel }: Ca
       data-visual={visual.kind}
     >
       <div
-        aria-label={captionFor(visual, currency, resultLabel)}
+        aria-label={captionFor(visual, currency, resultLabel, uiText, uiLocale)}
         className={cn('absolute inset-x-4 bottom-1.5', figure ? 'top-1.5' : 'top-2.5')}
         data-testid="news-visual"
         role="img"

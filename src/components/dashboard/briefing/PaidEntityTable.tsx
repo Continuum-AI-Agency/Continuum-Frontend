@@ -1,19 +1,23 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import type {
   PaidEntityKpi,
   PaidEntityLevel,
   PaidRankedEntity,
   PaidRankingScope,
 } from '@continuum/contracts';
+import { useLocale, useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   type InsightColumn,
   InsightDataTable,
 } from '@/components/dashboard/datatable/InsightDataTable';
+import { figureProps } from '@/components/paid-media/optimizer/format';
 import { ModuleShortcutLink } from '@/components/shared/ModuleShortcutLink';
 import { Badge } from '@/components/ui/badge';
+import type { UiLocale } from '@/i18n/config';
+import { localizeDashboardCopy } from '@/i18n/dashboardCopy';
 import {
   getLatestInsights,
   type PersistedCampaignInsight,
@@ -26,7 +30,6 @@ import {
 } from '@/lib/paid-media/paid-leaderboard-rows';
 import { fetchPaidRanking } from '@/lib/paid-media/paid-ranking.client';
 import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
-import { figureProps } from '@/components/paid-media/optimizer/format';
 import { useDashboardPrefsStore } from '@/stores/dashboardPrefs';
 import { InsightActionsDropdown, InsightContextActions } from './insightActions';
 import { DASHBOARD_PANEL_MAX_HEIGHT } from './panelLayout';
@@ -71,11 +74,12 @@ function kpiCell(
   kpi: PaidEntityKpi,
   scope: PaidRankingScope,
   currency: string | null,
+  locale: UiLocale,
 ): ReactNode {
   const value = metricForKpi(entity, kpi);
   if (typeof value !== 'number') return '—';
   const unit = kpiUnit(kpi);
-  const text = formatKpiValue(value, unit, currency);
+  const text = formatKpiValue(value, unit, currency, locale);
   const figureUnit = unit === 'currency' ? 'currency' : unit === 'number' ? 'count' : null;
   if (!figureUnit) return text;
   return (
@@ -96,6 +100,8 @@ export function PaidEntityTable({
   title,
   emptyMessage,
 }: PaidEntityTableProps) {
+  const uiText = useTranslations('dashboard');
+  const uiLocale = useLocale();
   const paidKpi = useDashboardPrefsStore((store) => store.paidKpi);
   const [state, setState] = useState<State>({ status: 'idle' });
 
@@ -166,7 +172,7 @@ export function PaidEntityTable({
       },
       {
         id: 'name',
-        header: scope === 'top_adsets' ? 'Ad set' : 'Campaign',
+        header: scope === 'top_adsets' ? uiText('m_ed78bb1810') : uiText('campaign_268286d'),
         cell: (row) => {
           const meta = leaderboardById.get(row.id);
           const level = meta?.level;
@@ -179,11 +185,11 @@ export function PaidEntityTable({
                     variant="secondary"
                     className="mt-0.5 shrink-0 px-1.5 py-0 text-2xs font-medium"
                   >
-                    {LEVEL_LABELS[level]}
+                    {localizeDashboardCopy(LEVEL_LABELS[level], uiText)}
                   </Badge>
                 ) : null}
                 <p className="text-sm leading-snug text-foreground line-clamp-2 break-words">
-                  {row.name.trim() || 'Untitled'}
+                  {row.name.trim() || uiText('untitled_f59ab8d')}
                 </p>
               </div>
               {pathLabel ? (
@@ -195,33 +201,33 @@ export function PaidEntityTable({
       },
       {
         id: paidKpi,
-        header: kpiLabel(paidKpi),
+        header: localizeDashboardCopy(kpiLabel(paidKpi), uiText),
         align: 'right',
         sortValue: (row) => metricForKpi(row, paidKpi) ?? Number.NEGATIVE_INFINITY,
         cellClassName: 'text-foreground',
-        cell: (row) => kpiCell(row, paidKpi, scope, accountCurrency),
+        cell: (row) => kpiCell(row, paidKpi, scope, accountCurrency, uiLocale),
       },
       ...contextKpis.map<InsightColumn<PaidDisplayRow>>((kpi) => ({
         id: kpi,
-        header: kpiLabel(kpi),
+        header: localizeDashboardCopy(kpiLabel(kpi), uiText),
         align: 'right',
         sortValue: (row) => metricForKpi(row, kpi) ?? Number.NEGATIVE_INFINITY,
-        cell: (row) => kpiCell(row, kpi, scope, accountCurrency),
+        cell: (row) => kpiCell(row, kpi, scope, accountCurrency, uiLocale),
       })),
     ];
-  }, [scope, paidKpi, leaderboardById, accountCurrency]);
+  }, [scope, paidKpi, leaderboardById, accountCurrency, uiText, uiLocale]);
 
   return (
     <InsightDataTable
       title={title}
-      metricLabel={kpiLabel(paidKpi)}
-      headerAction={<ModuleShortcutLink href="/scale" label="Scale" />}
+      metricLabel={localizeDashboardCopy(kpiLabel(paidKpi), uiText)}
+      headerAction={<ModuleShortcutLink href="/scale" label={uiText('scale_f102986')} />}
       rows={rows}
       columns={columns}
       getRowId={(row) => row.id}
       maxHeight={DASHBOARD_PANEL_MAX_HEIGHT}
       isLoading={state.status === 'idle' || state.status === 'loading'}
-      emptyState={state.status === 'error' ? "Couldn't load performance right now." : emptyMessage}
+      emptyState={state.status === 'error' ? uiText('m_acb5220bed') : emptyMessage}
       contextMenu={() => <InsightContextActions />}
       rowActions={() => <InsightActionsDropdown />}
       expandedContent={(row) => (
@@ -230,10 +236,22 @@ export function PaidEntityTable({
             <p className="text-foreground">{leaderboardById.get(row.id)?.insightLine}</p>
           ) : null}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono tabular-nums text-muted-foreground sm:grid-cols-4">
-            <Stat label="Conv" value={kpiCell(row, 'conversions', scope, accountCurrency)} />
-            <Stat label="Conv value" value={kpiCell(row, 'conversions_value', scope, accountCurrency)} />
-            <Stat label="CPC" value={kpiCell(row, 'cpc', scope, accountCurrency)} />
-            <Stat label="CPM" value={kpiCell(row, 'cpm', scope, accountCurrency)} />
+            <Stat
+              label={uiText('conv_c0bd66c')}
+              value={kpiCell(row, 'conversions', scope, accountCurrency, uiLocale)}
+            />
+            <Stat
+              label={uiText('conv_value_ad95995')}
+              value={kpiCell(row, 'conversions_value', scope, accountCurrency, uiLocale)}
+            />
+            <Stat
+              label={uiText('m_eba32f8c03')}
+              value={kpiCell(row, 'cpc', scope, accountCurrency, uiLocale)}
+            />
+            <Stat
+              label={uiText('m_58736669aa')}
+              value={kpiCell(row, 'cpm', scope, accountCurrency, uiLocale)}
+            />
           </dl>
         </div>
       )}

@@ -114,23 +114,30 @@ mock.module('@/components/library/useMediaUpload', () => ({
   },
 }));
 const WEB_KEY = `web:${ASSET}`;
-const getContract = mock(async (_brandId: string, templateKey: string, _bindingId?: string | null) => ({
-  template: { key: templateKey, name: 'hello', bindingId: WEB_COMPONENT_BINDING_ID },
-  variables: [
-    { key: 'title_text', label: 'Title · text', kind: 'text', options: [] },
-    { key: 'title_align', label: 'Title · align', kind: 'enum', options: ['left', 'center'] },
-  ],
-  outputs: [],
-  publishCheck: { state: 'warn', issues: ['Video needs an even width.'], workerAttachmentId: null, media: [] },
-  web: {
-    width: 1080,
-    height: 1080,
-    durationSec: 4,
-    fps: 30,
-    previewUrl: 'https://api.test/preview',
-    variables: [{ key: 'title_text', nodeId: 'title', property: 'text' }],
-  },
-}));
+const getContract = mock(
+  async (_brandId: string, templateKey: string, _bindingId?: string | null) => ({
+    template: { key: templateKey, name: 'hello', bindingId: WEB_COMPONENT_BINDING_ID },
+    variables: [
+      { key: 'title_text', label: 'Title · text', kind: 'text', options: [] },
+      { key: 'title_align', label: 'Title · align', kind: 'enum', options: ['left', 'center'] },
+    ],
+    outputs: [],
+    publishCheck: {
+      state: 'warn',
+      issues: ['Video needs an even width.'],
+      workerAttachmentId: null,
+      media: [],
+    },
+    web: {
+      width: 1080,
+      height: 1080,
+      durationSec: 4,
+      fps: 30,
+      previewUrl: 'https://api.test/preview',
+      variables: [{ key: 'title_text', nodeId: 'title', property: 'text' }],
+    },
+  }),
+);
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }), getContract },
 }));
@@ -146,8 +153,14 @@ mock.module('@/components/ui/toast-imperative', () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@/components/library/__tests__/renderWithCreativeI18n';
 import { ForgeWorkbench } from './ForgeWorkbench';
 
 beforeEach(() => {
@@ -425,7 +438,9 @@ describe('ForgeWorkbench', () => {
     const onOpenRender = mock((_intent: { templateKey: string }) => undefined);
     try {
       render(
-        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
           <ForgeWorkbench brandId={BRAND} onOpenRender={onOpenRender} />
         </QueryClientProvider>,
       );
@@ -496,8 +511,14 @@ describe('ForgeWorkbench', () => {
       expect(await screen.findAllByTestId('hyperframes-seed-handoff')).toHaveLength(2);
       expect(screen.getByRole('tab', { name: 'Author' })).toBeTruthy();
       expect(screen.getByText('Source selected · Untitled template')).toBeTruthy();
-      expect(screen.getAllByText(/privately stage and verify the composition package/i)).toHaveLength(2);
-      expect(screen.getAllByRole('button', { name: /Import into this Forge workspace|Create private draft and import/ })).toHaveLength(1);
+      expect(
+        screen.getAllByText(/privately stage and verify the composition package/i),
+      ).toHaveLength(2);
+      expect(
+        screen.getAllByRole('button', {
+          name: /Import into this Forge workspace|Create private draft and import/,
+        }),
+      ).toHaveLength(1);
     });
 
     test('?set and ?row open that set in Render with the row, selected for a re-render', async () => {

@@ -1,9 +1,9 @@
+'use client';
+
 // Browser API + React Query hooks for Automations (scheduled agent prompts
 // emailed as reports). Calls the agents-ts backend directly per the FE
 // API-layer rule — no Next.js proxy route; every payload parses through
 // @continuum/contracts schemas.
-
-'use client';
 
 import {
   type Automation,

@@ -3,6 +3,7 @@
 import type { Skill } from '@continuum/contracts';
 import { ArrowUp, Paperclip, Square } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -430,7 +431,7 @@ export function PromptInput({
   attachments,
   disabled,
   placeholder,
-  ariaLabel = 'Message input',
+  ariaLabel: uiProvidedAriaLabel,
   actions,
   className,
   mentionProvider,
@@ -453,6 +454,9 @@ export function PromptInput({
   onFocus,
   slashSkills,
 }: PromptInputProps) {
+  const uiText = useTranslations('common');
+const ariaLabel=uiProvidedAriaLabel??uiText('m_49dd6b65ec');
+
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [references, setReferences] = React.useState<TrackedReference[]>([]);
@@ -917,7 +921,7 @@ export function PromptInput({
                 aria-hidden
                 className="pointer-events-none absolute inset-0 px-3 py-3.5 text-sm leading-6 text-muted-foreground/85"
               >
-                {placeholder ?? 'Send a message…'}
+                {placeholder ?? uiText('m_358d592908')}
               </div>
             ) : null}
             {/* contenteditable is required for Grok-style inline mention chips;
@@ -980,7 +984,7 @@ export function PromptInput({
                       transition={{ duration: prefersReducedMotion ? 0 : 0.18 }}
                     >
                       <InputGroupText className="text-xs uppercase tracking-[0.12em] text-rose-500">
-                        Recording
+                        {uiText('m_9b98e1a000')}
                       </InputGroupText>
                     </motion.div>
                   ) : null}
@@ -996,7 +1000,7 @@ export function PromptInput({
                 {actions}
 
                 <SpeechInput
-                  aria-label="Dictate message"
+                  aria-label={uiText('m_d32fc9fe6e')}
                   className={cn(
                     'h-8 w-8 border border-border/65 bg-background text-foreground hover:bg-accent',
                     'focus-visible:ring-2 focus-visible:ring-ring/40',
@@ -1021,7 +1025,7 @@ export function PromptInput({
                       type="file"
                     />
                     <InputGroupButton
-                      aria-label="Attach files"
+                      aria-label={uiText('attach_files_e697cc1')}
                       disabled={disabled}
                       onClick={() => fileInputRef.current?.click()}
                       size="icon-sm"
@@ -1034,7 +1038,7 @@ export function PromptInput({
 
                 {isStreaming ? (
                   <Button
-                    aria-label="Stop generating"
+                    aria-label={uiText('m_8b1e1a9705')}
                     className="h-8 rounded-lg px-2.5"
                     onClick={onStop}
                     size="icon"
@@ -1044,7 +1048,7 @@ export function PromptInput({
                   </Button>
                 ) : (
                   <Button
-                    aria-label="Send message"
+                    aria-label={uiText('send_message_93a26b1')}
                     className="h-8 rounded-lg px-2.5"
                     disabled={!canSubmit || disabled}
                     size="icon"

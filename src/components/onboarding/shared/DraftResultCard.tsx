@@ -1,7 +1,8 @@
 'use client';
 
 import { AlertTriangle, CheckCircle2, Wand2 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import React, { useEffect, useId, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,10 @@ type DraftResultCardProps = {
 };
 
 export function DraftResultCard({ voice, audience, isDrafting, onSave }: DraftResultCardProps) {
+  const tUi = useTranslations('onboarding');
+  const voiceId = useId();
+  const audienceId = useId();
+
   const [localVoice, setLocalVoice] = useState(voice);
   const [localAudience, setLocalAudience] = useState(audience);
 
@@ -35,22 +40,21 @@ export function DraftResultCard({ voice, audience, isDrafting, onSave }: DraftRe
           <div className="space-y-1">
             <CardTitle className="text-lg flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-primary" />
-              AI Analysis
+              {tUi('m_e63991ef35')}
             </CardTitle>
             <CardDescription>
-              {isDrafting
-                ? 'Analyzing website and extracting insights...'
-                : 'Review and refine your brand identity.'}
+              {isDrafting ? tUi('m_54bd9e6ef8') : tUi('m_77f41f261d')}
             </CardDescription>
           </div>
           {isDrafting && (
             <Badge variant="secondary" className="animate-pulse">
-              Analyzing...
+              {tUi('analyzing')}
             </Badge>
           )}
           {!isDrafting && hasContent && (
             <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
-              <CheckCircle2 className="w-3 h-3 mr-1" /> Ready
+              <CheckCircle2 className="w-3 h-3 mr-1" />
+              {tUi('m_54b2ffa9fd')}
             </Badge>
           )}
         </div>
@@ -59,33 +63,41 @@ export function DraftResultCard({ voice, audience, isDrafting, onSave }: DraftRe
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Brand Voice
+            <label
+              htmlFor={voiceId}
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              {tUi('m_879e54c0b9')}
             </label>
             <Textarea
+              id={voiceId}
               value={localVoice}
               onChange={(e) => {
                 setLocalVoice(e.target.value);
                 onSave(e.target.value, localAudience);
               }}
               className="min-h-[250px] resize-none focus-visible:ring-1"
-              placeholder="Brand voice will appear here..."
+              placeholder={tUi('m_41f0718f5c')}
               readOnly={isDrafting}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Target Audience
+            <label
+              htmlFor={audienceId}
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              {tUi('m_5cc6318e21')}
             </label>
             <Textarea
+              id={audienceId}
               value={localAudience}
               onChange={(e) => {
                 setLocalAudience(e.target.value);
                 onSave(localVoice, e.target.value);
               }}
               className="min-h-[250px] resize-none focus-visible:ring-1"
-              placeholder="Target audience segments will appear here..."
+              placeholder={tUi('m_aa406dbc72')}
               readOnly={isDrafting}
             />
           </div>
@@ -94,10 +106,8 @@ export function DraftResultCard({ voice, audience, isDrafting, onSave }: DraftRe
         {!isDrafting && !voice && !audience && (
           <Alert variant="destructive" className="mt-4">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Analysis Failed</AlertTitle>
-            <AlertDescription>
-              We couldn't extract enough information. Please enter your details manually.
-            </AlertDescription>
+            <AlertTitle>{tUi('m_ed120bd8f0')}</AlertTitle>
+            <AlertDescription>{tUi('m_fb588872c5')}</AlertDescription>
           </Alert>
         )}
       </CardContent>

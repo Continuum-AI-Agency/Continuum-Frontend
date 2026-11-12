@@ -1,7 +1,8 @@
 'use client';
-
+import { useTranslations } from 'next-intl';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import type { ScaffoldNodeStatus } from '@/lib/paid-media/scaffoldTree';
+import { localizeScaffoldCopy } from './scaffoldPlanView';
 
 type Tone = 'success' | 'error' | 'warning' | 'info';
 
@@ -33,14 +34,15 @@ const STATUS_PRESENTATION: Record<
 };
 
 export function ScaffoldStatusPill({ status }: { status: ScaffoldNodeStatus }) {
+  const t = useTranslations('scale');
   const presentation = STATUS_PRESENTATION[status];
   return (
     <Pill
       className="gap-1.5 whitespace-nowrap"
-      {...(presentation.hint ? { title: presentation.hint } : {})}
+      {...(presentation.hint ? { title: localizeScaffoldCopy(presentation.hint, t) } : {})}
     >
       <PillIndicator variant={presentation.tone} pulse={presentation.pulse} />
-      {presentation.label}
+      {localizeScaffoldCopy(presentation.label, t)}
     </Pill>
   );
 }

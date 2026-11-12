@@ -1,6 +1,11 @@
 'use client';
+import type {UiLocale} from '@/i18n/config';
+import {formatDecimal} from '@/lib/format/decimal';
+import {useLocale} from 'next-intl';
+
 
 import type { AdhocSuggestionFigure } from '@continuum/contracts';
+import { useTranslations } from 'next-intl';
 import type * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -47,20 +52,19 @@ type DailyReadListProps = {
 };
 
 /** The control's label while its row is open: the same button closes what it opened. */
-const CLOSE_LABEL = 'Close the proposal';
 
-function formatFigure(figure: AdhocSuggestionFigure, currency: string | null): string {
+function formatFigure(figure: AdhocSuggestionFigure, currency: string | null, uiLocale:UiLocale='en'): string {
   switch (figure.unit) {
     case 'currency':
-      return formatCurrency(figure.value, currency);
+      return formatCurrency(figure.value, currency, uiLocale);
     case 'percent':
-      return `${(figure.value * 100).toFixed(2)}%`;
+      return `${formatDecimal(figure.value * 100,2,uiLocale)}%`;
     case 'multiple':
-      return `${figure.value.toFixed(2)}×`;
+      return `${formatDecimal(figure.value,2,uiLocale)}×`;
     case 'days':
       return `${Math.round(figure.value)}d`;
     default:
-      return Number.isInteger(figure.value) ? String(figure.value) : figure.value.toFixed(1);
+      return Number.isInteger(figure.value) ? String(figure.value) : formatDecimal(figure.value,1,uiLocale);
   }
 }
 
@@ -84,16 +88,22 @@ export function DailyReadList({
   expandedRowId = null,
   renderExpansion,
 }: DailyReadListProps) {
+const uiLocale=useLocale();
+  const uiText = useTranslations('scale');
   if (rows.length === 0) return null;
   const asked = rows.filter((row) => row.origin === 'asked').length;
   return (
     <section className="mb-8" data-testid="daily-read">
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="font-semibold text-base text-foreground tracking-tight">
-          {asked > 0 ? "Today's read, and what you asked for" : "Today's read, by category"}
+          {asked > 0
+            ? uiText('today_s_read_and_what_you_asked_for_ac863bc')
+            : uiText('today_s_read_by_category_525b67d')}
         </h3>
         <p className="text-muted-foreground text-xs">
-          {source === 'brief' ? 'Jaina, from the latest cycle' : 'Draft read from the latest cycle'}
+          {source === 'brief'
+            ? uiText('jaina_from_the_latest_cycle_5dc52b7')
+            : uiText('draft_read_from_the_latest_cycle_5a12f7e')}
         </p>
       </header>
       <ul className="mt-3 divide-y divide-border/60 border-border/60 border-y">
@@ -117,9 +127,13 @@ export function DailyReadList({
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
                   <KindTag tone={MODULE_TONE[row.module]}>{row.category}</KindTag>
                   <span className={TIER_TEXT[row.tier]}>{row.tierLabel}</span>
-                  {row.isHero ? <span className="text-primary-ink">· On the overview</span> : null}
+                  {row.isHero ? (
+                    <span className="text-primary-ink">{uiText('on_the_overview_551c0a1')}</span>
+                  ) : null}
                   {row.origin === 'asked' ? (
-                    <span className="text-muted-foreground">· You asked for this</span>
+                    <span className="text-muted-foreground">
+                      {uiText('you_asked_for_this_dc3b020')}
+                    </span>
                   ) : null}
                 </div>
                 <p className="truncate font-semibold text-foreground text-sm tracking-tight">
@@ -144,7 +158,7 @@ export function DailyReadList({
                       >
                         <dt className="text-muted-foreground">{figure.label}</dt>
                         <dd className="font-mono font-semibold text-foreground text-xs tabular-nums">
-                          {formatFigure(figure, currency)}
+                          {formatFigure(figure, currency, uiLocale)}
                         </dd>
                       </div>
                     ))}
@@ -185,7 +199,7 @@ export function DailyReadList({
                       type="button"
                       variant="ghost"
                     >
-                      Dismiss
+                      {uiText('dismiss_48845bf')}
                     </Button>
                   ) : null}
                   <Button
@@ -197,7 +211,7 @@ export function DailyReadList({
                     type="button"
                     variant="secondary"
                   >
-                    {busy ? 'Working…' : expanded ? CLOSE_LABEL : row.cta.label}
+                    {busy ? uiText('working_5474eef') : expanded ? uiText('closeProposalLabel') : row.cta.label}
                   </Button>
                 </div>
               </div>

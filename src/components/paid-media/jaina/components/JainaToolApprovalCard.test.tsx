@@ -1,3 +1,5 @@
+import { render } from '@/i18n/__tests__/render';
+
 /**
  * The card is the last thing between a human and a Meta write, so what it must prove is
  * narrow: it shows the EXACT arguments that will run, and the button it offers reports
@@ -5,10 +7,10 @@
  * hands back the wrong id approves a different call than the one on screen.
  */
 
-import { jainaToolApprovalRequiredPayloadSchema } from '@continuum/contracts';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { jainaToolApprovalRequiredPayloadSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { JainaToolApprovalCard } from './JainaToolApprovalCard';
 

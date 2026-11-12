@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { libraryUploadRefusal } from '@continuum/contracts';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@/components/library/__tests__/renderWithCreativeI18n';
 
 const uploaded = {
   assetId: 'asset-aep',
@@ -56,5 +56,7 @@ test('every dropped file is queued; the ones it cannot take are named with the r
     refused: true,
     error: 'shoot.mov is 600 MB — uploads are capped at 500 MB right now.',
   });
-  await waitFor(() => expect(uploadMediaAsset).toHaveBeenCalledWith(expect.objectContaining({ file: unknown })));
+  await waitFor(() =>
+    expect(uploadMediaAsset).toHaveBeenCalledWith(expect.objectContaining({ file: unknown })),
+  );
 });

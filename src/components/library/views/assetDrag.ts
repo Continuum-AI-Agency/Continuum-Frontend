@@ -5,6 +5,7 @@
 // Finder does between folders); from the unfiled grid, or with Alt/Option held, it adds.
 // No DnD library — the payload rides a private MIME type on the DataTransfer.
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { type DragEvent, useCallback, useState } from 'react';
 import { toast } from '@/components/ui/toast-imperative';
 import { mutateCollectionMembershipOperation } from '@/lib/library/creativeOperations';
@@ -138,6 +139,8 @@ export function useCollectionAssetDrop({
   collectionName: (collectionId: string) => string | undefined;
   onDropped?: (collectionId: string, assetIds: string[]) => void;
 }) {
+  const translateUi = useUiTranslations('library');
+
   const [overCollectionId, setOverCollectionId] = useState<string | null>(null);
 
   const onDragOver = useCallback(
@@ -184,16 +187,31 @@ export function useCollectionAssetDrop({
         targetCollectionId: collectionId,
         sourceCollectionId: mode === 'move' ? sourceCollectionId : null,
       }).then((outcome) => {
-        if (outcome === 'moved') toast.success(`Moved ${payload.assetIds.length} to ${name}`);
-        if (outcome === 'added') toast.success(`Added ${payload.assetIds.length} to ${name}`);
+        if (outcome === 'moved')
+          toast.success(
+            translateUi('moved_value0_to_value1_d5a2c972', {
+              value0: String(payload.assetIds.length),
+              value1: String(name),
+            }),
+          );
+        if (outcome === 'added')
+          toast.success(
+            translateUi('added_value0_to_value1_9bf5ed9a', {
+              value0: String(payload.assetIds.length),
+              value1: String(name),
+            }),
+          );
         if (outcome === 'added_not_removed') {
-          toast.error(`Added to ${name}, but could not take it out of the collection it came from`);
+          toast.error(
+            translateUi('added_to_value0_but_could_not_take__66736c14', { value0: String(name) }),
+          );
         }
-        if (outcome === 'failed') toast.error(`Adding to ${name} failed`);
+        if (outcome === 'failed')
+          toast.error(translateUi('adding_to_value0_failed_af6a9be6', { value0: String(name) }));
         if (outcome !== 'failed') onDropped?.(collectionId, payload.assetIds);
       });
     },
-    [brandId, sourceCollectionId, collectionName, onDropped],
+    [brandId, sourceCollectionId, collectionName, onDropped, translateUi],
   );
 
   return { overCollectionId, onDragOver, onDragLeave, onDrop };

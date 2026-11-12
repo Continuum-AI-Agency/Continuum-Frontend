@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { localizeOptimizationMetricDefinition } from '@/lib/paid-media/optimizationMetricPresentation';
+import { createOptimizerDisplayTranslate } from '@/lib/paid-media/optimizerTranslator';
+
 // The right-hand summary: the portfolio being built, said in sentences that fill in as the
 // steps are reached (a step not reached yet reads "next step"), plus the setup advisor — the one place that knows both the selection and
 // the goal, so its warnings sit beside the fields they are about on every step.
@@ -15,7 +20,7 @@ import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
   channelTypeSummary,
   effectiveTargetMetric,
-  MODE_COPY,
+  MODE_COPY,wizardModeCopy,
   planReadout,
   selectedMembers,
   selectionByPlatform,
@@ -54,11 +59,12 @@ function Row({
   pending?: boolean;
   children: React.ReactNode;
 }) {
+  const uiText = useTranslations('scale');
   return (
     <div className="space-y-0.5">
       <p className={`${typeScale.label} font-medium text-muted-foreground`}>{label}</p>
       {pending ? (
-        <p className="text-muted-foreground/70 text-sm">next step</p>
+        <p className="text-muted-foreground/70 text-sm">{uiText('next_step_e1644f0')}</p>
       ) : (
         <p className="text-foreground text-sm tabular-nums">{children}</p>
       )}
@@ -78,7 +84,13 @@ export function WizardSummary({
   disabled,
   reached,
 }: WizardSummaryProps) {
-  const metric = getOptimizationMetricDefinition(effectiveTargetMetric(draft));
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
+  const optimizerText = useMemo(() => createOptimizerDisplayTranslate(uiText), [uiText]);
+  const metric = localizeOptimizationMetricDefinition(
+    getOptimizationMetricDefinition(effectiveTargetMetric(draft)),
+    optimizerText,
+  );
   const target = Number.parseFloat(draft.target);
   const typedDaily = Number.parseFloat(draft.dailyTotal);
   const readout = planReadout(draft);
@@ -86,23 +98,27 @@ export function WizardSummary({
     Number.isFinite(typedDaily) && typedDaily > 0
       ? typedDaily
       : (readout.perDay ?? (selectedBudgetSum > 0 ? selectedBudgetSum : null));
-  const mode = MODE_COPY[draft.mode];
+  const mode = wizardModeCopy(draft.mode,uiText);
   const goalPending = !reached.has('goal');
   const planPending = !reached.has('plan');
   const assetsPending = !reached.has('assets');
 
   return (
     <aside className="space-y-3.5 rounded-xl bg-muted/50 px-4 py-4">
-      <p className="font-semibold text-sm tracking-tight">{draft.name.trim() || 'New portfolio'}</p>
+      <p className="font-semibold text-sm tracking-tight">
+        {draft.name.trim() || uiText('new_portfolio_2ea4a33')}
+      </p>
       {assetsPending ? (
-        <Row label="Manages" pending>
+        <Row label={uiText('manages_930f87c')} pending>
           {null}
         </Row>
       ) : draft.proposedMembers.length > 0 ? (
         <div className="space-y-0.5">
-          <p className={`${typeScale.label} font-medium text-muted-foreground`}>Manages</p>
+          <p className={`${typeScale.label} font-medium text-muted-foreground`}>
+            {uiText('manages_930f87c')}
+          </p>
           {selectionByPlatform(draft).length === 0 ? (
-            <p className="text-foreground text-sm">Nothing selected yet</p>
+            <p className="text-foreground text-sm">{uiText('nothing_selected_yet_09245a7')}</p>
           ) : (
             <ul className="space-y-0.5">
               {selectionByPlatform(draft).map((entry) => (
@@ -115,49 +131,64 @@ export function WizardSummary({
                   {PLATFORM_NAMES[entry.platform]} · {entry.label}
                   {entry.platform === 'meta' ? '' : channelTypesOf(draft, entry.platform)}
                   {entry.platform === 'meta' && selectedBudgetSum > 0
-                    ? ` · ${formatCurrency(selectedBudgetSum, currency)}/day today`
+                    ? uiText('template_1642ab5261f5', {
+                        v0: formatCurrency(selectedBudgetSum, currency, uiLocale),
+                      })
                     : ''}
                   {/* Off Meta the optimizer recommends, and what it recommends is the budget. */}
-                  {entry.platform === 'meta' ? '' : ' · budget recommendations'}
+                  {entry.platform === 'meta' ? '' : uiText('budget_recommendations_cdc464c')}
                 </li>
               ))}
             </ul>
           )}
         </div>
       ) : (
-        <Row label="Manages">
+        <Row label={uiText('manages_930f87c')}>
           {draft.adsetIds.length === 0
-            ? 'Nothing selected yet'
+            ? uiText('nothing_selected_yet_09245a7')
             : draft.campaignIds.length > 0
-              ? `${draft.campaignIds.length} campaign${draft.campaignIds.length === 1 ? '' : 's'} · ${draft.adsetIds.length} ad sets`
-              : `${draft.adsetIds.length} ad set${draft.adsetIds.length === 1 ? '' : 's'}`}
+              ? uiText('template_9ac09ef75352', {
+                  campaigns: draft.campaignIds.length,
+                  adsets: draft.adsetIds.length,
+                })
+              : uiText('template_18e413a54a56', { count: draft.adsetIds.length })}
           {selectedBudgetSum > 0
-            ? ` · ${formatCurrency(selectedBudgetSum, currency)}/day today`
+            ? uiText('template_1642ab5261f5', {
+                v0: formatCurrency(selectedBudgetSum, currency, uiLocale),
+              })
             : ''}
         </Row>
       )}
-      <Row label="Goal" pending={goalPending}>
-        {humanize(draft.objective)} · {metric.costLabel}
+      <Row label={uiText('goal_cdbf697')} pending={goalPending}>
+        {humanize(draft.objective, uiText)} · {metric.costLabel}
         {Number.isFinite(target) && target > 0
-          ? ` under ${formatCpa(target, currency)}`
-          : ' · engine default target'}
+          ? uiText('template_ac9d015f224f', { v0: formatCpa(target, currency, uiLocale) })
+          : uiText('engine_default_target_f1c7c01')}
       </Row>
-      <Row label="Mode" pending={goalPending}>
+      <Row label={uiText('mode_5e23ec6')} pending={goalPending}>
         {mode.title}
         {draft.mode === 'scale' && draft.scaleGrowthPct && draft.scaleCadenceDays
-          ? ` · +${draft.scaleGrowthPct}% every ${draft.scaleCadenceDays} days`
+          ? uiText('template_015444222c26', {
+              v0: draft.scaleGrowthPct,
+              v1: draft.scaleCadenceDays,
+            })
           : ''}
       </Row>
-      <Row label="Plan" pending={planPending}>
-        {daily != null ? `${formatCurrency(daily, currency)}/day` : 'Daily budget to set'}
+      <Row label={uiText('plan_fa8ed0b')} pending={planPending}>
+        {daily != null
+          ? uiText('template_34dd8b60efe4', { v0: formatCurrency(daily, currency, uiLocale) })
+          : uiText('daily_budget_to_set_e7a265e')}
         {readout.total != null && draft.flightFrom && draft.flightTo
-          ? ` · ${formatCurrency(readout.total, currency)} over ${readout.days} days`
-          : ' · unpaced'}
+          ? uiText('template_f99854c517ea', {
+              v0: formatCurrency(readout.total, currency, uiLocale),
+              v1: readout.days ?? '',
+            })
+          : uiText('unpaced_246d20a')}
       </Row>
-      <Row label="Applies moves" pending={planPending}>
-        {applyModePill(draft.applyMode)?.label ?? TIER_COPY[draft.applyMode].title}
+      <Row label={uiText('applies_moves_31a3b21')} pending={planPending}>
+        {applyModePill(draft.applyMode, optimizerText)?.label ?? TIER_COPY[draft.applyMode].title}
         {draft.applyMode === 'autopilot' && draft.maxChangePct
-          ? ` · holds moves over ${draft.maxChangePct}%`
+          ? uiText('template_553611db9e7c', { v0: draft.maxChangePct })
           : ''}
       </Row>
       {assetsPending ? null : (

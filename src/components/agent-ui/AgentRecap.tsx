@@ -1,5 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+import { useAgentFormats } from './useAgentFormats';
+
 // What the agents did while you were away: the window as a stacked activity chart, then a board
 // of what needs you, what failed and what is done, each acted on in place. Fed from Optimizer
 // action rows, pending recommendations and finished or failed jobs.
@@ -33,49 +36,37 @@ import {
 } from '@/components/ui/item';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
-import {
-  formatAway,
-  groupRecap,
-  RECAP_TONES,
-  type RecapItem,
-  type RecapTone,
-  recapBins,
-} from './model';
+import { groupRecap, RECAP_TONES, type RecapItem, type RecapTone, recapBins } from './model';
 
-export const RECAP_TONE: Record<
-  RecapTone,
-  {
-    label: string;
-    icon: typeof CircleDot;
-    tile: string;
-    badge: 'violet' | 'destructive' | 'muted';
-  }
-> = {
+export const RECAP_TONE = {
   needs: {
-    label: 'Needs you',
+    labelKey: 'm_0d9d0df110' as const,
     icon: CircleDot,
     tile: 'bg-primary/10 text-primary',
-    badge: 'violet',
+    badge: 'violet' as const,
   },
   failed: {
-    label: 'Failed',
+    labelKey: 'failed_031a8f0' as const,
     icon: CircleAlert,
     tile: 'bg-destructive/10 text-destructive',
-    badge: 'destructive',
+    badge: 'destructive' as const,
   },
   done: {
-    label: 'Done',
+    labelKey: 'done_11a6767' as const,
     icon: CheckCircle2,
     tile: 'bg-success/10 text-success',
-    badge: 'muted',
+    badge: 'muted' as const,
   },
 };
 
-const CHART: ChartConfig = {
-  needs: { label: 'Needs you', color: 'var(--primary)' },
-  failed: { label: 'Failed', color: 'var(--destructive)' },
-  done: { label: 'Done', color: 'color-mix(in oklab, var(--muted-foreground) 45%, transparent)' },
-};
+const getCHART = (tUi: ReturnType<typeof useTranslations<'common'>>): ChartConfig => ({
+  needs: { label: tUi('m_0d9d0df110'), color: 'var(--primary)' },
+  failed: { label: tUi('failed_031a8f0'), color: 'var(--destructive)' },
+  done: {
+    label: tUi('done_11a6767'),
+    color: 'color-mix(in oklab, var(--muted-foreground) 45%, transparent)',
+  },
+});
 
 export function AgentRecap({
   since,
@@ -92,6 +83,10 @@ export function AgentRecap({
   bins?: number;
   className?: string;
 }) {
+  const { formatAway } = useAgentFormats();
+
+  const uiText = useTranslations('common');
+  const CHART = getCHART(uiText);
   const groups = groupRecap(items);
   const data = recapBins(items, since, until, bins).map((bin) => ({
     label: formatRelativeTime(bin.start, until),
@@ -110,15 +105,19 @@ export function AgentRecap({
       <AgentCardHeader
         action={
           waiting > 0 ? (
-            <StatusLabel tone="waiting">{waiting} need you</StatusLabel>
+            <StatusLabel tone="waiting">{uiText('m_eaf85da2dc', { count: waiting })}</StatusLabel>
           ) : (
-            <StatusLabel tone="done">All caught up</StatusLabel>
+            <StatusLabel tone="done">{uiText('m_47cbaf0cdf')}</StatusLabel>
           )
         }
       >
-        <AgentCardEyebrow label="While you were away" />
+        <AgentCardEyebrow label={uiText('while_you_were_away_f55eaca')} />
         <AgentCardTitle>
-          {items.length} updates over <span className="font-mono">{formatAway(until - since)}</span>
+          {uiText.rich('m_0b17747635', {
+            count: items.length,
+            duration: formatAway(until - since),
+            time: (chunks) => <span className="font-mono">{chunks}</span>,
+          })}
         </AgentCardTitle>
       </AgentCardHeader>
       <figure className="px-3 pt-3 pb-1">
@@ -155,7 +154,8 @@ export function AgentRecap({
       </figure>
       <div className="grid min-w-0 grid-cols-1 divide-y divide-border/60 border-t border-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         {RECAP_TONES.map((tone) => {
-          const { label, icon: Icon, tile, badge } = RECAP_TONE[tone];
+          const { labelKey, icon: Icon, tile, badge } = RECAP_TONE[tone];
+          const label = uiText(labelKey);
           return (
             <section key={tone} aria-label={label} className="flex min-w-0 flex-col gap-1 p-3">
               <h3 className="flex items-center gap-2 px-1 text-xs font-medium">
@@ -172,7 +172,7 @@ export function AgentRecap({
                   <EmptyMedia variant="icon">
                     <PartyPopper />
                   </EmptyMedia>
-                  <EmptyDescription>Nothing here</EmptyDescription>
+                  <EmptyDescription>{uiText('m_76216f7884')}</EmptyDescription>
                 </Empty>
               ) : (
                 <ItemGroup className="gap-0.5">
@@ -199,7 +199,10 @@ export function AgentRecap({
                       {item.actionLabel && (
                         <ItemActions>
                           {handled.has(item.id) ? (
-                            <CheckCircle2 aria-label="Handled" className="size-4 text-success" />
+                            <CheckCircle2
+                              aria-label={uiText('m_bee630efb1')}
+                              className="size-4 text-success"
+                            />
                           ) : (
                             <Button
                               size="xs"

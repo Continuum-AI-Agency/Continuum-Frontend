@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import type { GridStatus } from '@/lib/organic/store';
 import { GenerationProgressPanel } from './GenerationProgressPanel';
 
@@ -39,7 +40,8 @@ describe('GenerationProgressPanel', () => {
     );
 
     expect(screen.getByText('Generation Failed')).toBeTruthy();
-    expect(screen.getByText('Failed to connect to service')).toBeTruthy();
+    expect(screen.getByText('Generation failed')).toBeTruthy();
+    expect(screen.queryByText('Failed to connect to service')).toBeNull();
     expect(screen.queryByTestId('generation-progress-bar')).toBeNull();
   });
 

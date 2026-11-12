@@ -16,6 +16,7 @@
 //   when the room loaded are left alone: their wiring may have changed since they ran.
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { useStudioStore } from '../stores/useStudioStore';
 import {
@@ -31,6 +32,8 @@ const text = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
 export function LibraryContextSync() {
+  const uiErrorText = useUiErrorMessage();
+
   const brandId = useStudioStore((state) => state.brandId) ?? null;
   const roomId = useStudioStore((state) => state.activeRoomId) ?? null;
   const nodes = useStudioStore((state) => state.nodes);
@@ -161,11 +164,11 @@ export function LibraryContextSync() {
         .catch((error: unknown) => {
           console.warn('[canvas-library] pinned lineage not recorded', {
             nodeId: node.id,
-            error: error instanceof Error ? error.message : String(error),
+            error: uiErrorText(error),
           });
         });
     }
-  }, [brandId, roomId, nodes, edges]);
+  }, [brandId, roomId, nodes, edges, uiErrorText]);
 
   return null;
 }

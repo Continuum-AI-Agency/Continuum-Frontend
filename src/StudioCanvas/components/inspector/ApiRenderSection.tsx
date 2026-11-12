@@ -18,7 +18,9 @@ import type {
   PaidCanvasTarget,
 } from '@continuum/contracts';
 import { RefreshCw } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useForgePresentationText } from '@/components/forge/useForgePresentationText';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -56,6 +58,10 @@ export function ApiRenderSection({
   data: ApiRenderNodeData;
   onPatch: (patch: Partial<ApiRenderNodeData>) => void;
 }) {
+  const presentForge = useForgePresentationText();
+
+  const translateUi = useUiTranslations('studio');
+
   const brandId = useStudioStore((state) => state.brandId);
   const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
   const edges = useStudioStore((state) => state.edges);
@@ -195,11 +201,15 @@ export function ApiRenderSection({
       setSetName('');
       onPatch({ inputSetId: created.id });
     } catch (cause) {
-      setLocalError(cause instanceof Error ? describeRenderDiscoveryFailure(cause) : 'Save failed');
+      setLocalError(
+        cause instanceof Error
+          ? describeRenderDiscoveryFailure(cause, presentForge)
+          : 'Save failed',
+      );
     } finally {
       setBusy(false);
     }
-  }, [brandId, data, edges, nodeId, nodes, onPatch, setName]);
+  }, [brandId, data, edges, nodeId, nodes, onPatch, setName, presentForge]);
 
   const deleteInputSet = useCallback(async () => {
     if (!brandId || !data.inputSetId) return;
@@ -237,7 +247,11 @@ export function ApiRenderSection({
       const store = useStudioStore.getState();
       const newNodeId = `api-render-ref-${output.versionId}`;
       if (store.nodes.some((node) => node.id === newNodeId)) {
-        show({ title: 'Already on the canvas', description: output.fileName, variant: 'info' });
+        show({
+          title: translateUi('already_on_the_canvas_1cff41ba'),
+          description: output.fileName,
+          variant: 'info',
+        });
         return;
       }
       const sourceNode = store.getNodeById(nodeId);
@@ -263,13 +277,19 @@ export function ApiRenderSection({
       };
       store.setNodes(resolveCollisions([...store.nodes, derivedNode]) as StudioNode[]);
       store.triggerSave();
-      show({ title: 'Added as reference', description: output.fileName, variant: 'success' });
+      show({
+        title: translateUi('added_as_reference_e536354c'),
+        description: output.fileName,
+        variant: 'success',
+      });
     },
-    [nodeId, show],
+    [nodeId, show, translateUi],
   );
 
   if (!data.templateKey) {
-    return <InspectorNote>Choose a template on the node to configure a render.</InspectorNote>;
+    return (
+      <InspectorNote>{translateUi('choose_a_template_on_the_node_to_co_59c53e9d')}</InspectorNote>
+    );
   }
 
   return (
@@ -288,9 +308,11 @@ export function ApiRenderSection({
           node draws one picture; this is the table behind it. */}
       <RenderFitTable data={data} />
 
-      <InspectorSection title="Presets">
+      <InspectorSection title={translateUi('presets_954f93fe')}>
         <Field>
-          <FieldLabel htmlFor={`${nodeId}-preset`}>Saved values</FieldLabel>
+          <FieldLabel htmlFor={`${nodeId}-preset`}>
+            {translateUi('saved_values_b056741e')}
+          </FieldLabel>
           <Select
             value={data.inputSetId ?? 'current'}
             onValueChange={(next) => onPatch({ inputSetId: next === 'current' ? null : next })}
@@ -300,7 +322,7 @@ export function ApiRenderSection({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectItem value="current">Current values</SelectItem>
+                <SelectItem value="current">{translateUi('current_values_a62ae9a0')}</SelectItem>
                 {inputSets.map((set) => (
                   <SelectItem key={set.id} value={set.id}>
                     {set.name}
@@ -312,8 +334,8 @@ export function ApiRenderSection({
         </Field>
         <div className="flex gap-1">
           <Input
-            aria-label="New preset name"
-            placeholder="Preset name"
+            aria-label={translateUi('new_preset_name_76429c7f')}
+            placeholder={translateUi('preset_name_e534a666')}
             value={setName}
             onChange={(event) => setSetName(event.target.value)}
           />
@@ -323,7 +345,8 @@ export function ApiRenderSection({
             disabled={busy || !setName.trim()}
             onClick={() => void saveInputSet()}
           >
-            Save
+            {' '}
+            {translateUi('save_1509f561')}{' '}
           </Button>
           <Button
             size="sm"
@@ -331,13 +354,15 @@ export function ApiRenderSection({
             disabled={busy || !data.inputSetId}
             onClick={() => void deleteInputSet()}
           >
-            Delete
+            {' '}
+            {translateUi('delete_e2d0a549')}{' '}
           </Button>
         </div>
         {inputSets.length > 0 ? (
           <div className="flex flex-col gap-1">
             <FieldDescription>
-              Render several presets at once — one render each, one confirmation.
+              {' '}
+              {translateUi('render_several_presets_at_once_one__be172606')}{' '}
             </FieldDescription>
             {inputSets.map((set) => (
               <Field key={set.id} orientation="horizontal">
@@ -361,12 +386,15 @@ export function ApiRenderSection({
         ) : null}
       </InspectorSection>
 
-      <InspectorSection title="Meta delivery">
+      <InspectorSection title={translateUi('meta_delivery_11392c37')}>
         <Field orientation="horizontal">
           <FieldContent>
-            <FieldLabel htmlFor={`${nodeId}-delivery`}>Also create a paused ad</FieldLabel>
+            <FieldLabel htmlFor={`${nodeId}-delivery`}>
+              {translateUi('also_create_a_paused_ad_d3d84362')}
+            </FieldLabel>
             <FieldDescription>
-              Off by default. The render always lands in the Library either way.
+              {' '}
+              {translateUi('off_by_default_the_render_always_la_c0682c5a')}{' '}
             </FieldDescription>
           </FieldContent>
           <Switch
@@ -378,8 +406,8 @@ export function ApiRenderSection({
         {deliveryEnabled ? (
           <>
             <Input
-              aria-label="Search campaigns"
-              placeholder="Search campaigns"
+              aria-label={translateUi('search_campaigns_8ef9b813')}
+              placeholder={translateUi('search_campaigns_8ef9b813')}
               value={campaignQuery}
               onChange={(event) => setCampaignQuery(event.target.value)}
             />
@@ -399,8 +427,8 @@ export function ApiRenderSection({
                   });
                 }}
               >
-                <SelectTrigger aria-label="Meta campaign">
-                  <SelectValue placeholder="Campaign" />
+                <SelectTrigger aria-label={translateUi('meta_campaign_25c845b2')}>
+                  <SelectValue placeholder={translateUi('campaign_268286d2')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -436,8 +464,8 @@ export function ApiRenderSection({
                   });
                 }}
               >
-                <SelectTrigger aria-label="Meta ad set">
-                  <SelectValue placeholder="Ad set" />
+                <SelectTrigger aria-label={translateUi('meta_ad_set_a7e5ef84')}>
+                  <SelectValue placeholder={translateUi('ad_set_639a64f7')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
@@ -454,21 +482,22 @@ export function ApiRenderSection({
         ) : null}
       </InspectorSection>
 
-      <InspectorSection title="Render history">
+      <InspectorSection title={translateUi('render_history_be397c2b')}>
         <div className="flex items-center justify-between">
           <FieldDescription>
             {jobs.length === 0
-              ? (data.latestOutputs?.[0]?.fileName ?? 'No renders yet.')
-              : `${jobs.length} render${jobs.length === 1 ? '' : 's'}`}
+              ? (data.latestOutputs?.[0]?.fileName ?? translateUi('no_renders_yet_5f26b282'))
+              : translateUi('value0_render_value1_f17befcc', { count: Number(jobs.length) })}
           </FieldDescription>
           <Button
             size="sm"
             variant="ghost"
-            aria-label="Refresh renders"
+            aria-label={translateUi('refresh_renders_9fb0d5ab')}
             onClick={() => void refreshJobs()}
           >
-            <RefreshCw data-icon="inline-start" aria-hidden />
-            Refresh
+            <RefreshCw data-icon="inline-start" aria-hidden /> {translateUi(
+              'refresh_0e916101',
+            )}{' '}
           </Button>
         </div>
         {jobs.map((job: ApiRenderJob) => (

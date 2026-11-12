@@ -1,4 +1,6 @@
 'use client';
+import {useTranslations} from 'next-intl';
+
 
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -18,10 +20,13 @@ export interface ChartLoadingLabelProps {
 }
 
 export function ChartLoadingLabel({
-  text = 'Loading',
+  text: uiProvidedText,
   className,
   exiting = false,
 }: ChartLoadingLabelProps) {
+const defaultUiText=useTranslations('common');
+const text=uiProvidedText??defaultUiText('loading_dc38088');
+
   if (!text.trim()) {
     return null;
   }

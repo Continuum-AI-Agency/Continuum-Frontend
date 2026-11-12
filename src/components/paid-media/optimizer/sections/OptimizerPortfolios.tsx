@@ -1,5 +1,11 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import {
+  accountDetectorComparison,
+  accountDetectorLabel,
+} from '@/lib/paid-media/accountPresentation';
+
 // Portfolios sub-view — a live table, one ROW per portfolio (Performance+ one-bar redesign,
 // unit L1). Each row is a single click target that navigates INTO the portfolio's dedicated
 // detail workspace. Columns: the name with its badges and one muted line under it, cost per
@@ -108,10 +114,15 @@ function LeadLine({
   currency?: string | null;
   figureKey: string;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const headline = candidate.headline;
   const lead = headline
-    ? formatHeadline(headline, currency)
-    : { figure: formatCurrency(candidate.impact_per_day, currency), label: '/day' };
+    ? formatHeadline(headline, currency, uiLocale)
+    : {
+        figure: formatCurrency(candidate.impact_per_day, currency, uiLocale),
+        label: uiText('day_ea30d1c'),
+      };
   const provenance = headline
     ? figureProps(
         `${figureKey}.figure`,
@@ -127,7 +138,7 @@ function LeadLine({
       data-detector={candidate.detector}
       data-testid="portfolio-lead"
     >
-      {clipLine(ACCOUNT_DETECTOR_META[candidate.detector]?.label ?? candidate.detector)} ·{' '}
+      {clipLine(accountDetectorLabel(candidate.detector, uiText))} ·{' '}
       <span className="font-mono text-foreground tabular-nums" {...provenance}>
         {lead.figure}
       </span>{' '}
@@ -145,6 +156,8 @@ function PacingLine({
   line: ReturnType<typeof portfolioPacingLine> & object;
   figureKey: string;
 }) {
+  const uiLocale = useLocale();
+  const uiText = useTranslations('scale');
   return (
     <p
       className="mt-0.5 truncate text-muted-foreground text-xs"
@@ -156,9 +169,9 @@ function PacingLine({
         className="font-mono text-foreground tabular-nums"
         {...figureProps(`${figureKey}.figure`, line.pct, null, 'none', 'percent')}
       >
-        {formatPercent(line.pct)}
+        {formatPercent(line.pct, {}, uiLocale)}
       </span>{' '}
-      {pacingSideLabel(line)} · {line.noun}
+      {pacingSideLabel(line, uiText)} · {line.noun}
     </p>
   );
 }
@@ -184,13 +197,16 @@ function PortfolioTableRow({
    *  portfolio buys instead — a portfolio with nothing to say says nothing more. */
   lead?: AccountCandidate | null;
 }) {
+  const uiText = useTranslations('scale');
+
+  const uiLocale = useLocale();
   const figureKey = (name: string) => `portfolios.${portfolio.id}.${name}`;
   // The account's pacing finding is about every flight at once; the row speaks for its own.
   const ownPacing = lead?.detector === 'account_pacing';
-  const pacingLine = ownPacing ? portfolioPacingLine(portfolio, pacing) : null;
+  const pacingLine = ownPacing ? portfolioPacingLine(portfolio, pacing, uiText) : null;
   return (
     <PortfolioRow
-      aria-label={`Open ${portfolio.name}`}
+      aria-label={uiText('template_863533cb89d4', { v0: portfolio.name })}
       cells={
         <>
           <CostVsTargetCell
@@ -203,9 +219,9 @@ function PortfolioTableRow({
           <FigureCell
             currency={currency}
             figureKey={figureKey('daily')}
-            narrowSuffix="/day"
+            narrowSuffix={uiText('dailyNarrowSuffix')}
             raw={portfolio.daily_total}
-            text={formatCurrency(portfolio.daily_total, currency)}
+            text={formatCurrency(portfolio.daily_total, currency, uiLocale)}
           />
           <FigureCell
             narrowSuffix={` ${memberNoun(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}`}
@@ -225,7 +241,7 @@ function PortfolioTableRow({
             badges={
               <>
                 <Badge variant="teal" className="text-xs">
-                  {humanize(portfolio.mode)}
+                  {humanize(portfolio.mode, uiText)}
                 </Badge>
                 <Badge variant="muted" className="text-xs">
                   {portfolioLevelLabel(portfolio.level)}
@@ -245,7 +261,7 @@ function PortfolioTableRow({
             <LeadLine candidate={lead} currency={currency} figureKey={figureKey('lead')} />
           ) : (
             <p className="mt-0.5 truncate text-muted-foreground text-xs">
-              {humanize(portfolio.objective)}
+              {humanize(portfolio.objective, uiText)}
             </p>
           )}
         </>
@@ -266,6 +282,8 @@ function ArchivedPortfolios({
   adAccountId: string;
   currency?: string | null;
 }) {
+  const uiText = useTranslations('scale');
+  const uiLocale = useLocale();
   const archivedRead = useOptimizerArchivedPortfolios(brandId, adAccountId);
   const { restore } = useOptimizerMutations(brandId, adAccountId);
   const [open, setOpen] = useState(false);
@@ -276,11 +294,15 @@ function ArchivedPortfolios({
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-border/60 border-t pt-2">
       <CollapsibleTrigger className="group flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left font-medium text-muted-foreground text-xs outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-        Archived ({archived.length})
-        <ChevronRight
-          className="size-3.5 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
-          aria-hidden
-        />
+        {uiText.rich('sentence_978d1789748f', {
+          v0: archived.length,
+          v1: () => (
+            <ChevronRight
+              className="size-3.5 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
+              aria-hidden
+            />
+          ),
+        })}
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul className="divide-y divide-border/60">
@@ -292,19 +314,24 @@ function ArchivedPortfolios({
               <div className="min-w-0">
                 <p className="truncate font-medium text-sm">{portfolio.name}</p>
                 <p className="text-xs tabular-nums">
-                  {humanize(portfolio.objective)} ·{' '}
-                  {memberCountLabel(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}{' '}
-                  ·{' '}
-                  <span
-                    {...figureProps(
-                      `portfolios.archived.${portfolio.id}.daily`,
-                      portfolio.daily_total,
-                      currency,
-                    )}
-                  >
-                    {formatCurrency(portfolio.daily_total, currency)}
-                  </span>
-                  /d
+                  {uiText.rich('sentence_ca27bba1c113', {
+                    v0: humanize(portfolio.objective, uiText),
+                    v1: memberCountLabel(
+                      portfolio.adset_count,
+                      portfolioPlatforms(portfolio.platforms),
+                    ),
+                    v2: () => (
+                      <span
+                        {...figureProps(
+                          `portfolios.archived.${portfolio.id}.daily`,
+                          portfolio.daily_total,
+                          currency,
+                        )}
+                      >
+                        {formatCurrency(portfolio.daily_total, currency, uiLocale)}
+                      </span>
+                    ),
+                  })}
                 </p>
               </div>
               <Button
@@ -316,14 +343,16 @@ function ArchivedPortfolios({
                 onClick={() => restore.mutate({ portfolio_id: portfolio.id, name: portfolio.name })}
               >
                 <RotateCcw className="size-3.5" aria-hidden />
-                Restore
+                {uiText('restore_a76e13b')}
               </Button>
             </li>
           ))}
         </ul>
         {restore.isError ? (
           <p className="px-2 pt-1 text-destructive text-xs">
-            {restore.error instanceof Error ? restore.error.message : 'Could not restore.'}
+            {restore.error instanceof Error
+              ? restore.error.message
+              : uiText('could_not_restore_ee97850')}
           </p>
         ) : null}
       </CollapsibleContent>
@@ -344,6 +373,7 @@ export function OptimizerPortfolios({
   planOpen,
   onOpenAcrossAccounts,
 }: OptimizerPortfoliosProps) {
+  const uiText = useTranslations('scale');
   const [scope, setScope] = useState<PortfolioBrowseScope>('account');
   // The SAME query keys the Overview warms, so arriving from there is a cache hit and this
   // view never asks twice. No approvals read beside them: the lead line prints figures, and
@@ -373,7 +403,9 @@ export function OptimizerPortfolios({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-3">
           <h3 className="font-semibold text-sm tracking-tight">
-            Portfolios ({browsingBrand ? brandPortfolioCount : portfolios.length})
+            {uiText.rich('sentence_1f16d9c87278', {
+              v0: browsingBrand ? brandPortfolioCount : portfolios.length,
+            })}
           </h3>
           {hasOtherAccountPortfolios ? (
             <ToggleGroup
@@ -384,20 +416,20 @@ export function OptimizerPortfolios({
               onValueChange={(value) => {
                 if (value) setScope(value as PortfolioBrowseScope);
               }}
-              aria-label="Portfolio scope"
+              aria-label={uiText('portfolio_scope_c53be86')}
             >
               <ToggleGroupItem value="account" className="h-7 px-2 text-xs">
-                This account
+                {uiText('this_account_7c18ebb')}
               </ToggleGroupItem>
               <ToggleGroupItem value="brand" className="h-7 px-2 text-xs">
-                All accounts · {brandPortfolioCount}
+                {uiText.rich('sentence_0eb23e66cb00', { v0: brandPortfolioCount })}
               </ToggleGroupItem>
             </ToggleGroup>
           ) : null}
         </div>
         <Button type="button" size="sm" variant="default" className="gap-1.5" onClick={onCreate}>
           <Plus className="size-4" aria-hidden />
-          New portfolio
+          {uiText('new_portfolio_2ea4a33')}
         </Button>
       </div>
 

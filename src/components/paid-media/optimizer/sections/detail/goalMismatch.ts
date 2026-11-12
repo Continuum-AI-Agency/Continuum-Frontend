@@ -1,3 +1,7 @@
+import type {useTranslations as ScaleTranslationHook} from 'next-intl';
+import {createOptimizerDisplayTranslate} from '@/lib/paid-media/optimizerTranslator';
+import {resultNoun} from './news/cardVisual';
+type ScaleCopy=ReturnType<typeof ScaleTranslationHook<'scale'>>;
 // Ad sets that bid for a different result than the portfolio measures (`kpi_mismatch`).
 //
 // The engine holds every one of them — it cannot rank a cheap event against an expensive
@@ -77,7 +81,11 @@ function singular(entities: string): string {
     .join(' / ');
 }
 
-function sentence(m: Omit<GoalMismatch, 'text'>): string {
+function sentence(m: Omit<GoalMismatch, 'text'>,uiTranslate?:ScaleCopy): string {
+if(uiTranslate){
+const common={total:m.total,entities:m.entities,hasBought:m.bought?'yes':'no',bought:m.bought?resultNoun(m.bought,uiTranslate):'',measures:resultNoun(m.measures,uiTranslate)};
+return m.scope==='all'?uiTranslate('goalMismatchAll',common):uiTranslate('goalMismatchSome',{...common,mismatched:m.mismatched,hasShare:m.share?'yes':'no',share:m.share?.pct??0,shareOf:m.share?.of??'spend'});
+}
   const what = m.bought
     ? `for ${m.bought}, not the ${m.measures}`
     : `for a different result than the ${m.measures}`;
@@ -97,7 +105,7 @@ export function goalMismatchOf(args: {
   report: ParsedCycleRunReport | null;
   /** The result the portfolio measures, plural and lower-case ("conversations"). */
   measures: string;
-}): GoalMismatch | null {
+},uiTranslate?:ScaleCopy): GoalMismatch | null {
   const { report, measures } = args;
   if (!report) return null;
   const items = report.latest_items;
@@ -123,7 +131,7 @@ export function goalMismatchOf(args: {
     bought: said?.bought ?? null,
     measures,
     share,
-    entities: collectionPlural(items.map(entityOf).filter((e) => e != null)),
+    entities: collectionPlural(items.map(entityOf).filter((e) => e != null),uiTranslate?createOptimizerDisplayTranslate(uiTranslate):undefined),
   } as const;
-  return { ...shape, text: sentence(shape) };
+  return { ...shape, text: sentence(shape,uiTranslate) };
 }

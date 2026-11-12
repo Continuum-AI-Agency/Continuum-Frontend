@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 // Wraps Base UI's NumberField the way `slider.tsx` wraps its Slider: parts re-exported
 // with this app's tokens, plus one opinionated composition.
 //
@@ -88,6 +90,7 @@ function NumberScrubField({
   onChange,
   onCommit,
 }: NumberScrubFieldProps) {
+  const uiText = useTranslations('common');
   const inline = orientation === 'inline';
   // At least two decimals so a step-1 geometry field still reads 10.5 rather than 11,
   // and `minimumFractionDigits: 0` so a whole number stays whole.
@@ -148,7 +151,7 @@ function NumberScrubField({
       >
         <NumberFieldInput
           aria-label={ariaLabel ?? label}
-          placeholder={placeholder ?? (nullable ? 'Auto' : undefined)}
+          placeholder={placeholder ?? (nullable ? uiText('auto_0286249') : undefined)}
           className="h-full w-full min-w-0 bg-transparent px-2 text-2xs tabular-nums text-foreground outline-none placeholder:text-muted-foreground"
         />
         {suffix ? (
@@ -157,13 +160,13 @@ function NumberScrubField({
         {inline ? null : (
           <div className="flex h-full flex-col border-l border-input">
             <NumberFieldIncrement
-              aria-label={`Increase ${label}`}
+              aria-label={uiText('m_9f1d5a87c5', { v0: String(label) })}
               className="flex flex-1 items-center justify-center px-1 text-muted-foreground outline-none hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45"
             >
               <ChevronUp className="size-2.5" />
             </NumberFieldIncrement>
             <NumberFieldDecrement
-              aria-label={`Decrease ${label}`}
+              aria-label={uiText('m_20e31c9d3c', { v0: String(label) })}
               className="flex flex-1 items-center justify-center px-1 text-muted-foreground outline-none hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45"
             >
               <ChevronDown className="size-2.5" />

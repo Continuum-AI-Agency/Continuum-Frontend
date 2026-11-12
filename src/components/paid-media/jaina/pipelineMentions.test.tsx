@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { type PipelineCapabilityV2, pipelineCapabilityV2Schema } from '@continuum/contracts';
 import { QueryClient } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { PromptInput } from '@/components/chat/prompt-input';
+import { render } from '@/i18n/__tests__/render';
 import type { AgentMentionProvider } from '@/lib/agent-references';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
 import { PIPELINES_MENTION_FOLDER_KEY, withPipelineMentions } from './pipelineMentions';

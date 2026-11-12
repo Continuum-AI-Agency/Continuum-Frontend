@@ -20,6 +20,7 @@ import {
   sheetTable,
 } from '@continuum/contracts';
 import { FileSpreadsheet, FolderOpen, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
+import { type useTranslations, useTranslations as useUiTranslations } from 'next-intl';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { useUiErrorMessage } from '@/i18n/errors';
 import { ApiError } from '@/lib/api/errors';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
@@ -155,31 +157,34 @@ export function downloadTemplateCsv(contract: ImportContract, fileName: string):
   setTimeout(() => URL.revokeObjectURL(url), 40_000);
 }
 
-const IMPORT_ERROR_COPY: Record<string, string> = {
-  render_import_too_many_rows: `This sheet has too many rows. A render set holds at most ${MAX_BATCH_ROWS}.`,
-  render_import_no_rows: 'This spreadsheet has no rows to import.',
-  render_import_too_large: 'This spreadsheet is too large to import.',
-  render_import_failed: 'Could not read this spreadsheet. Save it as .xlsx or .csv and try again.',
-  media_url_unsafe: 'This media link is not a public HTTPS address.',
-  media_url_unavailable: 'Could not download this media link.',
-  media_url_wrong_type: 'This link does not contain the expected image or video.',
-  media_url_too_large: 'This linked file is over 100 MB. Upload it directly to the Library.',
-  media_url_empty: 'This media link returned an empty file.',
-  media_url_redirects: 'This media link redirected too many times.',
-  media_import_failed: 'Could not import this media link.',
-};
+const IMPORT_ERROR_KEYS = {
+  render_import_too_many_rows: 'importSheetTooMany',
+  render_import_no_rows: 'importNoRows',
+  render_import_too_large: 'importTooLarge',
+  render_import_failed: 'importFailed',
+  media_url_unsafe: 'importMediaUnsafe',
+  media_url_unavailable: 'importMediaUnavailable',
+  media_url_wrong_type: 'importMediaWrongType',
+  media_url_too_large: 'importMediaTooLarge',
+  media_url_empty: 'importMediaEmpty',
+  media_url_redirects: 'importMediaRedirects',
+  media_import_failed: 'importMediaFailed',
+} as const;
 
-/** The refusal's code as the sentence a person needs, row count included. */
-function importErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return 'Could not read this spreadsheet.';
+function importErrorMessage(
+  error: unknown,
+  translate: ReturnType<typeof useTranslations<'forge'>>,
+  fallback: (error: unknown) => string,
+): string {
+  console.error('[RenderRowsImport] import failed', error);
+  if (!(error instanceof Error)) return fallback(error);
+  const code = (error instanceof ApiError ? error.code : undefined) ?? error.message;
   const rowCount = error instanceof ApiError ? error.payload?.rowCount : undefined;
-  if (error.message === 'render_import_too_many_rows' && typeof rowCount === 'number') {
-    return `This sheet has ${rowCount} rows. A render set holds at most ${MAX_BATCH_ROWS}.`;
-  }
-  return IMPORT_ERROR_COPY[error.message] ?? error.message;
+  if (code === 'render_import_too_many_rows' && typeof rowCount === 'number')
+    return translate('importSheetCap', { count: rowCount, max: MAX_BATCH_ROWS, existing: 0 });
+  const key = IMPORT_ERROR_KEYS[code as keyof typeof IMPORT_ERROR_KEYS];
+  return key ? translate(key, { max: MAX_BATCH_ROWS }) : fallback(error);
 }
-
-const article = (word: string) => (/^[aeiou]/.test(word) ? 'an' : 'a');
 
 /** A Drive folder is a page of files, never the one picture a cell asks for. */
 const isFolderLink = (url: string) => /drive\.google\.com\/drive\/(u\/\d+\/)?folders\//i.test(url);
@@ -232,6 +237,9 @@ export function RenderRowsImport({
   onOpenChange: (open: boolean) => void;
   onImport: (rows: RequestRow[]) => void;
 }) {
+  const translateUi = useUiTranslations('forge');
+  const uiErrorText = useUiErrorMessage();
+
   const fileRef = useRef<HTMLInputElement>(null);
   const kitsRef = useRef<HTMLInputElement>(null);
   const scopeRef = useRef(0);
@@ -394,7 +402,7 @@ export function RenderRowsImport({
       }
     } catch {
       if (scope === scopeRef.current)
-        toast.error('Could not suggest a mapping right now. Map the columns below.');
+        toast.error(translateUi('could_not_suggest_a_mapping_right_n_e3679f7b'));
     } finally {
       if (scope === scopeRef.current) setSuggesting(false);
     }
@@ -464,9 +472,9 @@ export function RenderRowsImport({
         ],
       });
     } catch (error) {
-      toast.error(importErrorMessage(error));
+      toast.error(importErrorMessage(error, translateUi, uiErrorText));
     }
-  }, [pasted]);
+  }, [pasted, translateUi, uiErrorText]);
 
   const loadFile = async (file: File) => {
     const scope = scopeRef.current;
@@ -477,7 +485,7 @@ export function RenderRowsImport({
       showWorkbook(next, savedMapping);
     } catch (error) {
       if (scope !== scopeRef.current) return;
-      toast.error(importErrorMessage(error));
+      toast.error(importErrorMessage(error, translateUi, uiErrorText));
     } finally {
       if (scope === scopeRef.current) setBusy(false);
     }
@@ -514,11 +522,15 @@ export function RenderRowsImport({
       requestedLinks.current.add(key);
       void apiRendersApi.importMedia({ brandId, ...value }).then(
         (asset) => setLinks((current) => ({ ...current, [key]: asset })),
-        (error) => setLinks((current) => ({ ...current, [key]: importErrorMessage(error) })),
+        (error) =>
+          setLinks((current) => ({
+            ...current,
+            [key]: importErrorMessage(error, translateUi, uiErrorText),
+          })),
       );
     }
     // `links` re-runs this after a retry has forgotten the failed ones.
-  }, [brandId, mediaLinks, links]);
+  }, [brandId, mediaLinks, links, translateUi, uiErrorText]);
 
   /** Picture fields filled from a team's name: which column names them, and the names to match. */
   const kitTargets = useMemo(
@@ -580,7 +592,7 @@ export function RenderRowsImport({
       }
       return next;
     });
-    const result = rowsFromMappedImport(sourceRows, mappings, variables, outputs);
+    const result = rowsFromMappedImport(sourceRows, mappings, variables, outputs, translateUi);
     result.rows.forEach((row, index) => {
       for (const [column, target] of Object.entries(mappings)) {
         const kind = byKey.get(target)?.kind;
@@ -597,7 +609,7 @@ export function RenderRowsImport({
       }
     });
     return { duplicate: null, rows: result.rows, errors: [...result.errors, ...errors] };
-  }, [prepared, mappings, variables, outputs, links, brandId, byKey]);
+  }, [prepared, mappings, variables, outputs, links, brandId, byKey, translateUi]);
 
   const pending = useMemo(
     () =>
@@ -639,11 +651,11 @@ export function RenderRowsImport({
             typeof asset === 'object' && asset !== null && asset.kind !== kind,
         );
         const message = lookups.includes('failed')
-          ? 'Could not check this id'
+          ? translateUi('could_not_check_this_id_a8f278f4')
           : lookups.includes(null)
-            ? 'No Library asset with this id'
+            ? translateUi('no_library_asset_with_this_id_1866130e')
             : mismatch && kind
-              ? `This Library asset is ${article(mismatch.kind)} ${mismatch.kind}, not ${article(kind)} ${kind}`
+              ? translateUi('importAssetKindMismatch', { actual: mismatch.kind, expected: kind })
               : null;
         if (message) {
           errors.push({ row: index, column: columnOf.get(key) ?? key, message });
@@ -665,7 +677,7 @@ export function RenderRowsImport({
       return { ...row, values, media: { ...row.media, ...media } };
     });
     return { rows, errors };
-  }, [review, mappings, assets, brandId, byKey, kitTargets, kitMatches, table]);
+  }, [review, mappings, assets, brandId, byKey, kitTargets, kitMatches, table, translateUi]);
 
   const overCap = workbook !== null && !canImportRows(existingRows, rowCount);
   const failedLinks = mediaLinks.filter(([key]) => typeof links[key] === 'string');
@@ -736,7 +748,11 @@ export function RenderRowsImport({
           }),
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'A picture could not be uploaded.');
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translateUi('a_picture_could_not_be_uploaded_bbda6aa3'),
+        );
         return;
       } finally {
         setUploading(null);
@@ -771,12 +787,17 @@ export function RenderRowsImport({
             ...mapping,
           },
         })
-        .catch(() =>
-          toast.error('The rows imported, but this mapping was not saved for next time.'),
-        );
+        .catch(() => toast.error(translateUi('the_rows_imported_but_this_mapping__2a14ace1')));
     const n = rows.length;
     toast.success(
-      `${n} row${n === 1 ? '' : 's'} imported for review${errors.length ? ` · ${errors.length} cell${errors.length === 1 ? '' : 's'} left empty` : ''}`,
+      translateUi('value0_row_value1_imported_for_revi_1ed5d44d', {
+        count: Number(n),
+        details: String(
+          errors.length
+            ? ` · ${errors.length} cell${errors.length === 1 ? '' : 's'} left empty`
+            : '',
+        ),
+      }),
     );
   };
 
@@ -791,15 +812,15 @@ export function RenderRowsImport({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Import render rows</DialogTitle>
+          <DialogTitle>{translateUi('import_render_rows_8fb35a18')}</DialogTitle>
           <DialogDescription>
-            Choose an .xlsx or .csv — every tab is read here, in your browser. Review the mapping,
-            then add the rows. Nothing renders automatically.
+            {' '}
+            {translateUi('choose_an_xlsx_or_csv_every_tab_is__68f55cc5')}{' '}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <Field>
-            <FieldLabel>Spreadsheet</FieldLabel>
+            <FieldLabel>{translateUi('spreadsheet_f3befcc6')}</FieldLabel>
             <input
               ref={fileRef}
               id={fileInputId}
@@ -824,15 +845,16 @@ export function RenderRowsImport({
                   <Loader2 className="animate-spin" data-icon="inline-start" />
                 ) : (
                   <FileSpreadsheet data-icon="inline-start" />
-                )}
-                Choose XLSX or CSV
+                )}{' '}
+                {translateUi('choose_xlsx_or_csv_177bed6c')}{' '}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => downloadTemplateCsv(contract, 'render-rows-template.csv')}
               >
-                Download CSV template
+                {' '}
+                {translateUi('download_csv_template_67f46a1d')}{' '}
               </Button>
             </div>
             {/* A drop takes the same review path as the picker. A label carries the drop and clicks
@@ -858,12 +880,16 @@ export function RenderRowsImport({
                 if (file) void loadFile(file);
               }}
             >
-              <span className="font-medium text-foreground">Drop a file here or choose one</span>
-              <span className="text-muted-foreground">The file is read here, in your browser.</span>
+              <span className="font-medium text-foreground">
+                {translateUi('drop_a_file_here_or_choose_one_ca849c35')}
+              </span>
+              <span className="text-muted-foreground">
+                {translateUi('the_file_is_read_here_in_your_brows_7f40acd3')}
+              </span>
             </label>
             <FieldDescription>
-              Title rows, notes and a colour legend around the data are fine. Colour names (Rojo,
-              Blanco) and short hexes become full hex colours.
+              {' '}
+              {translateUi('title_rows_notes_and_a_colour_legen_6582f817')}{' '}
             </FieldDescription>
           </Field>
 
@@ -872,22 +898,28 @@ export function RenderRowsImport({
               <div className="flex flex-wrap items-end gap-3">
                 {workbook.tables.length > 1 ? (
                   <Field className="w-56">
-                    <FieldLabel>Sheet</FieldLabel>
+                    <FieldLabel>{translateUi('sheet_54bf0ebb')}</FieldLabel>
                     <Select
                       value={String(sheetIndex)}
                       onValueChange={(value) => changeSheet(Number(value))}
                     >
-                      <SelectTrigger aria-label="Sheet">
+                      <SelectTrigger aria-label={translateUi('sheet_54bf0ebb')}>
                         <SelectValue>
-                          {workbook.tables[sheetIndex]?.name.trim() || `Sheet ${sheetIndex + 1}`}
+                          {workbook.tables[sheetIndex]?.name.trim() ||
+                            translateUi('sheet_value0_a685fb73', {
+                              value0: String(sheetIndex + 1),
+                            })}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
                           {tables.map((entry, index) => (
                             <SelectItem key={`${entry.name}-${index}`} value={String(index)}>
-                              {entry.name.trim() || `Sheet ${index + 1}`} ·{' '}
-                              {entry.table.rows.length} rows
+                              {entry.name.trim() ||
+                                translateUi('sheet_value0_a685fb73', {
+                                  value0: String(index + 1),
+                                })}{' '}
+                              · {entry.table.rows.length} {translateUi('rows_bc51e9e6')}{' '}
                             </SelectItem>
                           ))}
                         </SelectGroup>
@@ -896,7 +928,9 @@ export function RenderRowsImport({
                   </Field>
                 ) : null}
                 <Field className="w-32">
-                  <FieldLabel htmlFor="import-header-row">Header row</FieldLabel>
+                  <FieldLabel htmlFor="import-header-row">
+                    {translateUi('header_row_4d7cc7ed')}
+                  </FieldLabel>
                   <Input
                     id="import-header-row"
                     type="number"
@@ -906,7 +940,9 @@ export function RenderRowsImport({
                   />
                 </Field>
                 <Field className="min-w-56 flex-1">
-                  <FieldLabel htmlFor="import-row-names">Row names</FieldLabel>
+                  <FieldLabel htmlFor="import-row-names">
+                    {translateUi('row_names_3fedaba0')}
+                  </FieldLabel>
                   <Input
                     id="import-row-names"
                     value={mapping.label ?? ''}
@@ -931,13 +967,16 @@ export function RenderRowsImport({
                     ) : (
                       <Sparkles data-icon="inline-start" />
                     )}
-                    {suggesting ? 'Mapping columns…' : 'Suggest mapping'}
+                    {suggesting
+                      ? translateUi('mapping_columns_62d7c85e')
+                      : translateUi('suggest_mapping_876cb3d8')}
                   </Button>
                 ) : null}
               </div>
               <p className="text-xs font-medium">
-                {workbook.sourceName} · {rowCount} row{rowCount === 1 ? '' : 's'}
-                {fromSaved ? ' · mapped as last time' : ''}
+                {workbook.sourceName} · {rowCount} {translateUi('row_634768da')}
+                {rowCount === 1 ? '' : 's'}
+                {fromSaved ? translateUi('mapped_as_last_time_782df232') : ''}
               </p>
 
               {table.headers.map((header) => {
@@ -947,12 +986,16 @@ export function RenderRowsImport({
                   <Field key={header} orientation="horizontal">
                     <FieldLabel className="min-w-32">{header}</FieldLabel>
                     <Select value={target} onValueChange={(value) => setColumn(header, value)}>
-                      <SelectTrigger aria-label={`Map ${header}`}>
+                      <SelectTrigger
+                        aria-label={translateUi('map_value0_9a0d270a', { value0: String(header) })}
+                      >
                         <SelectValue>{labelOf(target)}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectItem value={IMPORT_SKIP}>Do not import</SelectItem>
+                          <SelectItem value={IMPORT_SKIP}>
+                            {translateUi('do_not_import_1dab22ff')}
+                          </SelectItem>
                           {targets.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
@@ -977,19 +1020,28 @@ export function RenderRowsImport({
                           })
                         }
                       >
-                        <SelectTrigger aria-label={`Decimals for ${header}`} className="w-36">
+                        <SelectTrigger
+                          aria-label={translateUi('decimals_for_value0_ca012dfa', {
+                            value0: String(header),
+                          })}
+                          className="w-36"
+                        >
                           <SelectValue>
                             {mapping.decimals[target] === undefined
-                              ? 'As written'
-                              : `${mapping.decimals[target]} decimals`}
+                              ? translateUi('as_written_ca0c0605')
+                              : translateUi('value0_decimals_04551002', {
+                                  count: Number(mapping.decimals[target]),
+                                })}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="as-written">As written</SelectItem>
+                            <SelectItem value="as-written">
+                              {translateUi('as_written_ca0c0605')}
+                            </SelectItem>
                             {[0, 1, 2, 3].map((places) => (
                               <SelectItem key={places} value={String(places)}>
-                                {places} decimals
+                                {places} {translateUi('decimals_ee80fd2f')}{' '}
                               </SelectItem>
                             ))}
                           </SelectGroup>
@@ -1002,7 +1054,11 @@ export function RenderRowsImport({
 
               {formatsColumn && outputs.length > 1 ? (
                 <div className="flex flex-col gap-1.5 rounded-md border p-2">
-                  <p className="text-xs font-medium">Which format each “{formatsColumn}” picks</p>
+                  <p className="text-xs font-medium">
+                    {translateUi('which_format_each_a43aa440')}
+                    {formatsColumn}
+                    {translateUi('picks_87291b4d')}
+                  </p>
                   {formatValues.map((value) => {
                     const picked = mapping.outputs[foldName(value)];
                     return (
@@ -1017,10 +1073,14 @@ export function RenderRowsImport({
                             }))
                           }
                         >
-                          <SelectTrigger aria-label={`Format for ${value}`}>
+                          <SelectTrigger
+                            aria-label={translateUi('format_for_value0_e55d3912', {
+                              value0: String(value),
+                            })}
+                          >
                             <SelectValue>
                               {outputs.find((output) => output.id === picked)?.label ??
-                                'Match by name'}
+                                translateUi('match_by_name_cc943f8e')}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
@@ -1042,17 +1102,22 @@ export function RenderRowsImport({
               {kitTargets.length ? (
                 <div className="flex flex-col gap-1 rounded-md border p-2 text-xs">
                   <p className="font-medium">
-                    Pictures by name:{' '}
+                    {' '}
+                    {translateUi('pictures_by_name_dfca04c9')}{' '}
                     {kitTargets
                       .map(([key, header]) => `${byKey.get(key)?.label ?? key} ← ${header}`)
                       .join(' · ')}
                   </p>
                   <p className="text-muted-foreground">
                     {library === null
-                      ? 'Looking for each name in your Library…'
-                      : `${kitMatches.size - unmatchedKits.length} of ${kitMatches.size} found${
-                          unmatchedKits.length ? ` — not found: ${unmatchedKits.join(', ')}` : ''
-                        }.`}
+                      ? translateUi('looking_for_each_name_in_your_libra_f762e397')
+                      : translateUi('value0_of_value1_found_value2_0735d1d7', {
+                          value0: String(kitMatches.size - unmatchedKits.length),
+                          value1: String(kitMatches.size),
+                          value2: String(
+                            unmatchedKits.length ? ` — not found: ${unmatchedKits.join(', ')}` : '',
+                          ),
+                        })}
                   </p>
                   <input
                     ref={kitsRef}
@@ -1061,7 +1126,7 @@ export function RenderRowsImport({
                     accept="image/*"
                     {...{ webkitdirectory: '' }}
                     className="sr-only"
-                    aria-label="Choose a folder of pictures"
+                    aria-label={translateUi('choose_a_folder_of_pictures_a944b6a7')}
                     onChange={(event) => {
                       // Names only: the folder's structure says nothing about which team a picture is.
                       const files = Array.from(event.target.files ?? []).filter((file) =>
@@ -1079,8 +1144,8 @@ export function RenderRowsImport({
                       className="w-fit"
                       onClick={() => kitsRef.current?.click()}
                     >
-                      <FolderOpen data-icon="inline-start" />
-                      Add a folder of pictures, named by team
+                      <FolderOpen data-icon="inline-start" />{' '}
+                      {translateUi('add_a_folder_of_pictures_named_by_t_c2464243')}{' '}
                     </Button>
                   ) : null}
                 </div>
@@ -1089,30 +1154,35 @@ export function RenderRowsImport({
               {folderColumns.length ? (
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   <TriangleAlert className="size-3.5" aria-hidden />
-                  {folderColumns.map(([header]) => header).join(', ')} hold a Drive folder link, not
-                  a picture — those cells are skipped.
+                  {folderColumns.map(([header]) => header).join(', ')}{' '}
+                  {translateUi('hold_a_drive_folder_link_not_a_pict_8cd3c7ef')}{' '}
                 </p>
               ) : null}
               {overCap ? (
                 <p role="alert" className="text-xs text-destructive">
-                  This sheet has {rowCount} rows. A render set holds at most {MAX_BATCH_ROWS}
-                  {existingRows > 0 ? ` (${existingRows} already here)` : ''}.
+                  {translateUi('importSheetCap', {
+                    count: rowCount,
+                    max: MAX_BATCH_ROWS,
+                    existing: existingRows,
+                  })}
                 </p>
               ) : null}
               {review?.duplicate ? (
                 <p role="alert" className="text-xs text-destructive">
-                  {labelOf(review.duplicate)} is mapped more than once. Choose one source column.
+                  {labelOf(review.duplicate)}{' '}
+                  {translateUi('is_mapped_more_than_once_choose_one_70328e8f')}{' '}
                 </p>
               ) : null}
               {checking ? (
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" /> Importing links and checking Library
-                  ids…
+                  <Loader2 className="size-3 animate-spin" />{' '}
+                  {translateUi('importing_links_and_checking_librar_f0132e1b')}{' '}
                 </p>
               ) : null}
               {failedLinks.length > 0 ? (
                 <Button type="button" variant="outline" size="xs" onClick={retryFailedLinks}>
-                  Retry linked media
+                  {' '}
+                  {translateUi('retry_linked_media_ab52079a')}{' '}
                 </Button>
               ) : null}
 
@@ -1175,7 +1245,9 @@ export function RenderRowsImport({
                 >
                   {errors.map((error) => (
                     <li key={`${cellKey(error.row, error.column)}:${error.message}`}>
-                      Row {error.row + 1} · {error.column}: {error.message} — imported empty
+                      {' '}
+                      {translateUi('row_95110d74')} {error.row + 1} · {error.column}:{' '}
+                      {error.message} {translateUi('imported_empty_28db3dde')}{' '}
                     </li>
                   ))}
                 </ul>
@@ -1186,21 +1258,25 @@ export function RenderRowsImport({
         <DialogFooter className="items-center">
           {errors.length > 0 ? (
             <p className="mr-auto text-2xs text-muted-foreground">
-              {errors.length} cell{errors.length === 1 ? '' : 's'} will be left empty for you to
-              fill in the grid.
+              {errors.length} {translateUi('cell_39d02b42')}
+              {errors.length === 1 ? '' : 's'}{' '}
+              {translateUi('will_be_left_empty_for_you_to_fill__853cdca5')}{' '}
             </p>
           ) : null}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {' '}
+            {translateUi('cancel_19766ed6')}{' '}
           </Button>
           <Button type="button" disabled={!canImport} onClick={() => void importRows()}>
             {uploading ? (
               <>
-                <Loader2 className="animate-spin" data-icon="inline-start" />
-                Uploading pictures {uploading.done}/{uploading.total}…
+                <Loader2 className="animate-spin" data-icon="inline-start" />{' '}
+                {translateUi('uploading_pictures_d0cccd0b')} {uploading.done}/{uploading.total}…
               </>
             ) : (
-              `Import ${rowCount ? `${rowCount} ` : ''}rows`
+              translateUi('import_value0_rows_635cbd5b', {
+                value0: String(rowCount ? `${rowCount} ` : ''),
+              })
             )}
           </Button>
         </DialogFooter>

@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 // Shared pieces for the agent-ui cards: the full-bleed stat band, rolling figures, the
 // transform-only bar with an optional tooltip, a score ring and model initials.
@@ -117,12 +118,14 @@ const RING_C = 2 * Math.PI * RING_R;
 
 /** A 0–1 score as a ring with its percentage in the middle. */
 export function ScoreRing({ score, emphasis = false }: { score: number; emphasis?: boolean }) {
+  const tUi = useTranslations('common');
+
   const pct = Math.round(Math.min(1, Math.max(0, score)) * 100);
   return (
     <span
       className="relative grid size-10 shrink-0 place-items-center"
       role="img"
-      aria-label={`Score ${pct}`}
+      aria-label={tUi('m_e183080861', { v0: String(pct) })}
     >
       <svg viewBox="0 0 36 36" className="absolute inset-0 -rotate-90" aria-hidden="true">
         <circle cx="18" cy="18" r={RING_R} fill="none" strokeWidth="3" className="stroke-muted" />

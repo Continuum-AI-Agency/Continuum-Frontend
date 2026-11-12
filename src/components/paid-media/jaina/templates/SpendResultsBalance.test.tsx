@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { formatFigure, type TemplateFigure } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { render } from '@/i18n/__tests__/render';
 import { type AnswerTemplateBlockV2, checkpointBlockV2Schema } from '@/lib/jaina/schemas';
 import fixture from './__fixtures__/spend_results_balance.block.json';
 import TemplateBlock, { TemplateExecutive, TemplateJustification } from './TemplateBlock';

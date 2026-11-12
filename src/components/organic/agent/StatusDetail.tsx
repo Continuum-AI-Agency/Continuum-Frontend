@@ -1,7 +1,9 @@
 'use client';
 
-import { resolveOrganicAgentLabel } from '@continuum/contracts';
 import { Check, Clock, Loader2, Minus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
+import { localizeOrganicAgentLabel } from '@/lib/ui/organicLifecycleLabels';
 import { cn } from '@/lib/utils';
 import type { CheckpointState } from './types';
 
@@ -25,7 +27,10 @@ const LADDER_TEXT: Record<LadderState, string> = {
   pending: 'text-muted-foreground/50',
 };
 
-function ladderFor(checkpoint: CheckpointState): Array<[string, LadderState, string | null]> {
+function ladderFor(
+  checkpoint: CheckpointState,
+  translate: ReturnType<typeof useTranslations<'organic'>>,
+): Array<[string, LadderState, string | null]> {
   const copy: LadderState = checkpoint.textReady ? 'done' : 'active';
   const preview: LadderState = !checkpoint.textReady
     ? 'pending'
@@ -43,15 +48,15 @@ function ladderFor(checkpoint: CheckpointState): Array<[string, LadderState, str
           : 'pending';
 
   return [
-    ['Copy', copy, null],
-    ['Preview', preview, null],
+    [translate('checkpointCopy'), copy, null],
+    [translate('checkpointPreview'), preview, null],
     [
-      'Media',
+      translate('checkpointMedia'),
       media,
       media === 'waiting'
-        ? 'your choice'
+        ? translate('checkpointChoiceNote')
         : checkpoint.mediaStatus === 'user_supplied'
-          ? 'yours'
+          ? translate('checkpointYoursNote')
           : null,
     ],
   ];
@@ -72,8 +77,16 @@ export function StatusDetail({
   diagnostic?: string | null;
   error?: string | null;
 }) {
+  const uiText = useTranslations('organic');
+  const commonText = useTranslations('common');
+  const localizedDiagnostic =
+    diagnostic === 'No pipeline.stage frame has arrived for this run.'
+      ? uiText('diagnosticNoStage')
+      : diagnostic === 'Copy is saved; the media job failed.'
+        ? uiText('diagnosticMediaFailed')
+        : diagnostic;
   const liveLine = [
-    resolveOrganicAgentLabel(agentName),
+    localizeOrganicAgentLabel(agentName, commonText),
     stageLabel,
     typeof pct === 'number' ? `${Math.round(pct)}%` : null,
   ]
@@ -86,7 +99,7 @@ export function StatusDetail({
 
       {checkpoint && (
         <ul className="grid gap-1">
-          {ladderFor(checkpoint).map(([label, state, note]) => {
+          {ladderFor(checkpoint, uiText).map(([label, state, note]) => {
             const Icon = LADDER_ICON[state];
             return (
               <li className="flex items-center gap-1.5 text-2xs" key={label}>
@@ -106,12 +119,16 @@ export function StatusDetail({
         </ul>
       )}
 
-      {error && <p className="text-2xs leading-relaxed text-destructive/85 text-pretty">{error}</p>}
+      {error && (
+        <p className="text-2xs leading-relaxed text-destructive/85 text-pretty">
+          {friendlyStreamError(error, uiText)}
+        </p>
+      )}
 
       {/* Kept last and quiet: this is the engineer's line, not the marketer's. */}
       {diagnostic && (
         <p className="text-3xs leading-relaxed text-muted-foreground/70 text-pretty">
-          {diagnostic}
+          {localizedDiagnostic}
         </p>
       )}
     </div>

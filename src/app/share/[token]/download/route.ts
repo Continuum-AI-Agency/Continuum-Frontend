@@ -5,9 +5,9 @@
 // identity and stripped of any location.
 
 import type { SharePreparedDownload } from '@continuum/contracts';
-import { invokeLibraryShare } from '../shareEdge.server';
-import { fetchShareDelivery } from '../shareDownload.server';
-import { viewerContext } from '../shareEvents.server';
+import { invokeLibraryShare } from '../../../[locale]/share/[token]/shareEdge.server.ts';
+import { fetchShareDelivery } from '../../../[locale]/share/[token]/shareDownload.server.ts';
+import { viewerContext } from '../../../[locale]/share/[token]/shareEvents.server.ts';
 
 export const maxDuration = 300;
 

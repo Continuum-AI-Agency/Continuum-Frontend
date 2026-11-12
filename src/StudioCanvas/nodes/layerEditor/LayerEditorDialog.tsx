@@ -2,6 +2,7 @@
 
 import type { MediaAsset } from '@continuum/contracts';
 import { ImageIcon, Layers, Loader2, Plus, Redo2, Undo2, Upload } from 'lucide-react';
+import { useTranslations as useUiTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
 import { Button } from '@/components/ui/button';
@@ -109,6 +110,8 @@ export function LayerEditorDialog({
   onPersist,
   onCompose,
 }: LayerEditorDialogProps) {
+  const translateUi = useUiTranslations('studio');
+
   const [history, rawDispatch] = useReducer(
     layerDocReducer,
     { frame, layers: [...layers], background },
@@ -661,10 +664,11 @@ export function LayerEditorDialog({
           <DialogHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 px-4 py-3 text-left">
             <div>
               <DialogTitle className="flex items-center gap-2 text-base">
-                <Layers className="h-4 w-4" /> Layer Editor
+                <Layers className="h-4 w-4" /> {translateUi('layer_editor_328aef07')}{' '}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Stack, place and blend stills into one composed image.
+                {' '}
+                {translateUi('stack_place_and_blend_stills_into_o_6a8c9c4a')}{' '}
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -675,15 +679,15 @@ export function LayerEditorDialog({
                 <Switch
                   checked={snapEnabled}
                   onCheckedChange={setSnapEnabled}
-                  aria-label="Align to the frame and other layers"
-                />
-                Snap
+                  aria-label={translateUi('align_to_the_frame_and_other_layers_c6fc9542')}
+                />{' '}
+                {translateUi('snap_98df9a59')}{' '}
               </span>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                aria-label="Undo"
+                aria-label={translateUi('undo_a8283ade')}
                 disabled={!canUndo(history)}
                 onClick={undo}
               >
@@ -693,7 +697,7 @@ export function LayerEditorDialog({
                 type="button"
                 size="sm"
                 variant="ghost"
-                aria-label="Redo"
+                aria-label={translateUi('redo_74273989')}
                 disabled={!canRedo(history)}
                 onClick={redo}
               >
@@ -707,8 +711,8 @@ export function LayerEditorDialog({
                         <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <Plus className="mr-1 h-3.5 w-3.5" />
-                      )}
-                      Add layer
+                      )}{' '}
+                      {translateUi('add_layer_3fc8b134')}{' '}
                     </Button>
                   }
                 />
@@ -717,13 +721,14 @@ export function LayerEditorDialog({
                     className="text-2xs"
                     onSelect={() => fileInputRef.current?.click()}
                   >
-                    <Upload className="mr-2 h-3 w-3" />
-                    Upload an image…
+                    <Upload className="mr-2 h-3 w-3" /> {translateUi(
+                      'upload_an_image_2054d015',
+                    )}{' '}
                   </DropdownMenuItem>
                   {brandId ? (
                     <DropdownMenuItem className="text-2xs" onSelect={() => setLibraryOpen(true)}>
-                      <ImageIcon className="mr-2 h-3 w-3" />
-                      From the Library…
+                      <ImageIcon className="mr-2 h-3 w-3" />{' '}
+                      {translateUi('from_the_library_7520b8c5')}{' '}
                     </DropdownMenuItem>
                   ) : null}
                   {unplaced.length > 0 ? <DropdownMenuSeparator /> : null}
@@ -769,8 +774,8 @@ export function LayerEditorDialog({
                 />
               ) : null}
               <Button type="button" size="sm" onClick={() => void compose()} disabled={composing}>
-                {composing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-                Compose
+                {composing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}{' '}
+                {translateUi('compose_98652afe')}{' '}
               </Button>
             </div>
           </DialogHeader>

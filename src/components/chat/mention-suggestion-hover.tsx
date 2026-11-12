@@ -1,4 +1,7 @@
 'use client';
+import {translateControlLabel} from '@/lib/ui/controlLabels';
+
+import { useTranslations } from 'next-intl';
 
 /**
  * Hover previews for context-grabber rows: full text (no truncation), type-specific
@@ -177,6 +180,7 @@ function MetricSeriesBlock({
   fallbackValue?: number | null;
   fallbackDelta?: number | null;
 }) {
+  const uiText = useTranslations('common');
   const series = useMetricTrendSeries({
     enabled: open,
     analytics,
@@ -191,7 +195,7 @@ function MetricSeriesBlock({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-foreground">{label}</p>
-          <p className="text-2xs text-muted-foreground">Last 7 days</p>
+          <p className="text-2xs text-muted-foreground">{uiText('last_7_days_0603dec')}</p>
         </div>
         <div className="text-right">
           {current != null ? (
@@ -226,7 +230,9 @@ function MetricSeriesBlock({
         ) : values.length > 0 ? (
           <MiniBars values={values} />
         ) : (
-          <p className="py-2 text-center text-2xs text-muted-foreground">No daily series yet</p>
+          <p className="py-2 text-center text-2xs text-muted-foreground">
+            {uiText('m_7a651fdc21')}
+          </p>
         )}
       </div>
     </div>
@@ -234,6 +240,8 @@ function MetricSeriesBlock({
 }
 
 function CreativeInsightHover({ meta, label }: { meta: Record<string, unknown>; label: string }) {
+  const tUi = useTranslations('common');
+
   const thumbs = Array.isArray(meta.exemplarThumbnails)
     ? (meta.exemplarThumbnails as unknown[]).filter((u): u is string => typeof u === 'string')
     : [];
@@ -275,14 +283,15 @@ function CreativeInsightHover({ meta, label }: { meta: Record<string, unknown>; 
         ) : null}
         {confidence != null ? (
           <Badge variant="secondary" className="font-normal tabular-nums">
-            {Math.round(confidence * 100)}% conf
+            {Math.round(confidence * 100)}
+            {tUi('m_41709ea383')}
           </Badge>
         ) : null}
       </div>
       {count > 0 && (thumbs.length > 0 || snippets.length > 0) ? (
         <div>
           <p className="mb-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-            Top creatives
+            {tUi('m_3ea03a4229')}
           </p>
           <div className="flex gap-2 overflow-x-auto pb-0.5">
             {Array.from({ length: Math.min(count, 4) }).map((_, i) => {
@@ -344,6 +353,8 @@ function PackHover({
   analytics?: MentionAnalyticsContext | null;
   open: boolean;
 }) {
+  const tUi = useTranslations('common');
+
   const packId = readString(meta, 'packId');
   const pack = OPTIMIZATION_PACKS.find((p) => p.id === packId);
   const keys = Array.isArray(meta.metricKeys)
@@ -352,9 +363,7 @@ function PackHover({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs text-muted-foreground">
-        {pack?.description ?? 'Optimization pack — metrics included below.'}
-      </p>
+      <p className="text-xs text-muted-foreground">{pack?.description ?? tUi('m_c36803c929')}</p>
       <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
         {keys.slice(0, 5).map((key) => {
           const entry = getOrganicMetric(key as never);
@@ -437,6 +446,8 @@ function GenericTextHover({
   suggestion: AgentMentionSuggestion;
   meta: Record<string, unknown>;
 }) {
+  const tUi = useTranslations('common');
+
   const body =
     readString(meta, 'description') ??
     readString(meta, 'text') ??
@@ -452,7 +463,7 @@ function GenericTextHover({
   return body ? (
     <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{body}</p>
   ) : (
-    <p className="text-xs text-muted-foreground">No additional detail for this reference.</p>
+    <p className="text-xs text-muted-foreground">{tUi('m_169c0ddec4')}</p>
   );
 }
 
@@ -465,6 +476,8 @@ function HoverBody({
   analytics?: MentionAnalyticsContext | null;
   open: boolean;
 }) {
+  const tUi = useTranslations('common');
+
   const ref = suggestion.reference;
   const meta = (ref?.metadata ?? {}) as Record<string, unknown>;
   const type = suggestion.type;
@@ -476,7 +489,7 @@ function HoverBody({
         <div className="min-w-0">
           <p className="text-sm font-medium leading-snug text-foreground">{suggestion.label}</p>
           <p className="mt-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
-            {isPack ? 'Pack' : typeLabel(type)}
+            {isPack ? tUi('m_152a5035bf') : translateControlLabel(typeLabel(type),tUi)}
             {readString(meta, 'kind') ? ` · ${readString(meta, 'kind')}` : null}
             {readString(meta, 'category') ? ` · ${readString(meta, 'category')}` : null}
           </p>
@@ -545,6 +558,8 @@ export function MentionSuggestionHover({
   analytics?: MentionAnalyticsContext | null;
   children: React.ReactElement;
 }) {
+  const tUi = useTranslations('common');
+
   const [open, setOpen] = React.useState(false);
   // Folders: light description hover only (still useful for long childrenLabel).
   const isFolder = Boolean(suggestion.isFolder || suggestion.childrenLabel);
@@ -576,7 +591,7 @@ export function MentionSuggestionHover({
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-medium">{suggestion.label}</p>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {suggestion.childrenLabel ?? suggestion.description ?? 'Open folder'}
+              {suggestion.childrenLabel ?? suggestion.description ?? tUi('m_f963014162')}
             </p>
           </div>
         ) : (

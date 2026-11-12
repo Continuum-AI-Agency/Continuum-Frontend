@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations as useUiTranslations } from 'next-intl';
 import type { PreviewFormat } from '@/components/forge/FormatPreview';
 import { RenderJobsGrid } from '@/components/forge/RenderJobsGrid';
 import { Panel } from '@/components/shared/Panel';
@@ -17,8 +18,10 @@ export function TemplateRenders({
   templateKey: string;
   formats?: PreviewFormat[];
 }) {
+  const translateUi = useUiTranslations('forge');
+
   return (
-    <Panel title="Renders" aria-label="Renders">
+    <Panel title={translateUi('renders_5d75bf75')} aria-label={translateUi('renders_5d75bf75')}>
       <RenderJobsGrid brandId={brandId} templateKey={templateKey} formats={formats} />
     </Panel>
   );
