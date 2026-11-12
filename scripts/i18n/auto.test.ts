@@ -145,20 +145,20 @@ describe('incremental catalog filling', () => {
 });
 
 describe('review automation boundaries', () => {
-  it('runs the credentialed workflow from the default branch and restricts incoming repositories', () => {
+  it('pins trusted base code and restricts incoming repositories', () => {
     const workflow = Bun.YAML.parse(
       readFileSync(new URL('../../.github/workflows/i18n-auto.yml', import.meta.url), 'utf8'),
     ) as {
-      on: { workflow_run: { workflows: string[] } };
+      on: { pull_request_target: { branches: string[] } };
       jobs: {
         drafts: { if: string; steps: Array<{ uses?: string; with?: Record<string, unknown> }> };
       };
     };
-    expect(workflow.on.workflow_run.workflows).toEqual(['I18n inventory']);
-    expect(workflow.jobs.drafts.if).toContain('head_repository.id == github.event.repository.id');
+    expect(workflow.on.pull_request_target.branches).toEqual(['beta','main']);
+    expect(workflow.jobs.drafts.if).toContain('head.repo.id == github.event.repository.id');
     const first = workflow.jobs.drafts.steps[0];
     expect(first.with?.path).toBe('tool');
-    expect(first.with?.ref).toBeUndefined();
+    expect(first.with?.ref).toBe('${{ github.event.pull_request.base.sha }}');
     const source = readFileSync(
       new URL('../../.github/workflows/i18n-auto.yml', import.meta.url),
       'utf8',

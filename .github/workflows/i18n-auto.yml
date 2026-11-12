@@ -1,33 +1,33 @@
 name: I18n drafts
 on:
-  workflow_run:
-    workflows: [I18n inventory]
-    types: [completed]
+  pull_request_target:
+    branches: [beta, main]
+    types: [opened, synchronize, reopened]
+    paths: ['src/**', 'messages/**', 'scripts/i18n/**', 'package.json', 'bun.lock', '.github/workflows/i18n-auto.yml']
 permissions:
   contents: write
   id-token: write
 concurrency:
-  group: i18n-${{ github.event.workflow_run.head_branch }}
+  group: i18n-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 jobs:
   drafts:
-    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.id == github.event.repository.id
+    if: github.event.pull_request.head.repo.id == github.event.repository.id
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # Executable tools and dependencies come from the trusted default branch.
+      # Executable tools and dependencies come from the trusted PR base, never its head.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: tool
+          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
       - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         id: pr
         with:
           script: |
-            const run = context.payload.workflow_run;
-            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({...context.repo,commit_sha:run.head_sha});
-            const pr = prs.data.find(p=>p.state==='open' && p.head.sha===run.head_sha && p.head.repo.id===context.payload.repository.id && ['beta','main'].includes(p.base.ref));
-            if(!pr){core.setOutput('run','false');return;}
+            const {data:pr}=await github.rest.pulls.get({...context.repo,pull_number:context.payload.pull_request.number});
+            if(pr.state!=='open'||pr.head.sha!==context.payload.pull_request.head.sha||pr.head.repo.id!==context.payload.repository.id||!['beta','main'].includes(pr.base.ref)){core.setOutput('run','false');return;}
             if(['beta','main'].includes(pr.head.ref)){core.summary.addRaw('Use a feature PR for translation drafts; release branches require their normal qualification.');await core.summary.write();core.setOutput('run','false');return;}
             core.setOutput('run','true');core.setOutput('sha',pr.head.sha);core.setOutput('base',pr.base.sha);core.setOutput('number',pr.number);core.setOutput('target',pr.head.ref);
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -64,7 +64,7 @@ jobs:
         id: fill
         env:
           BASE_SHA: ${{ steps.pr.outputs.base }}
-          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN: ${{ github.run_id }}
         run: |
           node tool/scripts/i18n/auto.mjs --write --project "$GITHUB_WORKSPACE/incoming" --base "$BASE_SHA" --run-id "github-$SOURCE_RUN" --staging "$RUNNER_TEMP/i18n-drafts" --prefix "gs://continuum-production-477821-creative-benchmarks/i18n/automation/github-$SOURCE_RUN/" --max-characters 10000
       - name: Commit translation drafts back to the originating PR
@@ -72,7 +72,7 @@ jobs:
         working-directory: incoming
         env:
           TARGET_BRANCH: ${{ steps.pr.outputs.target }}
-          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN: ${{ github.run_id }}
         run: |
           git config user.name 'continuum-i18n[bot]'
           git config user.email 'continuum-i18n[bot]@users.noreply.github.com'
