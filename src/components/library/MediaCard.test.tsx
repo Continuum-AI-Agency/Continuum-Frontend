@@ -96,6 +96,29 @@ describe('MediaCard download affordance', () => {
   });
 });
 
+describe('MediaCard HEVC warning', () => {
+  const video = (videoCodec: string | null) =>
+    libraryAsset({
+      kind: 'video',
+      fileName: 'PAUTA_1_MAJITO.mov',
+      mimeType: 'video/quicktime',
+      signedUrl: 'https://cdn.test/pauta.mov',
+      videoCodec,
+    });
+
+  // Easy Fit's PAUTA .mov files played in the editor and only failed at export.
+  it('flags an HEVC video on the card, before anyone builds an export on it', () => {
+    mount(<MediaCard brandId="brand-1" asset={video('HEVC')} />);
+    expect(screen.getByText('HEVC').getAttribute('title')).toContain('H.264');
+  });
+
+  it('leaves H.264 and uncoded videos alone', () => {
+    mount(<MediaCard brandId="brand-1" asset={video('H.264')} />);
+    mount(<MediaCard brandId="brand-1" asset={video(null)} />);
+    expect(screen.queryByText('HEVC')).toBeNull();
+  });
+});
+
 describe('MediaCard thumbnail', () => {
   // Tests run without next.config, so next/image wraps the chosen URL in its loader.
   const imageSrc = () => {

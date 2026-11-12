@@ -1,7 +1,11 @@
 'use client';
 
 import type { LibraryAspectRatioBin, LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
-import { libraryAspectRatioBin, placementPreviewCrops } from '@continuum/contracts';
+import {
+  libraryAspectRatioBin,
+  placementPreviewCrops,
+  videoCodecFamily,
+} from '@continuum/contracts';
 import {
   AudioLines,
   Check,
@@ -882,6 +886,15 @@ export function MediaCard({
                     behind it — every other one (including the skipped_* terminals) has
                     an intact file, so the card offers the save. */}
                 <div className="absolute right-2 top-2 flex items-center gap-1.5">
+                  {/* Plays in most browsers, but the video export's renderer cannot decode it. */}
+                  {asset.kind === 'video' && videoCodecFamily(asset.videoCodec) === 'hevc' ? (
+                    <span
+                      title="HEVC (H.265): video exports can't decode this file. Re-upload it as an H.264 MP4."
+                      className="rounded bg-amber-900/80 px-1.5 py-0.5 text-2xs font-medium text-amber-200"
+                    >
+                      HEVC
+                    </span>
+                  ) : null}
                   <ClipViralityBadge asset={asset} />
                   {asset.kind === 'image' && asset.signedUrl ? (
                     <QuickReformatMenu

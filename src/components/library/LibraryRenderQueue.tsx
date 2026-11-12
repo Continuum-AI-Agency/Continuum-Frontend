@@ -1,7 +1,7 @@
 'use client';
 
 import type { ClientRenderJob } from '@continuum/contracts';
-import { ChevronDown, Cpu, ExternalLink, Film, Loader2, RotateCcw, Square } from 'lucide-react';
+import { ChevronDown, Cpu, ExternalLink, Film, Loader2, RotateCcw, Square, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -77,9 +77,10 @@ export function LibraryRenderQueue() {
               Jobs
             </h2>
             <p className="text-xs text-muted-foreground">
+              {/* The queue spans every brand this person operates, not this device or brand. */}
               {failed > 0
-                ? `${failed} failed · ${jobs.length} on this device`
-                : `${jobs.length} waiting on this device`}
+                ? `${failed} failed · ${jobs.length} across your brands · open to see why`
+                : `${jobs.length} waiting across your brands`}
             </p>
           </div>
           <span className="text-xs tabular-nums text-muted-foreground">{jobs.length}</span>
@@ -158,6 +159,17 @@ export function LibraryRenderQueue() {
                       >
                         <RotateCcw />
                         Retry
+                      </Button>
+                    ) : null}
+                    {job.state === 'failed' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void queue.dismiss(job)}
+                      >
+                        <X />
+                        Dismiss
                       </Button>
                     ) : null}
                     {active && local ? (
