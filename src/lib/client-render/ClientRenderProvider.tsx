@@ -49,6 +49,7 @@ type ClientRenderContextValue = {
   setInboxOpen(open: boolean): void;
   run(job: ClientRenderJob): Promise<void>;
   retry(job: ClientRenderJob): Promise<void>;
+  dismiss(job: ClientRenderJob): Promise<void>;
   stop(job: ClientRenderJob): Promise<void>;
   refresh(): Promise<void>;
   canExecute(job: ClientRenderJob): boolean;
@@ -370,6 +371,12 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
     [replaceJob],
   );
 
+  const dismiss = useCallback(async (job: ClientRenderJob) => {
+    const { dismissClientRenderJob } = await jobsApi();
+    await dismissClientRenderJob(job.id, job.brandId);
+    setJobs((current) => current.filter((entry) => entry.id !== job.id));
+  }, []);
+
   const stop = useCallback(
     async (job: ClientRenderJob) => {
       const localJobId = localJobIds.current.get(job.id);
@@ -409,13 +416,14 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       setInboxOpen,
       run,
       retry,
+      dismiss,
       stop,
       refresh,
       canExecute: (job) => hasClientRenderExecutor(job.kind),
       isRunningLocally: (job) => localJobIds.current.has(job.id),
       willAutoRun,
     }),
-    [inboxOpen, jobs, readyCount, refresh, retry, run, stop, willAutoRun],
+    [dismiss, inboxOpen, jobs, readyCount, refresh, retry, run, stop, willAutoRun],
   );
 
   return <ClientRenderContext.Provider value={value}>{children}</ClientRenderContext.Provider>;

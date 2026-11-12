@@ -7,7 +7,7 @@ import {
   clientRenderMutationResponseSchema,
   listClientRenderJobsResponseSchema,
 } from '@continuum/contracts';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { http } from './http';
 
 type ClaimedResponse = z.infer<typeof claimedClientRenderJobResponseSchema>;
@@ -150,6 +150,19 @@ export function retryClientRenderJob(jobId: string, brandId: string): Promise<Mu
     path: `${base(jobId)}/retry?${new URLSearchParams({ brandId })}`,
     method: 'POST',
     schema: clientRenderMutationResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+/** Takes a failed job out of the queue; the Backend refuses (409) anything not failed. */
+export function dismissClientRenderJob(
+  jobId: string,
+  brandId: string,
+): Promise<{ dismissed: boolean }> {
+  return http.request({
+    path: `${base(jobId)}/dismiss?${new URLSearchParams({ brandId })}`,
+    method: 'POST',
+    schema: z.object({ dismissed: z.boolean() }),
     cache: 'no-store',
   });
 }

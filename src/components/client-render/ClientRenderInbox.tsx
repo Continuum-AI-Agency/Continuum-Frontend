@@ -1,7 +1,7 @@
 'use client';
 
 import type { ClientRenderJob } from '@continuum/contracts';
-import { Cpu, ExternalLink, Loader2, RotateCcw, Square } from 'lucide-react';
+import { Cpu, ExternalLink, Loader2, RotateCcw, Square, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -134,6 +134,17 @@ export function ClientRenderInbox() {
                           >
                             <RotateCcw />
                             Retry
+                          </Button>
+                        ) : null}
+                        {job.state === 'failed' ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void queue.dismiss(job)}
+                          >
+                            <X />
+                            Dismiss
                           </Button>
                         ) : null}
                         {active && queue.isRunningLocally(job) ? (
