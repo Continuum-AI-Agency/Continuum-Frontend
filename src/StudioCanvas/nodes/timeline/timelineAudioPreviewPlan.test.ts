@@ -130,7 +130,7 @@ it('maps repeated nested video and audio sources, retaining independent child an
   const input = {
     project,
     layout: { ...computeLayout([], effectiveItemDuration, 80), totalSec: 6 },
-    blobsByClipId: new Map([
+    mediaByClipId: new Map<string, Blob | string>([
       ['v', videoBlob],
       ['a', audioBlob],
     ]),
