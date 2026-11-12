@@ -1078,6 +1078,7 @@
     "audio_reference_7cc3183d": "Referencia de audio",
     "audio_waveform_9c4fb7e6": "Forma de onda de audio",
     "auto_02862497": "Automático",
+    "auto_582a087c696d": "Capa {count, plural, one {# Capas } other {# Capas }}",
     "auto_ads_e85072f8": "Anuncios automáticos",
     "auto_detect_89ebfb7a": "Detectar automáticamente",
     "automatic_for_this_node_91354caf": ": automático para este nodo",

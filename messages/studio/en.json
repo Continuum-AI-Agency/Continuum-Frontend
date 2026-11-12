@@ -2515,5 +2515,6 @@
 	"composerQuestions": "Questions",
 	"composerWeekTrends": "This week’s trends",
 	"composerUpcomingEvents": "Upcoming events",
-	"composerAudienceQuestions": "Audience questions"
+	"composerAudienceQuestions": "Audience questions",
+	"auto_582a087c696d": "{count, plural, one {# layer} other {# layers}}"
 }

@@ -1078,6 +1078,7 @@
     "audio_reference_7cc3183d": "Referência de áudio",
     "audio_waveform_9c4fb7e6": "Forma de onda de áudio",
     "auto_02862497": "Automático",
+    "auto_582a087c696d": "Camada {count, plural, one {# Camadas } other {# }}",
     "auto_ads_e85072f8": "Anúncios automáticos",
     "auto_detect_89ebfb7a": "Detectar automaticamente",
     "automatic_for_this_node_91354caf": " — automático para este nó",

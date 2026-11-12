@@ -2515,5 +2515,6 @@
 	"composerQuestions": "Perguntas",
 	"composerWeekTrends": "Tendências desta semana",
 	"composerUpcomingEvents": "Próximos eventos",
-	"composerAudienceQuestions": "Perguntas do público"
+	"composerAudienceQuestions": "Perguntas do público",
+	"auto_582a087c696d": "Camada {count, plural, one {# Camadas } other {# }}"
 }

@@ -2515,5 +2515,6 @@
 	"composerQuestions": "Preguntas",
 	"composerWeekTrends": "Tendencias de esta semana",
 	"composerUpcomingEvents": "Próximos eventos",
-	"composerAudienceQuestions": "Preguntas de la audiencia"
+	"composerAudienceQuestions": "Preguntas de la audiencia",
+	"auto_582a087c696d": "Capa {count, plural, one {# Capas } other {# Capas }}"
 }

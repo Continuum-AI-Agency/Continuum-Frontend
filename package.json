@@ -175,7 +175,10 @@
 		"organic:agent:chat:live:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4424 NEXT_PUBLIC_API_URL=http://127.0.0.1:4424 PORT=3134 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3134 NEXT_DIST_DIR=.next/organic-agent-chat-live-e2e playwright test e2e/organic-agent-chat-live.spec.ts --workers=1",
 		"typecheck:hyperframes-native": "bunx tsc -p tsconfig.hyperframes-native.json --noEmit",
 		"i18n:check": "node scripts/i18n/check.mjs",
-		"i18n:sync": "node scripts/i18n/scopes.mjs --write"
+		"i18n:sync": "node scripts/i18n/scopes.mjs --write",
+		"i18n:auto": "node scripts/i18n/auto.mjs --write",
+		"i18n:auto:check": "node scripts/i18n/auto.mjs --check",
+		"i18n:auto:bench": "node scripts/i18n/auto.bench.mjs"
 	},
 	"dependencies": {
 		"@ai-sdk/react": "^4.0.109",

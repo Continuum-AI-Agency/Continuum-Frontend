@@ -222,7 +222,7 @@ export function LayerEditorBlock({
                     className="absolute left-2 top-2 z-20 h-5 px-2 text-2xs"
                     data-testid="layer-editor-count"
                   >
-                    {`${layers.length} ${layers.length === 1 ? 'layer' : 'layers'}`}
+                    {translateUi('auto_582a087c696d', { count: layers.length })}
                   </Badge>
 
                   {/* Edit and Download share the corner. Download renders only once a

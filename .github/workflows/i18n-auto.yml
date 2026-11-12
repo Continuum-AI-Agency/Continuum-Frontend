@@ -1,0 +1,84 @@
+name: I18n drafts
+on:
+  workflow_run:
+    workflows: [I18n inventory]
+    types: [completed]
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: i18n-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+jobs:
+  drafts:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.id == github.event.repository.id
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Executable tools and dependencies come from the trusted default branch.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: tool
+          persist-credentials: false
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        id: pr
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({...context.repo,commit_sha:run.head_sha});
+            const pr = prs.data.find(p=>p.state==='open' && p.head.sha===run.head_sha && p.head.repo.id===context.payload.repository.id && ['beta','main'].includes(p.base.ref));
+            if(!pr){core.setOutput('run','false');return;}
+            if(['beta','main'].includes(pr.head.ref)){core.summary.addRaw('Use a feature PR for translation drafts; release branches require their normal qualification.');await core.summary.write();core.setOutput('run','false');return;}
+            core.setOutput('run','true');core.setOutput('sha',pr.head.sha);core.setOutput('base',pr.base.sha);core.setOutput('number',pr.number);core.setOutput('target',pr.head.ref);
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: steps.pr.outputs.run == 'true'
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+          path: incoming
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: steps.pr.outputs.run == 'true'
+        with:
+          bun-version: 1.4.2
+      - name: Install trusted tool dependencies
+        if: steps.pr.outputs.run == 'true'
+        working-directory: tool
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Plan with trusted code; never execute the incoming PR
+        if: steps.pr.outputs.run == 'true'
+        id: plan
+        env:
+          BASE_SHA: ${{ steps.pr.outputs.base }}
+        run: |
+          node tool/scripts/i18n/auto.mjs --check --project "$GITHUB_WORKSPACE/incoming" --base "$BASE_SHA" > "$RUNNER_TEMP/i18n-plan.json" || test "$?" = 2
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/i18n-plan.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,"changes="+Boolean(p.sourceFiles||p.missingOrChangedTargets)+"\n");'
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        if: steps.plan.outputs.changes == 'true'
+        with:
+          workload_identity_provider: ${{ vars.I18N_WIF_PROVIDER }}
+          service_account: ${{ vars.I18N_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        if: steps.plan.outputs.changes == 'true'
+      - name: Fill static draft catalogs and validate without building
+        if: steps.plan.outputs.changes == 'true'
+        id: fill
+        env:
+          BASE_SHA: ${{ steps.pr.outputs.base }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          node tool/scripts/i18n/auto.mjs --write --project "$GITHUB_WORKSPACE/incoming" --base "$BASE_SHA" --run-id "github-$SOURCE_RUN" --staging "$RUNNER_TEMP/i18n-drafts" --prefix "gs://continuum-production-477821-creative-benchmarks/i18n/automation/github-$SOURCE_RUN/" --max-characters 10000
+      - name: Commit translation drafts back to the originating PR
+        if: steps.fill.outcome == 'success'
+        working-directory: incoming
+        env:
+          TARGET_BRANCH: ${{ steps.pr.outputs.target }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          git config user.name 'continuum-i18n[bot]'
+          git config user.email 'continuum-i18n[bot]@users.noreply.github.com'
+          git add -- src messages
+          if test -f scripts/i18n/translation-drafts.json; then git add -- scripts/i18n/translation-drafts.json; fi
+          git diff --cached --check
+          node ../tool/scripts/i18n/seal-patch.mjs "$RUNNER_TEMP/i18n-drafts" "gs://continuum-production-477821-creative-benchmarks/i18n/automation/github-$SOURCE_RUN/"
+          git commit -m 'chore(i18n): fill offline translation drafts for review'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"

@@ -1078,6 +1078,7 @@
     "audio_reference_7cc3183d": "Audio Reference",
     "audio_waveform_9c4fb7e6": "Audio waveform",
     "auto_02862497": "Auto",
+    "auto_582a087c696d": "{count, plural, one {# layer} other {# layers}}",
     "auto_ads_e85072f8": "Auto-ads",
     "auto_detect_89ebfb7a": "Auto-detect",
     "automatic_for_this_node_91354caf": " — automatic for this node",
