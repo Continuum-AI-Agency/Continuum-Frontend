@@ -70,6 +70,9 @@ export function shortDraftId(draftId: string): string {
 
 export const PAST_DATE_NOTICE = 'This date has passed; pick a new time';
 
+/** A card whose draft never reached the server: it is not a real post until Recreate saves it. */
+export const SAVE_FAILED_NOTICE = 'This post failed to save.';
+
 /** The toast for a scheduled post the persist floor moved off a moment that had passed. */
 export function describeFlooredSchedule(
   title: string,

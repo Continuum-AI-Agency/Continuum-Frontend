@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
+import { usePlannerLocale, weekdayLabels } from '@/lib/organic/calendarLabels';
 import { postPlatformLabel } from '@/lib/organic/postPlatforms';
 import { cn } from '@/lib/utils';
 import { UNSCHEDULED_DAY_ID } from './calendar-utils';
@@ -41,8 +42,6 @@ const ROW_BUTTON_CLASS =
 
 const SECTION_HEADING_CLASS =
   'flex min-h-9 shrink-0 items-center px-3 py-1 text-xs font-semibold uppercase tracking-wide text-foreground';
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 function formatDockDay(dayId: string, options: Intl.DateTimeFormatOptions): string {
   return new Date(`${dayId}T12:00:00`).toLocaleDateString('en-US', options);
@@ -297,6 +296,8 @@ export const PlannerAttentionDock = React.memo(function PlannerAttentionDock({
 }: PlannerAttentionDockProps) {
   const attentionHeadingId = React.useId();
   const lookaheadHeadingId = React.useId();
+  const locale = usePlannerLocale();
+  const weekdays = React.useMemo(() => weekdayLabels(locale, 1), [locale]);
   const hasAttention = showAttention && dock.attention.length > 0;
   const todayId = dock.lookahead.find((day) => !day.past)?.dayId;
 
@@ -360,10 +361,12 @@ export const PlannerAttentionDock = React.memo(function PlannerAttentionDock({
               {lookaheadHeading(dock.openDays)}
             </h2>
             <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-[auto_repeat(4,minmax(0,1fr))] gap-1 px-2 [@container(height<14rem)]:grid-rows-[repeat(4,minmax(0,1fr))] [@container(height<14rem)]:gap-0.5 [@container(height<5.5rem)]:hidden">
-              {WEEKDAYS.map((weekday) => (
+              {weekdays.map((weekday, index) => (
                 <span
-                  key={weekday}
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the seven weekday columns are positional
+                  key={index}
                   aria-hidden
+                  translate="no"
                   className="px-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground [@container(height<14rem)]:hidden"
                 >
                   {weekday}

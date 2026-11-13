@@ -32,15 +32,21 @@ import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRe
 import { pluralize } from '@/lib/format/pluralize';
 import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
+import { usePlannerLocale } from '@/lib/organic/calendarLabels';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { findDraftInDays } from '@/lib/organic/groupDraft';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
-import { describeFlooredSchedule } from '@/lib/organic/organicActionCopy';
+import {
+  describeFlooredSchedule,
+  ORGANIC_ACTION_LABELS,
+  SAVE_FAILED_NOTICE,
+} from '@/lib/organic/organicActionCopy';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform } from '@/lib/organic/postPlatforms';
 import { defaultPublishAccount } from '@/lib/organic/publish-utils';
 import { usePublishAccounts } from '@/lib/organic/publishTargets';
+import { resolveDraftSelection } from '@/lib/organic/resolveDraftSelection';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
 import { getLocalStorageJSON, removeLocalStorage, setLocalStorageJSON } from '@/lib/storage';
@@ -88,6 +94,7 @@ import {
   DraftDeletionConfirmationProvider,
   useDraftDeletionConfirmation,
 } from './DraftDeletionConfirmation';
+import { MissingDraftPanel } from './MissingDraftPanel';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { PlannerAttentionDock } from './PlannerAttentionDock';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
@@ -423,9 +430,18 @@ function OrganicCalendarWorkspaceInner({
     });
   }, [calendarDays, resolveDismissedFocus, selectedId, selectedPost]);
 
+  // A selection that names a draft the hydrated Calendar does not hold (a chat card's "Open in
+  // Calendar", a `?draftId=` link) is shown as MissingDraftPanel. It used to be dropped
+  // silently, so the click did nothing.
+  const [missingDraftId, setMissingDraftId] = React.useState<string | null>(null);
+  const dismissedMissingIdsRef = React.useRef(new Set<string>());
   const closePreview = React.useCallback(() => {
     returnFocusToSelection();
     setSelectedPost(null);
+    setMissingDraftId((current) => {
+      if (current) dismissedMissingIdsRef.current.add(current);
+      return null;
+    });
     clearAll();
   }, [clearAll, returnFocusToSelection]);
   const handleCollapsePreview = React.useCallback(() => {
@@ -812,7 +828,7 @@ function OrganicCalendarWorkspaceInner({
   const handleDeleteSelectedPost = React.useCallback(() => {
     if (deletablePost) void deletePublishedPost(deletablePost);
   }, [deletablePost, deletePublishedPost]);
-  const hasSelection = Boolean(selectedId || previewPost);
+  const hasSelection = Boolean(selectedId || previewPost || missingDraftId);
   // Selection keeps the workflow rail on the "review" stage; only an expanded
   // preview claims layout width.
   const isPreviewOpen = hasSelection && !isPreviewCollapsed;
@@ -834,6 +850,9 @@ function OrganicCalendarWorkspaceInner({
   }, [selectedId]);
 
   const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts]);
+  React.useEffect(() => {
+    if (selectedPost || (selectedId && allDraftIds.has(selectedId))) setMissingDraftId(null);
+  }, [allDraftIds, selectedId, selectedPost]);
 
   // Unified selection sync: prune stale selections and restore preferred
   // draft in a single pass to avoid cascading renders.
@@ -853,37 +872,28 @@ function OrganicCalendarWorkspaceInner({
       // yet. Don't prune the selection until hydration is authoritative, or the
       // back-nav transiently loses the draft being edited.
       if (!isCalendarHydrated) return;
-      // The same post under a new id: removing the card's own platform hands the card to
-      // another member row, which the refetch maps under that row's id. Follow the row.
-      const rowId = lastResolvedDraftRef.current?.backendDraftId;
-      const followed = rowId ? drafts.find((draft) => draft.backendDraftId === rowId) : undefined;
-      if (followed) {
-        if (editingDraftId === selectedId) beginEditingDraft(followed.id);
-        else setSelectedDraftId(followed.id);
+      // The same post under a new id (removing the card's own platform hands the card to
+      // another member row), or a chat card / link naming the row: follow the row. Gone:
+      // say so instead of selecting nothing, or some other draft.
+      const resolved = resolveDraftSelection({
+        requestedId: selectedId,
+        drafts,
+        lastRowId: lastResolvedDraftRef.current?.backendDraftId,
+      });
+      if (resolved.kind === 'select') {
+        if (editingDraftId === selectedId) beginEditingDraft(resolved.draftId);
+        else setSelectedDraftId(resolved.draftId);
         return;
       }
-      // Current selection is stale -- attempt to restore a preferred draft
-      // instead of nulling out then re-selecting on the next render cycle.
-      if (typeof window !== 'undefined') {
-        const preferredDraftId =
-          initialSelectedDraftId ??
-          (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
-        if (
-          preferredDraftId &&
-          allDraftIds.has(preferredDraftId) &&
-          !isAutoSelectSuppressed(preferredDraftId)
-        ) {
-          setSelectedDraftId(preferredDraftId);
-          return;
-        }
-      }
+      if (!dismissedMissingIdsRef.current.has(selectedId)) setMissingDraftId(selectedId);
       setSelectedDraftId(null);
       return;
     }
 
     // No current selection -- try to restore from initial prop / localStorage,
-    // unless the user just dismissed that very draft from the preview panel.
-    if (!selectedId && !selectedPost && typeof window !== 'undefined') {
+    // unless the user just dismissed that very draft from the preview panel, or the panel
+    // is saying the requested one is gone.
+    if (!selectedId && !selectedPost && !missingDraftId && typeof window !== 'undefined') {
       const preferredDraftId =
         initialSelectedDraftId ??
         (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
@@ -904,6 +914,7 @@ function OrganicCalendarWorkspaceInner({
     initialSelectedDraftId,
     isAutoSelectSuppressed,
     isCalendarHydrated,
+    missingDraftId,
     selectedId,
     selectedPost,
     selectedIds,
@@ -922,14 +933,18 @@ function OrganicCalendarWorkspaceInner({
   // undone on the very next render by this watcher re-selecting the same draft.
   React.useEffect(() => {
     if (!searchDraftId || searchDraftId === selectedId) return;
-    if (!isCalendarHydrated || !allDraftIds.has(searchDraftId)) return;
-    if (isAutoSelectSuppressed(searchDraftId)) return;
-    setSelectedDraftId(searchDraftId);
+    if (!isCalendarHydrated || isAutoSelectSuppressed(searchDraftId)) return;
+    const resolved = resolveDraftSelection({ requestedId: searchDraftId, drafts });
+    if (resolved.kind === 'select') {
+      if (resolved.draftId !== selectedId) setSelectedDraftId(resolved.draftId);
+      return;
+    }
+    if (!dismissedMissingIdsRef.current.has(searchDraftId)) setMissingDraftId(searchDraftId);
   }, [
     searchDraftId,
     selectedId,
     isCalendarHydrated,
-    allDraftIds,
+    drafts,
     isAutoSelectSuppressed,
     setSelectedDraftId,
   ]);
@@ -993,14 +1008,18 @@ function OrganicCalendarWorkspaceInner({
     [plannerPlatforms],
   );
 
-  const weekTitle = React.useMemo(() => formatWeekHeading(weekStart), [weekStart]);
+  const plannerLocale = usePlannerLocale();
+  const weekTitle = React.useMemo(
+    () => formatWeekHeading(weekStart, plannerLocale),
+    [plannerLocale, weekStart],
+  );
   // The zone every scheduled time in this planner is expressed in. The app displayed it
   // nowhere, which left every "9:00 AM" ambiguous to anyone not in the brand's zone.
   const plannerTimeZone = React.useMemo(() => resolvePlannerTimeZone(null), []);
   const weekSubtitle = React.useMemo(
     () =>
-      `${formatWeekRange(weekStart)} • ${pluralize(schedulableChannels, 'scheduling channel')} • ${plannerTimeZone}`,
-    [plannerTimeZone, schedulableChannels, weekStart],
+      `${formatWeekRange(weekStart, plannerLocale)} • ${pluralize(schedulableChannels, 'scheduling channel')} • ${plannerTimeZone}`,
+    [plannerLocale, plannerTimeZone, schedulableChannels, weekStart],
   );
 
   const createQuickDraft = React.useCallback(
@@ -1491,6 +1510,36 @@ function OrganicCalendarWorkspaceInner({
     setLocalStorageJSON(PREVIEW_LAYOUT_KEY, percent);
   }, []);
 
+  const showMissingDraft = Boolean(missingDraftId) && !previewDraft && !previewPost;
+  const previewSaveFailed = useCalendarStore((state) =>
+    previewDraft ? state.saveFailedDraftIds.includes(previewDraft.id) : false,
+  );
+  const retryDraftSaves = useCalendarStore((state) => state.retryDraftSaves);
+  // Recreate minted a new row: load it and select it, so the click lands on a real draft.
+  const handleMissingDraftRecreated = React.useCallback(
+    async (recreatedId: string) => {
+      setMissingDraftId((current) => {
+        if (current) dismissedMissingIdsRef.current.add(current);
+        return null;
+      });
+      await refetchCalendarDrafts();
+      setSelectedDraftId(recreatedId);
+      writePlannerUrlState({ tab: 'planner', draftId: recreatedId });
+    },
+    [refetchCalendarDrafts, setSelectedDraftId],
+  );
+  // The row exists after all: the Calendar's copy was stale. Reload and try the id again.
+  const handleMissingDraftExists = React.useCallback(async () => {
+    const id = missingDraftId;
+    setMissingDraftId(null);
+    await refetchCalendarDrafts();
+    if (id) setSelectedDraftId(id);
+  }, [missingDraftId, refetchCalendarDrafts, setSelectedDraftId]);
+  const handleMissingDraftCreatePost = React.useCallback(() => {
+    closePreview();
+    handleGoDraft();
+  }, [closePreview, handleGoDraft]);
+
   const previewLabel = previewPost ? 'Published post preview' : 'Draft preview';
   const previewWhen =
     previewDraft?.dateLabel || (previewPost ? formatPostedWhen(previewPost.post) : '');
@@ -1499,7 +1548,7 @@ function OrganicCalendarWorkspaceInner({
       {/* A draft names itself in its own identity row (account, format, time, ⋯, close); a
           published post keeps this header. The wide panel's collapse chevron sits absolutely
           over the row's left edge, so both rows keep clear of it. */}
-      {!previewDraft && (
+      {!previewDraft && !showMissingDraft && (
         <div
           className={cn(
             'mb-2 flex shrink-0 items-center justify-between gap-2 pb-1.5',
@@ -1525,6 +1574,17 @@ function OrganicCalendarWorkspaceInner({
         </div>
       )}
 
+      {previewSaveFailed ? (
+        <div
+          role="alert"
+          className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive"
+        >
+          <span>{SAVE_FAILED_NOTICE} It isn't in your Calendar until it saves.</span>
+          <Button type="button" size="xs" variant="outline" onClick={retryDraftSaves}>
+            {ORGANIC_ACTION_LABELS.recreateDraft}
+          </Button>
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
         {previewPost ? (
           <PostedContentPreview
@@ -1550,6 +1610,16 @@ function OrganicCalendarWorkspaceInner({
               const target = drafts.find((draft) => draft.id === draftId);
               return target ? approveAndSchedule(target) : false;
             }}
+          />
+        ) : showMissingDraft && missingDraftId ? (
+          <MissingDraftPanel
+            key={missingDraftId}
+            draftId={missingDraftId}
+            brandId={brandProfileId ?? null}
+            onRecreated={handleMissingDraftRecreated}
+            onDraftExists={handleMissingDraftExists}
+            onCreatePost={handleMissingDraftCreatePost}
+            onClose={closePreview}
           />
         ) : (
           // Selection is set but the draft has not resolved from the

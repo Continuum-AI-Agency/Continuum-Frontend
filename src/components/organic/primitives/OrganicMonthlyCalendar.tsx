@@ -2,6 +2,7 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import {
+  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   GalleryHorizontalEnd,
@@ -29,7 +30,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { formatCalendarDate, usePlannerLocale, weekdayLabels } from '@/lib/organic/calendarLabels';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
+import { SAVE_FAILED_NOTICE } from '@/lib/organic/organicActionCopy';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { EMPTY_SELECTION, selectionWithin } from '../hooks/useCalendarSelection';
@@ -58,8 +61,6 @@ const PLATFORM_CHIP_COLORS: Record<string, string> = {
   tiktok: 'bg-neutral-900 text-neutral-50',
   youtube: 'bg-red-700 text-neutral-50',
 };
-
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type OrganicMonthlyCalendarProps = {
   days: OrganicCalendarDay[];
@@ -131,6 +132,7 @@ const DraftChip = React.memo(function DraftChip({
     useDraftDragHandle(draft.id);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const { label: statusLabel } = draftStatusPresentation(draft.status);
+  const saveFailed = useCalendarStore((state) => state.saveFailedDraftIds.includes(draft.id));
 
   // Drag start has to close an open preview, not merely refuse to open a new one: the
   // 272px card otherwise sits under the cursor for the whole drag.
@@ -189,12 +191,18 @@ const DraftChip = React.memo(function DraftChip({
                       // declared in :root, not @theme), so these rings drew in currentColor.
                       isSelected && 'ring-1 ring-primary ring-offset-1',
                       isMultiSelected && !isSelected && 'ring-1 ring-primary/50',
+                      saveFailed && !isSelected && 'ring-1 ring-destructive/60',
                     )}
                     // The chip is coloured by PLATFORM, so without the dot and this title the
                     // month grid was the one surface that named no status at all.
-                    title={`${statusLabel} · ${draft.title || 'Untitled'}`}
+                    title={`${saveFailed ? `${SAVE_FAILED_NOTICE} Open it to recreate.` : statusLabel} · ${draft.title || 'Untitled'}`}
+                    data-save-failed={saveFailed ? '' : undefined}
                   >
-                    <StatusDot status={draft.status} />
+                    {saveFailed ? (
+                      <AlertTriangle className="size-3 shrink-0 text-destructive" aria-hidden />
+                    ) : (
+                      <StatusDot status={draft.status} />
+                    )}
                     <span className="min-w-0 flex-1 truncate">{draft.title || 'Untitled'}</span>
                     <CardTargets draft={draft} className="max-w-[50%] text-3xs font-normal" />
                   </button>
@@ -523,14 +531,19 @@ export function OrganicMonthlyCalendar({
 
   const currentMonth = monthAnchorDate.getMonth();
   const currentYear = monthAnchorDate.getFullYear();
-  const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(
-    new Date(currentYear, currentMonth, 1),
-  );
+  const locale = usePlannerLocale();
+  const monthLabel = formatCalendarDate(new Date(currentYear, currentMonth, 1, 12), locale, {
+    month: 'long',
+    year: 'numeric',
+  });
+  const dayLabels = React.useMemo(() => weekdayLabels(locale), [locale]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-card/50 p-2">
       <header className="mb-2 flex shrink-0 items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">{monthLabel}</h2>
+        <h2 translate="no" className="text-lg font-semibold tracking-tight text-foreground">
+          {monthLabel}
+        </h2>
         <div className="flex items-center gap-1">
           <Button type="button" variant="outline" size="sm" onClick={onToday}>
             Today
@@ -556,10 +569,11 @@ export function OrganicMonthlyCalendar({
         </div>
       </header>
 
-      <div className="grid shrink-0 grid-cols-7 border-b border-border/30 pb-1">
-        {DAY_LABELS.map((label) => (
+      <div translate="no" className="grid shrink-0 grid-cols-7 border-b border-border/30 pb-1">
+        {dayLabels.map((label, index) => (
           <div
-            key={label}
+            // biome-ignore lint/suspicious/noArrayIndexKey: the seven weekday columns are positional
+            key={index}
             className="py-1 text-center text-2xs font-semibold uppercase tracking-wide text-muted-foreground"
           >
             {label}
@@ -613,9 +627,9 @@ export function OrganicMonthlyCalendar({
       <Dialog open={openDayId !== null} onOpenChange={(open) => !open && setOpenDayId(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle translate="no">
               {openDayId
-                ? new Date(`${openDayId}T12:00:00`).toLocaleDateString('en-US', {
+                ? formatCalendarDate(openDayId, locale, {
                     weekday: 'long',
                     month: 'long',
                     day: 'numeric',

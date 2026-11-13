@@ -15,6 +15,7 @@ import {
   PUBLISH_PLATFORM_LABELS,
   type PublishAccountCandidate,
   publishAccountCandidateSchema,
+  unsupportedFormatMessage,
 } from './publish-plan';
 import {
   captionLimits,
@@ -96,7 +97,7 @@ export function publishTargetVerdict(input: {
       ? `Reconnect ${label} to post here`
       : `Connect ${label} to post here`
     : !formatSupported
-      ? `${label} cannot publish a ${format.toLowerCase()}`
+      ? unsupportedFormatMessage(platform, format)
       : !fits
         ? captionTooLongMessage(platform, maxLength, length)
         : null;
