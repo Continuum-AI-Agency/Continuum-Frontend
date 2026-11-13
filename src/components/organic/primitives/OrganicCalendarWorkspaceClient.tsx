@@ -35,6 +35,7 @@ import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-post
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { findDraftInDays } from '@/lib/organic/groupDraft';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
+import { describeFlooredSchedule } from '@/lib/organic/organicActionCopy';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform } from '@/lib/organic/postPlatforms';
@@ -53,7 +54,6 @@ import { useAttachCreative } from '../hooks/useAttachCreative';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
 import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
 import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
-import { canDeletePublishedPost, useDeletePublishedPost } from '../hooks/useDeletePublishedPost';
 import { useCalendarRealtimeSync } from '../hooks/useCalendarRealtimeSync';
 import {
   findSelectionFocusTarget,
@@ -63,6 +63,7 @@ import {
   type SelectionFocusTarget,
   useCalendarSelection,
 } from '../hooks/useCalendarSelection';
+import { canDeletePublishedPost, useDeletePublishedPost } from '../hooks/useDeletePublishedPost';
 import { useDraftGeneration } from '../hooks/useDraftGeneration';
 import { useRescheduleDraft } from '../hooks/useRescheduleDraft';
 import { AiPostComposer } from './AiPostComposer';
@@ -536,6 +537,7 @@ function OrganicCalendarWorkspaceInner({
   const draftAccountIds =
     Object.keys(selectedAccountIds).length > 0 ? selectedAccountIds : platformAccountIds;
 
+  const { show } = useToast();
   const { refetch: refetchCalendarDrafts, isHydrated: isCalendarHydrated } =
     useCalendarDraftPersistence({
       brandProfileId,
@@ -544,6 +546,8 @@ function OrganicCalendarWorkspaceInner({
       updateDraftById,
       platformAccountIds: draftAccountIds,
       timeZone: brandTimeZone,
+      onScheduleFloored: (title, scheduledIso) =>
+        show({ ...describeFlooredSchedule(title, scheduledIso), variant: 'warning' }),
     });
 
   // Server-authoritative freshness: subscribe to Realtime draft writes for this
@@ -958,7 +962,6 @@ function OrganicCalendarWorkspaceInner({
     expandPreview();
   }, [editingDraftId, isPreviewCollapsed, expandPreview]);
 
-  const { show } = useToast();
   const { reschedule, rescheduleMany } = useRescheduleDraft();
 
   const { activeDragDraft, handleDragStart, handleDragEnd, handleNativeDrop } = useCalendarDnD(

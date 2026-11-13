@@ -1,23 +1,17 @@
 'use client';
 
-import { hasApprovablePreview } from '@continuum/contracts';
 import type { LucideIcon } from 'lucide-react';
 import {
-  CalendarDays,
   ChevronDown,
   Clapperboard,
   GalleryHorizontalEnd,
   ImageIcon,
   ImageOff,
-  List,
-  PencilRuler,
   RectangleVertical,
-  RefreshCw,
   Sparkles,
-  Wand2,
   X,
 } from 'lucide-react';
-import { type ButtonHTMLAttributes, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChatMediaCarousel, ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import type { ChatMedia } from '@/components/chat/media/media';
 import { type LightboxItem, MediaLightbox } from '@/components/organic/primitives/MediaLightbox';
@@ -27,7 +21,14 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
 import { resolveConceptPreviewUrls } from './conceptPreview';
-import { type ConceptStatus, resolvePlanItemStatus } from './conceptStatus';
+import { type ConceptStatus, isFailureKind, resolvePlanItemStatus } from './conceptStatus';
+import {
+  DraftCardActions,
+  DraftIdTag,
+  FailureNotice,
+  hasOpenableDraft,
+  RowAction,
+} from './DraftCardActions';
 import { StatusDetail } from './StatusDetail';
 import type { PipelineCardState, PlanItem, PlanItemStatus } from './types';
 
@@ -229,38 +230,6 @@ function BriefRow({ label, value }: { label: string; value: string | null | unde
   );
 }
 
-/** A text-weight row action. The plan footer owns the one filled primary. */
-function RowAction({
-  icon: Icon,
-  children,
-  emphasis,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: LucideIcon;
-  emphasis?: 'primary' | 'danger';
-}) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        'disabled:pointer-events-none disabled:opacity-40',
-        emphasis === 'primary'
-          ? 'font-medium text-foreground/80 hover:bg-muted/60 hover:text-primary'
-          : emphasis === 'danger'
-            ? 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
-            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-        props.className,
-      )}
-    >
-      <Icon className="h-3 w-3" />
-      {children}
-    </button>
-  );
-}
-
 // --- The row ----------------------------------------------------------------
 
 type Props = {
@@ -272,7 +241,8 @@ type Props = {
   dependsOnLabel?: string | null;
   onGenerate: () => void;
   onDismiss?: () => void;
-  onViewDraft?: (draftId: string, target: 'calendar' | 'list') => void;
+  /** Open the planner on this draft; `null` opens the planner (a draft that is gone). */
+  onOpenDraft?: (draftId: string | null) => void;
   /** Stage-2 "Enrich": sketch the blueprint for a text-ready draft. */
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
@@ -293,14 +263,13 @@ export function ConceptCard({
   dependsOnLabel,
   onGenerate,
   onDismiss,
-  onViewDraft,
+  onOpenDraft,
   onEnrichDraft,
   onGenerateMedia,
   onRetryJob,
 }: Props) {
   const [dispatched, setDispatched] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [mediaActionSent, setMediaActionSent] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const detailId = useId();
   // Synchronous latch: setDispatched is async and updates too late to stop a fast
@@ -309,7 +278,8 @@ export function ConceptCard({
 
   const caption = pipeline?.preview?.caption ?? null;
   const brief = concept.creativeBrief ?? null;
-  const draftId = pipeline?.draftId ?? concept.draftId ?? null;
+  // A missing draft's old id points at nothing: never fall back to the plan item's copy of it.
+  const draftId = pipeline?.draftMissing ? null : (pipeline?.draftId ?? concept.draftId ?? null);
 
   // A storyboard frame is a still whatever the draft's format is; only realized media may
   // read its kind from the format. Getting this backwards is what put a PNG in a <video>
@@ -362,39 +332,6 @@ export function ConceptCard({
   });
   const isFailed = state.kind === 'failed' || state.kind === 'media_failed';
 
-  const hasTextDraft = Boolean(
-    draftId &&
-      (pipeline?.checkpoint?.textReady ||
-        state.kind === 'copy_ready' ||
-        state.kind === 'preview_ready' ||
-        state.kind === 'realizing' ||
-        state.kind === 'realized' ||
-        state.kind === 'media_failed'),
-  );
-  const hasPreviewReady = Boolean(pipeline?.checkpoint?.blueprintReady);
-  const previewRevision = pipeline?.checkpoint?.previewRevision;
-  // Approve-through media actions: Enrich while only text exists, Generate media once
-  // the blueprint landed. Neither shows once media is final/user-supplied or rendering.
-  const mediaSettled =
-    mediaStatus === 'ready' || mediaStatus === 'user_supplied' || mediaStatus === 'generating';
-  const showGenerateMedia = Boolean(
-    onGenerateMedia &&
-      draftId &&
-      hasApprovablePreview(pipeline?.checkpoint) &&
-      hasPreviewReady &&
-      !mediaSettled,
-  );
-  // The invariant: an unsettled row always offers an action. Enrich doubles as the
-  // recovery for a blueprint that landed without a usable approval token, because
-  // re-expanding stamps a fresh previewRevision — which is also the media-failure retry.
-  const showEnrich = Boolean(
-    onEnrichDraft &&
-      draftId &&
-      pipeline?.checkpoint?.textReady &&
-      !mediaSettled &&
-      !showGenerateMedia,
-  );
-
   // Clear the latch when a job fails so the retry action can dispatch again; a
   // successful run swaps the row away from the generate action entirely.
   useEffect(() => {
@@ -402,6 +339,7 @@ export function ConceptCard({
   }, [isFailed]);
 
   const failedJobId = isFailed ? (pipeline?.jobId ?? null) : null;
+  const missingJobId = state.kind === 'draft_missing' ? (pipeline?.jobId ?? null) : null;
   const canRetryInPlace = Boolean(failedJobId && onRetryJob);
 
   const handleGenerateClick = () => {
@@ -526,11 +464,11 @@ export function ConceptCard({
           </div>
         )}
 
-        {isFailed && pipeline?.error?.message && (
-          <p className="max-w-[68ch] text-2xs leading-relaxed text-destructive/80 text-pretty">
-            {pipeline.error.message}
-          </p>
-        )}
+        <FailureNotice
+          status={state}
+          error={pipeline?.error ?? null}
+          className="text-2xs leading-relaxed"
+        />
 
         {/* ── Inspection depth ───────────────────────────────────────────── */}
         {expanded && (
@@ -573,81 +511,55 @@ export function ConceptCard({
             <p className="text-2xs text-muted-foreground">Follows {dependsOnLabel}</p>
           )}
 
-          <div className="ml-auto flex flex-wrap items-center gap-0.5">
-            {hasTextDraft && draftId && onViewDraft ? (
-              <>
-                <RowAction icon={CalendarDays} onClick={() => onViewDraft(draftId, 'calendar')}>
-                  Calendar
-                </RowAction>
-                <RowAction icon={List} onClick={() => onViewDraft(draftId, 'list')}>
-                  List
-                </RowAction>
-                {showEnrich && (
+          <DraftIdTag draftId={draftId} />
+
+          {state.kind === 'draft_missing' ||
+          hasOpenableDraft(state, draftId, pipeline?.checkpoint) ? (
+            <DraftCardActions
+              variant="row"
+              status={state}
+              draftId={draftId}
+              checkpoint={pipeline?.checkpoint}
+              format={concept.format ?? null}
+              onRetry={missingJobId && onRetryJob ? () => onRetryJob(missingJobId) : undefined}
+              onOpenDraft={onOpenDraft}
+              onEnrichDraft={onEnrichDraft}
+              onGenerateMedia={onGenerateMedia}
+            />
+          ) : state.advancing || state.kind === 'blind' || state.kind === 'queued' ? null : (
+            <DraftCardActions
+              variant="row"
+              status={state}
+              draftId={null}
+              checkpoint={null}
+              format={concept.format ?? null}
+              onRetry={locked ? undefined : handleGenerateClick}
+              leading={
+                <>
                   <RowAction
-                    icon={PencilRuler}
-                    emphasis="primary"
-                    disabled={mediaActionSent}
-                    title={
-                      state.kind === 'media_failed'
-                        ? 'Re-sketch the blueprint and try the media again'
-                        : hasPreviewReady
-                          ? 'Rebuild the blueprint to refresh its preview approval'
-                          : 'Sketch a low-cost blueprint before final media'
-                    }
-                    onClick={() => {
-                      setMediaActionSent(true);
-                      onEnrichDraft?.(draftId);
-                    }}
+                    icon={X}
+                    emphasis="danger"
+                    disabled={locked || !onDismiss}
+                    onClick={onDismiss}
+                    aria-label="Dismiss this concept"
                   >
-                    {mediaActionSent
-                      ? 'Enriching…'
-                      : state.kind === 'media_failed'
-                        ? 'Try media again'
-                        : hasPreviewReady
-                          ? 'Rebuild preview'
-                          : 'Enrich'}
+                    Dismiss
                   </RowAction>
-                )}
-                {showGenerateMedia && (
-                  <RowAction
-                    icon={Wand2}
-                    emphasis="primary"
-                    disabled={mediaActionSent}
-                    title="Render the final media from the approved blueprint"
-                    onClick={() => {
-                      setMediaActionSent(true);
-                      if (previewRevision) {
-                        onGenerateMedia?.(draftId, concept.format ?? '', previewRevision);
-                      }
-                    }}
-                  >
-                    {mediaActionSent ? 'Generating…' : 'Generate media'}
-                  </RowAction>
-                )}
-              </>
-            ) : state.advancing || state.kind === 'blind' || state.kind === 'queued' ? null : (
-              <>
-                <RowAction
-                  icon={X}
-                  emphasis="danger"
-                  disabled={locked || !onDismiss}
-                  onClick={onDismiss}
-                  aria-label="Dismiss this concept"
-                >
-                  Dismiss
-                </RowAction>
-                <RowAction
-                  icon={isFailed ? RefreshCw : Sparkles}
-                  emphasis="primary"
-                  disabled={locked}
-                  onClick={handleGenerateClick}
-                  aria-label={isFailed ? 'Retry copy draft' : 'Write copy for this concept'}
-                >
-                  {isFailed ? 'Retry' : 'Write copy'}
-                </RowAction>
-              </>
-            )}
-          </div>
+                  {isFailureKind(state.kind) ? null : (
+                    <RowAction
+                      icon={Sparkles}
+                      emphasis="primary"
+                      disabled={locked}
+                      onClick={handleGenerateClick}
+                      aria-label="Write copy for this concept"
+                    >
+                      Write copy
+                    </RowAction>
+                  )}
+                </>
+              }
+            />
+          )}
         </div>
       </div>
 

@@ -14,6 +14,7 @@ import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
+import { ORGANIC_ACTION_LABELS } from '@/lib/organic/organicActionCopy';
 import { useOpenPlannerDraft } from '../openPlannerDraft';
 import { ActiveStagesPanel } from './ActiveStagesPanel';
 import { AeoSnapshotCard } from './AeoSnapshotCard';
@@ -67,8 +68,6 @@ export function useStableRowActions(actions: OrganicMessageRowActions): OrganicM
       onRetryJob: (...args) => latest.current.onRetryJob(...args),
       onPlanDecision: (...args) => latest.current.onPlanDecision(...args),
       onStartBulkRun: (...args) => latest.current.onStartBulkRun(...args),
-      onOpenDraftIn: (...args) => latest.current.onOpenDraftIn(...args),
-      onViewDraft: (...args) => latest.current.onViewDraft(...args),
       onUseAsset: (...args) => latest.current.onUseAsset(...args),
       onSkillSaved: () => latest.current.onSkillSaved(),
       onRetryTurn: (...args) => latest.current.onRetryTurn(...args),
@@ -140,8 +139,6 @@ export type OrganicMessageRowActions = {
   onRetryJob: (jobId: string) => void;
   onPlanDecision: (decision: PlanApprovalDecision) => void;
   onStartBulkRun: (run: BulkRunRef) => void;
-  onOpenDraftIn: (draftId: string, target: 'calendar' | 'list') => void;
-  onViewDraft: (draftId: string) => void;
   onUseAsset: (item: MediaSearchResultsFrame['data']['items'][number]) => void;
   onSkillSaved: () => void;
   onRetryTurn: (messageId: string) => void;
@@ -261,6 +258,8 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
             cardsByToolCallId={pipelineCardsByToolCallId}
             onEnrichDraft={actions.onEnrichDraft}
             onGenerateMedia={actions.onGenerateMedia}
+            onRetryJob={actions.onRetryJob}
+            onOpenDraft={openPlannerDraft}
           />
           <ActiveStagesPanel stages={activeStages} isStreaming={isStreamingRow} />
           {msg.mediaSearchResults && msg.mediaSearchResults.length > 0 && (
@@ -322,7 +321,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
                           onRejectAction={() =>
                             actions.onPlanDecision({ decision: 'reject', planId })
                           }
-                          onViewDraftAction={actions.onOpenDraftIn}
+                          onOpenDraftAction={openPlannerDraft}
                           onEnrichDraftAction={actions.onEnrichDraft}
                           onGenerateMediaAction={actions.onGenerateMedia}
                           onRetryJobAction={actions.onRetryJob}
@@ -443,7 +442,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
               message={msg}
               pipelineCardsByToolCallId={pipelineCardsByToolCallId}
               jobs={jobs}
-              onViewDraft={actions.onViewDraft}
+              onOpenDraft={openPlannerDraft}
             />
           ) : null}
           {msg.role === 'assistant' && msg.error && !autoRetryPending ? (
@@ -492,32 +491,34 @@ function draftIdsForMessage(
   if (toolCallIds.size === 0) return [];
 
   const draftIds = new Set<string>();
+  // A draft whose row is gone is never linked: its card offers Recreate draft instead.
+  // Every path that marks a draft missing also clears its id, so skipping the flag is enough.
   for (const toolCallId of toolCallIds) {
     for (const card of pipelineCardsByToolCallId.get(toolCallId) ?? []) {
-      if (card.draftId) draftIds.add(card.draftId);
+      if (card.draftId && !card.draftMissing) draftIds.add(card.draftId);
     }
   }
   for (const job of Object.values(jobs)) {
-    if (job.toolCallId && toolCallIds.has(job.toolCallId) && job.draftId) {
+    if (job.toolCallId && toolCallIds.has(job.toolCallId) && job.draftId && !job.draftMissing) {
       draftIds.add(job.draftId);
     }
   }
   return Array.from(draftIds);
 }
 
-// Persistent "View post" CTA(s) on an assistant turn that produced a draft, so the
+// Persistent "Open in Calendar" CTA(s) on an assistant turn that produced a draft, so the
 // ready post is always one obvious click away from the chat — the old text-based
 // linkifier never fired because the backend does not emit a "Draft ID:" line.
 function MessageDraftLinks({
   message,
   pipelineCardsByToolCallId,
   jobs,
-  onViewDraft,
+  onOpenDraft,
 }: {
   message: ConversationMessage;
   pipelineCardsByToolCallId: ReadonlyMap<string, PipelineCardState[]>;
   jobs: Readonly<Record<string, AgentJobState>>;
-  onViewDraft: (draftId: string) => void;
+  onOpenDraft: (draftId: string) => void;
 }) {
   const draftIds = draftIdsForMessage(message, pipelineCardsByToolCallId, jobs);
   if (draftIds.length === 0) return null;
@@ -529,10 +530,13 @@ function MessageDraftLinks({
         <button
           key={draftId}
           type="button"
-          onClick={() => onViewDraft(draftId)}
+          onClick={() => onOpenDraft(draftId)}
+          title={draftId}
           className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/40 bg-brand-primary/5 px-3 py-1 text-xs font-medium text-brand-primary transition-colors hover:bg-brand-primary/10"
         >
-          {multiple ? `View post ${index + 1}` : 'View post'}
+          {multiple
+            ? `${ORGANIC_ACTION_LABELS.openInCalendar} (${index + 1})`
+            : ORGANIC_ACTION_LABELS.openInCalendar}
           <ArrowRight className="size-3" />
         </button>
       ))}

@@ -57,6 +57,10 @@ const jobEventDataSchema = z
     // resolveOrganicGenerationDisplay rather than inferring it from the frame type.
     status: organicGenerationStatusEnum.optional(),
     mediaStage: organicMediaStageSchema.optional(),
+    // A completed post_generation job whose draft row no longer exists: the write
+    // never landed, or the post was deleted afterwards (the job's draft_id FK is
+    // ON DELETE SET NULL). The card must offer Recreate, never "Draft ready".
+    draftMissing: z.boolean().optional(),
   })
   .loose();
 
@@ -124,6 +128,7 @@ export const organicLifecyclePhaseEnum = z.enum([
   'scheduled', // approved; will post at its time
   'published', // live on the platform
   'media_failed', // copy survived, the media job did not
+  'draft_missing', // the job finished but its draft row does not exist
   'failed',
   'cancelled',
 ]);
@@ -206,6 +211,12 @@ export const ORGANIC_PHASE_PRESENTATION: Record<OrganicLifecyclePhase, OrganicPh
     label: 'Media didn’t render',
     pill: 'Media failed',
     hint: 'Copy is saved; the media job failed',
+    tone: 'error',
+  },
+  draft_missing: {
+    label: 'This post wasn’t saved',
+    pill: 'Not saved',
+    hint: 'The draft for this post does not exist — it failed to save or was deleted. Recreate it.',
     tone: 'error',
   },
   failed: {
@@ -345,6 +356,7 @@ export function resolveOrganicLifecycle(input: {
   draftStatus?: OrganicDraftStatus | null;
   stage?: PipelineStage | null;
   mediaStage?: OrganicMediaStage | null;
+  draftMissing?: boolean | null;
 }): OrganicLifecycleDisplay {
   const phase = resolveOrganicPhase(input);
   const base = ORGANIC_PHASE_PRESENTATION[phase];
@@ -399,7 +411,10 @@ export function resolveOrganicPhase(input: {
   planItemStatus?: PlanItemStatus | null;
   draftStatus?: OrganicDraftStatus | null;
   mediaStage?: OrganicMediaStage | null;
+  draftMissing?: boolean | null;
 }): OrganicLifecyclePhase {
+  // A missing row outranks every status: there is nothing to show, approve or render.
+  if (input.draftMissing) return 'draft_missing';
   // A media failure outranks the row's own status: it is the one thing that is true
   // whether the job "completed" or "failed", and it is what the user has to act on.
   if (input.mediaStage === 'failed') return 'media_failed';
@@ -418,6 +433,7 @@ export function resolveOrganicGenerationDisplay(input: {
   status: OrganicGenerationStatus;
   stage?: PipelineStage | null;
   mediaStage?: OrganicMediaStage | null;
+  draftMissing?: boolean | null;
 }): OrganicGenerationDisplay {
   const resolved = resolveOrganicLifecycle(input);
   return { label: resolved.label, tone: LEGACY_TONE[resolved.tone] };
@@ -488,6 +504,8 @@ export const organicGenerationSummarySchema = z
     enqueuedAt: z.string().nullable().optional(),
     completedAt: z.string().nullable().optional(),
     error: z.object({ code: z.string().optional(), message: z.string() }).nullable().optional(),
+    // Same meaning as on job events: completed, but its draft row is gone.
+    draftMissing: z.boolean().optional(),
   })
   .loose();
 export type OrganicGenerationSummary = z.infer<typeof organicGenerationSummarySchema>;

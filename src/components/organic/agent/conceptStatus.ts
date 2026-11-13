@@ -34,6 +34,7 @@ export type ConceptStatusKind =
   | 'realizing'
   | 'realized'
   | 'media_failed'
+  | 'draft_missing'
   | 'failed'
   | 'cancelled';
 
@@ -80,6 +81,7 @@ const PHASE_KIND: Record<Exclude<OrganicLifecyclePhase, 'draft_ready'>, ConceptS
   scheduled: 'copy_ready',
   published: 'realized',
   media_failed: 'media_failed',
+  draft_missing: 'draft_missing',
   failed: 'failed',
   cancelled: 'cancelled',
 };
@@ -95,6 +97,8 @@ type ConceptStatusInput = {
   status: OrganicGenerationStatus;
   stage?: PipelineStage | null;
   checkpoint?: CheckpointState | null;
+  /** The job finished but its draft row is gone: outranks every status. */
+  draftMissing?: boolean | null;
 };
 
 export function resolveConceptStatus(input: ConceptStatusInput): ConceptStatus {
@@ -111,6 +115,7 @@ export function resolveConceptStatus(input: ConceptStatusInput): ConceptStatus {
     status: input.status,
     stage: input.stage ?? null,
     mediaStage,
+    draftMissing: input.draftMissing ?? null,
   });
 
   const kind: ConceptStatusKind =
@@ -194,5 +199,13 @@ export function resolvePlanItemStatus(input: {
     status,
     stage: pipeline?.currentStage ?? null,
     checkpoint: pipeline?.checkpoint ?? null,
+    draftMissing: pipeline?.draftMissing ?? null,
   });
+}
+
+/** The phases that are a failure the user must act on, each with its own next action. */
+export function isFailureKind(
+  kind: ConceptStatusKind,
+): kind is 'failed' | 'media_failed' | 'draft_missing' {
+  return kind === 'failed' || kind === 'media_failed' || kind === 'draft_missing';
 }

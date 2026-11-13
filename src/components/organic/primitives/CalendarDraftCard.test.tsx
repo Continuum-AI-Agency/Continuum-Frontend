@@ -852,7 +852,10 @@ describe('CalendarDraftCard', () => {
     );
 
     fireEvent.click(screen.getByText('Ready to render'));
-    fireEvent.click(screen.getByText('Edit in AI Studio'));
+    // One wording everywhere: the stage action and the context menu say the same thing.
+    const studioActions = screen.getAllByText('Open in AI Studio');
+    expect(studioActions).toHaveLength(2);
+    fireEvent.click(studioActions[0]);
     expect(onStitch).toHaveBeenCalledWith('draft-reel-ready');
     expect(onRealize).toHaveBeenCalledWith('draft-reel-ready');
   });
@@ -922,5 +925,44 @@ describe('CalendarDraftCard', () => {
 
     expect(screen.queryByText('Text only — no media yet')).toBeNull();
     expect(screen.queryByText('Blueprint ready')).toBeNull();
+  });
+});
+
+// The persist path floors a past scheduled_date forward so the publish poller does not fire
+// it on its next tick. The card must say the moment passed BEFORE that happens silently.
+describe('CalendarDraftCard past date', () => {
+  beforeEach(() => {
+    storeDays.length = 0;
+  });
+  afterEach(() => cleanup());
+
+  const renderOn = (dayId: string, overrides: Partial<OrganicCalendarDraft> = {}) => {
+    const onDay = { ...draft, ...overrides };
+    storeDays.push({ ...makeCalendarDay(dayId), slots: [onDay] });
+    return render(
+      <CalendarDraftCard
+        draft={onDay}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+  };
+
+  it('tells an unpublished card its time has passed and opens the time editor', async () => {
+    renderOn('2020-01-06', { status: 'scheduled' });
+    expect(screen.getByText('This date has passed; pick a new time')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a time' }));
+    await waitFor(() => expect(screen.getByText('Set posting time')).toBeTruthy());
+  });
+
+  it('says nothing for a future post or a published one', () => {
+    renderOn('2099-01-05');
+    expect(screen.queryByText('This date has passed; pick a new time')).toBeNull();
+    cleanup();
+    storeDays.length = 0;
+    renderOn('2020-01-06', { status: 'published' });
+    expect(screen.queryByText('This date has passed; pick a new time')).toBeNull();
   });
 });
