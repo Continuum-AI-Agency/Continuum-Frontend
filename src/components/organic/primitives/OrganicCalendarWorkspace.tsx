@@ -66,6 +66,8 @@ type OrganicCalendarWorkspaceProps = {
   postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform;
   /** Why the server-side trend fetch failed, when it did — the Trends drawer says so. */
   insightsError?: string | null;
+  /** The read succeeded but the brand has no completed generation: start the first one. */
+  trendsReportMissing?: boolean;
 };
 
 export function OrganicCalendarWorkspace({
@@ -86,6 +88,7 @@ export function OrganicCalendarWorkspace({
   initialComposePlatform,
   postedContentAccountsByPlatform,
   insightsError,
+  trendsReportMissing,
 }: OrganicCalendarWorkspaceProps) {
   const todayId = plannerDayIdInZone(new Date().toISOString(), brandTimeZone);
   const { weekStart: resolvedWeekStart } = resolvePlannerInitialDates({
@@ -116,6 +119,7 @@ export function OrganicCalendarWorkspace({
       initialComposePlatform={initialComposePlatform}
       postedContentAccountsByPlatform={postedContentAccountsByPlatform}
       insightsError={insightsError}
+      trendsReportMissing={trendsReportMissing}
     />
   );
 }

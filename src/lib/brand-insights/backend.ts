@@ -2,6 +2,7 @@ import { trendsStageSchema } from '@continuum/contracts';
 import { z } from 'zod';
 
 import {
+  type BrandInsights,
   brandInsightsDataSchema,
   brandInsightsEventSchema,
   brandInsightsGenerationResponseSchema,
@@ -125,73 +126,6 @@ const backendQuestionSchema = z
     metadata: z.record(z.string(), z.unknown()).nullish(),
   })
   .passthrough();
-
-const backendNicheQuestionsSchema = z.union([
-  z.object({
-    questions: z.array(backendQuestionSchema).default([]),
-    total_generated: z.number().int().nonnegative().nullish(),
-    totalGenerated: z.number().int().nonnegative().nullish(),
-    stats: z
-      .object({
-        count: z.number().int().nonnegative().nullish(),
-      })
-      .nullish(),
-  }),
-  z.string().transform(() => ({ questions: [], total_generated: 0 })),
-]);
-
-const backendQuestionsByNicheSchema = z.object({
-  status: z.string().nullish(),
-  questions_by_niche: z.record(z.string(), backendNicheQuestionsSchema).default({}),
-  questionsByNiche: z.record(z.string(), backendNicheQuestionsSchema).nullish(),
-  summary: z
-    .object({
-      total_niches: z.number().int().nonnegative().nullish(),
-      total_questions: z.number().int().nonnegative().nullish(),
-      average_per_niche: z.number().nullish(),
-      totalNiches: z.number().int().nonnegative().nullish(),
-      totalQuestions: z.number().int().nonnegative().nullish(),
-      averagePerNiche: z.number().nullish(),
-    })
-    .nullish(),
-  generated_at: isoDateSchema.nullish(),
-  generatedAt: isoDateSchema.nullish(),
-});
-
-const backendTrendsAndEventsSchema = z.object({
-  status: z.string().nullish(),
-  trends: z.array(backendTrendSchema).default([]),
-  events: z.array(backendEventSchema).default([]),
-  country: z.string().nullish(),
-  week_analyzed: z.string().nullish(),
-  weekAnalyzed: z.string().nullish(),
-  generated_at: isoDateSchema.nullish(),
-  generatedAt: isoDateSchema.nullish(),
-});
-
-const backendInsightsDataSchema = z.object({
-  generation_id: z.string().nullish(),
-  generationId: z.string().nullish(),
-  trends_and_events: backendTrendsAndEventsSchema.nullish(),
-  trendsAndEvents: backendTrendsAndEventsSchema.nullish(),
-  questions_by_niche: backendQuestionsByNicheSchema.nullish(),
-  questionsByNiche: backendQuestionsByNicheSchema.nullish(),
-  country: z.string().nullish(),
-  week_start_date: z.string().nullish(),
-  weekStartDate: z.string().nullish(),
-  from_cache: z.boolean().nullish(),
-  fromCache: z.boolean().nullish(),
-  selected_social_platforms: z.array(z.string()).nullish(),
-  selectedSocialPlatforms: z.array(z.string()).nullish(),
-});
-
-const backendInsightsResponseSchema = z.object({
-  status: z.string(),
-  message: z.string().nullish(),
-  generated_at: isoDateSchema.nullish(),
-  generatedAt: isoDateSchema.nullish(),
-  data: backendInsightsDataSchema.nullable(),
-});
 
 const backendTotalsSchema = z.object({
   trends: z.number().int().nonnegative().nullish(),
@@ -750,71 +684,6 @@ function mapQuestion(question: z.infer<typeof backendQuestionSchema>) {
   });
 }
 
-function mapQuestionsByNiche(payload: z.infer<typeof backendQuestionsByNicheSchema>) {
-  const questionsByNiche: Record<
-    string,
-    z.infer<typeof brandInsightsQuestionsByNicheSchema>['questionsByNiche'][string]
-  > = {};
-  let totalQuestions = 0;
-
-  const sourceMap = payload.questions_by_niche ?? payload.questionsByNiche ?? {};
-  Object.entries(sourceMap).forEach(([niche, value]) => {
-    if (typeof value === 'string') {
-      questionsByNiche[niche] = {
-        questions: [],
-        totalGenerated: 0,
-      };
-      return;
-    }
-
-    const parsed = backendNicheQuestionsSchema.parse(value);
-    const stats = 'stats' in parsed ? parsed.stats : undefined;
-    const totalGenerated =
-      parsed.total_generated ??
-      ('totalGenerated' in parsed ? parsed.totalGenerated : undefined) ??
-      stats?.count ??
-      undefined;
-    const questions = parsed.questions.map(mapQuestion);
-    totalQuestions += totalGenerated ?? questions.length;
-    questionsByNiche[niche] = {
-      questions,
-      totalGenerated,
-    };
-  });
-
-  const nichesCount = Object.keys(questionsByNiche).length;
-
-  return brandInsightsQuestionsByNicheSchema.parse({
-    status: payload.status ?? undefined,
-    questionsByNiche,
-    summary:
-      payload.summary || nichesCount > 0
-        ? {
-            totalNiches:
-              payload.summary?.total_niches ?? payload.summary?.totalNiches ?? nichesCount,
-            totalQuestions:
-              payload.summary?.total_questions ?? payload.summary?.totalQuestions ?? totalQuestions,
-            averagePerNiche:
-              payload.summary?.average_per_niche ??
-              payload.summary?.averagePerNiche ??
-              (nichesCount > 0 ? totalQuestions / nichesCount : undefined),
-          }
-        : undefined,
-    generatedAt: normalizeTimestamp(payload.generated_at ?? payload.generatedAt),
-  });
-}
-
-function mapTrendsAndEvents(payload: z.infer<typeof backendTrendsAndEventsSchema>) {
-  return brandInsightsTrendsAndEventsSchema.parse({
-    status: payload.status ?? undefined,
-    trends: (payload.trends ?? []).map(mapTrend),
-    events: (payload.events ?? []).map(mapEvent),
-    country: payload.country ?? undefined,
-    weekAnalyzed: payload.week_analyzed ?? payload.weekAnalyzed ?? undefined,
-    generatedAt: normalizeTimestamp(payload.generated_at ?? payload.generatedAt),
-  });
-}
-
 function mapQuestionsByNicheFromWindow(
   payload: Pick<z.infer<typeof backendReadWindowSchema>, 'questions'>,
   generatedAt?: string,
@@ -884,20 +753,6 @@ function extractDateOnly(value?: string | null) {
   return normalized ? normalized.slice(0, 10) : undefined;
 }
 
-function parseLegacyInsightsData(payload: unknown) {
-  const direct = backendInsightsDataSchema.safeParse(payload);
-  if (direct.success) {
-    return direct.data;
-  }
-
-  const nested = z
-    .object({
-      data: backendInsightsDataSchema,
-    })
-    .safeParse(payload);
-  return nested.success ? nested.data.data : undefined;
-}
-
 function selectReadWindow(windows: Array<z.infer<typeof backendReadWindowSchema>>) {
   if (windows.length === 0) return undefined;
   const exactWeek = windows.find((window) => window.days === 7);
@@ -915,42 +770,6 @@ function selectReadWindow(windows: Array<z.infer<typeof backendReadWindowSchema>
   )[0];
 }
 
-function mapLegacyInsightsResponse(payload: z.infer<typeof backendInsightsResponseSchema>) {
-  if (!payload.data) {
-    const reason = payload.message ?? `Brand insights unavailable (status: ${payload.status})`;
-    throw new Error(reason);
-  }
-
-  const data = backendInsightsDataSchema.parse(payload.data);
-  const generationId = data.generation_id ?? data.generationId;
-  const weekStartDate = data.week_start_date ?? data.weekStartDate;
-
-  if (!generationId || !weekStartDate) {
-    throw new Error('Brand insights payload missing required generation metadata');
-  }
-
-  const trendsPayload = data.trends_and_events ?? data.trendsAndEvents;
-  const questionsPayload = data.questions_by_niche ?? data.questionsByNiche;
-  if (!trendsPayload || !questionsPayload) {
-    throw new Error('Brand insights payload missing trends or questions');
-  }
-
-  return brandInsightsSchema.parse({
-    status: payload.status,
-    generatedAt: normalizeTimestamp(payload.generated_at ?? payload.generatedAt),
-    data: brandInsightsDataSchema.parse({
-      generationId,
-      trendsAndEvents: mapTrendsAndEvents(trendsPayload),
-      questionsByNiche: mapQuestionsByNiche(questionsPayload),
-      country: data.country ?? undefined,
-      weekStartDate,
-      fromCache: data.from_cache ?? data.fromCache ?? false,
-      selectedSocialPlatforms:
-        data.selected_social_platforms ?? data.selectedSocialPlatforms ?? undefined,
-    }),
-  });
-}
-
 function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSchema>) {
   if (!payload.data) {
     const reason = payload.message ?? `Brand insights unavailable (status: ${payload.status})`;
@@ -960,9 +779,6 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
   const data = payload.data;
   const anchorTimestamp = normalizeTimestamp(data.anchor_ts ?? data.anchorTs);
   const selectedWindow = selectReadWindow(data.windows);
-  const generationInsights = parseLegacyInsightsData(
-    data.generation_insights ?? data.generationInsights,
-  );
   const generationSnapshot = backendGenerationInsightsSnapshotSchema.safeParse(
     data.generation_insights ?? data.generationInsights,
   );
@@ -975,18 +791,18 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
     data.generation?.id ??
     selectedWindow?.generations[0]?.generation_id ??
     selectedWindow?.generations[0]?.generationId ??
-    selectedWindow?.generations[0]?.id ??
-    generationInsights?.generation_id ??
-    generationInsights?.generationId;
+    selectedWindow?.generations[0]?.id;
+
+  // The Backend answers a brand with no completed generation with a null generation id.
+  // That is "no first report yet" — an empty state, not a failure.
+  if (!generationId) return null;
 
   const weekStartDate =
     data.week?.week_start_date ??
-    generationInsights?.week_start_date ??
-    generationInsights?.weekStartDate ??
     extractDateOnly(selectedWindow?.window_start ?? selectedWindow?.windowStart) ??
     extractDateOnly(anchorTimestamp);
 
-  if (!generationId || !weekStartDate) {
+  if (!weekStartDate) {
     throw new Error('Brand insights payload missing required generation metadata');
   }
 
@@ -1019,11 +835,6 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
     !Array.isArray(latestWeekMetadata)
       ? (latestWeekMetadata as Record<string, unknown>).generation_kind
       : undefined;
-  const legacyTrendsPayload =
-    generationInsights?.trends_and_events ?? generationInsights?.trendsAndEvents;
-  const legacyQuestionsPayload =
-    generationInsights?.questions_by_niche ?? generationInsights?.questionsByNiche;
-
   const trendsAndEvents = generationSnapshot.success
     ? brandInsightsTrendsAndEventsSchema.parse({
         trends: generationSnapshot.data.trends.map(mapTrend),
@@ -1032,22 +843,13 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
       })
     : selectedWindow
       ? mapTrendsAndEventsFromWindow(selectedWindow, generatedAt)
-      : legacyTrendsPayload
-        ? mapTrendsAndEvents(legacyTrendsPayload)
-        : brandInsightsTrendsAndEventsSchema.parse({
-            trends: [],
-            events: [],
-          });
+      : brandInsightsTrendsAndEventsSchema.parse({ trends: [], events: [] });
 
   const questionsByNiche = generationSnapshot.success
     ? mapQuestionsByNicheFromWindow({ questions: generationSnapshot.data.questions }, generatedAt)
     : selectedWindow
       ? mapQuestionsByNicheFromWindow(selectedWindow, generatedAt)
-      : legacyQuestionsPayload
-        ? mapQuestionsByNiche(legacyQuestionsPayload)
-        : brandInsightsQuestionsByNicheSchema.parse({
-            questionsByNiche: {},
-          });
+      : brandInsightsQuestionsByNicheSchema.parse({ questionsByNiche: {} });
 
   return brandInsightsSchema.parse({
     status: payload.status,
@@ -1056,13 +858,7 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
       generationId,
       trendsAndEvents,
       questionsByNiche,
-      country: generationInsights?.country ?? undefined,
       weekStartDate,
-      fromCache: generationInsights?.from_cache ?? generationInsights?.fromCache ?? false,
-      selectedSocialPlatforms:
-        generationInsights?.selected_social_platforms ??
-        generationInsights?.selectedSocialPlatforms ??
-        undefined,
       weeks,
       generationKind: generationKind === 'regeneration' ? 'regeneration' : 'initial',
       generationCount: data.week?.generation_count ?? undefined,
@@ -1070,14 +866,9 @@ function mapReadInsightsResponse(payload: z.infer<typeof backendReadResponseSche
   });
 }
 
-export function mapBackendInsightsResponse(payload: unknown) {
-  const readPayload = backendReadResponseSchema.safeParse(payload);
-  if (readPayload.success) {
-    return mapReadInsightsResponse(readPayload.data);
-  }
-
-  const parsed = backendInsightsResponseSchema.parse(payload);
-  return mapLegacyInsightsResponse(parsed);
+/** Maps a `/api/trends/read` envelope; `null` means the brand has no completed generation yet. */
+export function mapBackendInsightsResponse(payload: unknown): BrandInsights | null {
+  return mapReadInsightsResponse(backendReadResponseSchema.parse(payload));
 }
 
 export function mapBackendGenerationResponse(payload: unknown) {

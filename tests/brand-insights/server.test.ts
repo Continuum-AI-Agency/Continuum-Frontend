@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 
 import { fetchBrandInsights } from '../../src/lib/api/brandInsights.server.ts';
 import { BRAND_TRENDS_SCHEMA } from '../../src/lib/schemas/brandInsights.ts';
@@ -57,6 +57,7 @@ test('fetchBrandInsights includes brand_trends schema header', async () => {
 
   try {
     const result = await fetchBrandInsights('brand-123');
+    assert.ok(result);
     assert.equal(result.status, 'success');
     assert.equal(result.data.generationId, 'gen-1');
   } finally {
@@ -69,34 +70,44 @@ test('fetchBrandInsights includes brand_trends schema header', async () => {
   assert.equal(capturedHeaders.get('x-supabase-schema'), BRAND_TRENDS_SCHEMA);
 });
 
-test('fetchBrandInsights falls back to legacy GET route when read endpoint returns 404', async () => {
+function respondWith(status: number, body: unknown) {
+  return (async () =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    })) as unknown as typeof fetch;
+}
+
+test('fetchBrandInsights resolves null for a brand with no completed generation', async () => {
   const originalFetch = globalThis.fetch;
-  const urls: string[] = [];
-  const methods: string[] = [];
-
-  globalThis.fetch = (async (input, init) => {
-    urls.push(String(input));
-    methods.push(String(init?.method ?? 'GET'));
-
-    if (urls.length === 1) {
-      return new Response(JSON.stringify({ message: 'Not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    return createInsightsResponse();
-  }) as typeof fetch;
-
+  globalThis.fetch = respondWith(200, {
+    status: 'success',
+    data: {
+      status: 'success',
+      brand_id: 'brand-new',
+      generation_id: null,
+      anchor_ts: '2026-11-13T10:00:00.000Z',
+      windows_days: [],
+      windows: [],
+      generation: null,
+      generation_insights: null,
+      week: null,
+      weeks: [],
+    },
+  });
   try {
-    const result = await fetchBrandInsights('brand-123');
-    assert.equal(result.data.generationId, 'gen-1');
+    assert.equal(await fetchBrandInsights('brand-new'), null);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
 
-  assert.match(urls[0] ?? '', /\/api\/trends\/read$/);
-  assert.equal(methods[0], 'POST');
-  assert.match(urls[1] ?? '', /\/api\/trends\/brand-123$/);
-  assert.equal(methods[1], 'GET');
+test('fetchBrandInsights rejects with the Backend reason on a real failure', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = respondWith(409, { status: 'error', message: 'generation_not_servable' });
+  try {
+    await assert.rejects(fetchBrandInsights('brand-123'), /generation_not_servable/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
