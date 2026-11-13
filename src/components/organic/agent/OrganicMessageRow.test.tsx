@@ -45,8 +45,6 @@ const ACTIONS: RowProps['actions'] = {
   onRetryJob: noop,
   onPlanDecision: noop,
   onStartBulkRun: noop,
-  onOpenDraftIn: noop,
-  onViewDraft: noop,
   onUseAsset: noop,
   onSkillSaved: noop,
   onRetryTurn: noop,
@@ -244,7 +242,7 @@ describe('OrganicMessageRow headless batch card', () => {
       </QueryClientProvider>,
     );
     expect(container.querySelector('[data-slot="headless-batch-card"]')).toBeTruthy();
-    fireEvent.click(getByRole('button', { name: 'Open draft for Reel 1' }));
+    fireEvent.click(getByRole('button', { name: 'Open in Calendar for Reel 1' }));
     expect(openPlannerDraft).toHaveBeenCalledWith(draftId);
   });
 });
@@ -287,5 +285,75 @@ describe('OrganicMessageRow approval reply', () => {
     view.rerender(row({ ...answered, approvalReply: true }));
     expect(view.queryByRole('button', { name: 'Copy message' })).toBeTruthy();
     expect(view.queryByRole('button', { name: 'Regenerate response' })).toBeNull();
+  });
+});
+
+describe('OrganicMessageRow ghost draft (bug #417)', () => {
+  afterEach(() => cleanup());
+
+  // A completed post_generation job whose draft row was deleted from the calendar: the
+  // turn must not link to the dead id, and its card must offer the way back.
+  it('never links a missing draft and routes Recreate / Open Calendar to the right handlers', () => {
+    const deadDraftId = '7f95aaaa-0000-4000-8000-000000000000';
+    const msg: RowProps['msg'] = {
+      id: 'a1',
+      role: 'assistant',
+      content: 'Wrote your post.',
+      toolCalls: [{ toolCallId: 'call-1', toolName: 'generatePosts', args: {} }],
+    };
+    let state = panelReducer(initialPanelState(), {
+      type: 'HYDRATE_JOBS',
+      jobs: [
+        {
+          jobId: 'job-1',
+          brandId: 'brand-1',
+          status: 'completed',
+          toolCallId: 'call-1',
+          draftId: deadDraftId,
+        },
+      ],
+    });
+    // The Backend's durable read now says the row is gone.
+    state = panelReducer(state, {
+      type: 'SYNC_GENERATION_SUMMARIES',
+      summaries: [{ jobId: 'job-1', brandId: 'brand-1', status: 'completed', draftMissing: true }],
+    });
+    const onRetryJob = mock((_jobId: string) => {});
+    const openPlannerDraft = mock((_draftId: string | null) => {});
+    const card = state.pipeline['job-1'];
+    const { getByRole, queryByText, getAllByText } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OpenPlannerDraftProvider value={openPlannerDraft}>
+          <ChatTranscript anchors={[]}>
+            <OrganicMessageRow
+              msg={msg}
+              brandId="brand-1"
+              isStreamingRow={false}
+              activeStages={NO_ACTIVE_STAGES}
+              autoRetryPending={false}
+              isStreaming={false}
+              inputDisabled={false}
+              pipeline={state.pipeline}
+              pipelineCardsByToolCallId={new Map([['call-1', [card]]])}
+              planItemStatus={state.planItemStatus}
+              bulkRuns={{}}
+              jobs={state.jobs}
+              actions={{ ...ACTIONS, onRetryJob }}
+            />
+          </ChatTranscript>
+        </OpenPlannerDraftProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(getAllByText('This post wasn’t saved').length).toBeGreaterThan(0);
+    expect(queryByText('Draft ready')).toBeNull();
+    expect(queryByText('View post')).toBeNull();
+    expect(queryByText('Open in Calendar')).toBeNull();
+    expect(queryByText('Open in AI Studio')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Recreate draft' }));
+    expect(onRetryJob).toHaveBeenCalledWith('job-1');
+    fireEvent.click(getByRole('button', { name: 'Open Calendar' }));
+    expect(openPlannerDraft).toHaveBeenCalledWith(null);
   });
 });

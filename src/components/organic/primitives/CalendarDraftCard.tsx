@@ -1,5 +1,6 @@
 'use client';
 
+import { plannerInstantFromDayTime } from '@continuum/contracts';
 import {
   Check,
   CircleDashed,
@@ -43,6 +44,11 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
+import {
+  isUnpublishedPastDue,
+  ORGANIC_ACTION_LABELS,
+  PAST_DATE_NOTICE,
+} from '@/lib/organic/organicActionCopy';
 import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import {
   groupPublishBlocker,
@@ -172,6 +178,18 @@ export function CalendarDraftCard({
   const [duplicatePickerOpen, setDuplicatePickerOpen] = React.useState(false);
   const [pendingTime, setPendingTime] = React.useState(draft.timeLabel);
   const [timeError, setTimeError] = React.useState<string | null>(null);
+  // The day the card sits on, so its time can be read as an instant. The unscheduled shelf
+  // has no date, and so no "past".
+  const cardDayId = useCalendarStore(
+    (state) => state.days.find((day) => day.slots.some((slot) => slot.id === draft.id))?.id ?? null,
+  );
+  const isPastDue = isUnpublishedPastDue({
+    status: draft.status,
+    scheduledAt:
+      cardDayId && cardDayId !== UNSCHEDULED_DAY_ID
+        ? plannerInstantFromDayTime({ dayId: cardDayId, timeOfDay: draft.timeLabel })
+        : null,
+  });
   const [isHoverPreviewOpen, setIsHoverPreviewOpen] = React.useState(false);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
@@ -632,6 +650,38 @@ export function CalendarDraftCard({
                         </div>
                       ) : null}
 
+                      {/* A past moment is not silently "fixed": the persist floor would move a
+                          scheduled post to now + guard, so the card asks for a real time first. */}
+                      {isPastDue ? (
+                        <p
+                          data-slot="past-date-notice"
+                          className="mt-1.5 flex flex-wrap items-center gap-1.5 text-2xs text-warning"
+                        >
+                          <span>{PAST_DATE_NOTICE}</span>
+                          {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="inline-flex items-center rounded border border-warning/40 px-1.5 py-0.5 font-medium hover:bg-warning/10"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPendingTime(draft.timeLabel);
+                              setTimePickerOpen(true);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setPendingTime(draft.timeLabel);
+                                setTimePickerOpen(true);
+                              }
+                            }}
+                          >
+                            Pick a time
+                          </span>
+                        </p>
+                      ) : null}
+
                       {/* Media state — honest about text-only / blueprint drafts.
                         Only realized media earns the image chip; a pending draft
                         shows its storyboard (when ready) or an explicit text-only
@@ -678,7 +728,7 @@ export function CalendarDraftCard({
                               <CardStageAction
                                 label={
                                   draft.mediaSuggestion?.reel?.composition
-                                    ? 'Edit in AI Studio'
+                                    ? ORGANIC_ACTION_LABELS.openInAiStudio
                                     : 'Generate final media'
                                 }
                                 onActivate={() => onRealize(draft.id)}
@@ -846,7 +896,7 @@ export function CalendarDraftCard({
           ) : null}
           {openInStudio && !aiStudioHandoffIssue(draft) ? (
             <ContextMenuItem onSelect={() => openInStudio(draft.id)}>
-              {draft.mediaSuggestion?.reel?.composition ? 'Edit composition' : 'Open in AI Studio'}
+              {ORGANIC_ACTION_LABELS.openInAiStudio}
             </ContextMenuItem>
           ) : null}
           <ContextMenuItem

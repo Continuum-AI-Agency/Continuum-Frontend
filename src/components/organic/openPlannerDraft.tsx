@@ -24,7 +24,10 @@ import { buildPlannerDraftDeepLink } from './agent/presentAgentMessage';
  * notification, another route) it falls back to the deep link, which is the only
  * thing that can work from outside.
  */
-export type OpenPlannerDraft = (draftId: string) => void;
+export type OpenPlannerDraft = (draftId: string | null) => void;
+
+/** `null` opens the planner itself: the card's draft no longer exists to select. */
+const PLANNER_ONLY_LINK = '/organic?tab=planner';
 
 const OpenPlannerDraftContext = React.createContext<OpenPlannerDraft | null>(null);
 
@@ -35,12 +38,12 @@ export function useOpenPlannerDraft(): OpenPlannerDraft {
   const router = useRouter();
 
   return React.useCallback(
-    (draftId: string) => {
+    (draftId: string | null) => {
       if (provided) {
         provided(draftId);
         return;
       }
-      router.push(buildPlannerDraftDeepLink(draftId));
+      router.push(draftId ? buildPlannerDraftDeepLink(draftId) : PLANNER_ONLY_LINK);
     },
     [provided, router],
   );
@@ -54,7 +57,7 @@ export function useWorkspaceOpenPlannerDraft(showPlanner: () => void): OpenPlann
   const setSelectedDraftId = useCalendarStore((state) => state.setSelectedDraftId);
 
   return React.useCallback(
-    (draftId: string) => {
+    (draftId: string | null) => {
       setSelectedDraftId(draftId);
       showPlanner();
       writePlannerUrlState({ tab: 'planner', draftId });

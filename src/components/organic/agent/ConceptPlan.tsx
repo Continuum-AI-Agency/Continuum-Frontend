@@ -32,7 +32,8 @@ type Props = {
   // enqueues them in parallel — this replaces fanning out N per-card approvals.
   onGenerateAllAction: (itemIds: string[]) => void;
   onRejectAction: () => void;
-  onViewDraftAction: (draftId: string, target: 'calendar' | 'list') => void;
+  /** Open the planner on a draft; `null` opens the planner itself (the draft is gone). */
+  onOpenDraftAction: (draftId: string | null) => void;
   onEnrichDraftAction?: (draftId: string) => void;
   onGenerateMediaAction?: (draftId: string, format: string, previewRevision: string) => void;
   onRetryJobAction?: (jobId: string) => void;
@@ -142,7 +143,7 @@ export function ConceptPlan({
   onGenerateItemAction,
   onGenerateAllAction,
   onRejectAction,
-  onViewDraftAction,
+  onOpenDraftAction,
   onEnrichDraftAction,
   onGenerateMediaAction,
   onRetryJobAction,
@@ -279,7 +280,7 @@ export function ConceptPlan({
                 }
                 onGenerateMedia={onGenerateMediaAction}
                 onRetryJob={onRetryJobAction}
-                onViewDraft={onViewDraftAction}
+                onOpenDraft={onOpenDraftAction}
                 pipeline={pipelineFor(item.itemId)}
                 status={resolveStatus(item)}
               />

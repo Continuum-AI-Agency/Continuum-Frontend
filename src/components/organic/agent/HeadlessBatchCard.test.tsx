@@ -308,7 +308,7 @@ describe('HeadlessBatchCard', () => {
 
   it('opens a piece in the planner, its label in the button name', () => {
     const { getByRole, onOpenDraft } = renderCards([batch([item(0), item(1)])]);
-    fireEvent.click(getByRole('button', { name: 'Open draft for Reel 2' }));
+    fireEvent.click(getByRole('button', { name: 'Open in Calendar for Reel 2' }));
     expect(onOpenDraft).toHaveBeenCalledWith(draftId(1));
   });
 
@@ -582,7 +582,7 @@ describe('HeadlessBatchCard', () => {
     expect(row?.textContent).toContain('Piece 2');
     const box = row?.querySelector('[data-slot="headless-batch-item-output"]')?.firstElementChild;
     expect((box as HTMLElement).style.width).toBe('58px');
-    expect(getByRole('button', { name: 'Open draft for Piece 2' })).toBeTruthy();
+    expect(getByRole('button', { name: 'Open in Calendar for Piece 2' })).toBeTruthy();
   });
 
   it('polls only while on screen, and asks at once on coming back after 10 s', async () => {

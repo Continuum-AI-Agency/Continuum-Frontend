@@ -145,6 +145,7 @@ describe('calendar draft persistence utils', () => {
     });
 
     expect(payload.scheduled_date).toBe('2020-01-07T09:00:00.000Z');
+    expect(payload.scheduledDateFloored).toBe(false);
   });
 
   it('DOES floor a past-dated scheduled draft, so the publish poller cannot fire on arrival', () => {
@@ -157,6 +158,21 @@ describe('calendar draft persistence utils', () => {
     });
 
     expect(Date.parse(payload.scheduled_date)).toBeGreaterThan(Date.now());
+    // Reported, so the autosave can tell the user their post moved instead of moving it silently.
+    expect(payload.scheduledDateFloored).toBe(true);
+  });
+
+  it('reports no floor for a scheduled post whose time is still ahead', () => {
+    const payload = buildPersistedDraftPayload({
+      brandId: '11111111-1111-4111-8111-111111111111',
+      weekStartId: '2099-01-05',
+      dayId: '2099-01-06',
+      draft: makeDraft({ status: 'scheduled', timeLabel: '9:00 AM' }),
+      timeZone: 'UTC',
+    });
+
+    expect(payload.scheduled_date).toBe('2099-01-06T09:00:00.000Z');
+    expect(payload.scheduledDateFloored).toBe(false);
   });
 
   it('maps persisted rows back into calendar entries', () => {

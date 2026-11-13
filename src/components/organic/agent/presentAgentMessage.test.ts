@@ -19,10 +19,10 @@ describe('presentAgentMessage', () => {
     expect(message).toContain(buildPlannerDraftDeepLink(ID));
   });
 
-  it('turns a raw draft ID into a friendly Planner link', () => {
+  it('turns a raw draft ID into a friendly Calendar link', () => {
     const message = presentAgentMessage(`Draft ID: ${ID}`);
 
-    expect(message).toContain('[Open in Planner]');
+    expect(message).toContain('[Open in Calendar]');
     expect(message).toContain(`draftId=${ID}`);
     expect(message).not.toContain('Draft ID:');
   });

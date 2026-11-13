@@ -125,6 +125,8 @@ export type AgentJobState = {
   pct?: number;
   error?: { code?: string; message: string };
   draftId?: string;
+  /** Completed, but its draft row no longer exists (deleted, or never saved). */
+  draftMissing?: boolean;
   placement?: CalendarPlacement;
   uiPostCard?: UiPostCard;
   // Signed 512px storyboard URLs from draft.blueprint_ready, keyed to this job's
@@ -198,6 +200,11 @@ export type PipelineCardState = {
   previewStale?: boolean;
   quality?: PipelineQuality | null;
   draftId?: string | null;
+  /**
+   * The job finished but its draft row is gone (deleted from the calendar, or the write
+   * never landed). `draftId` is null alongside it: the old id points at nothing.
+   */
+  draftMissing?: boolean;
   error?: { code?: string; message: string };
   checkpoint?: CheckpointState;
 };
