@@ -48,6 +48,7 @@ import {
   isUnpublishedPastDue,
   ORGANIC_ACTION_LABELS,
   PAST_DATE_NOTICE,
+  SAVE_FAILED_NOTICE,
 } from '@/lib/organic/organicActionCopy';
 import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import {
@@ -217,6 +218,8 @@ export function CalendarDraftCard({
   const accentColor = resolvePlatformAccentColor(platform);
   const FormatGlyph = formatGlyph(draft.format);
   const statusPresentation = draftStatusPresentation(draft.status);
+  const saveFailed = useCalendarStore((state) => state.saveFailedDraftIds.includes(draft.id));
+  const retryDraftSaves = useCalendarStore((state) => state.retryDraftSaves);
   // A week is only scannable if a card can show its whole idea. Cards stay clamped at
   // rest — the grid keeps its rhythm — and reveal the full title/copy on hover, or
   // whenever the card is the selected one being edited.
@@ -427,6 +430,7 @@ export function CalendarDraftCard({
                             compact glyphs give way first (format, then the status dot). */}
                         <span
                           data-card-time=""
+                          translate="no"
                           className="shrink-0 whitespace-nowrap text-2xs font-bold uppercase tabular-nums tracking-wider text-muted-foreground/70 @max-[14rem]/draft-card:tracking-normal"
                         >
                           {draft.timeLabel}
@@ -445,7 +449,9 @@ export function CalendarDraftCard({
                             aria-hidden
                             className="size-2.5 shrink-0 @max-[7rem]/draft-card:hidden"
                           />
-                          <span className="sr-only">{draft.format}</span>
+                          <span className="sr-only" translate="no">
+                            {draft.format}
+                          </span>
                           {needsMedia ? (
                             <span className="inline-flex shrink-0 text-warning" title="Needs media">
                               <ImageOff aria-hidden className="size-2.5" />
@@ -648,6 +654,34 @@ export function CalendarDraftCard({
                             </span>
                           </div>
                         </div>
+                      ) : null}
+
+                      {saveFailed ? (
+                        <p
+                          data-slot="save-failed-notice"
+                          className="mt-1.5 flex flex-wrap items-center gap-1.5 text-2xs text-destructive"
+                        >
+                          <span>{SAVE_FAILED_NOTICE}</span>
+                          {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="inline-flex items-center rounded border border-destructive/40 px-1.5 py-0.5 font-medium hover:bg-destructive/10"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              retryDraftSaves();
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                retryDraftSaves();
+                              }
+                            }}
+                          >
+                            {ORGANIC_ACTION_LABELS.recreateDraft}
+                          </span>
+                        </p>
                       ) : null}
 
                       {/* A past moment is not silently "fixed": the persist floor would move a

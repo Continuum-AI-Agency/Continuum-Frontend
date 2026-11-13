@@ -52,7 +52,7 @@ describe('publishTargetVerdict', () => {
     expect(reason('facebook')).toBe('Reconnect Facebook to post here');
     expect(
       publishTargetVerdict({ platform: 'tiktok', format: 'STORY', caption: null, accounts }).reason,
-    ).toBe('TikTok cannot publish a story');
+    ).toBe("TikTok doesn't publish Stories. Use a post, video or carousel instead.");
     expect(
       publishTargetVerdict({
         platform: 'instagram',

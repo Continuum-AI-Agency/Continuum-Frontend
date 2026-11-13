@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { postPlatformLabel } from './postPlatforms';
 
 const STORAGE_PREFIX = 'continuum:organic-planner:ai-studio-context';
 
@@ -108,13 +109,13 @@ export function aiStudioHandoffIssue(draft: {
   const platform = draft.platforms[0];
   if (platform === 'instagram') return null;
   if (platform === 'linkedin') {
-    return normalizeDraftPostType(draft.format) === 'post'
-      ? null
-      : 'This LinkedIn format is not supported in AI Studio yet.';
+    const postType = normalizeDraftPostType(draft.format);
+    if (postType === 'post') return null;
+    return `AI Studio edits LinkedIn posts only, not a LinkedIn ${postType === 'reel' ? 'video post' : postType}. Edit it here in the Calendar, or change its format to Post to open it in AI Studio.`;
   }
   if (platform === 'tiktok') {
     if (normalizeDraftPostType(draft.format) !== 'post')
-      return 'This TikTok format is not supported in AI Studio yet.';
+      return `AI Studio edits TikTok photo posts only, not a TikTok ${normalizeDraftPostType(draft.format) === 'reel' ? 'video' : 'carousel'}. Edit it here in the Calendar instead.`;
     const hasMedia = Boolean(
       draft.publishingAssets?.length ||
         draft.mediaSuggestion?.assetUrl ||
@@ -122,10 +123,11 @@ export function aiStudioHandoffIssue(draft: {
         draft.mediaSuggestion?.reel,
     );
     if (hasMedia || (draft.mediaStage && draft.mediaStage !== 'text_only'))
-      return 'TikTok media editing is not supported in AI Studio yet.';
+      return "AI Studio can't edit media on a TikTok post yet. Edit it here in the Calendar instead.";
     return null;
   }
-  return `${platform ?? 'This platform'} is not supported in AI Studio yet.`;
+  const named = platform ? `${postPlatformLabel(platform)} post` : 'post';
+  return `AI Studio opens Instagram, LinkedIn and TikTok posts only. Edit this ${named} here in the Calendar.`;
 }
 
 const applyAssetInputSchema = z.object({

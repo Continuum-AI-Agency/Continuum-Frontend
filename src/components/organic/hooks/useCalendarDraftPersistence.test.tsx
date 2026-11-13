@@ -18,6 +18,8 @@ mock.module('@/lib/api/http', () => ({ request: requestMock }));
 
 const updateCalls: unknown[] = [];
 const upsertCalls: unknown[] = [];
+// Flip to make the next inserts fail the way a dropped connection or an RLS refusal does.
+let upsertFails = false;
 const updateChain = {
   update: (payload: unknown) => {
     updateCalls.push(payload);
@@ -25,7 +27,14 @@ const updateChain = {
   },
   upsert: (payload: unknown) => {
     upsertCalls.push(payload);
-    return { select: () => ({ single: async () => ({ data: { id: 'be-new' }, error: null }) }) };
+    return {
+      select: () => ({
+        single: async () =>
+          upsertFails
+            ? { data: null, error: { message: 'network' } }
+            : { data: { id: 'be-new' }, error: null },
+      }),
+    };
   },
   delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
 };
@@ -37,6 +46,7 @@ mock.module('@/lib/supabase/client', () => ({
 }));
 
 const { useCalendarDraftPersistence } = await import('./useCalendarDraftPersistence');
+const { useCalendarStore } = await import('@/lib/organic/store');
 const { withGroupAfterRemoval } = await import('./useFanOutDraft');
 
 const BRAND = 'brand-1';
@@ -91,6 +101,8 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 900));
 beforeEach(() => {
   updateCalls.length = 0;
   upsertCalls.length = 0;
+  upsertFails = false;
+  useCalendarStore.getState().setSaveFailedDraftIds([]);
   requestMock.mockReset();
   onScheduleFloored.mockClear();
 });
@@ -168,6 +180,44 @@ describe('useCalendarDraftPersistence autosave', () => {
     expect(updateCalls).toEqual([]);
     // A plain draft on a past day is never floored, so there is nothing to tell anyone.
     expect(onScheduleFloored).not.toHaveBeenCalled();
+  });
+
+  it('a draft whose insert failed is marked failed-to-save, and Recreate saves it for real', async () => {
+    requestMock.mockResolvedValue({ drafts: [manualRow('be-1', 'Hello')] });
+    const { result } = renderHook(useHarness);
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    await waitFor(() =>
+      expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(1),
+    );
+    await act(settle);
+
+    upsertFails = true;
+    const day = result.current.calendarDays.find((d) => d.id === DAY) as OrganicCalendarDay;
+    act(() => {
+      result.current.appendDraft(day.id, {
+        ...day.slots[0],
+        id: 'local-ghost',
+        clientKey: 'ck-local-ghost',
+        backendDraftId: undefined,
+        title: 'Ghost',
+      } as OrganicCalendarDraft);
+    });
+    await act(settle);
+
+    // The ghost is never silent: the card can say "This post failed to save".
+    expect(upsertCalls).toHaveLength(1);
+    expect(useCalendarStore.getState().saveFailedDraftIds).toEqual(['local-ghost']);
+
+    upsertFails = false;
+    act(() => useCalendarStore.getState().retryDraftSaves());
+    await act(settle);
+
+    // The retry writes the same logical draft (same client_key), so it upserts one row.
+    expect(upsertCalls).toHaveLength(2);
+    expect((upsertCalls[1] as { client_key: string }).client_key).toBe(
+      (upsertCalls[0] as { client_key: string }).client_key,
+    );
+    expect(useCalendarStore.getState().saveFailedDraftIds).toEqual([]);
   });
 
   // The floor stays (a past scheduled_date would publish on the poller's next tick), but the
