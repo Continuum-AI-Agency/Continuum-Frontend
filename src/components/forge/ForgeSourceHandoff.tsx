@@ -98,6 +98,13 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
         setProgress((current) => [...current, `${file.name} uploaded`]);
         setCompletedRefs([...refs]);
       }
+      // Fonts are not a source the agent reads, and a handoff completes with at least one: keep it
+      // open for the project they were sent for.
+      if (!refs.length) {
+        setStatus('ready');
+        setMessage('Fonts added. Now choose the template project that uses them.');
+        return;
+      }
       const { error } = await createSupabaseBrowserClient().functions.invoke('library-upload', {
         body: { action: 'complete_forge_source_intent', brandId, uploadIntentId: intentId, sourceRefs: refs },
       });

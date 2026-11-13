@@ -49,3 +49,27 @@ test('a web component project stays one ZIP, even with a Photoshop file among it
   const files = await expandDesignArchives([project]);
   expect(files).toEqual([project]);
 });
+
+// EasyFit 2026-11-12: "Neusa Font.zip" beside an Illustrator file stayed a ZIP, every ZIP counts as
+// a project, so it was uploaded as a template that never parsed and its fonts never reached the
+// font library. A ZIP of nothing but fonts opens into them; a package that carries fonts does not.
+test('a ZIP of only fonts opens into its fonts; a page that ships its fonts stays one package', async () => {
+  const bytes = new Uint8Array([1, 2, 3]);
+  const fonts = new File(
+    [
+      zipSync({
+        'Neusa/Neusa-Regular.otf': bytes,
+        'Neusa/Neusa-SemiBold.ttf': bytes,
+        'Neusa/License.txt': bytes,
+        '__MACOSX/Neusa/._Neusa-Regular.otf': bytes,
+      }),
+    ],
+    'Neusa Font.zip',
+  );
+  const page = new File([zipSync({ 'index.html': bytes, 'fonts/Brand.otf': bytes })], 'page.zip');
+  const files = await expandDesignArchives([fonts, page]);
+  expect(files.map((f) => f.name)).toEqual(['Neusa-Regular.otf', 'Neusa-SemiBold.ttf', 'page.zip']);
+  expect(files[0].type).toBe('font/otf');
+  expect(files[1].type).toBe('font/ttf');
+  expect(files[2]).toBe(page);
+});
