@@ -67,6 +67,10 @@ export function BrandTrendsHeaderModule({
       setWeekError(null);
       try {
         const result = await fetchBrandInsightsWeek({ brandId, weekStartDate });
+        if (!result) {
+          setWeekError('No Trends report exists for that week.');
+          return;
+        }
         setVisibleInsights({
           trendsAndEvents: result.data.trendsAndEvents,
           questionsByNiche: result.data.questionsByNiche,

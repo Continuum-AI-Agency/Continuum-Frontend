@@ -69,6 +69,8 @@ type TrendWorkbenchProps = {
    * is true of neither, and is why the Trends drawer read as "opens nothing".
    */
   insightsError?: string | null;
+  /** No trends yet because the first report waits on the brand report — not a failure. */
+  waitingForBrandReport?: boolean;
 };
 
 // Only real (uuid) trends can anchor a durable one-shot job; seeded slug trends
@@ -549,11 +551,13 @@ const TrendTableRow = React.memo(function TrendTableRow({
  */
 function TrendWorkbenchEmptyState({
   insightsError,
+  waitingForBrandReport,
   hasAnyTrend,
   isFetching,
   onFetch,
 }: {
   insightsError?: string | null;
+  waitingForBrandReport?: boolean;
   hasAnyTrend: boolean;
   isFetching: boolean;
   onFetch?: () => void;
@@ -583,6 +587,36 @@ function TrendWorkbenchEmptyState({
             {isFetching ? 'Retrying…' : 'Retry'}
           </Button>
         ) : null}
+      </div>
+    );
+  }
+
+  if (!hasAnyTrend && isFetching) {
+    return (
+      <div
+        data-testid="trend-workbench-first-run"
+        role="status"
+        className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-4 text-center text-xs"
+      >
+        <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
+        <p className="font-medium text-foreground">Generating your first trend report</p>
+        <p className="text-muted-foreground">
+          Continuum is scanning your market. This usually takes a minute or two.
+        </p>
+      </div>
+    );
+  }
+
+  if (!hasAnyTrend && waitingForBrandReport) {
+    return (
+      <div
+        data-testid="trend-workbench-waiting"
+        className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-4 text-center text-xs"
+      >
+        <p className="font-medium text-foreground">Your first trend report is on its way</p>
+        <p className="text-muted-foreground">
+          It starts as soon as your brand report is ready. Nothing to do on your side.
+        </p>
       </div>
     );
   }
@@ -639,6 +673,7 @@ export function TrendWorkbench({
   isFetching = false,
   brandProfileId,
   insightsError,
+  waitingForBrandReport,
 }: TrendWorkbenchProps) {
   const [query, setQuery] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState<TrendTypeFilter>('all');
@@ -933,6 +968,7 @@ export function TrendWorkbench({
             {filteredTrends.length === 0 ? (
               <TrendWorkbenchEmptyState
                 insightsError={insightsError}
+                waitingForBrandReport={waitingForBrandReport}
                 hasAnyTrend={trends.length > 0}
                 isFetching={isFetching}
                 onFetch={onFetch}

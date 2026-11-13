@@ -39,7 +39,7 @@ export default async function PrimitivesPage() {
   let questionsError: string | null = null;
 
   if (insightsResult.status === 'fulfilled') {
-    questionsByNiche = insightsResult.value.data.questionsByNiche;
+    if (insightsResult.value) questionsByNiche = insightsResult.value.data.questionsByNiche;
   } else {
     questionsError =
       insightsResult.reason instanceof Error

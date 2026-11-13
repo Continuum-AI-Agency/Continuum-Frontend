@@ -25,6 +25,7 @@ interface RenderCounts {
 }
 
 function renderedCounts(rendered: ReturnType<typeof mapBackendInsightsResponse>): RenderCounts {
+  if (!rendered) throw new Error('The read envelope carried no completed generation.');
   const trends = rendered.data.trendsAndEvents.trends.length;
   const events = rendered.data.trendsAndEvents.events.length;
   const questions =
@@ -199,6 +200,32 @@ async function runFixture(): Promise<void> {
   );
 }
 
+// What the Backend's readTrendsSnapshot answers for a brand that has Trends but no completed
+// generation (pinned on that side by trendsReadService.spec.ts). It must map to the empty
+// state — this envelope used to throw "missing required generation metadata" and toast on
+// every login.
+function runEmptyBrandFixture(): void {
+  const rendered = mapBackendInsightsResponse({
+    status: 'success',
+    data: {
+      status: 'success',
+      brand_id: 'brand-without-generation',
+      generation_id: null,
+      anchor_ts: new Date().toISOString(),
+      windows_days: [],
+      windows: [],
+      generation: null,
+      generation_insights: null,
+      week: null,
+      weeks: [],
+    },
+  });
+  if (rendered !== null) {
+    throw new Error('Empty brand: a read with no generation must map to the empty state (null).');
+  }
+  console.log('Empty-brand render PASS — no generation maps to the empty state, not an error.');
+}
+
 async function runLive(): Promise<boolean> {
   const apiBaseUrl = process.env.CONTINUUM_API_URL?.replace(/\/$/, '');
   const brandId = process.env.TRENDS_BENCH_BRAND_ID?.trim();
@@ -232,6 +259,7 @@ async function runLive(): Promise<boolean> {
 async function main(): Promise<void> {
   console.log('TRENDS RENDER BENCH (browser-path FE mapper)');
   await runFixture();
+  runEmptyBrandFixture();
   const liveRan = await runLive();
   console.log(
     liveRan

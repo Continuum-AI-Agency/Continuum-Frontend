@@ -104,10 +104,8 @@ export function groupMoves(moves: CompetitorMove[]): MoveGroup[] {
   );
 }
 
-/** A trends read for a brand with no completed generation carries no generation id. */
+/** A trends read for a brand with no completed generation maps to `null`. */
 export function trendsFromReadResponse(payload: unknown): BrandInsights | null {
-  const data = (payload as { data?: { generation_id?: unknown } | null } | null)?.data;
-  if (!data || data.generation_id == null) return null;
   return mapBackendInsightsResponse(payload);
 }
 

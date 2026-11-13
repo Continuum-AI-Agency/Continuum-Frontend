@@ -62,7 +62,7 @@ async function request<TResponse = unknown>(
 export async function fetchBrandInsights(
   brandId: string,
   options?: FetchOptions,
-): Promise<BrandInsights> {
+): Promise<BrandInsights | null> {
   const revalidate = options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS;
   const next = { revalidate, tags: [tags.brandInsights(brandId)] };
   const response = await request({

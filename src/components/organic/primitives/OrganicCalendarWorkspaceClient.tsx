@@ -172,6 +172,8 @@ type OrganicCalendarWorkspaceClientProps = {
   postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform;
   /** Why the server-side trend fetch failed, when it did — the Trends drawer says so. */
   insightsError?: string | null;
+  /** The read succeeded but the brand has no completed generation: start the first one. */
+  trendsReportMissing?: boolean;
 };
 
 const NOOP_STRING = (_id: string) => {};
@@ -225,6 +227,7 @@ function OrganicCalendarWorkspaceInner({
   initialComposePlatform,
   postedContentAccountsByPlatform,
   insightsError,
+  trendsReportMissing = false,
 }: OrganicCalendarWorkspaceClientProps) {
   const { requestDraftDeletion } = useDraftDeletionConfirmation();
   const {
@@ -974,9 +977,12 @@ function OrganicCalendarWorkspaceInner({
     drafts,
   });
 
-  const { refresh: refreshTrends, isFetching: isFetchingTrends } = useBrandInsightsRefresh(
-    brandProfileId ?? '',
-  );
+  const {
+    refresh: refreshTrends,
+    isFetching: isFetchingTrends,
+    error: trendsRefreshError,
+    waitingForBrandReport,
+  } = useBrandInsightsRefresh(brandProfileId ?? '', { autoStartFirstRun: trendsReportMissing });
 
   // Rows represent either a creation channel or a platform with content worth viewing.
   // Unsupported empty platforms stay out of the matrix so the week remains scan-friendly.
@@ -1784,7 +1790,8 @@ function OrganicCalendarWorkspaceInner({
                   onGenerateFromTrend={handleGenerateFromTrend}
                   onFetch={brandProfileId ? refreshTrends : undefined}
                   isFetching={isFetchingTrends}
-                  insightsError={insightsError}
+                  insightsError={trendsRefreshError ?? insightsError}
+                  waitingForBrandReport={waitingForBrandReport}
                   brandProfileId={brandProfileId}
                 />
 
