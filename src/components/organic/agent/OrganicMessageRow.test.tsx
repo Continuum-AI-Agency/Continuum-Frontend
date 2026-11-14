@@ -357,3 +357,37 @@ describe('OrganicMessageRow ghost draft (bug #417)', () => {
     expect(openPlannerDraft).toHaveBeenCalledWith(null);
   });
 });
+
+describe('OrganicMessageRow under Chrome page translation', () => {
+  afterEach(() => cleanup());
+
+  // A translated copy of a reply still streaming freezes on its first words: React keeps writing
+  // into the text nodes Chrome replaced. The finished reply is translatable again.
+  it('keeps a streaming reply untranslated, and lets the settled reply be translated', () => {
+    const row = (isStreamingRow: boolean) => (
+      <ChatTranscript anchors={[]}>
+        <OrganicMessageRow
+          msg={{ id: 'r1', role: 'assistant', content: 'Mon: reel.' }}
+          brandId="brand-1"
+          isStreamingRow={isStreamingRow}
+          activeStages={NO_ACTIVE_STAGES}
+          autoRetryPending={false}
+          isStreaming={isStreamingRow}
+          inputDisabled={false}
+          pipeline={{}}
+          pipelineCardsByToolCallId={new Map()}
+          planItemStatus={{}}
+          bulkRuns={{}}
+          jobs={{}}
+          actions={ACTIONS}
+        />
+      </ChatTranscript>
+    );
+
+    const view = render(row(true));
+    // The wrapper that holds the reply's prose, tool calls and cards.
+    expect(view.container.querySelector('div.space-y-2')?.getAttribute('translate')).toBe('no');
+    view.rerender(row(false));
+    expect(view.container.querySelector('div.space-y-2')?.hasAttribute('translate')).toBe(false);
+  });
+});

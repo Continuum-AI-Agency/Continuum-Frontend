@@ -91,6 +91,7 @@ import { buildCanvasReference, getCanvasPreview } from './canvasMentions';
 import { resolveConceptPreviewUrls } from './conceptPreview';
 import { DraftTrayPreview } from './DraftTrayPreview';
 import { deriveOrganicAnchors } from './deriveOrganicAnchors';
+import { MessageRowBoundary } from './MessageRowBoundary';
 import {
   NO_ACTIVE_STAGES,
   OrganicMessageRow,
@@ -391,13 +392,11 @@ export function OrganicAgentPanel({
     // Fetch-all reload pulls in the new draft wherever it landed.
     requestCalendarRefetch();
   }, [requestCalendarRefetch]);
-  const { start, startControl, cancel, detach, isStreaming, liveRunId } = useOrganicAgentStream(
-    dispatch,
-    {
+  const { start, startControl, reattach, cancel, detach, isStreaming, liveRunId } =
+    useOrganicAgentStream(dispatch, {
       onRunStarted: attachRun,
       onCalendarDraftSignal: handleCalendarDraftSignal,
-    },
-  );
+    });
 
   // Render a turn that was already in flight when we got here — you sent a message,
   // navigated away, and came back. The app-level store kept tailing the run the whole time;
@@ -997,6 +996,17 @@ export function OrganicAgentPanel({
       const idx = state.messages.findIndex((m) => m.id === assistantMessageId);
       if (idx === -1) return false;
 
+      // The connection dropped but the run kept going: pick it up in the same bubble. Re-sending
+      // the question would answer it twice, and file a second copy of it in the history.
+      const { resumeRun } = state.messages[idx];
+      if (resumeRun) {
+        dispatch({ type: 'RESUME_STREAMING', messageId: assistantMessageId });
+        reattach({ brandId, sessionId: currentSessionId, run: resumeRun })
+          .then(() => debouncedRefreshSessions())
+          .catch(() => {});
+        return true;
+      }
+
       let userMessage: ConversationMessage | undefined;
       for (let i = idx - 1; i >= 0; i--) {
         if (state.messages[i].role === 'user') {
@@ -1036,6 +1046,7 @@ export function OrganicAgentPanel({
       brandId,
       scopedPlatformAccountIds,
       start,
+      reattach,
       activeSessionId,
       debouncedRefreshSessions,
     ],
@@ -1766,18 +1777,19 @@ export function OrganicAgentPanel({
               {state.messages.map((msg) => {
                 const isStreamingRow = msg.id === state.streamingMessageId;
                 return (
-                  <OrganicMessageRow
-                    key={msg.id}
-                    msg={msg}
-                    brandId={brandId}
-                    isStreamingRow={isStreamingRow}
-                    activeStages={isStreamingRow ? activeStages : NO_ACTIVE_STAGES}
-                    autoRetryPending={state.pendingAutoRetry === msg.id}
-                    isStreaming={isStreaming}
-                    inputDisabled={inputDisabled}
-                    {...rowRunState(msg, runState)}
-                    actions={rowActions}
-                  />
+                  <MessageRowBoundary key={msg.id} messageId={msg.id}>
+                    <OrganicMessageRow
+                      msg={msg}
+                      brandId={brandId}
+                      isStreamingRow={isStreamingRow}
+                      activeStages={isStreamingRow ? activeStages : NO_ACTIVE_STAGES}
+                      autoRetryPending={state.pendingAutoRetry === msg.id}
+                      isStreaming={isStreaming}
+                      inputDisabled={inputDisabled}
+                      {...rowRunState(msg, runState)}
+                      actions={rowActions}
+                    />
+                  </MessageRowBoundary>
                 );
               })}
               {state.pendingToolApprovals.length > 0 && (

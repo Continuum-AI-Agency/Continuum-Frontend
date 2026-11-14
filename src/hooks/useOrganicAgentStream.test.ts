@@ -643,7 +643,8 @@ describe('useOrganicAgentStream resume loop', () => {
     });
     view.unmount();
 
-    expect(resumeUrls).toEqual(['/api/organic/agent/runs/run_hook_1/events?after_seq=2']);
+    // after_seq is exclusive on the Backend (seq > after_seq), so it names the last seq folded.
+    expect(resumeUrls).toEqual(['/api/organic/agent/runs/run_hook_1/events?after_seq=1']);
     expect(actions.filter((a) => a.type === 'STREAM_ERROR')).toHaveLength(0);
     expect(actions.filter((a) => a.type === 'STREAM_COMPLETE').length).toBeGreaterThanOrEqual(1);
     expect(
