@@ -106,6 +106,16 @@ describe('run lifecycle frames', () => {
     expect(parsed.success).toBe(true);
   });
 
+  // The client's optimistic bubble adopts this id; a schema that stripped it would leave the
+  // bubble and its persisted row as two different messages.
+  it('agent.chat_started keeps the id of the user message the turn persisted', () => {
+    const parsed = agentChatStartedFrameSchema.parse({
+      type: AGENT_CHAT_STARTED,
+      data: { runId: 'run_1', sessionId: 'sess_1', agent: 'organic', userMessageId: '101' },
+    });
+    expect(parsed.data.userMessageId).toBe('101');
+  });
+
   it('agent.run_queued names the session the run is fenced behind', () => {
     const parsed = agentRunQueuedFrameSchema.safeParse({
       type: AGENT_RUN_QUEUED,

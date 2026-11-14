@@ -223,7 +223,9 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
   return (
     <>
       <ChatMessage id={msg.id} role={msg.role}>
-        <div className="space-y-2">
+        {/* Chrome's page translation swaps text nodes for its own; a reply still streaming
+            would keep writing into the detached originals. Translated once it settles. */}
+        <div className="space-y-2" translate={isStreamingRow ? 'no' : undefined}>
           {msg.role === 'assistant' ? (
             msg.content ? (
               <SafeMarkdown

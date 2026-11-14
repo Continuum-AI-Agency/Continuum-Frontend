@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+// A chat turn streams for as long as the agent works — minutes when it retries a tool or
+// delegates. Without this the platform default cut the proxy mid-answer, the browser saw the
+// stream break, and the turn looked failed while the Backend kept running it. 300 s is the
+// ceiling every Vercel plan allows; a longer turn is picked up by the client's replay poll.
+export const maxDuration = 300;
+
 const HOP_BY_HOP_HEADERS = [
   'connection',
   'keep-alive',
