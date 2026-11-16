@@ -18,6 +18,8 @@ type OrganicTrendsDrawerProps = {
   isFetching?: boolean;
   /** Set when the server-side trend fetch failed, so the workbench can say so. */
   insightsError?: string | null;
+  /** The first trend report waits on the brand report. */
+  waitingForBrandReport?: boolean;
   /** Required by the workbench's per-trend citations query; without it, it stays disabled. */
   brandProfileId?: string;
 };
@@ -34,6 +36,7 @@ export function OrganicTrendsDrawer({
   onFetch,
   isFetching,
   insightsError,
+  waitingForBrandReport,
   brandProfileId,
 }: OrganicTrendsDrawerProps) {
   return (
@@ -56,6 +59,7 @@ export function OrganicTrendsDrawer({
             onFetch={onFetch}
             isFetching={isFetching}
             insightsError={insightsError}
+            waitingForBrandReport={waitingForBrandReport}
             brandProfileId={brandProfileId}
           />
         </div>

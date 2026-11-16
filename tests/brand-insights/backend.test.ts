@@ -1,101 +1,12 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'bun:test';
 
 import {
   mapBackendGenerationResponse,
   mapBackendInsightsResponse,
-  mapBackendProfileResponse,
   mapBackendStatusMessage,
   mapBackendStatusResponse,
 } from '../../src/lib/brand-insights/backend.ts';
-
-test('mapBackendInsightsResponse normalizes snake_case fields', () => {
-  const payload = {
-    status: 'success',
-    generated_at: '2024-07-01T00:00:00Z',
-    data: {
-      generation_id: 'gen-123',
-      trends_and_events: {
-        status: 'success',
-        trends: [
-          {
-            id: 'trend-1',
-            title: 'AI-driven personalization',
-            description: null,
-            relevance_to_brand: 'Highly aligned with current campaigns',
-            source: 'Forrester',
-            is_selected: null,
-            times_used: null,
-          },
-        ],
-        events: [
-          {
-            id: 'event-1',
-            title: 'Black Friday',
-            date: '2024-11-29',
-            description: 'Seasonal spike',
-            opportunity: 'Launch gift bundles',
-            is_selected: true,
-            times_used: 1,
-          },
-        ],
-        country: 'US',
-        week_analyzed: '2024-W27',
-        generated_at: '2024-07-01T00:00:00Z',
-      },
-      questions_by_niche: {
-        status: 'success',
-        questions_by_niche: {
-          Fitness: {
-            questions: [
-              {
-                id: 'q1',
-                question: 'How do I stay consistent when traveling?',
-                social_platform: 'instagram',
-                content_type_suggestion: 'story',
-                why_relevant: 'Matches brand travel audience',
-                is_selected: null,
-                times_used: null,
-              },
-            ],
-            total_generated: 1,
-          },
-        },
-        summary: {
-          total_niches: 1,
-          total_questions: 1,
-          average_per_niche: 1,
-        },
-        generated_at: '2024-07-01T00:00:00Z',
-      },
-      country: 'US',
-      week_start_date: '2024-07-01',
-      from_cache: true,
-      selected_social_platforms: ['instagram'],
-    },
-  };
-
-  const result = mapBackendInsightsResponse(payload);
-
-  assert.equal(result.status, 'success');
-  assert.equal(result.data.generationId, 'gen-123');
-  assert.equal(
-    result.data.trendsAndEvents.trends[0].relevanceToBrand,
-    'Highly aligned with current campaigns',
-  );
-  assert.equal(result.data.trendsAndEvents.trends[0].timesUsed, 0);
-  assert.equal(result.data.trendsAndEvents.events[0].date, '2024-11-29');
-  assert.equal(
-    result.data.questionsByNiche.questionsByNiche.Fitness.questions[0].socialPlatform,
-    'instagram',
-  );
-  assert.equal(
-    result.data.questionsByNiche.questionsByNiche.Fitness.questions[0].isSelected,
-    false,
-  );
-  assert.equal(result.data.fromCache, true);
-  assert.deepEqual(result.data.selectedSocialPlatforms, ['instagram']);
-});
 
 test('mapBackendInsightsResponse maps edge-backed /api/trends/read payload using the 7-day window', () => {
   const payload = {
@@ -160,6 +71,7 @@ test('mapBackendInsightsResponse maps edge-backed /api/trends/read payload using
   };
 
   const result = mapBackendInsightsResponse(payload);
+  assert.ok(result);
 
   assert.equal(result.status, 'success');
   assert.equal(result.generatedAt, '2026-02-21T18:00:00.000Z');
@@ -170,49 +82,6 @@ test('mapBackendInsightsResponse maps edge-backed /api/trends/read payload using
   assert.equal(
     result.data.questionsByNiche.questionsByNiche.B2B.questions[0].socialPlatform,
     'linkedin',
-  );
-});
-
-test('mapBackendInsightsResponse falls back to generation_insights when read windows are empty', () => {
-  const payload = {
-    status: 'success',
-    data: {
-      status: 'success',
-      brand_id: 'brand-123',
-      generation_id: 'gen-legacy',
-      anchor_ts: '2026-02-21T18:00:00.000Z',
-      windows_days: [7, 30],
-      windows: [],
-      generation_insights: {
-        generation_id: 'gen-legacy',
-        week_start_date: '2026-02-17',
-        trends_and_events: {
-          trends: [{ id: 't1', title: 'UGC momentum' }],
-          events: [],
-        },
-        questions_by_niche: {
-          questions_by_niche: {
-            Retail: {
-              questions: [{ id: 'q1', question_text: 'What should we post tomorrow?' }],
-            },
-          },
-        },
-        from_cache: true,
-        selected_social_platforms: ['instagram'],
-      },
-    },
-  };
-
-  const result = mapBackendInsightsResponse(payload);
-
-  assert.equal(result.data.generationId, 'gen-legacy');
-  assert.equal(result.data.weekStartDate, '2026-02-17');
-  assert.equal(result.data.fromCache, true);
-  assert.deepEqual(result.data.selectedSocialPlatforms, ['instagram']);
-  assert.equal(result.data.trendsAndEvents.trends[0].title, 'UGC momentum');
-  assert.equal(
-    result.data.questionsByNiche.questionsByNiche.Retail.questions[0].question,
-    'What should we post tomorrow?',
   );
 });
 
@@ -437,100 +306,33 @@ test('mapBackendStatusMessage normalizes message event payloads', () => {
   assert.deepEqual(result.payload, { source_count: 14 });
 });
 
-test('mapBackendProfileResponse maps new strategic analysis fields', () => {
-  const payload = {
+// The exact envelope readTrendsSnapshot (Backend) returns for a brand with no completed generation.
+const NO_GENERATION_READ = {
+  status: 'success',
+  data: {
     status: 'success',
-    data: {
-      brand_id: 'brand-abc',
-      brand_summary: 'Premium fitness brand focused on mobility.',
-      brand_foundation: {
-        mission: 'Empower everyday athletes',
-        vision: 'Movement without pain',
-        core_values: ['Consistency', 'Curiosity', ''],
-        niches: ['Mobility'],
-      },
-      niches: ['Strength'],
-      audience_profile: {
-        summary: 'Busy professionals seeking quick wins',
-        pain_points: ['Lack of time'],
-        motivations: ['Visible progress'],
-        segments: [
-          { name: 'Corporate athletes', description: 'Office workers training after hours' },
-        ],
-      },
-      competitive_landscape: {
-        top_competitors: [
-          {
-            name: 'GymCo',
-            strategy: 'Price leader',
-            messaging: 'Strong every day',
-            urls: ['https://gym.co'],
-          },
-        ],
-      },
-      brand_voice: {
-        tone: 'Encouraging',
-        keywords: ['mobile', 'resilient', ''],
-        emoji_usage: 'light',
-        key_messaging: ['Progress over perfection'],
-      },
-    },
-  };
+    brand_id: 'brand-new',
+    generation_id: null,
+    anchor_ts: '2026-11-13T10:00:00.000Z',
+    windows_days: [],
+    windows: [],
+    generation: null,
+    generation_insights: null,
+    week: null,
+    weeks: [],
+  },
+};
 
-  const result = mapBackendProfileResponse(payload);
-
-  assert.equal(result.status, 'success');
-  assert.equal(result.brandId, 'brand-abc');
-  assert.equal(result.mission, 'Empower everyday athletes');
-  assert.deepEqual(result.coreValues, ['Consistency', 'Curiosity']);
-  assert.deepEqual(result.niches, ['Strength']);
-  assert.equal(result.audience?.summary, 'Busy professionals seeking quick wins');
-  assert.equal(result.audience?.painsAndFears?.[0], 'Lack of time');
-  assert.equal(result.audience?.motivationsAndTriggers?.[0], 'Visible progress');
-  assert.equal(result.competitors?.[0].name, 'GymCo');
-  assert.equal(result.brandVoice?.tone, 'Encouraging');
-  assert.deepEqual(result.brandVoice?.keywords, ['mobile', 'resilient']);
+test('mapBackendInsightsResponse maps a brand with no generation yet to null, not an error', () => {
+  assert.equal(mapBackendInsightsResponse(NO_GENERATION_READ), null);
 });
 
-test('mapBackendInsightsResponse handles question_text and niche stats', () => {
+test('mapBackendInsightsResponse still throws for a generation it cannot place in a week', () => {
   const payload = {
     status: 'success',
-    data: {
-      generation_id: 'gen-abc',
-      trends_and_events: {
-        trends: [],
-        events: [],
-      },
-      questions_by_niche: {
-        questions_by_niche: {
-          wellness: {
-            questions: [
-              {
-                id: 'q1',
-                question_text: 'How do I stay consistent?',
-                social_platform: 'instagram',
-                content_type_suggestion: 'Carousel',
-                why_relevant: 'Seasonal',
-              },
-            ],
-            stats: { count: 2 },
-          },
-        },
-      },
-      country: 'US',
-      week_start_date: '2025-11-24',
-    },
+    data: { generation_id: 'gen-1', windows_days: [7], windows: [] },
   };
-
-  const result = mapBackendInsightsResponse(payload);
-
-  assert.equal(result.data.questionsByNiche.questionsByNiche.wellness.totalGenerated, 2);
-  assert.equal(
-    result.data.questionsByNiche.questionsByNiche.wellness.questions[0].question,
-    'How do I stay consistent?',
-  );
-  assert.equal(result.data.questionsByNiche.summary?.totalQuestions, 2);
-  assert.equal(result.data.questionsByNiche.summary?.totalNiches, 1);
+  assert.throws(() => mapBackendInsightsResponse(payload), /missing required generation metadata/);
 });
 
 test('mapBackendInsightsResponse throws when data is null', () => {
@@ -543,80 +345,22 @@ test('mapBackendInsightsResponse throws when data is null', () => {
   assert.throws(() => mapBackendInsightsResponse(payload), /No insights yet/);
 });
 
-test('mapBackendProfileResponse gracefully handles onboarding_required', () => {
-  const result = mapBackendProfileResponse({
-    status: 'onboarding_required',
-    data: null,
-  });
-
-  assert.equal(result.status, 'onboarding_required');
-  assert.equal(result.brandId, undefined);
-});
-
-test('mapBackendProfileResponse drops empty competitor rows and voice noise', () => {
-  const payload = {
-    status: 'success',
-    data: {
-      brand_id: 'brand-empty',
-      brand_foundation: {
-        mission: 'Do more with less',
-      },
-      competitive_landscape: {
-        top_competitors: [
-          { name: '', strategy: 'missing name', urls: [''] },
-          { name: 'Named', primary_url: 'https://example.com', messaging: null, strategy: null },
-        ],
-      },
-      brand_voice: {
-        tone: null,
-        keywords: [null, 'sharp'],
-        emoji_usage: 'minimal',
-        key_messaging: [''],
-      },
-    },
-  };
-
-  const result = mapBackendProfileResponse(payload);
-
-  assert.equal(result.competitors?.length, 1);
-  assert.equal(result.competitors?.[0].name, 'Named');
-  assert.deepEqual(result.brandVoice?.keywords, ['sharp']);
-  assert.equal(result.brandVoice?.keyMessaging, undefined);
-});
-
 test('mapBackendInsightsResponse falls back to event_date and defaults selection flags', () => {
   const payload = {
     status: 'success',
     data: {
       generation_id: 'gen-xyz',
-      trends_and_events: {
+      anchor_ts: '2024-09-01T12:00:00.000Z',
+      generation_insights: {
         trends: [],
-        events: [
-          {
-            id: 'event-legacy',
-            title: 'Launch',
-            event_date: '2024-09-01',
-          },
-        ],
+        events: [{ id: 'event-1', title: 'Launch', event_date: '2024-09-01' }],
+        questions: [{ id: 'q-1', question: 'What changed?', platform: 'tiktok', niche: 'Default' }],
       },
-      questions_by_niche: {
-        questions_by_niche: {
-          Default: {
-            questions: [
-              {
-                id: 'q-legacy',
-                question: 'What changed?',
-                platform: 'tiktok',
-              },
-            ],
-          },
-        },
-      },
-      week_start_date: '2024-09-01',
     },
   };
 
   const result = mapBackendInsightsResponse(payload);
+  assert.ok(result);
 
   assert.equal(result.data.trendsAndEvents.events[0].date, '2024-09-01');
   assert.equal(result.data.trendsAndEvents.events[0].isSelected, false);
@@ -635,8 +379,8 @@ test('mapBackendInsightsResponse propagates curated metadata fields on trends, e
     status: 'success',
     data: {
       generation_id: 'gen-meta',
-      trends_and_events: {
-        status: 'success',
+      anchor_ts: '2026-05-01T12:00:00.000Z',
+      generation_insights: {
         trends: [
           {
             id: 'trend-meta-1',
@@ -675,34 +419,27 @@ test('mapBackendInsightsResponse propagates curated metadata fields on trends, e
             source_signal_count: 4,
           },
         ],
-      },
-      questions_by_niche: {
-        status: 'success',
-        questions_by_niche: {
-          Marketing: {
-            questions: [
-              {
-                id: 'q-meta-1',
-                question: 'Do I need to learn Python in 2026?',
-                niche: 'Technical vs. Non-Technical',
-                social_platform: 'instagram',
-                content_type_suggestion: 'Talking head video',
-                why_relevant: 'Targets imposter syndrome.',
-                confidence: 0.9,
-                analysis_tags: ['career anxiety'],
-                metadata: {
-                  platform_distribution: { instagram: 4, facebook: 1 },
-                },
-              },
-            ],
+        questions: [
+          {
+            id: 'q-meta-1',
+            question: 'Do I need to learn Python in 2026?',
+            niche: 'Marketing',
+            social_platform: 'instagram',
+            content_type_suggestion: 'Talking head video',
+            why_relevant: 'Targets imposter syndrome.',
+            confidence: 0.9,
+            analysis_tags: ['career anxiety'],
+            metadata: {
+              platform_distribution: { instagram: 4, facebook: 1 },
+            },
           },
-        },
+        ],
       },
-      week_start_date: '2026-05-01',
     },
   };
 
   const result = mapBackendInsightsResponse(payload);
+  assert.ok(result);
   const trend = result.data.trendsAndEvents.trends[0];
   const event = result.data.trendsAndEvents.events[0];
   const question = result.data.questionsByNiche.questionsByNiche.Marketing.questions[0];
@@ -721,7 +458,7 @@ test('mapBackendInsightsResponse propagates curated metadata fields on trends, e
   assert.equal(event.sourceUrl, 'https://developer.apple.com/wwdc26');
   assert.equal(event.sourceSignalCount, 4);
 
-  assert.equal(question.niche, 'Technical vs. Non-Technical');
+  assert.equal(question.niche, 'Marketing');
   assert.equal(question.confidence, 0.9);
   assert.deepEqual(question.platformDistribution, { instagram: 4, facebook: 1 });
   assert.equal(question.contentTypeSuggestion, 'Talking head video');

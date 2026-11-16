@@ -340,7 +340,6 @@ async function OrganicContent({
     organicAgentMentionContext = { ...organicAgentMentionContext, documents: brandDocuments };
   }
 
-  const showNoTrendsMessage = selectorTrends.length === 0;
   const metricAccountsByPlatform = deriveMetricAccountsByPlatform({
     integrationSummary,
     onboardingConnections: {
@@ -367,7 +366,6 @@ async function OrganicContent({
       <OrganicNoticeBridge
         brandId={brandProfileId}
         insightsError={insightsError}
-        showNoTrendsMessage={showNoTrendsMessage}
       />
       <OrganicWorkspaceTabs
         brandId={brandProfileId}
@@ -401,6 +399,7 @@ async function OrganicContent({
             initialComposePlatform={initialComposePlatform}
             postedContentAccountsByPlatform={metricAccountsByPlatform}
             insightsError={insightsError}
+            trendsReportMissing={insightsResult.status === 'fulfilled' && insights === null}
           />
         }
         metricsSlot={

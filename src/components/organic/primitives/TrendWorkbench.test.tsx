@@ -269,6 +269,41 @@ describe('TrendWorkbench', () => {
       expect(screen.queryByTestId('trend-workbench-error')).toBeNull();
     });
 
+    it('shows a calm first-report state while the first generation runs', () => {
+      render(
+        <TrendWorkbench
+          trends={[]}
+          selectedTrendIds={[]}
+          activePlatforms={['instagram']}
+          onToggleTrend={mock()}
+          onFetch={mock()}
+          isFetching
+        />,
+      );
+
+      expect(screen.getByTestId('trend-workbench-first-run').textContent).toContain(
+        'Generating your first trend report',
+      );
+      expect(screen.queryByTestId('trend-workbench-error')).toBeNull();
+      expect(screen.queryByTestId('trend-workbench-empty')).toBeNull();
+    });
+
+    it('says the first report is on its way while the brand report is not ready', () => {
+      render(
+        <TrendWorkbench
+          trends={[]}
+          selectedTrendIds={[]}
+          activePlatforms={['instagram']}
+          onToggleTrend={mock()}
+          onFetch={mock()}
+          waitingForBrandReport
+        />,
+      );
+
+      expect(screen.getByTestId('trend-workbench-waiting')).toBeTruthy();
+      expect(screen.queryByTestId('trend-workbench-error')).toBeNull();
+    });
+
     it('says no match only when a non-empty set was filtered to nothing', () => {
       render(
         <TrendWorkbench

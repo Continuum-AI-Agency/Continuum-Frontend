@@ -3,22 +3,22 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
-import { getItem, setItem } from '@/lib/storage/brandScopedStorage';
-
-const WARMING_UP_BASE_KEY = 'organic.notice.warmingUpDismissed';
+import { revalidateBrandInsights } from '@/lib/actions/brandInsights';
+import { claimOncePerSession } from '@/lib/brand-insights/oncePerSession';
 
 type Props = {
   brandId: string;
   insightsError: string | null;
-  showNoTrendsMessage: boolean;
 };
 
-export function OrganicNoticeBridge({ brandId, insightsError, showNoTrendsMessage }: Props) {
+export function OrganicNoticeBridge({ brandId, insightsError }: Props) {
   const { show } = useToast();
   const router = useRouter();
 
+  // A real read failure, shown once per session. "No report yet" never reaches here: the
+  // page maps it to an empty state.
   useEffect(() => {
-    if (!insightsError) return;
+    if (!insightsError || !claimOncePerSession('error-toast', brandId)) return;
     show({
       title: 'Trend intelligence unavailable',
       description: insightsError,
@@ -27,26 +27,14 @@ export function OrganicNoticeBridge({ brandId, insightsError, showNoTrendsMessag
       dedupeKey: `organic-insights-error:${brandId}`,
       action: {
         label: 'Retry',
-        onClick: () => router.refresh(),
+        // router.refresh() alone would re-render against the cached read.
+        onClick: () =>
+          void revalidateBrandInsights(brandId)
+            .catch(() => undefined)
+            .then(() => router.refresh()),
       },
     });
   }, [brandId, insightsError, router, show]);
-
-  useEffect(() => {
-    if (insightsError) return;
-    if (!showNoTrendsMessage) return;
-    if (!brandId) return;
-    const dismissed = getItem(WARMING_UP_BASE_KEY, brandId) === '1';
-    if (dismissed) return;
-    setItem(WARMING_UP_BASE_KEY, brandId, '1');
-    show({
-      title: 'Trend coverage warming up',
-      description: 'You can publish normally now and add trend-driven posts as signals arrive.',
-      variant: 'warning',
-      durationMs: 6000,
-      dedupeKey: `organic-no-trends:${brandId}`,
-    });
-  }, [brandId, insightsError, showNoTrendsMessage, show]);
 
   return null;
 }
