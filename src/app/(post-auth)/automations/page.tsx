@@ -39,6 +39,12 @@ export default async function AutomationsPage() {
               canvas. Published workflows stay locked until you unpublish them.
             </p>
           </div>
+          <Link
+            href="/automations/watchman"
+            className="shrink-0 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:border-violet-500/40 hover:bg-violet-500/[0.03]"
+          >
+            Watchman
+          </Link>
         </div>
         <AutomationTemplateGallery brandId={activeBrandId} />
         {data?.length ? (

@@ -22,6 +22,8 @@ import AutomationWorkspaceNotFound from './[automationId]/not-found';
 import AutomationsError from './error';
 import AutomationsLoading from './loading';
 
+/** A workflow card: every /automations/ link but the Watchman's. */
+const WORKFLOW_CARD = 'a[href^="/automations/"]:not([href="/automations/watchman"])';
 const ACTIVE_BRAND_ID = '0f3a3d1e-6b7e-4f52-9e0a-2c9a1d5b7f11';
 const AUTOMATION_ID = '5a2c9f44-1d3e-4a88-b2c7-6f0e9d4a2b31';
 const OTHER_AUTOMATION_ID = 'c81f2a70-7b3d-4c19-8a52-3e6b0f9d1c42';
@@ -323,7 +325,10 @@ describe('automations index page', () => {
     const view = within(container);
 
     expect(view.getByText('No workflows yet')).toBeTruthy();
-    expect(container.querySelectorAll('a[href^="/automations/"]').length).toBe(0);
+    expect(container.querySelectorAll(WORKFLOW_CARD).length).toBe(0);
+    expect(view.getByRole('link', { name: 'Watchman' }).getAttribute('href')).toBe(
+      '/automations/watchman',
+    );
     expect(view.getByTestId('template-gallery').getAttribute('data-brand-id')).toBe(
       ACTIVE_BRAND_ID,
     );
@@ -355,7 +360,7 @@ describe('automations index page', () => {
     const view = within(container);
 
     expect(view.queryByText('No workflows yet')).toBeNull();
-    expect(container.querySelectorAll('a[href^="/automations/"]').length).toBe(2);
+    expect(container.querySelectorAll(WORKFLOW_CARD).length).toBe(2);
     expect(
       container.querySelector(`a[href="/automations/${AUTOMATION_ID}"]`)?.textContent,
     ).toContain('Weekly recap');
