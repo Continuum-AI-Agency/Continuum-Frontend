@@ -60,6 +60,7 @@ export * from './tracking/index';
 export * from './trends/index';
 export * from './trial-reels/index';
 export * from './virality/index';
+export * from './watchman/index';
 export * from './whats-new/index';
 export * from './media/template-authoring-group';
 export * from './media/template-authoring-group-transform';

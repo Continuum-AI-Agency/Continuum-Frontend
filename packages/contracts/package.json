@@ -30,6 +30,7 @@
     "./mcp": "./src/mcp/index.ts",
     "./ai-studio": "./src/ai-studio/index.ts",
     "./ai-studio/hyperframes-runtime/*": "./src/ai-studio/hyperframes-runtime/*.ts",
+    "./watchman": "./src/watchman/index.ts",
     "./whats-new": "./src/whats-new/index.ts"
   },
   "peerDependencies": {
