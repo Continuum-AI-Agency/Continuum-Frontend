@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { log } from '@/lib/observability/logger';
 import { resolveHeadersOrigin } from '@/lib/server/origin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
@@ -47,6 +48,37 @@ function getSafeErrorMessage(error: Error | { message: string }): string {
   });
 
   return 'An unexpected error occurred. Please try again';
+}
+
+const EMAIL_SEND_FAILED_MESSAGE =
+  "We couldn't send the sign-in email right now. Please try again in a few minutes.";
+
+type AuthErrorLike = { name?: string; message?: string; status?: number; code?: string };
+
+// A failed send (SMTP quota spent, provider down) reaches auth-js as a 5xx whose body may be empty,
+// leaving a message of just '{}' (2026-11-09), so status and code are what identify it. Only the
+// send action asks: a 5xx from sign-out or password sign-in has nothing to do with email.
+function emailSendFailureMessage(error: unknown): string | null {
+  const { name, message = '', status, code } = (error ?? {}) as AuthErrorLike;
+  const rateLimited = code === 'over_email_send_rate_limit';
+  const sendFailed =
+    code === 'unexpected_failure' ||
+    (status !== undefined && status >= 500) ||
+    /sending .*email/i.test(message);
+
+  if (!rateLimited && !sendFailed) return null;
+
+  // The provider's message can name the recipient, so the event carries the classification only.
+  const context = {
+    reason: rateLimited ? 'rate_limited' : 'send_failed',
+    status,
+    code,
+    errorName: name,
+  };
+  if (rateLimited) log.warn('auth.email_send_failed', context);
+  else log.error('auth.email_send_failed', undefined, context);
+
+  return EMAIL_SEND_FAILED_MESSAGE;
 }
 
 // Sign out ends THIS browser's session only. auth-js defaults to 'global', which ended every
@@ -209,7 +241,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
     if (error) {
       return {
         success: false,
-        error: getSafeErrorMessage(error),
+        error: emailSendFailureMessage(error) ?? getSafeErrorMessage(error),
       };
     }
 
@@ -220,7 +252,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
   } catch (error) {
     return {
       success: false,
-      error: getSafeErrorMessage(error as Error),
+      error: emailSendFailureMessage(error) ?? getSafeErrorMessage(error as Error),
     };
   }
 }
