@@ -5,6 +5,7 @@ import { requireClaimsIdentity } from '@/lib/auth/claims';
 import type { AuthIdentity } from '@/lib/auth/identity';
 import { type BrandAccessClient, readBrandAccess } from '@/lib/billing/brandAccess.server';
 import type { BrandAccess } from '@/lib/billing/productAccess';
+import { isExternalLogoUrl } from '@/lib/brands/external-logo-url';
 import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { resolveActiveBrandId } from '@/lib/brands/resolve-active-brand';
 import { reusableSignedUrl, rememberSignedUrl } from '@/lib/media/signed-urls';
@@ -290,6 +291,10 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       const brand = brandMap.get(id);
       const path = brand?.logoPath;
       if (!path) return;
+      if (isExternalLogoUrl(path)) {
+        signedUrlMap.set(path, path);
+        return;
+      }
       const key = ['logo', user.id, path, brand.updatedAt ?? ''].join('\n');
       const reused = reusableSignedUrl(key);
       if (reused) {
