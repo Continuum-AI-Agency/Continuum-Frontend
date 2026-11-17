@@ -2,7 +2,6 @@
 
 import type { Skill } from '@continuum/contracts';
 import { AnimatePresence } from 'motion/react';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Suggestion } from '@/components/ai-elements/suggestion';
@@ -72,7 +71,6 @@ import {
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { describeSkillForGeneration } from '@/lib/brands/generationConfigPresentation';
-import { requestOrganicJobRetry } from '@/lib/organic/agent-retry';
 import {
   fetchOrganicSessionMessagePage,
   type OrganicSessionMessage,
@@ -102,8 +100,8 @@ import {
 } from './OrganicMessageRow';
 import { OrganicSessionSidebar } from './OrganicSessionSidebar';
 import { PromptPickerButton } from './PromptPickerButton';
-import { buildPlannerDraftDeepLink } from './presentAgentMessage';
 import { type RestoredSession, restoreSessionFromMessages } from './restoreSession';
+import { retryJobInPlace } from './retryJobInPlace';
 import { SkillPickerButton } from './SkillPickerButton';
 import { organicSessionContent } from './sessionContent';
 import { ToolApprovalCard } from './ToolApprovalCard';
@@ -387,7 +385,6 @@ export function OrganicAgentPanel({
   );
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { show } = useToast();
-  const router = useRouter();
   const { attachRun } = useCalendarRunStream();
   const requestCalendarRefetch = useCalendarStore((s) => s.requestCalendarRefetch);
   const handleCalendarDraftSignal = useCallback(() => {
@@ -429,8 +426,6 @@ export function OrganicAgentPanel({
   const backlogDrafts = useCalendarStore((s) => s.backlogDrafts);
   const selectedDraftId = useCalendarStore((s) => s.selectedDraftId);
   const selectedTrendIds = useCalendarStore((s) => s.selectedTrendIds);
-  const setViewMode = useCalendarStore((s) => s.setViewMode);
-  const setSelectedDraftId = useCalendarStore((s) => s.setSelectedDraftId);
   const canvasNodes = useStudioStore((s) => s.nodes);
   // Chat-side approve-through: the same Stage-2 (expandDrafts) / Stage-3
   // (generateDraftMedia) client fns the planner uses, keyed onto the planner
@@ -465,35 +460,23 @@ export function OrganicAgentPanel({
     },
     [brandId, generateDraftMedia, resolveCalendarFeId],
   );
-  /**
-   * Retry a FAILED generation by resetting its existing row to queued, rather than
-   * enqueuing a second job for the same concept. The durable worker re-runs it from the
-   * context it already persisted, and the dead row does not stay behind inflating the
-   * queued count with work nobody is watching.
-   */
+  /** Retry (failed job) and Recreate draft (missing draft) — see retryJobInPlace. */
   const handleRetryJobFromChat = useCallback(
     (jobId: string) => {
-      dispatch({ type: 'JOB_UPDATE', job: { jobId, status: 'queued' } });
-      void requestOrganicJobRetry({ jobId, brandId }).catch((error: unknown) => {
-        dispatch({
-          type: 'JOB_UPDATE',
-          job: {
-            jobId,
-            status: 'failed',
-            error: {
-              message:
-                error instanceof Error ? error.message : 'Could not retry the failed generation.',
-            },
-          },
-        });
-        show({
-          title: 'Could not retry that generation',
-          description: error instanceof Error ? error.message : undefined,
-          variant: 'error',
-        });
+      void retryJobInPlace({
+        jobId,
+        brandId,
+        state: { jobs: state.jobs, pipeline: state.pipeline },
+        dispatch,
+        notifyFailure: (message) =>
+          show({
+            title: 'Could not retry that generation',
+            description: message,
+            variant: 'error',
+          }),
       });
     },
-    [brandId, show],
+    [brandId, show, state.jobs, state.pipeline],
   );
 
   const {
@@ -1069,13 +1052,6 @@ export function OrganicAgentPanel({
       dispatch({ type: 'AUTO_RETRY_ABANDON' });
     }
   }, [state.pendingAutoRetry, isStreaming, handleRetryTurn]);
-
-  const handleViewDraft = useCallback(
-    (draftId: string) => {
-      router.push(buildPlannerDraftDeepLink(draftId));
-    },
-    [router],
-  );
 
   const handleStop = useCallback(async () => {
     // Stop the run on screen even if this reader doesn't own it — the projected run you
@@ -1706,11 +1682,6 @@ export function OrganicAgentPanel({
     onRetryJob: handleRetryJobFromChat,
     onPlanDecision: handlePlanDecision,
     onStartBulkRun: (run) => dispatch({ type: 'BULK_RUN_START', run }),
-    onOpenDraftIn: (draftId, target) => {
-      setSelectedDraftId(draftId);
-      setViewMode(target === 'calendar' ? 'month' : 'list');
-    },
-    onViewDraft: handleViewDraft,
     onUseAsset: (item) =>
       setQueuedMentionSuggestions((current) => [
         ...current,

@@ -5,14 +5,20 @@ import {
   plannerCompositionListResponseSchema,
 } from '@continuum/contracts';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import React from 'react';
 import { CreativeLibrarySidebar } from '@/components/creative-assets/CreativeLibrarySidebar';
+import { buttonVariants } from '@/components/ui/button';
+import { ApiError } from '@/lib/api/errors';
+import { request } from '@/lib/api/http';
 import {
   buildAiStudioStorageKey,
   type PlannerAiStudioHandoff,
   plannerAiStudioHandoffSchema,
 } from '@/lib/organic/ai-studio-bridge';
+import { ORGANIC_ACTION_LABELS } from '@/lib/organic/organicActionCopy';
+import { cn } from '@/lib/utils';
 
 const StudioCanvas = dynamic(
   () => import('@/StudioCanvas/components/StudioCanvas').then((mod) => mod.StudioCanvas),
@@ -47,6 +53,70 @@ function readOrganicPlannerSeedContext(
   }
 }
 
+/**
+ * Does the planner draft still exist? Read through the same single-draft route the chat
+ * cards use. `null` is "could not tell" (offline, 5xx): only a 404 is proof it is gone.
+ */
+export async function plannerDraftExists(backendDraftId: string): Promise<boolean | null> {
+  try {
+    await request({ path: `/api/organic/calendar/drafts/${encodeURIComponent(backendDraftId)}` });
+    return true;
+  } catch (error) {
+    return error instanceof ApiError && error.status === 404 ? false : null;
+  }
+}
+
+export type PlannerHandoff =
+  | { status: 'none' }
+  | { status: 'ready'; seed: PlannerAiStudioHandoff }
+  | { status: 'missing' };
+
+/**
+ * What a `source=organic-planner&draftId=…` link actually hands the canvas. A missing or
+ * foreign seed, a seed for a draft that was never saved, or a draft deleted since is
+ * `missing` — the page says so instead of opening an empty canvas that cannot apply back.
+ */
+export async function resolvePlannerHandoff(input: {
+  source: string | null;
+  draftId: string | null;
+  brandProfileId: string;
+  readSeed?: (draftId: string, brandProfileId: string) => PlannerAiStudioHandoff | null;
+  draftExists?: (backendDraftId: string) => Promise<boolean | null>;
+}): Promise<PlannerHandoff> {
+  if (input.source !== 'organic-planner' || !input.draftId) return { status: 'none' };
+  const seed = (input.readSeed ?? readOrganicPlannerSeedContext)(
+    input.draftId,
+    input.brandProfileId,
+  );
+  if (!seed?.backendDraftId) return { status: 'missing' };
+  const exists = await (input.draftExists ?? plannerDraftExists)(seed.backendDraftId);
+  return exists === false ? { status: 'missing' } : { status: 'ready', seed };
+}
+
+export function PlannerDraftMissingNotice() {
+  return (
+    <div
+      role="alert"
+      data-slot="planner-draft-missing"
+      className="mx-4 mt-2 flex flex-wrap items-center gap-3 rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-white">This post isn&apos;t saved anymore</p>
+        <p className="text-xs text-amber-100/80">
+          Its draft was deleted from the calendar or never saved, so there is nothing to edit here.
+          Recreate it from the calendar or the chat.
+        </p>
+      </div>
+      <Link
+        href="/organic?tab=planner"
+        className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}
+      >
+        {ORGANIC_ACTION_LABELS.openCalendar}
+      </Link>
+    </div>
+  );
+}
+
 export default function AIStudioClient({
   brandProfileId,
   brandName,
@@ -63,13 +133,20 @@ export default function AIStudioClient({
   const [plannerCompositions, setPlannerCompositions] =
     React.useState<PlannerCompositionListResponse | null>(null);
 
-  React.useEffect(() => {
-    if (source !== 'organic-planner' || !draftId) {
-      setOrganicPlannerSeed(null);
-      return;
-    }
+  const [plannerDraftMissing, setPlannerDraftMissing] = React.useState(false);
 
-    setOrganicPlannerSeed(readOrganicPlannerSeedContext(draftId, brandProfileId));
+  React.useEffect(() => {
+    let cancelled = false;
+    setOrganicPlannerSeed(null);
+    setPlannerDraftMissing(false);
+    void resolvePlannerHandoff({ source, draftId, brandProfileId }).then((handoff) => {
+      if (cancelled) return;
+      setOrganicPlannerSeed(handoff.status === 'ready' ? handoff.seed : null);
+      setPlannerDraftMissing(handoff.status === 'missing');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [brandProfileId, draftId, source]);
 
   React.useEffect(() => {
@@ -117,6 +194,8 @@ export default function AIStudioClient({
             <span className="text-sm text-gray-400">Build flows for {brandName}</span>
           </div>
         </div>
+
+        {plannerDraftMissing ? <PlannerDraftMissingNotice /> : null}
 
         {plannerCompositions?.current && selectedComposition ? (
           <div className="mx-4 mt-2 flex min-h-9 flex-wrap items-center gap-2 rounded-md border border-white/10 bg-slate-900/75 px-3 py-1.5 text-xs text-slate-300">

@@ -56,6 +56,8 @@ function manualRow(id: string, title: string) {
   };
 }
 
+const onScheduleFloored = mock((_title: string, _scheduledIso: string) => {});
+
 function useHarness() {
   const [calendarDays, setCalendarDays] = React.useState<OrganicCalendarDay[]>([]);
   const updateDraftById = React.useCallback(
@@ -79,6 +81,7 @@ function useHarness() {
     calendarDays,
     setCalendarDays,
     updateDraftById,
+    onScheduleFloored,
   });
   return { ...persistence, calendarDays, updateDraftById, appendDraft };
 }
@@ -89,6 +92,7 @@ beforeEach(() => {
   updateCalls.length = 0;
   upsertCalls.length = 0;
   requestMock.mockReset();
+  onScheduleFloored.mockClear();
 });
 
 afterEach(() => {
@@ -162,6 +166,40 @@ describe('useCalendarDraftPersistence autosave', () => {
 
     expect(upsertCalls).toHaveLength(1);
     expect(updateCalls).toEqual([]);
+    // A plain draft on a past day is never floored, so there is nothing to tell anyone.
+    expect(onScheduleFloored).not.toHaveBeenCalled();
+  });
+
+  // The floor stays (a past scheduled_date would publish on the poller's next tick), but the
+  // move is announced instead of happening silently.
+  it('a scheduled post whose moment has passed is floored forward AND reported', async () => {
+    requestMock.mockResolvedValue({ drafts: [manualRow('be-1', 'Hello')] });
+    const { result } = renderHook(useHarness);
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    await waitFor(() =>
+      expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(1),
+    );
+    await act(settle);
+
+    const day = result.current.calendarDays.find((d) => d.id === DAY) as OrganicCalendarDay;
+    act(() => {
+      result.current.appendDraft(day.id, {
+        ...day.slots[0],
+        id: 'local-past',
+        clientKey: 'ck-local-past',
+        backendDraftId: undefined,
+        title: 'Past post',
+        status: 'scheduled',
+        timeLabel: '9:00 AM',
+      } as OrganicCalendarDraft);
+    });
+    await act(settle);
+
+    expect(upsertCalls).toHaveLength(1);
+    const written = upsertCalls[0] as { scheduled_date: string };
+    expect(Date.parse(written.scheduled_date)).toBeGreaterThan(Date.now());
+    expect(onScheduleFloored).toHaveBeenCalledTimes(1);
+    expect(onScheduleFloored.mock.calls[0]).toEqual(['Past post', written.scheduled_date]);
   });
 
   // group/remove on the card's own row promotes another member and gives it the card's key.

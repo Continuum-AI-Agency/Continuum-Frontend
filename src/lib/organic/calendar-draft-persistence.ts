@@ -287,6 +287,11 @@ export type PersistedDraftWritePayload = {
   // Canonical per-brand identity for UPSERT (brand_id, client_key) — keeps the
   // autosave from inserting a second row for the same logical draft.
   client_key: string;
+  /**
+   * The chosen moment was already past, so `scheduled_date` was floored forward to
+   * now + guard. Not a column: the caller tells the user their post moved.
+   */
+  scheduledDateFloored: boolean;
 };
 
 export type PersistedCalendarEntry = {
@@ -422,7 +427,7 @@ function persistedScheduledDate(args: {
   timeLabel?: string | null;
   timeZone?: string | null;
   status: PersistedDraftStatus;
-}): string {
+}): { scheduledDate: string; floored: boolean } {
   const timeOfDay = parsePlannerTimeOfDay(args.timeLabel);
   const composed = plannerInstantFromDayTime({
     dayId: args.dayId,
@@ -431,12 +436,14 @@ function persistedScheduledDate(args: {
   });
   // An unparseable day id is not a schedule we can improve on; keep the old
   // behaviour rather than inventing an instant.
-  if (!composed) return args.dayId;
+  if (!composed) return { scheduledDate: args.dayId, floored: false };
   // The future floor exists to stop the publish poller firing the instant a row
   // lands, so it applies ONLY to a status that arms the poller. Flooring a plain
   // draft would silently relocate every past-dated draft to today — a user
   // backfilling last month's calendar would watch their work jump forward.
-  return args.status === 'scheduled' ? applyPlannerFutureFloor(composed) : composed;
+  if (args.status !== 'scheduled') return { scheduledDate: composed, floored: false };
+  const scheduledDate = applyPlannerFutureFloor(composed);
+  return { scheduledDate, floored: Date.parse(scheduledDate) !== Date.parse(composed) };
 }
 
 export function buildPersistedDraftPayload(args: {
@@ -467,17 +474,20 @@ export function buildPersistedDraftPayload(args: {
   const resolvedTimeZone = resolvePlannerTimeZone(timeZone);
   const timeOfDay = parsePlannerTimeOfDay(draft.timeLabel);
 
+  const schedule = persistedScheduledDate({
+    dayId,
+    timeLabel: draft.timeLabel,
+    timeZone: resolvedTimeZone,
+    status,
+  });
+
   return {
     brand_id: brandId,
     platform: primaryPlatform,
     platform_account_id: platformAccountId,
     status,
-    scheduled_date: persistedScheduledDate({
-      dayId,
-      timeLabel: draft.timeLabel,
-      timeZone: resolvedTimeZone,
-      status,
-    }),
+    scheduled_date: schedule.scheduledDate,
+    scheduledDateFloored: schedule.floored,
     // Stable identity == the draft's minted clientKey (fallback to its local id for
     // legacy drafts created before clientKey existed).
     client_key: draft.clientKey ?? draft.id,

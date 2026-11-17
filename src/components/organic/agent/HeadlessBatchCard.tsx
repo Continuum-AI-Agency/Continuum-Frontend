@@ -8,6 +8,7 @@ import { MediaStrip, mediaStripTileWidth } from '@/components/chat/media/MediaSt
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/errors';
+import { ORGANIC_ACTION_LABELS } from '@/lib/organic/organicActionCopy';
 import {
   approveHeadlessBatchCast,
   fetchHeadlessBatchStatus,
@@ -398,7 +399,7 @@ function BatchItemRow({
         onClick={() => onOpenDraft(item.draftId)}
         className="h-7 min-h-0 shrink-0 gap-1 px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring"
       >
-        Open draft
+        {ORGANIC_ACTION_LABELS.openInCalendar}
         <span className="sr-only">{` for ${label}`}</span>
         <ArrowUpRight className="size-3" aria-hidden="true" />
       </AgentButton>

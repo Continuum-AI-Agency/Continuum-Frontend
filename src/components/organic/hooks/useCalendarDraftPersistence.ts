@@ -46,6 +46,8 @@ type UseCalendarDraftPersistenceOptions = {
   platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>;
   /** The brand's zone: a chip's time of day names a moment there, as the field route reads it. */
   timeZone?: string;
+  /** A scheduled post's moment had passed, so the write floored it forward: tell the user. */
+  onScheduleFloored?: (title: string, scheduledIso: string) => void;
 };
 
 function parseUpdatedAt(value: string | null | undefined): number {
@@ -144,12 +146,16 @@ export function useCalendarDraftPersistence({
   updateDraftById,
   platformAccountIds = {},
   timeZone,
+  onScheduleFloored,
 }: UseCalendarDraftPersistenceOptions) {
   const hydratedKeyRef = React.useRef<string | null>(null);
   // Re-render-visible mirror of hydratedKeyRef so consumers (e.g. the AI Studio
   // apply-on-return effect, selection restore) can wait for the initial fetch-all
   // to finish before acting, instead of racing it.
   const [isHydrated, setIsHydrated] = React.useState(false);
+  // A ref, so a new callback identity never re-arms the autosave effect.
+  const onScheduleFlooredRef = React.useRef(onScheduleFloored);
+  onScheduleFlooredRef.current = onScheduleFloored;
   const knownBackendIdsRef = React.useRef<Set<string>>(new Set());
   const lastSyncedRef = React.useRef<SyncedIndex>(new Map());
   const syncInFlightRef = React.useRef(false);
@@ -322,6 +328,11 @@ export function useCalendarDraftPersistence({
               .single();
             if (error) continue;
             if (!created.id) continue;
+            // The floor is kept (a past scheduled_date would publish on the poller's next
+            // tick), but it is never silent: the user picked a moment that has passed.
+            if (payload.scheduledDateFloored && payload.scheduled_date) {
+              onScheduleFlooredRef.current?.(entry.draft.title, payload.scheduled_date);
+            }
 
             knownBackendIdsRef.current.add(created.id);
             updateDraftById(entry.draft.id, (draft) => ({

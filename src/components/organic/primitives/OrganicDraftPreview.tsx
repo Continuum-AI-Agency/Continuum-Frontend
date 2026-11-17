@@ -60,6 +60,7 @@ import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative'
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { groupMemberDrafts, isGroup, resolveFrameDraft } from '@/lib/organic/groupDraft';
+import { ORGANIC_ACTION_LABELS } from '@/lib/organic/organicActionCopy';
 import { platformVerdicts } from '@/lib/organic/platformSelection';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform, POST_PLATFORMS, type PostFormatOption } from '@/lib/organic/postPlatforms';
@@ -1735,7 +1736,7 @@ export function OrganicDraftPreview({
       onOpenInStudio={
         openInStudio
           ? {
-              label: reelComposition?.composition ? 'Edit in AI Studio' : 'Open in AI Studio',
+              label: ORGANIC_ACTION_LABELS.openInAiStudio,
               onSelect: () => openInStudio(draft.id),
               disabledReason: aiStudioHandoffIssue(draft),
             }

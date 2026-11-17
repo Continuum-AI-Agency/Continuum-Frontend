@@ -8,23 +8,21 @@ type PipelineMediaActions = {
   onEnrichDraft?: (draftId: string) => void;
   /** Stage-3 "Generate media": realize a blueprint-ready draft (format-routed). */
   onGenerateMedia?: (draftId: string, format: string, previewRevision: string) => void;
+  /** Re-queue a job in place: Retry (failed) and Recreate draft (draft gone). */
+  onRetryJob?: (jobId: string) => void;
+  /** Open the planner on a draft; `null` opens the planner itself. */
+  onOpenDraft?: (draftId: string | null) => void;
 };
 
 export function PipelinePlacementGrid({
   cards,
-  onEnrichDraft,
-  onGenerateMedia,
+  ...actions
 }: { cards: PipelineCardState[] } & PipelineMediaActions) {
   if (cards.length === 0) return null;
   return (
     <div className="grid grid-cols-1 justify-start gap-2 min-[520px]:grid-cols-[repeat(auto-fill,minmax(220px,260px))]">
       {cards.map((card) => (
-        <PipelineCard
-          key={card.jobId}
-          card={card}
-          onEnrichDraft={onEnrichDraft}
-          onGenerateMedia={onGenerateMedia}
-        />
+        <PipelineCard key={card.jobId} card={card} {...actions} />
       ))}
     </div>
   );
@@ -37,18 +35,11 @@ export function PipelinePlacementGrid({
 export function ToolCallPipelineCards({
   toolCalls,
   cardsByToolCallId,
-  onEnrichDraft,
-  onGenerateMedia,
+  ...actions
 }: {
   toolCalls: ToolCallEvent[];
   cardsByToolCallId: Map<string, PipelineCardState[]>;
 } & PipelineMediaActions) {
   const cards = toolCalls.flatMap((toolCall) => cardsByToolCallId.get(toolCall.toolCallId) ?? []);
-  return (
-    <PipelinePlacementGrid
-      cards={cards}
-      onEnrichDraft={onEnrichDraft}
-      onGenerateMedia={onGenerateMedia}
-    />
-  );
+  return <PipelinePlacementGrid cards={cards} {...actions} />;
 }

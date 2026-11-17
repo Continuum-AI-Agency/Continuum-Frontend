@@ -87,7 +87,7 @@ function renderPlan(plan: UiPlanCard, pipeline: PipelineCardState[] = []) {
       onGenerateAllAction={noop}
       onGenerateItemAction={noop}
       onRejectAction={noop}
-      onViewDraftAction={noop}
+      onOpenDraftAction={noop}
       pipeline={pipeline}
       plan={plan}
     />,
@@ -209,7 +209,7 @@ describe('format is shown, not only labelled', () => {
   it('plays realized reel media as video once the media ladder finishes', () => {
     const { container } = renderRow({
       concept: item({ format: 'reel', draftId: 'draft-1' }),
-      onViewDraft: noop,
+      onOpenDraft: noop,
       pipeline: previewPipeline(['https://cdn/final-reel'], {
         status: 'completed',
         draftId: 'draft-1',
@@ -360,7 +360,7 @@ describe('state is honest — three failures that must not look alike', () => {
     const { container } = renderRow({
       concept: item({ draftId: 'draft-1' }),
       onEnrichDraft: noop,
-      onViewDraft: noop,
+      onOpenDraft: noop,
       pipeline: {
         jobId: 'job-1',
         stages: [],
@@ -375,8 +375,11 @@ describe('state is honest — three failures that must not look alike', () => {
     expect(row?.getAttribute('data-status-kind')).toBe('media_failed');
     expect(screen.getAllByText('Media didn’t render').length).toBeGreaterThan(0);
     // The draft survived, so its destinations and the media retry stay reachable.
-    expect(screen.getByText('Calendar')).toBeTruthy();
-    expect(screen.getByText('Try media again')).toBeTruthy();
+    expect(screen.getByText('Open in Calendar')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Enrich/ }).getAttribute('title')).toBe(
+      'Re-sketch the blueprint and try the media again',
+    );
+    expect(screen.getByText('The copy is saved. Only the media failed to render.')).toBeTruthy();
     expect(screen.queryByText('Retry')).toBeNull();
   });
 
@@ -395,7 +398,7 @@ describe('state is honest — three failures that must not look alike', () => {
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
     expect(screen.getByText('render exploded')).toBeTruthy();
     expect(screen.getByText('Retry')).toBeTruthy();
-    expect(screen.queryByText('Try media again')).toBeNull();
+    expect(screen.queryByText('Enrich')).toBeNull();
   });
 
   it('an untouched concept carries no status badge — the action says what to do', () => {

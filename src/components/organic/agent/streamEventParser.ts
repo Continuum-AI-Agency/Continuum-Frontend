@@ -240,6 +240,7 @@ function parseJobUpdate(type: string, event: Record<string, unknown>) {
         brandId,
         status: 'completed' as const,
         draftId: readNonEmptyString(payload.draftId) ?? undefined,
+        ...(payload.draftMissing === true ? { draftMissing: true } : {}),
       };
     case 'job.failed':
       return {

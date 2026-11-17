@@ -1,12 +1,14 @@
 'use client';
 
+import { resolveOrganicLifecycle } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StatusLabel } from '@/components/shared/agent-cards/agentCardKit';
 import { type ParsedRunEvent, useRunEventStream } from '@/hooks/useRunEventStream';
 import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
 import { useCalendarStore } from '@/lib/organic/store';
 import { fetchBulkPlanBatch } from '@/lib/organic-agent/headlessBatch';
-import { cn } from '@/lib/utils';
+import { resolveConceptStatus } from './conceptStatus';
 import { HeadlessBatchCard } from './HeadlessBatchCard';
 import type { BulkRunState, BulkRunStatus } from './types';
 
@@ -158,6 +160,9 @@ export function BulkRunPanel({
         : 'completed'
       : run.status;
 
+  const lifecycle = resolveOrganicLifecycle({ status });
+  const statusTone = resolveConceptStatus({ status }).tone;
+
   const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
   const reconciledRef = useRef(false);
   useEffect(() => {
@@ -178,18 +183,11 @@ export function BulkRunPanel({
           <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
             Bulk Generation Run
           </p>
-          <span
-            className={cn(
-              'shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide',
-              status === 'completed'
-                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                : status === 'failed'
-                  ? 'bg-red-500/15 text-red-500'
-                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-            )}
-          >
-            {status}
-          </span>
+          {/* The same pill words and tones as every other generation card, never the raw
+              run status ("running" / "completed" read like log output). */}
+          <StatusLabel tone={statusTone} title={lifecycle.hint}>
+            {lifecycle.pill}
+          </StatusLabel>
         </div>
 
         <div className="mb-2 flex items-center gap-2">

@@ -99,6 +99,13 @@ export type PanelAction =
   | { type: 'STREAM_UI_CARD'; card: UiCard }
   | { type: 'STREAM_MEDIA_SEARCH_RESULTS'; frame: MediaSearchResultsFrame }
   | { type: 'JOB_UPDATE'; job: Partial<AgentJobState> & { jobId: string } }
+  /**
+   * Retry (failed job) and Recreate draft (missing draft) re-queue the SAME row. The card
+   * is reset to a fresh run rather than waiting for frames: a settled card refuses a
+   * non-terminal update, so without this it sat on "Failed" / "Not saved" after the click.
+   * `draftId` is the server's answer — a recreated draft is a NEW row.
+   */
+  | { type: 'JOB_RETRY'; jobId: string; draftId?: string | null }
   | { type: 'JOB_CANCEL_START'; jobId: string }
   | { type: 'JOB_CANCEL_SUCCESS'; jobId: string }
   | { type: 'JOB_CANCEL_FAILURE'; jobId: string }
@@ -235,6 +242,7 @@ type DurableJobLike = {
   stage?: string | null;
   pct?: number | null;
   previewRevision?: string | null;
+  draftMissing?: boolean | null;
   error?: unknown;
 };
 
@@ -321,6 +329,12 @@ function pipelineCardFromDurableJob(
     ...(job.brandId ? { brandId: job.brandId } : {}),
     ...(job.platform ? { platform: job.platform } : {}),
     ...(job.draftId ? { draftId: job.draftId } : {}),
+    // The old id points at a deleted row: clear it, or the card keeps linking to nothing.
+    ...(job.draftMissing === true
+      ? { draftMissing: true, draftId: null }
+      : job.draftMissing === false
+        ? { draftMissing: false }
+        : {}),
     ...(job.toolCallId ? { toolCallId: job.toolCallId } : {}),
     ...(typeof job.planId === 'string' ? { planId: job.planId } : {}),
     ...(typeof job.planItemId === 'string' ? { planItemId: job.planItemId } : {}),
@@ -352,7 +366,8 @@ function reconcileJobFromPipeline(
 // ConceptCard/PipelineCard — which read pipeline and planItemStatus — spun forever.
 // Card rules mirror SYNC_GENERATION_SUMMARIES: a running card takes any update, a
 // settled card only takes a terminal one, and a card is only CREATED when the job
-// carries a toolCallId (cards without one have no place to render). The plan item
+// carries a toolCallId or a planItemId (the inline grid and the plan row are the two
+// places a card renders; a plan row needs it to learn its draft is gone). The plan item
 // is settled only by a terminal job status.
 function reconcilePipelineFromJob(
   pipeline: Record<string, PipelineCardState>,
@@ -366,7 +381,7 @@ function reconcilePipelineFromJob(
   const incomingTerminal = typeof job.status === 'string' && TERMINAL_JOB_STATUSES.has(job.status);
   const canWriteCard = existingCard
     ? incomingTerminal || existingCard.status === 'running'
-    : Boolean(job.toolCallId);
+    : Boolean(job.toolCallId || job.planItemId);
   const nextPipeline = canWriteCard
     ? {
         ...pipeline,
@@ -471,7 +486,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         // after the chat stream closes — so tool-dispatched jobs (toolCallId) get
         // their card here, and any restored card converges to the durable status.
         const durable = job as AgentJobState & DurableJobLike & { progress?: unknown };
-        if (!durable.toolCallId && !pipeline[job.jobId]) continue;
+        if (!durable.toolCallId && !durable.planItemId && !pipeline[job.jobId]) continue;
         const progress =
           durable.progress && typeof durable.progress === 'object'
             ? (durable.progress as { stage?: unknown; pct?: unknown })
@@ -716,12 +731,60 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           [action.job.jobId]: {
             ...(state.jobs[action.job.jobId] ?? {}),
             ...action.job,
+            ...(action.job.draftMissing ? { draftId: undefined } : {}),
           } as AgentJobState,
         },
         pipeline,
         planItemStatus,
         pendingJobCancellations,
       };
+    }
+
+    case 'JOB_RETRY': {
+      const existingJob = state.jobs[action.jobId];
+      const existingCard = state.pipeline[action.jobId];
+      if (!existingJob && !existingCard) return state;
+      const recreated = existingJob?.draftMissing === true || existingCard?.draftMissing === true;
+      const draftId =
+        action.draftId !== undefined
+          ? (action.draftId ?? undefined)
+          : recreated
+            ? undefined
+            : (existingJob?.draftId ?? existingCard?.draftId ?? undefined);
+      const jobs = existingJob
+        ? {
+            ...state.jobs,
+            [action.jobId]: {
+              ...existingJob,
+              status: 'queued' as const,
+              draftId,
+              draftMissing: false,
+              error: undefined,
+            },
+          }
+        : state.jobs;
+      const pipeline = existingCard
+        ? {
+            ...state.pipeline,
+            [action.jobId]: {
+              ...existingCard,
+              status: 'running' as const,
+              stages: STAGE_ORDER.map((stage) => ({ stage, status: 'pending' as const })),
+              currentStage: undefined,
+              pct: undefined,
+              checkpoint: undefined,
+              preview: recreated ? undefined : existingCard.preview,
+              error: undefined,
+              draftId: draftId ?? null,
+              draftMissing: false,
+            },
+          }
+        : state.pipeline;
+      const planItemId = existingCard?.planItemId ?? existingJob?.planItemId;
+      const planItemStatus = planItemId
+        ? { ...state.planItemStatus, [planItemId]: 'executing' as const }
+        : state.planItemStatus;
+      return { ...state, jobs, pipeline, planItemStatus };
     }
 
     // Terminal state of last resort: the stream idle watchdog fired after minutes of
@@ -1017,6 +1080,11 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
               ...(summary.agentName ? { agentName: summary.agentName } : {}),
               ...(typeof summary.pct === 'number' ? { pct: summary.pct } : {}),
               ...(summary.draftId ? { draftId: summary.draftId } : {}),
+              ...(summary.draftMissing === true
+                ? { draftMissing: true, draftId: undefined }
+                : summary.draftMissing === false
+                  ? { draftMissing: false }
+                  : {}),
               ...(summary.toolCallId ? { toolCallId: summary.toolCallId } : {}),
               ...(summary.error?.message
                 ? { error: { code: summary.error.code, message: summary.error.message } }
