@@ -31,7 +31,8 @@ export type CaptionFontPayload = {
 };
 
 /**
- * The registrable faces, keyed by the exact family string a CaptionStyle names.
+ * The registrable faces, keyed by canonical family. Look one up with `captionFontSpec`, which
+ * ignores case and edge spaces as CSS does.
  *
  * Provenance and licences are in public/fonts/README.md. Inter, Montserrat and JetBrains
  * Mono are variable so `emphasis.weight` is not a no-op; Anton ships one weight and is
@@ -58,13 +59,19 @@ export const CAPTION_FONTS: Readonly<Record<string, CaptionFontSpec>> = {
   Allura: { family: 'Allura', url: '/fonts/Allura-Regular.woff2', weightRange: '400' },
 };
 
+// Keyed without case or edge spaces, the way CSS matches a family name: a brand that typed
+// "ANTON" (Airtable #420) gets the Anton file, registered under its canonical family.
+const SPEC_BY_KEY = new Map(
+  Object.values(CAPTION_FONTS).map((spec) => [spec.family.toLowerCase(), spec]),
+);
+
 /** True when a family name has a real file behind it — the honest answer for brand fonts. */
 export function isRegistrableCaptionFont(family: string | undefined): boolean {
-  return typeof family === 'string' && family in CAPTION_FONTS;
+  return captionFontSpec(family) !== undefined;
 }
 
 export function captionFontSpec(family: string | undefined): CaptionFontSpec | undefined {
-  return family ? CAPTION_FONTS[family] : undefined;
+  return family ? SPEC_BY_KEY.get(family.trim().toLowerCase()) : undefined;
 }
 
 /**
@@ -97,9 +104,9 @@ async function fetchFontBytes(spec: CaptionFontSpec): Promise<ArrayBuffer> {
  * to the user through `isRegistrableCaptionFont`.
  */
 export async function loadCaptionFonts(families: readonly string[]): Promise<CaptionFontPayload[]> {
-  const specs = [...new Set(families)]
-    .map(captionFontSpec)
-    .filter((s): s is CaptionFontSpec => !!s);
+  const specs = [
+    ...new Set(families.map(captionFontSpec).filter((s): s is CaptionFontSpec => !!s)),
+  ];
   return Promise.all(
     specs.map(async (spec) => {
       let pending = byteCache.get(spec.family);
