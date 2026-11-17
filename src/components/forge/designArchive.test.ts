@@ -67,9 +67,14 @@ test('a ZIP of only fonts opens into its fonts; a page that ships its fonts stay
     'Neusa Font.zip',
   );
   const page = new File([zipSync({ 'index.html': bytes, 'fonts/Brand.otf': bytes })], 'page.zip');
-  const files = await expandDesignArchives([fonts, page]);
-  expect(files.map((f) => f.name)).toEqual(['Neusa-Regular.otf', 'Neusa-SemiBold.ttf', 'page.zip']);
+  const app = new File(
+    [zipSync({ 'package.json': bytes, 'src/main.js': bytes, 'fonts/Brand.otf': bytes })],
+    'app.zip',
+  );
+  const files = await expandDesignArchives([fonts, page, app]);
+  expect(files.map((f) => f.name)).toEqual(['Neusa-Regular.otf', 'Neusa-SemiBold.ttf', 'page.zip', 'app.zip']);
   expect(files[0].type).toBe('font/otf');
   expect(files[1].type).toBe('font/ttf');
   expect(files[2]).toBe(page);
+  expect(files[3]).toBe(app);
 });

@@ -91,3 +91,15 @@ test('fonts alone are stored and the handoff waits for the project they belong t
   expect(invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent')).toBe(false);
   expect(screen.getByLabelText('Choose Forge source files')).toBeTruthy();
 });
+
+test('fonts that were all refused say so instead of asking for the project', async () => {
+  uploadTemplateFontFiles.mockImplementationOnce(async (_brandId: string, files: File[]) => ({
+    stored: [],
+    refused: files.map((file) => `${file.name}: not a font`),
+  }));
+  await choose([file('Neusa-Regular.otf')]);
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe('No fonts were added. Choose valid .ttf or .otf files and try again.'),
+  );
+  expect(invoke.mock.calls.some(([, options]) => options.body.action === 'complete_forge_source_intent')).toBe(false);
+});
