@@ -10,13 +10,15 @@ export function DocumentUploader({
   initialFiles?: File[];
   onInitialFilesTaken?: () => void;
 }) {
-  const { brandId, state, updateState } = useOnboarding();
+  const { brandId, state, reloadState } = useOnboarding();
+  // Every document action returns the state the server just saved. Adopt it: re-saving it as a
+  // patch cost a second full onboarding load per file and raced the next upload's write.
   return (
     <DocumentManager
       brandId={brandId}
       seed={state.documents ?? []}
       density="compact"
-      onStateChange={(next) => void updateState({ documents: next.documents })}
+      onStateChange={reloadState}
       initialFiles={initialFiles}
       onInitialFilesTaken={onInitialFilesTaken}
     />

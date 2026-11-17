@@ -15,7 +15,8 @@ type OnboardingContextValue = {
   state: OnboardingState;
   userId: string | null;
   isPending: boolean;
-  updateState: (patch: OnboardingPatch) => Promise<void>;
+  /** `notify: false` leaves the failure toast to a caller that words its own. */
+  updateState: (patch: OnboardingPatch, options?: { notify?: boolean }) => Promise<void>;
   resetState: () => Promise<void>;
   reloadState: (next: OnboardingState) => void;
 };
@@ -47,7 +48,7 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
   }, []);
 
   const updateState = useCallback(
-    (patch: OnboardingPatch) =>
+    (patch: OnboardingPatch, options?: { notify?: boolean }) =>
       mutationQueue.current.enqueue(async () => {
         const previous = stateRef.current;
         const nextOptimistic = mergeOnboardingState(previous, patch);
@@ -69,11 +70,13 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
             setState(previous);
           });
           console.error('Failed to update onboarding state', error);
-          show({
-            title: 'Save failed',
-            description: 'Could not update your changes.',
-            variant: 'error',
-          });
+          if (options?.notify !== false) {
+            show({
+              title: 'Save failed',
+              description: 'Could not update your changes.',
+              variant: 'error',
+            });
+          }
           throw error;
         } finally {
           setPendingCount((count) => Math.max(0, count - 1));

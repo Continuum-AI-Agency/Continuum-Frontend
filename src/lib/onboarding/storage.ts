@@ -471,17 +471,42 @@ async function fetchMetadataFromTable(
   return metadata;
 }
 
-async function updateUserOnboardingMetadata(
+function mirroredActiveBrandId(user: AuthIdentity): string | null {
+  const onboarding = user.user_metadata?.onboarding;
+  if (onboarding && typeof onboarding === 'object' && 'activeBrandId' in onboarding) {
+    const { activeBrandId } = onboarding as { activeBrandId?: unknown };
+    return typeof activeBrandId === 'string' ? activeBrandId : null;
+  }
+  return null;
+}
+
+/**
+ * Mirrors the active brand into auth user_metadata. user_onboarding_states is the source of
+ * truth; only the legacy import above reads this back. Auth rate-limits PUT /user, and a mirror
+ * written on every save sent one onboarding session 64 of them in 82 seconds and failed its step
+ * save on the 429 (2026-11-13). So: write only on a change, and never fail the caller over it.
+ * `user` comes from the JWT claims, which stay stale until the token refreshes, so the local copy
+ * is updated after a write to keep the rest of this request from repeating it.
+ */
+async function mirrorActiveBrandToUserMetadata(
   supabase: SupabaseOnboardingClient,
+  user: AuthIdentity,
   activeBrandId: string | null,
 ): Promise<void> {
-  const onboardingPayload = activeBrandId ? { activeBrandId } : null;
-  const { error } = await supabase.auth.updateUser({
-    data: { onboarding: onboardingPayload },
-  });
-  if (error) {
-    throw error;
+  if (mirroredActiveBrandId(user) === activeBrandId) {
+    return;
   }
+  const onboarding = activeBrandId ? { activeBrandId } : null;
+  const { error } = await supabase.auth.updateUser({ data: { onboarding } });
+  if (error) {
+    console.warn('[onboarding.metadata] active brand mirror skipped', {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    });
+    return;
+  }
+  user.user_metadata = { ...user.user_metadata, onboarding };
 }
 
 async function upsertUserBrandPreference(
@@ -674,7 +699,7 @@ async function persistMetadata(
     }
   }
 
-  await updateUserOnboardingMetadata(supabase, metadata.activeBrandId ?? null);
+  await mirrorActiveBrandToUserMetadata(supabase, user, metadata.activeBrandId ?? null);
 }
 
 function parseLegacyMetadata(raw: unknown): OnboardingMetadata | null {
@@ -740,8 +765,9 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
       metadata = legacy;
       await persistMetadata(supabase, user, metadata);
     } else {
-      await updateUserOnboardingMetadata(
+      await mirrorActiveBrandToUserMetadata(
         supabase,
+        user,
         metadata.activeBrandId ?? legacy.activeBrandId ?? null,
       );
     }
@@ -778,8 +804,10 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
     ensureBrandProfileRecord(supabase, brandId, owner, normalizedMetadata.brands[brandId]),
   ]);
 
+  // A documents sync changes this brand's state only. It is dirty on most loads while uploads
+  // finish processing, so it writes that one row rather than re-persisting every brand.
   if (documentsDirty) {
-    await persistMetadata(supabase, user, normalizedMetadata);
+    await persistBrandState(supabase, user.id, brandId, normalizedMetadata.brands[brandId]);
   }
 
   if (resolvedBrandId !== brandId) {
@@ -795,13 +823,6 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
     normalizedMetadata.activeBrandId = resolvedBrandId;
     brandId = resolvedBrandId;
     await persistMetadata(supabase, user, normalizedMetadata);
-  } else {
-    // If ensureBrandProfileRecord updated the state (e.g. synced completedAt), persist it.
-    // We check if it's different from what we loaded.
-    const finalState = normalizedMetadata.brands[brandId];
-    if (JSON.stringify(finalState) !== JSON.stringify(metadata.brands[brandId])) {
-      await persistMetadata(supabase, user, normalizedMetadata);
-    }
   }
 
   return {
@@ -1109,7 +1130,7 @@ export async function setActiveBrand(brandId: string): Promise<OnboardingState> 
   await upsertActiveBrand(context.supabase, context.user.id, brandId, targetState);
 
   context.metadata.activeBrandId = brandId;
-  await updateUserOnboardingMetadata(context.supabase, brandId);
+  await mirrorActiveBrandToUserMetadata(context.supabase, context.user, brandId);
   await upsertUserBrandPreference(context.supabase, context.user.id, brandId);
 
   return targetState;

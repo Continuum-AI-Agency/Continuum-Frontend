@@ -4,7 +4,7 @@ import type { OnboardingIntake, OnboardingSourceResponse } from '@continuum/cont
 import { CircleNotch } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
   approveAndLaunchOnboardingAction,
   approveOnboardingAndStartAnalysisAction,
@@ -57,6 +57,7 @@ import {
 import { BackgroundJobsProvider, useBackgroundJobs } from './state/BackgroundJobsProvider';
 import { JobPersistor } from './state/JobPersistor';
 import { readOnboardingSource } from './state/jobRunners';
+import { useStepNavigation } from './state/useStepNavigation';
 
 const TOTAL_STEPS = 6;
 
@@ -105,16 +106,19 @@ function ExperienceInner({
   const router = useRouter();
   const { show } = useToast();
   const totalSteps = planRequired ? TOTAL_STEPS + 1 : TOTAL_STEPS;
-  const [screen, setScreen] = useState<ScreenIndex>(resumeScreenFor(initialState, planRequired));
+  const {
+    screen,
+    direction: directionRef,
+    navigate,
+    startOver,
+  } = useStepNavigation(resumeScreenFor(initialState, planRequired));
   const [welcomeVisible, setWelcomeVisible] = useState(false);
-  const persistedStepRef = useRef<ScreenIndex>(screen);
 
   useEffect(() => {
     if (resumeScreenFor(initialState, planRequired) === 0 && !hasSeenWelcome()) {
       setWelcomeVisible(true);
     }
   }, [initialState, planRequired]);
-  const directionRef = useRef<1 | -1>(1);
   const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? '');
   const { start, patch, jobs, reset } = useBackgroundJobs();
   const { brandId, resetState, state, updateState } = useOnboarding();
@@ -126,35 +130,6 @@ function ExperienceInner({
   const lastStartedKeyRef = useRef<string | null>(null);
   const emailReportOptInRef = useRef(state.emailReportOptIn ?? true);
 
-  const navigate = useCallback(
-    async (next: ScreenIndex): Promise<boolean> => {
-      const from = screen;
-      directionRef.current = next > from ? 1 : -1;
-      // Show the next step now and save it behind the transition: waiting for the save made
-      // every Continue cost a server round trip. A failed save brings the user back.
-      setScreen(next);
-      if (next > persistedStepRef.current || (from === 2 && next === 3)) {
-        try {
-          await updateState({
-            step: next,
-            ...(from === 2 && next === 3 ? { catalogCompleted: true } : {}),
-          });
-          persistedStepRef.current = Math.max(persistedStepRef.current, next) as ScreenIndex;
-        } catch {
-          // updateState already told the user the save failed. Return to the last step that
-          // was saved, but only if they are still on the one that was not.
-          setScreen((current) => {
-            if (current !== next) return current;
-            directionRef.current = -1;
-            return persistedStepRef.current;
-          });
-          return false;
-        }
-      }
-      return true;
-    },
-    [screen, updateState],
-  );
   const { assignedIds: assignedAccountIds } = useBrandAssignedAccountIds(brandId);
   const [launching, startLaunch] = useTransition();
   const [resetting, startReset] = useTransition();
@@ -182,7 +157,6 @@ function ExperienceInner({
       prewarmedRef.current = false;
       launchInFlightRef.current = false;
       launchKeyRef.current = null;
-      persistedStepRef.current = 0;
       useBrandProfileRevealCache.getState().invalidateBrand(brandId);
       try {
         await resetState();
@@ -195,8 +169,7 @@ function ExperienceInner({
         return;
       }
       setDomain(defaultUrl ?? '');
-      directionRef.current = -1;
-      setScreen(0);
+      startOver();
     });
   };
 
@@ -405,6 +378,16 @@ function ExperienceInner({
     const initialGeneration = analysisGenerationRef.current;
     const existingKey = await intakeInputKey(snapshot);
     if (initialGeneration !== analysisGenerationRef.current) return false;
+    // After a reload, a preview for this exact input already has a run, which the Brand DNA screen
+    // resumes by id. Re-reading the source here only risks a failed read sending the user back to
+    // the first step.
+    if (
+      !force &&
+      lastStartedKeyRef.current === null &&
+      snapshot.previewRequest?.runId &&
+      snapshot.previewRequest.inputKey === existingKey
+    )
+      return true;
     if (
       !force &&
       lastStartedKeyRef.current === existingKey &&
