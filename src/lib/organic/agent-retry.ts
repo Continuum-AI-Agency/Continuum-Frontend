@@ -49,3 +49,22 @@ export async function retryOrganicJobOptimistically<
     return false;
   }
 }
+
+/**
+ * Recreate a post the Calendar knows only by its draft id (it failed to save, or was deleted).
+ * The Backend finds the job that made the draft and re-queues it onto a fresh draft row.
+ * Refusals arrive as ApiError messages: `no_generation_job` (nothing to regenerate from),
+ * `draft_exists` (the row is there; the planner's copy is stale), `not_retryable` (still
+ * generating).
+ */
+export async function requestDraftRecreate(
+  input: { draftId: string; brandId: string },
+  request: RetryRequestFn = http.request,
+): Promise<OrganicJobRetryResponse> {
+  return request<OrganicJobRetryResponse>({
+    path: `/api/organic/agent/drafts/${encodeURIComponent(input.draftId)}/recreate`,
+    method: 'POST',
+    body: { brandId: input.brandId },
+    schema: organicJobRetryResponseSchema,
+  });
+}

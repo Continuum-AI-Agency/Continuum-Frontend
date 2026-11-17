@@ -25,19 +25,19 @@ export function formatDayId(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function formatWeekRange(weekStart: Date): string {
+export function formatWeekRange(weekStart: Date, locale = 'en-US'): string {
   const end = new Date(weekStart);
   end.setDate(weekStart.getDate() + 6);
-  const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+  const formatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' });
   return `${formatter.format(weekStart)} – ${formatter.format(end)}`;
 }
 
-export function formatWeekHeading(weekStart: Date): string {
+export function formatWeekHeading(weekStart: Date, locale = 'en-US'): string {
   const end = new Date(weekStart);
   end.setDate(weekStart.getDate() + 6);
 
-  const startMonth = weekStart.toLocaleString('en-US', { month: 'long' });
-  const endMonth = end.toLocaleString('en-US', { month: 'long' });
+  const startMonth = weekStart.toLocaleString(locale, { month: 'long' });
+  const endMonth = end.toLocaleString(locale, { month: 'long' });
   const year = weekStart.getFullYear();
 
   if (startMonth === endMonth) {

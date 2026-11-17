@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
+import { postPlatformLabel } from '@/lib/organic/postPlatforms';
 import { describePublishError, parseSSE, publishPlatformLabel } from '@/lib/organic/publish-utils';
 import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -176,7 +177,11 @@ export function OrganicPublishBlock({
           });
         } else if (event === 'failed') {
           const failed = parsed as Extract<PublishEvent, { type: 'failed' }>;
-          const message = describePublishError(failed.code, failed.error);
+          const message = describePublishError(
+            failed.code,
+            failed.error,
+            intent.platform ? postPlatformLabel(intent.platform) : undefined,
+          );
           patchData({ error: message });
           show({ title: 'Publish failed', description: message, variant: 'error' });
         }

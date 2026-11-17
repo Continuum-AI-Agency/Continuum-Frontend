@@ -95,7 +95,14 @@ function describeOutcome(
         ? PUBLISH_PLATFORM_LABELS[result.platform]
         : 'One platform';
     if (result.status === 'published') published.push(name);
-    else failures.push(`${name} failed: ${describePublishError(result.code, result.error)}`);
+    else
+      failures.push(
+        `${name} failed: ${describePublishError(
+          result.code,
+          result.error,
+          result.platform ? PUBLISH_PLATFORM_LABELS[result.platform] : undefined,
+        )}`,
+      );
   }
   return { published, failures };
 }

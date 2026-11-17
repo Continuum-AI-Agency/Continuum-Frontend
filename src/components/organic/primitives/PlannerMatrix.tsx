@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatCalendarDate, usePlannerLocale } from '@/lib/organic/calendarLabels';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { EMPTY_SELECTION, selectionWithin } from '../hooks/useCalendarSelection';
@@ -116,6 +117,10 @@ const DayHeader = React.memo(function DayHeader({
   onCreatePost: (options: CreatePostOptions) => void;
 }) {
   const dayNumber = dateLabel.split(' ').at(-1) ?? dateLabel;
+  const locale = usePlannerLocale();
+  const weekday = /^\d{4}-\d{2}-\d{2}$/.test(dayId)
+    ? formatCalendarDate(dayId, locale, { weekday: 'short' })
+    : label;
 
   return (
     // Right-clicking the day column header offers the day's create actions with no
@@ -131,8 +136,11 @@ const DayHeader = React.memo(function DayHeader({
           isToday ? 'bg-primary/[0.06]' : 'bg-muted/30',
         )}
       >
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {label}
+        <p
+          translate="no"
+          className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          {weekday}
         </p>
         {isToday ? (
           <span className="mt-1 inline-flex size-7 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-sm font-semibold text-primary">

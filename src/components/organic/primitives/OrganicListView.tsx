@@ -208,7 +208,9 @@ const DraftRow = React.memo(function DraftRow({
 
                   <div className="flex shrink-0 items-center gap-2">
                     {draft.dateLabel && (
-                      <span className="text-xs text-muted-foreground">{draft.dateLabel}</span>
+                      <span translate="no" className="text-xs text-muted-foreground">
+                        {draft.dateLabel}
+                      </span>
                     )}
                     {draft.contentPlanId && <PlannedBadge />}
                     <StatusBadge status={draft.status} />

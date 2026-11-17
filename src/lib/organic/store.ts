@@ -283,6 +283,11 @@ interface CalendarState {
   // delete by the persistence layer. Without this an agent-/teammate-created draft
   // would only vanish locally and reappear on the next refetch ("undeletable").
   pendingServerDeletes: string[];
+  // Never-saved drafts whose last insert failed: their cards show "Failed to save" with
+  // Recreate instead of looking like real posts. Bumping saveRetryNonce re-runs the autosave
+  // for them. Absent from PersistedCalendarState: a reload retries anyway.
+  saveFailedDraftIds: string[];
+  saveRetryNonce: number;
   // Field edits written optimistically and not yet acknowledged by the server, keyed
   // by draft id. A refetch replaces `days` wholesale, so without this an edit made
   // while its PATCH was in flight would be discarded by the server's older copy.
@@ -304,6 +309,8 @@ interface CalendarState {
   // Drop ids from pendingServerDeletes once the persistence layer has deleted them
   // server-side (or confirmed there was nothing to delete).
   clearPendingServerDeletes: (backendIds: string[]) => void;
+  setSaveFailedDraftIds: (draftIds: string[]) => void;
+  retryDraftSaves: () => void;
   // Mark/unmark the fields of a draft whose write is in flight. Marking is additive
   // so two concurrent edits to different fields of one draft cannot unmark each other.
   markDraftEditPending: (draftId: string, fields: readonly DraftEditField[]) => void;
@@ -472,6 +479,8 @@ export const useCalendarStore = create<CalendarState>()(
       isViewCleared: false,
       calendarRefetchNonce: 0,
       pendingServerDeletes: [],
+      saveFailedDraftIds: [],
+      saveRetryNonce: 0,
       pendingDraftEdits: {},
       eventHistory: [],
       backlogDrafts: [],
@@ -654,6 +663,13 @@ export const useCalendarStore = create<CalendarState>()(
               : state.pendingServerDeletes,
           };
         }),
+      setSaveFailedDraftIds: (draftIds) =>
+        set((state) =>
+          draftIds.length === 0 && state.saveFailedDraftIds.length === 0
+            ? ({} as Partial<CalendarState>)
+            : { saveFailedDraftIds: draftIds },
+        ),
+      retryDraftSaves: () => set((state) => ({ saveRetryNonce: state.saveRetryNonce + 1 })),
       clearPendingServerDeletes: (backendIds) =>
         set((state) => {
           if (backendIds.length === 0) return {} as Partial<CalendarState>;

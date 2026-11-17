@@ -54,7 +54,9 @@ mock.module('./useDraftDragHandle', () => ({
   }),
 }));
 
-mock.module('@/lib/organic/store', () => createCalendarStoreStub({}));
+// Mutable, so a spec can mark a draft as failed-to-save.
+const storeState: Record<string, unknown> = {};
+mock.module('@/lib/organic/store', () => createCalendarStoreStub(storeState));
 // The month grid imports metricsPostHref from the week cell; the cell's card is not under test.
 mock.module('./DraggableDraftCard', () => ({ DraggableDraftCard: () => null }));
 
@@ -262,6 +264,72 @@ describe('OrganicMonthlyCalendar status signal', () => {
 
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
     expect(screen.getByTitle(/^Failed · /)).toBeTruthy();
+  });
+});
+
+describe('OrganicMonthlyCalendar ghost drafts', () => {
+  beforeEach(() => {
+    cleanup();
+    storeState.saveFailedDraftIds = [];
+  });
+  afterAll(() => {
+    delete storeState.saveFailedDraftIds;
+  });
+
+  it('marks a draft whose save failed instead of drawing it as a real post', () => {
+    storeState.saveFailedDraftIds = ['draft-1'];
+    renderMonth();
+    expect(chip().getAttribute('title')).toBe(
+      'This post failed to save. Open it to recreate. · Launch teaser',
+    );
+    expect(chip().hasAttribute('data-save-failed')).toBe(true);
+  });
+
+  it('still opens the ghost on click, so the click is never dead', () => {
+    storeState.saveFailedDraftIds = ['draft-1'];
+    const onSelectDraft = mock((_id: string) => undefined);
+    renderMonth({ onSelectDraft });
+    fireEvent.click(chip());
+    expect(onSelectDraft).toHaveBeenCalledWith('draft-1');
+  });
+
+  it('leaves a saved draft unmarked', () => {
+    renderMonth();
+    expect(chip().hasAttribute('data-save-failed')).toBe(false);
+  });
+});
+
+describe('OrganicMonthlyCalendar labels', () => {
+  const realLanguage = Object.getOwnPropertyDescriptor(window.navigator, 'language');
+  beforeEach(() => cleanup());
+  afterAll(() => {
+    if (realLanguage) Object.defineProperty(window.navigator, 'language', realLanguage);
+    else delete (window.navigator as { language?: string }).language;
+  });
+
+  it("formats weekday and month names in the reader's locale, not hard-coded English", () => {
+    Object.defineProperty(window.navigator, 'language', { value: 'es-ES', configurable: true });
+    renderMonth();
+    const expected = Array.from({ length: 7 }, (_, index) =>
+      new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(
+        new Date(2026, 0, 4 + index, 12),
+      ),
+    );
+    const header = screen.getByText(expected[3] as string).parentElement as HTMLElement;
+    expect(Array.from(header.children).map((cell) => cell.textContent)).toEqual(expected);
+    expect(screen.queryByText('Wed')).toBeNull();
+    expect(
+      screen.getByText(
+        new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(ANCHOR),
+      ),
+    ).toBeTruthy();
+  });
+
+  it('marks the weekday row and the month title translate="no" so page translation leaves them alone', () => {
+    Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
+    renderMonth();
+    expect(screen.getByText('Wed').parentElement?.getAttribute('translate')).toBe('no');
+    expect(screen.getByText('August 2026').getAttribute('translate')).toBe('no');
   });
 });
 

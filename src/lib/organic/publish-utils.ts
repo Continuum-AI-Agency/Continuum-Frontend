@@ -94,13 +94,20 @@ export const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
   media_staging_failed:
     "We couldn't prepare your media for publishing. Re-attach the creative and try again.",
   media_upload_failed: "We couldn't upload your media to the platform. Try again in a moment.",
-  unsupported_format: "This post format isn't supported on that platform.",
   // X is pay-per-use: every post is paid from the brand's prepaid X API credits.
   credits_exhausted:
     'This brand is out of X API credits. Buy X credits in Billing (or turn on X auto-billing), then publish again.',
 };
 
-export function describePublishError(code: string, fallback: string): string {
+/**
+ * `platform` names the connection to fix: an expired token reads "Reconnect LinkedIn", not a
+ * generic "the connection expired". `unsupported_format` has no entry on purpose: the backend
+ * sends the specific sentence (`unsupportedFormatMessage`: what the platform takes instead).
+ */
+export function describePublishError(code: string, fallback: string, platform?: string): string {
+  if (code === 'token_expired' && platform) {
+    return `Reconnect ${platform}: its connection expired or was revoked. Reconnect it in Integrations, then try again. We always post to the account you selected.`;
+  }
   return PUBLISH_ERROR_MESSAGES[code] ?? fallback;
 }
 
