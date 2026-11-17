@@ -97,6 +97,14 @@ describe('isRegistrableCaptionFont', () => {
     expect(isRegistrableCaptionFont(undefined)).toBe(false);
     expect(captionFontSpec('Gotham Rounded')).toBeUndefined();
   });
+
+  // Airtable #420: a brand typed its face as "ANTON". CSS matches family names without regard to
+  // case, so the shipped file serves it — a case-sensitive lookup drew it in the fallback stack.
+  it('finds a shipped face however the brand capitalised or spaced it', () => {
+    expect(isRegistrableCaptionFont('ANTON')).toBe(true);
+    expect(captionFontSpec(' jetbrains mono ')?.family).toBe('JetBrains Mono');
+    expect(captionFontSpec('anton')).toBe(CAPTION_FONTS.Anton);
+  });
 });
 
 describe('loadCaptionFonts', () => {
@@ -123,6 +131,12 @@ describe('loadCaptionFonts', () => {
   it('de-duplicates repeated families in one request', async () => {
     const payloads = await loadCaptionFonts(['Inter', 'Inter', 'Inter']);
     expect(payloads).toHaveLength(1);
+    expect(fetchCalls).toHaveLength(1);
+  });
+
+  it('de-duplicates two spellings of one face, returning its canonical family', async () => {
+    const payloads = await loadCaptionFonts(['ANTON', 'Anton']);
+    expect(payloads.map((p) => p.family)).toEqual(['Anton']);
     expect(fetchCalls).toHaveLength(1);
   });
 
