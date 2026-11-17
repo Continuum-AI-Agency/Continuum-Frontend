@@ -211,7 +211,8 @@ export function OrganicSessionSidebar({
                       </Pill>
                     ))}
                   </div>
-                  <div className="flex w-full items-center justify-between gap-2">
+                  {/* Live status: swapped in place while a run streams, so kept untranslated. */}
+                  <div className="flex w-full items-center justify-between gap-2" translate="no">
                     {isWorking ? (
                       <span className="inline-flex items-center gap-1 text-2xs uppercase tracking-wide text-primary">
                         <Loader2Icon className="size-3 animate-spin" />

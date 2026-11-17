@@ -13,18 +13,34 @@ import {
   applyOrganicFrame,
   type OrganicFrameHandlers,
 } from '@/components/organic/agent/applyOrganicFrame';
-import type { AgentChatInput } from '@/components/organic/agent/types';
+import type { AgentChatInput, ResumableRun } from '@/components/organic/agent/types';
 import type { PanelAction } from '@/components/organic/agent/useOrganicAgentReducer';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { confirmOrganicRunCancellation } from '@/lib/organic/agent-cancellation';
+import { invalidateMessageCache } from '@/lib/organic/agent-sessions';
 import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
 
 const RECONNECT_BACKOFF_MS = 750;
+/** Consecutive transport failures (a fetch that throws or answers non-OK) before giving up. */
 const MAX_RECONNECT_ATTEMPTS = 5;
+/** Longest wait between replay polls of a run that is still going but has nothing new yet. */
+const RESUME_POLL_MAX_MS = 5_000;
 // 5 minutes of total silence — matches useRunEventStream's watchdog budget. Reset on
 // every frame, so a long-but-progressing turn is never cut short; only a genuinely idle
 // stream trips it.
 const STREAM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** What the error row says while a run that is still going cannot be reached. */
+export const CONNECTION_LOST_MESSAGE =
+  'Connection lost while the answer was still being written. Retry to pick it up where it left off.';
+
+/** The replay endpoint refused the run (404/403): there is nothing to re-attach to. */
+class RunNotResumableError extends Error {
+  constructor(status: number) {
+    super(`This answer can no longer be resumed (status ${status}).`);
+    this.name = 'RunNotResumableError';
+  }
+}
 
 /**
  * How to settle a run the idle watchdog had to end. A run that emitted at least one
@@ -154,12 +170,20 @@ export function useOrganicAgentStream(
   );
 
   const runStream = useCallback(
-    async (input: AgentChatInput, mode: StreamMode): Promise<{ error?: string }> => {
+    async (
+      input: AgentChatInput,
+      mode: StreamMode,
+      resume?: ResumableRun,
+    ): Promise<{ error?: string }> => {
       if (mode === 'chat') {
         // Detach any previous view; do not cancel the run behind it.
         detach();
         runIdRef.current = null;
         setIsStreaming(true);
+        // The cached first page of this transcript predates the turn about to run. A remount
+        // that reads it (the panel's error boundary, a navigation back) would restore the
+        // conversation as it was BEFORE this message — question gone, previous answer last.
+        invalidateMessageCache(input.sessionId);
       }
 
       const controller = new AbortController();
@@ -169,10 +193,15 @@ export function useOrganicAgentStream(
         controlAbortRefs.current.add(controller);
       }
 
-      let chatRunId: string | null = null;
-      let lastSeq = -1;
+      // Re-attaching to a run whose connection was lost starts where the bubble left off.
+      let chatRunId: string | null = resume?.runId ?? null;
+      let lastSeq = resume?.afterSeq ?? -1;
       let terminal = false;
-      let receivedAnyFrame = false;
+      let receivedAnyFrame = resume !== undefined;
+      if (resume && mode === 'chat') {
+        runIdRef.current = resume.runId;
+        setLiveRunId(resume.runId);
+      }
       // The status the LAST terminal frame implies, mirroring how the store derives it.
       // Organic emits a non-fatal `response.error` when a background-job drain times out and
       // then still finishes the turn, so a later `completed` has to be allowed to win.
@@ -269,10 +298,21 @@ export function useOrganicAgentStream(
         // tails it over Realtime from here on, so unmounting the panel (or navigating away
         // entirely) no longer ends the run's client side.
         if (type === AGENT_CHAT_STARTED && !chatRunId) {
-          const data = event.data as { runId?: unknown; sessionId?: unknown } | undefined;
+          const data = event.data as
+            | { runId?: unknown; sessionId?: unknown; userMessageId?: unknown }
+            | undefined;
           const runIdFromEvent = typeof data?.runId === 'string' ? data.runId : null;
           const sessionIdFromEvent =
             typeof data?.sessionId === 'string' ? data.sessionId : input.sessionId;
+          // The server stored the question before starting the run; the bubble becomes that row.
+          const sentUserMessage = input.messages.findLast((m) => m.role === 'user');
+          if (mode === 'chat' && typeof data?.userMessageId === 'string' && sentUserMessage) {
+            dispatch({
+              type: 'ADOPT_USER_MESSAGE_ID',
+              clientId: sentUserMessage.id,
+              serverId: data.userMessageId,
+            });
+          }
           if (runIdFromEvent) {
             chatRunId = runIdFromEvent;
             runIdRef.current = runIdFromEvent;
@@ -334,11 +374,8 @@ export function useOrganicAgentStream(
         });
       };
 
-      // Armed before the request: a backend that accepts the POST and then never writes
-      // a byte is exactly the stall this guards.
-      armIdleWatchdog();
-
-      try {
+      /** Send the turn and fold its live stream until it ends or drops. */
+      const openTurn = async (): Promise<void> => {
         // Proxied through the Next.js route at /api/organic/agent/chat
         // (mirrors the Jaina chat-stream pattern). The proxy attaches the
         // Supabase access token server-side from the request cookie and
@@ -381,27 +418,38 @@ export function useOrganicAgentStream(
           await consumeReader(initialReader);
         } catch (error) {
           // A mid-stream throw on a NAMED run is a dropped connection, not a failed
-          // turn — fall into the resume loop below (GET replay from after_seq, no
-          // re-billing) instead of surfacing STREAM_ERROR. Without a runId there is
-          // nothing to resume, so the throw propagates to the outer catch.
+          // turn — fall into the resume loop (GET replay from after_seq, no re-billing)
+          // instead of surfacing STREAM_ERROR. Without a runId there is nothing to
+          // resume, so the throw propagates to the outer catch.
           if (terminal || !chatRunId || controller.signal.aborted) throw error;
         }
+      };
 
-        // Stream closed or broke mid-turn. If we never saw a terminal frame and we
-        // have a runId, reconnect via the resumable GET endpoint and continue from
-        // the last-seen seq. Each failed attempt (fetch error, non-OK response, or
-        // another mid-stream throw) burns one attempt; only exhausting them all
-        // falls through to STREAM_ERROR.
-        let attempts = 0;
-        while (
-          !terminal &&
-          !controller.signal.aborted &&
-          chatRunId &&
-          attempts < MAX_RECONNECT_ATTEMPTS
-        ) {
-          attempts += 1;
+      // Armed before the request: a backend that accepts the POST and then never writes
+      // a byte is exactly the stall this guards.
+      armIdleWatchdog();
+
+      try {
+        if (!resume) await openTurn();
+
+        // Stream closed or broke mid-turn, or this is a re-attach. Until a terminal frame
+        // arrives, replay the run's durable log from the last seq this view folded.
+        //
+        // The replay endpoint answers with what is stored SO FAR and closes; it does not
+        // tail. So a run that is still working is POLLED, and a poll that returns nothing
+        // new is not a failure — it used to be, which spent all five attempts in ~11 s and
+        // told the user the connection was lost while the run was still going. Only
+        // transport failures count against MAX_RECONNECT_ATTEMPTS; total silence is bounded
+        // by the idle watchdog, which no poll re-arms.
+        let failures = 0;
+        let quietPolls = 0;
+        while (!terminal && !controller.signal.aborted && chatRunId) {
+          const delayMs = Math.min(
+            RECONNECT_BACKOFF_MS * (failures + quietPolls + 1),
+            RESUME_POLL_MAX_MS,
+          );
           await new Promise<void>((resolve) => {
-            const timeout = setTimeout(resolve, RECONNECT_BACKOFF_MS * attempts);
+            const timeout = setTimeout(resolve, delayMs);
             controller.signal.addEventListener('abort', () => {
               clearTimeout(timeout);
               resolve();
@@ -409,11 +457,14 @@ export function useOrganicAgentStream(
           });
           if (controller.signal.aborted) break;
 
+          const seqBefore = lastSeq;
           try {
-            // Proxied through /api/organic/agent/runs/[runId]/events — the
-            // server-side route attaches the Supabase token from the cookie
-            // and forwards to the Backend resume endpoint.
-            const resumeUrl = `/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq + 1}`;
+            // Proxied through /api/organic/agent/runs/[runId]/events — the server-side route
+            // attaches the Supabase token from the cookie. `after_seq` is exclusive (the
+            // Backend returns seq > after_seq), so it is the last seq ALREADY folded: passing
+            // lastSeq + 1 skipped a frame on every resume, and when that frame was the
+            // terminal one the turn could never finish.
+            const resumeUrl = `/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq}`;
             const resumeResponse = await fetch(resumeUrl, {
               headers: {
                 Accept: 'application/x-ndjson',
@@ -421,41 +472,49 @@ export function useOrganicAgentStream(
               signal: controller.signal,
             });
 
+            if (resumeResponse.status === 403 || resumeResponse.status === 404) {
+              // Not a blip: this run cannot be read back (an older deployment without
+              // chat-run persistence, or not this user's run). Polling would never end.
+              throw new RunNotResumableError(resumeResponse.status);
+            }
             if (!resumeResponse.ok || !resumeResponse.body) {
-              // If the run can't be found (e.g. older deployment without
-              // chat-run persistence), surface the dropped-connection
-              // error instead of silently spinning.
-              throw new Error(
-                `Stream reconnect failed (status ${resumeResponse.status}). The connection was lost and could not be resumed.`,
-              );
+              throw new Error(`Stream reconnect failed (status ${resumeResponse.status}).`);
             }
 
             const resumeReader = resumeResponse.body.getReader();
             if (mode === 'chat') readerRef.current = resumeReader;
             await consumeReader(resumeReader);
+            failures = 0;
+            quietPolls = lastSeq > seqBefore ? 0 : quietPolls + 1;
           } catch (error) {
             if (controller.signal.aborted) break;
-            if (attempts >= MAX_RECONNECT_ATTEMPTS) throw error;
+            if (error instanceof RunNotResumableError) throw error;
+            failures += 1;
+            if (failures >= MAX_RECONNECT_ATTEMPTS) throw error;
           }
-        }
-
-        if (!terminal && chatRunId && !controller.signal.aborted) {
-          // Every resume attempt ran out without a terminal frame — this is the
-          // only path from a resumable run to STREAM_ERROR.
-          throw new Error(
-            'The connection was lost and could not be resumed after multiple attempts.',
-          );
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Stream failed';
         if (mode === 'chat' && !controller.signal.aborted) {
-          dispatch({ type: 'STREAM_ERROR', error: message });
+          // A named run that is merely unreachable is still running server-side. The error
+          // row offers to re-attach, and the first one does so silently — never a re-send,
+          // which would run the question a second time.
+          const resumable = chatRunId !== null && !(error instanceof RunNotResumableError);
+          dispatch({
+            type: 'STREAM_ERROR',
+            error: resumable ? CONNECTION_LOST_MESSAGE : message,
+            ...(resumable && chatRunId
+              ? { transient: true, resumeRun: { runId: chatRunId, afterSeq: lastSeq } }
+              : {}),
+          });
         }
         return { error: message };
       } finally {
         clearIdleWatchdog();
         settleTerminalRun();
         if (mode === 'chat') {
+          // The turn is over (or detached): whatever the cache held is stale again.
+          invalidateMessageCache(input.sessionId);
           // An aborted controller means an INTENTIONAL detach (session switch / unmount), not
           // a finished turn — the run lives on and the projection owns it now. Dispatching
           // STREAM_COMPLETE here would clear the streaming state of whatever session is now on
@@ -480,6 +539,17 @@ export function useOrganicAgentStream(
   );
 
   const start = useCallback((input: AgentChatInput) => runStream(input, 'chat'), [runStream]);
+  // Pick a run back up after its connection was lost. Only the run's identity is needed: the
+  // turn was already sent, and nothing is re-sent.
+  const reattach = useCallback(
+    (target: { brandId: string; sessionId: string; run: ResumableRun }) =>
+      runStream(
+        { brandId: target.brandId, sessionId: target.sessionId, messages: [] },
+        'chat',
+        target.run,
+      ),
+    [runStream],
+  );
   const startControl = useCallback(
     (input: AgentChatInput) => runStream(input, 'control'),
     [runStream],
@@ -492,5 +562,5 @@ export function useOrganicAgentStream(
   // sessions mid-run: the run keeps executing (Backend + app-level store), and the projection
   // reattaches when they come back. Without this, the reader would keep dispatching the old
   // session's frames into a reducer that has already switched to a different transcript.
-  return { start, startControl, cancel, detach, isStreaming, liveRunId };
+  return { start, startControl, reattach, cancel, detach, isStreaming, liveRunId };
 }

@@ -10,6 +10,7 @@ import type {
   PipelineStageNode,
   PipelineStageNodeStatus,
   PlanItemStatus,
+  ResumableRun,
   ToolApproval,
   ToolCallEvent,
   UiCard,
@@ -90,7 +91,19 @@ export type PanelAction =
     }
   | { type: 'STREAM_COMPLETE' }
   | { type: 'STREAM_STALLED' }
-  | { type: 'STREAM_ERROR'; error: string; code?: string; transient?: boolean }
+  | {
+      type: 'STREAM_ERROR';
+      error: string;
+      code?: string;
+      transient?: boolean;
+      /** The run is still going server-side; Retry re-attaches to it instead of re-sending. */
+      resumeRun?: ResumableRun;
+    }
+  /**
+   * The server persisted the user's message before the run started and named its row. The
+   * optimistic bubble takes that id, so a history page merges onto it instead of beside it.
+   */
+  | { type: 'ADOPT_USER_MESSAGE_ID'; clientId: string; serverId: string }
   | { type: 'STREAM_RETRYING'; attempt: number; reason?: string }
   | { type: 'AUTO_RETRY_ABANDON' }
   | { type: 'STREAM_QUEUED'; aheadOf: number }
@@ -552,6 +565,19 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         streamRetrying: null,
       };
 
+    case 'ADOPT_USER_MESSAGE_ID': {
+      const { clientId, serverId } = action;
+      if (clientId === serverId || !state.messages.some((m) => m.id === clientId)) return state;
+      // A history page that landed first already holds the server's copy: keep that one.
+      if (state.messages.some((m) => m.id === serverId)) {
+        return { ...state, messages: state.messages.filter((m) => m.id !== clientId) };
+      }
+      return {
+        ...state,
+        messages: state.messages.map((m) => (m.id === clientId ? { ...m, id: serverId } : m)),
+      };
+    }
+
     case 'DISCARD_MESSAGE':
       return { ...state, messages: state.messages.filter((m) => m.id !== action.messageId) };
 
@@ -635,9 +661,16 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       if (state.messages.some((m) => m.id === action.messageId)) {
         return {
           ...state,
+          // Re-attaching to a run whose connection was lost: the same bubble streams on, so
+          // the error it was showing no longer describes it.
+          messages: state.messages.map((m) =>
+            m.id === action.messageId ? { ...m, error: undefined, resumeRun: undefined } : m,
+          ),
           streamingMessageId: action.messageId,
           pendingAutoRetry: null,
-          autoRetryConsumed: false,
+          // Kept, not reset: a re-attach that fails again must paint the error row, not
+          // queue another silent attempt behind itself forever.
+          autoRetryConsumed: state.autoRetryConsumed,
           streamRetrying: null,
         };
       }
@@ -669,7 +702,13 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         streamingMessageId: null,
         streamRetrying: null,
         messages: state.messages.map((m) =>
-          m.id === erroredMessageId ? { ...m, error: action.error } : m,
+          m.id === erroredMessageId
+            ? {
+                ...m,
+                error: action.error,
+                ...(action.resumeRun ? { resumeRun: action.resumeRun } : {}),
+              }
+            : m,
         ),
         ...(autoRetry ? { pendingAutoRetry: erroredMessageId, autoRetryConsumed: true } : {}),
       };

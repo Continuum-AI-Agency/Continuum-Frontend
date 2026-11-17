@@ -229,9 +229,17 @@ export type ConversationMessage = {
   // Set when a turn failed; the partial `content` (if any) is preserved so the
   // user keeps what streamed, and a styled error row + Retry can render below it.
   error?: string;
+  /**
+   * Set when the connection to a run that is still going was lost. Retry re-attaches to that run
+   * from `afterSeq` — the run never stopped, so re-sending the question would answer it twice.
+   */
+  resumeRun?: ResumableRun;
   /** The agent's reply to an approval: it has no user turn of its own to retry or regenerate. */
   approvalReply?: boolean;
 };
+
+/** A durable run the client can re-attach to: its id and the last seq this view folded. */
+export type ResumableRun = { runId: string; afterSeq: number };
 
 export type AgentChatInput = {
   brandId: string;

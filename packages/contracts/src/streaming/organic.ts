@@ -1051,6 +1051,7 @@ const agentChatStartedSchema = z.object({
     .object({
       runId: z.string().min(1),
       sessionId: z.string().min(1),
+      userMessageId: z.string().min(1).optional(),
     })
     .loose(),
 });
