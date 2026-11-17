@@ -5,9 +5,13 @@ import {
 } from '@continuum/contracts';
 import { unzip } from 'fflate';
 
+const FONT_ARCHIVE_ENTRY =
+  /[\\/]$|\.(ttf|otf|woff2?|eot|txt|md|pdf|rtf)$|(^|[\\/])(licen[cs]e|readme|ofl|copying)[^\\/]*$|(^|[\\/])(\.ds_store|thumbs\.db|desktop\.ini)$/i;
+
 /**
- * Design-only ZIPs follow the same upload/import path as loose designs. AE packages and web
- * component projects (a `forge-component.json`, which may bundle a .psd asset) stay intact.
+ * Design-only and font-only ZIPs follow the same upload/import path as loose designs and fonts. AE
+ * packages and web component projects (a `forge-component.json`, which may bundle a .psd asset) stay
+ * intact.
  */
 export async function expandDesignArchives(files: readonly File[]): Promise<File[]> {
   const result: File[] = [];
@@ -27,10 +31,16 @@ export async function expandDesignArchives(files: readonly File[]): Promise<File
       (entry) =>
         !entry.name.split(/[\\/]/).some((part) => part === '__MACOSX' || part.startsWith('._')),
     );
+    // A ZIP of nothing but fonts opens too: kept whole, it counted as a template project that never
+    // parses, and its fonts never reached the font library. A licence, readme or web cut beside them
+    // is fine; anything else (a package.json, source, a page) keeps the ZIP whole.
+    const fontsOnly =
+      entries.some((entry) => /\.(ttf|otf)$/i.test(entry.name)) &&
+      entries.every((entry) => FONT_ARCHIVE_ENTRY.test(entry.name));
     if (
       entries.some((entry) => /\.(aep|aepx|aet)$/i.test(entry.name)) ||
       webComponentManifestPath(entries.map((entry) => entry.name)) ||
-      !entries.some((entry) => /\.(psd|ai)$/i.test(entry.name))
+      (!entries.some((entry) => /\.(psd|ai)$/i.test(entry.name)) && !fontsOnly)
     ) {
       result.push(file);
       continue;

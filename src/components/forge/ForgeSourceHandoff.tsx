@@ -67,6 +67,7 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
     setStatus('uploading');
     setMessage('');
     const refs: SourceRef[] = [...completedRefs];
+    let fontsStored = 0;
     try {
       // A ZIP of Photoshop or Illustrator files opens into those files, as in the gallery; fonts are
       // stored first because a project is parsed seconds after it lands and that parse looks for them.
@@ -74,6 +75,7 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
       const { fonts } = partitionForgeProjectFiles(expanded);
       if (fonts.length && !refs.length) {
         const { stored, refused } = await uploadTemplateFontFiles(brandId, fonts);
+        fontsStored = stored.length;
         setProgress((current) => [
           ...current,
           ...(stored.length ? [`Fonts added: ${stored.join(', ')}`] : []),
@@ -97,6 +99,14 @@ export function ForgeSourceHandoff({ brandId }: { brandId: string }) {
         } else throw new Error(`Unsupported file: ${file.name}`);
         setProgress((current) => [...current, `${file.name} uploaded`]);
         setCompletedRefs([...refs]);
+      }
+      // Fonts are not a source the agent reads, and a handoff completes with at least one: keep it
+      // open for the project they were sent for.
+      if (!refs.length) {
+        if (!fontsStored) throw new Error('No fonts were added. Choose valid .ttf or .otf files and try again.');
+        setStatus('ready');
+        setMessage('Fonts added. Now choose the template project that uses them.');
+        return;
       }
       const { error } = await createSupabaseBrowserClient().functions.invoke('library-upload', {
         body: { action: 'complete_forge_source_intent', brandId, uploadIntentId: intentId, sourceRefs: refs },
