@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { HeadlessBatchQuote, HeadlessBatchStatus } from '@continuum/contracts';
+import { mediaCostLine, mediaCostPlan } from '@continuum/contracts';
 import type { OrganicSessionMessage } from '@/lib/organic/agent-sessions';
 import { restoreSessionFromMessages } from './restoreSession';
 import { parseOrganicStreamEvent } from './streamEventParser';
@@ -108,6 +109,29 @@ describe('ui.headless_batch', () => {
       },
     });
     expect(parsed.kind === 'toolApproval' && parsed.approval.batchPreview).toEqual(quote);
+  });
+
+  it('carries a media tool card its priced plan, and drops an unreadable one without the card', () => {
+    const costPlan = mediaCostPlan(
+      [mediaCostLine('image', '4K still · 3 slides', 'nano-banana-2@4k', 3)],
+      4,
+    );
+    const frame = (plan: unknown) =>
+      parseOrganicStreamEvent({
+        type: 'tool.approval_required',
+        data: {
+          approvalId: 'a1',
+          toolCallId: 'c1',
+          toolName: 'headlessStillCreate',
+          input: {},
+          costPlan: plan,
+        },
+      });
+    const read = frame({ ...costPlan, futureField: true });
+    expect(read.kind === 'toolApproval' && read.approval.costPlan).toEqual(costPlan);
+    const unreadable = frame({ lines: 'nope' });
+    expect(unreadable.kind).toBe('toolApproval');
+    expect(unreadable.kind === 'toolApproval' && 'costPlan' in unreadable.approval).toBe(false);
   });
 
   it('a plain approval carries no quote', () => {

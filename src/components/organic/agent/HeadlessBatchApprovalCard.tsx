@@ -1,9 +1,10 @@
 'use client';
 
-import type { HeadlessBatchQuote } from '@continuum/contracts';
+import type { HeadlessBatchQuote, MediaCostPlan } from '@continuum/contracts';
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { useId } from 'react';
 import { AgentButton, AgentDecisionCard } from '@/components/shared/agent-cards/agentCardKit';
+import { MediaCostPlanList } from '@/components/shared/agent-cards/MediaCostPlanList';
 import { CardContent, CardFooter } from '@/components/ui/card';
 
 const usd = (value: number) => `$${value.toFixed(2)}`;
@@ -28,11 +29,14 @@ function refusalWords(quote: HeadlessBatchQuote): string {
  */
 export function HeadlessBatchApprovalCard({
   quote,
+  costPlan = null,
   onApproveAction,
   onDenyAction,
   disabled,
 }: {
   quote: HeadlessBatchQuote | null;
+  /** The typical generations behind the quote, priced; the quote's bound stays the gate. */
+  costPlan?: MediaCostPlan | null;
   onApproveAction: () => void;
   onDenyAction: () => void;
   disabled?: boolean;
@@ -51,7 +55,10 @@ export function HeadlessBatchApprovalCard({
     >
       <CardContent className="space-y-2.5 px-3.5 pt-3.5 pb-2 tabular-nums">
         {quote ? (
-          <QuoteBody quote={quote} titleId={titleId} />
+          <>
+            <QuoteBody quote={quote} titleId={titleId} />
+            {costPlan ? <MediaCostPlanList plan={costPlan} /> : null}
+          </>
         ) : (
           <p
             id={titleId}

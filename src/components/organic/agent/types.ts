@@ -6,6 +6,7 @@ import type {
   BulkContentPlan,
   ChatMediaStripData,
   HeadlessBatchQuote,
+  MediaCostPlan,
   MediaSearchResultsFrame,
   OrganicPostCardData,
   OrganicTrendChartData,
@@ -209,6 +210,8 @@ export type ToolApproval = {
   input: unknown;
   /** headlessBatchCreate only: the bound, cost and cast step its one card shows. */
   batchPreview?: HeadlessBatchQuote;
+  /** A headless media tool's priced pre-plan: every generation the approval pays for. */
+  costPlan?: MediaCostPlan;
 };
 
 export type ConversationMessage = {

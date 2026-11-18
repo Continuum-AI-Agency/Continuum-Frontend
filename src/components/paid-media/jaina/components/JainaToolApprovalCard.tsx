@@ -24,6 +24,7 @@ import {
   ApproveRejectActions,
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
+import { MediaCostPlanList } from '@/components/shared/agent-cards/MediaCostPlanList';
 import {
   Table,
   TableBody,
@@ -338,6 +339,13 @@ export function JainaToolApprovalCard({
         <AgentCardTitle>{title}</AgentCardTitle>
 
         {groupVersionId ? <AudienceGroupSummary groupVersionId={groupVersionId} /> : null}
+
+        {approval.costPlan ? (
+          <MediaCostPlanList
+            plan={approval.costPlan}
+            className={`mt-3 px-3 py-2.5 ${VALUES_PANEL}`}
+          />
+        ) : null}
 
         {choices ? (
           <ChoiceConfirmation
