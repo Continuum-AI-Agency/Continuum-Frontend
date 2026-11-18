@@ -32,6 +32,7 @@ const KINDS: { kind: string; label: string }[] = [
   { kind: 'review_status_change', label: 'Review status changed' },
   { kind: 'comment_mention', label: 'Mentioned in a comment' },
   { kind: 'comment_reply', label: 'Reply to my comment' },
+  { kind: 'prepayment_claimed', label: 'Pre-Payment claimed' },
 ];
 
 const CHANNELS: { channel: NotificationChannel; label: string }[] = [
