@@ -6,6 +6,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { CopyButton } from '@/components/paid-media/conversions/CapiShared';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { fetchBillingOverview, startPlanCheckout } from '@/lib/billing/billingApi';
@@ -26,6 +27,10 @@ import { cn } from '@/lib/utils';
 //
 // Stripe confirms a payment before our webhook grants the plan, so a Checkout return polls the
 // entitlements (bounded by CHANGE_POLL_WINDOW_MS) and completes the moment a product shows up.
+//
+// A Stripe Payment Link from our team (a webinar, a sales call) cannot know the brand, so this
+// step shows the brand ID to paste into the link's "Brand ID" field; the webhook links the
+// purchase by it, and "Check again" picks the plan up.
 
 type PlanScreenProps = {
   brandId: string;
@@ -191,8 +196,18 @@ export function PlanScreen({
                 <h2 className="text-sm font-semibold text-foreground">Working with our team?</h2>
                 <p className="max-w-[52ch] text-sm text-muted-foreground">
                   If Continuum bills this brand under an agreement, our team will enable your
-                  account — no card needed. Once they have, continue from here.
+                  account — no card needed. Paying with a link from our team? Enter this brand ID in
+                  its Brand ID field. Once you have paid or been enabled, continue from here.
                 </p>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <code
+                    data-testid="plan-brand-id"
+                    className="select-all rounded bg-muted px-2 py-1 font-mono text-xs text-foreground"
+                  >
+                    {brandId}
+                  </code>
+                  <CopyButton value={brandId} label="Brand ID" />
+                </div>
                 {notEnabledYet ? (
                   <p
                     data-testid="plan-not-enabled"
