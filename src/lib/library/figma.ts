@@ -8,6 +8,7 @@ import {
   figmaFramesResponseSchema,
   importFigmaFramesRequestSchema,
   importFigmaFramesResponseSchema,
+  importFigmaPasteRequestSchema,
 } from '@continuum/contracts';
 
 import { getApiUrl } from '@/lib/api/config';
@@ -91,6 +92,23 @@ export function figmaErrorMessage(error: unknown): { message: string; reconnect:
           'That link points at a page or a layer, not a frame. Pick frames from the file below.',
         reconnect: false,
       };
+    case 'figma_paste_missing':
+    case 'figma_paste_unreadable':
+    case 'figma_paste_unsupported':
+      return {
+        message: "Figma's copy could not be read. Copy the frame in Figma again, then paste.",
+        reconnect: false,
+      };
+    case 'figma_paste_empty':
+      return {
+        message: 'That Figma copy holds no layers. Copy a frame, then paste.',
+        reconnect: false,
+      };
+    case 'figma_paste_too_large':
+      return {
+        message: 'That Figma selection is too big to paste. Copy fewer or smaller frames.',
+        reconnect: false,
+      };
     case 'figma_fonts_missing': {
       const fonts = error instanceof FigmaApiError ? error.missingFonts.join(', ') : '';
       return {
@@ -170,5 +188,20 @@ export async function importFigmaFrames(input: {
   const body = importFigmaFramesRequestSchema.parse(input);
   return importFigmaFramesResponseSchema.parse(
     await requestJson('/import', { method: 'POST', body: JSON.stringify(body) }),
+  ).assets;
+}
+
+/** Copying in Figma puts the layers themselves on the clipboard, between `(figma)` markers. */
+export const isFigmaClipboard = (html: string): boolean => html.includes('(figma)');
+
+/** A Figma copy, pasted: one design template per top-level layer, no Figma connection needed. */
+export async function importFigmaPaste(
+  brandId: string,
+  html: string,
+  tokenResolver?: () => Promise<string>,
+): Promise<FigmaImportedAsset[]> {
+  const body = importFigmaPasteRequestSchema.parse({ brandId, html });
+  return importFigmaFramesResponseSchema.parse(
+    await requestJson('/paste', { method: 'POST', body: JSON.stringify(body) }, tokenResolver),
   ).assets;
 }

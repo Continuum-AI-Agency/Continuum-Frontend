@@ -85,10 +85,19 @@ export const importFigmaFramesResponseSchema = z
   .object({ assets: z.array(figmaImportedAssetSchema) })
   .strict();
 
+/**
+ * A Figma copy, pasted: the clipboard's `text/html`, which carries the layers themselves. Answered
+ * with `importFigmaFramesResponseSchema`, one asset per top-level pasted layer.
+ */
+export const importFigmaPasteRequestSchema = z
+  .object({ brandId: z.string().uuid(), html: z.string().min(1).max(50_000_000) })
+  .strict();
+
 export type FigmaFolder = z.infer<typeof figmaFolderSchema>;
 export type FigmaFile = z.infer<typeof figmaFileSchema>;
 export type FigmaFrame = z.infer<typeof figmaFrameSchema>;
 export type FigmaImportedAsset = z.infer<typeof figmaImportedAssetSchema>;
+export type ImportFigmaPasteRequest = z.infer<typeof importFigmaPasteRequestSchema>;
 export type RegisterFigmaImportOperation = z.infer<typeof registerFigmaImportOperationSchema>;
 
 /**

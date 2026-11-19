@@ -145,6 +145,17 @@ mock.module('@/components/ui/toast-imperative', () => ({
   }),
 }));
 
+const figma = await import('@/lib/library/figma');
+const importFigmaPaste = mock(async (_brandId: string, _html: string) => [
+  {
+    assetId: ASSET,
+    versionId: '66666666-6666-4666-8666-666666666666',
+    figmaNodeId: '1:2',
+    status: 'created' as const,
+  },
+]);
+mock.module('@/lib/library/figma', () => ({ ...figma, importFigmaPaste }));
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
@@ -161,6 +172,7 @@ beforeEach(() => {
   renameTemplateSource.mockClear();
   toastError.mockClear();
   importDesignTemplate.mockClear();
+  importFigmaPaste.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -201,6 +213,28 @@ function rename(from: string, to: string) {
 }
 
 describe('ForgeWorkbench', () => {
+  test('a Figma copy pasted anywhere becomes a template; any other paste is left alone', async () => {
+    renderWorkbench();
+    await screen.findByRole('button', { name: 'Open Untitled template' });
+    const paste = (html: string) => {
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', {
+        value: { getData: (type: string) => (type === 'text/html' ? html : '') },
+      });
+      document.body.dispatchEvent(event);
+      return event;
+    };
+
+    expect(paste('<p>plain copy</p>').defaultPrevented).toBe(false);
+    expect(importFigmaPaste).not.toHaveBeenCalled();
+
+    const html = '<span data-buffer="<!--(figma)ZmlnLWtpd2k=(/figma)-->"></span>';
+    expect(paste(html).defaultPrevented).toBe(true);
+    await waitFor(() => expect(importFigmaPaste).toHaveBeenCalledWith(BRAND, html));
+    // The new template joins the list, and a single pasted frame opens.
+    await waitFor(() => expect(fetchTemplateSources).toHaveBeenCalledTimes(2));
+  });
+
   test('a completed upload appears immediately and keeps showing unpacking progress', async () => {
     fetchedSources = [];
     renderWorkbench();

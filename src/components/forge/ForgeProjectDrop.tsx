@@ -243,7 +243,7 @@ export function ForgeProjectDrop({
         </span>
         <span className="max-w-60 text-xs font-normal text-muted-foreground">
           Drop a PowerPoint deck or template, project folder, web component folder, ZIP, After Effects project, layered Photoshop or Illustrator file,
-          or click to choose files.
+          or click to choose files. Copied a frame in Figma? Paste it anywhere here.
         </span>
       </Button>
       <Button

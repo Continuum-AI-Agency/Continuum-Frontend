@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type FigmaImportedAsset,
   isWebTemplateKey,
   type TemplateSourceSummary,
   templateDisplayName,
@@ -44,6 +45,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
+import { figmaErrorMessage, importFigmaPaste, isFigmaClipboard } from '@/lib/library/figma';
 import {
   discoverWorkspaceTemplates,
   renameTemplateSource,
@@ -395,6 +397,37 @@ export function ForgeWorkbench({
     );
   const openShared = (template: SharedTemplate | null) =>
     exitGuard.runGuarded(() => morph(() => setSelectedShared(template ? sharedTemplateId(template) : null)));
+  const figmaImported = async (assets: FigmaImportedAsset[]) => {
+    await refreshTemplate();
+    // One frame opens like any new template; a batch stays on the list it joined.
+    if (assets.length === 1 && assets[0]) open(assets[0].assetId);
+  };
+  const latestFigmaImported = useRef(figmaImported);
+  latestFigmaImported.current = figmaImported;
+
+  // Copying in Figma puts the layers themselves on the clipboard, so a paste anywhere here imports
+  // them: no Figma connection, and none of the Figma API's ~20 monthly reads.
+  useEffect(() => {
+    const paste = (event: ClipboardEvent) => {
+      const html = event.clipboardData?.getData('text/html') ?? '';
+      if (event.defaultPrevented || !isFigmaClipboard(html)) return;
+      event.preventDefault();
+      toast('Making templates from your Figma copy…');
+      importFigmaPaste(brandId, html).then(
+        (assets) => {
+          toast.success(
+            assets.length === 1
+              ? 'Template imported from Figma'
+              : `${assets.length} templates imported from Figma`,
+          );
+          return latestFigmaImported.current(assets);
+        },
+        (error: unknown) => toast.error(figmaErrorMessage(error).message),
+      );
+    };
+    document.addEventListener('paste', paste);
+    return () => document.removeEventListener('paste', paste);
+  }, [brandId]);
 
   // An intent is an event, taken once and handed back, the way the Render grid takes its own.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event.
@@ -688,11 +721,7 @@ export function ForgeWorkbench({
             await refreshTemplate();
             open(assetId);
           }}
-          onFigmaImported={async (assets) => {
-            await refreshTemplate();
-            // One frame opens like any new template; a batch stays on the list it joined.
-            if (assets.length === 1 && assets[0]) open(assets[0].assetId);
-          }}
+          onFigmaImported={figmaImported}
           onRejected={(files) =>
             toast.error(
               `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd, .ai or .blend, and .ttf or .otf for fonts.`,
