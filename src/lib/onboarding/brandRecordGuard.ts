@@ -1,3 +1,5 @@
+import type { OnboardingState } from './state';
+
 export interface BrandRecordOwnership {
   created_by: string | null;
 }
@@ -18,4 +20,33 @@ export function canPersistBrandRecord(
 ): boolean {
   if (!record) return true;
   return record.created_by !== null && record.created_by === currentUserId;
+}
+
+export interface BrandRecordFields {
+  brand_name: string | null;
+  logo_path: string | null;
+  completed_at: string | null;
+  email_report_opt_in: boolean | null;
+}
+
+/**
+ * A state minted this load for a brand that already has a row (made by staff
+ * provisioning, an admin tool or SQL) starts from that row, not from the blank
+ * default. Otherwise ensureBrandProfileRecord writes the default
+ * "<handle>'s Brand" and email opt-in over the brand the creator just opened.
+ */
+export function adoptBrandRecord(
+  state: OnboardingState,
+  record: BrandRecordFields,
+): OnboardingState {
+  return {
+    ...state,
+    brand: {
+      ...state.brand,
+      name: record.brand_name?.trim() ? record.brand_name : state.brand.name,
+      logoPath: record.logo_path ?? state.brand.logoPath,
+    },
+    completedAt: record.completed_at,
+    emailReportOptIn: record.email_report_opt_in ?? true,
+  };
 }
